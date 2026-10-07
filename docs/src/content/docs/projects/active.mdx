@@ -17,7 +17,7 @@ This is Devantler Tech’s wider technical portfolio, maintained by its founder,
 
   This marker pins EVERY submodule this monorepo tracks (the source-of-truth is .gitmodules) to how it is represented on the site, so a newly-added product can't silently go unlisted. The docs CI drift-check asserts this path set EQUALS the live .gitmodules paths; when a submodule is added or removed, record it here with one disposition and update the page if needed:
     • section        — has its own H2 product section on this page (KSail, Platform, Data Product Controller, World at Ruin, Reusable Workflows, Actions, Agent Skills, Agent Plugins, UniFi Provider). The Reusable Workflows section is backed by the actions submodule (its .github/workflows), not a submodule of its own.
-    • grouped        — a private self-hosted app folded into the "🏠 Self-Hosted Personal Apps" section (wedding-app, ascoachingogvaner).
+    • grouped        — a self-hosted application folded into the "🏠 Self-Hosted Personal Apps" section (wedding-app, ascoachingogvaner), independently of source-repository visibility.
     • templates-page — a starter template listed on the Templates page (/templates/) instead of here.
     • infra          — an internal config/automation/GitOps-state repo, not surfaced as a project (the .github-public/profile/maintenance/fleet-gitops repos, and the aws config tenant the Platform reconciles).
     • omitted        — deliberately outside the reusable-products shelf: this business website itself, the homebrew-tap distribution tap and the private applications/unifi network config. Promote to section/grouped if it should appear.
@@ -59,7 +59,7 @@ Currently in **pre-alpha**, and playable now on macOS — [install it with Homeb
 
 ## 🏠 Self-Hosted Personal Apps
 
-A couple of small apps I build and self-host purely for myself and my family — they run as tenants on the Platform cluster above. These are personal hobby projects, not products or services: there's nothing to sign up for, and the source repositories are private.
+A couple of small apps I build and self-host for my family — they run as tenants on the Platform cluster above. They illustrate custom websites rather than reusable tools or libraries. A public source repository does not make a private guest experience publicly accessible.
 
 - **Wedding App** — a small service I put together around a family wedding.
 - **AS Coaching og Vaner** — a small website I host on behalf of a family member.
