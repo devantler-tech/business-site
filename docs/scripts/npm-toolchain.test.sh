@@ -18,7 +18,9 @@
 #      actions/setup-node step, placed before its first step in docs/, with an explicit
 #      node-version on a Node line whose bundled npm is that major. The known jobs must all be
 #      found, so an empty discovery cannot pass.
-#   3. CI runs this test from a job that its own inputs gate, and that gate covers every
+#   3. The build first proves npm 11.4.2 can clean-install the lockfile, then installs
+#      with the runner's current npm 11. Optional peers can differ within the same major.
+#   4. CI runs this test from a job that its own inputs gate, and that gate covers every
 #      workflow, so a new workflow that works in docs/ reruns it.
 #
 # Fixture cases first prove each check rejects the drift it exists for.
@@ -165,7 +167,20 @@ check() {
       violation "${required} was not found as a job that works in docs/" || return 1
   done
 
-  local ci="${workflows_dir}/ci.yaml" gate filter
+  local ci="${workflows_dir}/ci.yaml" gate filter compatibility
+  compatibility="$(yq -o=json '.' "${ci}" | jq -r '
+    .jobs["build-docs"].steps as $steps |
+    [range(0; $steps | length) | select(
+      $steps[.]["working-directory"] == "docs" and
+      $steps[.].run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts"
+    )] as $older |
+    [range(0; $steps | length) | select(
+      $steps[.]["working-directory"] == "docs" and $steps[.].run == "npm ci"
+    )] as $current |
+    ($older | length) == 1 and ($current | length) == 1 and $older[0] < $current[0]
+  ')" || violation "cannot read the lockfile compatibility installs" || return 1
+  [ "${compatibility}" = "true" ] ||
+    violation "ci.yaml:build-docs must clean-install with npm 11.4.2 before its current npm ci" || return 1
   # The test runs from the repository root: a step working in docs/ would make its own job one
   # this test requires to set up Node.
   gate="$(yq -r '
@@ -290,6 +305,20 @@ expect_failure "setup-node after npm ci" "ci.yaml:build-docs sets up Node after 
 reset_fixture
 yq -i 'del(.jobs.build-docs)' "${fixture}/.github/workflows/ci.yaml"
 expect_failure "job not discovered" "ci.yaml:build-docs was not found"
+
+reset_fixture
+yq -i 'del(.jobs.build-docs.steps[] | select(.run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts"))' \
+  "${fixture}/.github/workflows/ci.yaml"
+expect_failure "missing older npm clean install" "must clean-install with npm 11.4.2 before its current npm ci"
+
+reset_fixture
+yq -i '(.jobs.build-docs.steps[] | select(.run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts") | .run) = "npx --yes --package=npm@11.4.2 npm install --ignore-scripts"' \
+  "${fixture}/.github/workflows/ci.yaml"
+expect_failure "install hides a lockfile mismatch" "must clean-install with npm 11.4.2 before its current npm ci"
+
+reset_fixture
+yq -i '.jobs.build-docs.steps |= sort_by(.run // "")' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "compatibility install moved after current install" "must clean-install with npm 11.4.2 before its current npm ci"
 
 reset_fixture
 jq 'del(.devEngines)' "${repo_root}/docs/package.json" >"${fixture}/docs/package.json"

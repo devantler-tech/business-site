@@ -215,10 +215,15 @@ else
 fi
 
 # --- Reusable Workflows: count tripwire + workflow-name set equality -----------
-# Live reusable (workflow_call) workflow names (basename minus .yaml), sorted & unique.
+# Live reusable (workflow_call) workflow names (basename minus .yaml or .yml), sorted & unique.
 rw_live=$(
-  grep -lE '^[[:space:]]*workflow_call:' "$rw_workflows_dir"/*.yaml 2>/dev/null \
-    | awk -F/ '{ name = $NF; sub(/\.yaml$/, "", name); print name }' | sort -u
+  for workflow in "$rw_workflows_dir"/*.yaml "$rw_workflows_dir"/*.yml; do
+    [[ -f "$workflow" ]] || continue
+    if grep -Eq '^[[:space:]]*workflow_call:' "$workflow"; then
+      name=${workflow##*/}
+      printf '%s\n' "${name%.*}"
+    fi
+  done | sort -u
 )
 rw_count=$(printf '%s\n' "$rw_live" | grep -c . || true)
 rw_expected=$(grep -oE 'reusable-workflows-count:[[:space:]]*[0-9]+' "$mdx" | grep -oE '[0-9]+' | head -n1 || true)

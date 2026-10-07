@@ -4,6 +4,12 @@ import { rankPublicProducts } from '../src/data/public-products.ts';
 import catalogue from '../src/data/public-products.json' with { type: 'json' };
 
 const snapshot = (repositories) => ({ observedAt: '2026-10-07', repositories });
+test('restricted-reuse products identify their own actual licence filename', () => {
+  const licensed = catalogue.filter((product) => product.terms);
+  assert.deepEqual(licensed.map(({ repository, licenseFile }) => [repository, licenseFile]), [
+    ['ksail', 'LICENSE'], ['world-at-ruin', 'LICENSE.md'],
+  ]);
+});
 const products = ['zeta', 'beta', 'alpha', 'zero'].map((repository) => ({ ...catalogue[0], repository }));
 test('ranks by stars, resolves ties by repository name and retains zero stars without mutating input', () => {
   const ranked = rankPublicProducts(products, snapshot({ zeta: 2, beta: 2, alpha: 100, zero: 0 }));

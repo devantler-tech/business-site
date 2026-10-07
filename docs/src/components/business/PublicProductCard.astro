@@ -18,7 +18,7 @@ const starLabel = locale === 'da' ? (product.stars === 1 ? 'stjerne' : 'stjerner
   <div class="links">
     <a href={repositoryUrl}>GitHub <span class="sr-only">— {product.name}</span><span aria-hidden="true">↗</span></a>
     {product.documentation && <a href={product.documentation}>{locale === 'da' ? 'Dokumentation' : 'Documentation'} <span class="sr-only">— {product.name}</span><span aria-hidden="true">↗</span></a>}
-    {product.terms && <a class="terms" href={`${repositoryUrl}/blob/main/LICENSE`}>{product.terms[locale]} <span class="sr-only">— {product.name}</span></a>}
+    {product.terms && <a class="terms" href={`${repositoryUrl}/blob/main/${product.licenseFile}`}>{product.terms[locale]} <span class="sr-only">— {product.name}</span></a>}
   </div>
 </article>
 <style>

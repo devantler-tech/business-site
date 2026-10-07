@@ -10,10 +10,23 @@ The [devantler.tech](https://devantler.tech) site — an [Astro](https://astro.b
 
 ```sh
 cd docs
-npm install
+npm ci
 npm run dev      # local dev server
 npm run build    # production build (this is what CI validates)
 ```
+
+Use Node 24 and npm 11. CI clean-installs with npm 11.4.2 before repeating the install
+with the runner's current npm 11. This also checks older supported versions: they
+require a nested optional Markdown peer that newer npm releases can omit when
+generating a lockfile. For intentional dependency changes, regenerate rather than
+editing the lockfile:
+
+```sh
+npx --yes --package=npm@11.4.2 npm install --package-lock-only --ignore-scripts
+```
+
+Then run both CI install commands and the build. A newer generator's output is
+acceptable only when it passes the same clean-install checks.
 
 ## Business website
 

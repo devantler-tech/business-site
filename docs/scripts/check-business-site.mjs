@@ -64,7 +64,8 @@ for (const locale of ['en', 'da']) {
       assert.match(overflow[1], /data-stars="0"/, 'Zero-star products are included, not discarded as missing');
       assert.match(shelf, /<time[^>]*datetime="\d{4}-\d{2}-\d{2}"/, 'Star counts carry a visible observation date');
       assert.ok(shelf.includes(`datetime="${starSnapshot.observedAt}"`), 'The displayed star date matches the observation');
-      assert.match(shelf, /world-at-ruin\/blob\/main\/LICENSE/, 'The game links to its distinct source-available terms');
+      assert.ok(shelf.includes('href="https://github.com/devantler-tech/world-at-ruin/blob/main/LICENSE.md"'), 'The game links to its actual source-available licence file');
+      assert.ok(shelf.includes('href="https://github.com/devantler-tech/ksail/blob/main/LICENSE"'), 'KSail keeps its actual licence file');
       assert.ok(shelf.includes(locale === 'da' ? 'Kildekode tilgængelig' : 'Source-available'), 'The game is not presented as unrestricted open source');
       for (const repository of publicRepositories) assert.ok(shelf.includes(`href="https://github.com/devantler-tech/${repository}"`), `${repository} retains its real repository link`);
       for (const product of publicCatalogue) {
