@@ -213,7 +213,7 @@ jobs:
       - test-repository-contracts
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/aggregate-job-checks@515b5dfe2259955908387369f3bc3c107f50a8b4
+        uses: devantler-tech/.github/actions/aggregate-job-checks@515b5dfe2259955908387369f3bc3c107f50a8b4
         with:
           job-results: >-
             ${{ needs.changes.result }}
