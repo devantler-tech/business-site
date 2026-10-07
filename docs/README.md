@@ -56,6 +56,14 @@ explicitly labels it an anonymized demo and does not link to the private invitat
 No production account or guest invitation code is used. Built-page checks verify both
 thumbnails and their readable larger images, as well as the localized visit action.
 
+Home focuses on services, two visual examples and a compact engineering-quality summary. A short
+bridge points to the public portfolio instead of repeating product cards or the About biography.
+Projects owns the complete catalogue and a collapsed evidence disclosure, linked from Home:
+actual KSail test/lint and CodeQL workflows, Wedding App accessibility tests, and portfolio
+maintenance/review rules. A direct fragment opens that disclosure in either language. The copy
+describes verified practices rather than universal coverage, certification, vulnerability-free
+software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
+
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
 distinguishes open-source tools and family examples from client work. The journal and technical

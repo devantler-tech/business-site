@@ -269,6 +269,31 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   }
   const selectedWork = page.match(/<section[^>]*id="work"[^>]*>([\s\S]*?)<\/section>/)?.[1];
   await workExamples(selectedWork, locale);
+  // The homepage promises a way to inspect the engineering practices, not a
+  // second product catalogue. Follow its actual localized route and bookmark.
+  const quality = page.match(/<section\b[^>]*data-engineering-quality[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(quality, 'Visitors can inspect the engineering approach before making an inquiry');
+  const proofHref = `${locale === 'da' ? '/da' : ''}/projects/#engineering-checks`;
+  assert.ok(quality.includes(`href="${proofHref}"`), 'Quality evidence stays in the visitor’s language and points to the full portfolio');
+  const projects = html(`${locale === 'da' ? 'da/' : ''}projects`);
+  const proof = projects.match(/<details\b[^>]*id="engineering-checks"[^>]*>([\s\S]*?)<\/details>/);
+  assert.ok(proof, 'The evidence bookmark resolves to a real native disclosure');
+  assert.ok(!/\sopen(?:[\s=>])/.test(proof[0].split('>')[0]), 'Detailed engineering evidence does not overwhelm the default catalogue view');
+  for (const target of [
+    'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/ci.yaml',
+    'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/codeql.yaml',
+    'https://github.com/devantler-tech/wedding-app/blob/main/tests/e2e/a11y.test.ts',
+    'https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md',
+  ]) assert.ok(proof[1].includes(`href="${target}"`), 'Evidence has inspectable public implementation sources');
+  const reveal = projects.match(/<script\b[^>]*data-project-reveal[^>]*>([\s\S]*?)<\/script>/)?.[1];
+  const details = { open: false };
+  let scrolled = false;
+  runInNewContext(reveal, {
+    location: { hash: '#engineering-checks' },
+    document: { getElementById: (id) => id === 'engineering-checks' ? { closest: () => details, scrollIntoView: () => { scrolled = true; } } : null },
+    window: { addEventListener() {} },
+  });
+  assert.ok(details.open && scrolled, 'Following the homepage proof link opens and reveals the evidence');
   for (const [service, setup, monthly] of [['website', 2995, 99], ['app', 7995, 299], ['service', 4995, 199]]) {
     assert.match(page, new RegExp(`data-offer="${service}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     assert.ok(page.includes(new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-DK').format(setup)), 'Starting price must be visible');

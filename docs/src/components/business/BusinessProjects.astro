@@ -14,6 +14,12 @@ const t = supporting[locale];
 const home = copy[locale];
 const featured = publicProducts.slice(0, 6);
 const additional = publicProducts.slice(6);
+const engineeringSources = [
+  'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/ci.yaml',
+  'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/codeql.yaml',
+  'https://github.com/devantler-tech/wedding-app/blob/main/tests/e2e/a11y.test.ts',
+  'https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md',
+];
 // Keep published heading bookmarks useful within the single public catalogue.
 const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'],
@@ -40,6 +46,7 @@ const { Content: ResearchContent } = await render(completed);
   <div class="product-grid">{featured.map((product) => <PublicProductCard product={product} locale={locale} legacyAnchors={legacyAnchors[product.repository]} />)}</div>
   {additional.length > 0 && <details id="more-public-products"><summary>{t.moreProducts} <span class="count">{additional.length}</span></summary><div class="product-grid additional">{additional.map((product) => <PublicProductCard product={product} locale={locale} legacyAnchors={legacyAnchors[product.repository]} />)}</div></details>}
   <p class="note">{home.subscriptionNote}</p>
+  <details id="engineering-checks"><summary>{t.engineeringTitle}</summary><div class="engineering-proof"><p>{t.engineeringIntro}</p><ul>{engineeringSources.map((href, i) => <li><a href={href}>{t.engineeringSources[i]}</a></li>)}</ul><p class="note">{t.engineeringScope}</p></div></details>
 </section>
 <section aria-labelledby="family-title">
   <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
@@ -90,6 +97,10 @@ const { Content: ResearchContent } = await render(completed);
   details { margin-top: 2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
   summary { cursor: pointer; padding: 1.25rem; min-height: 44px; font-weight: 600; }
   summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  #engineering-checks { scroll-margin-top: 1.5rem; }
+  .engineering-proof { padding: 0 1.25rem 1.25rem; max-width: 850px; font-size: .9rem; }
+  .engineering-proof ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem 1.5rem; padding-left: 1.2rem; margin-block: 1rem; }
+  .engineering-proof li::marker { color: var(--accent); }
   .catalogue { padding: 0 1.5rem 1.5rem; max-width: 850px; }
   .catalogue :global(h2) { font-size: 1.4rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
   .catalogue :global(h3) { font-size: 1.1rem; }
@@ -99,5 +110,5 @@ const { Content: ResearchContent } = await render(completed);
   .catalogue :global(a) { color: var(--accent); overflow-wrap: anywhere; }
   .catalogue :global(.sl-anchor-link) { display: none; }
   @media (max-width: 760px) { section { padding-block: 2rem; } .feature, .family { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue { padding-inline: 1rem; } .shelf-heading { grid-template-columns: 1fr; } .shelf-heading img { display: none; } }
-  @media (max-width: 600px) { .product-grid { grid-template-columns: 1fr; } .additional { padding-inline: .75rem; } }
+  @media (max-width: 600px) { .product-grid, .engineering-proof ul { grid-template-columns: 1fr; } .additional { padding-inline: .75rem; } }
 </style>
