@@ -1,0 +1,129 @@
+---
+title: Agentic Engineering
+description: The concrete process my Agentic Engineer uses to research problems, implement solutions, and prove outcomes across the Devantler Tech portfolio.
+---
+
+I use a scheduled **Agentic Engineer** as the primary engineer across the Devantler Tech portfolio. It operates products by keeping them healthy and advances them by improving their direction, capabilities, and quality.
+
+The process is deliberately concrete. The useful result is not generated code or an open pull request. It is a problem understood, a change verified, and a working solution proved against the original issue.
+
+## The process
+
+Read the numbered arrows down **Problem**, upward through **Solution**, and then down **Outcome**. The outer boxes only categorize the work; the activities form the actual sequence.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "fontFamily": "Arial, Helvetica, sans-serif",
+    "fontSize": "17px",
+    "lineColor": "#64748b",
+    "primaryTextColor": "#0f172a"
+  },
+  "themeCSS": ".nodeLabel, .edgeLabel, .blockLabel { font-family: Arial, Helvetica, sans-serif !important; } .flowchart-link { stroke: #475569 !important; stroke-width: 3px !important; } .arrowMarkerPath { fill: #475569 !important; stroke: #475569 !important; }",
+  "block": {"padding": 24}
+}}%%
+
+block-beta
+  columns 20
+
+  block:Problem:6
+    columns 1
+    PH["<b>PROBLEM</b>"]
+    P1["<b>1. Research the product and context</b><br/>Docs · roadmap · code · release notes"]
+    P2["<b>2. Survey the current state</b><br/>GitHub API · CI · logs · monitoring"]
+    P3["<b>3. Reproduce and record the issue</b><br/>GitHub Issues · Project board"]
+  end
+
+  space
+
+  block:Solution:6
+    columns 1
+    SH["<b>SOLUTION</b>"]
+    S5["<b>8. Verify the exact change</b><br/>GitHub Actions · required checks · exact head"]
+    S4["<b>7. Review the proposed change</b><br/>AI review · optional human steering"]
+    S3["<b>6. Test against the identified issue</b><br/>Unit · integration · end-to-end · security"]
+    S2["<b>5. Implement an isolated change</b><br/>Git worktree · branch · feature flag"]
+    S1["<b>4. Select by the fixed priority ladder</b><br/>Breakage → PRs → security → bugs → oldest issue"]
+  end
+
+  space
+
+  block:Outcome:6
+    columns 1
+    OH["<b>OUTCOME</b><br/>Proved working solution"]
+    O1["<b>9. Deliver the verified change</b><br/>Merge · release · deploy"]
+    O2["<b>10. Confirm the original issue is solved</b><br/>Runtime or user evidence"]
+    O3["<b>11. Close with proof</b><br/>Issue · PR · evidence feeds the next cycle"]
+  end
+
+  P1 --> P2
+  P2 --> P3
+  P3 --> S1
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> O1
+  O1 --> O2
+  O2 --> O3
+
+  style P1 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style P2 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style P3 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style S1 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S2 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S3 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S4 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S5 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style O1 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style O2 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style O3 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style PH fill:#ffe4e6,stroke:#e11d48,stroke-width:0px,color:#881337
+  style SH fill:#dbeafe,stroke:#2563eb,stroke-width:0px,color:#172554
+  style OH fill:#d1fae5,stroke:#059669,stroke-width:0px,color:#064e3b
+  style Problem fill:#fff5f6,stroke:#e11d48,stroke-width:3px
+  style Solution fill:#f3f7ff,stroke:#2563eb,stroke-width:3px
+  style Outcome fill:#f1fbf6,stroke:#059669,stroke-width:3px
+```
+
+## Problem: research and identify
+
+The first category is the work required to understand the problem before changing anything.
+
+1. **Research the product and context.** Read the current documentation, roadmap, code, and release history.
+2. **Survey the current state.** Check live repository state, CI, logs, monitoring, open work, and ownership.
+3. **Reproduce and record the issue.** Turn the finding into a concrete GitHub Issue and place it in the portfolio project.
+
+The output is an evidence-backed problem statement, not a guess or a task chosen because it is easy to automate.
+
+## Solution: select, implement, test, and verify
+
+The solution begins only after the problem is known.
+
+1. **Select the first actionable task in the fixed priority ladder.** Work top-down through live breakage, open pull requests, security issues, bugs, and then the oldest actionable issue. Do not descend while a higher rung still has actionable work.
+2. **Implement in isolation.** Use a dedicated worktree and branch so concurrent agents cannot overwrite one another.
+3. **Test against the identified issue.** Combine focused tests with the repository's wider lint, integration, end-to-end, and security checks.
+4. **Review the proposed change.** Use a draft pull request for required AI review and optional human steering without implying that the work is ready.
+5. **Verify the exact change.** Bind the evidence to the current pull-request head. A review or CI run for an older commit does not clear a newer one.
+
+## Outcome: prove the working solution
+
+Delivery is part of the proof, not the end of it.
+
+1. **Deliver the verified change.** Merge, release, or deploy through the product's normal path.
+2. **Confirm the original issue is solved.** Use runtime, user, or other product-level evidence appropriate to the change.
+3. **Close with proof.** Record the evidence on the issue and pull request so it informs the next research cycle.
+
+Static checks can prove properties of code. They cannot manufacture missing deployment or user evidence. Runtime-sensitive work remains incomplete until the required proof exists.
+
+## What the tools contribute
+
+- **GitHub Issues and the Project board** record problems, priorities, dependencies, and ownership.
+- **Git worktrees and branches** isolate implementation from concurrent work.
+- **Pull requests and reviews** make the exact proposed change inspectable.
+- **GitHub Actions** runs deterministic quality, test, and security checks.
+- **Runtime and user evidence** confirms that the delivered behavior resolves the original problem.
+
+For the reasoning behind this structure, read [How My Agentic Engineer Turns Problems into Proved Working Solutions](/blog/how-my-agentic-engineer-turns-problems-into-proved-working-solutions/).

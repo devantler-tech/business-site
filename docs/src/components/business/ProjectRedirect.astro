@@ -1,0 +1,22 @@
+---
+interface Props { anchor: 'open-title' | 'research' }
+const { anchor } = Astro.props;
+const destination = '/projects/';
+const fallback = `#${anchor}`;
+const href = `${destination}${fallback}`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Projects have moved | Devantler Tech</title>
+    <link rel="canonical" href="https://devantler.tech/projects/" />
+    <script is:inline data-project-redirect data-destination={destination} data-fallback={fallback}>
+      const redirect = document.currentScript;
+      location.replace(redirect.dataset.destination + (location.hash || redirect.dataset.fallback));
+    </script>
+    <noscript><meta http-equiv="refresh" content={`0;url=${href}`} /></noscript>
+  </head>
+  <body><p>The project catalogue has moved. <a href={href}>Continue to Projects</a>.</p></body>
+</html>

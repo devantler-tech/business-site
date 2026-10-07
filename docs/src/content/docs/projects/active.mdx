@@ -1,0 +1,122 @@
+---
+title: Active Projects
+description: The technical portfolio maintained by Devantler Tech’s founder, Nikolai Emil Damm.
+---
+
+import { Image } from "astro:assets";
+import ksailImg from "../../../assets/ksail-cli-dark.png";
+import platformImg from "../../../assets/editorial/cloud-fleet.webp";
+
+<div class="projects-page">
+
+{/* public-products: .github,actions,agent-plugins,agent-skills,data-product-controller,dotnet-template,go-template,ksail,kyverno-policies,platform-template,platform-tenant-template,provider-upjet-unifi,world-at-ruin */}
+
+This is Devantler Tech’s wider technical portfolio, maintained by its founder, Nikolai Emil Damm. It includes developer tools, experimental products and personal projects—not a catalogue of paid client work. Contributors and feedback are welcome through each public project's contribution guidelines.
+
+{/* projects-submodules: applications/ascoachingogvaner=grouped,applications/aws=infra,applications/data-product-controller=section,applications/fleet-gitops=infra,applications/ksail=section,applications/unifi=omitted,applications/wedding-app=grouped,applications/world-at-ruin=section,github/devantler-tech/.github-public=infra,github/devantler-tech/github-actions/actions=section,github/devantler-tech/maintenance=infra,github/personal/.github-public=infra,github/personal/profile=infra,homebrew-tap=omitted,libraries/agent-plugins=section,libraries/agent-skills=section,libraries/kyverno-policies=section,libraries/provider-upjet-unifi=section,platform=section,templates/dotnet-template=templates-page,templates/platform-tenant-template=templates-page,templates/go-template=templates-page,templates/platform-template=templates-page
+
+  This marker pins EVERY submodule this monorepo tracks (the source-of-truth is .gitmodules) to how it is represented on the site, so a newly-added product can't silently go unlisted. The docs CI drift-check asserts this path set EQUALS the live .gitmodules paths; when a submodule is added or removed, record it here with one disposition and update the page if needed:
+    • section        — has its own H2 product section on this page (KSail, Platform, Data Product Controller, World at Ruin, Reusable Workflows, Actions, Agent Skills, Agent Plugins, UniFi Provider). The Reusable Workflows section is backed by the actions submodule (its .github/workflows), not a submodule of its own.
+    • grouped        — a private self-hosted app folded into the "🏠 Self-Hosted Personal Apps" section (wedding-app, ascoachingogvaner).
+    • templates-page — a starter template listed on the Templates page (/templates/) instead of here.
+    • infra          — an internal config/automation/GitOps-state repo, not surfaced as a project (the .github-public/profile/maintenance/fleet-gitops repos, and the aws config tenant the Platform reconciles).
+    • omitted        — a product that is deliberately not surfaced on this page (homebrew-tap distribution tap; the private applications/unifi network config). Promote to section/grouped if it should appear.
+*/}
+
+## [🛥️ KSail](https://github.com/devantler-tech/ksail) ![Go](https://img.shields.io/badge/Go-00ADD8.svg?style=for-the-badge&logo=Go&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED.svg?style=for-the-badge&logo=Docker&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white)
+
+<Image src={ksailImg} alt="KSail CLI" />
+
+A tool that bundles common Kubernetes tooling into a single binary, exposed through a **VS Code extension**, **CLI**, **AI-enabled chat TUI**, or **MCP interface**. Use it to create clusters, deploy workloads, and operate GitOps-based cloud-native stacks across a range of distributions and providers.
+
+📖 [Full Documentation](https://ksail.devantler.tech) · 📝 [Read about the journey from .NET to Go](/blog/building-ksail-from-shell-to-dotnet-to-go/)
+
+## [☸️ Platform](https://github.com/devantler-tech/platform) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white) ![Flux](https://img.shields.io/badge/Flux-5468FF.svg?style=for-the-badge&logo=Flux&logoColor=white) ![Talos Linux](https://img.shields.io/badge/Talos-FF7300.svg?style=for-the-badge&logo=Talos&logoColor=white)
+
+<Image src={platformImg} alt="Illustration of connected local and cloud infrastructure" />
+
+A [Flux](https://fluxcd.io/) GitOps-based Kubernetes cluster running on [Hetzner Cloud](https://www.hetzner.com/cloud/). It demonstrates a production-grade approach to working with Kubernetes using [Talos Linux](https://www.talos.dev/) — provisioned via [KSail's native Hetzner provider](https://github.com/devantler-tech/ksail).
+
+The platform supports software development and self-hosted applications. It is also a place to explore cloud-native technologies; its experimental and personal workloads should not be read as a promise about a customer’s hosting agreement.
+
+**Key Technologies**: [Cilium](https://cilium.io/) (CNI & [Gateway API](https://gateway-api.sigs.k8s.io/) ingress), [cert-manager](https://cert-manager.io/) (TLS), [SOPS](https://getsops.io) & [External Secrets](https://external-secrets.io/) + [OpenBao](https://openbao.org/) (Secrets), [external-dns](https://kubernetes-sigs.github.io/external-dns/) with [Cloudflare](https://www.cloudflare.com) (DNS)
+
+## [⬡ Data Product Controller](https://github.com/devantler-tech/data-product-controller) ![Go](https://img.shields.io/badge/Go-00ADD8.svg?style=for-the-badge&logo=Go&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white)
+
+A cloud-native controller and open contract for building **composable data products**. A Kubernetes `DataProduct` resource describes ownership, dependencies, data interfaces, and an independently hosted UI; the controller publishes ready products through a central registry without coupling that registry to any product implementation. The same descriptor can therefore be consumed by other compatible portals, and products can depend on products to form larger aggregates and data spaces.
+
+The initial v1.0 foundation includes the CRD and reconciler, registry API and UI, standard query and OpenAPI surfaces, and a standalone Harbour demonstration product. Source provisioners, connection integrators, and aggregate execution remain explicit roadmap work rather than capabilities claimed by this first release.
+
+🗺️ [Roadmap](https://github.com/devantler-tech/data-product-controller/issues/1) · 🔎 [Explore the hosted registry](https://data-products.platform.devantler.tech)
+
+## [⚔️ World at Ruin](https://github.com/devantler-tech/world-at-ruin) ![Godot Engine](https://img.shields.io/badge/Godot-478CBF.svg?style=for-the-badge&logo=godotengine&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white)
+
+A **source-available, cloud-native MMORPG built almost entirely by AI agents** — the newest and most experimental project in the portfolio. Everything is authored as code and built headlessly in CI: a [Godot 4](https://godotengine.org/) client with procedurally generated worlds, and an [Agones](https://agones.dev/)-based server tier planned on the Platform above. Progress is meant to be watched by *playing* — every player-visible change lands in the in-game dev log.
+
+Currently in **pre-alpha**, and playable now on macOS — [install it with Homebrew, or download the app directly](https://github.com/devantler-tech/world-at-ruin#play-it). You wake in a cave, shape your character, and walk out into the ruins; combat and networking come later. The full settled design lives in the repo's [AGENTS.md](https://github.com/devantler-tech/world-at-ruin/blob/main/AGENTS.md).
+
+🎮 [Install & play](https://github.com/devantler-tech/world-at-ruin#play-it)
+
+## 🏠 Self-Hosted Personal Apps
+
+A couple of small apps I build and self-host purely for myself and my family — they run as tenants on the Platform cluster above. These are personal hobby projects, not products or services: there's nothing to sign up for, and the source repositories are private.
+
+- **Wedding App** — a small service I put together around a family wedding.
+- **AS Coaching og Vaner** — a small website I host on behalf of a family member.
+
+## [🔄 Reusable Workflows](https://github.com/devantler-tech/actions/tree/main/.github/workflows) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
+
+A collection of [reusable GitHub Actions workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) that encapsulate common CI/CD patterns, shipped from the [actions](https://github.com/devantler-tech/actions) repo (the standalone reusable-workflows repo was merged into it and archived). Used across all DevantlerTech projects to ensure consistency and reduce duplication.
+
+- **CI Workflows**: [Go](https://go.dev/) testing/linting, [.NET](https://dotnet.microsoft.com/) testing, repo-wide linting, [dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review)
+- **CD Workflows**: [GitHub Pages](https://pages.github.com/) publish, application/library releases, manifests-only [OCI](https://opencontainers.org/) publish, workflow-run cleanup
+- **Automation**: Auto-merge for trusted bots, [semantic-release](https://semantic-release.gitbook.io/), TODO scanning, [Kyverno](https://kyverno.io/) policy sync, [Zizmor](https://github.com/woodruffw/zizmor) workflow analysis, [agent skills](https://github.com/devantler-tech/agent-skills) updates, [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) sync, signed commit-back of exported auto-fixes
+
+{/* reusable-workflows-count: 17 — this categorical list covers every reusable (workflow_call) workflow in devantler-tech/actions' .github/workflows; the docs CI drift-check fails when a workflow is added or removed there. When that happens, review the category bullets above and bump this number to match. */}
+
+{/* reusable-workflows-names: apply-signed-fixes,create-release,delete-workflow-runs,dependency-review,deploy-github-pages,enable-auto-merge,lint,publish-app,publish-dotnet-library,publish-manifests,run-dotnet-tests,scan-for-todo-comments,scan-for-workflow-vulnerabilities,sync-cluster-policies,template-sync,update-agent-skills,validate-go-project — the exact set of reusable (workflow_call) workflow filenames (minus .yaml) in devantler-tech/actions' .github/workflows. The docs CI drift-check asserts this set EQUALS the live workflow_call workflows, so an added, removed, OR renamed workflow breaks the build even when the count is unchanged (a count alone misses renames and net-zero swaps). When that happens, review the category bullets above and update this marker together with the count. */}
+
+## [⚡ Actions](https://github.com/devantler-tech/actions) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
+
+A collection of [composite GitHub Actions](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action) that provide small, reusable components for CI/CD workflows.
+
+- **Aggregate Job Checks**: Aggregate multiple job results into a single required check
+- **Approve PR**: Approve a PR using a GitHub App identity
+- **Dependency Review**: Scan a PR's dependency changes for vulnerabilities and disallowed licenses
+- **Diagnose Flux**: Dump [Flux](https://fluxcd.io/) reconcile state, controller logs, and failing pod logs to debug a stuck deploy in CI/CD
+- **Enable Auto-Merge**: Enable auto-merge on a pull request
+- **Cleanup GHCR**: Clean up old [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) packages
+- **Free Disk Space**: Reclaim runner disk space by removing large preinstalled toolchains
+- **Guard Installed Skill Edits**: Refuse a hand-edit to a synced installed-skill tree, naming the upstream that owns it
+- **Login to GHCR**: Authenticate with the GitHub Container Registry
+- **.NET Test**: Test [.NET](https://dotnet.microsoft.com/) solutions or projects
+- **Setup Agent Skills**: Install agent skills via `gh skill` for one or more agents (e.g. GitHub Copilot, Claude Code)
+- **Setup Go Toolchain**: Set up Go with optional private module support
+- **Setup KSail**: Install [KSail](https://github.com/devantler-tech/ksail) CLI via [Homebrew](https://brew.sh/)
+- **TODOs**: Create GitHub issues from TODO comments in code
+- **Update Agent Skills**: Run `gh skill update --all` and report changes
+- **Upload Coverage**: Upload a Cobertura XML coverage report to GitHub Code Quality
+- **Upsert Issue**: Create, update, reopen, or close a GitHub issue by title
+- **Validate Manifest Naming**: Check that Kubernetes manifests and machine patches follow a configurable naming convention
+- **Validate Retired Repository Links**: Reject links to retired GitHub repositories, with documented historical exceptions
+- **Validate Shell Pipelines**: Find early-exit `grep` assertions in shell scripts before `pipefail` can invert their result
+
+{/* actions-dirs: aggregate-job-checks,approve-pr,dependency-review,diagnose-flux,enable-auto-merge-on-pr,cleanup-ghcr-packages,free-disk-space,guard-installed-skill-edits,login-to-ghcr,run-dotnet-tests,setup-agent-skills,setup-go-toolchain,setup-ksail-cli,create-issues-from-todos,update-agent-skills,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines — one entry per composite-action directory in devantler-tech/actions, in bullet order. The docs CI drift-check asserts this set EQUALS the live action directories, so an added, removed, OR renamed action breaks the build. When that happens, update the matching bullet above and this marker together. */}
+
+## [🧠 Agent Skills](https://github.com/devantler-tech/agent-skills) ![GitHub Copilot](https://img.shields.io/badge/GitHub%20Copilot-000000.svg?style=for-the-badge&logo=githubcopilot&logoColor=white) ![Claude](https://img.shields.io/badge/Claude-D97757.svg?style=for-the-badge&logo=claude&logoColor=white)
+
+A collection of generic, tool-neutral [agent skills](https://github.com/devantler-tech/agent-skills) that teach AI coding agents how to perform common engineering tasks. Installable via `gh skill` and designed to work across agents such as [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://www.anthropic.com/claude-code).
+
+## [🧩 Agent Plugins](https://github.com/devantler-tech/agent-plugins) ![GitHub Copilot](https://img.shields.io/badge/GitHub%20Copilot-000000.svg?style=for-the-badge&logo=githubcopilot&logoColor=white) ![Claude](https://img.shields.io/badge/Claude-D97757.svg?style=for-the-badge&logo=claude&logoColor=white) ![VS Code](https://img.shields.io/badge/VS%20Code-007ACC.svg?style=for-the-badge&logo=visualstudiocode&logoColor=white)
+
+An agent-plugin marketplace that bundles curated agent skills into plugins by category. Each skill is pulled from its own upstream, drawing on many sources across the ecosystem — including the in-house sibling library [Agent Skills](https://github.com/devantler-tech/agent-skills). Dual manifests mean the same plugins work in [VS Code](https://code.visualstudio.com/), the [GitHub Copilot CLI](https://github.com/features/copilot), and [Claude Code](https://www.anthropic.com/claude-code).
+
+## [🛜 UniFi Provider](https://github.com/devantler-tech/provider-upjet-unifi) ![Crossplane](https://img.shields.io/badge/Crossplane-1A1A1A.svg?style=for-the-badge&logo=crossplane&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white) ![Go](https://img.shields.io/badge/Go-00ADD8.svg?style=for-the-badge&logo=Go&logoColor=white)
+
+A [Crossplane](https://crossplane.io/) provider for [Ubiquiti UniFi](https://www.ui.com/), generated with [Upjet](https://github.com/crossplane/upjet) from the [`ubiquiti-community/terraform-provider-unifi`](https://github.com/ubiquiti-community/terraform-provider-unifi) Terraform provider. It turns UniFi networks, WLANs, firewall rules, VPN/WireGuard, devices and settings into Kubernetes custom resources, so network configuration lives in Git and is reconciled like everything else — the same way the [Platform](https://github.com/devantler-tech/platform) cluster consumes the upstream GitHub provider.
+
+## [🛡️ Kyverno Policies](https://github.com/devantler-tech/kyverno-policies) ![Kyverno](https://img.shields.io/badge/Kyverno-1D9BF0.svg?style=for-the-badge&logo=kyverno&logoColor=white) ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5.svg?style=for-the-badge&logo=Kubernetes&logoColor=white)
+
+A shared catalog of [Kyverno](https://kyverno.io/) policies — the rules that decide what may run on a cluster and fill in what a workload left out. Writing them once here means the [Platform](https://github.com/devantler-tech/platform) and the [Platform Template](https://github.com/devantler-tech/platform-template) inherit the same guardrails instead of each keeping a copy that quietly drifts. Every policy ships with a Kyverno CLI test pinning the behaviour it promises, so a change that would loosen a guardrail fails before it reaches a cluster.
+
+</div>

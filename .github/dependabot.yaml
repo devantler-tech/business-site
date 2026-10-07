@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
+      exclude:
+        - devantler-tech/*
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
+    ignore:
+      # astro-mermaid supports Mermaid 10/11, not an unverified major upgrade.
+      - dependency-name: mermaid
+        update-types: [version-update:semver-major]

@@ -1,0 +1,48 @@
+name: Audit - Docs Dependencies
+
+# Observes the docs dependency tree on a cadence, independent of whether any pull
+# request touched docs dependencies.
+#
+# The `audit-docs` job in ci.yaml runs only when a change touches docs deps, so on an
+# ordinary day nothing audits the lockfile at all. Advisories therefore accumulate
+# unseen and first surface by blocking an automated dependency pull request — which
+# agents may not touch — at which point no single-package bump can clear them.
+#
+# Both workflows invoke the same bounded audit wrapper. Its contract test also checks
+# this wiring, so a change to either workflow cannot silently weaken the scheduled copy.
+#
+# This workflow gates nothing. It has no pull_request trigger, is absent from the
+# "CI - Required Checks" aggregation, and adds no latency to any pull request.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: "audit-docs"
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  audit-docs:
+    name: "Audit docs dependencies"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Test audit wrapper
+        working-directory: docs
+        run: ./scripts/audit-dependencies.test.sh
+      - name: Audit
+        working-directory: docs
+        run: ./scripts/audit-dependencies.sh

@@ -1,0 +1,60 @@
+---
+import { copy, type Locale } from './content';
+interface Props { locale?: Locale; path?: string; translated?: boolean }
+const { locale = 'en', path = '/', translated = true } = Astro.props;
+const t = copy[locale];
+const prefix = locale === 'da' ? '/da' : '';
+const home = `${prefix}/`;
+const section = (id: string) => `${path === home ? '' : home}#${id}`;
+const english = translated ? path.replace(/^\/da(?=\/)/, '') : path;
+const danish = translated ? `/da${english}` : '/da/';
+const links = [
+  { href: section('services'), label: t.services },
+  { href: `${prefix}/projects/`, label: t.projectsNav },
+  { href: `${prefix}/about/`, label: t.aboutNav },
+  { href: '/blog/', label: t.journalNav },
+  { href: section('contact'), label: t.contact },
+];
+---
+<div class="business-header container">
+  <a href={home} class="brand" aria-label="Devantler Tech">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M8 8h8a8 8 0 0 1 0 16H8V8Zm5 5v6h3a3 3 0 0 0 0-6h-3Z" fill="currentColor" /></svg>
+    <span>Devantler<span class="brand-tech"> Tech</span></span>
+  </a>
+  <nav data-business-nav aria-label={t.navigation}>
+    {links.map(({ href, label }) => <a href={href} aria-current={path === href || (href === '/blog/' && path.startsWith('/blog/')) ? 'page' : undefined}>{label}</a>)}
+  </nav>
+  <div class="controls">
+    <div id="theme-control" hidden>
+      <label class="sr-only" for="theme-select">{t.appearance}</label>
+      <select id="theme-select"><option value="auto" selected>{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select>
+    </div>
+    <div class="languages" aria-label={t.language}>
+      <a href={english} lang="en" aria-current={locale === 'en' ? 'page' : undefined} data-language-switch={locale !== 'en' || undefined}>EN</a>
+      <span aria-hidden="true">/</span>
+      <a href={danish} lang="da" title={!translated ? 'Danish homepage — this article is in English' : undefined} aria-current={locale === 'da' ? 'page' : undefined} data-language-switch={translated && locale !== 'da' || undefined}>DA</a>
+    </div>
+  </div>
+</div>
+<script>
+  document.querySelectorAll<HTMLAnchorElement>('[data-language-switch]').forEach((link) => {
+    link.addEventListener('click', () => { link.hash = window.location.hash; });
+  });
+</script>
+<style>
+  .business-header { display: flex; align-items: center; gap: 1.5rem; min-height: 90px; font-family: 'Studio Inter', system-ui, sans-serif; color: var(--ink); }
+  .brand { display: inline-flex; align-items: center; flex-shrink: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: -.04em; text-decoration: none; color: var(--ink); }
+  .brand-tech { color: var(--accent); }
+  .brand-mark { width: 34px; height: 34px; margin-right: .45rem; background: var(--accent); color: var(--accent-ink); border-radius: 8px; }
+  nav { display: flex; justify-content: flex-end; flex: 1; gap: 1.1rem; }
+  nav a { display: inline-flex; align-items: center; min-height: 44px; font-size: .875rem; text-decoration: none; color: var(--ink); }
+  a:hover, a[aria-current] { color: var(--accent); }
+  .controls { display: flex; align-items: center; gap: .9rem; flex-shrink: 0; }
+  select { min-height: 44px; border: 1px solid var(--line); border-radius: 6px; padding: .4rem .35rem .4rem .65rem; background: var(--paper); color: var(--ink); font: inherit; font-size: .8rem; cursor: pointer; }
+  .languages { display: flex; gap: .5rem; font-size: .8rem; color: var(--muted); }
+  .languages a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; color: inherit; }
+  .languages [aria-current] { color: var(--accent); font-weight: 600; }
+  .languages span { align-self: center; }
+  @media (max-width: 1050px) { .business-header { gap: .5rem 1rem; flex-wrap: wrap; padding-block: .75rem; } nav { order: 3; flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; gap: .1rem 1.25rem; } .controls { margin-left: auto; } }
+  @media (max-width: 760px) { .brand { font-size: 1.1rem; } .brand-mark { width: 28px; height: 28px; } .controls { gap: .6rem; } }
+</style>

@@ -1,0 +1,32 @@
+---
+title: Completed Projects
+description: Past projects and academic work that have reached their end of life or are no longer actively maintained.
+---
+
+import { Image } from "astro:assets";
+import dataProductImg from "../../../assets/editorial/data-research.webp";
+import dataSpaceImg from "../../../assets/data-space-as-a-data-mesh.png";
+
+<div class="projects-page">
+
+Earlier projects and academic work by Devantler Tech’s founder, Nikolai Emil Damm. These are background and research examples, not current commercial offerings.
+
+## [⬡ Data Product](https://github.com/devantler-tech/data-product) ![.NET](https://img.shields.io/badge/.NET-512BD4.svg?style=for-the-badge&logo=dotnet&logoColor=white)
+
+<Image src={dataProductImg} alt="Illustration of independent data tiles connected into a larger landscape" />
+
+My master thesis project: a data product inspired by the [Data Mesh](https://www.datamesh-architecture.com/) architectural pattern and [Zhamak Dehghani's book](https://www.oreilly.com/library/view/data-mesh/9781492092384/). Built in [.NET](https://dotnet.microsoft.com/) using [Source Generators](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) to create data products from schema definitions and YAML configuration.
+
+📄 [Read the thesis](/pdfs/thesis.pdf)
+
+## 🌏 Exploration of State-of-the-Art Technology, Architectures and Tools to Create Future-Proof Data Spaces
+
+### ⭐️ Graded 12/12 <span style="float:right">10th semester (MSc thesis)</span>
+
+<Image src={dataSpaceImg} alt="Data Space as a Data Mesh" />
+
+An exploration of whether a [data space](https://internationaldataspaces.org/) can be implemented as a [data mesh](https://www.datamesh-architecture.com/), focusing on challenges and benefits for collaboration in the Danish energy sector.
+
+📄 [Read the thesis](/pdfs/thesis.pdf)
+
+</div>

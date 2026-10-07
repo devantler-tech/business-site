@@ -1,0 +1,161 @@
+---
+import { Image } from 'astro:assets';
+import portrait from '../../assets/profile.jpg';
+import matrix from '../../assets/matrix.png';
+import BusinessLayout from "./BusinessLayout.astro";
+import { copy, offers, inquiryUrl, type Locale } from './content';
+
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const t = copy[locale];
+const home = locale === 'da' ? '/da/' : '/';
+const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-DK').format(value);
+---
+
+<BusinessLayout locale={locale}>
+    <main id="main">
+      <section class="hero-scene" aria-labelledby="hero-title">
+        <Image class="hero-art" data-hero-art src={matrix} width={1600} height={800} widths={[640, 1280, 1920]} sizes="100vw" format="webp" quality={80} alt="" aria-hidden="true" loading="eager" fetchpriority="high" />
+        <div class="hero container">
+        <div class="hero-copy">
+          <p class="eyebrow">{t.eyebrow}</p>
+          <h1 id="hero-title">{t.headline.split('\n').map((line) => <span>{line}</span>)}</h1>
+          <p class="hero-intro">{t.intro}</p>
+          <div class="actions"><a class="button" href="#contact">{t.primary} <span aria-hidden="true">↗</span></a><a class="text-link" href="#services">{t.secondary} <span aria-hidden="true">↓</span></a></div>
+          <p class="availability"><span aria-hidden="true"></span>{t.availability}</p>
+        </div>
+        <aside class="developer" aria-labelledby="developer-name">
+          <figure>
+            <Image class="developer-portrait" src={portrait} width={600} widths={[224, 320, 600]} sizes="(max-width: 760px) 112px, 320px" format="webp" alt="Nikolai Emil Damm" loading="eager" />
+            <figcaption><h2 id="developer-name">Nikolai Emil Damm</h2><p>{t.developerRole}</p></figcaption>
+          </figure>
+          <p class="developer-note">{t.developerNote}</p>
+          <div class="supporting-links"><a href={`${home}about/`} hreflang={locale}>{t.profile}</a><a href="https://github.com/devantler">{t.publicCode}</a></div>
+        </aside>
+        </div>
+      </section>
+      <div class="promise container"><ul>{t.promise.map((item) => <li>{item}</li>)}</ul></div>
+      <section id="services" class="section container" aria-labelledby="services-title">
+        <div class="section-heading"><h2 id="services-title">{t.servicesTitle}</h2><p>{t.servicesIntro}</p></div>
+        <div class="offers">
+          {offers.map((offer, i) => {
+            const detail = t.offerCopy[i];
+            return <article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
+              <h3>{detail.title}</h3><p class="offer-description">{detail.description}</p>
+              <div class="price"><span>{t.starting}</span><strong>{locale === 'en' && `${t.currency} `}{format(offer.setup)}{locale === 'da' && ` ${t.currency}`}</strong></div>
+              <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}</p>
+              <ul>{detail.includes.map((item) => <li>{item}</li>)}</ul>
+              <p class="boundary">{detail.boundary}</p>
+              <a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
+            </article>;
+          })}
+        </div>
+        <p class="price-note">{t.priceNote}</p>
+        <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
+      </section>
+      <section id="work" class="work-band" aria-labelledby="work-title">
+        <div class="container section">
+          <div class="section-heading"><h2 id="work-title">{t.workTitle}</h2><p>{t.workIntro}</p></div>
+          <div class="work-list">{t.workItems.map((item) => <article><p class="eyebrow">{item.kind}</p><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
+          <a class="text-link" href={`${home}projects/`}>{t.portfolioLink}<span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+      <section id="products" class="section container" aria-labelledby="products-title">
+        <div class="section-heading"><h2 id="products-title">{t.productsTitle}</h2><p>{t.productsIntro}</p></div>
+        <div class="product-list">
+          <article><span class="product-symbol" aria-hidden="true">&gt;_</span><div><h3>KSail</h3><p>{t.ksailText}</p><a class="text-link" href="https://ksail.devantler.tech">{t.productLink}<span aria-hidden="true">↗</span></a></div></article>
+          <article><span class="product-symbol" aria-hidden="true">{'{ }'}</span><div><h3>Agent Plugins</h3><p>{t.pluginsText}</p><a class="text-link" href="https://github.com/devantler-tech/agent-plugins">{t.productLink}<span aria-hidden="true">↗</span></a></div></article>
+        </div>
+        <p class="subscription-note">{t.subscriptionNote}</p>
+      </section>
+      <section id="process" class="section container process" aria-labelledby="process-title">
+        <div class="section-heading"><h2 id="process-title">{t.processTitle}</h2></div>
+        <ol>{t.steps.map((step) => <li><h3>{step.title}</h3><p>{step.text}</p></li>)}</ol>
+      </section>
+      <section class="founder container">
+        <div><h2>{t.founderTitle}</h2><p>{t.founderText}</p><div class="supporting-links"><a href={`${home}about/`}>{t.profile}</a><a href="/blog/">{t.blog}</a><a href={`${home}projects/`}>{t.technical}</a></div><p class="language-note">{t.englishNote}</p></div>
+      </section>
+      <section id="contact" class="contact-band" aria-labelledby="contact-title">
+        <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><p class="contact-note">{t.contactNote}</p></div>
+      </section>
+    </main>
+</BusinessLayout>
+
+<style>
+  h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); }
+  h3 { font-size: 1.3rem; letter-spacing: -.025em; }
+  .hero-scene { position: relative; isolation: isolate; overflow: hidden; background: var(--canvas); }
+  .hero-art { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: var(--art-opacity); }
+  .hero-scene::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--hero-shield) 10%, transparent 90%), linear-gradient(0deg, var(--canvas), transparent 30%); }
+  .hero { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 5rem; padding-block: 4.5rem 3.5rem; align-items: center; }
+  .eyebrow { font-size: .8rem; font-weight: 600; letter-spacing: .01em; color: var(--accent); margin-bottom: 1.2rem; }
+  h1 { font-size: clamp(2.7rem, 4.5vw, 4.15rem); line-height: 1.09; }
+  h1 span { display: block; }
+  .hero-intro { max-width: 550px; font-size: 1.1rem; margin-top: 1.6rem; }
+  .actions { display: flex; align-items: center; gap: 1.7rem; flex-wrap: wrap; margin-top: 2rem; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: 1.5rem; min-height: 48px; padding: .85rem 1.25rem; background: var(--accent); border: 1px solid var(--accent); border-radius: 6px; color: var(--accent-ink); font-size: .92rem; font-weight: 600; text-decoration: none; }
+  .button:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
+  .text-link { display: inline-flex; align-items: center; gap: .7rem; min-height: 44px; font-size: .9rem; font-weight: 600; color: var(--accent); text-decoration: none; }
+  .text-link:hover { text-decoration: underline; }
+  .availability { display: flex; align-items: center; gap: .6rem; font-size: .8rem; margin-top: 1.25rem; }
+  .availability span { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .developer { max-width: 320px; justify-self: center; }
+  .developer figure { margin: 0; }
+  .developer-portrait { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; object-position: center 35%; border: 1px solid var(--line); border-radius: 8px; }
+  .developer figcaption { margin-top: 1rem; }
+  .developer h2 { font-size: 1.15rem; letter-spacing: -.025em; }
+  .developer figcaption p { font-size: .75rem; margin-top: .35rem; }
+  .developer-note { font-size: .85rem; margin-top: 1rem; }
+  .developer .supporting-links { gap: .3rem 1rem; }
+  .promise { padding-block: 1.4rem; border-block: 1px solid var(--line); }
+  .promise ul { display: flex; justify-content: space-between; gap: 1rem; padding: 0; margin: 0; list-style: none; font-size: .85rem; color: var(--muted); }
+  .section { padding-block: 5rem; }
+  .section-heading { max-width: 730px; margin-bottom: 2.5rem; }
+  .section-heading p { margin-top: 1rem; }
+  .offers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  .offer { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; padding: 1.65rem; background: var(--card); }
+  .offer-description { font-size: .9rem; margin-top: .8rem; min-height: 4.5em; }
+  .price { display: flex; flex-direction: column; margin-top: 1.5rem; }
+  .price > span { font-size: .8rem; color: var(--muted); }
+  .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
+  .hosting-price { font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
+  .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
+  .offer li { padding-left: .15rem; margin-block: .45rem; }
+  .offer li::marker { color: var(--accent); }
+  .boundary { font-size: .79rem; margin-bottom: 1rem; }
+  .offer .text-link { margin-top: auto; }
+  .price-note { font-size: .8rem; margin-top: 1.3rem; max-width: 1000px; }
+  .scope-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 3rem; padding-top: 3rem; border-top: 1px solid var(--line); }
+  .scope-notes h3 { font-size: 1.2rem; }
+  .scope-notes p { font-size: .9rem; margin-top: .9rem; }
+  .work-band { background: var(--paper); border-block: 1px solid var(--line); }
+  .work-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-bottom: 1.5rem; }
+  .work-list article { border-top: 1px solid var(--line); padding-top: 1.5rem; }
+  .work-list .eyebrow { margin-bottom: .6rem; }
+  .work-list article > p:last-child { font-size: .9rem; margin-top: 1rem; }
+  .product-list { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; }
+  .product-list article { display: flex; gap: 1.5rem; }
+  .product-symbol { flex-shrink: 0; width: 54px; height: 54px; background: var(--paper); border: 1px solid var(--line); display: grid; place-items: center; border-radius: 6px; color: var(--accent); font-family: monospace; font-size: 1.25rem; }
+  .product-list p { font-size: .9rem; margin-block: .9rem .4rem; }
+  .subscription-note { margin-top: 2rem; font-size: .8rem; }
+  .process { padding-top: 1rem; }
+  .process ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3rem; list-style: none; counter-reset: steps; margin: 0; padding: 0; }
+  .process li { border-top: 1px solid var(--line); padding-top: 1.3rem; counter-increment: steps; }
+  .process li::before { content: counter(steps); display: block; color: var(--accent); font-size: .9rem; margin-bottom: 1rem; }
+  .process h3 { font-size: 1.15rem; }
+  .process p { font-size: .9rem; margin-top: .9rem; }
+  .founder { border-top: 1px solid var(--line); padding-block: 3rem; }
+  .founder h2 { font-size: 1.35rem; }
+  .founder p { max-width: 760px; font-size: .9rem; margin-top: .7rem; }
+  .supporting-links { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: .8rem; font-size: .85rem; }
+  .supporting-links a { min-height: 44px; display: inline-flex; align-items: center; }
+  .founder .language-note { margin-top: .3rem; font-size: .75rem; }
+  .contact-band { background: var(--contact); border-top: 1px solid var(--line); padding-block: 4.5rem; }
+  .contact-band h2 { max-width: 700px; }
+  .contact-band p { max-width: 650px; margin-top: 1.3rem; }
+  .contact-band .button { margin-top: 1.6rem; }
+  .contact-band .contact-note { font-size: .75rem; max-width: 700px; }
+  @media (max-width: 1050px) { .hero { gap: 2rem; } .offers { gap: .75rem; } .offer { padding: 1.2rem; } }
+  @media (max-width: 760px) { .container { width: calc(100% - 2.5rem); } .hero { grid-template-columns: 1fr; gap: 2rem; padding-block: 2rem; } .hero-scene::before { background: linear-gradient(90deg, var(--hero-shield), transparent 170%), linear-gradient(0deg, var(--canvas), transparent 35%); } .developer { width: 100%; max-width: 540px; } .developer figure { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 1rem; align-items: center; } .developer figcaption { margin-top: 0; } .developer .supporting-links { margin-top: .35rem; } h1 { font-size: clamp(2.2rem, 8vw, 3.4rem); } .promise ul { flex-direction: column; gap: .5rem; } .section { padding-block: 3rem; } .offers, .scope-notes, .work-list, .product-list, .process ol { grid-template-columns: 1fr; gap: 1.5rem; } .offer { padding: 1.5rem; } .offer-description { min-height: 0; } .scope-notes { margin-top: 2rem; padding-top: 2rem; } .product-list { gap: 2rem; } .supporting-links { gap: .3rem 1rem; } .contact-band { padding-block: 3rem; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+</style>

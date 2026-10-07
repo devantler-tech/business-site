@@ -1,0 +1,1528 @@
+/* Custom styles for devantler.tech */
+
+/* ─── Foundation ─── */
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: clip;
+}
+
+body {
+  overflow-x: clip;
+}
+
+/* Smooth theme transitions */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0s;
+}
+
+:root[data-theme] *,
+:root[data-theme] *::before,
+:root[data-theme] *::after {
+  transition-duration: 0.25s;
+  transition-timing-function: ease;
+}
+
+::selection {
+  background: rgba(57, 255, 20, 0.25);
+  color: inherit;
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(21, 128, 61, 0.2);
+}
+
+/* ─── Accessibility — Skip Link ─── */
+/* Scoped to body > a to avoid targeting TOC "Overview" links */
+
+body > a[href="#_top"] {
+  position: fixed;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.75rem 1.5rem;
+  background: var(--sl-color-accent);
+  color: var(--sl-color-bg, #000);
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: top 0.2s ease;
+}
+
+body > a[href="#_top"]:focus {
+  top: 0;
+}
+
+/* ─── Accessibility — Focus Indicators ─── */
+
+:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 4px rgba(57, 255, 20, 0.15);
+}
+
+:root[data-theme="light"] :focus-visible {
+  box-shadow: 0 0 0 4px rgba(21, 128, 61, 0.15);
+}
+
+/* Suppress outline on mouse clicks */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ─── Color Palette ─── */
+
+/* Dark mode */
+:root {
+  --sl-color-accent-low: #0a2e14;
+  --sl-color-accent: #39ff14;
+  --sl-color-accent-high: #7aff6e;
+  --sl-color-bg-accent: rgba(57, 255, 20, 0.06);
+  --glow-color: rgba(57, 255, 20, 0.3);
+  --glow-color-subtle: rgba(57, 255, 20, 0.1);
+  --card-bg: rgba(255, 255, 255, 0.045);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-border-hover: rgba(57, 255, 20, 0.45);
+  --hero-overlay: linear-gradient(135deg, rgba(5, 10, 8, 0.84) 0%, rgba(5, 10, 8, 0.65) 50%, rgba(5, 10, 8, 0.84) 100%);
+  --hero-bottom-fade: linear-gradient(to bottom, transparent 60%, var(--sl-color-bg) 100%);
+}
+
+/* Light mode */
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d4fcd6;
+  --sl-color-accent: #15803d;
+  --sl-color-accent-high: #0d5a2a;
+  --sl-color-bg-accent: rgba(21, 128, 61, 0.05);
+  --glow-color: rgba(21, 128, 61, 0.18);
+  --glow-color-subtle: rgba(21, 128, 61, 0.07);
+  --card-bg: rgba(0, 0, 0, 0.035);
+  --card-border: rgba(0, 0, 0, 0.12);
+  --card-border-hover: rgba(21, 128, 61, 0.45);
+  --hero-overlay: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(245, 255, 247, 0.62) 50%,
+    rgba(255, 255, 255, 0.82) 100%
+  );
+  --hero-bottom-fade: linear-gradient(to bottom, transparent 60%, var(--sl-color-bg) 100%);
+}
+
+/* ─── Global Polish ─── */
+
+/* ─── Header — Glass Morphism ─── */
+
+header {
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  border-bottom: 1px solid var(--card-border);
+  background: rgba(var(--sl-color-bg-raw, 17, 18, 25), 0.8) !important;
+}
+
+:root[data-theme="light"] header {
+  background: rgba(255, 255, 255, 0.82) !important;
+}
+
+pre {
+  border-radius: 0.5rem;
+}
+
+table {
+  max-width: 100%;
+}
+
+footer {
+  text-align: center;
+}
+
+a {
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+/* ─── Hero Section — Full-Width Background ─── */
+
+/* Break the hero out of the content column so the matrix background
+   truly covers the viewport edge-to-edge on the splash page. */
+[data-has-hero] main > .hero,
+main > .hero,
+.hero {
+  position: relative;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 520px;
+  /* Top padding includes the fixed-header height so the title clears the
+     navbar once the hero rises behind it (see the [data-has-hero] rules below). */
+  padding: calc(var(--sl-nav-height) + 1.5rem) 2rem 4rem !important;
+  text-align: center;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  overflow: hidden;
+}
+
+/* On splash (hero) pages, let the full-bleed hero rise *behind* the fixed glass
+   header instead of starting below it — so the header's backdrop-blur sits over
+   the matrix art and there's no plain band between the navbar and the hero
+   image. The layout normally reserves header clearance with top padding on these
+   wrappers; cancel it only on hero pages (the hero's own top padding, which
+   includes --sl-nav-height, keeps the title clear of the header). */
+[data-has-hero] .main-frame,
+[data-has-hero] .content-panel:first-child {
+  padding-top: 0;
+}
+
+/* Matrix image as full-width background */
+.hero > img {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover;
+  z-index: 0;
+  border-radius: 0 !important;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .hero > img {
+  opacity: 0.28;
+}
+
+/* Dark overlay gradient */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--hero-overlay);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Bottom fade into page background */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--hero-bottom-fade);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Hero content sits above overlays */
+.hero > .sl-flex.stack {
+  position: relative;
+  z-index: 2;
+  align-items: center !important;
+}
+
+.hero .copy {
+  align-items: center !important;
+}
+
+/* Hero title — animated gradient text */
+.hero h1 {
+  background: linear-gradient(
+    135deg,
+    var(--sl-color-accent-high),
+    var(--sl-color-accent),
+    #a3ffb0,
+    var(--sl-color-accent-high)
+  );
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+  font-size: clamp(2.25rem, 5vw + 1rem, 3.5rem);
+  line-height: 1.1;
+  animation: shimmer 6s ease-in-out infinite;
+}
+
+/* Light mode — deeper gradient for better contrast */
+:root[data-theme="light"] .hero h1 {
+  background: linear-gradient(135deg, #064e1e, var(--sl-color-accent), #22c55e, #064e1e);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Hero tagline */
+.hero .tagline {
+  opacity: 0.94;
+  max-width: 56ch;
+  text-align: center;
+  font-size: 1.18rem;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
+  line-height: 1.65;
+}
+
+/* Hero action buttons (shared with the About page CV download button) */
+.hero .actions {
+  justify-content: center !important;
+}
+
+.hero .sl-link-button,
+.sl-markdown-content .cv-download .sl-link-button {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.hero .sl-link-button.primary,
+.sl-markdown-content .cv-download .sl-link-button.primary {
+  box-shadow: 0 2px 16px var(--glow-color);
+}
+
+.hero .sl-link-button.primary:hover,
+.sl-markdown-content .cv-download .sl-link-button.primary:hover {
+  box-shadow: 0 4px 24px var(--glow-color);
+  transform: translateY(-2px);
+}
+
+.hero .sl-link-button.secondary:hover {
+  background: var(--glow-color-subtle) !important;
+  border-color: var(--sl-color-accent) !important;
+  box-shadow: 0 2px 16px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+.hero .sl-link-button.minimal:hover {
+  color: var(--sl-color-accent) !important;
+  transform: translateY(-2px);
+}
+
+/* ─── Cards ─── */
+
+.card {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 0.75rem !important;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.card:hover {
+  border-color: var(--card-border-hover) !important;
+  box-shadow:
+    0 4px 24px var(--glow-color-subtle),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+}
+
+.card .icon {
+  filter: drop-shadow(0 0 6px var(--glow-color-subtle));
+}
+
+.sl-link-card {
+  border-radius: 0.75rem !important;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease !important;
+}
+
+.sl-link-card:hover {
+  border-color: var(--card-border-hover) !important;
+  box-shadow: 0 4px 24px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+.badges img {
+  display: inline-block;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+/* ─── About Page — Meta & Skills Cards ─── */
+
+.sl-markdown-content dl.about-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin: 1.5rem 0 2rem;
+  padding: 0;
+}
+
+.sl-markdown-content dl.about-meta > div {
+  /* Override Starlight's markdown flow-margin, which otherwise lands on
+     every card but the first and breaks grid row alignment. */
+  margin: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem 0.9rem 1.15rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.65rem;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+/* Accent rail along the left edge — brightens on hover */
+.sl-markdown-content dl.about-meta > div::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--sl-color-accent);
+  opacity: 0.4;
+  transition: opacity 0.25s ease;
+}
+
+.sl-markdown-content dl.about-meta > div:hover {
+  border-color: var(--card-border-hover);
+  box-shadow: 0 6px 22px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+.sl-markdown-content dl.about-meta > div:hover::before {
+  opacity: 1;
+}
+
+.sl-markdown-content dl.about-meta dt {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sl-color-accent);
+}
+
+.sl-markdown-content dl.about-meta dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* ─── About Page — CV Download ─── */
+/* The button itself shares the hero primary-button rules above. */
+
+.sl-markdown-content .cv-download {
+  display: flex;
+  justify-content: center;
+  margin: -0.25rem 0 2rem;
+}
+
+.sl-markdown-content .cv-download .sl-link-button {
+  /* Starlight gives markdown link buttons a trailing margin; drop it so flex centering is exact. */
+  margin-inline-end: 0;
+}
+
+/* ─── About Page — Connect Bar ─── */
+
+.sl-markdown-content ul.connect-bar {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.sl-markdown-content ul.connect-bar li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: inline-flex;
+}
+
+.sl-markdown-content ul.connect-bar a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  text-decoration: none;
+  background: var(--card-bg);
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.sl-markdown-content ul.connect-bar a:hover {
+  border-color: var(--sl-color-accent);
+  background: var(--glow-color-subtle);
+  box-shadow: 0 2px 12px var(--glow-color-subtle);
+  transform: translateY(-1px);
+  color: var(--sl-color-accent);
+}
+
+@media (max-width: 50rem) {
+  .sl-markdown-content ul.connect-bar {
+    flex-direction: column;
+  }
+  .sl-markdown-content ul.connect-bar a {
+    justify-content: center;
+  }
+}
+
+/* ─── About Page — Profile ─── */
+
+[data-page-title="About Me"] main img[alt="Nikolai Emil Damm"] {
+  border: 3px solid var(--sl-color-accent);
+  box-shadow:
+    0 0 24px var(--glow-color),
+    0 8px 32px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.3s ease;
+}
+
+[data-page-title="About Me"] main img[alt="Nikolai Emil Damm"]:hover {
+  box-shadow:
+    0 0 36px var(--glow-color),
+    0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Blockquote — Info Card Style ─── */
+
+blockquote {
+  background: var(--card-bg);
+  border-left: 3px solid var(--sl-color-accent);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+blockquote p {
+  margin: 0.3rem 0;
+}
+
+/* ─── Details / Summary — CV Expandables ─── */
+
+.sl-markdown-content details {
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  transition: border-color 0.2s ease;
+}
+
+.sl-markdown-content details:hover {
+  border-color: var(--card-border-hover);
+}
+
+.sl-markdown-content details summary {
+  cursor: pointer;
+  color: var(--sl-color-accent);
+  font-weight: 500;
+  padding: 0.6rem 1rem;
+  margin-left: 0 !important;
+  border-radius: 0.5rem;
+  background: var(--card-bg);
+  transition: background 0.2s ease;
+  list-style: none;
+}
+
+.sl-markdown-content details summary::before {
+  content: "\25B8\00a0";
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.sl-markdown-content details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.sl-markdown-content details summary::-webkit-details-marker {
+  display: none;
+}
+
+.sl-markdown-content details summary:hover {
+  background: var(--glow-color-subtle);
+}
+
+.sl-markdown-content details[open] summary {
+  border-radius: 0.5rem 0.5rem 0 0;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.sl-markdown-content details > :not(summary) {
+  padding: 0.5rem 1.25rem;
+}
+
+.sl-markdown-content details > ul {
+  padding-left: 2.5rem;
+}
+
+.sl-markdown-content details > :last-child {
+  padding-bottom: 0.75rem;
+}
+
+/* ─── Section Headings ─── */
+
+.sl-markdown-content h2 {
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--glow-color-subtle);
+  position: relative;
+}
+
+.sl-markdown-content h2::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 3rem;
+  height: 2px;
+  background: var(--sl-color-accent);
+  border-radius: 1px;
+}
+
+.sl-markdown-content h3 span[style*="float"] {
+  font-weight: 400;
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+/* ─── Connect Section — Styled Links ─── */
+
+[data-page-title="About Me"] .sl-markdown-content #connect ~ ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+[data-page-title="About Me"] .sl-markdown-content #connect ~ ul a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: 9999px;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+[data-page-title="About Me"] .sl-markdown-content #connect ~ ul a:hover {
+  border-color: var(--sl-color-accent);
+  background: var(--glow-color-subtle);
+  box-shadow: 0 2px 12px var(--glow-color-subtle);
+  transform: translateY(-1px);
+}
+
+/* ─── "Browse all posts" Link ─── */
+
+.sl-markdown-content > p:last-of-type > a[href="/blog/"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--sl-color-accent);
+  text-decoration: none;
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--card-border);
+  border-radius: 9999px;
+  transition:
+    gap 0.25s ease,
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.sl-markdown-content > p:last-of-type > a[href="/blog/"]:hover {
+  gap: 0.7rem;
+  border-color: var(--sl-color-accent);
+  background: var(--glow-color-subtle);
+  box-shadow: 0 2px 12px var(--glow-color-subtle);
+  transform: translateY(-1px);
+}
+
+/* ─── Blog Article Cards ─── */
+
+.blog-post-list article,
+main article {
+  position: relative;
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  background: var(--card-bg);
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+main article:hover {
+  border-color: var(--card-border-hover);
+  box-shadow: 0 4px 20px var(--glow-color-subtle);
+  transform: translateY(-2px);
+  cursor: pointer;
+}
+
+/* Make entire blog card clickable via heading link overlay */
+main article h2 a,
+.blog-post-list article h2 a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Blog cover image polish */
+main article figure img,
+article figure img {
+  border-radius: 0.5rem;
+  border: 1px solid var(--card-border);
+}
+
+/* ─── Talk Video Section ─── */
+
+.sl-markdown-content a:has(img[alt*="talk"]),
+.sl-markdown-content a:has(img[alt*="Talk"]) {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: var(--card-bg);
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+.sl-markdown-content a:has(img[alt*="talk"]):hover,
+.sl-markdown-content a:has(img[alt*="Talk"]):hover {
+  border-color: var(--card-border-hover);
+  box-shadow: 0 4px 20px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+.sl-markdown-content a:has(img[alt*="talk"]) img,
+.sl-markdown-content a:has(img[alt*="Talk"]) img {
+  border-radius: 0.5rem;
+  max-width: 100%;
+}
+
+/* ─── Badges & Certificates Grid ─── */
+
+.sl-markdown-content .badges,
+.sl-markdown-content p:has(> img[alt*="Badge"]),
+.sl-markdown-content p:has(> img[alt*="Certification"]),
+.sl-markdown-content p:has(> img[alt*="KodeKloud"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.sl-markdown-content img[alt*="Badge"],
+.sl-markdown-content img[alt*="Certification"],
+.sl-markdown-content img[alt*="Speaker"],
+.sl-markdown-content img[alt*="KodeKloud"],
+.sl-markdown-content img[alt*="Cilium"] {
+  border-radius: 0.5rem;
+  border: 1px solid var(--card-border);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sl-markdown-content img[alt*="Badge"]:hover,
+.sl-markdown-content img[alt*="Certification"]:hover,
+.sl-markdown-content img[alt*="Speaker"]:hover,
+.sl-markdown-content img[alt*="KodeKloud"]:hover,
+.sl-markdown-content img[alt*="Cilium"]:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 16px var(--glow-color-subtle);
+}
+
+/* ─── Pagination (Older / Newer Posts) ─── */
+
+/* Removed: redundant pagination pill styling now handled by .pagination .sl-link-card a */
+
+/* ─── Global Button & Link Hover Enhancements ─── */
+
+/* Sidebar navigation links */
+nav.sidebar-content a:hover,
+.sidebar-content a:hover {
+  color: var(--sl-color-accent) !important;
+  transition: color 0.2s ease;
+}
+
+/* Sidebar active link — polished pill */
+nav.sidebar-content a[aria-current="page"],
+.sidebar a[aria-current="page"] {
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 4px var(--glow-color-subtle);
+}
+
+/* Table of contents links */
+starlight-toc a:hover,
+.right-sidebar a:hover {
+  color: var(--sl-color-accent) !important;
+  transition: color 0.2s ease;
+}
+
+/* Table of contents — active link */
+starlight-toc a[aria-current="true"] {
+  color: var(--sl-color-accent) !important;
+  font-weight: 600;
+}
+
+/* Pagination / prev-next links */
+a.pagination-link:hover,
+.pagination-links a:hover,
+a[rel="prev"]:hover,
+a[rel="next"]:hover {
+  border-color: var(--card-border-hover) !important;
+  box-shadow: 0 2px 12px var(--glow-color-subtle);
+  transform: translateY(-1px);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+/* Tag pill links */
+a[href*="/tags/"] {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--sl-color-text) !important;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+a[href*="/tags/"]:visited {
+  color: var(--sl-color-text) !important;
+}
+a[href*="/tags/"]:hover {
+  color: var(--sl-color-accent) !important;
+  background: var(--glow-color-subtle) !important;
+  border-color: var(--sl-color-accent) !important;
+  box-shadow: 0 2px 8px var(--glow-color-subtle);
+  transform: translateY(-1px);
+}
+
+/* Tag pill list layout */
+li:has(> a[href*="/tags/"]) {
+  list-style: none;
+  display: inline-block;
+  margin: 0.2rem 0.15rem;
+}
+
+ul:has(> li > a[href*="/tags/"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-left: 0;
+  margin: 0.5rem 0;
+}
+
+/* Header nav links */
+.header a:hover,
+header a:hover {
+  color: var(--sl-color-accent) !important;
+  transition: color 0.2s ease;
+}
+
+/* Theme toggle and icon buttons */
+starlight-theme-select button:hover,
+starlight-menu-button button:hover {
+  color: var(--sl-color-accent) !important;
+  transition: color 0.2s ease;
+}
+
+/* Generic button hover */
+button:hover {
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+/* ─── Image Polish ─── */
+
+.sl-markdown-content img {
+  border-radius: 0.5rem;
+}
+
+/* ─── Content Links — Animated Underlines ─── */
+
+.sl-markdown-content a:not([href*="/tags/"]):not(:has(img)):not(.heading-link) {
+  text-decoration: none;
+  background-image: linear-gradient(var(--sl-color-accent), var(--sl-color-accent));
+  background-size: 0% 1.5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition:
+    background-size 0.3s ease,
+    color 0.2s ease;
+}
+
+.sl-markdown-content a:not([href*="/tags/"]):not(:has(img)):not(.heading-link):hover {
+  background-size: 100% 1.5px;
+}
+
+/* ─── Table Styling ─── */
+
+.sl-markdown-content table {
+  display: table !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--card-border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* On mobile, allow horizontal scrolling for wide tables */
+@media (max-width: 50rem) {
+  .sl-markdown-content table {
+    display: block !important;
+    overflow-x: auto;
+  }
+}
+.sl-markdown-content table thead th {
+  background: var(--sl-color-accent-low);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--sl-color-accent);
+  padding: 0.75rem 1rem;
+}
+
+.sl-markdown-content table tbody td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.sl-markdown-content table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sl-markdown-content table tbody tr:nth-child(even) {
+  background: var(--card-bg);
+}
+
+.sl-markdown-content table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.sl-markdown-content table tbody tr:hover {
+  background: var(--glow-color-subtle);
+}
+
+/* ─── Code Block Polish ─── */
+
+.sl-markdown-content pre,
+.expressive-code pre,
+figure.frame pre {
+  border: 1px solid var(--card-border) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sl-markdown-content code:not(pre code) {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.88em;
+}
+
+/* ─── Blog Pagination (Older / Newer Posts) ─── */
+
+.blog-post-list ~ nav a,
+.blog-post-list+nav a,
+nav:has(a[href*="/blog/2"]) a,
+nav:has(a[href*="/blog/3"]) a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--sl-color-accent);
+  text-decoration: none;
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--card-border);
+  border-radius: 9999px;
+  transition:
+    gap 0.25s ease,
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+.blog-post-list ~ nav a:hover,
+.blog-post-list+nav a:hover,
+nav:has(a[href*="/blog/2"]) a:hover,
+nav:has(a[href*="/blog/3"]) a:hover {
+  gap: 0.7rem;
+  border-color: var(--sl-color-accent);
+  background: var(--glow-color-subtle);
+  box-shadow: 0 2px 12px var(--glow-color-subtle);
+  transform: translateY(-1px);
+}
+
+/* ─── Blog Post Next/Prev Navigation ─── */
+
+.blog-post-navigation {
+  border-top: 1px solid var(--card-border);
+  padding-top: 1.5rem;
+  margin-top: 2rem;
+}
+
+.blog-post-navigation a {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  background: var(--card-bg);
+  text-decoration: none;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+.blog-post-navigation a:hover {
+  border-color: var(--card-border-hover);
+  box-shadow: 0 4px 16px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+/* ─── Blog Post Prev/Next — Full Card Clickability ─── */
+
+/* starlight-blog plugin uses .sl-link-card wrapping an <a> + <svg> icon;
+   style the card itself as the pill so both text and icon sit inside it. */
+.pagination .card-grid {
+  display: flex !important;
+  justify-content: center !important;
+}
+.pagination .sl-link-card {
+  position: relative;
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+    gap: 0.5rem;
+    width: fit-content !important;
+    padding: 0.75rem 1.5rem !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 9999px !important;
+    background: var(--card-bg) !important;
+    box-shadow: none !important;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+      transform 0.25s ease,
+      background-color 0.25s ease;
+}
+
+.pagination .sl-link-card:hover {
+  border-color: var(--sl-color-accent) !important;
+  box-shadow: 0 2px 12px var(--glow-color-subtle) !important;
+    background: var(--glow-color-subtle) !important;
+  transform: translateY(-2px);
+}
+
+.pagination .sl-link-card a {
+  position: static;
+  display: inline;
+  padding: 0;
+  border: none !important;
+  border-radius: 0 !important;
+  background: none !important;
+  font-weight: 600;
+  color: var(--sl-color-text);
+    text-decoration: none;
+}
+
+.pagination .sl-link-card a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+/* ─── Subtle Page Entrance Animation ─── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+main > .content-panel,
+main > .sl-container {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* ─── Horizontal Rule ─── */
+
+.sl-markdown-content hr {
+  border: none;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--sl-color-accent), transparent);
+  opacity: 0.5;
+  margin: 2rem 0;
+}
+
+/* ─── Footer Meta (Edit Page / Last Updated) ─── */
+
+.meta.sl-flex {
+  border-top: 1px solid var(--card-border);
+  padding-top: 1rem;
+  margin-top: 2rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.meta.sl-flex a {
+  font-weight: 500;
+}
+
+/* ─── Pagination Link (prev/next) ─── */
+
+a[rel="next"],
+a[rel="prev"],
+.pagination-links a {
+  border-radius: 0.75rem !important;
+  border: 1px solid var(--card-border) !important;
+  background: var(--card-bg) !important;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease !important;
+}
+
+a[rel="next"]:hover,
+a[rel="prev"]:hover,
+.pagination-links a:hover {
+  border-color: var(--card-border-hover) !important;
+  box-shadow: 0 4px 16px var(--glow-color-subtle) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* ─── Projects Page ─── */
+
+/* Project heading wrappers — border between projects */
+.projects-page > .level-h2 {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--card-border);
+}
+
+/* First project after category intro — no top border */
+.projects-page > .level-h1 + p + .level-h2 {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0.5rem;
+}
+
+/* Project headings — remove default bottom border */
+.projects-page h2 {
+  border-bottom: none;
+  padding-bottom: 0.3rem;
+}
+
+/* Tech badge images in heading — compact inline */
+.projects-page h2 img {
+  height: 20px !important;
+  width: auto !important;
+  display: inline-block !important;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.projects-page h2:hover img {
+  opacity: 1;
+}
+
+/* Project screenshot images — framed with constrained height */
+.projects-page > img {
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  margin: 0.75rem 0 1rem;
+  max-height: 360px;
+  width: auto;
+  object-fit: contain;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease;
+}
+
+.projects-page > img:hover {
+  border-color: var(--card-border-hover);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    0 0 16px var(--glow-color-subtle);
+  transform: translateY(-2px);
+}
+
+/* Video framing */
+.projects-page video {
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  max-width: 100%;
+  max-height: 360px;
+  margin: 0.75rem 0 1rem;
+}
+
+/* School project grade headings — clean layout */
+.projects-page h3 {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0.25rem;
+}
+
+/* Sponsor badge — centered (overview pages) */
+:is([data-page-title="Projects"], [data-page-title="Templates"]) .sl-markdown-content > p:first-child {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+/* Document/thesis links — accent hover */
+.projects-page a[href*="/pdfs/"]:hover,
+.projects-page a[href*="/blog/"]:hover {
+  color: var(--sl-color-accent);
+}
+
+/* ─── Responsive Tweaks ─── */
+
+@media (max-width: 50rem) {
+  .hero {
+    min-height: 360px;
+    padding: calc(var(--sl-nav-height) + 0.5rem) 1.5rem 2.5rem !important;
+  }
+
+  [data-page-title="About Me"] .sl-markdown-content #connect ~ ul {
+    flex-direction: column;
+  }
+
+  [data-page-title="About Me"] .sl-markdown-content #connect ~ ul a {
+    justify-content: center;
+  }
+
+  main article {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+/* ─── Accessibility — Reduced Motion ─── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Custom Scrollbar (Webkit) ─── */
+
+:root::-webkit-scrollbar {
+  width: 8px;
+}
+
+:root::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+:root::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme="light"]::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme="light"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Firefox Scrollbar ─── */
+
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+:root[data-theme="light"] {
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+/* ─── Blog Post Navigation — Single Card Layout ─── */
+
+/* When only next or prev exists, make the container flex and center/stretch */
+.pagination-links:has(> a[rel="next"]:only-child) {
+  justify-content: flex-end;
+}
+
+.pagination-links:has(> a[rel="prev"]:only-child) {
+  justify-content: flex-start;
+}
+
+.pagination-links > a[rel="next"]:only-child,
+.pagination-links > a[rel="prev"]:only-child {
+  min-width: 60%;
+}
+
+/* Blog plugin pagination — single card in card-grid */
+.pagination .card-grid:has(> :only-child) {
+  grid-template-columns: 1fr !important;
+  max-width: 100%;
+}
+
+.pagination .card-grid:has(> :only-child) .sl-link-card {
+  max-width: 100%;
+}
+
+/* ─── Blog Author Avatar ─── */
+
+.blog-post-list article img[loading="lazy"][width="48"],
+main article img[loading="lazy"][width="48"],
+article img[loading="lazy"][decoding="async"][width="48"] {
+  border: 2px solid var(--card-border);
+  border-radius: 50%;
+  transition: border-color 0.3s ease;
+}
+
+article:hover img[loading="lazy"][width="48"] {
+  border-color: var(--sl-color-accent);
+}
+
+/* ─── Expressive Code — Enhanced Chrome ─── */
+
+.expressive-code .frame {
+  border: 1px solid var(--card-border) !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+}
+
+/* Code block title bar */
+.expressive-code .header {
+  border-bottom: 1px solid var(--card-border) !important;
+  background: var(--card-bg) !important;
+}
+
+/* Copy button styling */
+.expressive-code .copy button,
+.expressive-code button.copy {
+  border-radius: 0.375rem !important;
+  opacity: 0.5;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
+}
+
+.expressive-code .copy button:hover,
+.expressive-code button.copy:hover {
+  opacity: 1;
+  color: var(--sl-color-accent) !important;
+}
+
+/* ─── Starlight Asides / Callouts ─── */
+
+.starlight-aside {
+  border-radius: 0.5rem;
+  border-left-width: 3px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.starlight-aside .starlight-aside__title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ─── Mobile Header Overflow ─── */
+
+@media (max-width: 50rem) {
+  header .site-title {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  header .site-title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ─── GitHub Alert Boxes (starlight-github-alerts) ─── */
+
+.markdown-alert,
+.github-alert {
+  border-radius: 0.5rem;
+  border-left-width: 3px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  background: var(--card-bg);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ─── Print Styles ─── */
+
+@media print {
+  /* Hide non-essential UI */
+  header,
+  footer,
+  nav,
+  .right-sidebar,
+  .sidebar,
+  starlight-toc,
+  starlight-menu-button,
+  starlight-theme-select,
+  .hero::before,
+  .hero::after,
+  .hero > img,
+  body > a[href="#_top"] {
+    display: none !important;
+  }
+
+  /* Reset backgrounds and colors for ink-friendly output */
+  :root,
+  :root[data-theme],
+  :root[data-theme="light"],
+  :root[data-theme="dark"] {
+    --sl-color-bg: #fff;
+    --sl-color-text: #000;
+    --card-bg: transparent;
+    --card-border: #ccc;
+  }
+
+  body,
+  main {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .hero {
+    min-height: auto;
+    padding: 1rem 0 !important;
+  }
+
+  .hero h1 {
+    background: none;
+    -webkit-text-fill-color: #000;
+    color: #000;
+  }
+
+  a {
+    color: #000 !important;
+    text-decoration: underline;
+  }
+
+  /* Show URLs after links */
+  .sl-markdown-content a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    opacity: 0.7;
+    word-break: break-all;
+  }
+
+  /* Remove all box shadows and transforms */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transform: none !important;
+  }
+
+  /* Prevent page breaks inside elements */
+  img,
+  pre,
+  blockquote,
+  table,
+  details {
+    break-inside: avoid;
+  }
+
+  /* Ensure main content fills width */
+  main .content-panel {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

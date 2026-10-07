@@ -1,0 +1,104 @@
+---
+title: Home
+description: Personal site of Nikolai Emil Damm — software engineer, open-source advocate, and Kubernetes enthusiast.
+template: splash
+hero:
+  title: Nikolai Emil Damm
+  tagline: Developer Experience Engineer building tools that make Kubernetes development effortless. Open-source advocate and cloud-native enthusiast.
+  image:
+    file: ../../assets/matrix.png
+    alt: Matrix-style background
+  actions:
+    - text: About Me
+      link: /about/
+      icon: right-arrow
+      variant: primary
+    - text: Try KSail
+      link: https://ksail.devantler.tech
+      icon: external
+      variant: secondary
+    - text: Projects
+      link: /projects/
+      variant: secondary
+    - text: Templates
+      link: /templates/
+      variant: secondary
+    - text: Blog
+      link: /blog/
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/devantler
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import { getCollection } from "astro:content";
+import PreviewBanner from "../../components/PreviewBanner.astro";
+
+export const latestPosts = (await getCollection("docs"))
+  .filter((entry) => entry.id.startsWith("blog/"))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 4);
+
+<PreviewBanner />
+
+## What I Do
+
+<CardGrid>
+  <Card title="Platform Engineering" icon="setting">
+    Building and maintaining Kubernetes platforms with GitOps, Flux, Talos Linux, and CNCF technologies.
+  </Card>
+  <Card title="Developer Tooling" icon="rocket">
+    Creating tools like [KSail](https://ksail.devantler.tech) that simplify Kubernetes development and operations.
+  </Card>
+  <Card title="Open Source" icon="github">
+    Contributing to the open-source ecosystem with reusable workflows, actions, and templates.
+  </Card>
+  <Card title="Knowledge Sharing" icon="document">
+    Writing about software development, cloud-native technologies, and modern engineering practices.
+  </Card>
+</CardGrid>
+
+## Featured Projects
+
+<CardGrid>
+  <LinkCard
+    title="🛥️ KSail"
+    description="KSail bundles common Kubernetes tooling into a single binary. Spin up local clusters, deploy workloads, and operate cloud-native stacks — via CLI, VS Code extension, AI chat TUI, or MCP server."
+    href="https://ksail.devantler.tech"
+  />
+  <LinkCard
+    title="☸️ Platform"
+    description="A GitOps-driven Kubernetes platform on Talos Linux and Hetzner Cloud — powered by Flux, Cilium, and the Gateway API."
+    href="/projects/active/"
+  />
+  <LinkCard
+    title="🔄 Reusable Workflows"
+    description="A curated library of GitHub Actions reusable workflows for Go, .NET, docs, releases, and repo automation."
+    href="https://github.com/devantler-tech/actions/tree/main/.github/workflows"
+  />
+  <LinkCard
+    title="⚡ Actions"
+    description="Composite GitHub Actions for common CI/CD needs: auto-merge, GHCR cleanup, label sync, TODO scanning, and more."
+    href="https://github.com/devantler-tech/actions"
+  />
+</CardGrid>
+
+[Browse all projects &rarr;](/projects/)
+
+## Latest from the Blog
+
+<CardGrid>
+  {
+    latestPosts.map((post) => (
+      <LinkCard
+        title={post.data.title}
+        description={post.data.excerpt}
+        href={`/${post.id}/`}
+      />
+    ))
+  }
+</CardGrid>
+
+[Browse all posts &rarr;](/blog/)

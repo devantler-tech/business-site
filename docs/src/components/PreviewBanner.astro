@@ -1,0 +1,35 @@
+---
+// Example feature-flagged section (feature-flag-first delivery, monorepo#2059).
+//
+// Reads the build-time `FEATURE_PREVIEW_BANNER` flag from `astro:env/server`
+// (type-safe, Zod-validated in astro.config.mjs, default: false). Because this
+// runs while the page renders at build time, the banner is only emitted when
+// the flag is on — production builds (flag off) ship nothing at all: no markup
+// and no styles (the styles are inlined on the element, so nothing is hoisted
+// into the page CSS when the gate is closed).
+//
+// This is the pattern to copy for any unreleased content/UI: declare a
+// default-off flag in the schema, gate rendering on it here, and enable it in a
+// preview build (`FEATURE_PREVIEW_BANNER=true npm run build`) to review before
+// the production build flips it on. Remove the flag + gate once shipped.
+import { FEATURE_PREVIEW_BANNER } from "astro:env/server";
+
+const style = [
+  "margin:0 0 1.5rem",
+  "padding:0.75rem 1rem",
+  "border:1px solid var(--sl-color-orange)",
+  "border-radius:0.5rem",
+  "background:var(--sl-color-orange-low)",
+  "color:var(--sl-color-white)",
+  "font-size:var(--sl-text-sm)",
+].join(";");
+---
+
+{
+  FEATURE_PREVIEW_BANNER && (
+    <aside role="note" aria-label="Preview build notice" style={style}>
+      🚧 <strong>Preview build</strong> — this page includes unreleased content
+      gated behind the <code>FEATURE_PREVIEW_BANNER</code> feature flag.
+    </aside>
+  )
+}

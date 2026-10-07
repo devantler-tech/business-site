@@ -1,0 +1,262 @@
+---
+title: About Me
+description: Nikolai Emil Damm — software engineer, open-source advocate, and Kubernetes enthusiast.
+---
+
+import { Image } from "astro:assets";
+import { LinkButton } from "@astrojs/starlight/components";
+import { cv } from "../../data/cv";
+import profileImg from "../../assets/profile.jpg";
+
+export const cvPdf = { href: "/pdfs/nikolai-emil-damm-cv.pdf", filename: "Nikolai Emil Damm - CV.pdf" };
+
+<div style="text-align: center; margin-bottom: 1.5rem;">
+  <Image src={profileImg} alt={cv.name} width={280} style="border-radius: 50%;" />
+</div>
+
+<div class="cv-download">
+  <LinkButton href={cvPdf.href} download={cvPdf.filename} variant="primary" icon="download" iconPlacement="start">
+    Download CV (PDF)
+  </LinkButton>
+</div>
+
+<p>{cv.profile}</p>
+
+<dl class="about-meta">
+  <div><dt>Name</dt><dd>{cv.name}</dd></div>
+  <div><dt>Location</dt><dd>{cv.location}</dd></div>
+  <div><dt>Role</dt><dd>{cv.title}</dd></div>
+  <div><dt>Education</dt><dd>{cv.education[0].title}</dd></div>
+  <div><dt>Languages</dt><dd>{cv.languages}</dd></div>
+  <div><dt>Interests</dt><dd>{cv.interests}</dd></div>
+</dl>
+
+## Talks and Presentations
+
+### KSail — a tool for creating, maintaining and operating Kubernetes clusters with ease <span style="float:right">KCD Denmark 2024</span>
+
+<div style="text-align: center;">
+  <a href="https://youtu.be/Q-Hfn_-B7p8?si=2Uec_kld--fNw3gm" target="_blank">
+    <img src="/images/talks/kcd-denmark-2024-ksail.jpeg" alt="KSail talk at KCD Denmark 2024" width="400" height="400" loading="lazy" decoding="async" />
+    <br />
+    🎥 Watch the talk! 🎥
+  </a>
+</div>
+
+KSail's public introduction — a mix of conceptual explanation and live demos, showing how it simplifies local development and CI workflows, and how it lets developers take on cluster operations earlier in the process rather than leaving them to the end.
+
+It closes with the roadmap and an open invitation to contribute.
+
+## Professional Experience
+
+### Developer Experience Engineer <span style="float:right">Jun 2025 — Present</span>
+
+_TV2, Odense_
+
+I improve the developer experience for TV2's product teams — working closely with them to find where they get stuck, and with other enabling teams to keep our tools aligned with the wider organization. In May 2026 our team was renamed from **Developer Tooling** to **Development Platform**, as the remit grew past internal tooling to cover running and securing software too.
+
+### Platform Engineer and Open Source Community Facilitator <span style="float:right">Nov 2024 — Jun 2025</span>
+
+_Energinet, Fredericia — Consultant_
+
+<details>
+  <summary>Learn more...</summary>
+
+Promoted to Consultant and moved to the Platform team in the Infrastructure and Platforms department, where I helped scope, design, and implement a shared Kubernetes platform offering managed single- and multi-tenant clusters across Energinet.
+
+- Built and ran the Kubernetes platforms, tenancy models, self-service portals, GitOps tooling, and CI/CD pipelines.
+- Operated and monitored on-prem servers.
+- Grew an internal open-source community, hosting meetups, hackathons, and workshops.
+- Championed GitHub Flow, DevOps, cloud-native, and open-source practices.
+
+</details>
+
+### Software Engineer and Open Source Community Facilitator <span style="float:right">Aug 2023 — Nov 2024</span>
+
+_Energinet, Fredericia — Junior Consultant_
+
+<details>
+  <summary>Learn more...</summary>
+
+As a Junior Consultant at Energinet, I was part of the Substation Data team in the Innovation department, focused on platform engineering and IT/OT convergence.
+
+- Built and ran Kubernetes platforms, GitOps tooling, CI/CD pipelines, and IT/OT integrations.
+- Operated and monitored on-prem servers.
+- Grew an internal open-source community, hosting meetups, hackathons, and workshops.
+- Championed GitHub Flow, DevOps, cloud-native, and open-source practices.
+
+</details>
+
+## Previous Experience
+
+<details>
+  <summary><strong>Student & teaching assistant roles</strong> (2018 — 2023)</summary>
+
+### Teaching Assistant <span style="float:right">Sep 2022 — Aug 2023</span>
+
+_University of Southern Denmark, Odense_
+
+<details>
+  <summary>Learn more...</summary>
+
+Teaching assistant in Big Data at the University of Southern Denmark. Created course material, taught students, and helped them through their exercises.
+
+</details>
+
+### Student Software Developer <span style="float:right">Jul 2022 — Aug 2023</span>
+
+_Umbraco, Odense_
+
+<details>
+  <summary>Learn more...</summary>
+
+Part of the Umbraco Heartcore team. Responsible for developing and maintaining the Umbraco Heartcore headless CMS.
+
+- Developing and maintaining the Umbraco Heartcore Product.
+- Working with operation of the Umbraco Heartcore Product in Azure Portal.
+- Working with Infrastructure as Code (IaC) with Terraform.
+- Working with CI/CD pipelines in Azure DevOps.
+- Working in a DevOps team with a focus on automation and monitoring.
+
+</details>
+
+### Student Software Developer <span style="float:right">Nov 2021 — Jul 2022</span>
+
+_FiftyTwo, Kolding_
+
+<details>
+  <summary>Learn more...</summary>
+
+Part of the development team for an e-commerce platform.
+
+- Developing and maintaining the e-commerce platform.
+- Working with .NET Framework and SVN.
+- Working with SQL Server and Stored Procedures.
+- Working with Kibana and network monitoring.
+
+</details>
+
+### Student Software Developer <span style="float:right">Feb 2021 — Nov 2021</span>
+
+_Maersk Mc-Kinney Moller Institute, Odense_
+
+<details>
+  <summary>Learn more...</summary>
+
+Sole developer of a platform used in research projects and course material to explore the possibilities of mapping and visualizing Business Ecosystems with UML.
+
+- Developing and operating a web-based platform.
+- Working with C# and Blazor WebAssembly.
+- Working with SQL Server and Entity Framework.
+- Working with Azure and GitHub Actions.
+- Working with Actor-Based modeling and UML.
+- Working closely with researchers and students.
+
+</details>
+
+### Teaching Assistant <span style="float:right">Sep 2020 — Dec 2020</span>
+
+_University of Southern Denmark, Odense_
+
+<details>
+  <summary>Learn more...</summary>
+
+Teaching assistant in Object-Oriented Programming at the University of Southern Denmark.
+
+</details>
+
+### Student Software Developer <span style="float:right">Feb 2018 — May 2019</span>
+
+_GF Forsikring, Odense_
+
+<details>
+  <summary>Learn more...</summary>
+
+Part of the development team for the GF Forsikring website and landing pages.
+
+- Developing and maintaining the GF Forsikring website and landing pages.
+- Working with Sitecore, Git and SVN.
+- Working with AngularJS and many other front-end technologies.
+- Working with SQL Server.
+- Working with the Marketing team to quickly create landing pages for campaigns.
+
+</details>
+
+</details>
+
+## Skills
+
+### Technical
+
+<dl class="about-meta">
+  {cv.technicalSkills.map((skill) => (
+    <div><dt>{skill.label}</dt><dd>{skill.value}</dd></div>
+  ))}
+</dl>
+
+### Personal
+
+<dl class="about-meta">
+  {cv.personalSkills.map((skill) => (
+    <div><dt>{skill.label}</dt><dd>{skill.value}</dd></div>
+  ))}
+</dl>
+
+## Side Projects
+
+### VS Code & GitHub Copilot Backstage <span style="float:right">Member</span>
+
+Member of the VS Code and GitHub Copilot backstage group, where I get early access to their latest offerings, test pre-release features, and provide feedback directly to the teams behind them. I take part out of a genuine interest in the field of AI, and to stay ahead of industry standards and trends in developer tooling.
+
+## Achievements
+
+### Certificates
+
+<div style="text-align: center;">
+  <img src="/images/certificates/github-actions-certification.png" alt="GitHub Actions Certification" width="420" height="321" loading="lazy" decoding="async" />
+</div>
+
+### [Credly Badges](https://www.credly.com/users/nikolai-emil-damm/badges)
+
+<div style="text-align: left;">
+  <img src="/images/badges/speaker-kcd-denmark-2024.png" alt="KCD 2024 Speaker" width="172" height="172" loading="lazy" decoding="async" />
+  <img
+    src="/images/badges/cilium-discovery-platform-engineer.png"
+    alt="Cilium: Discovery Platform Engineer"
+    width="172"
+    height="172"
+    loading="lazy"
+    decoding="async"
+  />
+</div>
+
+### Completed Courses
+
+<div style="text-align: center;">
+  <img
+    src="/images/courses/kodecloud-kubernetes-for-the-absolute-beginners-course-completion-certificate.png"
+    alt="KodeKloud: Kubernetes for the Absolute Beginners"
+    width="420"
+    height="297"
+    loading="lazy"
+    decoding="async"
+  />
+  <img
+    src="/images/courses/kodecloud-kcna-course-completion-certificate.png"
+    alt="KodeKloud: Kubernetes and Cloud-Native Associate (KCNA)"
+    width="420"
+    height="297"
+    loading="lazy"
+    decoding="async"
+  />
+</div>
+
+## Connect
+
+<ul class="connect-bar">
+  <li><a href={cvPdf.href} download={cvPdf.filename}>Download CV</a></li>
+  <li><a href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/">LinkedIn</a></li>
+  <li><a href="https://github.com/devantler">GitHub</a></li>
+  <li><a href="https://github.com/sponsors/devantler">Sponsor</a></li>
+  <li><a href="/blog/rss.xml">RSS</a></li>
+</ul>

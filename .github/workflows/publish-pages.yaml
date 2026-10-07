@@ -1,0 +1,88 @@
+name: Publish - Pages
+
+# The monorepo owns the existing Pages resource/domain and selects reviewed source.
+# It calls this implementation at an immutable workflow revision. Never add a
+# second push publisher here: deployment uses the caller's Pages environment.
+on:
+  workflow_call:
+    inputs:
+      source-revision:
+        description: Reviewed business-site gitlink revision selected by the monorepo
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LC_ALL: C
+    permissions:
+      contents: read
+    steps:
+      - name: Validate publication admission
+        shell: bash
+        env:
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_REF: ${{ github.ref }}
+          CALLER_EVENT: ${{ github.event_name }}
+          SOURCE_REVISION: ${{ inputs.source-revision }}
+        run: |
+          set -euo pipefail
+          [[ "$CALLER_REPOSITORY" == 'devantler-tech/monorepo' ]] || exit 1
+          [[ "$CALLER_REF" == 'refs/heads/main' ]] || exit 1
+          case "$CALLER_EVENT" in push|workflow_dispatch) ;; *) exit 1 ;; esac
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: devantler-tech/business-site
+          ref: ${{ inputs.source-revision }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: docs/package-lock.json
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
+      - name: Build with Astro
+        working-directory: docs
+        run: npm run build
+      - name: Record public source identity
+        shell: bash
+        env:
+          SOURCE_REVISION: ${{ inputs.source-revision }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          printf '{"repository":"devantler-tech/business-site","sourceRevision":"%s","callerRevision":"%s"}\n' \
+            "$SOURCE_REVISION" "$GITHUB_SHA" > docs/dist/publication-source.json
+          printf 'Website source: devantler-tech/business-site@%s\n\nCaller: %s\n' \
+            "$SOURCE_REVISION" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

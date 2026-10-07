@@ -1,0 +1,44 @@
+---
+import { getImage } from 'astro:assets';
+import portrait from '../../assets/profile.jpg';
+import BusinessTheme from './BusinessTheme.astro';
+import BusinessHeader from './BusinessHeader.astro';
+import BusinessFooter from './BusinessFooter.astro';
+import { copy, type Locale } from './content';
+interface Props { locale: Locale; title?: string; description?: string; section?: string }
+const { locale, title = copy[locale].title, description = copy[locale].description, section = '' } = Astro.props;
+const english = `/${section ? `${section}/` : ''}`;
+const danish = `/da${english}`;
+const path = locale === 'da' ? danish : english;
+const sharing = await getImage({ src: portrait, width: 600, format: 'webp' });
+---
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+    <BusinessTheme />
+    <title>{title}</title><meta name="description" content={description} />
+    <link rel="canonical" href={`https://devantler.tech${path}`} />
+    <link rel="alternate" hreflang="en" href={`https://devantler.tech${english}`} />
+    <link rel="alternate" hreflang="da" href={`https://devantler.tech${danish}`} />
+    <link rel="alternate" hreflang="x-default" href={`https://devantler.tech${english}`} />
+    <link rel="sitemap" href="/sitemap-index.xml" /><link rel="icon" href="/favicon.png" />
+    <meta property="og:title" content={title} /><meta property="og:description" content={description} />
+    <meta property="og:type" content="website" /><meta property="og:url" content={`https://devantler.tech${path}`} />
+    <meta property="og:locale" content={locale === 'da' ? 'da_DK' : 'en_GB'} />
+    <meta property="og:image" content={new URL(sharing.src, 'https://devantler.tech').href} />
+    <meta property="og:image:alt" content="Nikolai Emil Damm" /><meta name="twitter:card" content="summary" />
+    <script is:inline src="https://analytics.platform.devantler.tech/script.js" data-website-id="2f8d150e-c6f0-4a90-ab77-431c9ef9dc59" data-domains="devantler.tech" defer></script>
+  </head>
+  <body data-business-site>
+    <a class="skip" href="#main">{copy[locale].skip}</a>
+    <header class="site-header"><BusinessHeader locale={locale} path={path} /></header>
+    <slot />
+    <BusinessFooter locale={locale} />
+  </body>
+</html>
+<style>
+  .site-header { border-bottom: 1px solid var(--line); background: var(--canvas); }
+  .skip { position: fixed; top: -100%; left: 1rem; z-index: 100; padding: .6rem 1rem; background: var(--accent); color: var(--accent-ink); }
+  .skip:focus { top: 1rem; }
+</style>
