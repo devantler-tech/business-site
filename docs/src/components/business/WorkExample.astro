@@ -1,0 +1,41 @@
+---
+import { Image } from 'astro:assets';
+import coaching from '../../assets/ascoaching-homepage.jpg';
+import wedding from '../../assets/wedding-guest-demo.jpg';
+import { copy, type Locale } from './content';
+
+interface Props {
+  locale: Locale;
+  item: (typeof copy)[Locale]['workItems'][number];
+}
+const { locale, item } = Astro.props;
+const t = copy[locale];
+const image = item.id === 'coaching' ? coaching : wedding;
+const alt = item.id === 'coaching' ? t.workPreviewAlt : t.weddingPreviewAlt;
+---
+<article data-work-example={item.id}>
+  <p class="eyebrow">{item.kind}</p>
+  <h3>{item.title}</h3>
+  <p class="description">{item.text}</p>
+    <a class="preview" data-work-preview href={image.src} target="_blank" rel="noopener">
+      <Image src={image} width={640} widths={[320, 640, 960]} sizes="(max-width: 760px) calc(100vw - 40px), 560px" format="webp" quality={85} alt={alt} loading="lazy" />
+      <span>{t.workPreviewAction} <span aria-hidden="true">↗</span></span>
+    </a>
+    {item.id === 'coaching'
+      ? <a class="visit" href="https://ascoachingogvaner.dk/">{t.workVisitAction} <span aria-hidden="true">↗</span></a>
+      : <p class="capture-note">{t.weddingPreviewNote}</p>}
+</article>
+<style>
+  article { min-width: 0; border-top: 1px solid var(--line); padding-top: 1.5rem; }
+  .eyebrow { font-size: .8rem; color: var(--accent); margin-bottom: .6rem; }
+  h3 { font-size: 1.3rem; letter-spacing: -.025em; }
+  .description { font-size: .9rem; margin-top: 1rem; min-height: 3.4em; }
+  .preview { display: block; margin-top: 1.25rem; color: var(--muted); font-size: .8rem; text-decoration: none; cursor: zoom-in; }
+  .preview img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .preview > span { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
+  .preview:hover > span { color: var(--accent); text-decoration: underline; }
+  .visit { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; color: var(--accent); font-size: .9rem; font-weight: 600; text-underline-offset: .2em; }
+  .capture-note { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
+  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
+  @media (max-width: 760px) { .description { min-height: 0; } }
+</style>

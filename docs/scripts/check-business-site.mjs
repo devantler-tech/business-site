@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
+import sharp from 'sharp';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -14,6 +15,48 @@ const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-prod
 const escapeText = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 assert.ok(home.includes('data-business-site'), 'Production build must publish the business homepage without an opt-in flag');
+
+// Exercise the delivered image and its links on both entrypoints, not just the
+// source component: a thumbnail must lead to a real, larger local capture.
+const workExamples = async (page, locale) => {
+  const card = page.match(/<article\b[^>]*data-work-example="coaching"[^>]*>([\s\S]*?)<\/article>/)?.[1];
+  assert.ok(card, 'Visitors can identify the AS Coaching family example');
+  const preview = card.match(/<a\b[^>]*data-work-preview[^>]*>([\s\S]*?)<\/a>/);
+  assert.ok(preview, 'The AS Coaching thumbnail opens its full screenshot');
+  const target = preview[0].match(/href="([^"]+)"/)?.[1];
+  assert.match(target, /^\/_astro\/ascoaching-homepage\.[^/]+\.jpg$/, 'The larger view is the original local capture');
+  assert.match(preview[0], /target="_blank"/, 'Opening the screenshot preserves the portfolio page');
+  assert.match(preview[0], /rel="noopener"/, 'The new tab cannot control the portfolio page');
+  const image = preview[1].match(/<img\b[^>]*>/)?.[0];
+  assert.ok(image, 'The preview link contains a real thumbnail');
+  const alt = locale === 'da' ? 'Skærmbillede af AS Coaching og Vaners forside.' : 'Screenshot of AS Coaching og Vaner’s homepage.';
+  assert.ok(image.includes(`alt="${alt}"`), 'The screenshot has a factual localized description');
+  const thumbnail = image.match(/src="([^"]+)"/)?.[1];
+  assert.ok(thumbnail && existsSync(resolve(root, `.${thumbnail}`)), 'The thumbnail is delivered locally');
+  assert.notEqual(thumbnail, target, 'Visitors download a compact thumbnail before choosing the larger capture');
+  assert.ok(Number(image.match(/width="(\d+)"/)?.[1]) <= 640 && Number(image.match(/height="(\d+)"/)?.[1]) > 0, 'Thumbnails reserve a compact, stable layout');
+  const full = await sharp(resolve(root, `.${target}`)).metadata();
+  assert.ok(full.width >= 1200 && full.height >= 600, 'The larger view retains readable desktop-capture resolution');
+  assert.ok(preview[1].includes(locale === 'da' ? 'Se større billede (åbner i en ny fane)' : 'View larger (opens in a new tab)'), 'Visitors know how the larger view opens');
+  assert.match(card, /<a\b[^>]*href="https:\/\/ascoachingogvaner\.dk\/"[^>]*>/, 'A separate link visits the actual public website');
+  assert.ok(card.includes(locale === 'da' ? 'Besøg hjemmesiden' : 'Visit website'), 'The visit action is localized');
+  const wedding = page.match(/<article\b[^>]*data-work-example="wedding"[^>]*>([\s\S]*?)<\/article>/)?.[1];
+  const weddingPreview = wedding?.match(/<a\b[^>]*data-work-preview[^>]*>([\s\S]*?)<\/a>/);
+  assert.ok(weddingPreview, 'The Wedding App also has an enlargable guest-view preview');
+  const weddingTarget = weddingPreview[0].match(/href="([^"]+)"/)?.[1];
+  assert.match(weddingTarget, /^\/_astro\/wedding-guest-demo\.[^/]+\.jpg$/, 'The wedding preview links to its local anonymous capture');
+  assert.match(weddingPreview[0], /target="_blank"/, 'Enlarging the wedding demo preserves the portfolio page');
+  assert.match(weddingPreview[0], /rel="noopener"/, 'The wedding preview tab cannot control the portfolio page');
+  const weddingAlt = locale === 'da' ? 'Anonymiseret forhåndsvisning af Wedding Apps gæsteforside.' : 'Anonymized preview of the Wedding App guest homepage.';
+  assert.ok(weddingPreview[1].includes(`alt="${weddingAlt}"`), 'The wedding capture is explicitly described as anonymized');
+  const weddingImage = weddingPreview[1].match(/<img\b[^>]*>/)?.[0];
+  const weddingThumbnail = weddingImage?.match(/src="([^"]+)"/)?.[1];
+  assert.ok(weddingThumbnail && existsSync(resolve(root, `.${weddingThumbnail}`)), 'The wedding thumbnail is emitted locally');
+  assert.notEqual(weddingThumbnail, weddingTarget, 'The wedding preview also uses a compact thumbnail');
+  const weddingFull = await sharp(resolve(root, `.${weddingTarget}`)).metadata();
+  assert.ok(weddingFull.width >= 1200 && weddingFull.height >= 600, 'The wedding demo retains readable larger-view resolution');
+  assert.ok(wedding.includes(locale === 'da' ? 'Anonymiseret demo af gæstevisningen.' : 'Anonymized guest-view demo.'), 'The demo is not misrepresented as an unmodified live invitation');
+};
 
 // Catch a visitor leaving the business site and losing its navigation, theme
 // controls or inquiry route on a supporting page.
@@ -86,6 +129,7 @@ for (const locale of ['en', 'da']) {
       const family = page.match(/<section[^>]*aria-labelledby="family-title"[^>]*>([\s\S]*?)<\/section>/)?.[1];
       assert.ok(family?.includes('Wedding App') && family.includes('AS Coaching'), 'Family examples remain available outside the public software catalogue');
       assert.ok(family.includes(locale === 'da' ? 'ikke betalte kundeopgaver' : 'not paid client commissions'), 'Family work is labelled honestly');
+      await workExamples(family, locale);
       assert.ok(page.includes('href="/pdfs/thesis.pdf"'), 'Earlier research remains reachable');
       assert.match(page, /<img[^>]*alt="Data Space as a Data Mesh"/, 'Research retains its authored diagram');
       const ksail = shelf.match(/<article\b[^>]*data-public-product="ksail"[^>]*>([\s\S]*?)<\/article>/)?.[1];
@@ -223,6 +267,8 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   for (const id of ['services', 'work', 'products', 'process', 'contact']) {
     assert.ok(page.includes(`id="${id}"`), `Missing visitor section: ${id}`);
   }
+  const selectedWork = page.match(/<section[^>]*id="work"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  await workExamples(selectedWork, locale);
   for (const [service, setup, monthly] of [['website', 2995, 99], ['app', 7995, 299], ['service', 4995, 199]]) {
     assert.match(page, new RegExp(`data-offer="${service}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     assert.ok(page.includes(new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-DK').format(setup)), 'Starting price must be visible');

@@ -6,6 +6,7 @@ import research from '../../assets/editorial/data-research.webp';
 import { copy, type Locale } from './content';
 import { supporting } from './supporting';
 import PublicProductCard from './PublicProductCard.astro';
+import WorkExample from './WorkExample.astro';
 import { publicProducts, starsObservedAt } from '../../data/public-products';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
@@ -43,7 +44,7 @@ const { Content: ResearchContent } = await render(completed);
 <section aria-labelledby="family-title">
   <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
   <p class="eyebrow">{t.familyLabel}</p><h2 id="family-title">{t.familyTitle}</h2><p class="intro">{t.familyIntro}</p>
-  <div class="family">{home.workItems.map((item) => <article><p class="eyebrow">{item.kind}</p><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
+  <div class="family">{home.workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>
 </section>
 <section id="research" aria-labelledby="research-title">
   <p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{t.researchTitle}</h2>
@@ -85,9 +86,7 @@ const { Content: ResearchContent } = await render(completed);
   .feature img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
   .feature > img { aspect-ratio: 16 / 9; object-fit: cover; }
   figure { margin: 0; } figcaption, .note { font-size: .8rem; color: var(--muted); margin-top: .75rem; }
-  .family { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 2rem; }
-  .family article { border-left: 2px solid var(--line); padding-left: 1.5rem; }
-  .family article > p:last-child { margin-top: 1rem; }
+  .family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; margin-top: 2rem; }
   details { margin-top: 2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
   summary { cursor: pointer; padding: 1.25rem; min-height: 44px; font-weight: 600; }
   summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }

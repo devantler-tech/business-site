@@ -38,3 +38,22 @@ These are illustrations, not photographs of company equipment, factual architect
 customer examples or product screenshots. The real founder photograph, KSail interface captures
 and authored research/process diagrams retain their evidential role. Covers are compressed to
 1440-pixel-wide WebP; Astro generates responsive delivery assets.
+
+## `ascoaching-homepage.jpg`
+
+Real desktop screenshot of the public [AS Coaching og Vaner homepage](https://ascoachingogvaner.dk/),
+captured in the browser on 2026-10-07. It shows the public opening section and portrait, not an
+invented design or a generated illustration. Astro emits compact responsive WebP thumbnails;
+the original JPEG is linked for visitors who choose the larger view. Family-work examples are
+not presented as paid client commissions.
+
+## `wedding-guest-demo.jpg`
+
+Real browser capture of Wedding App's signed-in local guest demo, captured on 2026-10-07
+from the reviewed application source `dcf337b61ed342be615240b474c29894e729bf9e`.
+Its documented database-free demo login was used, not a production guest account.
+Local-only display substitutions removed the guest/couple names, event date, venue/address,
+countdown values and venue background before capture. No guest list, gallery photographs,
+schedule, invitation code or private URL appears in the image. These substitutions are not
+application changes and are not deployed. The card identifies this as an anonymized demo;
+Astro emits responsive thumbnails and links the original anonymous capture for enlargement.

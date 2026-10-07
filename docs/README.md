@@ -47,6 +47,15 @@ and GitHub links. First-person English/Danish copy explains the independent busi
 inventing client endorsements; the family projects remain labelled as such. The real photograph
 also supplies the sharing image. Built-page checks verify the portrait and profile journey.
 
+Selected work uses the same `WorkExample.astro` card on Home and Projects in both languages.
+AS Coaching og Vaner includes a real public homepage capture, a compact responsive thumbnail
+linked to its original local JPEG in a new tab, and a separate link to the public website.
+The Wedding App shows its documented local guest demo after sign-in, with names, date,
+venue/address, countdown values and the venue background removed before capture. The card
+explicitly labels it an anonymized demo and does not link to the private invitation site.
+No production account or guest invitation code is used. Built-page checks verify both
+thumbnails and their readable larger images, as well as the localized visit action.
+
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
 distinguishes open-source tools and family examples from client work. The journal and technical
