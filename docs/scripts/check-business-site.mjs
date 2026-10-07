@@ -294,9 +294,13 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
     window: { addEventListener() {} },
   });
   assert.ok(details.open && scrolled, 'Following the homepage proof link opens and reveals the evidence');
-  for (const [service, setup, monthly] of [['website', 2995, 99], ['app', 7995, 299], ['service', 4995, 199]]) {
+  for (const [service, setup, monthly, englishPrice, danishPrice] of [
+    ['website', 2995, 99, 'DKK 2,995', '2.995 kr.'],
+    ['app', 7995, 299, 'DKK 7,995', '7.995 kr.'],
+    ['service', 4995, 199, 'DKK 4,995', '4.995 kr.'],
+  ]) {
     assert.match(page, new RegExp(`data-offer="${service}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
-    assert.ok(page.includes(new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-DK').format(setup)), 'Starting price must be visible');
+    assert.ok(page.includes(locale === 'da' ? danishPrice : englishPrice), 'Starting price uses unambiguous language-appropriate grouping');
   }
   assert.ok(page.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'), 'Inquiry route must be the verified public profile');
   assert.ok(!page.includes('<form'), 'Do not present a contact form without delivery');

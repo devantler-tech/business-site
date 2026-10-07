@@ -217,13 +217,32 @@ fi
 # --- Reusable Workflows: count tripwire + workflow-name set equality -----------
 # Live reusable (workflow_call) workflow names (basename minus .yaml or .yml), sorted & unique.
 rw_live=$(
-  for workflow in "$rw_workflows_dir"/*.yaml "$rw_workflows_dir"/*.yml; do
-    [[ -f "$workflow" ]] || continue
-    if grep -Eq '^[[:space:]]*workflow_call:' "$workflow"; then
-      name=${workflow##*/}
-      printf '%s\n' "${name%.*}"
-    fi
-  done | sort -u
+  node --input-type=module - "$rw_workflows_dir" "$script_dir/../package.json" <<'NODE'
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { resolve, parse } from 'node:path';
+import { createRequire } from 'node:module';
+const { load } = createRequire(resolve(process.argv[3]))('js-yaml');
+const names = new Set();
+for (const filename of readdirSync(process.argv[2]).filter((name) => /\.ya?ml$/.test(name))) {
+  const file = resolve(process.argv[2], filename);
+  if (!statSync(file).isFile()) continue;
+  try {
+    const events = load(readFileSync(file, 'utf8'))?.on;
+    let reusable;
+    if (typeof events === 'string') reusable = events === 'workflow_call';
+    else if (Array.isArray(events) && events.every((event) => typeof event === 'string')) {
+      reusable = events.includes('workflow_call');
+    } else if (events && typeof events === 'object' && !Array.isArray(events)) {
+      reusable = Object.hasOwn(events, 'workflow_call');
+    } else throw new Error('on must be an event name, sequence or mapping');
+    if (reusable) names.add(parse(filename).name);
+  } catch {
+    console.error(`::error file=${file}::Cannot parse workflow triggers`);
+    process.exit(1);
+  }
+}
+console.log([...names].sort().join('\n'));
+NODE
 )
 rw_count=$(printf '%s\n' "$rw_live" | grep -c . || true)
 rw_expected=$(grep -oE 'reusable-workflows-count:[[:space:]]*[0-9]+' "$mdx" | grep -oE '[0-9]+' | head -n1 || true)

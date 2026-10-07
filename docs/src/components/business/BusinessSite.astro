@@ -10,7 +10,7 @@ interface Props { locale: Locale }
 const { locale } = Astro.props;
 const t = copy[locale];
 const home = locale === 'da' ? '/da/' : '/';
-const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-DK').format(value);
+const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-GB').format(value);
 ---
 
 <BusinessLayout locale={locale}>

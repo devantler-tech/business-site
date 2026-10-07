@@ -973,8 +973,43 @@ c="$tmp/workflow-yml-ordinary"; build_fixture "$c"
 printf 'on:\n  push:\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ordinary-ci.yml"
 pass_case "Reusable Workflows: ordinary .yml CI is ignored" "$c"
 
+# GitHub accepts scalar, sequence and mapping event declarations. These literal
+# fixtures catch omitted reusable workflows without mirroring the parser.
+for form in scalar flow-list block-list flow-map quoted-key; do
+  c="$tmp/workflow-event-$form"; build_fixture "$c"
+  workflow="$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yaml"
+  case "$form" in
+    scalar) printf 'on: workflow_call\n' > "$workflow" ;;
+    flow-list) printf 'on: [push, workflow_call]\n' > "$workflow" ;;
+    block-list) printf 'on:\n  - push\n  - workflow_call\n' > "$workflow" ;;
+    flow-map) printf 'on: {workflow_call: {}}\n' > "$workflow" ;;
+    quoted-key) printf '"on": workflow_call\n' > "$workflow" ;;
+  esac
+  pass_case "Reusable Workflows: $form event declaration is counted" "$c"
+done
+
+c="$tmp/workflow-nested-key"; build_fixture "$c"
+printf 'on: push\nenv:\n  workflow_call: false\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ordinary.yml"
+pass_case "Reusable Workflows: a key outside on is ignored" "$c"
+
+c="$tmp/workflow-script-text"; build_fixture "$c"
+printf 'on: push\njobs:\n  example:\n    steps:\n      - run: |\n          workflow_call: not-an-event\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ordinary.yml"
+pass_case "Reusable Workflows: script text is not an event" "$c"
+
+c="$tmp/workflow-unlisted-scalar"; build_fixture "$c"
+printf 'on: workflow_call\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/new-call.yml"
+fail_match "Reusable Workflows: an unlisted scalar event trips drift" "$c" "3 reusable (workflow_call) workflow(s)"
+
+c="$tmp/workflow-malformed-yaml"; build_fixture "$c"
+printf 'on: [workflow_call\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yaml"
+fail_match "Reusable Workflows: malformed YAML fails closed" "$c" "Cannot parse workflow triggers"
+
+c="$tmp/workflow-invalid-events"; build_fixture "$c"
+printf 'on: 42\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yaml"
+fail_match "Reusable Workflows: invalid event shape fails closed" "$c" "Cannot parse workflow triggers"
+
 if [ "$fail" -ne 0 ]; then
   printf '❌ active-projects drift-guard self-test FAILED\n' >&2
   exit 1
 fi
-printf '✅ active-projects drift-guard self-test passed (61 cases)\n'
+printf '✅ active-projects drift-guard self-test passed (71 cases)\n'
