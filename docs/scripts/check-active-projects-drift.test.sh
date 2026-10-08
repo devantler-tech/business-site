@@ -1046,8 +1046,84 @@ c="$tmp/current-checkout-missing"; build_fixture "$c"
 rm -rf "$c/github/devantler-tech/.github-public"
 fail_match "Current automation: missing checkout fails closed" "$c" "current automation actions not found"
 
+# Legacy action.yml files are equally valid, including an extension-only rename.
+c="$tmp/action-mixed-extension"; build_fixture "$c"
+mv "$c/github/devantler-tech/github-actions/actions/alpha/action.yaml" "$c/github/devantler-tech/github-actions/actions/alpha/action.yml"
+pass_case "Actions: mixed metadata extensions are counted" "$c"
+
+c="$tmp/action-yml-only"; build_fixture "$c"
+for name in alpha beta; do
+  mv "$c/github/devantler-tech/github-actions/actions/$name/action.yaml" "$c/github/devantler-tech/github-actions/actions/$name/action.yml"
+done
+pass_case "Actions: a .yml-only inventory is counted" "$c"
+
+c="$tmp/action-yml-added"; build_fixture "$c"
+mkdir -p "$c/github/devantler-tech/github-actions/actions/gamma"
+printf 'name: gamma\n' > "$c/github/devantler-tech/github-actions/actions/gamma/action.yml"
+fail_match "Actions: unlisted .yml trips count drift" "$c" "3 composite action(s)"
+
+c="$tmp/action-yml-renamed"; build_fixture "$c"
+mv "$c/github/devantler-tech/github-actions/actions/alpha" "$c/github/devantler-tech/github-actions/actions/gamma"
+mv "$c/github/devantler-tech/github-actions/actions/gamma/action.yaml" "$c/github/devantler-tech/github-actions/actions/gamma/action.yml"
+fail_match "Actions: a .yml rename trips set drift" "$c" "'actions-dirs' marker does not match"
+
+# Correct paths cannot hide an absent, misspelled or partially parsed disposition.
+c="$tmp/disposition-multiline-comment"; build_fixture "$c"
+sed -i.bak '/projects-submodules:/s# \*/}##' "$(mdx_path "$c")"
+sed -i.bak '/projects-submodules:/a\
+  Inventory explanation.\
+*/}' "$(mdx_path "$c")"
+pass_case "Submodules: multiline comment preserves the complete inventory" "$c"
+
+for disposition in sectoin '' '=section' 'section!ignored' 'section=infra'; do
+  c="$tmp/disposition-${disposition:-missing}"; build_fixture "$c"
+  sed -i.bak "s#applications/bar=grouped#applications/bar=$disposition#" "$(mdx_path "$c")"
+  fail_match "Submodules: invalid disposition '$disposition' fails closed" "$c" "Invalid projects-submodules disposition"
+done
+
+c="$tmp/disposition-no-equals"; build_fixture "$c"
+sed -i.bak 's#applications/bar=grouped#applications/bar#' "$(mdx_path "$c")"
+fail_match "Submodules: missing disposition assignment fails closed" "$c" "Invalid projects-submodules disposition"
+
+c="$tmp/disposition-empty-entry"; build_fixture "$c"
+sed -i.bak 's#applications/bar=grouped,#applications/bar=grouped,,#' "$(mdx_path "$c")"
+fail_match "Submodules: an empty entry fails closed" "$c" "Invalid projects-submodules disposition"
+
+c="$tmp/disposition-duplicate-marker"; build_fixture "$c"
+sed -i.bak '/projects-submodules:/p' "$(mdx_path "$c")"
+fail_match "Submodules: duplicate inventory fails closed" "$c" "Invalid projects-submodules disposition"
+
+c="$tmp/disposition-duplicate-path"; build_fixture "$c"
+sed -i.bak 's#applications/bar=grouped,#applications/bar=grouped,applications/bar=infra,#' "$(mdx_path "$c")"
+fail_match "Submodules: conflicting duplicate path fails closed" "$c" "Invalid projects-submodules disposition"
+
+c="$tmp/disposition-same-line-markers"; build_fixture "$c"
+sed -i.bak 's#{/\* projects-submodules: #{/* projects-submodules: applications/bar=sectoin */} {/* projects-submodules: #' "$(mdx_path "$c")"
+fail_match "Submodules: another marker on the same line cannot hide invalid entries" "$c" "Invalid projects-submodules disposition"
+
+for disposition in section grouped infra omitted; do
+  c="$tmp/disposition-valid-$disposition"; build_fixture "$c"
+  sed -i.bak "s#applications/bar=grouped#applications/bar=$disposition#" "$(mdx_path "$c")"
+  pass_case "Submodules: supported '$disposition' is accepted" "$c"
+done
+
+# Public business components/data and repository-derived URLs are rendered too.
+c="$tmp/retired-business-component"; build_fixture "$c"
+mkdir -p "$c/docs/src/components/business"
+printf '<a href="https://github.com/devantler-tech/reusable-workflows">Source</a>\n' > "$c/docs/src/components/business/ProjectsPage.astro"
+fail_match "Retired links: business component cannot bypass guard" "$c" "Retired-repo link"
+
+c="$tmp/retired-business-data"; build_fixture "$c"
+printf '{"source":"https://github.com/devantler-tech/reusable-workflows"}\n' > "$c/docs/src/data/example.json"
+fail_match "Retired links: public data cannot bypass guard" "$c" "Retired-repo link"
+
+c="$tmp/retired-catalogue-slug"; build_fixture "$c"
+printf '[{"repository":"actions"},{"repository":"foo-template"},{"repository":"reusable-workflows"}]\n' > "$c/docs/src/data/public-products.json"
+sed -i.bak 's/public-products: actions,foo-template/public-products: actions,foo-template,reusable-workflows/' "$(mdx_path "$c")"
+fail_match "Retired links: a generated catalogue URL cannot bypass guard" "$c" "Retired-repo link"
+
 if [ "$fail" -ne 0 ]; then
   printf '❌ active-projects drift-guard self-test FAILED\n' >&2
   exit 1
 fi
-printf '✅ active-projects drift-guard self-test passed (78 cases)\n'
+printf '✅ active-projects drift-guard self-test passed (100 cases)\n'

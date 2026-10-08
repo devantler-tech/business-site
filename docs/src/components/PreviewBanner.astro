@@ -14,22 +14,27 @@
 // the production build flips it on. Remove the flag + gate once shipped.
 import { FEATURE_PREVIEW_BANNER } from "astro:env/server";
 
+interface Props { locale?: 'en' | 'da' }
+const { locale = 'en' } = Astro.props;
+const notice = locale === 'da'
+  ? { label: 'Forhåndsvisning', text: 'Denne side viser endnu ikke udgivet indhold via funktionsflaget' }
+  : { label: 'Preview build', text: 'This page includes unreleased content gated behind the feature flag' };
 const style = [
-  "margin:0 0 1.5rem",
+  "margin:1rem",
   "padding:0.75rem 1rem",
-  "border:1px solid var(--sl-color-orange)",
+  "border:1px solid var(--accent,var(--sl-color-orange))",
   "border-radius:0.5rem",
-  "background:var(--sl-color-orange-low)",
-  "color:var(--sl-color-white)",
-  "font-size:var(--sl-text-sm)",
+  "background:var(--paper,var(--sl-color-orange-low))",
+  "color:var(--ink,var(--sl-color-white))",
+  "font-size:0.875rem",
+  "overflow-wrap:anywhere",
 ].join(";");
 ---
 
 {
   FEATURE_PREVIEW_BANNER && (
-    <aside role="note" aria-label="Preview build notice" style={style}>
-      🚧 <strong>Preview build</strong> — this page includes unreleased content
-      gated behind the <code>FEATURE_PREVIEW_BANNER</code> feature flag.
+    <aside role="note" aria-label={notice.label} data-preview-banner style={style}>
+      🚧 <strong>{notice.label}</strong> — {notice.text} <code>FEATURE_PREVIEW_BANNER</code>.
     </aside>
   )
 }

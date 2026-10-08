@@ -15,7 +15,7 @@
 # already-checked-out submodule, never the GitHub API.
 #
 #   - Actions list       — one bullet per composite action, so it maps 1:1 to
-#                          the `*/action.yaml` directories. A bullet *count*
+#                          the `*/action.yaml` / `*/action.yml` directories. A bullet *count*
 #                          alone cannot catch a rename (or a net-zero add+remove)
 #                          — the count stays equal while a bullet silently goes
 #                          stale — so we additionally pin the exact directory
@@ -149,13 +149,40 @@ for entry in "${retired_repo_urls[@]}"; do
   retired_url="${entry%%|*}"
   replacement_url="${entry##*|}"
 
-  # -F: the URLs are literals, not patterns. Match the whole content tree, not just
-  # active.mdx — an unguarded page is exactly how this drifts.
-  if hits=$(grep -rFl "$retired_url" "$content_dir" 2>/dev/null) && [ -n "$hits" ]; then
+  # Components and data also render public links. Inspect the whole source tree,
+  # not just MDX; distinguish no matches from an incomplete read.
+  if hits=$(grep -rFlI "$retired_url" "$site_root/docs/src"); then
     while IFS= read -r hit; do
       echo "::error file=${hit#"$repo_root"/}::Retired-repo link: this page links to '${retired_url}', \
 which is archived (read-only). Link '${replacement_url}' instead." >&2
     done <<<"$hits"
+    fail=1
+  else
+    scan_status=$?
+    if [ "$scan_status" -ne 1 ]; then
+      echo "::error::Cannot inspect public source for retired-repo links" >&2
+      fail=1
+    fi
+  fi
+
+  # The catalogue renderer constructs links from repository slugs, so there is
+  # no literal URL to grep. Check the URLs that it will actually emit as well.
+  if ! node --input-type=module - "$public_catalogue" "$retired_url" "$replacement_url" <<'NODE'
+import { readFileSync } from 'node:fs';
+try {
+  const [cataloguePath, retired, replacement] = process.argv.slice(2);
+  const catalogue = JSON.parse(readFileSync(cataloguePath, 'utf8'));
+  if (!Array.isArray(catalogue)) throw new Error('Expected an array');
+  if (catalogue.some(({ repository }) => `https://github.com/devantler-tech/${repository}` === retired)) {
+    console.error(`::error::Retired-repo link: the public catalogue generates '${retired}'. Link '${replacement}' instead.`);
+    process.exitCode = 1;
+  }
+} catch {
+  console.error('::error::Cannot inspect public catalogue for retired-repo links');
+  process.exitCode = 1;
+}
+NODE
+  then
     fail=1
   fi
 done
@@ -183,9 +210,9 @@ count_section_bullets() {
 }
 
 # --- Actions: bullet-count tripwire + directory-name set equality --------------
-# Live action directory names (each dir holding an action.yaml), sorted & unique.
+# Live action directory names (either valid metadata extension), sorted & unique.
 actions_live=$(
-  find "$actions_dir" -mindepth 2 -maxdepth 2 -name action.yaml -type f \
+  find "$actions_dir" -mindepth 2 -maxdepth 2 -type f \( -name action.yaml -o -name action.yml \) \
     | awk -F/ '{ print $(NF - 1) }' | sort -u
 )
 actions_count=$(printf '%s\n' "$actions_live" | grep -c . || true)
@@ -331,11 +358,25 @@ submodules_live=$(
 )
 
 # Declared paths from the inline `projects-submodules: path=disposition,...`
-# marker — take the path (left of '=') from each comma-separated entry.
+# marker — validate every complete entry BEFORE discarding its disposition.
 submodules_marker=$(
-  grep -oE 'projects-submodules:[[:space:]]*[a-z0-9/=,._-]+' "$mdx" \
-    | sed -E 's/^projects-submodules:[[:space:]]*//' | head -n1 || true
+  sed -nE 's#^.*projects-submodules:[[:space:]]*(.*)$#\1#p' "$mdx" \
+    | sed -E 's#[[:space:]]*\*/\}[[:space:]]*$##; s/^[[:space:]]+//; s/[[:space:]]+$//'
 )
+submodules_valid=1
+if [ -n "$submodules_marker" ]; then
+  if [ "$(grep -oF 'projects-submodules:' "$mdx" | wc -l | tr -d ' ')" -ne 1 ]; then
+    submodules_valid=0
+  fi
+  while IFS= read -r disposition_entry; do
+    if [[ ! "$disposition_entry" =~ ^[a-z0-9._/-]+=(section|grouped|templates-page|infra|omitted)$ ]]; then
+      submodules_valid=0
+    fi
+  done < <(printf '%s\n' "$submodules_marker" | tr ',' '\n')
+  if [ "$(printf '%s\n' "$submodules_marker" | tr ',' '\n' | cut -d= -f1 | sort | uniq -d | wc -l | tr -d ' ')" -ne 0 ]; then
+    submodules_valid=0
+  fi
+fi
 submodules_declared=$(
   printf '%s' "$submodules_marker" | tr ',' '\n' | sed -E 's/=.*$//; /^[[:space:]]*$/d' | sort -u
 )
@@ -344,6 +385,9 @@ if [ -z "$submodules_marker" ]; then
   echo "::error file=docs/src/content/docs/projects/active.mdx::Missing \
 'projects-submodules: path=disposition,...' marker in \
 docs/src/content/docs/projects/active.mdx." >&2
+  fail=1
+elif [ "$submodules_valid" -ne 1 ]; then
+  echo "::error file=docs/src/content/docs/projects/active.mdx::Invalid projects-submodules disposition: use one inventory with unique paths and one of section / grouped / templates-page / infra / omitted for EVERY entry." >&2
   fail=1
 elif [ "$submodules_declared" != "$submodules_live" ]; then
   only_live=$(comm -23 <(printf '%s\n' "$submodules_live") <(printf '%s\n' "$submodules_declared") | paste -sd, -)

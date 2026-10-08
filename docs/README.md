@@ -78,7 +78,8 @@ research and diagrams are sourced from `src/content/docs/projects/completed.mdx`
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public product card or family/research content.
-The former deployed-platform bookmark lands on the reusable Platform Template. A bookmarked card
+The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
+reusable Platform Template in the public software catalogue. A bookmarked card
 in the collapsed remainder opens that disclosure. Links without a fragment and the no-JavaScript
 fallback use the relevant section. Root horizontal overflow is
 clipped without creating a non-scrolling ancestor
@@ -212,7 +213,8 @@ env: {
 
 Gate rendering on the flag by importing it from `astro:env/server` (or `astro:env/client` for a
 `PUBLIC_`-prefixed client flag) — see [`src/components/PreviewBanner.astro`](src/components/PreviewBanner.astro),
-the worked example. When the flag is off, the component emits nothing.
+the worked example mounted on the English and Danish business homepages. When the flag is off,
+the component emits nothing; enabling it adds a localized notice above the homepage introduction.
 
 Flags can also gate **content-collection inclusion** (filter entries out of `getCollection(...)`
 when a flag is off) to hold back whole docs sections.

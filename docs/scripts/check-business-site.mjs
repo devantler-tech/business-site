@@ -223,6 +223,8 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   navigation(page, locale);
   assert.match(page, new RegExp(`<html[^>]+lang="${locale}"`));
   assert.ok(page.includes('data-business-site'), 'Production build must publish the business homepage');
+  assert.equal(page.includes('data-preview-banner'), process.env.FEATURE_PREVIEW_BANNER === 'true',
+    `The ${locale} homepage renders the preview notice exactly when FEATURE_PREVIEW_BANNER is enabled`);
   assert.equal((page.match(/<h1\b/g) ?? []).length, 1, 'One clear page heading');
   const canonical = `https://devantler.tech/${path ? `${path}/` : ''}`;
   assert.ok(page.includes(`rel="canonical" href="${canonical}"`), 'Self-referencing canonical URL');

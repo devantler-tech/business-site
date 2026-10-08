@@ -5,6 +5,7 @@ import matrix from '../../assets/matrix.png';
 import BusinessLayout from "./BusinessLayout.astro";
 import { copy, offers, inquiryUrl, type Locale } from './content';
 import WorkExample from './WorkExample.astro';
+import PreviewBanner from '../PreviewBanner.astro';
 
 interface Props { locale: Locale }
 const { locale } = Astro.props;
@@ -15,6 +16,7 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
 
 <BusinessLayout locale={locale}>
     <main id="main">
+      <PreviewBanner locale={locale} />
       <section class="hero-scene" aria-labelledby="hero-title">
         <Image class="hero-art" data-hero-art src={matrix} width={1600} height={800} widths={[640, 1280, 1920]} sizes="100vw" format="webp" quality={80} alt="" aria-hidden="true" loading="eager" fetchpriority="high" />
         <div class="hero container">

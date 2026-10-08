@@ -21,7 +21,7 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
-      // Example flag for PreviewBanner.astro; not used by the business homepage.
+      // Default-off preview notice on the rendered English and Danish homepages.
       // Default-off, so production builds omit it; a preview build enables it
       // with `FEATURE_PREVIEW_BANNER=true npm run build`. Server context = the
       // flag is read while the .astro component renders at build time (SSG), so
