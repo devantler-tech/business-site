@@ -4,6 +4,12 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
+test('ordinary production enables the client-facing portfolio by default', () => {
+  const config = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
+  const flag = config.match(/FEATURE_CLIENT_PORTFOLIO:\s*envField\.boolean\(\{([\s\S]*?)\}\)/)?.[1];
+  assert.ok(flag, 'The release flag remains a typed Astro boolean');
+  assert.match(flag, /default:\s*true\b/);
+});
 const valid = (ci) => {
   if (ci.env?.FEATURE_CLIENT_PORTFOLIO != null || ci.jobs?.['build-docs']?.env?.FEATURE_CLIENT_PORTFOLIO != null) return false;
   const steps = ci.jobs?.['build-docs']?.steps ?? [];

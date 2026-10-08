@@ -29,7 +29,7 @@ export default defineConfig({
       FEATURE_CLIENT_PORTFOLIO: envField.boolean({
         context: "server",
         access: "public",
-        default: false,
+        default: true,
       }),
       // Default-off preview notice on the rendered English and Danish homepages.
       // Default-off, so production builds omit it; a preview build enables it

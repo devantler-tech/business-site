@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 const [directory, ...extra] = process.argv.slice(2);
 assert.ok(directory && extra.length === 0, 'Usage: check-client-facing.mjs <build-directory>');
 const page = (path) => readFileSync(resolve(directory, path, 'index.html'), 'utf8');
-const enabled = process.env.FEATURE_CLIENT_PORTFOLIO === 'true';
+const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const stars = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const anchors = {
@@ -21,7 +21,7 @@ for (const locale of ['en', 'da']) {
   const prefix = locale === 'da' ? 'da/' : '';
   const home = page(prefix);
   const projects = page(`${prefix}projects`);
-  test(`${locale}: rollout is build-time and default-off`, () => {
+  test(`${locale}: rollout follows the build-time flag and enabled production default`, () => {
     assert.equal(home.includes('data-client-quality'), enabled);
     assert.equal(projects.includes('data-client-portfolio'), enabled);
   });
