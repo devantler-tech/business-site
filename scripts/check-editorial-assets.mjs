@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { load } from 'js-yaml';
 import sharp from 'sharp';
 
+/** Reject reused paths or decoded pixels, including covers assigned to another site subject. */
 export function assertUniqueIllustrations(covers, otherImages = [], label = 'Journal cover') {
   assert.ok(covers.length > 0, 'Journal cover inventory must not be empty');
   const paths = new Set();
@@ -20,11 +21,13 @@ export function assertUniqueIllustrations(covers, otherImages = [], label = 'Jou
   }
 }
 
+/** Hash decoded dimensions and RGBA pixels so a re-encoding cannot disguise duplicate artwork. */
 export async function imageDigest(path) {
   const { data, info } = await sharp(path).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   return createHash('sha256').update(`${info.width}x${info.height}:`).update(data).digest('hex');
 }
 
+/** Read every actual post's local cover and decoded fingerprint from its validated frontmatter. */
 export async function readJournalCovers(repository) {
   const blog = join(repository, 'src/content/docs/blog');
   const covers = [];
@@ -41,6 +44,7 @@ export async function readJournalCovers(repository) {
   return covers;
 }
 
+/** Validate the complete Journal inventory against site imports and the two research subjects. */
 export async function checkEditorialAssets(repository) {
   const covers = await readJournalCovers(repository);
   const otherImages = [];

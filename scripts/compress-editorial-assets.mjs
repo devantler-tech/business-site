@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { linkSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 
-// One-off asset preparation, not part of the production build. Never overwrite source art.
-export async function compressEditorialAssets(files) {
+/**
+ * Prepare budgeted WebPs without changing source art or replacing another writer's output.
+ * Write into an owned directory on the destination filesystem, then atomically link the
+ * complete file into place. The optional writer lets tests simulate a partial storage failure.
+ */
+export async function compressEditorialAssets(files, write = writeFileSync) {
   for (const { source, output } of files) {
     let encoded;
     let quality;
@@ -14,8 +18,16 @@ export async function compressEditorialAssets(files) {
       if (encoded.length < 220_000) break;
     }
     assert.ok(encoded.length < 220_000, 'Editorial asset exceeds the delivery budget');
-    // Exclusive creation checks and opens atomically, even if a rival writes while encoding.
-    writeFileSync(output, encoded, { flag: 'wx' });
+    const staging = mkdtempSync(join(dirname(output), '.editorial-'));
+    const temporary = join(staging, 'asset.webp');
+    try {
+      write(temporary, encoded, { flag: 'wx' });
+      // A hard link publishes only complete bytes and fails EEXIST instead of replacing a rival.
+      linkSync(temporary, output);
+    } finally {
+      rmSync(temporary, { force: true });
+      rmdirSync(staging);
+    }
     console.log(`${output}: ${encoded.length} bytes, quality ${quality}`);
   }
 }

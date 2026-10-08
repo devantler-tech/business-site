@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
+/** Admit only unconditional enabled, disabled and unset builds before the production artifact. */
 const valid = (ci) => {
   const flag = 'FEATURE_JOURNAL_PRESENTATION';
   const job = ci.jobs?.['build-docs'];

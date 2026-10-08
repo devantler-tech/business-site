@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import sharp from 'sharp';
 import { compressEditorialAssets } from './compress-editorial-assets.mjs';
 
+/** Create an owned disposable image fixture and register cleanup with the test runner. */
 async function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'editorial-compression-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -55,4 +56,18 @@ test('the actual command refuses an existing destination without modifying it', 
   const result = spawnSync(process.execPath, ['scripts/compress-editorial-assets.mjs', manifest], { encoding: 'utf8' });
   assert.notEqual(result.status, 0);
   assert.equal(readFileSync(output, 'utf8'), 'original artwork');
+});
+
+test('a partial encoding write never publishes a destination and leaves no temporary files', async t => {
+  const { dir, source, output } = await fixture(t);
+  const before = readdirSync(dir);
+  const failedWrite = (path, bytes, options) => {
+    writeFileSync(path, bytes.subarray(0, 8), options);
+    throw Object.assign(new Error('simulated storage failure'), { code: 'EIO' });
+  };
+  await assert.rejects(compressEditorialAssets([{ source, output }], failedWrite), { code: 'EIO' });
+  assert.equal(existsSync(output), false, 'an incomplete asset must never become the published path');
+  assert.deepEqual(readdirSync(dir), before, 'failed preparation cleans only its own temporary files');
+  await compressEditorialAssets([{ source, output }]);
+  assert.equal((await sharp(output).metadata()).format, 'webp', 'a retry can publish a complete image');
 });

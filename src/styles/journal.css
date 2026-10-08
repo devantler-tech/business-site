@@ -9,10 +9,13 @@
 .journal-page .journal-browse > summary { padding: .8rem 0 1.25rem; color: var(--ink); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .journal-page .journal-browse > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 .journal-page .journal-browser { padding: 0 0 2rem; }
-.journal-page .journal-browser > ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.journal-page .journal-browser > sl-sidebar-state-persist > ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
 .journal-page .journal-browser a { overflow-wrap: anywhere; }
 .journal-page .main-pane { width: 100%; padding: 0; }
-.journal-page .right-sidebar-container { display: none; }
+/* Starlight uses this rail for the mobile contents menu as well as desktop navigation. */
+@media (min-width: 72rem) {
+  .journal-page .right-sidebar-container { display: none; }
+}
 .journal-page main > .content-panel { padding: 0; border: 0; }
 .journal-page main > .content-panel:first-of-type { display: block !important; padding: 3.5rem 0 2.75rem; }
 .journal-page .sl-container { max-width: none; margin: 0; }
@@ -57,7 +60,7 @@
 .journal-page .sl-markdown-content img { max-width: 100%; }
 @media (max-width: 760px) {
   .journal-page .journal-wrap { width: calc(100% - 2.5rem); margin-top: 1.25rem; }
-  .journal-page .journal-browser > ul { grid-template-columns: 1fr; }
+  .journal-page .journal-browser > sl-sidebar-state-persist > ul { grid-template-columns: 1fr; }
   .journal-page main > .content-panel:first-of-type { padding: 2.5rem 0 2rem; }
   .journal-page .sl-blog-posts { grid-template-columns: 1fr; gap: 2rem; }
   .journal-page .sl-blog-preview:first-child { grid-column: auto; }
