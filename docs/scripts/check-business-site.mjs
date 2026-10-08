@@ -7,6 +7,7 @@ import sharp from 'sharp';
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
 const root = resolve(directory);
+const clientFacing = process.env.FEATURE_CLIENT_PORTFOLIO === 'true';
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     assert.ok(!readFileSync(resolve(root, path), 'utf8').includes('https://github.com/devantler-tech/reusable-workflows'), 'Rendered public pages must not link to retired repositories');
@@ -92,7 +93,7 @@ for (const locale of ['en', 'da']) {
     if (section === 'about') {
       assert.match(page, /<img[^>]*alt="Nikolai Emil Damm"/, 'The business biography identifies its real founder');
       assert.ok(page.includes('href="/pdfs/nikolai-emil-damm-cv.pdf"'), 'The founder’s professional background remains available');
-    } else {
+    } else if (!clientFacing) {
       const shelf = page.match(/<section[^>]*aria-labelledby="open-title"[^>]*>([\s\S]*?)<\/section>/)?.[1];
       assert.ok(shelf, 'The public products shelf is reachable on the unified Projects page');
       const overflow = shelf.match(/<details[^>]*id="more-public-products"[^>]*>([\s\S]*?)<\/details>/);
@@ -191,6 +192,7 @@ for (const locale of ['en', 'da']) {
       const illustrationPath = illustration.match(/src="([^"]+)"/)?.[1];
       assert.ok(illustrationPath && existsSync(resolve(root, `.${illustrationPath}`)), 'Project artwork is emitted locally');
     }
+    if (section === 'projects' && clientFacing) await workExamples(page, locale);
   }
 }
 for (const [path, target] of [['projects/active', '/projects/#open-title'], ['projects/completed', '/projects/#research']]) {
@@ -253,7 +255,7 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   assert.ok(portraitPath && existsSync(resolve(root, `.${portraitPath}`)), 'The developer portrait is served locally');
   assert.match(portraitPath, /\/profile\.[^/]+\.webp$/, 'Use the existing public profile photograph, not the illustrated avatar');
   assert.ok(hero.includes(`href="${locale === 'da' ? '/da/about/' : '/about/'}"`), 'Visitors can follow the business biography in their selected language');
-  assert.match(hero, /href="https:\/\/github\.com\/devantler"/, 'Visitors can inspect the developer’s verified public work');
+  if (!clientFacing) assert.match(hero, /href="https:\/\/github\.com\/devantler"/, 'Visitors can inspect the developer’s verified public work');
   const socialPortrait = page.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/)?.[1];
   assert.ok(socialPortrait, 'Sharing identifies the person behind the business');
   assert.equal(new URL(socialPortrait).origin, 'https://devantler.tech', 'Sharing uses the locally hosted portrait');
@@ -281,6 +283,7 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   }
   const selectedWork = page.match(/<section[^>]*id="work"[^>]*>([\s\S]*?)<\/section>/)?.[1];
   await workExamples(selectedWork, locale);
+  if (!clientFacing) {
   // The homepage promises a way to inspect the engineering practices, not a
   // second product catalogue. Follow its actual localized route and bookmark.
   const quality = page.match(/<section\b[^>]*data-engineering-quality[^>]*>([\s\S]*?)<\/section>/)?.[1];
@@ -306,6 +309,7 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
     window: { addEventListener() {} },
   });
   assert.ok(details.open && scrolled, 'Following the homepage proof link opens and reveals the evidence');
+  }
   for (const [service, setup, monthly, englishPrice, danishPrice] of [
     ['website', 2995, 99, 'DKK 2,995', '2.995 kr.'],
     ['app', 7995, 299, 'DKK 7,995', '7.995 kr.'],

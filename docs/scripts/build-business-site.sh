@@ -5,7 +5,9 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 node --test scripts/theme.test.mjs
 node --test scripts/journal-navigation.test.mjs
 node --test scripts/public-products.test.mjs
+node --test scripts/client-rollout.test.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
 node scripts/check-business-site.mjs dist
+node scripts/check-client-facing.mjs dist
 bash scripts/retired-public-output.test.sh dist

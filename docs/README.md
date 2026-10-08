@@ -64,6 +64,17 @@ maintenance/review rules. A direct fragment opens that disclosure in either lang
 describes verified practices rather than universal coverage, certification, vulnerability-free
 software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
 
+`FEATURE_CLIENT_PORTFOLIO=true` previews the client-facing redesign requested in business-site#5.
+The preview puts plain-language quality and security highlights on Home before the prices and
+examples. Projects leads with the real family website/app examples, keeps all thirteen public
+products visible, and retains the hosting and research bookmarks. Business Home/Projects do not
+link to source code; the journal and existing technical documentation retain their own detail.
+The flag is default-off and does not change the publication revision or turn on the redesign in
+production. CI builds enabled, explicit-false and entirely-unset states and uploads only the final
+normal production output. `scripts/check-client-facing.mjs` exercises the emitted EN/DA visitor
+pages; `scripts/client-rollout.test.mjs` guards the actual CI invocation and its negative controls.
+After a reviewed activation and live visitor verification, remove this short-lived release flag.
+
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
 distinguishes open-source tools and family examples from client work. The journal and technical

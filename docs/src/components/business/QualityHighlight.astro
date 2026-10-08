@@ -1,0 +1,26 @@
+---
+import { clientCopy } from './client-facing';
+import type { Locale } from './content';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const t = clientCopy[locale];
+---
+<section id="quality" data-client-quality data-engineering-quality class="quality-highlight container" aria-labelledby="quality-title">
+  <div class="heading"><p class="eyebrow">{t.qualityEyebrow}</p><h2 id="quality-title">{t.qualityTitle}</h2><p>{t.qualityIntro}</p></div>
+  <div class="quality-columns">{t.quality.map((item, i) => <article><span class="number" aria-hidden="true">0{i + 1}</span><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
+  <p class="scope">{t.qualityScope}</p>
+</section>
+<style>
+  .quality-highlight { padding-block: 4rem; scroll-margin-top: 2rem; }
+  .heading { max-width: 670px; }
+  .eyebrow { color: var(--accent); font-size: .8rem; margin-bottom: .8rem; }
+  h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); }
+  .heading > p:last-child { margin-top: 1rem; }
+  .quality-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2.5rem; margin-top: 2.5rem; }
+  article { padding-top: 1.2rem; border-top: 1px solid var(--line); }
+  .number { display: block; color: var(--accent); font-size: .85rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.2rem; }
+  article p { margin-top: .8rem; font-size: .95rem; }
+  .scope { max-width: 860px; font-size: .8rem; margin-top: 2rem; }
+  @media (max-width: 760px) { .quality-highlight { padding-block: 2.5rem; } .quality-columns { grid-template-columns: 1fr; gap: 1.5rem; margin-top: 1.8rem; } }
+</style>

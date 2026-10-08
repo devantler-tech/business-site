@@ -21,6 +21,11 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      FEATURE_CLIENT_PORTFOLIO: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
+      }),
       // Default-off preview notice on the rendered English and Danish homepages.
       // Default-off, so production builds omit it; a preview build enables it
       // with `FEATURE_PREVIEW_BANNER=true npm run build`. Server context = the

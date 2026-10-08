@@ -97,11 +97,20 @@ jobs:
         env:
           FEATURE_PREVIEW_BANNER: "true"
         run: npm run build
+      - name: Build client-facing portfolio preview
+        working-directory: docs
+        env:
+          FEATURE_CLIENT_PORTFOLIO: "true"
+        run: npm run build
       - name: Build
         working-directory: docs
         env:
           FEATURE_PREVIEW_BANNER: "false"
+          FEATURE_CLIENT_PORTFOLIO: "false"
         run: npm run build
+      - name: Build entirely unset production
+        working-directory: docs
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER npm run build
       - name: Upload reviewable production preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
