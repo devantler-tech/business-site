@@ -60,8 +60,8 @@ fail_match() { # name root expected-substring
 build_fixture() {
   local root="$1"
   rm -rf "$root"
-  local mdx_dir="$root/docs/src/content/docs/projects"
-  local tpl_dir="$root/docs/src/content/docs/templates"
+  local mdx_dir="$root/src/content/docs/projects"
+  local tpl_dir="$root/src/content/docs/templates"
   local actions_dir="$root/github/devantler-tech/github-actions/actions"
   local rw_dir="$actions_dir/.github/workflows"
   local current="$root/github/devantler-tech/.github-public"
@@ -70,8 +70,8 @@ build_fixture() {
   printf 'name: current-alpha\n' > "$current/actions/current-alpha/action.yml"
   printf 'on: [push, workflow_call]\n' > "$current/.github/workflows/current-ci.yml"
   printf 'on: push\n' > "$current/.github/workflows/ordinary.yaml"
-  mkdir -p "$root/docs/src/data"
-  printf '[{"repository":"actions"},{"repository":"foo-template"}]\n' > "$root/docs/src/data/public-products.json"
+  mkdir -p "$root/src/data"
+  printf '[{"repository":"actions"},{"repository":"foo-template"}]\n' > "$root/src/data/public-products.json"
 
   printf 'name: alpha\n' > "$actions_dir/alpha/action.yaml"
   printf 'name: beta\n'  > "$actions_dir/beta/action.yaml"
@@ -139,7 +139,7 @@ proves the guarded relation is a strict subset rather than set equality.
 </div>
 EOF
 
-  cat > "$root/docs/src/content/docs/index.mdx" <<'EOF'
+  cat > "$root/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -161,7 +161,7 @@ EOF
 }
 
 # Path to the fixture's active.mdx — every drift case mutates this file.
-mdx_path() { printf '%s/docs/src/content/docs/projects/active.mdx' "$1"; }
+mdx_path() { printf '%s/src/content/docs/projects/active.mdx' "$1"; }
 
 # 0. fully-consistent fixture → pass (the happy path; guards against a guard
 #    that fails-closed on a correct page).
@@ -249,7 +249,7 @@ fail_match "Templates: templates-page submodule with no doc page" "$c" \
 #     submodule check still passes) → templates set-equality fires on the
 #     "has a doc page but not dispositioned" side.
 c="$tmp/templates-extra-page"; build_fixture "$c"
-cat > "$c/docs/src/content/docs/templates/qux.md" <<'EOF'
+cat > "$c/src/content/docs/templates/qux.md" <<'EOF'
 ---
 title: Qux Template
 ---
@@ -265,13 +265,13 @@ rm -rf "$c/github/devantler-tech/github-actions/actions"
 fail_match "die_missing: actions submodule not checked out" "$c" \
   "actions submodule not found"
 
-# 13. Retired-repo link: ANY page under docs/src/content linking to an archived
+# 13. Retired-repo link: ANY page under src/content linking to an archived
 #     repo trips the guard — not just the guarded lists. Uses the homepage,
 #     because that is exactly where this drifted in production: active.mdx was
 #     updated when reusable-workflows was archived and the homepage LinkCard was
 #     not (monorepo#1813, theme 2).
 c="$tmp/retired-link"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'FIXTURE'
+cat >"$c/src/content/docs/index.mdx" <<'FIXTURE'
 ---
 title: Home
 ---
@@ -286,21 +286,21 @@ fail_match "retired-repo link on an unguarded page" "$c" \
 #     outside the Featured Projects section and must not enter the comparison.
 c="$tmp/homepage-featured-project"; build_fixture "$c"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 fail_match "Homepage: featured project absent from Active Projects" "$c" \
   "Homepage featured-project drift"
 
 # 15. The homepage is now a required source for the cross-page invariant. A
 #     missing file must fail closed instead of silently skipping the check.
 c="$tmp/homepage-missing"; build_fixture "$c"
-rm "$c/docs/src/content/docs/index.mdx"
+rm "$c/src/content/docs/index.mdx"
 fail_match "Homepage: source file missing" "$c" \
   "homepage index.mdx not found"
 
 # 16. A rendered LinkCard without a literal title cannot participate in the
 #     invariant and must fail closed with the card-shape error.
 c="$tmp/homepage-empty-featured"; build_fixture "$c"
-sed -i.bak '/title="⚡ Actions"/d' "$c/docs/src/content/docs/index.mdx"
+sed -i.bak '/title="⚡ Actions"/d' "$c/src/content/docs/index.mdx"
 fail_match "Homepage: Featured Projects has no literal card titles" "$c" \
   "Every homepage Featured Projects LinkCard must have exactly one literal title"
 
@@ -315,7 +315,7 @@ fail_match "Active Projects: no linked project headings" "$c" \
 # 18. Single quotes are valid MDX literal syntax. A ghost card using them must
 #     not disappear merely because another double-quoted card was extracted.
 c="$tmp/homepage-single-quoted-title"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -337,7 +337,7 @@ fail_match "Homepage: single-quoted ghost project is not omitted" "$c" \
 # 19. Two LinkCards on one line are still separate rendered MDX nodes. Both must
 #     enter the comparison, so the Ghost card is caught.
 c="$tmp/homepage-compact-cards"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -358,7 +358,7 @@ fail_match "Homepage: compact LinkCards fail closed" "$c" \
 # 20. Attribute order is irrelevant in MDX. A preceding data-title must not
 #     impersonate the real Ghost title.
 c="$tmp/homepage-data-title"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -379,7 +379,7 @@ fail_match "Homepage: data-title cannot mask the real title" "$c" \
 # 21. Two cards with the same visible identity are not a valid set. Raw title
 #     and LinkCard counts still agree, so only the uniqueness guard catches it.
 c="$tmp/homepage-duplicate-title"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -401,7 +401,7 @@ fail_match "Homepage: duplicate featured title" "$c" \
 # 22. Attribute-looking text inside another quoted value must not mask the real
 #     title; the MDX AST identifies the Ghost title semantically.
 c="$tmp/homepage-quoted-title-text"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -422,7 +422,7 @@ fail_match "Homepage: quoted title text cannot mask the real title" "$c" \
 # 23. A preceding component on the same line is a separate MDX node and cannot
 #     donate its title to the following Ghost LinkCard.
 c="$tmp/homepage-preceding-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -443,7 +443,7 @@ fail_match "Homepage: preceding Card cannot mask LinkCard title" "$c" \
 # 24. An MDX comment is not rendered content. A commented-out card must not
 #     satisfy an otherwise-empty Featured Projects section.
 c="$tmp/homepage-commented-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -462,7 +462,7 @@ fail_match "Homepage: commented LinkCard is not rendered content" "$c" \
 # 25. A fenced example is likewise source text rather than a rendered card. It
 #     must not satisfy the required live-card extraction.
 c="$tmp/homepage-fenced-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -485,7 +485,7 @@ fail_match "Homepage: fenced LinkCard is not rendered content" "$c" \
 #     so the Actions card remains excluded; the matching closer must then restore
 #     parsing so the live Ghost card is caught.
 c="$tmp/homepage-long-fence"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -510,7 +510,7 @@ fail_match "Homepage: shorter fence marker does not close a long fence" "$c" \
 #     cannot satisfy a ghost homepage card.
 c="$tmp/active-projects-commented-heading"; build_fixture "$c"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 cat >>"$(mdx_path "$c")" <<'EOF'
 
 {/*
@@ -524,7 +524,7 @@ fail_match "Active Projects: commented heading cannot satisfy homepage" "$c" \
 #     must not enter the independently navigable project-title set.
 c="$tmp/active-projects-fenced-heading"; build_fixture "$c"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 cat >>"$(mdx_path "$c")" <<'EOF'
 
 ````mdx
@@ -538,7 +538,7 @@ fail_match "Active Projects: fenced heading cannot satisfy homepage" "$c" \
 # 29. Comment-looking text inside inline code is rendered text, not an MDX
 #     comment opener. It must not hide the real Ghost card that follows.
 c="$tmp/homepage-inline-code-comment-marker"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -559,7 +559,7 @@ fail_match "Homepage: inline-code comment marker cannot hide a card" "$c" \
 # 30. CommonMark forbids a backtick in a backtick fence info string, so this is
 #     rendered text rather than a fence opener and cannot hide the Ghost card.
 c="$tmp/homepage-invalid-backtick-fence"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -580,7 +580,7 @@ fail_match "Homepage: invalid backtick fence cannot hide a card" "$c" \
 # 31. An escaped comment opener is rendered text too. Reject the ambiguous
 #     source shape rather than entering comment state and hiding the real card.
 c="$tmp/homepage-escaped-comment-marker"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -602,7 +602,7 @@ fail_match "Homepage: escaped comment marker cannot hide a card" "$c" \
 #     literal title attribute. The actual expression-valued title is unsupported
 #     by the cross-page invariant and must fail closed.
 c="$tmp/homepage-template-string-title"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -628,7 +628,7 @@ fail_match "Homepage: template text cannot impersonate literal title" "$c" \
 #     Active Project section, and cannot satisfy the homepage subset.
 c="$tmp/active-projects-template-heading"; build_fixture "$c"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 cat >>"$(mdx_path "$c")" <<'EOF'
 
 export const fakeProject = `
@@ -641,7 +641,7 @@ fail_match "Active Projects: JS template heading cannot satisfy homepage" "$c" \
 # 34. Conditional JSX is runtime-dependent and cannot be enumerated from the
 #     static LinkCard nodes. Reject it rather than silently omitting Ghost.
 c="$tmp/homepage-conditional-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -661,7 +661,7 @@ fail_match "Homepage: conditional LinkCard fails closed" "$c" \
 # 35. A spread can override a literal title at runtime, so a card using one is
 #     not statically safe even when it also declares an accepted title.
 c="$tmp/homepage-spread-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -680,7 +680,7 @@ fail_match "Homepage: spread attributes fail closed" "$c" \
 # 36. Inline JSX uses mdxJsxTextElement rather than mdxJsxFlowElement. It is
 #     still rendered and must enter the comparison.
 c="$tmp/homepage-inline-linkcard"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -699,7 +699,7 @@ fail_match "Homepage: inline LinkCard enters comparison" "$c" \
 # 37. The section boundary must be unique, otherwise choosing one silently
 #     leaves another rendered Featured Projects section unchecked.
 c="$tmp/homepage-duplicate-featured-heading"; build_fixture "$c"
-cat >>"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >>"$c/src/content/docs/index.mdx" <<'EOF'
 
 ## Featured Projects
 
@@ -711,7 +711,7 @@ fail_match "Homepage: duplicate Featured Projects headings fail closed" "$c" \
 # 38. Malformed MDX must fail at the semantic parser rather than degrading to
 #     an incomplete text scan.
 c="$tmp/homepage-malformed-mdx"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -726,7 +726,7 @@ fail_match "Homepage: malformed MDX fails closed" "$c" \
 # 39. A non-LinkCard JSX element can still render a card through an expression-
 #     valued prop. Reject all runtime JSX attributes in the guarded section.
 c="$tmp/homepage-expression-attribute-card"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -747,7 +747,7 @@ fail_match "Homepage: expression-valued JSX attributes fail closed" "$c" \
 #     escaped so a title cannot inject a second GitHub Actions command.
 c="$tmp/homepage-annotation-injection"; build_fixture "$c"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost\&#10;::notice::Injected"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 fail_match "Homepage: annotation data escapes decoded newlines" "$c" \
   "%0A::notice::Injected"
 
@@ -759,7 +759,7 @@ cat >>"$(mdx_path "$c")" <<'EOF'
 <Broken
 EOF
 fail_match "Active Projects: malformed MDX reports its own file" "$c" \
-  "file=docs/src/content/docs/projects/active.mdx::Unable to parse project metadata as MDX"
+  "file=src/content/docs/projects/active.mdx::Unable to parse project metadata as MDX"
 
 # 42. Astro frontmatter is metadata, not rendered Markdown. A linked-H2-looking
 #     YAML block scalar cannot satisfy the homepage subset.
@@ -768,14 +768,14 @@ sed -i.bak '/title: Active Projects/a\
 fake: |\
   ## [👻 Ghost Project](https://example.invalid/ghost)' "$(mdx_path "$c")"
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 fail_match "Active Projects: frontmatter heading cannot satisfy homepage" "$c" \
   "Homepage featured-project drift"
 
 # 43. The whole section must not sit beneath a runtime-controlled JSX ancestor.
 #     Keeping its H2 top-level makes the section boundary statically meaningful.
 c="$tmp/homepage-runtime-wrapper"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -798,7 +798,7 @@ fail_match "Homepage: runtime-wrapped Featured section fails closed" "$c" \
 # 44. A nested or blockquoted H2 is rendered content inside the section, not the
 #     top-level boundary. It must not truncate inspection before a later card.
 c="$tmp/homepage-nested-h2"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -832,7 +832,7 @@ cat >>"$(mdx_path "$c")" <<'EOF'
 </Conditional>
 EOF
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 fail_match "Active Projects: runtime-wrapped H2 cannot satisfy homepage" "$c" \
   "Homepage featured-project drift"
 
@@ -860,7 +860,7 @@ fail_match "Active Projects: JSX inside linked-H2 title fails closed" "$c" \
 #     JSX in the guarded section must fail closed instead of disappearing from
 #     the comparison while a different normal LinkCard keeps the set non-empty.
 c="$tmp/homepage-aliased-linkcard"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -896,7 +896,7 @@ cat >>"$(mdx_path "$c")" <<'EOF'
 </Hidden>
 EOF
 sed -i.bak 's/title="⚡ Actions"/title="👻 Ghost Project"/' \
-  "$c/docs/src/content/docs/index.mdx"
+  "$c/src/content/docs/index.mdx"
 fail_match "Active Projects: custom wrapper cannot satisfy homepage" "$c" \
   "Homepage featured-project drift"
 
@@ -904,7 +904,7 @@ fail_match "Active Projects: custom wrapper cannot satisfy homepage" "$c" \
 #     different renderer under it. This valid MDX renders Ghost via LinkCard-as-
 #     Card while retaining a normal LinkCard that keeps the inspected set nonempty.
 c="$tmp/homepage-rebound-linkcard"; build_fixture "$c"
-cat >"$c/docs/src/content/docs/index.mdx" <<'EOF'
+cat >"$c/src/content/docs/index.mdx" <<'EOF'
 ---
 title: Home
 ---
@@ -926,11 +926,11 @@ fail_match "Homepage: rebound LinkCard binding fails closed" "$c" \
   "Featured Projects component bindings must use named exports"
 
 c="$tmp/public-products-set"; build_fixture "$c"
-printf '[{"repository":"foo-template"}]\n' > "$c/docs/src/data/public-products.json"
+printf '[{"repository":"foo-template"}]\n' > "$c/src/data/public-products.json"
 fail_match "Public catalogue: removed product cannot leave inventory stale" "$c" "Public product catalogue drift"
 
 c="$tmp/public-products-missing"; build_fixture "$c"
-rm "$c/docs/src/data/public-products.json"
+rm "$c/src/data/public-products.json"
 fail_match "Public catalogue: missing source fails closed" "$c" "Public product catalogue not found"
 
 c="$tmp/public-products-marker"; build_fixture "$c"
@@ -939,8 +939,8 @@ fail_match "Public catalogue: missing inventory fails closed" "$c" "Public produ
 
 c="$tmp/extracted-site"; build_fixture "$c"
 mkdir -p "$c/site"
-cp -R "$c/docs" "$c/site/docs"
-mv "$c/docs" "$c/unused-docs"
+cp -R "$c/src" "$c/site/src"
+mv "$c/src" "$c/unused-src"
 if GITHUB_WORKSPACE="$c" SITE_ROOT="$c/site" bash "$guard" >/dev/null 2>&1; then
   printf '  ✅ Extracted site: explicit source root preserves real portfolio joins\n'
 else
@@ -950,7 +950,7 @@ fi
 c="$tmp/extracted-source-missing"; build_fixture "$c"
 if out="$(GITHUB_WORKSPACE="$c" SITE_ROOT="$c/absent-site" bash "$guard" 2>&1)"; then
   printf '  ❌ Extracted site: missing explicit source root silently fell back\n'; fail=1
-elif grep -qF "$c/absent-site/docs/src/content/docs/projects/active.mdx" <<<"$out"; then
+elif grep -qF "$c/absent-site/src/content/docs/projects/active.mdx" <<<"$out"; then
   printf '  ✅ Extracted site: missing source fails on the selected source root\n'
 else
   printf '  ❌ Extracted site: missing source failed on an unrelated root\n'; fail=1
@@ -1127,16 +1127,16 @@ done
 
 # Public business components/data and repository-derived URLs are rendered too.
 c="$tmp/retired-business-component"; build_fixture "$c"
-mkdir -p "$c/docs/src/components/business"
-printf '<a href="https://github.com/devantler-tech/reusable-workflows">Source</a>\n' > "$c/docs/src/components/business/ProjectsPage.astro"
+mkdir -p "$c/src/components/business"
+printf '<a href="https://github.com/devantler-tech/reusable-workflows">Source</a>\n' > "$c/src/components/business/ProjectsPage.astro"
 fail_match "Retired links: business component cannot bypass guard" "$c" "Retired-repo link"
 
 c="$tmp/retired-business-data"; build_fixture "$c"
-printf '{"source":"https://github.com/devantler-tech/reusable-workflows"}\n' > "$c/docs/src/data/example.json"
+printf '{"source":"https://github.com/devantler-tech/reusable-workflows"}\n' > "$c/src/data/example.json"
 fail_match "Retired links: public data cannot bypass guard" "$c" "Retired-repo link"
 
 c="$tmp/retired-catalogue-slug"; build_fixture "$c"
-printf '[{"repository":"actions"},{"repository":"foo-template"},{"repository":"reusable-workflows"}]\n' > "$c/docs/src/data/public-products.json"
+printf '[{"repository":"actions"},{"repository":"foo-template"},{"repository":"reusable-workflows"}]\n' > "$c/src/data/public-products.json"
 sed -i.bak 's/public-products: actions,foo-template/public-products: actions,foo-template,reusable-workflows/' "$(mdx_path "$c")"
 fail_match "Retired links: a generated catalogue URL cannot bypass guard" "$c" "Retired-repo link"
 

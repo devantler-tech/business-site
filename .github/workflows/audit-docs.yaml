@@ -41,8 +41,8 @@ jobs:
         with:
           node-version: "24"
       - name: Test audit wrapper
-        working-directory: docs
+        working-directory: .
         run: ./scripts/audit-dependencies.test.sh
       - name: Audit
-        working-directory: docs
+        working-directory: .
         run: ./scripts/audit-dependencies.sh

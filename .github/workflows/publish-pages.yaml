@@ -46,15 +46,15 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Install dependencies
-        working-directory: docs
+        working-directory: .
         run: npm ci
       - name: Build with Astro
-        working-directory: docs
+        working-directory: .
         run: npm run build
       - name: Record public source identity
         shell: bash
@@ -65,13 +65,13 @@ jobs:
           [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
           printf '{"repository":"devantler-tech/business-site","sourceRevision":"%s","callerRevision":"%s"}\n' \
-            "$SOURCE_REVISION" "$GITHUB_SHA" > docs/dist/publication-source.json
+            "$SOURCE_REVISION" "$GITHUB_SHA" > dist/publication-source.json
           printf 'Website source: devantler-tech/business-site@%s\n\nCaller: %s\n' \
             "$SOURCE_REVISION" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: docs/dist
+          path: dist
 
   deploy:
     environment:

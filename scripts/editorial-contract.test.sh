@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keep the former monorepo editorial tripwires with their source owner.
 set -euo pipefail
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readme="$root/docs/README.md"
 fail() { printf 'editorial contract: FAIL — %s\n' "$*" >&2; exit 1; }
 for standard in '## Blog editorial standard' \

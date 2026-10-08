@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { load } from 'js-yaml';
 
-const workflow = load(readFileSync(new URL('../../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
+const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
 const valid = (ci) => {
   if (ci.env?.FEATURE_CLIENT_PORTFOLIO != null || ci.jobs?.['build-docs']?.env?.FEATURE_CLIENT_PORTFOLIO != null) return false;
   const steps = ci.jobs?.['build-docs']?.steps ?? [];
@@ -11,10 +11,10 @@ const valid = (ci) => {
   const enabled = index('true', 'npm run build');
   const disabled = index('false', 'npm run build');
   const unset = steps.flatMap((step, i) => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER npm run build' ? [i] : []);
-  const artifact = steps.flatMap((step, i) => step.with?.name === 'business-site-preview' && step.with.path === 'docs/dist' ? [i] : []);
+  const artifact = steps.flatMap((step, i) => step.with?.name === 'business-site-preview' && step.with.path === 'dist' ? [i] : []);
   return [enabled, disabled, unset, artifact].every((group) => group.length === 1) &&
     enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
-    [...enabled, ...disabled, ...unset].every((i) => steps[i]['working-directory'] === 'docs' && steps[i].if == null &&
+    [...enabled, ...disabled, ...unset].every((i) => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
 test('actual CI builds the client preview, false and entirely unset before production artifact upload', () => assert.ok(valid(workflow)));
