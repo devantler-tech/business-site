@@ -8,8 +8,8 @@ tags:
 description: A welcome post to introduce myself and the site.
 excerpt: A welcome post to introduce myself and the site.
 cover:
-  alt: Welcome to devantler.tech
-  image: ../../../assets/profile.jpg
+  alt: Illustration of an open field journal and pencil welcoming new ideas
+  image: ../../../assets/editorial/journal-welcome.webp
 ---
 
 Hello everyone! Welcome to my site 👋🏻

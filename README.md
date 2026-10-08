@@ -20,6 +20,16 @@ npm run dev
 CI builds the normal production experience and uploads `business-site-preview` for review.
 Preview with `npm run preview`; stop the server afterwards.
 
+The editorial Journal presentation is behind the default-off
+`FEATURE_JOURNAL_PRESENTATION` release flag. Set it to `true` for a review build;
+CI checks enabled, explicitly false and entirely unset output. It changes the
+Journal's frame and typography, not its article prose, URLs or native browsing controls.
+Each post also owns a distinct topic-specific cover in the existing workshop illustration style;
+the normal build checks that it is not reused for another post or unrelated site subject.
+[The presentation decision](docs/adr/0001-journal-presentation.md) records its scope.
+Activation and flag removal are tracked in [#12](https://github.com/devantler-tech/business-site/issues/12)
+and require a reviewed source adoption and verified public deployment.
+
 ## Publication
 
 Website source, tests and the complete reusable publisher belong here. The monorepo aggregates

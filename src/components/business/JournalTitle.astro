@@ -1,0 +1,17 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { FEATURE_JOURNAL_PRESENTATION } from 'astro:env/server';
+
+const path = Astro.url.pathname.replace(/\/$/, '');
+const enabled = FEATURE_JOURNAL_PRESENTATION && /^\/blog(?:\/|$)/.test(path);
+const reading = enabled && Astro.locals.starlightBlog.posts.some(post => post.href.replace(/\/$/, '') === path);
+const mainArchive = /^\/blog(?:\/\d+)?$/.test(path);
+---
+{
+  enabled && !reading ? (
+    <div class="journal-intro">
+      <h1 id="_top">{mainArchive ? 'Journal' : Astro.locals.starlightRoute.entry.data.title}</h1>
+      <p>Notes from building useful software. Ideas, decisions and practical lessons from the work behind Devantler Tech.</p>
+    </div>
+  ) : <Default />
+}

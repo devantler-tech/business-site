@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
+import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -330,23 +332,11 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   }
 }
 // Pin delivered covers, not just source frontmatter or a filename substring.
-const editorialCovers = [
-  ['building-ksail-from-shell-to-dotnet-to-go', 'code-craft'],
-  ['autonomous-oss-with-github-agentic-workflows', 'workflows'],
-  ['gitops-without-the-git-server-oci-registries-as-a-flux-source-with-ksail', 'cloud-fleet'],
-  ['mcp-server-for-kubernetes-cluster-management', 'agent-dialogue'],
-  ['creating-development-kubernetes-clusters-on-hetzner-with-ksail-and-talos', 'cloud-fleet'],
-  ['local-kubernetes-development-with-ksail-and-kind', 'kubernetes-workshop'],
-  ['storing-secrets-in-zshrc-with-macos-keychain', 'developer-workbench'],
-  ['ai-powered-github-issues-with-copilot-and-claude-opus', 'workflows'],
-  ['macos-as-a-developer-machine', 'developer-workbench'],
-  ['why-i-chose-the-polyform-shield-license-for-ksail', 'software-ownership'],
-  ['building-an-ai-assistant-for-kubernetes-with-github-copilot-sdk', 'agent-dialogue'],
-  ['local-kubernetes-development-with-ksail-and-talos', 'kubernetes-workshop'],
-  ['how-my-agentic-engineer-turns-problems-into-proved-working-solutions', 'workflows'],
-  ['local-kubernetes-development-with-ksail-and-k3d', 'kubernetes-workshop'],
-];
-for (const [slug, subject] of editorialCovers) {
+const editorialCovers = await readJournalCovers(resolve(fileURLToPath(new URL('..', import.meta.url))));
+const deliveredCoverPaths = new Set();
+const deliveredCoverPixels = new Set();
+for (const { slug, path: sourcePath } of editorialCovers) {
+  const subject = basename(sourcePath, '.webp');
   const page = html(`blog/${slug}`);
   const cover = [...page.matchAll(/<img\b[^>]*>/g)].map((match) => match[0]).find((tag) => /class="[^"]*sl-blog-cover-image/.test(tag));
   assert.ok(cover, `Journal post ${slug} has a delivered cover`);
@@ -357,5 +347,9 @@ for (const [slug, subject] of editorialCovers) {
   const path = resolve(root, `.${asset}`);
   assert.ok(existsSync(path), `Cover for ${slug} is served locally`);
   assert.ok(statSync(path).size < 220_000, 'Editorial covers stay below 220 kB at full size');
+  const digest = await imageDigest(path);
+  assert.ok(!deliveredCoverPaths.has(asset) && !deliveredCoverPixels.has(digest), `${slug}: delivered cover is unique`);
+  deliveredCoverPaths.add(asset);
+  deliveredCoverPixels.add(digest);
 }
 console.log('Published business visitor journey and editorial artwork verified.');

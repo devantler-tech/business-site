@@ -21,6 +21,11 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      FEATURE_JOURNAL_PRESENTATION: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
+      }),
       FEATURE_CLIENT_PORTFOLIO: envField.boolean({
         context: "server",
         access: "public",
@@ -55,6 +60,8 @@ export default defineConfig({
       description:
         "Devantler Tech — a one-person software business building websites, small apps and open-source tools.",
       components: {
+        PageFrame: './src/components/business/JournalFrame.astro',
+        PageTitle: './src/components/business/JournalTitle.astro',
         Head: './src/components/business/SupportingHead.astro',
         Header: './src/components/business/SupportingHeader.astro',
         Footer: './src/components/business/SupportingFooter.astro',
