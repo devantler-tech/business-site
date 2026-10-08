@@ -980,6 +980,24 @@ c="$tmp/workflow-yml-ordinary"; build_fixture "$c"
 printf 'on:\n  push:\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ordinary-ci.yml"
 pass_case "Reusable Workflows: ordinary .yml CI is ignored" "$c"
 
+# The markers intentionally use extensionless names. Two callable files with the
+# same basename cannot be represented honestly and must not collapse into one.
+c="$tmp/workflow-callable-basename-collision"; build_fixture "$c"
+cp "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yaml" "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yml"
+fail_match "Reusable Workflows: callable basename collision fails closed" "$c" "Duplicate reusable workflow basename: ci-one"
+
+c="$tmp/current-callable-basename-collision"; build_fixture "$c"
+cp "$c/github/devantler-tech/.github-public/.github/workflows/current-ci.yml" "$c/github/devantler-tech/.github-public/.github/workflows/current-ci.yaml"
+fail_match "Current automation: callable basename collision fails closed" "$c" "Duplicate reusable workflow basename: current-ci"
+
+c="$tmp/workflow-ordinary-basename-collision"; build_fixture "$c"
+printf 'on: push\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yml"
+pass_case "Reusable Workflows: ordinary namesake does not add a callable workflow" "$c"
+
+c="$tmp/current-ordinary-basename-collision"; build_fixture "$c"
+printf 'on: push\n' > "$c/github/devantler-tech/.github-public/.github/workflows/current-ci.yaml"
+pass_case "Current automation: ordinary namesake does not add a callable workflow" "$c"
+
 # GitHub accepts scalar, sequence and mapping event declarations. These literal
 # fixtures catch omitted reusable workflows without mirroring the parser.
 for form in scalar flow-list block-list flow-map quoted-key; do
@@ -1126,4 +1144,4 @@ if [ "$fail" -ne 0 ]; then
   printf '❌ active-projects drift-guard self-test FAILED\n' >&2
   exit 1
 fi
-printf '✅ active-projects drift-guard self-test passed (100 cases)\n'
+printf '✅ active-projects drift-guard self-test passed (104 cases)\n'

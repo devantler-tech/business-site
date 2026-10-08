@@ -269,7 +269,14 @@ for (const filename of readdirSync(process.argv[2]).filter((name) => /\.ya?ml$/.
     } else if (events && typeof events === 'object' && !Array.isArray(events)) {
       reusable = Object.hasOwn(events, 'workflow_call');
     } else throw new Error('on must be an event name, sequence or mapping');
-    if (reusable) names.add(parse(filename).name);
+    if (reusable) {
+      const name = parse(filename).name;
+      if (names.has(name)) {
+        console.error(`::error file=${file}::Duplicate reusable workflow basename: ${name}`);
+        process.exit(1);
+      }
+      names.add(name);
+    }
   } catch {
     console.error(`::error file=${file}::Cannot parse workflow triggers`);
     process.exit(1);
