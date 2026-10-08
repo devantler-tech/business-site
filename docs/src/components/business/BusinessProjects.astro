@@ -23,7 +23,6 @@ const engineeringSources = [
 // Keep published heading bookmarks useful within the single public catalogue.
 const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'],
-  'platform-template': ['️-platform---'],
   'data-product-controller': ['-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'],
   actions: ['-reusable-workflows-', '-actions-'],
@@ -52,6 +51,11 @@ const { Content: ResearchContent } = await render(completed);
   <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
   <p class="eyebrow">{t.familyLabel}</p><h2 id="family-title">{t.familyTitle}</h2><p class="intro">{t.familyIntro}</p>
   <div class="family">{home.workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>
+  <article class="hosting-project" data-hosting-project>
+    <span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span>
+    <h3><a href="https://github.com/devantler-tech/platform">Platform <span aria-hidden="true">↗</span></a></h3>
+    <p>{t.platformText}</p><p class="note">{t.platformScope}</p>
+  </article>
 </section>
 <section id="research" aria-labelledby="research-title">
   <p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{t.researchTitle}</h2>
@@ -94,6 +98,8 @@ const { Content: ResearchContent } = await render(completed);
   .feature > img { aspect-ratio: 16 / 9; object-fit: cover; }
   figure { margin: 0; } figcaption, .note { font-size: .8rem; color: var(--muted); margin-top: .75rem; }
   .family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; margin-top: 2rem; }
+  .hosting-project { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); max-width: 760px; }
+  .hosting-project > p { margin-top: .75rem; }
   details { margin-top: 2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
   summary { cursor: pointer; padding: 1.25rem; min-height: 44px; font-weight: 600; }
   summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }

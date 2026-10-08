@@ -64,7 +64,12 @@ build_fixture() {
   local tpl_dir="$root/docs/src/content/docs/templates"
   local actions_dir="$root/github/devantler-tech/github-actions/actions"
   local rw_dir="$actions_dir/.github/workflows"
+  local current="$root/github/devantler-tech/.github-public"
   mkdir -p "$mdx_dir" "$tpl_dir" "$actions_dir/alpha" "$actions_dir/beta" "$rw_dir"
+  mkdir -p "$current/actions/current-alpha" "$current/.github/workflows"
+  printf 'name: current-alpha\n' > "$current/actions/current-alpha/action.yml"
+  printf 'on: [push, workflow_call]\n' > "$current/.github/workflows/current-ci.yml"
+  printf 'on: push\n' > "$current/.github/workflows/ordinary.yaml"
   mkdir -p "$root/docs/src/data"
   printf '[{"repository":"actions"},{"repository":"foo-template"}]\n' > "$root/docs/src/data/public-products.json"
 
@@ -108,6 +113,8 @@ title: Active Projects
 
 {/* projects-submodules: applications/bar=grouped,github/devantler-tech/github-actions/actions=section,github/devantler-tech/github-actions/reusable-workflows=omitted,templates/foo-template=templates-page */}
 {/* public-products: actions,foo-template */}
+{/* github-automation-actions: current-alpha */}
+{/* github-automation-workflows: current-ci */}
 
 ## [⚡ Actions](https://github.com/devantler-tech/actions)
 
@@ -1008,8 +1015,39 @@ c="$tmp/workflow-invalid-events"; build_fixture "$c"
 printf 'on: 42\n' > "$c/github/devantler-tech/github-actions/actions/.github/workflows/ci-one.yaml"
 fail_match "Reusable Workflows: invalid event shape fails closed" "$c" "Cannot parse workflow triggers"
 
+# Current automation is independent of the legacy comparison: unchanged legacy
+# inventories cannot hide an added, removed or renamed maintained building block.
+c="$tmp/current-action-added"; build_fixture "$c"
+mkdir -p "$c/github/devantler-tech/.github-public/actions/new-action"
+printf 'name: new-action\n' > "$c/github/devantler-tech/.github-public/actions/new-action/action.yaml"
+fail_match "Current automation: new action trips inventory drift" "$c" "Current GitHub Actions drift"
+
+c="$tmp/current-action-removed"; build_fixture "$c"
+rm "$c/github/devantler-tech/.github-public/actions/current-alpha/action.yml"
+fail_match "Current automation: removed action trips inventory drift" "$c" "Current GitHub Actions drift"
+
+c="$tmp/current-workflow-renamed"; build_fixture "$c"
+mv "$c/github/devantler-tech/.github-public/.github/workflows/current-ci.yml" "$c/github/devantler-tech/.github-public/.github/workflows/renamed.yaml"
+fail_match "Current automation: renamed workflow trips inventory drift" "$c" "Current reusable workflows drift"
+
+c="$tmp/current-workflow-added"; build_fixture "$c"
+printf 'on: workflow_call\n' > "$c/github/devantler-tech/.github-public/.github/workflows/new-call.yml"
+fail_match "Current automation: scalar reusable workflow trips drift" "$c" "Current reusable workflows drift"
+
+c="$tmp/current-workflow-invalid"; build_fixture "$c"
+printf 'on: [workflow_call\n' > "$c/github/devantler-tech/.github-public/.github/workflows/current-ci.yml"
+fail_match "Current automation: malformed workflow fails closed" "$c" "Cannot parse workflow triggers"
+
+c="$tmp/current-marker-missing"; build_fixture "$c"
+sed -i.bak '/github-automation-actions:/d' "$(mdx_path "$c")"
+fail_match "Current automation: missing inventory fails closed" "$c" "Missing 'github-automation-actions' inventory"
+
+c="$tmp/current-checkout-missing"; build_fixture "$c"
+rm -rf "$c/github/devantler-tech/.github-public"
+fail_match "Current automation: missing checkout fails closed" "$c" "current automation actions not found"
+
 if [ "$fail" -ne 0 ]; then
   printf '❌ active-projects drift-guard self-test FAILED\n' >&2
   exit 1
 fi
-printf '✅ active-projects drift-guard self-test passed (71 cases)\n'
+printf '✅ active-projects drift-guard self-test passed (78 cases)\n'

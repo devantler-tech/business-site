@@ -2,6 +2,9 @@
 #
 # check-active-projects-drift.sh
 #
+# Guards current .github automation inventories and the retained legacy Actions lists.
+# Current actions live in .github-public/actions and callable workflows in
+# .github-public/.github/workflows; both are checked independently of legacy metadata.
 # Guards the hand-maintained Actions / Reusable Workflows lists on the Active
 # Projects page (docs/src/content/docs/projects/active.mdx) against silent
 # drift from their source-of-truth repo. Both lists are sourced from the
@@ -98,6 +101,8 @@ mdx="$site_root/docs/src/content/docs/projects/active.mdx"
 homepage="$site_root/docs/src/content/docs/index.mdx"
 actions_dir="$repo_root/github/devantler-tech/github-actions/actions"
 rw_workflows_dir="$repo_root/github/devantler-tech/github-actions/actions/.github/workflows"
+current_actions_dir="$repo_root/github/devantler-tech/.github-public/actions"
+current_workflows_dir="$repo_root/github/devantler-tech/.github-public/.github/workflows"
 gitmodules="$repo_root/.gitmodules"
 templates_dir="$site_root/docs/src/content/docs/templates"
 content_dir="$site_root/docs/src/content"
@@ -120,6 +125,8 @@ die_missing() {
 [ -f "$public_catalogue" ] || die_missing "Public product catalogue" "$public_catalogue"
 [ -d "$actions_dir" ] || die_missing "actions submodule" "$actions_dir"
 [ -d "$rw_workflows_dir" ] || die_missing "actions submodule workflows directory" "$rw_workflows_dir"
+[ -d "$current_actions_dir" ] || die_missing "current automation actions" "$current_actions_dir"
+[ -d "$current_workflows_dir" ] || die_missing "current automation workflows" "$current_workflows_dir"
 [ -d "$content_dir" ] || die_missing "docs content directory" "$content_dir"
 
 # --- Retired repos: no page may still link to one -----------------------------
@@ -216,8 +223,8 @@ fi
 
 # --- Reusable Workflows: count tripwire + workflow-name set equality -----------
 # Live reusable (workflow_call) workflow names (basename minus .yaml or .yml), sorted & unique.
-rw_live=$(
-  node --input-type=module - "$rw_workflows_dir" "$script_dir/../package.json" <<'NODE'
+reusable_workflows() {
+  node --input-type=module - "$1" "$script_dir/../package.json" <<'NODE'
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, parse } from 'node:path';
 import { createRequire } from 'node:module';
@@ -243,7 +250,8 @@ for (const filename of readdirSync(process.argv[2]).filter((name) => /\.ya?ml$/.
 }
 console.log([...names].sort().join('\n'));
 NODE
-)
+}
+rw_live="$(reusable_workflows "$rw_workflows_dir")"
 rw_count=$(printf '%s\n' "$rw_live" | grep -c . || true)
 rw_expected=$(grep -oE 'reusable-workflows-count:[[:space:]]*[0-9]+' "$mdx" | grep -oE '[0-9]+' | head -n1 || true)
 
@@ -282,6 +290,37 @@ removed, or renamed — review the category bullets under '## 🔄 Reusable Work
 else
   echo "OK: Reusable Workflows in sync (${rw_count} workflow_call workflows == marker ${rw_expected}, name set matches)."
 fi
+
+# Current shared automation has its own exact inventories. Both action extensions
+# are valid; parse actual top-level workflow events with the same YAML parser.
+current_actions_live=$(
+  find "$current_actions_dir" -mindepth 2 -maxdepth 2 -type f \( -name action.yaml -o -name action.yml \) \
+    | awk -F/ '{ print $(NF - 1) }' | sort -u
+)
+current_workflows_live="$(reusable_workflows "$current_workflows_dir")"
+check_current_inventory() {
+  local marker="$1" live="$2" label="$3" declared entries
+  entries="$(grep -oE "${marker}:[[:space:]]*[a-z0-9,_-]+" "$mdx" | sed -E "s/^${marker}:[[:space:]]*//" || true)"
+  if [ -z "$entries" ]; then
+    echo "::error::Missing '$marker' inventory in active.mdx" >&2
+    fail=1
+    return
+  fi
+  if [ "$(printf '%s\n' "$entries" | wc -l | tr -d ' ')" -ne 1 ]; then
+    echo "::error::$label drift: inventory must occur exactly once" >&2
+    fail=1
+    return
+  fi
+  declared="$(printf '%s' "$entries" | tr ',' '\n' | sort -u)"
+  if [ "$declared" != "$live" ]; then
+    echo "::error::$label drift: update '$marker' to match the pinned devantler-tech/.github inventory" >&2
+    fail=1
+  else
+    echo "OK: $label inventory matches the current automation owner."
+  fi
+}
+check_current_inventory github-automation-actions "$current_actions_live" "Current GitHub Actions"
+check_current_inventory github-automation-workflows "$current_workflows_live" "Current reusable workflows"
 
 # --- Submodules: every submodule is consciously represented (or excluded) ------
 # Live submodule paths from .gitmodules (a tracked file at the repo root, so no

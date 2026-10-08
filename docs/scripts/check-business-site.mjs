@@ -142,10 +142,13 @@ for (const locale of ['en', 'da']) {
       assert.ok(existsSync(resolve(root, `.${screenshotPath}`)), 'The KSail capture is emitted locally');
       assert.ok(ksail.includes(locale === 'da' ? 'Den faktiske KSail-brugerflade i terminalen.' : 'The actual KSail terminal interface.'), 'KSail’s capture has a localized factual caption');
       // Former MDX heading links now land on the matching public card or family examples.
-      // The deployed-platform bookmark points to the reusable platform starter.
+      const platform = family.match(/<article\b[^>]*data-hosting-project[^>]*>([\s\S]*?)<\/article>/)?.[1];
+      assert.ok(platform?.includes('id="️-platform---"'), 'The old Platform bookmark lands on the actual hosting project');
+      assert.ok(platform.includes('href="https://github.com/devantler-tech/platform"'), 'Platform retains its own repository destination');
+      assert.ok(!shelf.includes('id="️-platform---"'), 'Platform is not aliased to a reusable template');
+      assert.ok(platform.includes(locale === 'da' ? 'ikke en hostinggaranti' : 'not a hosting guarantee'), 'The hosting example does not promise an operational guarantee');
       for (const [repository, anchors] of [
         ['ksail', ['️-ksail---']],
-        ['platform-template', ['️-platform---']],
         ['data-product-controller', ['-data-product-controller--']],
         ['world-at-ruin', ['️-world-at-ruin--']],
         ['actions', ['-reusable-workflows-', '-actions-']],
