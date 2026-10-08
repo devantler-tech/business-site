@@ -85,7 +85,7 @@ export default defineConfig({
       ],
       editLink: {
         baseUrl:
-          "https://github.com/devantler-tech/business-site/edit/main/docs/",
+          "https://github.com/devantler-tech/business-site/edit/main/",
       },
       customCss: ["./src/styles/custom.css", "./src/styles/business-docs.css"],
       plugins: [

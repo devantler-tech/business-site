@@ -36,35 +36,41 @@ jobs:
         with:
           filters: |
             docs:
+              - 'src/**'
+              - 'public/**'
+              - 'scripts/**'
+              - '*.json'
+              - '.npmrc'
+              - 'astro.config.mjs'
               - 'docs/**'
               - '.github/workflows/**'
             docs-deps:
-              - 'docs/package.json'
-              - 'docs/package-lock.json'
-              - 'docs/npm-shrinkwrap.json'
-              - 'docs/.npmrc'
-              - 'docs/scripts/audit-dependencies.sh'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'npm-shrinkwrap.json'
+              - '.npmrc'
+              - 'scripts/audit-dependencies.sh'
             docs-audit-contract:
-              - 'docs/.npmrc'
-              - 'docs/scripts/audit-dependencies.sh'
-              - 'docs/scripts/audit-dependencies.test.sh'
+              - '.npmrc'
+              - 'scripts/audit-dependencies.sh'
+              - 'scripts/audit-dependencies.test.sh'
               - '.github/workflows/audit-docs.yaml'
               - '.github/workflows/ci.yaml'
             docs-npm-toolchain:
-              - 'docs/package.json'
-              - 'docs/scripts/npm-toolchain.test.sh'
+              - 'package.json'
+              - 'scripts/npm-toolchain.test.sh'
               - '.github/workflows/**'
             active-projects:
-              - 'docs/src/content/**'
-              - 'docs/src/data/public-products.json'
-              - 'docs/src/data/cv.ts'
-              - 'docs/scripts/check-active-projects-drift.sh'
-              - 'docs/scripts/check-active-projects-drift.test.sh'
-              - 'docs/scripts/check-homepage-project-parity.mjs'
-              - 'docs/scripts/check-cv-drift.mjs'
-              - 'docs/scripts/check-cv-drift.test.sh'
-              - 'docs/package.json'
-              - 'docs/package-lock.json'
+              - 'src/content/**'
+              - 'src/data/public-products.json'
+              - 'src/data/cv.ts'
+              - 'scripts/check-active-projects-drift.sh'
+              - 'scripts/check-active-projects-drift.test.sh'
+              - 'scripts/check-homepage-project-parity.mjs'
+              - 'scripts/check-cv-drift.mjs'
+              - 'scripts/check-cv-drift.test.sh'
+              - 'package.json'
+              - 'package-lock.json'
               - '.github/workflows/ci.yaml'
 
   build-docs:
@@ -85,37 +91,37 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Verify lockfile with older supported npm
-        working-directory: docs
+        working-directory: .
         run: npx --yes --package=npm@11.4.2 npm ci --ignore-scripts
       - name: Install dependencies
-        working-directory: docs
+        working-directory: .
         run: npm ci
       - name: Build enabled preview
-        working-directory: docs
+        working-directory: .
         env:
           FEATURE_PREVIEW_BANNER: "true"
         run: npm run build
       - name: Build client-facing portfolio preview
-        working-directory: docs
+        working-directory: .
         env:
           FEATURE_CLIENT_PORTFOLIO: "true"
         run: npm run build
       - name: Build
-        working-directory: docs
+        working-directory: .
         env:
           FEATURE_PREVIEW_BANNER: "false"
           FEATURE_CLIENT_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
-        working-directory: docs
+        working-directory: .
         run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER npm run build
       - name: Upload reviewable production preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: business-site-preview
-          path: docs/dist
+          path: dist
           if-no-files-found: error
           retention-days: 7
 
@@ -135,10 +141,10 @@ jobs:
         with:
           node-version: "24"
       - name: Test audit wrapper
-        working-directory: docs
+        working-directory: .
         run: ./scripts/audit-dependencies.test.sh
       - name: Audit
-        working-directory: docs
+        working-directory: .
         run: ./scripts/audit-dependencies.sh
 
   test-docs-audit-wrapper:
@@ -157,7 +163,7 @@ jobs:
         with:
           node-version: "24"
       - name: Test audit wrapper
-        working-directory: docs
+        working-directory: .
         run: ./scripts/audit-dependencies.test.sh
 
   test-docs-npm-toolchain:
@@ -172,7 +178,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Test npm toolchain contract
-        run: bash docs/scripts/npm-toolchain.test.sh
+        run: bash scripts/npm-toolchain.test.sh
 
   drift-check-active-projects:
     needs: changes
@@ -190,18 +196,18 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install MDX parser dependencies
-        working-directory: docs
+        working-directory: .
         run: npm ci
       # The monorepo validates the real pinned sibling products. This source
       # repository retains all hermetic negative controls, not a fake live census.
       - name: Self-test the drift checker
-        run: bash docs/scripts/check-active-projects-drift.test.sh
+        run: bash scripts/check-active-projects-drift.test.sh
       - name: Self-test the CV drift checker
-        run: bash docs/scripts/check-cv-drift.test.sh
+        run: bash scripts/check-cv-drift.test.sh
       - name: Check the About page and CV data for drift
-        run: node docs/scripts/check-cv-drift.mjs docs/src/content/docs/about.mdx docs/src/data/cv.ts
+        run: node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
 
   test-repository-contracts:
     runs-on: ubuntu-latest
@@ -214,8 +220,8 @@ jobs:
           persist-credentials: false
       - name: Verify source-owned publishing and editorial contracts
         run: |
-          bash docs/scripts/publishing-contract.test.sh
-          bash docs/scripts/editorial-contract.test.sh
+          bash scripts/publishing-contract.test.sh
+          bash scripts/editorial-contract.test.sh
 
   status:
     name: CI - Required Checks

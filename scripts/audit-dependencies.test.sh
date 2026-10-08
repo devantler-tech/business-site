@@ -3,11 +3,11 @@
 set -euo pipefail
 
 script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-repo_root="$(CDPATH='' cd -- "${script_dir}/../.." && pwd -P)"
+repo_root="$(CDPATH='' cd -- "${script_dir}/.." && pwd -P)"
 audit_script="${script_dir}/audit-dependencies.sh"
 ci_workflow="${repo_root}/.github/workflows/ci.yaml"
 scheduled_workflow="${repo_root}/.github/workflows/audit-docs.yaml"
-npmrc="${repo_root}/docs/.npmrc"
+npmrc="${repo_root}/.npmrc"
 tmp_dir="$(mktemp -d)"
 # An abort must not read as a pass. Bash 3.2 reports $? as 0 to an EXIT trap after a
 # `set -u` abort, and a successful `rm` in the trap can become the script's own
@@ -99,9 +99,9 @@ run_case endpoint-always 1 2
 # What decides the live audit's answer: the dependency tree npm reads (a shrinkwrap
 # replaces the lockfile when one exists), the npm settings that select the advisory
 # source and what the audit counts, and the wrapper that runs it.
-live_audit_inputs='["docs/.npmrc", "docs/npm-shrinkwrap.json", "docs/package-lock.json", "docs/package.json", "docs/scripts/audit-dependencies.sh"]'
+live_audit_inputs='[".npmrc", "npm-shrinkwrap.json", "package-lock.json", "package.json", "scripts/audit-dependencies.sh"]'
 # What the contract test reads.
-contract_inputs='[".github/workflows/audit-docs.yaml", ".github/workflows/ci.yaml", "docs/.npmrc", "docs/scripts/audit-dependencies.sh", "docs/scripts/audit-dependencies.test.sh"]'
+contract_inputs='[".github/workflows/audit-docs.yaml", ".github/workflows/ci.yaml", ".npmrc", "scripts/audit-dependencies.sh", "scripts/audit-dependencies.test.sh"]'
 
 # Evaluate a yq expression against the parsed change filters of a CI workflow, with
 # NAME naming one filter and EXPECTED holding a JSON list of paths. Fails when the
@@ -123,7 +123,7 @@ validate_wiring() { # ci-workflow scheduled-workflow npmrc
     yq -e '
       [.jobs.audit-docs.steps[]
         | select(.name == "Test audit wrapper")
-        | select(."working-directory" == "docs")
+        | select(."working-directory" == ".")
         | select(.run == "./scripts/audit-dependencies.test.sh")
         | select(has("if") | not)
         | select(has("continue-on-error") | not)]
@@ -136,7 +136,7 @@ validate_wiring() { # ci-workflow scheduled-workflow npmrc
     yq -e '
       [.jobs.audit-docs.steps[]
         | select(.name == "Audit")
-        | select(."working-directory" == "docs")
+        | select(."working-directory" == ".")
         | select(.run == "./scripts/audit-dependencies.sh")
         | select(has("if") | not)
         | select(has("continue-on-error") | not)]
@@ -233,7 +233,7 @@ validate_wiring() { # ci-workflow scheduled-workflow npmrc
 
   yq -e '
     [.jobs.test-docs-audit-wrapper.steps[]
-      | select(."working-directory" == "docs")
+      | select(."working-directory" == ".")
       | select(.run == "./scripts/audit-dependencies.test.sh")
       | select(has("if") | not)
       | select(has("continue-on-error") | not)]
@@ -284,7 +284,7 @@ validate_wiring() { # ci-workflow scheduled-workflow npmrc
         '' | '#'* | ';'*) continue ;;
         'registry=https://registry.npmjs.org/') continue ;;
       esac
-      printf 'docs/.npmrc sets "%s", which this contract has not reviewed\n' "${line}"
+      printf '.npmrc sets "%s", which this contract has not reviewed\n' "${line}"
       return 1
     done <"${settings}"
   fi
@@ -354,27 +354,27 @@ expect_violation "every docs change runs the live audit" \
   "docs-deps filter runs the live audit for more than its inputs"
 
 reset_fixture
-edit_filters '.docs-deps -= ["docs/package-lock.json"]'
+edit_filters '.docs-deps -= ["package-lock.json"]'
 expect_violation "a lockfile change no longer runs the live audit" \
-  "docs-deps filter does not run the live audit for docs/package-lock.json"
+  "docs-deps filter does not run the live audit for package-lock.json"
 
 reset_fixture
-edit_filters '.docs-deps -= ["docs/scripts/audit-dependencies.sh"]'
+edit_filters '.docs-deps -= ["scripts/audit-dependencies.sh"]'
 expect_violation "a wrapper change no longer runs the live audit" \
-  "docs-deps filter does not run the live audit for docs/scripts/audit-dependencies.sh"
+  "docs-deps filter does not run the live audit for scripts/audit-dependencies.sh"
 
 reset_fixture
-edit_filters '.docs-deps -= ["docs/.npmrc"]'
+edit_filters '.docs-deps -= [".npmrc"]'
 expect_violation "an npm settings change no longer runs the live audit" \
-  "docs-deps filter does not run the live audit for docs/.npmrc"
+  "docs-deps filter does not run the live audit for .npmrc"
 
 reset_fixture
-edit_filters '.docs-deps = ["docs/never-matches", "docs/.npmrc\ndocs/npm-shrinkwrap.json\ndocs/package-lock.json\ndocs/package.json\ndocs/scripts/audit-dependencies.sh"]'
+edit_filters '.docs-deps = ["docs/never-matches", ".npmrc\nnpm-shrinkwrap.json\npackage-lock.json\npackage.json\nscripts/audit-dependencies.sh"]'
 expect_violation "the paths appear in the block but the filter holds none of them" \
-  "docs-deps filter does not run the live audit for docs/.npmrc"
+  "docs-deps filter does not run the live audit for .npmrc"
 
 reset_fixture
-edit_filters '.docs-deps = "docs/package.json"'
+edit_filters '.docs-deps = "package.json"'
 expect_violation "the live audit filter is not a list" \
   "docs-deps filter is not a readable list of paths"
 
@@ -391,9 +391,9 @@ expect_violation "a CI workflow change no longer runs the contract test" \
   "docs-audit-contract filter does not self-gate .github/workflows/ci.yaml"
 
 reset_fixture
-edit_filters '.docs-audit-contract -= ["docs/.npmrc"]'
+edit_filters '.docs-audit-contract -= [".npmrc"]'
 expect_violation "an npm settings change no longer runs the contract test" \
-  "docs-audit-contract filter does not self-gate docs/.npmrc"
+  "docs-audit-contract filter does not self-gate .npmrc"
 
 reset_fixture
 yq -i 'del(.jobs.changes.outputs."docs-audit-contract")' "${fixture_ci}"
@@ -416,7 +416,7 @@ expect_violation "the contract test step is switched off" \
   "test-docs-audit-wrapper does not run the audit contract test unconditionally"
 
 reset_fixture
-yq -i '.jobs.test-docs-audit-wrapper.steps += [{"name": "Audit", "working-directory": "docs", "run": "./scripts/audit-dependencies.sh"}]' \
+yq -i '.jobs.test-docs-audit-wrapper.steps += [{"name": "Audit", "working-directory": ".", "run": "./scripts/audit-dependencies.sh"}]' \
   "${fixture_ci}"
 expect_violation "the contract job runs the live audit" \
   "test-docs-audit-wrapper runs the live audit"
@@ -440,7 +440,7 @@ expect_violation "the CI audit job stops running the contract test" \
   "ci.yaml does not run the audit contract test unconditionally"
 
 reset_fixture
-yq -i '.jobs.audit-docs.steps += [{"name": "Install", "working-directory": "docs", "run": "npm ci"}]' \
+yq -i '.jobs.audit-docs.steps += [{"name": "Install", "working-directory": ".", "run": "npm ci"}]' \
   "${fixture_ci}"
 expect_violation "the CI audit job installs before auditing" \
   "ci.yaml rebuilds node_modules before a lockfile audit"
@@ -481,32 +481,32 @@ violation="$(validate_wiring "${fixture_ci}" "${fixture_scheduled}" "${fixture_n
 reset_fixture
 printf 'audit-level=critical\n' >>"${fixture_npmrc}"
 expect_violation "the audit level is raised above the advisory" \
-  'docs/.npmrc sets "audit-level=critical", which this contract has not reviewed'
+  '.npmrc sets "audit-level=critical", which this contract has not reviewed'
 
 reset_fixture
 printf 'include=dev\n' >>"${fixture_npmrc}"
 expect_violation "the audited dependency set is changed" \
-  'docs/.npmrc sets "include=dev", which this contract has not reviewed'
+  '.npmrc sets "include=dev", which this contract has not reviewed'
 
 reset_fixture
 printf 'registry=https://registry.example.invalid/\n' >"${fixture_npmrc}"
 expect_violation "another registry answers the audit" \
-  'docs/.npmrc sets "registry=https://registry.example.invalid/", which this contract has not reviewed'
+  '.npmrc sets "registry=https://registry.example.invalid/", which this contract has not reviewed'
 
 reset_fixture
 printf 'audit=false' >>"${fixture_npmrc}"
 expect_violation "a setting on a final line without a newline" \
-  'docs/.npmrc sets "audit=false", which this contract has not reviewed'
+  '.npmrc sets "audit=false", which this contract has not reviewed'
 
 reset_fixture
 printf '  \taudit-level=critical\n' >>"${fixture_npmrc}"
 expect_violation "an indented setting" \
-  'docs/.npmrc sets "audit-level=critical", which this contract has not reviewed'
+  '.npmrc sets "audit-level=critical", which this contract has not reviewed'
 
 reset_fixture
 printf 'include=dev\r\n' >>"${fixture_npmrc}"
 expect_violation "a setting on a CRLF line" \
-  'docs/.npmrc sets "include=dev", which this contract has not reviewed'
+  '.npmrc sets "include=dev", which this contract has not reviewed'
 
 [ "${mutations_run}" -eq 32 ] || fail "ran ${mutations_run} wiring mutations; expected 32"
 

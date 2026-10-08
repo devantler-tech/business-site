@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 #
 # npm-toolchain.test.sh — every workflow job that installs, audits or builds the site uses
-# the npm major that writes docs/package-lock.json (monorepo#3749).
+# the npm major that writes package-lock.json (monorepo#3749).
 #
 # WHY: Dependabot writes the lockfile with npm 11, its default for a version-3 lockfile.
 # npm 10 and npm 11 disagree about which optional peer entries a lockfile must hold, so a
 # lockfile one major writes fails the other major's `npm ci` sync check, and every
-# dependency update of the site went red. docs/package.json declares the npm major in
+# dependency update of the site went red. package.json declares the npm major in
 # devEngines.packageManager, and npm refuses to install, audit or run with another major.
 # This test keeps the workflows on a Node line that bundles that major, so no workflow can
 # drift back unnoticed — including the publish workflow, which runs only on main.
 #
 # CHECKS
-#   1. docs/package.json declares devEngines.packageManager as npm "^<major>.0.0" with
+#   1. package.json declares devEngines.packageManager as npm "^<major>.0.0" with
 #      onFail "error".
-#   2. Every job in .github/workflows that works in docs/ (see jobs_query) has exactly one
-#      actions/setup-node step, placed before its first step in docs/, with an explicit
+#   2. Every job in .github/workflows that invokes npm/npx or the audit wrapper
+#      (see jobs_query) has exactly one actions/setup-node step before that invocation, with an explicit
 #      node-version on a Node line whose bundled npm is that major. The known jobs must all be
 #      found, so an empty discovery cannot pass.
 #   3. The build first proves npm 11.4.2 can clean-install the lockfile, then installs
 #      with the runner's current npm 11. Both installs are unconditional and propagate
 #      failures. Optional peers can differ within the same major.
 #   4. CI runs this test from a job that its own inputs gate, and that gate covers every
-#      workflow, so a new workflow that works in docs/ reruns it.
+#      workflow, so a new workflow that uses the toolchain reruns it.
 #
 # Fixture cases first prove each check rejects the drift it exists for.
 set -euo pipefail
 
 script_dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-repo_root="$(CDPATH='' cd -- "${script_dir}/../.." && pwd -P)"
+repo_root="$(CDPATH='' cd -- "${script_dir}/.." && pwd -P)"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
@@ -38,7 +38,7 @@ fail() {
 }
 
 command -v yq >/dev/null 2>&1 || fail "yq is required to read the workflows"
-command -v jq >/dev/null 2>&1 || fail "jq is required to read docs/package.json"
+command -v jq >/dev/null 2>&1 || fail "jq is required to read package.json"
 
 # The npm major each Node release line bundles, from the Node.js release notes. An unlisted
 # line fails closed: confirm the npm major it bundles before adding it here.
@@ -61,22 +61,23 @@ required_jobs=(
 
 # Paths the CI filter gating this test must list, so a change to any input reruns it.
 required_filter_paths=(
-  docs/package.json
-  docs/scripts/npm-toolchain.test.sh
+  package.json
+  scripts/npm-toolchain.test.sh
   '.github/workflows/**'
 )
 
-# One row per job that works in docs/: job id, setup-node step count, node-version and
+# One row per job that uses the toolchain: job id, setup-node step count, node-version and
 # node-version-file of the first setup-node step, and whether that step comes before the
-# job's first step in docs/. "-" stands for an absent value, because `read` collapses empty
+# job's first toolchain step. "-" stands for an absent value, because `read` collapses empty
 # tab-separated fields. It is a jq program over yq's JSON rendering of the workflow: the
 # runner's yq is older than this host's and rejects parts of the same program in yq syntax.
 # A job works in docs/ when its own or the workflow's default working directory is docs/, a
 # step's working directory is, or a step enters it with cd, pushd or npm --prefix. Any path
 # with a docs component counts (./docs, ${{ github.workspace }}/docs), quoted or not. A step
 # that runs npm or npx anywhere counts too: npm is the tool whose major matters, so naming it
-# does not depend on spotting how a step reaches docs/. A false positive fails loudly here,
-# never silently.
+# does not depend on spotting how a step reaches docs/. Audit wrapper invocations count
+# from the root too. Legacy docs paths remain detectable, but a root working-directory
+# default alone must not turn every Bash-only job into a Node job.
 jobs_query=""
 IFS= read -r -d '' jobs_query <<'JQ' || true
 def docs_dir: test("(^|/)docs(/|$)");
@@ -84,6 +85,7 @@ def enters_docs:
   test("(^|[\\s;&|(])(cd|pushd)\\s+([^;&|\\n]*[/\"'\\s])?docs([\"'/\\s;&|)]|$)")
   or test("--prefix[ =]([^\\s;&|]*[/\"'])?docs([\"'/\\s;&|)]|$)");
 def runs_npm: test("(^|[\\s;&|(])(npm|npx)(\\s|$)");
+def runs_audit: test("(^|[/\\s;&|(])audit-dependencies(\\.test)?\\.sh([\\s;&|)]|$)");
 (((.defaults // {}).run // {})["working-directory"]) as $workflow_default |
 (.jobs // {}) | to_entries[] |
 (((((.value.defaults // {}).run // {})["working-directory"]) // $workflow_default // "") | docs_dir)
@@ -93,6 +95,7 @@ def runs_npm: test("(^|[\\s;&|(])(npm|npx)(\\s|$)");
   (($steps[.]["working-directory"] // "") | docs_dir) or
   (($steps[.].run // "") | enters_docs) or
   (($steps[.].run // "") | runs_npm) or
+  (($steps[.].run // "") | runs_audit) or
   ($default_docs and ($steps[.].run != null))
 )] as $docs |
 select($default_docs or ($docs | length > 0)) |
@@ -117,7 +120,7 @@ check() {
   pm_type="$(jq -r '.devEngines.packageManager | type' "${package_json}")" ||
     violation "cannot parse ${package_json}" || return 1
   [ "${pm_type}" = "object" ] ||
-    violation "docs/package.json declares no devEngines.packageManager entry for npm" || return 1
+    violation "package.json declares no devEngines.packageManager entry for npm" || return 1
   name="$(jq -r '.devEngines.packageManager.name // ""' "${package_json}")"
   version="$(jq -r '.devEngines.packageManager.version // ""' "${package_json}")"
   on_fail="$(jq -r '.devEngines.packageManager.onFail // ""' "${package_json}")"
@@ -157,7 +160,7 @@ check() {
         violation "${base}:${job} uses Node ${line}, whose bundled npm major this test does not know yet" ||
         return 1
       [ "${npm_major}" = "${declared_major}" ] ||
-        violation "${base}:${job} sets up Node ${node_version}, which bundles npm ${npm_major}; docs/package.json declares npm ${declared_major}" ||
+        violation "${base}:${job} sets up Node ${node_version}, which bundles npm ${npm_major}; package.json declares npm ${declared_major}" ||
         return 1
     done <<<"${rows}"
   done
@@ -172,11 +175,11 @@ check() {
   compatibility="$(yq -o=json '.' "${ci}" | jq -r '
     .jobs["build-docs"].steps as $steps |
     [range(0; $steps | length) | select(
-      $steps[.]["working-directory"] == "docs" and
+      $steps[.]["working-directory"] == "." and
       $steps[.].run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts"
     )] as $older |
     [range(0; $steps | length) | select(
-      $steps[.]["working-directory"] == "docs" and $steps[.].run == "npm ci"
+      $steps[.]["working-directory"] == "." and $steps[.].run == "npm ci"
     )] as $current |
     ($older | length) == 1 and ($current | length) == 1 and $older[0] < $current[0] and
     all(($older + $current)[]; $steps[.] | .if == null and
@@ -184,16 +187,16 @@ check() {
   ')" || violation "cannot read the lockfile compatibility installs" || return 1
   [ "${compatibility}" = "true" ] ||
     violation "ci.yaml:build-docs must clean-install with npm 11.4.2 before its current npm ci" || return 1
-  # The test runs from the repository root: a step working in docs/ would make its own job one
-  # this test requires to set up Node.
+  # This Bash-only contract needs no Node; an application-root default alone must
+  # not make its own job require setup-node.
   gate="$(yq -r '
     [.jobs | to_entries[] | select([.value.steps[]? | select(
-      .run == "bash docs/scripts/npm-toolchain.test.sh"
+      .run == "bash scripts/npm-toolchain.test.sh"
     )] | length > 0) | .value.if // ""] | .[0] // ""
   ' "${ci}")" || violation "cannot parse ci.yaml" || return 1
   # The whole condition, exactly: an inverted or narrowed gate would skip the test.
   [[ "${gate}" =~ ^needs\.changes\.outputs\.([a-z0-9-]+)\ ==\ \'true\'$ ]] ||
-    violation "ci.yaml has no job that runs bash docs/scripts/npm-toolchain.test.sh behind exactly needs.changes.outputs.<filter> == 'true' (found: '${gate}')" ||
+    violation "ci.yaml has no job that runs bash scripts/npm-toolchain.test.sh behind exactly needs.changes.outputs.<filter> == 'true' (found: '${gate}')" ||
     return 1
   filter="${BASH_REMATCH[1]}"
   # Compared in bash, literally: yq's == treats a `*` in its right-hand string as a glob, so
@@ -212,7 +215,7 @@ check() {
 # expect_failure <case> <expected message fragment>: runs check on the fixture copy.
 expect_failure() {
   local name="$1" fragment="$2" output status=0
-  output="$(check "${fixture}/docs/package.json" "${fixture}/.github/workflows")" || status=$?
+  output="$(check "${fixture}/package.json" "${fixture}/.github/workflows")" || status=$?
   [ "${status}" -ne 0 ] || fail "fixture '${name}' passed; the check must reject it"
   [[ "${output}" == *"${fragment}"* ]] ||
     fail "fixture '${name}' failed for another reason: ${output}"
@@ -223,11 +226,41 @@ reset_fixture() {
   fixture="${tmp_dir}/fixture"
   rm -rf "${fixture}"
   mkdir -p "${fixture}/docs" "${fixture}/.github"
-  cp "${repo_root}/docs/package.json" "${fixture}/docs/package.json"
+  cp "${repo_root}/package.json" "${fixture}/package.json"
   cp -R "${repo_root}/.github/workflows" "${fixture}/.github/workflows"
 }
 
-output="$(check "${repo_root}/docs/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
+output="$(check "${repo_root}/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
+
+# A root-native application still audits through its wrapper, not a literal npm
+# command. Discover that invocation even when a workflow inherits the root.
+reset_fixture
+yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
+  "runs-on": "ubuntu-latest",
+  "steps": [
+    {"uses": "actions/setup-node@fixture", "with": {"node-version": "22"}},
+    {"run": "./scripts/audit-dependencies.sh"}
+  ]
+}' "${fixture}/.github/workflows/publish-pages.yaml"
+expect_failure "root-default audit wrapper" "publish-pages.yaml:extra sets up Node 22"
+
+# Root defaults alone must not classify every Bash-only repository check as a
+# Node job. The wrapper/npm invocation, not the application's folder name, matters.
+reset_fixture
+yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
+  "runs-on": "ubuntu-latest", "steps": [{"run": "bash scripts/editorial-contract.test.sh"}]
+}' "${fixture}/.github/workflows/publish-pages.yaml"
+check "${fixture}/package.json" "${fixture}/.github/workflows" ||
+  fail "root-default Bash-only jobs must not require Node"
+
+reset_fixture
+yq -i '.jobs.extra = {
+  "runs-on": "ubuntu-latest", "steps": [
+    {"run": "./scripts/audit-dependencies.sh", "working-directory": "."},
+    {"uses": "actions/setup-node@fixture", "with": {"node-version": "24"}}
+  ]
+}' "${fixture}/.github/workflows/publish-pages.yaml"
+expect_failure "root audit before Node setup" "publish-pages.yaml:extra sets up Node after"
 
 reset_fixture
 yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "22"' \
@@ -276,7 +309,7 @@ cat >"${fixture}/.github/workflows/extra.yaml" <<'YAML'
 on: push
 defaults:
   run:
-    working-directory: docs
+    working-directory: .
 jobs:
   install:
     runs-on: ubuntu-latest
@@ -341,14 +374,14 @@ done
 
 reset_fixture
 yq -i '(.jobs.build-docs.steps[] | select(.run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts" or .run == "npm ci")).continue-on-error = false' "${fixture}/.github/workflows/ci.yaml"
-check "${fixture}/docs/package.json" "${fixture}/.github/workflows" || fail "explicit continue-on-error: false must preserve mandatory installs"
+check "${fixture}/package.json" "${fixture}/.github/workflows" || fail "explicit continue-on-error: false must preserve mandatory installs"
 
 reset_fixture
-jq 'del(.devEngines)' "${repo_root}/docs/package.json" >"${fixture}/docs/package.json"
+jq 'del(.devEngines)' "${repo_root}/package.json" >"${fixture}/package.json"
 expect_failure "no devEngines" "declares no devEngines.packageManager"
 
 reset_fixture
-jq '.devEngines.packageManager.onFail = "warn"' "${repo_root}/docs/package.json" >"${fixture}/docs/package.json"
+jq '.devEngines.packageManager.onFail = "warn"' "${repo_root}/package.json" >"${fixture}/package.json"
 expect_failure "onFail warn" "onFail is 'warn'"
 
 reset_fixture

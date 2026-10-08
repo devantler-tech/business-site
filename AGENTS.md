@@ -8,7 +8,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 ## Layout and ownership
 
-- `docs/` contains the Astro + Starlight application, public assets and production contracts.
+- The Astro + Starlight application lives at the repository root: `src/`,
+  `public/`, `scripts/` and root package/configuration files.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-pages.yaml` owns the complete callable publisher. The monorepo
@@ -23,17 +24,17 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
 
 ```sh
-npm --prefix docs ci
-npm --prefix docs run build
-bash docs/scripts/npm-toolchain.test.sh
-bash docs/scripts/audit-dependencies.test.sh
-bash docs/scripts/publishing-contract.test.sh
-bash docs/scripts/check-active-projects-drift.test.sh
-bash docs/scripts/check-cv-drift.test.sh
-node docs/scripts/check-cv-drift.mjs docs/src/content/docs/about.mdx docs/src/data/cv.ts
+npm ci
+npm run build
+bash scripts/npm-toolchain.test.sh
+bash scripts/audit-dependencies.test.sh
+bash scripts/publishing-contract.test.sh
+bash scripts/check-active-projects-drift.test.sh
+bash scripts/check-cv-drift.test.sh
+node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
 ```
 
-Audit dependency changes with `docs/scripts/audit-dependencies.sh` from `docs/`. The real
+Audit dependency changes with `scripts/audit-dependencies.sh` from the repository root. The real
 cross-product drift check runs in the monorepo against its pinned site and Actions products;
 standalone CI exercises the checker's hermetic fixtures and the actual CV. Do not substitute
 fixtures for the aggregator's cross-product validation or weaken a failing check.
@@ -46,6 +47,19 @@ pinned to the reviewed head, after the repository's ordered review lanes and com
 preflight; source publication is a separate reviewed monorepo pin adoption plus live readback.
 
 ## Content boundaries
+
+Read `docs/README.md` before editing public content. Pages and journal posts live in
+`src/content/docs/`; this inner Starlight collection is not the contributor-docs directory.
+Edit bilingual catalogue descriptions in `src/data/public-products.json`; set changes must also
+update the inventory in `src/content/docs/projects/active.mdx` and the dated stars snapshot.
+Keep KSail brief and linked to ksail.devantler.tech rather than duplicating its documentation.
+`src/data/cv.ts` is the CV source; builds generate the PDF.
+
+Write concise, reader-facing present-state copy, verified outcomes and a clear next step.
+Follow the editorial standard for posts and material updates; never invent experience or numbers.
+Unreleased UI/content stays behind a default-off `astro:env` release flag until reviewed activation
+and live proof; remove the flag once shipped. Never hand-edit generated output or edit a journal
+post during a project-description sync.
 
 Describe an honest one-person business. Do not invent company/contact/customer facts, reveal a
 private address, claim statutory compliance, or add purchases/subscriptions. Registration/contact
