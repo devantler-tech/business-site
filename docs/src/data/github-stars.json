@@ -1,0 +1,18 @@
+{
+  "observedAt": "2026-10-07",
+  "repositories": {
+    ".github": 0,
+    "actions": 2,
+    "agent-plugins": 2,
+    "agent-skills": 3,
+    "data-product-controller": 0,
+    "dotnet-template": 0,
+    "go-template": 0,
+    "ksail": 166,
+    "kyverno-policies": 0,
+    "platform-template": 1,
+    "platform-tenant-template": 1,
+    "provider-upjet-unifi": 0,
+    "world-at-ruin": 4
+  }
+}

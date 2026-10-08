@@ -1,0 +1,18 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import BusinessHeader from './BusinessHeader.astro';
+---
+<BusinessHeader path={Astro.url.pathname} translated={false} />
+<div class="documentation-tools container"><span>Technical notes &amp; journal</span><Search /></div>
+<script>
+  const header = document.querySelector<HTMLElement>('.page > header.header');
+  if (header) {
+    const resize = () => document.documentElement.style.setProperty('--sl-nav-height', `${header.getBoundingClientRect().height}px`);
+    resize();
+    new ResizeObserver(resize).observe(header);
+  }
+</script>
+<style>
+  .documentation-tools { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: .5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
+  @media (max-width: 49.99em) { .documentation-tools { padding-right: 3rem; } }
+</style>

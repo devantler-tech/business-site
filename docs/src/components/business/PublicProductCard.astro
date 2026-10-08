@@ -1,0 +1,40 @@
+---
+import { Image } from 'astro:assets';
+import ksailCapture from '../../assets/ksail-cli-dark.png';
+import type { publicProducts } from '../../data/public-products';
+import type { Locale } from './content';
+import { supporting } from './supporting';
+interface Props { product: typeof publicProducts[number]; locale: Locale; legacyAnchors?: string[] }
+const { product, locale, legacyAnchors = [] } = Astro.props;
+const repositoryUrl = `https://github.com/devantler-tech/${product.repository}`;
+const starLabel = locale === 'da' ? (product.stars === 1 ? 'stjerne' : 'stjerner') : (product.stars === 1 ? 'star' : 'stars');
+---
+<article data-public-product={product.repository} data-stars={product.stars}>
+  {legacyAnchors.map((id) => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
+  <div class="card-top"><p class="kind">{product.kind[locale]}</p><span class="stars" aria-label={`${product.stars} GitHub ${starLabel}`}><span aria-hidden="true">☆</span> {product.stars}</span></div>
+  <h3>{product.name}</h3>
+  <p class="description">{product.description[locale]}</p>
+  {product.repository === 'ksail' && <figure><Image src={ksailCapture} alt="KSail CLI" width={720} format="webp" /><figcaption>{supporting[locale].realScreenshot}</figcaption></figure>}
+  <div class="links">
+    <a href={repositoryUrl}>GitHub <span class="sr-only">— {product.name}</span><span aria-hidden="true">↗</span></a>
+    {product.documentation && <a href={product.documentation}>{locale === 'da' ? 'Dokumentation' : 'Documentation'} <span class="sr-only">— {product.name}</span><span aria-hidden="true">↗</span></a>}
+    {product.terms && <a class="terms" href={`${repositoryUrl}/blob/main/${product.licenseFile}`}>{product.terms[locale]} <span class="sr-only">— {product.name}</span></a>}
+  </div>
+</article>
+<style>
+  article { display: flex; flex-direction: column; min-width: 0; padding: 1.5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .kind { font-size: .75rem; color: var(--accent); } .stars { flex: none; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  h3 { font-size: 1.2rem; margin-top: .7rem; overflow-wrap: anywhere; }
+  .description { margin-block: 1rem; font-size: .95rem; }
+  .legacy-anchor { display: block; scroll-margin-top: 1.5rem; }
+  figure { margin: 0 0 1rem; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 5px; }
+  figcaption { font-size: .75rem; color: var(--muted); margin-top: .5rem; }
+  .links { display: flex; flex-wrap: wrap; gap: .25rem 1.2rem; margin-top: auto; }
+  a { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; color: var(--accent); text-underline-offset: .2em; font-size: .85rem; }
+  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  .terms { color: var(--muted); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  @media (max-width: 480px) { article { padding: 1.2rem; } }
+</style>

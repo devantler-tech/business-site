@@ -1,0 +1,27 @@
+---
+title: Templates
+description: Opinionated starter templates with CI/CD, testing, and code quality baked in.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import { getCollection } from "astro:content";
+
+export const templates = (await getCollection("docs"))
+  .filter((entry) => entry.id.startsWith("templates/") && entry.id !== "templates/index")
+  .sort((a, b) => a.id.localeCompare(b.id));
+
+[![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/devantler)
+
+Starter templates that skip the boilerplate and get you straight to shipping. Each comes with GitHub Actions workflows, code quality tooling, and automated dependency management.
+
+<CardGrid>
+  {
+    templates.map((template) => (
+      <LinkCard
+        title={template.data.title}
+        description={template.data.description}
+        href={`/${template.id}/`}
+      />
+    ))
+  }
+</CardGrid>

@@ -1,0 +1,120 @@
+---
+import { Image } from 'astro:assets';
+import { getEntry, render } from 'astro:content';
+import workflows from '../../assets/editorial/workflows.webp';
+import research from '../../assets/editorial/data-research.webp';
+import { copy, type Locale } from './content';
+import { supporting } from './supporting';
+import PublicProductCard from './PublicProductCard.astro';
+import WorkExample from './WorkExample.astro';
+import { publicProducts, starsObservedAt } from '../../data/public-products';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const t = supporting[locale];
+const home = copy[locale];
+const featured = publicProducts.slice(0, 6);
+const additional = publicProducts.slice(6);
+const engineeringSources = [
+  'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/ci.yaml',
+  'https://github.com/devantler-tech/ksail/blob/main/.github/workflows/codeql.yaml',
+  'https://github.com/devantler-tech/wedding-app/blob/main/tests/e2e/a11y.test.ts',
+  'https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md',
+];
+// Keep published heading bookmarks useful within the single public catalogue.
+const legacyAnchors: Record<string, string[]> = {
+  ksail: ['️-ksail---'],
+  'data-product-controller': ['-data-product-controller--'],
+  'world-at-ruin': ['️-world-at-ruin--'],
+  actions: ['-reusable-workflows-', '-actions-'],
+  'agent-skills': ['-agent-skills--'],
+  'agent-plugins': ['-agent-plugins---'],
+  'provider-upjet-unifi': ['-unifi-provider---'],
+  'kyverno-policies': ['️-kyverno-policies--'],
+};
+const completed = await getEntry('docs', 'projects/completed');
+if (!completed) throw new Error('The research catalogue is missing');
+const { Content: ResearchContent } = await render(completed);
+---
+<nav class="project-index" aria-label={t.projectIndex}>
+  <a href="#open-title">{t.openTitle}</a><a href="#family-title">{t.familyTitle}</a><a href="#research">{t.researchTitle}</a>
+</nav>
+<section aria-labelledby="open-title">
+  <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span>
+  <div class="shelf-heading"><div><p class="eyebrow">{t.currentLabel}</p><h2 id="open-title">{t.openTitle}</h2><p class="intro">{t.openIntro}</p></div><Image data-project-art src={workflows} alt="" width={440} format="webp" /></div>
+  <p class="note">{t.starSnapshot} <time datetime={starsObservedAt}>{new Intl.DateTimeFormat(locale === 'da' ? 'da-DK' : 'en-GB', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(starsObservedAt))}</time>. {t.reuseNote}</p>
+  <div class="product-grid">{featured.map((product) => <PublicProductCard product={product} locale={locale} legacyAnchors={legacyAnchors[product.repository]} />)}</div>
+  {additional.length > 0 && <details id="more-public-products"><summary>{t.moreProducts} <span class="count">{additional.length}</span></summary><div class="product-grid additional">{additional.map((product) => <PublicProductCard product={product} locale={locale} legacyAnchors={legacyAnchors[product.repository]} />)}</div></details>}
+  <p class="note">{home.subscriptionNote}</p>
+  <details id="engineering-checks"><summary>{t.engineeringTitle}</summary><div class="engineering-proof"><p>{t.engineeringIntro}</p><ul>{engineeringSources.map((href, i) => <li><a href={href}>{t.engineeringSources[i]}</a></li>)}</ul><p class="note">{t.engineeringScope}</p></div></details>
+</section>
+<section aria-labelledby="family-title">
+  <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
+  <p class="eyebrow">{t.familyLabel}</p><h2 id="family-title">{t.familyTitle}</h2><p class="intro">{t.familyIntro}</p>
+  <div class="family">{home.workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>
+  <article class="hosting-project" data-hosting-project>
+    <span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span>
+    <h3><a href="https://github.com/devantler-tech/platform">Platform <span aria-hidden="true">↗</span></a></h3>
+    <p>{t.platformText}</p><p class="note">{t.platformScope}</p>
+  </article>
+</section>
+<section id="research" aria-labelledby="research-title">
+  <p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{t.researchTitle}</h2>
+  <article class="feature">
+    <div><h3>{t.researchProject}</h3><p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{t.thesis} <span aria-hidden="true">↗</span></a></div>
+    <Image src={research} alt="" width={760} format="webp" />
+  </article>
+  <details><summary>{t.researchExpand}</summary><div class="catalogue" lang="en"><ResearchContent /></div></details>
+</section>
+<script is:inline data-project-reveal>
+  const revealTarget = () => {
+    let id;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    const details = target.closest('details');
+    if (details) { details.open = true; target.scrollIntoView(); }
+  };
+  revealTarget();
+  window.addEventListener('hashchange', revealTarget);
+</script>
+<style>
+  .project-index { display: flex; flex-wrap: wrap; gap: .5rem 2rem; padding-bottom: 2rem; }
+  .legacy-anchor { display: block; scroll-margin-top: 1.5rem; }
+  a { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; color: var(--accent); text-underline-offset: .2em; }
+  section { border-top: 1px solid var(--line); padding-block: 3rem; scroll-margin-top: 1.5rem; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); } h3 { font-size: 1.3rem; }
+  .eyebrow { font-size: .8rem; color: var(--accent); margin-bottom: .6rem; }
+  .intro { margin-top: 1.2rem; max-width: 760px; }
+  .shelf-heading { display: grid; grid-template-columns: minmax(0, 1fr) 220px; align-items: center; gap: 2rem; }
+  .shelf-heading img { width: 100%; height: auto; border-radius: 8px; }
+  .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 2rem; }
+  .additional { padding: 0 1.25rem 1.25rem; margin-top: 0; }
+  .count { margin-left: .6rem; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); align-items: center; gap: 3rem; margin-top: 2.5rem; }
+  .feature + .feature { border-top: 1px solid var(--line); padding-top: 2.5rem; }
+  .feature p { margin-block: 1rem; }
+  .feature img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .feature > img { aspect-ratio: 16 / 9; object-fit: cover; }
+  figure { margin: 0; } figcaption, .note { font-size: .8rem; color: var(--muted); margin-top: .75rem; }
+  .family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; margin-top: 2rem; }
+  .hosting-project { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); max-width: 760px; }
+  .hosting-project > p { margin-top: .75rem; }
+  details { margin-top: 2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  summary { cursor: pointer; padding: 1.25rem; min-height: 44px; font-weight: 600; }
+  summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  #engineering-checks { scroll-margin-top: 1.5rem; }
+  .engineering-proof { padding: 0 1.25rem 1.25rem; max-width: 850px; font-size: .9rem; }
+  .engineering-proof ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .3rem 1.5rem; padding-left: 1.2rem; margin-block: 1rem; }
+  .engineering-proof li::marker { color: var(--accent); }
+  .catalogue { padding: 0 1.5rem 1.5rem; max-width: 850px; }
+  .catalogue :global(h2) { font-size: 1.4rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .catalogue :global(h3) { font-size: 1.1rem; }
+  .catalogue :global(p), .catalogue :global(ul) { margin-block: 1.25rem; }
+  .catalogue :global(img) { max-width: 100%; height: auto; border-radius: 5px; }
+  .catalogue :global(h2 img) { display: none; }
+  .catalogue :global(a) { color: var(--accent); overflow-wrap: anywhere; }
+  .catalogue :global(.sl-anchor-link) { display: none; }
+  @media (max-width: 760px) { section { padding-block: 2rem; } .feature, .family { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue { padding-inline: 1rem; } .shelf-heading { grid-template-columns: 1fr; } .shelf-heading img { display: none; } }
+  @media (max-width: 600px) { .product-grid, .engineering-proof ul { grid-template-columns: 1fr; } .additional { padding-inline: .75rem; } }
+</style>

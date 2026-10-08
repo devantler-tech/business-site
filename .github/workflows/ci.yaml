@@ -1,0 +1,235 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  merge_group:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      docs-deps: ${{ steps.filter.outputs.docs-deps }}
+      docs-audit-contract: ${{ steps.filter.outputs.docs-audit-contract }}
+      docs-npm-toolchain: ${{ steps.filter.outputs.docs-npm-toolchain }}
+      active-projects: ${{ steps.filter.outputs.active-projects }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Detect changes
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            docs:
+              - 'docs/**'
+              - '.github/workflows/**'
+            docs-deps:
+              - 'docs/package.json'
+              - 'docs/package-lock.json'
+              - 'docs/npm-shrinkwrap.json'
+              - 'docs/.npmrc'
+              - 'docs/scripts/audit-dependencies.sh'
+            docs-audit-contract:
+              - 'docs/.npmrc'
+              - 'docs/scripts/audit-dependencies.sh'
+              - 'docs/scripts/audit-dependencies.test.sh'
+              - '.github/workflows/audit-docs.yaml'
+              - '.github/workflows/ci.yaml'
+            docs-npm-toolchain:
+              - 'docs/package.json'
+              - 'docs/scripts/npm-toolchain.test.sh'
+              - '.github/workflows/**'
+            active-projects:
+              - 'docs/src/content/**'
+              - 'docs/src/data/public-products.json'
+              - 'docs/src/data/cv.ts'
+              - 'docs/scripts/check-active-projects-drift.sh'
+              - 'docs/scripts/check-active-projects-drift.test.sh'
+              - 'docs/scripts/check-homepage-project-parity.mjs'
+              - 'docs/scripts/check-cv-drift.mjs'
+              - 'docs/scripts/check-cv-drift.test.sh'
+              - 'docs/package.json'
+              - 'docs/package-lock.json'
+              - '.github/workflows/ci.yaml'
+
+  build-docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Verify lockfile with older supported npm
+        working-directory: docs
+        run: npx --yes --package=npm@11.4.2 npm ci --ignore-scripts
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
+      - name: Build enabled preview
+        working-directory: docs
+        env:
+          FEATURE_PREVIEW_BANNER: "true"
+        run: npm run build
+      - name: Build
+        working-directory: docs
+        env:
+          FEATURE_PREVIEW_BANNER: "false"
+        run: npm run build
+      - name: Upload reviewable production preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: business-site-preview
+          path: docs/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  audit-docs:
+    needs: changes
+    if: needs.changes.outputs.docs-deps == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Test audit wrapper
+        working-directory: docs
+        run: ./scripts/audit-dependencies.test.sh
+      - name: Audit
+        working-directory: docs
+        run: ./scripts/audit-dependencies.sh
+
+  test-docs-audit-wrapper:
+    needs: changes
+    if: needs.changes.outputs.docs-audit-contract == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: Test audit wrapper
+        working-directory: docs
+        run: ./scripts/audit-dependencies.test.sh
+
+  test-docs-npm-toolchain:
+    needs: changes
+    if: needs.changes.outputs.docs-npm-toolchain == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test npm toolchain contract
+        run: bash docs/scripts/npm-toolchain.test.sh
+
+  drift-check-active-projects:
+    needs: changes
+    if: needs.changes.outputs.active-projects == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install MDX parser dependencies
+        working-directory: docs
+        run: npm ci
+      # The monorepo validates the real pinned sibling products. This source
+      # repository retains all hermetic negative controls, not a fake live census.
+      - name: Self-test the drift checker
+        run: bash docs/scripts/check-active-projects-drift.test.sh
+      - name: Self-test the CV drift checker
+        run: bash docs/scripts/check-cv-drift.test.sh
+      - name: Check the About page and CV data for drift
+        run: node docs/scripts/check-cv-drift.mjs docs/src/content/docs/about.mdx docs/src/data/cv.ts
+
+  test-repository-contracts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify source-owned publishing and editorial contracts
+        run: |
+          bash docs/scripts/publishing-contract.test.sh
+          bash docs/scripts/editorial-contract.test.sh
+
+  status:
+    name: CI - Required Checks
+    runs-on: ubuntu-latest
+    if: always()
+    permissions: {}
+    needs:
+      - changes
+      - build-docs
+      - audit-docs
+      - test-docs-audit-wrapper
+      - test-docs-npm-toolchain
+      - drift-check-active-projects
+      - test-repository-contracts
+    steps:
+      - name: Check job results
+        uses: devantler-tech/.github/actions/aggregate-job-checks@515b5dfe2259955908387369f3bc3c107f50a8b4
+        with:
+          job-results: >-
+            ${{ needs.changes.result }}
+            ${{ needs.build-docs.result }}
+            ${{ needs.audit-docs.result }}
+            ${{ needs.test-docs-audit-wrapper.result }}
+            ${{ needs.test-docs-npm-toolchain.result }}
+            ${{ needs.drift-check-active-projects.result }}
+            ${{ needs.test-repository-contracts.result }}

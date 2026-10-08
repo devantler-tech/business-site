@@ -1,0 +1,34 @@
+/* The documentation keeps its reading tools inside the business identity. */
+:root {
+  --sl-font: 'Studio Inter', system-ui, sans-serif;
+  --sl-color-bg: var(--canvas);
+  --sl-color-bg-nav: var(--canvas);
+  --sl-color-bg-sidebar: var(--paper);
+  --sl-color-hairline-shade: var(--line);
+  --sl-color-white: var(--ink);
+  --sl-color-gray-2: var(--ink);
+  --sl-color-gray-3: var(--muted);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent);
+  --sl-color-accent-low: var(--contact);
+  --sl-nav-height: 9rem;
+}
+:root[data-theme='light'] {
+  --sl-color-bg: var(--canvas);
+  --sl-color-bg-nav: var(--canvas);
+  --sl-color-bg-sidebar: var(--paper);
+  --sl-color-hairline-shade: var(--line);
+  --sl-color-white: var(--ink);
+  --sl-color-gray-2: var(--ink);
+  --sl-color-gray-3: var(--muted);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent);
+  --sl-color-accent-low: var(--contact);
+}
+.page > header.header { position: sticky; top: 0; height: auto; padding: 0 !important; background: var(--canvas) !important; backdrop-filter: none; }
+.page > .main-frame { padding-top: 0; }
+.sidebar-pane { border-color: var(--line); }
+.business-footer.container { width: 100%; }
+@media (max-width: 49.99em) { .sl-menu-button { top: calc(var(--sl-nav-height) - 2.75rem) !important; } }
+@media (max-width: 1050px) { :root { --sl-nav-height: 12rem; } }
+@media (max-width: 450px) { :root { --sl-nav-height: 15rem; } }
