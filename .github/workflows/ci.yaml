@@ -92,8 +92,15 @@ jobs:
       - name: Install dependencies
         working-directory: docs
         run: npm ci
+      - name: Build enabled preview
+        working-directory: docs
+        env:
+          FEATURE_PREVIEW_BANNER: "true"
+        run: npm run build
       - name: Build
         working-directory: docs
+        env:
+          FEATURE_PREVIEW_BANNER: "false"
         run: npm run build
       - name: Upload reviewable production preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

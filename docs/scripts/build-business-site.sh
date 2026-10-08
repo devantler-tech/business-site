@@ -7,3 +7,4 @@ node --test scripts/public-products.test.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
 node scripts/check-business-site.mjs dist
+bash scripts/retired-public-output.test.sh dist
