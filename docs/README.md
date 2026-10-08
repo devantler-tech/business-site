@@ -69,7 +69,8 @@ The business identity also covers `/about/` and `/projects/`, with Danish counte
 distinguishes open-source tools and family examples from client work. The journal and technical
 pages reuse the business navigation, typography, colors, footer and appearance control through
 Starlight component overrides. Their search, sidebar, RSS and historical articles remain available.
-Only Starlight Blog's preview cards receive whole-card mouse and keyboard navigation. Links,
+Only Starlight Blog's preview cards receive whole-card mouse navigation. Each native title link
+provides the single keyboard destination without making its article a second focus stop. Links,
 form controls, disclosure toggles and editable descendants retain their own interaction; individual
 journal and technical articles remain reading surfaces. `scripts/journal-navigation.test.mjs`
 executes the actual head script as part of every build.

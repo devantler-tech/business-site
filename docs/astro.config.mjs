@@ -153,20 +153,6 @@ export default defineConfig({
               if (control && control !== card) return;
               navigate(card);
             });
-            document.querySelectorAll(cards).forEach((card) => {
-              const link = card.querySelector(destination);
-              if (!link) return;
-              card.setAttribute('tabindex', '0');
-              card.setAttribute('role', 'link');
-              card.setAttribute('aria-label', link.textContent.trim());
-              card.addEventListener('keydown', (event) => {
-                if (event.target !== card) return;
-                if (event.key === 'Enter' || event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar') {
-                  event.preventDefault();
-                  navigate(card);
-                }
-              });
-            });
           });`,
         },
       ],

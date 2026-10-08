@@ -85,18 +85,26 @@ for (const href of ['https://devantler.tech/blog/example/', 'https://devantler.t
     view.window.location.href = 'https://devantler.tech/blog/';
     view.click(view.excerpt);
     assert.equal(view.window.location.href, href);
-    assert.equal(view.article.getAttribute('role'), 'link');
-    assert.equal(view.article.getAttribute('tabindex'), '0');
-    assert.equal(view.article.getAttribute('aria-label'), 'A useful journal post');
+    assert.equal(view.article.getAttribute('role'), null);
+    assert.equal(view.article.getAttribute('tabindex'), null);
+    assert.equal(view.article.getAttribute('aria-label'), null);
+  });
+  test(`list cards retain one native destination without a focusable link ancestor: ${href}`, () => {
+    const view = page({ href });
+    assert.equal(view.article.getAttribute('tabindex'), null, 'The native title link must not gain a duplicate ancestor focus stop');
+    assert.equal(view.article.getAttribute('role'), null, 'The title anchor must not be nested inside another link role');
+    assert.equal(view.link.href, href);
+    assert.equal(view.link.getAttribute('tabindex'), null, 'The native title anchor stays keyboard reachable');
+    assert.equal(view.link.listeners.size, 0, 'Native anchor keyboard activation must not be replaced');
   });
 }
 
 for (const key of ['Enter', ' ', 'Spacebar']) {
-  test(`list-card keyboard activation supports ${JSON.stringify(key)}`, () => {
+  test(`non-interactive card wrappers do not consume ${JSON.stringify(key)}`, () => {
     const view = page();
     view.window.location.href = 'https://devantler.tech/blog/';
-    assert.equal(view.key(view.article, key), true);
-    assert.equal(view.window.location.href, view.link.href);
+    assert.equal(view.key(view.article, key), false);
+    assert.equal(view.window.location.href, 'https://devantler.tech/blog/');
   });
 }
 
