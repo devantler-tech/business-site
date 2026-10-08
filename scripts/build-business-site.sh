@@ -8,6 +8,7 @@ node --test scripts/public-products.test.mjs
 node --test scripts/client-rollout.test.mjs
 node --test scripts/journal-rollout.test.mjs
 node --test scripts/editorial-assets.test.mjs
+node --test scripts/compress-editorial-assets.test.mjs
 node scripts/check-editorial-assets.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
