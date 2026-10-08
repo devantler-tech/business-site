@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exercise the real pre-checkout admission and the reusable publisher's boundaries.
 set -euo pipefail
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 workflow="$root/.github/workflows/publish-pages.yaml"
 fail() { printf 'publishing contract: FAIL — %s\n' "$*" >&2; exit 1; }
 command -v yq >/dev/null || fail 'yq is required'
@@ -24,10 +24,10 @@ ci_preview_valid() {
     .jobs["build-docs"].steps as $steps |
     [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].env.FEATURE_PREVIEW_BANNER == "true")] as $preview |
     [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].env.FEATURE_PREVIEW_BANNER == "false")] as $production |
-    [range(0; $steps | length) | select($steps[.].with.path == "docs/dist")] as $artifacts |
+    [range(0; $steps | length) | select($steps[.].with.path == "dist")] as $artifacts |
     ($preview | length) == 1 and ($production | length) == 1 and ($artifacts | length) == 1 and
     $preview[0] < $production[0] and $production[0] < $artifacts[0] and
-    all(($preview + $production)[]; $steps[.] | .["working-directory"] == "docs" and .if == null and .["continue-on-error"] == null)
+    all(($preview + $production)[]; $steps[.] | .["working-directory"] == "." and .if == null and .["continue-on-error"] == null)
   ' >/dev/null
 }
 ci_preview_valid <<<"$ci_json" || fail 'CI must validate preview-on before preview-off and upload only the final production output'
@@ -64,6 +64,49 @@ require '.jobs.build.steps[1].with.repository == "devantler-tech/business-site" 
 require '.jobs.deploy.needs == "build" and .jobs.deploy.permissions == {"pages":"write","id-token":"write"} and .jobs.deploy.environment.name == "github-pages"' 'deployment depends on the admitted build and uses only Pages authority'
 require '[.jobs[].steps[]? | select(has("continue-on-error"))] | length == 0' 'publisher cannot ignore failures'
 require '[.jobs[].steps[]? | select(.uses != null) | .uses | test("@[0-9a-f]{40}$")] | all' 'every publisher action is immutably pinned'
+publisher_layout_valid() {
+  jq -e '
+    .jobs.build.steps as $steps |
+    [range(0; $steps | length) | select($steps[.].run == "npm ci")] as $install |
+    [range(0; $steps | length) | select($steps[.].run == "npm run build")] as $build |
+    [range(0; $steps | length) | select($steps[.].name == "Record public source identity")] as $receipt |
+    [range(0; $steps | length) | select(($steps[.].uses // "") | startswith("actions/upload-pages-artifact@"))] as $upload |
+    all([$install, $build, $receipt, $upload][]; length == 1) and
+    $install[0] < $build[0] and $build[0] < $receipt[0] and $receipt[0] < $upload[0] and
+    all(($install + $build + $receipt + $upload)[]; $steps[.] | .if == null and
+      (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    all(($install + $build)[]; $steps[.]["working-directory"] == ".") and
+    $steps[$upload[0]].with.path == "dist" and
+    ([ $steps[] | select((.uses // "") | startswith("actions/setup-node@")) |
+      .with["cache-dependency-path"] ] == ["package-lock.json"])
+  ' >/dev/null
+}
+publisher_layout_valid <<<"$json" || fail 'publisher must install/build at the application root and upload its completed output'
+for broken_layout in \
+  '.jobs.build.steps |= map(if .run == "npm ci" then .["working-directory"] = "docs" else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then .if = "false" else . end)' \
+  '.jobs.build.steps |= map(select(.name != "Record public source identity"))' \
+  '.jobs.build.steps |= map(if (.uses // "" | startswith("actions/upload-pages-artifact@")) then .with.path = "docs/dist" else . end)' \
+  '.jobs.build.steps |= map(if (.uses // "" | startswith("actions/setup-node@")) then .with["cache-dependency-path"] = "docs/package-lock.json" else . end)' \
+  '.jobs.build.steps |= reverse'; do
+  if publisher_layout_valid <<<"$(jq "$broken_layout" <<<"$json")"; then
+    fail 'a broken root publication layout passed its negative control'
+  fi
+done
+# Execute the actual workflow receipt step against the root artifact directory.
+# This proves the moved output contains the exact source/caller identity, not
+# merely that the YAML mentions a matching-looking path.
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+mkdir "$scratch/dist"
+receipt="$(jq -r '.jobs.build.steps[] | select(.name == "Record public source identity") | .run' <<<"$json")"
+source_sha=0123456789abcdef0123456789abcdef01234567
+caller_sha=89abcdef0123456789abcdef0123456789abcdef
+(cd "$scratch" && env SOURCE_REVISION="$source_sha" GITHUB_SHA="$caller_sha" \
+  GITHUB_STEP_SUMMARY="$scratch/summary" bash -c "$receipt") || fail 'root receipt step failed'
+jq -e --arg source "$source_sha" --arg caller "$caller_sha" \
+  '. == {repository:"devantler-tech/business-site",sourceRevision:$source,callerRevision:$caller}' \
+  "$scratch/dist/publication-source.json" >/dev/null || fail 'root artifact receipt has the wrong identity'
 admission="$(jq -r '.jobs.build.steps[0].run' <<<"$json")"
 [[ -n "$admission" && "$admission" != null ]] || fail 'admission is missing'
 admit() {

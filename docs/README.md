@@ -2,14 +2,15 @@
 
 The [devantler.tech](https://devantler.tech) site — an [Astro](https://astro.build) +
 [Starlight](https://starlight.astro.build) static site. Its source lives in
-`devantler-tech/business-site` (`docs/` + repository root). The callable
+`devantler-tech/business-site` at the repository root (`src/`, `public/`, `scripts/`).
+This `docs/` directory holds contributor documentation and architecture decisions. The callable
 `.github/workflows/publish-pages.yaml` publishes the reviewed source selected by the monorepo's
 `applications/business-site` pin to the existing monorepo Pages resource and domain.
 
 ## Develop
 
 ```sh
-cd docs
+# From the repository root
 npm ci
 npm run dev      # local dev server
 npm run build    # production build (this is what CI validates)
@@ -102,7 +103,7 @@ clipped without creating a non-scrolling ancestor
 that would break the documentation header's sticky positioning.
 
 Journal covers and project illustrations use the subject-based green/charcoal workshop series in
-`src/assets/editorial/`. [Asset provenance](src/assets/PROVENANCE.md) distinguishes generated
+`src/assets/editorial/`. [Asset provenance](../src/assets/PROVENANCE.md) distinguishes generated
 illustrations from the real portrait, product captures and authored diagrams; the complete prompts
 are recorded alongside the assets. Covers do not replace factual inline screenshots or diagrams.
 
@@ -160,7 +161,7 @@ New posts and material updates to existing posts follow the same quality bar:
 - Keep the presentation skimmable and professional: a clear opening, descriptive headings, short
   paragraphs, purposeful visuals, and a relevant call to action.
 - Verify follower-facing distribution: RSS inclusion, social/OG presentation, and a measurable CTA.
-  Preview the result across mobile, tablet, and desktop, then run `npm run build` from `docs/` before
+  Preview the result across mobile, tablet, and desktop, then run `npm run build` from the repository root before
   opening the draft PR.
 
 Publication cadence is a prompt to review opportunities, never a reason to create filler. Record the
@@ -190,7 +191,7 @@ disclosure directly below. Builds and visitors need no GitHub connection. Refres
 updating the catalogue and during the monthly site content review:
 
 ```sh
-bash docs/scripts/refresh-public-stars.sh
+bash scripts/refresh-public-stars.sh
 ```
 
 The refresh requires authenticated `gh` and `jq`. It validates every selected repository as public,
@@ -213,7 +214,7 @@ web island — explicitly out of scope for the static site today.)
 ### The convention — `astro:env`
 
 Flags are declared in the Zod-validated [`astro:env`](https://docs.astro.build/en/guides/environment-variables/)
-`env.schema` in [`astro.config.mjs`](astro.config.mjs) — type-safe over raw `import.meta.env`:
+`env.schema` in [`astro.config.mjs`](../astro.config.mjs) — type-safe over raw `import.meta.env`:
 
 ```js
 env: {
@@ -228,7 +229,7 @@ env: {
 ```
 
 Gate rendering on the flag by importing it from `astro:env/server` (or `astro:env/client` for a
-`PUBLIC_`-prefixed client flag) — see [`src/components/PreviewBanner.astro`](src/components/PreviewBanner.astro),
+`PUBLIC_`-prefixed client flag) — see [`src/components/PreviewBanner.astro`](../src/components/PreviewBanner.astro),
 the worked example mounted on the English and Danish business homepages. When the flag is off,
 the component emits nothing; enabling it adds a localized notice above the homepage introduction.
 

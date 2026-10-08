@@ -1,27 +1,28 @@
-# AGENTS.md — devantler.tech site (`docs/`)
+# AGENTS.md — contributor documentation
 
-The [devantler.tech](https://devantler.tech) website: an Astro + Starlight static site that
-the repository's callable `.github/workflows/publish-pages.yaml` deploys to the monorepo's existing GitHub Pages resource. The root
-[`AGENTS.md`](../AGENTS.md) still applies; this file adds what is specific to the site. The
-[`README.md`](README.md) carries the full editorial standard and the feature-flag how-to.
+This directory contains contributor documentation, not the web application.
+The root [`AGENTS.md`](../AGENTS.md) governs the application, build and publication.
+[`README.md`](README.md) carries the editorial standard and feature-flag how-to.
 
 ## Build and validate
 
-Run these before opening any `docs/` PR, from the repository root, as
+Run these before opening a site PR, from the repository root, as
 CI runs them (Node 24 with npm 11).
 
 | Check | Command |
 |---|---|
-| Production build — gates every `docs/` PR | `npm --prefix docs ci && npm --prefix docs run build` |
-| Project checker fixtures (actual cross-product drift runs in the monorepo) | `bash docs/scripts/check-active-projects-drift.test.sh` |
-| Publisher admission and boundaries | `bash docs/scripts/publishing-contract.test.sh` |
-| CV drift | `bash docs/scripts/check-cv-drift.test.sh && node --disable-warning=ExperimentalWarning docs/scripts/check-cv-drift.mjs docs/src/content/docs/about.mdx docs/src/data/cv.ts` |
-| Dependency audit (when `package*.json` changes) | `(cd docs && ./scripts/audit-dependencies.test.sh && ./scripts/audit-dependencies.sh)` |
+| Production build — gates every site PR | `npm ci && npm run build` |
+| Project checker fixtures (actual cross-product drift runs in the monorepo) | `bash scripts/check-active-projects-drift.test.sh` |
+| Publisher admission and boundaries | `bash scripts/publishing-contract.test.sh` |
+| CV drift | `bash scripts/check-cv-drift.test.sh && node --disable-warning=ExperimentalWarning scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts` |
+| Dependency audit (when `package*.json` changes) | `./scripts/audit-dependencies.test.sh && ./scripts/audit-dependencies.sh` |
 
-A browser check (`npm --prefix docs run preview`) must be started in the background with its PID
+A browser check (`npm run preview`) must be started in the background with its PID
 captured, and killed afterwards even on failure, so port 4321 is freed.
 
 ## Where things live
+
+Application paths below are relative to the repository root.
 
 - **Pages and blog posts:** `src/content/docs/`, with posts in `src/content/docs/blog/`.
 - **Projects:** edit bilingual `src/data/public-products.json`; set changes also update the

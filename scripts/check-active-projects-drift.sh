@@ -6,7 +6,7 @@
 # Current actions live in .github-public/actions and callable workflows in
 # .github-public/.github/workflows; both are checked independently of legacy metadata.
 # Guards the hand-maintained Actions / Reusable Workflows lists on the Active
-# Projects page (docs/src/content/docs/projects/active.mdx) against silent
+# Projects page (src/content/docs/projects/active.mdx) against silent
 # drift from their source-of-truth repo. Both lists are sourced from the
 # devantler-tech/actions submodule (the standalone reusable-workflows repo was
 # merged into it and archived 2026-07-10 — monorepo#1964): composite actions
@@ -61,7 +61,7 @@
 #   - Templates page     — the four template submodules are dispositioned
 #                          `=templates-page` in the submodule marker above
 #                          because they are surfaced on the Templates page
-#                          (docs/src/content/docs/templates/), not here. That
+#                          (src/content/docs/templates/), not here. That
 #                          page's index CardGrid is auto-derived from the
 #                          `templates/*` doc collection, so the *list* cannot
 #                          drift — but the set of template doc PAGES is itself
@@ -94,20 +94,20 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="${GITHUB_WORKSPACE:-$(cd "$script_dir/../.." && pwd)}"
+repo_root="${GITHUB_WORKSPACE:-$(cd "$script_dir/.." && pwd)}"
 site_root="${SITE_ROOT:-$repo_root}"
 
-mdx="$site_root/docs/src/content/docs/projects/active.mdx"
-homepage="$site_root/docs/src/content/docs/index.mdx"
+mdx="$site_root/src/content/docs/projects/active.mdx"
+homepage="$site_root/src/content/docs/index.mdx"
 actions_dir="$repo_root/github/devantler-tech/github-actions/actions"
 rw_workflows_dir="$repo_root/github/devantler-tech/github-actions/actions/.github/workflows"
 current_actions_dir="$repo_root/github/devantler-tech/.github-public/actions"
 current_workflows_dir="$repo_root/github/devantler-tech/.github-public/.github/workflows"
 gitmodules="$repo_root/.gitmodules"
-templates_dir="$site_root/docs/src/content/docs/templates"
-content_dir="$site_root/docs/src/content"
+templates_dir="$site_root/src/content/docs/templates"
+content_dir="$site_root/src/content"
 homepage_parity_checker="$script_dir/check-homepage-project-parity.mjs"
-public_catalogue="$site_root/docs/src/data/public-products.json"
+public_catalogue="$site_root/src/data/public-products.json"
 
 # Anchor each H2 section on the source repo URL it links to — unique and stable.
 actions_anchor="](https://github.com/devantler-tech/actions)"
@@ -151,7 +151,7 @@ for entry in "${retired_repo_urls[@]}"; do
 
   # Components and data also render public links. Inspect the whole source tree,
   # not just MDX; distinguish no matches from an incomplete read.
-  if hits=$(grep -rFlI "$retired_url" "$site_root/docs/src"); then
+  if hits=$(grep -rFlI "$retired_url" "$site_root/src"); then
     while IFS= read -r hit; do
       echo "::error file=${hit#"$repo_root"/}::Retired-repo link: this page links to '${retired_url}', \
 which is archived (read-only). Link '${replacement_url}' instead." >&2
@@ -226,23 +226,23 @@ actions_marker=$(
 actions_declared=$(printf '%s' "$actions_marker" | tr ',' '\n' | sed '/^$/d' | sort -u)
 
 if [ -z "$actions_marker" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Missing 'actions-dirs: a,b,c' marker \
-in the '## ⚡ Actions' section of docs/src/content/docs/projects/active.mdx." >&2
+  echo "::error file=src/content/docs/projects/active.mdx::Missing 'actions-dirs: a,b,c' marker \
+in the '## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$actions_count" -ne "$actions_bullets" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Actions list drift: \
+  echo "::error file=src/content/docs/projects/active.mdx::Actions list drift: \
 ${actions_count} composite action(s) in the actions submodule but ${actions_bullets} bullet(s) under \
 '## ⚡ Actions'. An action was added or removed in devantler-tech/actions but the list was not updated — \
-update the '## ⚡ Actions' section of docs/src/content/docs/projects/active.mdx." >&2
+update the '## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$actions_declared" != "$actions_live" ]; then
   only_live=$(comm -23 <(printf '%s\n' "$actions_live") <(printf '%s\n' "$actions_declared") | paste -sd, -)
   only_marker=$(comm -13 <(printf '%s\n' "$actions_live") <(printf '%s\n' "$actions_declared") | paste -sd, -)
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Actions list drift: the 'actions-dirs' \
+  echo "::error file=src/content/docs/projects/active.mdx::Actions list drift: the 'actions-dirs' \
 marker does not match the action directories in devantler-tech/actions. \
 Missing from marker: [${only_live:-none}]. Stale in marker (no longer a real action): [${only_marker:-none}]. \
 An action was added, removed, or renamed — update the matching bullet AND the 'actions-dirs' marker in the \
-'## ⚡ Actions' section of docs/src/content/docs/projects/active.mdx." >&2
+'## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 else
   echo "OK: Actions list in sync (${actions_count} actions == ${actions_bullets} bullets, marker set matches)."
@@ -297,29 +297,29 @@ rw_marker=$(
 rw_declared=$(printf '%s' "$rw_marker" | tr ',' '\n' | sed '/^$/d' | sort -u)
 
 if [ -z "$rw_expected" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Missing 'reusable-workflows-count: N' \
-marker in the '## 🔄 Reusable Workflows' section of docs/src/content/docs/projects/active.mdx." >&2
+  echo "::error file=src/content/docs/projects/active.mdx::Missing 'reusable-workflows-count: N' \
+marker in the '## 🔄 Reusable Workflows' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ -z "$rw_marker" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Missing 'reusable-workflows-names: a,b,c' \
-marker in the '## 🔄 Reusable Workflows' section of docs/src/content/docs/projects/active.mdx." >&2
+  echo "::error file=src/content/docs/projects/active.mdx::Missing 'reusable-workflows-names: a,b,c' \
+marker in the '## 🔄 Reusable Workflows' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$rw_count" -ne "$rw_expected" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Reusable Workflows drift: \
+  echo "::error file=src/content/docs/projects/active.mdx::Reusable Workflows drift: \
 ${rw_count} reusable (workflow_call) workflow(s) in the actions submodule but the marker \
 declares ${rw_expected}. A workflow was added or removed in devantler-tech/actions — review \
-the category bullets under '## 🔄 Reusable Workflows' in docs/src/content/docs/projects/active.mdx and \
+the category bullets under '## 🔄 Reusable Workflows' in src/content/docs/projects/active.mdx and \
 update the 'reusable-workflows-count' marker to ${rw_count}." >&2
   fail=1
 elif [ "$rw_declared" != "$rw_live" ]; then
   only_live=$(comm -23 <(printf '%s\n' "$rw_live") <(printf '%s\n' "$rw_declared") | paste -sd, -)
   only_marker=$(comm -13 <(printf '%s\n' "$rw_live") <(printf '%s\n' "$rw_declared") | paste -sd, -)
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Reusable Workflows drift: the \
+  echo "::error file=src/content/docs/projects/active.mdx::Reusable Workflows drift: the \
 'reusable-workflows-names' marker does not match the workflow_call workflows in \
 devantler-tech/actions. Missing from marker: [${only_live:-none}]. \
 Stale in marker (no longer a workflow_call workflow): [${only_marker:-none}]. A workflow was added, \
 removed, or renamed — review the category bullets under '## 🔄 Reusable Workflows' AND update the \
-'reusable-workflows-names' marker in docs/src/content/docs/projects/active.mdx." >&2
+'reusable-workflows-names' marker in src/content/docs/projects/active.mdx." >&2
   fail=1
 else
   echo "OK: Reusable Workflows in sync (${rw_count} workflow_call workflows == marker ${rw_expected}, name set matches)."
@@ -389,17 +389,17 @@ submodules_declared=$(
 )
 
 if [ -z "$submodules_marker" ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Missing \
+  echo "::error file=src/content/docs/projects/active.mdx::Missing \
 'projects-submodules: path=disposition,...' marker in \
-docs/src/content/docs/projects/active.mdx." >&2
+src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$submodules_valid" -ne 1 ]; then
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Invalid projects-submodules disposition: use one inventory with unique paths and one of section / grouped / templates-page / infra / omitted for EVERY entry." >&2
+  echo "::error file=src/content/docs/projects/active.mdx::Invalid projects-submodules disposition: use one inventory with unique paths and one of section / grouped / templates-page / infra / omitted for EVERY entry." >&2
   fail=1
 elif [ "$submodules_declared" != "$submodules_live" ]; then
   only_live=$(comm -23 <(printf '%s\n' "$submodules_live") <(printf '%s\n' "$submodules_declared") | paste -sd, -)
   only_marker=$(comm -13 <(printf '%s\n' "$submodules_live") <(printf '%s\n' "$submodules_declared") | paste -sd, -)
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Submodule drift: the \
+  echo "::error file=src/content/docs/projects/active.mdx::Submodule drift: the \
 'projects-submodules' marker does not match the submodules in .gitmodules. \
 Missing from marker: [${only_live:-none}]. Stale in marker (no longer a submodule): [${only_marker:-none}]. \
 A submodule was added or removed — record it in the 'projects-submodules' marker with its disposition \
@@ -421,7 +421,7 @@ templates_declared=$(
 )
 
 # Source repos the live template doc pages declare in their `**Repository**:`
-# line — one per page under docs/src/content/docs/templates/*.md (the index is
+# line — one per page under src/content/docs/templates/*.md (the index is
 # an .mdx file, so the *.md glob excludes it), sorted & unique.
 templates_live=$(
   grep -hoE '^\*\*Repository\*\*:[[:space:]]*\[devantler-tech/[a-z0-9._-]+\]' "$templates_dir"/*.md 2>/dev/null \
@@ -431,9 +431,9 @@ templates_live=$(
 if [ "$templates_declared" != "$templates_live" ]; then
   only_decl=$(comm -23 <(printf '%s\n' "$templates_declared") <(printf '%s\n' "$templates_live") | paste -sd, -)
   only_page=$(comm -13 <(printf '%s\n' "$templates_declared") <(printf '%s\n' "$templates_live") | paste -sd, -)
-  echo "::error file=docs/src/content/docs/projects/active.mdx::Templates page drift: the submodules \
+  echo "::error file=src/content/docs/projects/active.mdx::Templates page drift: the submodules \
 dispositioned '=templates-page' in the 'projects-submodules' marker do not match the template doc pages \
-under docs/src/content/docs/templates/. Dispositioned templates-page but missing a doc page (or its \
+under src/content/docs/templates/. Dispositioned templates-page but missing a doc page (or its \
 '**Repository**: [devantler-tech/<repo>]' link is wrong): [${only_decl:-none}]. Has a doc page but not \
 dispositioned templates-page in the marker: [${only_page:-none}]. Add/remove the template doc page and \
 keep the 'projects-submodules' marker disposition in lockstep." >&2
