@@ -57,24 +57,22 @@ explicitly labels it an anonymized demo and does not link to the private invitat
 No production account or guest invitation code is used. Built-page checks verify both
 thumbnails and their readable larger images, as well as the localized visit action.
 
-Home focuses on services, two visual examples and a compact engineering-quality summary. A short
-bridge points to the public portfolio instead of repeating product cards or the About biography.
-Projects owns the complete catalogue and a collapsed evidence disclosure, linked from Home:
-actual KSail test/lint and CodeQL workflows, Wedding App accessibility tests, and portfolio
-maintenance/review rules. A direct fragment opens that disclosure in either language. The copy
+Home puts plain-language quality and security highlights before prices and two visual examples.
+Projects leads with the real family website/app examples, keeps all thirteen public products
+visible, and retains the hosting and research bookmarks. Business Home/Projects do not link to
+source code; the journal and existing technical documentation retain their own detail. The copy
 describes verified practices rather than universal coverage, certification, vulnerability-free
 software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
 
-`FEATURE_CLIENT_PORTFOLIO=true` previews the client-facing redesign requested in business-site#5.
-The preview puts plain-language quality and security highlights on Home before the prices and
-examples. Projects leads with the real family website/app examples, keeps all thirteen public
-products visible, and retains the hosting and research bookmarks. Business Home/Projects do not
-link to source code; the journal and existing technical documentation retain their own detail.
-The flag is default-off and does not change the publication revision or turn on the redesign in
-production. CI builds enabled, explicit-false and entirely-unset states and uploads only the final
-normal production output. `scripts/check-client-facing.mjs` exercises the emitted EN/DA visitor
-pages; `scripts/client-rollout.test.mjs` guards the actual CI invocation and its negative controls.
-After a reviewed activation and live visitor verification, remove this short-lived release flag.
+`FEATURE_CLIENT_PORTFOLIO` defaults to true in ordinary production builds.
+`FEATURE_CLIENT_PORTFOLIO=false` is a temporary build-time rollback to the previous presentation;
+it requires a rebuild and publication, not a browser setting. CI builds enabled, explicit-false
+and entirely-unset states and uploads only the final normal production output.
+`scripts/check-client-facing.mjs` exercises the emitted EN/DA visitor pages;
+`scripts/client-rollout.test.mjs` guards the production default and actual CI invocation.
+Source merges do not publish by themselves: the monorepo must adopt the reviewed source revision
+in both its gitlink and immutable publisher reference. After that adoption and live visitor
+verification, remove this short-lived release flag.
 
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects

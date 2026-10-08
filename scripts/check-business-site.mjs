@@ -7,7 +7,7 @@ import sharp from 'sharp';
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
 const root = resolve(directory);
-const clientFacing = process.env.FEATURE_CLIENT_PORTFOLIO === 'true';
+const clientFacing = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     assert.ok(!readFileSync(resolve(root, path), 'utf8').includes('https://github.com/devantler-tech/reusable-workflows'), 'Rendered public pages must not link to retired repositories');
