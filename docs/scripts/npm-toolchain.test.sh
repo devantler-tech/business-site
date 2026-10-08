@@ -19,7 +19,8 @@
 #      node-version on a Node line whose bundled npm is that major. The known jobs must all be
 #      found, so an empty discovery cannot pass.
 #   3. The build first proves npm 11.4.2 can clean-install the lockfile, then installs
-#      with the runner's current npm 11. Optional peers can differ within the same major.
+#      with the runner's current npm 11. Both installs are unconditional and propagate
+#      failures. Optional peers can differ within the same major.
 #   4. CI runs this test from a job that its own inputs gate, and that gate covers every
 #      workflow, so a new workflow that works in docs/ reruns it.
 #
@@ -177,7 +178,9 @@ check() {
     [range(0; $steps | length) | select(
       $steps[.]["working-directory"] == "docs" and $steps[.].run == "npm ci"
     )] as $current |
-    ($older | length) == 1 and ($current | length) == 1 and $older[0] < $current[0]
+    ($older | length) == 1 and ($current | length) == 1 and $older[0] < $current[0] and
+    all(($older + $current)[]; $steps[.] | .if == null and
+      (.["continue-on-error"] == null or .["continue-on-error"] == false))
   ')" || violation "cannot read the lockfile compatibility installs" || return 1
   [ "${compatibility}" = "true" ] ||
     violation "ci.yaml:build-docs must clean-install with npm 11.4.2 before its current npm ci" || return 1
@@ -319,6 +322,26 @@ expect_failure "install hides a lockfile mismatch" "must clean-install with npm 
 reset_fixture
 yq -i '.jobs.build-docs.steps |= sort_by(.run // "")' "${fixture}/.github/workflows/ci.yaml"
 expect_failure "compatibility install moved after current install" "must clean-install with npm 11.4.2 before its current npm ci"
+
+# Both installs must run and propagate errors; a conditional or error-tolerant
+# install cannot establish that the committed lockfile is clean-installable.
+install_guard_failures=0
+for install_run in "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts" "npm ci"; do
+  for broken_install in '.if = "false"' '.["continue-on-error"] = true' ".[\"continue-on-error\"] = \"\${{ always() }}\""; do
+    reset_fixture
+    yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" |
+      jq --arg run "${install_run}" ".jobs[\"build-docs\"].steps |= map(if .run == \$run then ${broken_install} else . end)" >"${fixture}/ci-broken.json"
+    yq -P '.' "${fixture}/ci-broken.json" >"${fixture}/.github/workflows/ci.yaml"
+    if ! (expect_failure "${install_run}: ${broken_install}" "must clean-install with npm 11.4.2 before its current npm ci"); then
+      install_guard_failures=$((install_guard_failures + 1))
+    fi
+  done
+done
+[ "${install_guard_failures}" -eq 0 ] || fail "${install_guard_failures} invalid install controls were accepted"
+
+reset_fixture
+yq -i '(.jobs.build-docs.steps[] | select(.run == "npx --yes --package=npm@11.4.2 npm ci --ignore-scripts" or .run == "npm ci")).continue-on-error = false' "${fixture}/.github/workflows/ci.yaml"
+check "${fixture}/docs/package.json" "${fixture}/.github/workflows" || fail "explicit continue-on-error: false must preserve mandatory installs"
 
 reset_fixture
 jq 'del(.devEngines)' "${repo_root}/docs/package.json" >"${fixture}/docs/package.json"
