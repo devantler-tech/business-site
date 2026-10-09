@@ -8,7 +8,7 @@ const [directory, ...extra] = process.argv.slice(2);
 assert.ok(directory && extra.length === 0, 'Usage: check-client-facing.mjs <build-directory>');
 const page = (path) => readFileSync(resolve(directory, path, 'index.html'), 'utf8');
 const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
-const featured = process.env.FEATURE_FEATURED_PORTFOLIO === 'true';
+const featured = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const stars = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const anchors = {

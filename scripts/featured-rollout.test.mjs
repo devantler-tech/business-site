@@ -21,7 +21,7 @@ const valid = (ci) => {
     [...enabled, ...disabled, ...unset].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
-test('feature implementation is default-off until separately reviewed activation', () => assert.match(config, /FEATURE_FEATURED_PORTFOLIO:\s*envField\.boolean\(\{\s*context: "server", access: "public", default: false\s*\}\)/));
+test('reviewed featured portfolio is enabled by default while retaining explicit rollback', () => assert.match(config, /FEATURE_FEATURED_PORTFOLIO:\s*envField\.boolean\(\{\s*context: "server", access: "public", default: true\s*\}\)/));
 test('actual CI builds Featured portfolio enabled, false and entirely unset before uploading production', () => assert.ok(valid(workflow)));
 for (const mode of ['missing-preview', 'missing-false', 'missing-unset', 'skipped-preview', 'ignored-failure', 'reverse', 'inherited-job', 'inherited-workflow', 'inherited-unset']) {
   test(`Featured portfolio rollout rejects ${mode}`, () => {

@@ -59,22 +59,22 @@ inactive selector. `scripts/theme.test.mjs` tests the actual controller as part 
 
 The introduction identifies Nikolai with the existing public `profile.jpg` photograph, biography
 and GitHub links. First-person English/Danish copy explains the independent business without
-inventing client endorsements; the family projects remain labelled as such. The real photograph
+inventing client endorsements; the featured business presentation omits personal/family framing. The real photograph
 also supplies the sharing image. Built-page checks verify the portrait and profile journey.
 
 Selected work uses the same `WorkExample.astro` card on Home and Projects in both languages.
 AS Coaching og Vaner includes a real public homepage capture, a compact responsive thumbnail
 linked to its original local JPEG in a new tab, and a separate link to the public website.
-The Wedding App shows its documented local guest demo after sign-in, with names, date,
+The explicit featured-portfolio rollback shows the Wedding App's documented local guest demo after sign-in, with names, date,
 venue/address, countdown values and the venue background removed before capture. The card
 explicitly labels it an anonymized demo and does not link to the private invitation site.
-No production account or guest invitation code is used. Built-page checks verify both
-thumbnails and their readable larger images, as well as the localized visit action.
+No production account or guest invitation code is used. Built-page checks verify the normal
+website example and both rollback thumbnails, their readable larger images and localized visit action.
 
-Home puts plain-language quality and security highlights before prices and two visual examples.
-Projects leads with the real family website/app examples, keeps all thirteen public products
-visible, and retains the hosting and research bookmarks. Business Home/Projects do not link to
-source code; the journal and existing technical documentation retain their own detail. The copy
+Home puts plain-language quality and security highlights before prices and one compact public website example.
+Projects leads with six maintained public tools, followed by the compact website example, hosting
+and research. Home avoids source-code links; Projects offers controlled public project destinations
+and wider-work navigation, not raw code files or workflows. The journal and existing technical documentation retain their own detail. The copy
 describes verified practices rather than universal coverage, certification, vulnerability-free
 software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
 
@@ -88,11 +88,12 @@ Source merges do not publish by themselves: the monorepo must adopt the reviewed
 in both its gitlink and immutable publisher reference. After that adoption and live visitor
 verification, remove this short-lived release flag.
 
-### Featured portfolio preview (#5)
+### Featured portfolio (#5)
 
-`FEATURE_FEATURED_PORTFOLIO=true` previews the professional selection on English/Danish Home
-and Projects. Its ordinary production default is false pending separate reviewed activation.
-The preview shows the actual public AS Coaching og Vaner website and removes personal/family
+`FEATURE_FEATURED_PORTFOLIO` defaults to true after the separately reviewed implementation and
+activation. `FEATURE_FEATURED_PORTFOLIO=false` is a temporary build-time rollback that requires
+rebuilding and republishing, not a browser setting. Normal English/Danish Home and Projects show
+the actual public AS Coaching og Vaner website as a compact example and remove personal/family
 framing and the anonymous Wedding App demo from these business entrypoints. It does not invent
 a paid commission, endorsement or measured client outcome. Original technical inventory and
 historical bookmarks remain available; the wider public-work link leads to the organization.
@@ -120,7 +121,7 @@ remain active in the new presentation.
 
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
-distinguishes open-source tools and family examples from client work. The journal and technical
+distinguishes maintained tools, a public website example and research without inventing client outcomes. The journal and technical
 pages reuse the business navigation, typography, colors, footer and appearance control through
 Starlight component overrides. Their search, sidebar, RSS and historical articles remain available.
 Only Starlight Blog's preview cards receive whole-card mouse navigation. Each native title link
@@ -143,15 +144,15 @@ must adopt this reviewed source revision before visitors receive the layout. Liv
 and removal of the temporary gate remain tracked in
 [#12](https://github.com/devantler-tech/business-site/issues/12).
 
-Projects presents one complete, stars-ranked public software catalogue, followed by family examples
-and earlier research. The real KSail terminal capture appears in its product card; expandable English
+Projects presents six stars-ranked maintained tools, followed by one compact public website example
+and earlier research. The real KSail desktop capture appears in its product card; expandable English
 research and diagrams are sourced from `src/content/docs/projects/completed.mdx`. The legacy
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
-heading fragments, which land on the corresponding public product card or family/research content.
+heading fragments, which land on the corresponding public tool, website example or research content.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
-reusable Platform Template in the public software catalogue. A bookmarked card
-in the collapsed remainder opens that disclosure. Links without a fragment and the no-JavaScript
+reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
+a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript
 fallback use the relevant section. Root horizontal overflow is
 clipped without creating a non-scrolling ancestor
 that would break the documentation header's sticky positioning.

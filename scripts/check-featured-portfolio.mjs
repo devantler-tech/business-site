@@ -7,7 +7,7 @@ import snapshot from '../src/data/github-stars.json' with { type: 'json' };
 import { readerText } from './reader-text.mjs';
 const directory = process.argv[2];
 assert.ok(directory, 'Usage: check-featured-portfolio.mjs <build-directory>');
-const enabled = process.env.FEATURE_FEATURED_PORTFOLIO === 'true';
+const enabled = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 for (const prefix of ['', 'da/']) {
   const home = readFileSync(resolve(directory, prefix, 'index.html'), 'utf8');
   const projects = readFileSync(resolve(directory, prefix, 'projects/index.html'), 'utf8');
