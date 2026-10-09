@@ -17,6 +17,8 @@ for (const prefix of ['', 'da/']) {
     const visibleText = readerText(html);
     assert.doesNotMatch(visibleText, /family|familie|Wedding App|Anonymized|Anonymiseret/i, 'The business presentation omits personal framing and anonymous demos');
     assert.equal((html.match(/data-work-example="coaching"/g) ?? []).length, 1);
+    assert.match(html, /data-work-example="coaching"[^>]*data-compact-work/, 'The public website is a compact example, not a dominant case-study feature');
+    assert.doesNotMatch(visibleText, /Design in practice|Design i praksis|A clear first impression|Et klart førstehåndsindtryk/i);
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
     assert.match(html, /alt="[^"<>]*AS Coaching[^"<>]*"/);
   }
@@ -26,6 +28,11 @@ for (const prefix of ['', 'da/']) {
   assert.ok(projects.includes('href="https://github.com/orgs/devantler-tech/repositories"'));
   assert.ok(projects.includes(`datetime="${snapshot.fetchedAt}"`));
   for (const [, name] of cards) assert.ok(projects.includes(`href="https://github.com/devantler-tech/${name}"`));
+  const ksail = projects.match(/<article\b[^>]*data-public-product="ksail"[^>]*>([\s\S]*?)<\/article>/)?.[1];
+  assert.ok(ksail);
+  assert.match(ksail, /<img[^>]*src="\/_astro\/ksail-desktop\.[^/]+\.webp"/);
+  assert.match(ksail, /alt="[^"<>]*KSail[^"<>]*(?:desktop application|desktopprogram)[^"<>]*"/);
+  assert.doesNotMatch(ksail, /ksail-cli-dark|KSail CLI/);
   for (const id of ['open-title', 'family-title', 'technical-projects', 'research', 'engineering-checks', '-self-hosted-personal-apps']) assert.ok(projects.includes(`id="${id}"`));
   assert.ok(projects.includes('href="/pdfs/thesis.pdf"'));
   assert.doesNotMatch(projects, /<script[^>]*>[\s\S]*?(?:api\.github\.com|fetch\()[\s\S]*?<\/script>/, 'No visitor-side GitHub calls');

@@ -1,0 +1,33 @@
+---
+import WorkExample from './WorkExample.astro';
+import ProfessionalWork from './ProfessionalWork.astro';
+import { copy, type Locale } from './content';
+import { supporting } from './supporting';
+import { clientCopy } from './client-facing';
+interface Props { locale: Locale; featured: boolean }
+const { locale, featured } = Astro.props;
+const t = clientCopy[locale];
+const s = supporting[locale];
+const text = locale === 'da'
+  ? { work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.' }
+  : { work: 'Selected work', intro: 'A public website you can visit and explore.' };
+---
+<section aria-labelledby="family-title">
+  <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
+  <div class="section-heading"><p class="eyebrow">{featured ? '02' : t.familyLabel}</p><h2 id="family-title">{featured ? text.work : s.familyTitle}</h2><p>{featured ? text.intro : s.familyIntro}</p></div>
+  {featured ? <ProfessionalWork locale={locale} /> : <div class="family">{copy[locale].workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>}
+  <article data-hosting-project class="hosting"><span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span><h3>{t.platformTitle}</h3><p>{t.platformText}</p></article>
+</section>
+<style>
+  section { padding-block: 4rem; border-top: 1px solid var(--line); scroll-margin-top: 1.5rem; }
+  .section-heading { max-width: 710px; }
+  .eyebrow { font-size: .8rem; color: var(--accent); margin-bottom: .8rem; }
+  h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); }
+  .section-heading > p:not(.eyebrow) { margin-top: 1rem; }
+  .family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; margin-top: 2.5rem; }
+  .hosting { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 3rem; margin-top: 2.5rem; padding: 1.5rem 0 0; border-top: 1px solid var(--line); }
+  .hosting .legacy-anchor { grid-column: 1 / -1; }
+  .hosting h3 { font-size: 1.15rem; } .hosting p { font-size: .9rem; }
+  .legacy-anchor { display: block; scroll-margin-top: 1.5rem; }
+  @media (max-width: 760px) { section { padding-block: 2.5rem; } .family, .hosting { grid-template-columns: 1fr; gap: 1.5rem; } }
+</style>

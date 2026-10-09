@@ -50,11 +50,14 @@ for (const locale of ['en', 'da']) {
     assert.ok(quality.includes(locale === 'da' ? 'aftales' : 'agreed'));
     assert.doesNotMatch(quality, /CodeQL|GitHub|Kubernetes|linters|mergeregler/);
   });
-  test(`${locale}: Projects lead with honest, real website and app examples`, () => {
-    assert.ok(projects.indexOf('aria-labelledby="family-title"') < projects.indexOf('aria-labelledby="open-title"'));
+  test(`${locale}: Projects keep honest examples with tools leading the featured presentation`, () => {
+    const examples = projects.indexOf('aria-labelledby="family-title"');
+    const tools = projects.indexOf('aria-labelledby="open-title"');
+    assert.ok(examples >= 0 && tools >= 0);
+    assert.ok(featured ? tools < examples : examples < tools);
     const index = projects.match(/<nav[^>]*class="project-index[^>]*>([\s\S]*?)<\/nav>/)?.[1];
     assert.ok(index);
-    assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id), ['family-title', 'open-title', 'research']);
+    assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id), featured ? ['open-title', 'family-title', 'research'] : ['family-title', 'open-title', 'research']);
     if (!featured) assert.ok(projects.includes(locale === 'da' ? 'ikke betalte kundeopgaver' : 'not paid client commissions'));
     for (const id of featured ? ['coaching'] : ['coaching', 'wedding']) assert.match(projects, new RegExp(`data-work-example="${id}"`));
     assert.ok(projects.includes('href="https://ascoachingogvaner.dk/"'));
@@ -79,7 +82,7 @@ for (const locale of ['en', 'da']) {
     assert.ok(shelf.includes(locale === 'da' ? 'Kildekode tilgængelig' : 'Source-available'));
     assert.ok(shelf.includes('PolyForm Shield'));
     assert.ok(shelf.includes(locale === 'da' ? 'licens' : 'licence'));
-    assert.ok(shelf.includes('alt="KSail CLI"'));
+    assert.ok(shelf.includes(featured ? (locale === 'da' ? 'alt="KSails desktopprogram' : 'alt="KSail desktop application') : 'alt="KSail CLI"'));
     assert.ok(shelf.includes('href="https://ksail.devantler.tech"'));
   });
   test(`${locale}: old engineering bookmark now leads to visible Home highlights`, () => {
