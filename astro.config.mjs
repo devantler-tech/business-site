@@ -29,7 +29,7 @@ export default defineConfig({
       FEATURE_JOURNAL_PRESENTATION: envField.boolean({
         context: "server",
         access: "public",
-        default: false,
+        default: true,
       }),
       FEATURE_CLIENT_PORTFOLIO: envField.boolean({
         context: "server",
