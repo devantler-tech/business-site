@@ -1,3 +1,5 @@
+import company from '../../data/company.json';
+export { default as company } from '../../data/company.json';
 export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
@@ -8,7 +10,8 @@ export const offers = [
   { id: 'service', setup: 4995, monthly: 199 },
 ] as const;
 
-export const inquiryUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
+export const inquiryUrl = `mailto:${company.email}`;
+export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
 
 export const copy = {
   en: {
@@ -72,8 +75,10 @@ export const copy = {
     profile: 'About Devantler Tech', blog: 'Read the journal', technical: 'Technical projects',
     contactTitle: 'What would make your working day easier?',
     contactText: 'Send me a few lines about your business and what you’d like to make easier. A rough budget and timing help, but you don’t need to arrive with a technical specification.',
-    contactAction: 'Message me on LinkedIn',
-    contactNote: 'The link opens Nikolai’s public LinkedIn profile. There is no automatic booking or instant-support service.',
+    contactAction: 'Email me',
+    contactAlternative: 'Or find me on LinkedIn',
+    contactNote: 'The email link opens your email app. There is no automatic booking or instant-support service.',
+    registrationType: 'Personally owned small business (PMV)',
     footer: 'Websites, software and hosting for small businesses.', englishNote: 'The journal and technical documentation are currently in English.',
   },
   da: {
@@ -137,8 +142,10 @@ export const copy = {
     profile: 'Om Devantler Tech', blog: 'Læs journalen (engelsk)', technical: 'Tekniske projekter (engelsk)',
     contactTitle: 'Hvad ville gøre din arbejdsdag lettere?',
     contactText: 'Send mig et par linjer om din virksomhed og det, du gerne vil gøre lettere. Et omtrentligt budget og en tidsplan hjælper, men du behøver ikke en teknisk specifikation.',
-    contactAction: 'Skriv til mig på LinkedIn',
-    contactNote: 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
+    contactAction: 'Skriv en email til mig',
+    contactAlternative: 'Eller find mig på LinkedIn',
+    contactNote: 'Emaillinket åbner dit emailprogram. Der er ingen automatisk booking eller øjeblikkelig support.',
+    registrationType: 'Personligt ejet mindre virksomhed (PMV)',
     footer: 'Hjemmesider, software og hosting til små virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
 } as const;

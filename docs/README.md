@@ -123,11 +123,13 @@ journeys and supporting pages. The same command is used by CI and GitHub Pages p
 The core business pages are always rendered. Short-lived presentation flags protect reviewable
 redesigns; reverting the publication change and redeploying remains the recovery path.
 
-The company contact email and CVR number are not known yet, so neither is invented or published.
-LinkedIn is the existing verified inquiry route. The maintainer has authorized publication with
-registration/contact details deferred to [#3917](https://github.com/devantler-tech/monorepo/issues/3917).
-That checklist covers the confirmed registered name, CVR, approved public business address and
-working email; publication does not claim verified statutory compliance.
+`src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
+and business email. The shared footer identifies Devantler Tech (CVR 46830385), and Home
+offers a direct email link to `ned@devantler.tech` with LinkedIn as an alternative.
+The email link opens the visitor's email application; the site does not send messages itself.
+Public street-address approval, receiving an inquiry and live-publication proof remain under
+[#3917](https://github.com/devantler-tech/monorepo/issues/3917). No street address is published
+without explicit approval, and publication does not claim verified statutory compliance.
 There is no contact-form backend, automatic booking,
 payment flow or paid product subscription. Home, About and Projects are translated; the journal,
 CV and detailed technical documentation remain in English and are labelled accordingly.

@@ -62,8 +62,11 @@ and live proof; remove the flag once shipped. Never hand-edit generated output o
 post during a project-description sync.
 
 Describe an honest one-person business. Do not invent company/contact/customer facts, reveal a
-private address, claim statutory compliance, or add purchases/subscriptions. Registration/contact
-follow-up [monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917) remains open.
+private address, claim statutory compliance, or add purchases/subscriptions. Confirmed company
+identity lives in `src/data/company.json`: Devantler Tech, CVR 46830385, PMV, Nikolai Emil Damm
+and `ned@devantler.tech`. Registration/contact follow-up
+[monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917) remains open for the public
+address decision, inquiry-receipt testing and deployed English/Danish proof.
 Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
 plus 299/month for a small app, and 4,995 plus 199/month for a service; extra scope/costs require
 an agreed quote. Preserve real portrait/screenshots/diagrams and generated-art provenance.
