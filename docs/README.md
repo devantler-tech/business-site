@@ -40,6 +40,16 @@ use separately agreed iterations with their own scope, schedule and price. Month
 rounded totals based on hosting costs plus a fixed service fee to Nikolai, with amounts and
 changes agreed before work begins; the site does not invent a fee amount or rounding increment.
 
+`FEATURE_OFFER_COPY=true` previews the revised offer from #15, including larger agreed iterations
+and the clarified maintenance terms. Every client project hosted on the platform includes
+optimization, accessibility improvements, bug fixes and routine upkeep in its agreed monthly price.
+New features and larger iterations require a new agreement. Human support terms are agreed per
+project; tailored automation helps with supported incidents without promising recovery from every
+incident or 24/7 personal availability. This flag defaults to false: Home, About and Projects retain
+their published English/Danish alternatives until reviewed activation. CI builds enabled, explicit
+false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
+live verification and removal of the temporary gate are tracked in #18.
+
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
 choice before painting, follows system changes in System mode, and shares Starlight's

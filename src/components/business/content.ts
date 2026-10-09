@@ -1,3 +1,5 @@
+import { FEATURE_OFFER_COPY } from 'astro:env/server';
+import { publishedOffer } from './published-offer';
 export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
@@ -10,7 +12,7 @@ export const offers = [
 
 export const inquiryUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
 
-export const copy = {
+const previewCopy = {
   en: {
     title: 'Websites & software for small businesses | Devantler Tech',
     description: 'Websites, web apps and web services for Danish small businesses. Agreed prices, step-by-step development and optional hosting from Devantler Tech.',
@@ -36,11 +38,11 @@ export const copy = {
       { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
       { title: 'A web service', description: 'Connect a small process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
     ],
-    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosting capacity, maintenance, backups and support scope are agreed separately. No VAT is charged under the current PMV setup.',
+    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. No VAT is charged under the current PMV setup.',
     hostingTitle: 'Hosting that fits the project—not the other way around.',
-    hostingText: 'Your project can run on the Devantler Tech platform when its needs fit. We agree a rounded monthly price based on hosting costs plus a fixed service fee to me. Traffic, storage and external services affect the hosting cost; if an iteration changes the monthly price, we agree it before work begins.',
+    hostingText: 'Every client project hosted on my platform includes optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. We agree a rounded total based on hosting costs plus a fixed service fee to me. New features and larger iterations require a new agreement, including any change in running costs.',
     fitTitle: 'A good fit for planned, manageable work.',
-    fitText: 'This is a small independent business, not an on-call agency. Changes are scheduled and quoted; feature requests are not delivered at a moment’s notice. Emergency response, 24/7 support and large infrastructure projects are not offered.',
+    fitText: 'Self-healing software and tailored agents help handle supported incidents. Problems needing human judgment are escalated; automatic recovery is not guaranteed for every incident. I am not personally available 24/7. Human support hours and response expectations are agreed for each project.',
     workTitle: 'A couple of things I’ve worked on',
     workIntro: 'These started as projects for my family. They give you an idea of the websites and small apps I work with; they aren’t paid client commissions.',
     workPreviewAlt: 'Screenshot of AS Coaching og Vaner’s homepage.',
@@ -61,7 +63,7 @@ export const copy = {
       { title: 'Security as a routine', text: 'GitHub security scans and dependency checks help flag risky code, exposed secrets and outdated packages.' },
       { title: 'Maintained with care', text: 'Agents help review changes and keep dependencies current. I remain responsible for what ships.' },
     ],
-    qualityScope: 'Checks fit the project. Ongoing maintenance and support are agreed in your quote—not an unlimited service.',
+    qualityScope: 'Checks fit the project. Routine maintenance is included for hosted projects; new features and larger iterations need a new agreement. Capacity, backups and human support terms are specified in your quote.',
     qualityLink: 'See the checks in practice',
     processTitle: 'A clear agreement before a line of code.',
     steps: [
@@ -101,11 +103,11 @@ export const copy = {
       { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
       { title: 'En webservice', description: 'Forbind en lille proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
     ],
-    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostingkapacitet, vedligeholdelse, backup og support aftales særskilt. Der opkræves ikke moms under den nuværende PMV-ordning.',
+    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Der opkræves ikke moms under den nuværende PMV-ordning.',
     hostingTitle: 'Hosting, der passer til projektet—ikke omvendt.',
-    hostingText: 'Dit projekt kan køre på Devantler Tech-platformen, når behovet passer. Vi aftaler en afrundet månedspris baseret på hostingudgifter plus et fast honorar til mig. Trafik, lagerplads og eksterne tjenester påvirker hostingudgiften; ændrer en etape månedsprisen, aftaler vi den, før arbejdet begynder.',
+    hostingText: 'Alle kundeprojekter, der hostes på min platform, har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Vi aftaler et afrundet beløb baseret på hostingudgifter plus et fast honorar til mig. Nye funktioner og større videreudvikling kræver en ny aftale, også om eventuelle ændringer i driftsudgifterne.',
     fitTitle: 'Til planlagt og overskueligt arbejde.',
-    fitText: 'Dette er en lille, uafhængig virksomhed, ikke et bureau på tilkaldevagt. Ændringer planlægges og prissættes; nye funktioner leveres ikke med et øjebliks varsel. Akut beredskab, support døgnet rundt og store infrastrukturprojekter tilbydes ikke.',
+    fitText: 'Selvhelende software og specialtilpassede agenter hjælper ved understøttede driftshændelser. Problemer, der kræver menneskelig vurdering, eskaleres; automatisk genopretning er ikke garanteret ved alle hændelser. Jeg er ikke personligt til rådighed døgnet rundt. Menneskelig support og forventninger til svartid aftales for hvert projekt.',
     workTitle: 'Et par ting, jeg har arbejdet på',
     workIntro: 'De begyndte som projekter for min familie. De giver et indtryk af de hjemmesider og små apps, jeg arbejder med; de er ikke betalte kundeopgaver.',
     workPreviewAlt: 'Skærmbillede af AS Coaching og Vaners forside.',
@@ -126,7 +128,7 @@ export const copy = {
       { title: 'Sikkerhed som en rutine', text: 'GitHubs sikkerhedsscanning og kontrol af afhængigheder hjælper med at opdage risikabel kode, lækkede hemmeligheder og forældede pakker.' },
       { title: 'Vedligeholdt med omtanke', text: 'Agenter hjælper med at gennemgå ændringer og holde afhængigheder opdateret. Jeg har stadig ansvaret for det, der leveres.' },
     ],
-    qualityScope: 'Kontrollen tilpasses projektet. Løbende vedligeholdelse og support aftales i tilbuddet—det er ikke en ubegrænset service.',
+    qualityScope: 'Kontrollen tilpasses projektet. Løbende vedligeholdelse er inkluderet for hostede projekter; nye funktioner og større videreudvikling kræver en ny aftale. Kapacitet, backup og menneskelig support beskrives i tilbuddet.',
     qualityLink: 'Se kontrollen i praksis',
     processTitle: 'En klar aftale før den første linje kode.',
     steps: [
@@ -141,4 +143,9 @@ export const copy = {
     contactNote: 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
     footer: 'Hjemmesider, software og hosting til små virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
+} as const;
+
+export const copy = FEATURE_OFFER_COPY ? previewCopy : {
+  en: { ...previewCopy.en, ...publishedOffer.copy.en },
+  da: { ...previewCopy.da, ...publishedOffer.copy.da },
 } as const;

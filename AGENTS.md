@@ -69,6 +69,11 @@ plus 299/month for a focused first app version, and 4,995 plus 199/month for a s
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
+The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects
+include optimization, accessibility improvements, bug fixes and routine upkeep in their agreed
+monthly price; new features and larger iterations require a new agreement. Human support is not
+24/7 and no universal incident-recovery guarantee is offered. Keep the published alternatives
+until reviewed adoption, activation and bilingual live proof; retire the gate with #18.
 Preserve real portrait/screenshots/diagrams and generated-art provenance.
 
 Scripts are Bash or Go, never Python. Stage explicit paths; never discard another session's work.

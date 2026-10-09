@@ -13,6 +13,7 @@ node --test scripts/compress-editorial-assets.test.mjs
 node scripts/check-editorial-assets.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
+node scripts/check-offer-rollout.mjs dist
 node scripts/check-business-site.mjs dist
 node scripts/check-client-facing.mjs dist
 node scripts/check-journal-presentation.mjs dist

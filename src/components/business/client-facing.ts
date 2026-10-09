@@ -1,6 +1,8 @@
+import { FEATURE_OFFER_COPY } from 'astro:env/server';
+import { publishedOffer } from './published-offer';
 import type { Locale } from './content';
 
-export const clientCopy = {
+const previewClientCopy = {
   en: {
     qualityEyebrow: 'Care built in', qualityTitle: 'Useful software. Built with care.',
     qualityIntro: 'A small project deserves the same attention to quality and security as a larger one.',
@@ -9,7 +11,7 @@ export const clientCopy = {
       { title: 'Security from the start', text: 'Automated checks help spot risky changes and outdated software. Access and data needs are considered as part of the project—not left until the end.' },
       { title: 'A responsible handover', text: 'Changes are reviewed before they ship. You know who built the work, how to use it and what ongoing care has been agreed.' },
     ],
-    qualityScope: 'Checks are chosen for each project; they are not a certification or a promise of flawless software. Maintenance, backups and support are agreed separately.',
+    qualityScope: 'Checks are chosen for each project; they are not a certification or a promise of flawless software. Hosted projects include optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. New features and larger iterations need a new agreement; capacity, backups and human support terms are specified in your quote.',
     portfolioBridge: 'Websites, web apps, reusable tools and earlier research. Explore the full range of work behind Devantler Tech.',
     projectsIntro: 'Different projects. The same care for the people who use them.',
     familyLabel: '01 / Websites & small apps', catalogueLabel: '02 / The wider portfolio', researchLabel: '03 / Earlier research',
@@ -34,7 +36,7 @@ export const clientCopy = {
       { title: 'Sikkerhed fra starten', text: 'Automatiske kontroller hjælper med at opdage risikable ændringer og forældet software. Adgang og databehov tænkes ind i projektet—ikke først til sidst.' },
       { title: 'En ansvarlig overdragelse', text: 'Ændringer gennemgås før udgivelse. Du ved, hvem der har bygget løsningen, hvordan den bruges, og hvilken løbende vedligeholdelse der er aftalt.' },
     ],
-    qualityScope: 'Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Vedligeholdelse, backup og support aftales særskilt.',
+    qualityScope: 'Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Hostede projekter har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Nye funktioner og større videreudvikling kræver en ny aftale; kapacitet, backup og menneskelig support aftales i tilbuddet.',
     portfolioBridge: 'Hjemmesider, webapps, genbrugelige værktøjer og tidligere forskning. Se bredden i arbejdet bag Devantler Tech.',
     projectsIntro: 'Forskellige projekter. Samme omtanke for dem, der bruger dem.',
     familyLabel: '01 / Hjemmesider og små apps', catalogueLabel: '02 / Den bredere portefølje', researchLabel: '03 / Tidligere forskning',
@@ -70,3 +72,8 @@ export const clientProducts: Record<string, Record<Locale, string>> = {
   'platform-template': { en: 'A reusable starting point for building an application-hosting platform—not a copy of a live installation.', da: 'En genbrugelig startpakke til en platform for applikationshosting, ikke en kopi af en aktiv installation.' },
   'platform-tenant-template': { en: 'A reusable starting point for putting an application on a hosting platform.', da: 'Et genbrugeligt udgangspunkt for at lægge en applikation på en hostingplatform.' },
 };
+
+export const clientCopy = FEATURE_OFFER_COPY ? previewClientCopy : {
+  en: { ...previewClientCopy.en, ...publishedOffer.clientCopy.en },
+  da: { ...previewClientCopy.da, ...publishedOffer.clientCopy.da },
+} as const;

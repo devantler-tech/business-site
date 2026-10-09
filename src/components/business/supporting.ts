@@ -1,4 +1,6 @@
-export const supporting = {
+import { FEATURE_OFFER_COPY } from 'astro:env/server';
+import { publishedOffer } from './published-offer';
+const previewSupporting = {
   en: {
     aboutTitle: 'About Devantler Tech',
     aboutDescription: 'Meet Nikolai Emil Damm, the founder and developer behind Devantler Tech’s one-person software business on Funen, Denmark.',
@@ -9,7 +11,7 @@ export const supporting = {
     approachTitle: 'What working together looks like',
     principles: [
       { title: 'A clear first version, with room to grow', text: 'We agree what the software needs to do first, what it costs and what can wait. Larger applications grow through further iterations with agreed scope and prices.' },
-      { title: 'Planned work, not an emergency service', text: 'Changes fit an agreed schedule. Support, maintenance and hosting limits are written down, and extra scope or running costs need a new agreement.' },
+      { title: 'Included maintenance, agreed development', text: 'Hosted projects include optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. New features and larger iterations need a new agreement. I am not personally available 24/7; human support terms are agreed for each project.' },
       { title: 'Something you can understand and use', text: 'You get a chance to try the result and a practical handover. The technical choices serve the work your business needs to get done.' },
     ],
     backgroundTitle: 'Background & public work',
@@ -25,7 +27,7 @@ export const supporting = {
     moreProducts: 'More tools, libraries & templates',
     engineeringTitle: 'The checks behind the work',
     engineeringIntro: 'Examples from the public portfolio: KSail runs Go tests and linting, plus CodeQL analysis. GitHub’s advanced security tooling also includes secret scanning and dependency alerts. The Wedding App has browser and accessibility tests. Agents help with review and updates under documented merge rules; I remain responsible for delivery.',
-    engineeringScope: 'These are working practices, not a certification or a promise of flawless software. Checks are selected for each project; ongoing care is scoped separately.',
+    engineeringScope: 'These are working practices, not a certification or a promise of flawless software. Checks are selected for each project. Routine maintenance is included for hosted projects; new features and larger iterations need a new agreement.',
     engineeringSources: ['KSail: tests & linting', 'KSail: CodeQL security analysis', 'Wedding App: accessibility tests', 'Portfolio: maintenance & review rules'],
     pluginsTitle: 'Agent Plugins',
     familyTitle: 'Websites & small apps',
@@ -53,7 +55,7 @@ export const supporting = {
     approachTitle: 'Sådan samarbejder vi',
     principles: [
       { title: 'En klar første version med plads til at vokse', text: 'Vi aftaler, hvad softwaren skal kunne først, hvad det koster, og hvad der kan vente. Større applikationer vokser gennem nye etaper med aftalt omfang og pris.' },
-      { title: 'Planlagt arbejde, ikke akut beredskab', text: 'Ændringer følger en aftalt tidsplan. Support, vedligeholdelse og hostinggrænser beskrives skriftligt. Ekstra opgaver eller driftsudgifter kræver en ny aftale.' },
+      { title: 'Inkluderet vedligeholdelse, aftalt udvikling', text: 'Hostede projekter har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Nye funktioner og større videreudvikling kræver en ny aftale. Jeg er ikke personligt til rådighed døgnet rundt; menneskelig support aftales for hvert projekt.' },
       { title: 'Noget, du kan forstå og bruge', text: 'Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det arbejde, din virksomhed har brug for at få gjort.' },
     ],
     backgroundTitle: 'Baggrund og offentlige projekter',
@@ -69,7 +71,7 @@ export const supporting = {
     moreProducts: 'Flere værktøjer, biblioteker og skabeloner',
     engineeringTitle: 'Kontrollen bag arbejdet',
     engineeringIntro: 'Eksempler fra den offentlige portefølje: KSail kører Go-tests og kodekontrol samt CodeQL-analyse. GitHubs avancerede sikkerhedsværktøjer omfatter også scanning efter hemmeligheder og advarsler om afhængigheder. Wedding App har browser- og tilgængelighedstests. Agenter hjælper med gennemgang og opdateringer efter dokumenterede mergeregler; jeg har stadig ansvaret for leveringen.',
-    engineeringScope: 'Det er arbejdsmetoder, ikke en certificering eller et løfte om fejlfri software. Kontrollen vælges til hvert projekt; løbende vedligeholdelse aftales særskilt.',
+    engineeringScope: 'Det er arbejdsmetoder, ikke en certificering eller et løfte om fejlfri software. Kontrollen vælges til hvert projekt. Løbende vedligeholdelse er inkluderet for hostede projekter; nye funktioner og større videreudvikling kræver en ny aftale.',
     engineeringSources: ['KSail: tests og kodekontrol', 'KSail: CodeQL-sikkerhedsanalyse', 'Wedding App: tilgængelighedstests', 'Porteføljen: vedligeholdelse og reviewregler'],
     pluginsTitle: 'Agent Plugins',
     familyTitle: 'Hjemmesider og små apps',
@@ -87,4 +89,9 @@ export const supporting = {
     researchText: 'Mit speciale undersøgte, hvordan selvstændige dataprodukter kunne samarbejde i et datarum, med en prototype bygget i .NET. Det er baggrundsforskning, ikke en ydelse, du kan købe.',
     thesis: 'Læs specialet (engelsk PDF)', researchExpand: 'Forskningsbaggrund og diagrammer (engelsk)',
   },
+} as const;
+
+export const supporting = FEATURE_OFFER_COPY ? previewSupporting : {
+  en: { ...previewSupporting.en, ...publishedOffer.supporting.en },
+  da: { ...previewSupporting.da, ...publishedOffer.supporting.da },
 } as const;
