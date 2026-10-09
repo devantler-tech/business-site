@@ -12,16 +12,19 @@ const root = resolve(directory);
 const clientFacing = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
 const company = JSON.parse(readFileSync(new URL('../src/data/company.json', import.meta.url), 'utf8'));
 const companyContact = `mailto:${company.email}`;
+const companyEnabled = (process.env.FEATURE_COMPANY_IDENTITY ?? 'false') === 'true';
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     const page = readFileSync(resolve(root, path), 'utf8');
     assert.ok(!page.includes('https://github.com/devantler-tech/reusable-workflows'), 'Rendered public pages must not link to retired repositories');
     const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
-    if (footer) {
+    if (footer && companyEnabled) {
       for (const fact of [company.name, company.cvr, company.businessType, company.owner, company.email]) {
         assert.ok(footer.includes(fact), `${path}: shared footer identifies the registered business`);
       }
       assert.ok(footer.includes(`href="${companyContact}"`), `${path}: registered email is usable without a form backend`);
+    } else if (footer) {
+      assert.ok(!footer.includes(company.cvr) && !footer.includes(company.email), `${path}: unreleased registration remains absent`);
     }
   }
 }
@@ -332,7 +335,7 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   }
   assert.ok(page.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'), 'LinkedIn remains an alternative inquiry route');
   const contact = page.match(/<section\b[^>]*id="contact"[^>]*>([\s\S]*?)<\/section>/)?.[1];
-  assert.ok(contact?.includes(`href="${companyContact}"`), 'Both language homepages offer the confirmed business email');
+  assert.equal(contact?.includes(`href="${companyContact}"`), companyEnabled, 'Both language homepages follow the registration release flag');
   assert.ok(!page.includes('<form'), 'Do not present a contact form without delivery');
   for (const href of page.matchAll(/href="(\/[^"?#]*)(?:[?#][^"]*)?"/g)) {
     const target = href[1];

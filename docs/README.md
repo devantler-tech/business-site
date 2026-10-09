@@ -124,8 +124,10 @@ The core business pages are always rendered. Short-lived presentation flags prot
 redesigns; reverting the publication change and redeploying remains the recovery path.
 
 `src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
-and business email. The shared footer identifies Devantler Tech (CVR 46830385), and Home
-offers a direct email link to `ned@devantler.tech` with LinkedIn as an alternative.
+and business email. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
+the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a direct email
+link to `ned@devantler.tech` with LinkedIn as an alternative. False and entirely unset builds
+retain the existing LinkedIn contact and footer until reviewed activation and live proof.
 The email link opens the visitor's email application; the site does not send messages itself.
 Public street-address approval, receiving an inquiry and live-publication proof remain under
 [#3917](https://github.com/devantler-tech/monorepo/issues/3917). No street address is published

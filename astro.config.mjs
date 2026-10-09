@@ -21,6 +21,11 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      FEATURE_COMPANY_IDENTITY: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
+      }),
       FEATURE_JOURNAL_PRESENTATION: envField.boolean({
         context: "server",
         access: "public",

@@ -1,12 +1,12 @@
 ---
-import { company, copy, inquiryUrl, type Locale } from './content';
+import { company, companyIdentityEnabled, copy, inquiryUrl, type Locale } from './content';
 interface Props { locale?: Locale }
 const { locale = 'en' } = Astro.props;
 const t = copy[locale];
 const prefix = locale === 'da' ? '/da' : '';
 ---
 <footer data-business-footer class="business-footer container">
-  <div><a class="brand" href={`${prefix}/`}>{company.name}</a><p>{t.footerIdentity}</p><p>{t.footer}</p><p>CVR {company.cvr} · {t.registrationType}</p><a class="company-email" href={inquiryUrl}>{company.email}</a></div>
+  <div><a class="brand" href={`${prefix}/`}>{company.name}</a><p>{t.footerIdentity}</p><p>{t.footer}</p>{companyIdentityEnabled && <><p>CVR {company.cvr} · {t.registrationType}</p><a class="company-email" href={inquiryUrl}>{company.email}</a></>}</div>
   <div class="links"><a href={`${prefix}/about/`}>{t.aboutNav}</a><a href={`${prefix}/projects/`}>{t.projectsNav}</a><a href={`${prefix}/#contact`}>{t.contact}</a></div>
 </footer>
 <style>
