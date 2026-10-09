@@ -88,6 +88,36 @@ Source merges do not publish by themselves: the monorepo must adopt the reviewed
 in both its gitlink and immutable publisher reference. After that adoption and live visitor
 verification, remove this short-lived release flag.
 
+### Featured portfolio preview (#5)
+
+`FEATURE_FEATURED_PORTFOLIO=true` previews the professional selection on English/Danish Home
+and Projects. Its ordinary production default is false pending separate reviewed activation.
+The preview shows the actual public AS Coaching og Vaner website and removes personal/family
+framing and the anonymous Wedding App demo from these business entrypoints. It does not invent
+a paid commission, endorsement or measured client outcome. Original technical inventory and
+historical bookmarks remain available; the wider public-work link leads to the organization.
+
+Projects selects exactly six curated maintained tools from complete public GitHub metadata,
+ordered by descending stars and repository-name ties. Games, templates, legacy Actions, forks,
+archived and private repositories cannot enter this showcase. All thirteen entries remain in the
+underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
+unrestricted open source. Stars indicate popularity, not a quality guarantee.
+
+The callable publisher refreshes the complete metadata before every build with read-only GitHub
+authority; no GitHub API call or token is sent to a visitor's browser. The page displays the actual
+UTC observation timestamp. Failed, partial or malformed reads abort publication and leave the
+previous live artifact with its previous timestamp; they are never presented as a fresh read.
+Automatic recurring data refresh requires the separately reviewed monorepo caller adoption; this
+source has no independent scheduled publisher. GitHub scheduled runs can be delayed or disabled
+after inactivity, so the displayed observation time is the freshness signal, not a promised SLA.
+Implementation, activation, caller adoption, bilingual live proof and release-flag cleanup stay
+tracked on #5. The disabled Codex chat schedule is unrelated and remains disabled.
+
+Every build runs ranking, rollout and publisher-boundary controls plus emitted bilingual-page
+checks. CI builds enabled, explicit false and entirely unset states before uploading normal
+production output. Existing quality/security, prices, inquiry, theme, research and image checks
+remain active in the new presentation.
+
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
 distinguishes open-source tools and family examples from client work. The journal and technical

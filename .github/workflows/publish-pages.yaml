@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           [[ "$CALLER_REPOSITORY" == 'devantler-tech/monorepo' ]] || exit 1
           [[ "$CALLER_REF" == 'refs/heads/main' ]] || exit 1
-          case "$CALLER_EVENT" in push|workflow_dispatch) ;; *) exit 1 ;; esac
+          case "$CALLER_EVENT" in push|workflow_dispatch|schedule) ;; *) exit 1 ;; esac
           [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,6 +53,11 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: npm ci
+      - name: Refresh complete public project ranking
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/refresh-public-stars.sh
       - name: Build with Astro
         working-directory: .
         run: npm run build

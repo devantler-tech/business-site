@@ -1,18 +1,86 @@
 {
-  "observedAt": "2026-10-07",
+  "observedAt": "2026-10-09",
+  "fetchedAt": "2026-10-09T14:27:31Z",
   "repositories": {
-    ".github": 0,
+    ".github": 1,
     "actions": 2,
     "agent-plugins": 2,
     "agent-skills": 3,
-    "data-product-controller": 0,
-    "dotnet-template": 0,
-    "go-template": 0,
-    "ksail": 166,
-    "kyverno-policies": 0,
-    "platform-template": 1,
-    "platform-tenant-template": 1,
-    "provider-upjet-unifi": 0,
+    "data-product-controller": 1,
+    "dotnet-template": 1,
+    "go-template": 1,
+    "ksail": 165,
+    "kyverno-policies": 1,
+    "platform-template": 2,
+    "platform-tenant-template": 2,
+    "provider-upjet-unifi": 1,
     "world-at-ruin": 4
+  },
+  "metadata": {
+    ".github": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "actions": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "agent-plugins": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "agent-skills": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "data-product-controller": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "dotnet-template": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "go-template": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "ksail": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "kyverno-policies": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "platform-template": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "platform-tenant-template": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "provider-upjet-unifi": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "world-at-ruin": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    }
   }
 }

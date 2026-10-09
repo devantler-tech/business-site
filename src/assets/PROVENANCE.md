@@ -57,6 +57,14 @@ invented design or a generated illustration. Astro emits compact responsive WebP
 the original JPEG is linked for visitors who choose the larger view. Family-work examples are
 not presented as paid client commissions.
 
+## `ksail-desktop.png`
+
+Real, unmodified native-window screenshot of the installed KSail macOS desktop application,
+captured on 2026-10-09. It shows the Assistant start screen with no conversation, customer data,
+cluster identifiers or credentials. No assistant request, cluster provisioning or plugin
+installation was performed for the capture. This is an interface screenshot, not proof of an
+operating customer environment or an agent completing work. Astro generates the delivery WebP.
+
 ## `wedding-guest-demo.jpg`
 
 Real browser capture of Wedding App's signed-in local guest demo, captured on 2026-10-07

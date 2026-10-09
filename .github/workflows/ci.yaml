@@ -118,6 +118,11 @@ jobs:
         env:
           FEATURE_OFFER_COPY: "true"
         run: npm run build
+      - name: Build featured portfolio preview
+        working-directory: .
+        env:
+          FEATURE_FEATURED_PORTFOLIO: "true"
+        run: npm run build
       - name: Build
         working-directory: .
         env:
@@ -125,10 +130,11 @@ jobs:
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_JOURNAL_PRESENTATION: "false"
           FEATURE_OFFER_COPY: "false"
+          FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO npm run build
       - name: Upload reviewable production preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

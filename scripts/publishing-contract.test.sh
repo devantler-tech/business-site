@@ -116,13 +116,14 @@ admit() {
 sha=0123456789abcdef0123456789abcdef01234567
 admit devantler-tech/monorepo refs/heads/main push "$sha" || fail 'reviewed main push rejected'
 admit devantler-tech/monorepo refs/heads/main workflow_dispatch "$sha" || fail 'reviewed main dispatch rejected'
+admit devantler-tech/monorepo refs/heads/main schedule "$sha" || fail 'reviewed main scheduled data refresh rejected'
 for input in main refs/heads/main deadbeef '0123456789abcdef0123456789abcdef0123456G' '0123456789abcdef0123456789abcdef012345678' 'main; echo unsafe'; do
   if admit devantler-tech/monorepo refs/heads/main push "$input"; then fail "non-immutable source admitted: $input"; fi
 done
 if admit unrelated/repository refs/heads/main push "$sha"; then fail 'foreign caller admitted'; fi
 if admit devantler-tech/business-site refs/heads/main push "$sha"; then fail 'competing site-repository publisher admitted'; fi
 if admit devantler-tech/monorepo refs/heads/feature push "$sha"; then fail 'branch deployment admitted'; fi
-for event in pull_request pull_request_target merge_group schedule; do
+for event in pull_request pull_request_target merge_group; do
   if admit devantler-tech/monorepo refs/heads/main "$event" "$sha"; then fail "$event deployment admitted"; fi
 done
 printf 'publishing contract: PASS — fixed caller, reviewed main, immutable source, least privilege and negative controls\n'

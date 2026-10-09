@@ -1,0 +1,10 @@
+---
+import WorkExample from './WorkExample.astro';
+import { copy, type Locale } from './content';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const item = { ...copy[locale].workItems[0], kind: locale === 'da' ? 'En offentlig hjemmeside' : 'A public website', text: locale === 'da'
+  ? 'En hjemmeside for AS Coaching og Vaner, der præsenterer coachingforløb, priser og kontaktmuligheder i et roligt og overskueligt design.'
+  : 'A website for AS Coaching og Vaner that brings coaching programmes, prices and contact options together in a calm, clear design.' };
+---
+<WorkExample item={item} locale={locale} compact />
