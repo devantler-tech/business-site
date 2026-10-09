@@ -1,15 +1,17 @@
-export const supporting = {
+import { FEATURE_OFFER_COPY } from 'astro:env/server';
+import { publishedOffer } from './published-offer';
+const previewSupporting = {
   en: {
     aboutTitle: 'About Devantler Tech',
     aboutDescription: 'Meet Nikolai Emil Damm, the founder and developer behind Devantler Tech’s one-person software business on Funen, Denmark.',
     aboutIntro: 'One person, from the first conversation to the finished software.',
     founderRole: 'Founder & developer',
-    founderText: 'I’m Nikolai. Devantler Tech is my independent software business on Funen, Denmark. I build websites, small web apps and services, and maintain a collection of open-source developer tools.',
-    founderNote: 'There is no account manager or large team behind the scenes. You talk directly to the person building your project. I keep the work small enough to give it proper attention alongside my other commitments.',
+    founderText: 'I’m Nikolai. Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services, and maintain a collection of open-source developer tools.',
+    founderNote: 'There is no account manager or large team behind the scenes. You talk directly to the person building your project. We plan manageable iterations so each gets proper attention alongside my other commitments.',
     approachTitle: 'What working together looks like',
     principles: [
-      { title: 'A clear first version', text: 'We agree what the software needs to do, what it costs and what can wait. A useful small project is a better starting point than a long list of promises.' },
-      { title: 'Planned work, not an emergency service', text: 'Changes fit an agreed schedule. Support, maintenance and hosting limits are written down, and extra scope or running costs need a new agreement.' },
+      { title: 'A clear first version, with room to grow', text: 'We agree what the software needs to do first, what it costs and what can wait. Larger applications grow through further iterations with agreed scope and prices.' },
+      { title: 'Included maintenance, agreed development', text: 'Hosted projects include optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. New features and larger iterations need a new agreement. I am not personally available 24/7; human support terms are agreed for each project.' },
       { title: 'Something you can understand and use', text: 'You get a chance to try the result and a practical handover. The technical choices serve the work your business needs to get done.' },
     ],
     backgroundTitle: 'Background & public work',
@@ -25,7 +27,7 @@ export const supporting = {
     moreProducts: 'More tools, libraries & templates',
     engineeringTitle: 'The checks behind the work',
     engineeringIntro: 'Examples from the public portfolio: KSail runs Go tests and linting, plus CodeQL analysis. GitHub’s advanced security tooling also includes secret scanning and dependency alerts. The Wedding App has browser and accessibility tests. Agents help with review and updates under documented merge rules; I remain responsible for delivery.',
-    engineeringScope: 'These are working practices, not a certification or a promise of flawless software. Checks are selected for each project; ongoing care is scoped separately.',
+    engineeringScope: 'These are working practices, not a certification or a promise of flawless software. Checks are selected for each project. Routine maintenance is included for hosted projects; new features and larger iterations need a new agreement.',
     engineeringSources: ['KSail: tests & linting', 'KSail: CodeQL security analysis', 'Wedding App: accessibility tests', 'Portfolio: maintenance & review rules'],
     pluginsTitle: 'Agent Plugins',
     familyTitle: 'Websites & small apps',
@@ -35,7 +37,7 @@ export const supporting = {
     moreTitle: 'Explore the wider portfolio',
     moreText: 'The technical portfolio includes tools, platforms and experiments. Older research is kept separately so completed work is not mistaken for a current offering.',
     active: 'Active technical projects', completed: 'Completed projects & research', english: 'Technical details and journal articles are in English.',
-    contact: 'Discuss a small project',
+    contact: 'Discuss your project',
     projectIndex: 'Project sections', currentLabel: 'Public software', familyLabel: 'Personal & family work',
     realScreenshot: 'The actual KSail terminal interface.',
     researchLabel: 'Earlier work · not a current offering', researchTitle: 'Research & completed work',
@@ -48,12 +50,12 @@ export const supporting = {
     aboutDescription: 'Mød Nikolai Emil Damm, stifteren og udvikleren bag Devantler Techs enkeltmandsvirksomhed på Fyn.',
     aboutIntro: 'Én person, fra den første samtale til den færdige software.',
     founderRole: 'Stifter og udvikler',
-    founderText: 'Jeg hedder Nikolai. Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, små webapps og services og vedligeholder en række open source-værktøjer til udviklere.',
-    founderNote: 'Der er ingen kundekonsulent eller stort team bag kulisserne. Du taler direkte med den, der bygger dit projekt. Jeg holder opgaverne små nok til at give dem ordentlig opmærksomhed ved siden af mine øvrige forpligtelser.',
+    founderText: 'Jeg hedder Nikolai. Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services og vedligeholder en række open source-værktøjer til udviklere.',
+    founderNote: 'Der er ingen kundekonsulent eller stort team bag kulisserne. Du taler direkte med den, der bygger dit projekt. Vi planlægger overskuelige etaper, så hver etape får ordentlig opmærksomhed ved siden af mine øvrige forpligtelser.',
     approachTitle: 'Sådan samarbejder vi',
     principles: [
-      { title: 'En klar første version', text: 'Vi aftaler, hvad softwaren skal kunne, hvad den koster, og hvad der kan vente. Et nyttigt, lille projekt er et bedre udgangspunkt end en lang liste af løfter.' },
-      { title: 'Planlagt arbejde, ikke akut beredskab', text: 'Ændringer følger en aftalt tidsplan. Support, vedligeholdelse og hostinggrænser beskrives skriftligt. Ekstra opgaver eller driftsudgifter kræver en ny aftale.' },
+      { title: 'En klar første version med plads til at vokse', text: 'Vi aftaler, hvad softwaren skal kunne først, hvad det koster, og hvad der kan vente. Større applikationer vokser gennem nye etaper med aftalt omfang og pris.' },
+      { title: 'Inkluderet vedligeholdelse, aftalt udvikling', text: 'Hostede projekter har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Nye funktioner og større videreudvikling kræver en ny aftale. Jeg er ikke personligt til rådighed døgnet rundt; menneskelig support aftales for hvert projekt.' },
       { title: 'Noget, du kan forstå og bruge', text: 'Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det arbejde, din virksomhed har brug for at få gjort.' },
     ],
     backgroundTitle: 'Baggrund og offentlige projekter',
@@ -69,7 +71,7 @@ export const supporting = {
     moreProducts: 'Flere værktøjer, biblioteker og skabeloner',
     engineeringTitle: 'Kontrollen bag arbejdet',
     engineeringIntro: 'Eksempler fra den offentlige portefølje: KSail kører Go-tests og kodekontrol samt CodeQL-analyse. GitHubs avancerede sikkerhedsværktøjer omfatter også scanning efter hemmeligheder og advarsler om afhængigheder. Wedding App har browser- og tilgængelighedstests. Agenter hjælper med gennemgang og opdateringer efter dokumenterede mergeregler; jeg har stadig ansvaret for leveringen.',
-    engineeringScope: 'Det er arbejdsmetoder, ikke en certificering eller et løfte om fejlfri software. Kontrollen vælges til hvert projekt; løbende vedligeholdelse aftales særskilt.',
+    engineeringScope: 'Det er arbejdsmetoder, ikke en certificering eller et løfte om fejlfri software. Kontrollen vælges til hvert projekt. Løbende vedligeholdelse er inkluderet for hostede projekter; nye funktioner og større videreudvikling kræver en ny aftale.',
     engineeringSources: ['KSail: tests og kodekontrol', 'KSail: CodeQL-sikkerhedsanalyse', 'Wedding App: tilgængelighedstests', 'Porteføljen: vedligeholdelse og reviewregler'],
     pluginsTitle: 'Agent Plugins',
     familyTitle: 'Hjemmesider og små apps',
@@ -79,7 +81,7 @@ export const supporting = {
     moreTitle: 'Se den bredere portefølje',
     moreText: 'Den tekniske portefølje omfatter værktøjer, platforme og eksperimenter. Ældre forskning står særskilt, så afsluttede projekter ikke forveksles med aktuelle tilbud.',
     active: 'Aktive tekniske projekter (engelsk)', completed: 'Afsluttede projekter og forskning (engelsk)', english: 'Tekniske detaljer og journalartikler er på engelsk.',
-    contact: 'Tal om et lille projekt',
+    contact: 'Tal om dit projekt',
     projectIndex: 'Projektsektioner', currentLabel: 'Offentlig software', familyLabel: 'Personlige projekter og familieprojekter',
     realScreenshot: 'Den faktiske KSail-brugerflade i terminalen.',
     researchLabel: 'Tidligere arbejde · ikke et aktuelt tilbud', researchTitle: 'Forskning og afsluttede projekter',
@@ -87,4 +89,9 @@ export const supporting = {
     researchText: 'Mit speciale undersøgte, hvordan selvstændige dataprodukter kunne samarbejde i et datarum, med en prototype bygget i .NET. Det er baggrundsforskning, ikke en ydelse, du kan købe.',
     thesis: 'Læs specialet (engelsk PDF)', researchExpand: 'Forskningsbaggrund og diagrammer (engelsk)',
   },
+} as const;
+
+export const supporting = FEATURE_OFFER_COPY ? previewSupporting : {
+  en: { ...previewSupporting.en, ...publishedOffer.supporting.en },
+  da: { ...previewSupporting.da, ...publishedOffer.supporting.da },
 } as const;

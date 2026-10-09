@@ -1,3 +1,5 @@
+import { FEATURE_OFFER_COPY } from 'astro:env/server';
+import { publishedOffer } from './published-offer';
 export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
@@ -10,10 +12,10 @@ export const offers = [
 
 export const inquiryUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
 
-export const copy = {
+const previewCopy = {
   en: {
     title: 'Websites & software for small businesses | Devantler Tech',
-    description: 'Websites, small web apps and web services for Danish small businesses. Clear introductory prices, agreed scope and optional hosting from Devantler Tech.',
+    description: 'Websites, web apps and web services for Danish small businesses. Agreed prices, step-by-step development and optional hosting from Devantler Tech.',
     skip: 'Skip to content', navigation: 'Main navigation', language: 'Choose language',
     appearance: 'Appearance', system: 'System', light: 'Light', dark: 'Dark',
     projectsNav: 'Projects', aboutNav: 'About', journalNav: 'Journal',
@@ -21,26 +23,26 @@ export const copy = {
     services: 'Services & prices', work: 'Selected work', products: 'Products', process: 'How it works', contact: 'Get in touch',
     eyebrow: 'Hi, I’m Nikolai.',
     headline: 'I build websites\nand useful software.',
-    intro: 'Devantler Tech is my small software business on Funen, Denmark. I build websites, small web apps and services for small businesses—and I’m the person you’ll talk to about your project.',
+    intro: 'Devantler Tech is my small software business on Funen, Denmark. I build websites, web apps and services for small businesses—and I’m the person you’ll talk to about your project.',
     primary: 'Tell me what you need', secondary: 'Explore services',
     availability: 'Planning projects from November 2026',
-    promise: ['Small, well-defined projects', 'Build + optional hosting', 'Direct contact with the developer'],
+    promise: ['Clear scope, room to grow', 'Build + optional hosting', 'Direct contact with the developer'],
     developerRole: 'Developer behind Devantler Tech · Funen, Denmark',
     developerNote: 'You’ll work directly with me, from our first conversation to the handover.',
     publicCode: 'My code on GitHub',
     servicesTitle: 'What I can help you with',
-    servicesIntro: 'Introductory starting prices for a focused first version. We agree the deliverables, schedule and total before work begins.',
+    servicesIntro: 'Introductory starting prices for a focused first version. Larger projects can grow through agreed iterations, each with its own scope, schedule and price.',
     starting: 'Build from', monthly: 'Optional hosting from', perMonth: '/ month', currency: 'DKK',
     offerCopy: [
       { title: 'A professional website', description: 'Make your business easy to find, understand and contact.', includes: ['Up to 5 straightforward pages', 'Mobile-friendly design', 'Your content, services and contact details', 'Basic search and sharing metadata'], boundary: 'You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately.' },
-      { title: 'A small web app', description: 'Replace a recurring manual task with a tool made for the way you work.', includes: ['One clearly defined workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'A compact first version, not a full business system. Complex permissions, payments, sensitive data and integrations need a separate scope.' },
+      { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
       { title: 'A web service', description: 'Connect a small process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
     ],
-    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosting capacity, maintenance, backups and support scope are agreed separately. No VAT is charged under the current PMV setup.',
+    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. No VAT is charged under the current PMV setup.',
     hostingTitle: 'Hosting that fits the project—not the other way around.',
-    hostingText: 'Your project can run on the Devantler Tech platform when its needs fit. Traffic, storage and any external services determine the final monthly price. If a new feature increases those costs, you receive a revised quote before it is added.',
+    hostingText: 'Every client project hosted on my platform includes optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. We agree a rounded total based on hosting costs plus a fixed service fee to me. New features and larger iterations require a new agreement, including any change in running costs.',
     fitTitle: 'A good fit for planned, manageable work.',
-    fitText: 'This is a small independent business, not an on-call agency. Changes are scheduled and quoted; feature requests are not delivered at a moment’s notice. Emergency response, 24/7 support and large infrastructure projects are not offered.',
+    fitText: 'Self-healing software and tailored agents help handle supported incidents. Problems needing human judgment are escalated; automatic recovery is not guaranteed for every incident. I am not personally available 24/7. Human support hours and response expectations are agreed for each project.',
     workTitle: 'A couple of things I’ve worked on',
     workIntro: 'These started as projects for my family. They give you an idea of the websites and small apps I work with; they aren’t paid client commissions.',
     workPreviewAlt: 'Screenshot of AS Coaching og Vaner’s homepage.',
@@ -55,19 +57,19 @@ export const copy = {
     portfolioLink: 'Explore the project portfolio',
     portfolioBridge: 'Beyond websites, I build KSail for creating and operating Kubernetes clusters, and reusable tools for AI coding assistants. The public portfolio shows that work in depth.',
     subscriptionNote: 'No paid product subscriptions are available yet. Open-source offerings are not being replaced by paid-only versions.',
-    qualityTitle: 'Small scope. Serious engineering.',
+    qualityTitle: 'Clear scope. Serious engineering.',
     qualityItems: [
       { title: 'Checks before delivery', text: 'Automated tests, linters and browser checks help catch regressions and keep changes maintainable.' },
       { title: 'Security as a routine', text: 'GitHub security scans and dependency checks help flag risky code, exposed secrets and outdated packages.' },
       { title: 'Maintained with care', text: 'Agents help review changes and keep dependencies current. I remain responsible for what ships.' },
     ],
-    qualityScope: 'Checks fit the project. Ongoing maintenance and support are agreed in your quote—not an unlimited service.',
+    qualityScope: 'Checks fit the project. Routine maintenance is included for hosted projects; new features and larger iterations need a new agreement. Capacity, backups and human support terms are specified in your quote.',
     qualityLink: 'See the checks in practice',
     processTitle: 'A clear agreement before a line of code.',
     steps: [
       { title: 'Describe the need', text: 'Share what your business does, the problem you want solved, your budget and your preferred timing.' },
-      { title: 'Agree a small scope', text: 'Receive a written proposal covering deliverables, cost, hosting needs, ownership, support and a realistic schedule.' },
-      { title: 'Review, launch, improve', text: 'Try the result before launch. Later changes and any additional monthly costs are agreed separately.' },
+      { title: 'Agree the first iteration', text: 'Receive a written proposal covering deliverables, price, hosting needs, ownership, support and a realistic schedule.' },
+      { title: 'Review, launch, grow', text: 'Try the result before launch. We can build on it through further iterations, agreeing the scope, price and any monthly cost changes before each one.' },
     ],
     profile: 'About Devantler Tech', blog: 'Read the journal', technical: 'Technical projects',
     contactTitle: 'What would make your working day easier?',
@@ -78,7 +80,7 @@ export const copy = {
   },
   da: {
     title: 'Hjemmesider og software til små virksomheder | Devantler Tech',
-    description: 'Hjemmesider, små webapps og webservices til danske små virksomheder. Vejledende introduktionspriser, aftalt omfang og valgfri hosting hos Devantler Tech.',
+    description: 'Hjemmesider, webapps og webservices til danske små virksomheder. Aftalte priser, udvikling i etaper og valgfri hosting hos Devantler Tech.',
     skip: 'Spring til indhold', navigation: 'Hovednavigation', language: 'Vælg sprog',
     appearance: 'Udseende', system: 'System', light: 'Lys', dark: 'Mørk',
     projectsNav: 'Projekter', aboutNav: 'Om virksomheden', journalNav: 'Journal (engelsk)',
@@ -86,26 +88,26 @@ export const copy = {
     services: 'Ydelser og priser', work: 'Udvalgte projekter', products: 'Produkter', process: 'Sådan foregår det', contact: 'Kontakt',
     eyebrow: 'Hej, jeg hedder Nikolai.',
     headline: 'Jeg bygger hjemmesider\nog nyttig software.',
-    intro: 'Devantler Tech er min lille softwarevirksomhed på Fyn. Jeg bygger hjemmesider, små webapps og services til små virksomheder—og det er mig, du taler med om dit projekt.',
+    intro: 'Devantler Tech er min lille softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til små virksomheder—og det er mig, du taler med om dit projekt.',
     primary: 'Fortæl om dit behov', secondary: 'Se ydelserne',
     availability: 'Planlægger projekter fra november 2026',
-    promise: ['Små, velafgrænsede projekter', 'Udvikling og valgfri hosting', 'Direkte kontakt med udvikleren'],
+    promise: ['Klart omfang, plads til at vokse', 'Udvikling og valgfri hosting', 'Direkte kontakt med udvikleren'],
     developerRole: 'Udvikleren bag Devantler Tech · Fyn, Danmark',
     developerNote: 'Du samarbejder direkte med mig, fra vores første samtale til overdragelsen.',
     publicCode: 'Min kode på GitHub',
     servicesTitle: 'Det kan jeg hjælpe dig med',
-    servicesIntro: 'Vejledende introduktionspriser for en afgrænset første version. Vi aftaler leverancer, tidsplan og samlet pris, før arbejdet begynder.',
+    servicesIntro: 'Vejledende introduktionspriser for en afgrænset første version. Større projekter kan vokse gennem aftalte etaper, hver med sit eget omfang, sin tidsplan og sin pris.',
     starting: 'Udvikling fra', monthly: 'Valgfri hosting fra', perMonth: '/ måned', currency: 'kr.',
     offerCopy: [
       { title: 'En professionel hjemmeside', description: 'Gør det nemt at finde, forstå og kontakte din virksomhed.', includes: ['Op til 5 enkle sider', 'Mobilvenligt design', 'Dit indhold, dine ydelser og kontaktoplysninger', 'Grundlæggende metadata til søgning og deling'], boundary: 'Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt.' },
-      { title: 'En lille webapp', description: 'Erstat en tilbagevendende manuel opgave med et værktøj til din måde at arbejde på.', includes: ['Én klart afgrænset arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'En kompakt første version, ikke et komplet virksomhedssystem. Komplekse adgangsrettigheder, betaling, følsomme data og integrationer kræver en særskilt aftale.' },
+      { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
       { title: 'En webservice', description: 'Forbind en lille proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
     ],
-    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostingkapacitet, vedligeholdelse, backup og support aftales særskilt. Der opkræves ikke moms under den nuværende PMV-ordning.',
+    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Der opkræves ikke moms under den nuværende PMV-ordning.',
     hostingTitle: 'Hosting, der passer til projektet—ikke omvendt.',
-    hostingText: 'Dit projekt kan køre på Devantler Tech-platformen, når behovet passer. Trafik, lagerplads og eventuelle eksterne tjenester afgør den endelige månedspris. Hvis en ny funktion øger udgifterne, får du et revideret tilbud, før den tilføjes.',
+    hostingText: 'Alle kundeprojekter, der hostes på min platform, har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Vi aftaler et afrundet beløb baseret på hostingudgifter plus et fast honorar til mig. Nye funktioner og større videreudvikling kræver en ny aftale, også om eventuelle ændringer i driftsudgifterne.',
     fitTitle: 'Til planlagt og overskueligt arbejde.',
-    fitText: 'Dette er en lille, uafhængig virksomhed, ikke et bureau på tilkaldevagt. Ændringer planlægges og prissættes; nye funktioner leveres ikke med et øjebliks varsel. Akut beredskab, support døgnet rundt og store infrastrukturprojekter tilbydes ikke.',
+    fitText: 'Selvhelende software og specialtilpassede agenter hjælper ved understøttede driftshændelser. Problemer, der kræver menneskelig vurdering, eskaleres; automatisk genopretning er ikke garanteret ved alle hændelser. Jeg er ikke personligt til rådighed døgnet rundt. Menneskelig support og forventninger til svartid aftales for hvert projekt.',
     workTitle: 'Et par ting, jeg har arbejdet på',
     workIntro: 'De begyndte som projekter for min familie. De giver et indtryk af de hjemmesider og små apps, jeg arbejder med; de er ikke betalte kundeopgaver.',
     workPreviewAlt: 'Skærmbillede af AS Coaching og Vaners forside.',
@@ -120,19 +122,19 @@ export const copy = {
     portfolioLink: 'Se projektporteføljen',
     portfolioBridge: 'Ud over hjemmesider bygger jeg KSail til at oprette og drive Kubernetes-klynger og genbrugelige værktøjer til AI-kodeassistenter. Den offentlige portefølje viser arbejdet i dybden.',
     subscriptionNote: 'Der tilbydes endnu ingen betalte produktabonnementer. Open source-tilbud erstattes ikke af udgaver, der kun kan købes.',
-    qualityTitle: 'Lille omfang. Solidt håndværk.',
+    qualityTitle: 'Klart omfang. Solidt håndværk.',
     qualityItems: [
       { title: 'Kontrol før levering', text: 'Automatiske tests, kodekontrol og browsertests hjælper med at fange fejl og gøre ændringer nemmere at vedligeholde.' },
       { title: 'Sikkerhed som en rutine', text: 'GitHubs sikkerhedsscanning og kontrol af afhængigheder hjælper med at opdage risikabel kode, lækkede hemmeligheder og forældede pakker.' },
       { title: 'Vedligeholdt med omtanke', text: 'Agenter hjælper med at gennemgå ændringer og holde afhængigheder opdateret. Jeg har stadig ansvaret for det, der leveres.' },
     ],
-    qualityScope: 'Kontrollen tilpasses projektet. Løbende vedligeholdelse og support aftales i tilbuddet—det er ikke en ubegrænset service.',
+    qualityScope: 'Kontrollen tilpasses projektet. Løbende vedligeholdelse er inkluderet for hostede projekter; nye funktioner og større videreudvikling kræver en ny aftale. Kapacitet, backup og menneskelig support beskrives i tilbuddet.',
     qualityLink: 'Se kontrollen i praksis',
     processTitle: 'En klar aftale før den første linje kode.',
     steps: [
       { title: 'Beskriv dit behov', text: 'Fortæl, hvad din virksomhed laver, hvilket problem du vil løse, dit budget og din ønskede tidsplan.' },
-      { title: 'Aftal et lille omfang', text: 'Få et skriftligt forslag med leverancer, pris, hostingbehov, ejerskab, support og en realistisk tidsplan.' },
-      { title: 'Afprøv, lancér, forbedr', text: 'Afprøv resultatet før lancering. Senere ændringer og eventuelle ekstra månedlige udgifter aftales særskilt.' },
+      { title: 'Aftal den første etape', text: 'Få et skriftligt forslag med leverancer, pris, hostingbehov, ejerskab, support og en realistisk tidsplan.' },
+      { title: 'Afprøv, lancér, udbyg', text: 'Afprøv resultatet før lancering. Vi kan bygge videre i nye etaper og aftaler omfang, pris og eventuelle ændringer i månedsprisen før hver etape.' },
     ],
     profile: 'Om Devantler Tech', blog: 'Læs journalen (engelsk)', technical: 'Tekniske projekter (engelsk)',
     contactTitle: 'Hvad ville gøre din arbejdsdag lettere?',
@@ -141,4 +143,9 @@ export const copy = {
     contactNote: 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
     footer: 'Hjemmesider, software og hosting til små virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
+} as const;
+
+export const copy = FEATURE_OFFER_COPY ? previewCopy : {
+  en: { ...previewCopy.en, ...publishedOffer.copy.en },
+  da: { ...previewCopy.da, ...publishedOffer.copy.da },
 } as const;
