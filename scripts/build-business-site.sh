@@ -6,6 +6,7 @@ node --test scripts/theme.test.mjs
 node --test scripts/journal-navigation.test.mjs
 node --test scripts/public-products.test.mjs
 node --test scripts/public-tools.test.mjs
+node --test scripts/reader-text.test.mjs
 node --test scripts/featured-rollout.test.mjs
 node --test scripts/fresh-publication.test.mjs
 node --test scripts/client-rollout.test.mjs

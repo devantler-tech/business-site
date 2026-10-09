@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { selectPublicTools } from '../src/data/public-products.ts';
 import catalogue from '../src/data/public-products.json' with { type: 'json' };
 import snapshot from '../src/data/github-stars.json' with { type: 'json' };
+import { readerText } from './reader-text.mjs';
 const directory = process.argv[2];
 assert.ok(directory, 'Usage: check-featured-portfolio.mjs <build-directory>');
 const enabled = process.env.FEATURE_FEATURED_PORTFOLIO === 'true';
@@ -13,7 +14,7 @@ for (const prefix of ['', 'da/']) {
   assert.equal(projects.includes('data-featured-portfolio'), enabled);
   if (!enabled) continue;
   for (const html of [home, projects]) {
-    const visibleText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ');
+    const visibleText = readerText(html);
     assert.doesNotMatch(visibleText, /family|familie|Wedding App|Anonymized|Anonymiseret/i, 'The business presentation omits personal framing and anonymous demos');
     assert.equal((html.match(/data-work-example="coaching"/g) ?? []).length, 1);
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
