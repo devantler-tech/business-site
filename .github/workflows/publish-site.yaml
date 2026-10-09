@@ -1,0 +1,107 @@
+name: Publish - Business Site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview uploads an artifact only; publish requires the cutover switch
+        type: choice
+        options: [preview, publish]
+        default: preview
+  schedule:
+    - cron: "17 6 * * *"
+
+permissions: {}
+
+# Review artifacts must not cancel an in-flight production deployment.
+concurrency:
+  group: pages-${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'preview' && 'preview' || 'production' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: ${{ vars.SITE_PUBLICATION_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'preview') }}
+    runs-on: ubuntu-latest
+    env:
+      LC_ALL: C
+    permissions:
+      contents: read
+    steps:
+      - name: Validate source-owned admission
+        shell: bash
+        env:
+          PUBLICATION_REPOSITORY: ${{ github.repository }}
+          PUBLICATION_REF: ${{ github.ref }}
+          PUBLICATION_EVENT: ${{ github.event_name }}
+          PUBLICATION_ENABLED: ${{ vars.SITE_PUBLICATION_ENABLED }}
+          PUBLICATION_MODE: ${{ inputs.mode || 'publish' }}
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PUBLICATION_REPOSITORY" == 'devantler-tech/business-site' ]] || exit 1
+          [[ "$PUBLICATION_REF" == 'refs/heads/main' ]] || exit 1
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          case "$PUBLICATION_EVENT" in push|workflow_dispatch|schedule) ;; *) exit 1 ;; esac
+          case "$PUBLICATION_MODE" in
+            preview) [[ "$PUBLICATION_EVENT" == workflow_dispatch ]] || exit 1 ;;
+            publish) [[ "$PUBLICATION_ENABLED" == true ]] || exit 1 ;;
+            *) exit 1 ;;
+          esac
+      - name: Checkout exact own source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Refresh complete public project ranking
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/refresh-public-stars.sh
+      - name: Build production site
+        run: npm run build
+      - name: Record source-owned identity
+        shell: bash
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+          PUBLICATION_MODE: ${{ inputs.mode || 'publish' }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$SOURCE_REVISION" == "$GITHUB_SHA" ]] || exit 1
+          [[ "$SOURCE_REVISION" == "$(git rev-parse HEAD)" ]] || exit 1
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 1
+          case "$PUBLICATION_MODE" in preview|publish) ;; *) exit 1 ;; esac
+          printf '{"repository":"devantler-tech/business-site","sourceRevision":"%s","workflowRunId":"%s","workflowRunAttempt":"%s","publicationMode":"%s"}\n' \
+            "$SOURCE_REVISION" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$PUBLICATION_MODE" > dist/publication-source.json
+          printf 'Website source: devantler-tech/business-site@%s\nRun: %s, attempt %s\nMode: %s\n' \
+            "$SOURCE_REVISION" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$PUBLICATION_MODE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    if: ${{ vars.SITE_PUBLICATION_ENABLED == 'true' && (github.event_name != 'workflow_dispatch' || inputs.mode == 'publish') }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Publish the built Pages artifact using an identity bound to this protected environment.
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to own GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

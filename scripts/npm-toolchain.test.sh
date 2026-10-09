@@ -57,6 +57,7 @@ required_jobs=(
   ci.yaml:drift-check-active-projects
   audit-docs.yaml:audit-docs
   publish-pages.yaml:build
+  publish-site.yaml:build
 )
 
 # Paths the CI filter gating this test must list, so a change to any input reruns it.
