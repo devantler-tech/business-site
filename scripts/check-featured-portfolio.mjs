@@ -32,6 +32,8 @@ for (const prefix of ['', 'da/']) {
   assert.ok(ksail);
   assert.match(ksail, /<img[^>]*src="\/_astro\/ksail-desktop\.[^/]+\.webp"/);
   assert.match(ksail, /alt="[^"<>]*KSail[^"<>]*(?:desktop application|desktopprogram)[^"<>]*"/);
+  assert.match(readerText(ksail), prefix ? /Klyngeoversigt.*private.*skjult/i : /Cluster overview.*private.*masked/i, 'The real overview must disclose its privacy redaction in both languages');
+  assert.doesNotMatch(ksail, /Assistant start screen|assistentens startskærm/i, 'Do not publish the rejected Assistant start screen');
   assert.doesNotMatch(ksail, /ksail-cli-dark|KSail CLI/);
   for (const id of ['open-title', 'family-title', 'technical-projects', 'research', 'engineering-checks', '-self-hosted-personal-apps']) assert.ok(projects.includes(`id="${id}"`));
   assert.ok(projects.includes('href="/pdfs/thesis.pdf"'));

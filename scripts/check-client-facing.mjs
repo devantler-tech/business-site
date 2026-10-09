@@ -82,7 +82,13 @@ for (const locale of ['en', 'da']) {
     assert.ok(shelf.includes(locale === 'da' ? 'Kildekode tilgængelig' : 'Source-available'));
     assert.ok(shelf.includes('PolyForm Shield'));
     assert.ok(shelf.includes(locale === 'da' ? 'licens' : 'licence'));
-    assert.ok(shelf.includes(featured ? (locale === 'da' ? 'alt="KSails desktopprogram' : 'alt="KSail desktop application') : 'alt="KSail CLI"'));
+    if (featured) {
+      assert.match(shelf, locale === 'da'
+        ? /alt="Klyngeoversigt i KSails desktopprogram med private oplysninger skjult"/
+        : /alt="Cluster overview in the KSail desktop application with private details masked"/);
+    } else {
+      assert.ok(shelf.includes('alt="KSail CLI"'));
+    }
     assert.ok(shelf.includes('href="https://ksail.devantler.tech"'));
   });
   test(`${locale}: old engineering bookmark now leads to visible Home highlights`, () => {
