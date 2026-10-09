@@ -12,8 +12,8 @@ tags:
 description: Most local Flux setups point at a Git repo. OCI registries are cleaner — here's a full walkthrough using KSail's local registry and workload push command, plus how to extend the same workflow to GHCR for CI.
 excerpt: Most local Flux setups point at a Git repo. OCI registries are cleaner — here's a full walkthrough using KSail's local registry and workload push command, plus how to extend the same workflow to GHCR for CI.
 cover:
-  alt: Illustration of connected local and cloud infrastructure
-  image: ../../../assets/editorial/cloud-fleet.webp
+  alt: Illustration of a packaged artifact canister connected to a server dock
+  image: ../../../assets/editorial/journal-oci-flux.webp
 ---
 
 The standard advice for running Flux locally is to point it at a Git repository. In practice that means either pushing to a remote repo and waiting for Flux to poll it, maintaining a local Git server, or wrestling with Flux's lack of support for local file paths. None of these are great for a tight development loop.

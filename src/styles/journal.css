@@ -1,0 +1,70 @@
+/* Editorial presentation is scoped to the default-off Journal frame. */
+.journal-page { --sl-content-width: 100%; }
+.journal-page > .header { z-index: var(--sl-z-index-navbar); }
+.journal-page .journal-wrap { width: min(1160px, calc(100% - 4rem)); margin: 2rem auto 0; }
+.journal-page .journal-wayfinding { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; font-size: .85rem; }
+.journal-page .journal-wayfinding a { color: var(--muted); text-decoration: none; }
+.journal-page .journal-wayfinding a:hover { color: var(--accent); text-decoration: underline; }
+.journal-page .journal-browse { margin: 1.5rem 0 0; padding: 0; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+.journal-page .journal-browse > summary { padding: .8rem 0 1.25rem; color: var(--ink); font-size: .9rem; font-weight: 600; cursor: pointer; }
+.journal-page .journal-browse > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.journal-page .journal-browser { padding: 0 0 2rem; }
+.journal-page .journal-browser > sl-sidebar-state-persist > ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.journal-page .journal-browser a { overflow-wrap: anywhere; }
+.journal-page .main-pane { width: 100%; padding: 0; }
+/* Starlight uses this rail for the mobile contents menu as well as desktop navigation. */
+@media (min-width: 72rem) {
+  .journal-page .right-sidebar-container { display: none; }
+}
+.journal-page main > .content-panel { padding: 0; border: 0; }
+.journal-page main > .content-panel:first-of-type { display: block !important; padding: 3.5rem 0 2.75rem; }
+.journal-page .sl-container { max-width: none; margin: 0; }
+.journal-page .journal-intro h1 { color: var(--ink); font-size: clamp(2.75rem, 6vw, 4.5rem); letter-spacing: -.045em; line-height: 1.08; text-shadow: none; }
+.journal-page .journal-intro p { max-width: 46rem; margin: 1.25rem 0 0; color: var(--muted); font-size: 1.12rem; line-height: 1.7; }
+.journal-page :is(h1, h2, h3) { text-shadow: none; }
+.journal-page :is(h1, h2, h3)::after { display: none; }
+.journal-page .sl-blog-posts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2.5rem; }
+.journal-page article.sl-blog-preview { min-width: 0; margin: 0; padding: 0 0 2rem; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; box-shadow: none; }
+.journal-page article.sl-blog-preview:hover { transform: none; box-shadow: none; border-color: var(--line); }
+.journal-page .sl-blog-preview-link { display: flex; flex-direction: column; gap: 1.25rem; color: var(--ink); text-decoration: none; }
+/* The legacy documentation skin marks every header background important. */
+.journal-page article.sl-blog-preview > header.sl-blog-preview-header { background: none !important; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.journal-page .sl-blog-preview-title { margin: 0; color: var(--ink); font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.22; letter-spacing: -.035em; text-wrap: balance; }
+.journal-page .sl-blog-preview-link:hover .sl-blog-preview-title { color: var(--accent); }
+.journal-page .sl-blog-preview-link .sl-blog-cover { order: -1; margin: 0; }
+.journal-page .sl-blog-cover-image { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border: 0; border-radius: .5rem; box-shadow: none; }
+.journal-page .sl-blog-preview:first-child { grid-column: 1 / -1; }
+.journal-page .sl-blog-preview:first-child .sl-blog-preview-link { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
+.journal-page .sl-blog-preview:first-child .sl-blog-preview-title { font-size: clamp(2rem, 3.6vw, 3rem); }
+.journal-page .sl-blog-preview:first-child .sl-blog-cover { order: 0; }
+.journal-page .sl-blog-preview:first-child :is(.sl-blog-metadata, .sl-blog-preview-excerpt, .sl-blog-preview-footer) { max-width: 52rem; }
+.journal-page .sl-blog-metadata { margin: 1.25rem 0; color: var(--muted); font-size: .85rem; }
+.journal-page .sl-blog-metadata-date { color: var(--muted); }
+.journal-page .sl-blog-metadata-authors img { width: 2rem; height: 2rem; box-shadow: none; border: 1px solid var(--line); }
+.journal-page .sl-blog-preview-excerpt { color: var(--muted); line-height: 1.75; }
+.journal-page .sl-blog-preview-excerpt p { margin-top: 1rem; }
+.journal-page .sl-blog-post-tags a { color: var(--muted); background: var(--paper); border-color: var(--line); text-decoration: none; box-shadow: none; font-size: .75rem; }
+.journal-page .sl-blog-post-tags a:hover { color: var(--accent); border-color: var(--accent); }
+.journal-page .pagination-links { margin: 3rem 0; }
+.journal-page .pagination-links a { background: var(--paper); border-color: var(--line); box-shadow: none; }
+.journal-page[data-journal-kind='article'] .journal-wrap { max-width: 800px; }
+.journal-page[data-journal-kind='article'] h1 { color: var(--ink); font-size: clamp(2rem, 4.5vw, 3.25rem); line-height: 1.15; letter-spacing: -.04em; text-wrap: balance; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content { color: var(--ink); font-size: 1.06rem; line-height: 1.85; overflow-wrap: break-word; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content :is(h2, h3, h4) { color: var(--ink); margin-top: 2.5rem; padding: 0; border: 0; line-height: 1.3; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content h2 { font-size: 1.7rem; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content h3 { font-size: 1.3rem; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content p { margin-block: 1.35rem; }
+.journal-page[data-journal-kind='article'] .sl-markdown-content a:not(:has(img)) { color: var(--accent); text-decoration: underline; text-shadow: none; border: 0 !important; background: none; box-shadow: none; }
+.journal-page[data-journal-kind='article'] .sl-blog-post-footer { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+.journal-page .sl-markdown-content :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.journal-page .sl-markdown-content img { max-width: 100%; }
+@media (max-width: 760px) {
+  .journal-page .journal-wrap { width: calc(100% - 2.5rem); margin-top: 1.25rem; }
+  .journal-page .journal-browser > sl-sidebar-state-persist > ul { grid-template-columns: 1fr; }
+  .journal-page main > .content-panel:first-of-type { padding: 2.5rem 0 2rem; }
+  .journal-page .sl-blog-posts { grid-template-columns: 1fr; gap: 2rem; }
+  .journal-page .sl-blog-preview:first-child { grid-column: auto; }
+  .journal-page .sl-blog-preview:first-child .sl-blog-preview-link { display: flex; gap: 1.25rem; }
+  .journal-page .sl-blog-preview:first-child .sl-blog-cover { order: -1; }
+  .journal-page .journal-intro p { font-size: 1rem; }
+}

@@ -14,8 +14,8 @@ tags:
 description: A Mac Mini runs 24/7 at home, firing scheduled prompts that open PRs against KSail. Here's how I've set it up and what I've learned running it.
 excerpt: A Mac Mini runs 24/7 at home, firing scheduled prompts that open PRs against KSail. Here's how I've set it up and what I've learned running it.
 cover:
-  alt: Illustration of connected planning and verification cards
-  image: ../../../assets/editorial/workflows.webp
+  alt: Illustration of a circular maintenance rail with workpieces and an inspection station
+  image: ../../../assets/editorial/journal-oss-automation.webp
 ---
 
 > [!NOTE]

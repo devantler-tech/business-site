@@ -12,8 +12,8 @@ tags:
 description: A guide to creating local Kubernetes development clusters using KSail with K3d (K3s in Docker).
 excerpt: A guide to creating local Kubernetes development clusters using KSail with K3d (K3s in Docker).
 cover:
-  alt: Illustration of a small cluster on a developer’s workbench
-  image: ../../../assets/editorial/kubernetes-workshop.webp
+  alt: Illustration of three compact server blocks on a lightweight development rail
+  image: ../../../assets/editorial/journal-k3d.webp
 ---
 
 K3s is Rancher's lightweight Kubernetes distribution, and when combined with [K3d](https://k3d.io/) and [KSail](https://github.com/devantler-tech/ksail), you get a fast, batteries-included local development experience. This post shows you how to get started.

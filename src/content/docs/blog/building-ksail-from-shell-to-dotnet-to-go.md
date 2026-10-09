@@ -12,8 +12,8 @@ tags:
 description: The journey of building KSail through three major rewrites and what I learned along the way.
 excerpt: The journey of building KSail through three major rewrites and what I learned along the way.
 cover:
-  alt: Illustration of a software design refined across three drafting sheets
-  image: ../../../assets/editorial/code-craft.webp
+  alt: Illustration of three increasingly refined developer-tool prototypes
+  image: ../../../assets/editorial/journal-tool-evolution.webp
 ---
 
 Building a developer tool is rarely a straight path. [KSail](https://github.com/devantler-tech/ksail) started as a humble shell script in late 2023 and has evolved through three major rewrites to become what it is today: a Go-based CLI that bundles common Kubernetes tooling into a single binary. This post tells the story of that journey.

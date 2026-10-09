@@ -1,0 +1,33 @@
+---
+import Default from '@astrojs/starlight/components/PageFrame.astro';
+import { FEATURE_JOURNAL_PRESENTATION } from 'astro:env/server';
+import '../../styles/journal.css';
+
+const path = Astro.url.pathname.replace(/\/$/, '');
+const enabled = FEATURE_JOURNAL_PRESENTATION && /^\/blog(?:\/|$)/.test(path);
+const reading = enabled && Astro.locals.starlightBlog.posts.some(post => post.href.replace(/\/$/, '') === path);
+---
+{
+  enabled ? (
+    <div class="page journal-page" data-journal-presentation data-journal-kind={reading ? 'article' : 'archive'}>
+      <header class="header"><slot name="header" /></header>
+      <div class="journal-wrap">
+        <nav class="journal-wayfinding" aria-label="Journal navigation">
+          <a href="/blog/">{reading ? 'Back to the Journal' : 'All articles'}</a>
+          <a href="/blog/rss.xml">Subscribe via RSS</a>
+        </nav>
+        <details class="journal-browse">
+          <summary>Browse the Journal</summary>
+          <div class="journal-browser"><slot name="sidebar" /></div>
+        </details>
+        <slot />
+      </div>
+    </div>
+  ) : (
+    <Default>
+      <slot name="header" slot="header" />
+      <slot name="sidebar" slot="sidebar" />
+      <slot />
+    </Default>
+  )
+}

@@ -11,8 +11,8 @@ tags:
 description: A quick guide on using macOS Keychain to avoid storing secrets in plaintext in your .zshrc.
 excerpt: A quick guide on using macOS Keychain to avoid storing secrets in plaintext in your .zshrc.
 cover:
-  alt: Illustration of a developer laptop and a physical key
-  image: ../../../assets/editorial/developer-workbench.webp
+  alt: Illustration of a key stored in an organizer beside a rolled terminal note
+  image: ../../../assets/editorial/journal-keychain.webp
 ---
 
 Storing tokens and passwords directly in `~/.zshrc` means they sit on disk in plaintext. macOS Keychain provides a built-in, encrypted alternative. Here's how to use it.

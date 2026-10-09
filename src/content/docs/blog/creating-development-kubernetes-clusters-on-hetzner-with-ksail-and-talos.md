@@ -12,8 +12,8 @@ tags:
 description: A step-by-step guide to creating Talos Linux Kubernetes clusters on Hetzner Cloud using KSail.
 excerpt: A step-by-step guide to creating Talos Linux Kubernetes clusters on Hetzner Cloud using KSail.
 cover:
-  alt: Illustration of a small local cluster connected to a cloud cluster
-  image: ../../../assets/editorial/cloud-fleet.webp
+  alt: Illustration of a remote server cluster reached by a cable across folded terrain
+  image: ../../../assets/editorial/journal-hetzner.webp
 ---
 
 Setting up Kubernetes environments doesn't have to be expensive or complicated. With [Hetzner Cloud](https://www.hetzner.com/cloud/)'s affordable pricing, [Talos Linux](https://www.talos.dev/)'s security-focused immutable OS, and [KSail](https://github.com/devantler-tech/ksail)'s unified tooling, you can have a cluster running in minutes. This post walks through the complete setup.

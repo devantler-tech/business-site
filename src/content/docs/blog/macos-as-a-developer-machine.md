@@ -10,8 +10,8 @@ tags:
 description: Setting up MacOS as a developer machine can be a daunting task. In this post, I will share my learnings and experiences to help you get started.
 excerpt: Setting up MacOS as a developer machine can be a daunting task. In this post, I will share my learnings and experiences to help you get started.
 cover:
-  alt: Illustration of a personal developer workbench
-  image: ../../../assets/editorial/developer-workbench.webp
+  alt: Illustration of a carefully arranged laptop workspace and development setup sketch
+  image: ../../../assets/editorial/journal-macos.webp
 ---
 
 In this post, I will share my experience setting up MacOS as a developer machine. I will cover the following topics:

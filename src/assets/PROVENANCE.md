@@ -32,7 +32,17 @@ Conceptual journal and project cover illustrations generated with the built-in i
 tool on 2026-10-07. The complete prompt set is in [editorial/PROMPTS.md](editorial/PROMPTS.md).
 They share a charcoal/green workshop palette and use subject-specific metaphors: workflows,
 local clusters, cloud infrastructure, assistant dialogue, software craft, ownership, developer
-setup and data research. Related articles share a subject illustration.
+setup and data research. The original generic series is retained for its site subjects.
+
+The topic-specific `editorial/journal-*.webp` covers and `data-product-research.webp` were generated
+with the built-in image tool on 2026-10-09, matching the original workshop series as a style
+reference. Every current Journal post owns one distinct cover; no cover is repurposed for an
+unrelated business-site subject. The older data-product implementation has a separate illustration
+from the broader data-space research feature. Repeated views of one article, translated views of
+one project and responsive delivery sizes use their subject's same image. The complete prompts,
+including the targeted removal of unintended emblems, are recorded in `editorial/JOURNAL-PROMPTS.md`.
+`scripts/check-editorial-assets.mjs` compares decoded image pixels as well as paths, so renaming or
+losslessly re-encoding an identical cover cannot make it unique.
 
 These are illustrations, not photographs of company equipment, factual architecture diagrams,
 customer examples or product screenshots. The real founder photograph, KSail interface captures

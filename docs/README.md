@@ -87,6 +87,16 @@ executes the actual head script as part of every build.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
 
+`FEATURE_JOURNAL_PRESENTATION=true` previews the editorial Journal frame from business-site#11.
+Its introduction, lead story, two-column archive and narrower reading pages use the homepage's
+type and palette. A native “Browse the Journal” disclosure keeps the existing post/topic menu
+available without a permanent documentation sidebar. Search, RSS, authors, tags, pagination,
+article bookmarks and copy controls retain their existing behavior. Technical guides keep their
+normal Starlight frame. The flag defaults to false; every build checks all generated Journal
+routes, and CI validates enabled, explicit-false and entirely-unset states. Activation and removal
+are tracked in [#12](https://github.com/devantler-tech/business-site/issues/12), separately from
+source adoption and live publication.
+
 Projects presents one complete, stars-ranked public software catalogue, followed by family examples
 and earlier research. The real KSail terminal capture appears in its product card; expandable English
 research and diagrams are sourced from `src/content/docs/projects/completed.mdx`. The legacy
@@ -100,15 +110,18 @@ fallback use the relevant section. Root horizontal overflow is
 clipped without creating a non-scrolling ancestor
 that would break the documentation header's sticky positioning.
 
-Journal covers and project illustrations use the subject-based green/charcoal workshop series in
+Journal covers and project illustrations use the green/charcoal workshop series in
 `src/assets/editorial/`. [Asset provenance](../src/assets/PROVENANCE.md) distinguishes generated
 illustrations from the real portrait, product captures and authored diagrams; the complete prompts
-are recorded alongside the assets. Covers do not replace factual inline screenshots or diagrams.
+are recorded alongside the assets. Every post has its own topic-specific cover, and unrelated
+site subjects do not share those covers. Translations, responsive sizes and repeated views of
+the same subject may use its same image. Source and emitted-image checks reject duplicated
+paths or decoded pixels. Covers do not replace factual inline screenshots or diagrams.
 
 `npm run build` renders the business experience directly and verifies its English/Danish visitor
 journeys and supporting pages. The same command is used by CI and GitHub Pages publication.
-The business site has no release toggle; reverting the publication change and redeploying is the
-recovery path.
+The core business pages are always rendered. Short-lived presentation flags protect reviewable
+redesigns; reverting the publication change and redeploying remains the recovery path.
 
 The company contact email and CVR number are not known yet, so neither is invented or published.
 LinkedIn is the existing verified inquiry route. The maintainer has authorized publication with

@@ -12,8 +12,8 @@ tags:
 description: How I built KSail's interactive AI chat assistant using Go, GitHub Copilot SDK, and Bubbletea TUI framework.
 excerpt: How I built KSail's interactive AI chat assistant using Go, GitHub Copilot SDK, and Bubbletea TUI framework.
 cover:
-  alt: Illustration of a terminal and a dialogue connected to infrastructure
-  image: ../../../assets/editorial/agent-dialogue.webp
+  alt: Illustration of two speech bubbles above a terminal pane and small server blocks
+  image: ../../../assets/editorial/journal-assistant.webp
 ---
 
 What if managing Kubernetes clusters was as simple as having a conversation?
