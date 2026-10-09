@@ -8,7 +8,7 @@ const [directory, ...extra] = process.argv.slice(2);
 assert.ok(directory && extra.length === 0, 'Usage: check-client-facing.mjs <build-directory>');
 const page = (path) => readFileSync(resolve(directory, path, 'index.html'), 'utf8');
 const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
-const featured = process.env.FEATURE_FEATURED_PORTFOLIO === 'true';
+const featured = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const stars = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const anchors = {
@@ -82,7 +82,13 @@ for (const locale of ['en', 'da']) {
     assert.ok(shelf.includes(locale === 'da' ? 'Kildekode tilgængelig' : 'Source-available'));
     assert.ok(shelf.includes('PolyForm Shield'));
     assert.ok(shelf.includes(locale === 'da' ? 'licens' : 'licence'));
-    assert.ok(shelf.includes(featured ? (locale === 'da' ? 'alt="KSails desktopprogram' : 'alt="KSail desktop application') : 'alt="KSail CLI"'));
+    if (featured) {
+      assert.match(shelf, /data-ksail-workflow/);
+      assert.match(shelf, /<a\b[^>]*data-ksail-detail[^>]*href="\/_astro\/ksail-desktop\.[^/]+\.webp"/);
+      assert.ok(shelf.includes(locale === 'da' ? 'private oplysninger skjult' : 'private details masked'));
+    } else {
+      assert.ok(shelf.includes('alt="KSail CLI"'));
+    }
     assert.ok(shelf.includes('href="https://ksail.devantler.tech"'));
   });
   test(`${locale}: old engineering bookmark now leads to visible Home highlights`, () => {

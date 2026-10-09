@@ -59,11 +59,17 @@ not presented as paid client commissions.
 
 ## `ksail-desktop.png`
 
-Real, unmodified native-window screenshot of the installed KSail macOS desktop application,
-captured on 2026-10-09. It shows the Assistant start screen with no conversation, customer data,
-cluster identifiers or credentials. No assistant request, cluster provisioning or plugin
-installation was performed for the capture. This is an interface screenshot, not proof of an
-operating customer environment or an agent completing work. Astro generates the delivery WebP.
+Real native-window capture of the installed KSail macOS desktop application's cluster overview,
+captured on 2026-10-09. At the maintainer's request, deterministic opaque masks conceal cluster
+and node identifiers, provider/namespace, workload names, absolute topology/capacity values,
+endpoint, versions and configuration. Anonymous relative utilization graphics remain; no
+healthy-operation or customer-environment claim is made. The native title bar was cropped out,
+excluding the computer-use badge and pointer. No data or interface was generated with AI.
+
+Only read-only cluster navigation/refresh was used: no provisioning, deletion, assistant request,
+credential changes or plugin installation. The private original is not committed. Astro generates
+the delivery WebP from this redacted capture. It is linked as an optional interface detail rather
+than displayed as the product's main image; both language notes disclose the redaction.
 
 ## `wedding-guest-demo.jpg`
 
