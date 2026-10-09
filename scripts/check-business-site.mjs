@@ -119,7 +119,9 @@ for (const locale of ['en', 'da']) {
         assert.ok(before.stars > after.stars || (before.stars === after.stars && before.repository < after.repository), 'GitHub stars descend across both groups with stable repository-name ties');
       }
       assert.deepEqual(repositories(overflow[1]), allRepositories.slice(6), 'The rest sit immediately below the leading six, in the same order');
-      assert.match(overflow[1], /data-stars="0"/, 'Zero-star products are included, not discarded as missing');
+      assert.equal(ranked.filter(({ stars }) => stars === 0).length,
+        publicRepositories.filter(repository => starSnapshot.repositories[repository] === 0).length,
+        'Every observed zero-star product is included, without inventing one when all counts are positive');
       assert.match(shelf, /<time[^>]*datetime="\d{4}-\d{2}-\d{2}"/, 'Star counts carry a visible observation date');
       assert.ok(shelf.includes(`datetime="${starSnapshot.observedAt}"`), 'The displayed star date matches the observation');
       assert.ok(shelf.includes('href="https://github.com/devantler-tech/world-at-ruin/blob/main/LICENSE.md"'), 'The game links to its actual source-available licence file');
