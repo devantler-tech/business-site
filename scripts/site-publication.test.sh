@@ -2,16 +2,19 @@
 # Exercise source-owned admission/receipts and detect weakened deployment wiring.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Stop the contract at the first violation and report its publication boundary.
 fail() { printf 'site publication: FAIL — %s\n' "$*" >&2; exit 1; }
 workflow="$root/.github/workflows/publish-site.yaml"
 [[ -f "$workflow" ]] || fail 'source-owned workflow is missing'
 json="$(yq -o=json '.' "$workflow")"
+# Assert a named invariant against the actual parsed publisher workflow.
 require() { jq -e "$1" <<<"$json" >/dev/null || fail "$2"; }
 require '(.on | keys | sort) == ["push","schedule","workflow_dispatch"] and .on.push.branches == ["main"]' 'only own main push/manual/schedule can publish'
 require '.on.workflow_dispatch.inputs.mode.type == "choice" and .on.workflow_dispatch.inputs.mode.default == "preview" and .on.workflow_dispatch.inputs.mode.options == ["preview","publish"]' 'manual dispatch defaults to artifact-only preview'
 require '.permissions == {} and .jobs.build.permissions == {"contents":"read"} and .jobs.deploy.permissions == {"pages":"write","id-token":"write"}' 'authority must remain least privilege'
 require '.jobs.build.steps[0].name == "Validate source-owned admission" and .jobs.build.steps[1].with.ref == "\u0024{{ github.sha }}" and .jobs.build.steps[1].with["persist-credentials"] == false and .jobs.build.steps[1].with.repository == null' 'admission precedes exact own-source checkout'
 require '.jobs.build.steps[0].env == {"PUBLICATION_REPOSITORY":"\u0024{{ github.repository }}","PUBLICATION_REF":"\u0024{{ github.ref }}","PUBLICATION_EVENT":"\u0024{{ github.event_name }}","PUBLICATION_ENABLED":"\u0024{{ vars.SITE_PUBLICATION_ENABLED }}","PUBLICATION_MODE":"\u0024{{ inputs.mode || \u0027publish\u0027 }}","SOURCE_REVISION":"\u0024{{ github.sha }}"}' 'admission binds runtime context safely'
+# Check ordered, fail-closed build steps and protected deployment dependencies.
 layout_valid() {
   jq -e '
     .jobs.build.steps as $steps |
@@ -50,6 +53,7 @@ for mutation in \
 done
 admission="$(jq -r '.jobs.build.steps[0].run' <<<"$json")"
 sha=0123456789abcdef0123456789abcdef01234567
+# Execute the workflow's admission script with an independently varied context.
 admit() {
   env PUBLICATION_REPOSITORY="$1" PUBLICATION_REF="$2" PUBLICATION_EVENT="$3" \
     PUBLICATION_ENABLED="$4" PUBLICATION_MODE="$5" SOURCE_REVISION="$6" \
@@ -84,6 +88,7 @@ git -C "$scratch" -c user.name=Fixture -c user.email=fixture@example.invalid -c 
 source_sha="$(git -C "$scratch" rev-parse HEAD)"
 mkdir "$scratch/dist"
 receipt="$(jq -r '.jobs.build.steps[] | select(.name == "Record source-owned identity") | .run' <<<"$json")"
+# Execute the workflow's receipt script inside a real fixture checkout.
 write_receipt() {
   (cd "$scratch" && env SOURCE_REVISION="$1" GITHUB_SHA="$2" GITHUB_RUN_ID="$3" GITHUB_RUN_ATTEMPT="$4" \
     PUBLICATION_MODE="$5" GITHUB_STEP_SUMMARY="$scratch/summary" bash -c "$receipt") >/dev/null 2>&1

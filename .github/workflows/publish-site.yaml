@@ -97,6 +97,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    # Publish the built Pages artifact using an identity bound to this protected environment.
     permissions:
       pages: write
       id-token: write
