@@ -35,6 +35,10 @@ The business homepage is rendered by `src/components/business/BusinessSite.astro
 and `/da/` (Danish). Its offer amounts and translated copy live together in
 `src/components/business/content.ts`. Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
+The app guide covers a focused first version, not a ceiling on application size. Larger builds
+use separately agreed iterations with their own scope, schedule and price. Monthly quotes are
+rounded totals based on hosting costs plus a fixed service fee to Nikolai, with amounts and
+changes agreed before work begins; the site does not invent a fee amount or rounding increment.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
