@@ -83,9 +83,9 @@ for (const locale of ['en', 'da']) {
     assert.ok(shelf.includes('PolyForm Shield'));
     assert.ok(shelf.includes(locale === 'da' ? 'licens' : 'licence'));
     if (featured) {
-      assert.match(shelf, locale === 'da'
-        ? /alt="Klyngeoversigt i KSails desktopprogram med private oplysninger skjult"/
-        : /alt="Cluster overview in the KSail desktop application with private details masked"/);
+      assert.match(shelf, /data-ksail-workflow/);
+      assert.match(shelf, /<a\b[^>]*data-ksail-detail[^>]*href="\/_astro\/ksail-desktop\.[^/]+\.webp"/);
+      assert.ok(shelf.includes(locale === 'da' ? 'private oplysninger skjult' : 'private details masked'));
     } else {
       assert.ok(shelf.includes('alt="KSail CLI"'));
     }

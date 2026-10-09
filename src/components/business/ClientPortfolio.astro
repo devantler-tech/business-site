@@ -1,5 +1,5 @@
 ---
-import { Image } from 'astro:assets';
+import { Image, getImage } from 'astro:assets';
 import workflows from '../../assets/editorial/workflows.webp';
 import research from '../../assets/editorial/data-research.webp';
 import diagram from '../../assets/data-space-as-a-data-mesh.png';
@@ -19,6 +19,7 @@ const t = clientCopy[locale];
 const s = supporting[locale];
 const home = locale === 'da' ? '/da/' : '/';
 const featured = FEATURE_FEATURED_PORTFOLIO;
+const ksailDetail = featured ? await getImage({ src: ksailDesktop, width: 1600, format: 'webp' }) : undefined;
 const visibleProducts = featured ? selectPublicTools(catalogue, snapshot) : publicProducts;
 const text = locale === 'da' ? {
   work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
@@ -28,6 +29,25 @@ const text = locale === 'da' ? {
   work: 'Selected work', intro: 'A public website you can visit and explore.',
   tools: 'Tools with public source', toolsIntro: 'Six selected, maintained tools. Their order follows GitHub stars, not a judgement of quality.',
   checked: 'Ranking checked', wider: 'Explore the rest of my public work', project: 'Explore the project',
+};
+const ksailStory = locale === 'da' ? {
+  lead: 'Fra den første opsætning til den daglige drift.',
+  steps: [
+    { title: 'Opret', body: 'Skab et ensartet fundament til dine applikationer.' },
+    { title: 'Udgiv', body: 'Flyt ændringer i applikationerne ud i miljøet.' },
+    { title: 'Driv', body: 'Se dine applikationer og administrer miljøet.' },
+  ],
+  detail: 'Se desktopprogrammet', newTab: 'åbner i en ny fane',
+  privacy: 'Klyngeoversigt med private oplysninger skjult.',
+} : {
+  lead: 'From first setup to everyday operation.',
+  steps: [
+    { title: 'Set up', body: 'Create a consistent foundation for your applications.' },
+    { title: 'Deploy', body: 'Move application changes into the environment.' },
+    { title: 'Operate', body: 'Inspect your applications and manage the environment.' },
+  ],
+  detail: 'View the desktop interface', newTab: 'opens in a new tab',
+  privacy: 'Cluster overview with private details masked.',
 };
 const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'], 'data-product-controller': ['-data-product-controller--'],
@@ -49,13 +69,18 @@ for (const product of publicProducts) {
     <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span><span class="legacy-anchor" id="more-public-products" aria-hidden="true"></span>
     <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">{featured ? '01' : t.catalogueLabel}</p><h2 id="open-title">{featured ? text.tools : t.catalogueTitle}</h2><p>{featured ? text.toolsIntro : t.catalogueIntro}</p>{featured && <p class="checked">{text.checked}: <time datetime={snapshot.fetchedAt}>{snapshot.fetchedAt?.replace('T', ' ').replace('Z', ' UTC')}</time></p>}</div><Image data-project-art src={workflows} alt="" width={440} format="webp" /></div>
     {featured && publicProducts.filter(product => !visibleProducts.some(item => item.repository === product.repository)).flatMap(product => legacyAnchors[product.repository] ?? []).map(id => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
-    <div class="collection">{visibleProducts.map((product, i) => <article class:list={['product', { featured: product.repository === 'ksail' }]} data-public-product={product.repository} data-stars={product.stars}>
+    <div class="collection">{visibleProducts.map((product, i) => <article class:list={['product', { featured: product.repository === 'ksail' }]} data-public-product={product.repository} data-stars={product.stars} data-ksail-presentation={featured && product.repository === 'ksail' || undefined}>
       {(legacyAnchors[product.repository] ?? []).map((id) => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
       <div class="product-copy"><span class="number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h3>{product.name}</h3><p>{clientProducts[product.repository][locale]}</p>{featured && product.repository === 'ksail' && <p class="terms">{locale === 'da' ? 'Kildekode tilgængelig — se projektets licens.' : 'Source-available — see the project’s licence.'}</p>}{product.terms && <p class="terms">{product.terms[locale]}</p>}
         {product.repository === 'ksail' && <a href="https://ksail.devantler.tech">{t.productVisit} <span aria-hidden="true">↗</span></a>}
         {featured && <a href={`https://github.com/devantler-tech/${product.repository}`}>{text.project}: {product.name} <span aria-hidden="true">↗</span></a>}
       </div>
-      {product.repository === 'ksail' && <figure><Image src={featured ? ksailDesktop : ksailCapture} alt={featured ? (locale === 'da' ? 'Klyngeoversigt i KSails desktopprogram med private oplysninger skjult' : 'Cluster overview in the KSail desktop application with private details masked') : 'KSail CLI'} width={960} format="webp" /><figcaption>{featured ? (locale === 'da' ? 'Klyngeoversigt i KSails desktopprogram. Private oplysninger er skjult.' : 'Cluster overview in the KSail desktop application. Private details are masked.') : s.realScreenshot}</figcaption></figure>}
+      {product.repository === 'ksail' && (featured ? <div class="ksail-story">
+        <p class="workflow-lead">{ksailStory.lead}</p>
+        <ol data-ksail-workflow>{ksailStory.steps.map(step => <li><h4>{step.title}</h4><p>{step.body}</p></li>)}</ol>
+        <a data-ksail-detail href={ksailDetail!.src} target="_blank" rel="noopener">{ksailStory.detail}<span aria-hidden="true">↗</span><span class="sr-only"> ({ksailStory.newTab})</span></a>
+        <p class="interface-note">{ksailStory.privacy}</p>
+      </div> : <figure><Image src={ksailCapture} alt="KSail CLI" width={960} format="webp" /><figcaption>{s.realScreenshot}</figcaption></figure>)}
     </article>)}</div>
     <p class="scope">{featured ? (locale === 'da' ? 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.' : 'Each project has its own licence. Check its terms before reuse.') : t.reuse}</p><a href="/blog/">{t.journal} <span aria-hidden="true">↗</span></a>
     {featured && <p><a href="https://github.com/orgs/devantler-tech/repositories">{text.wider} <span aria-hidden="true">↗</span></a></p>}
@@ -103,6 +128,16 @@ for (const product of publicProducts) {
   .checked { font-size: .8rem; margin-top: 1rem; }
   .featured { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 0 3rem; align-items: center; padding-block: 2rem; }
   .featured > .legacy-anchor { grid-column: 1 / -1; }
+  .featured[data-ksail-presentation] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 5rem; padding-block: 2.75rem; }
+  .featured[data-ksail-presentation] h3 { font-size: clamp(2.5rem, 4vw, 3.5rem); letter-spacing: -.05em; }
+  .featured[data-ksail-presentation] .product-copy > p:first-of-type { max-width: 38ch; font-size: 1.05rem; line-height: 1.7; margin-block: 1rem; }
+  .ksail-story { min-width: 0; padding-left: 2rem; border-left: 2px solid var(--accent); }
+  .product .workflow-lead { margin: 0; color: var(--ink); font-size: 1.35rem; font-weight: 600; line-height: 1.35; letter-spacing: -.025em; max-width: 30ch; }
+  .ksail-story ol { list-style: none; margin: 1.5rem 0 .75rem; padding: 0; }
+  .ksail-story li { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 1rem; padding-block: .85rem; border-top: 1px solid var(--line); }
+  .ksail-story h4 { margin: 0; font-size: .95rem; font-weight: 600; line-height: 1.65; }
+  .ksail-story li p { margin: 0; font-size: .9rem; line-height: 1.65; }
+  .product .interface-note { margin: .2rem 0 0; font-size: .75rem; }
   figure { margin: 0; } figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .6rem; }
   .scope { margin-top: 1rem; max-width: 900px; }
@@ -118,4 +153,5 @@ for (const product of publicProducts) {
   .research-detail img { width: 100%; height: auto; margin-top: 1rem; background: white; border-radius: 5px; }
   .legacy-anchor { display: block; scroll-margin-top: 1.5rem; }
   @media (max-width: 760px) { section { padding-block: 2.5rem; } .collection, .featured, .research-heading { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading > img { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 1rem; } }
+  @media (max-width: 760px) { .featured[data-ksail-presentation] { grid-template-columns: 1fr; gap: 2rem; padding-block: 2rem; } .ksail-story { padding-left: 1.25rem; } }
 </style>

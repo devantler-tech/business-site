@@ -68,7 +68,8 @@ excluding the computer-use badge and pointer. No data or interface was generated
 
 Only read-only cluster navigation/refresh was used: no provisioning, deletion, assistant request,
 credential changes or plugin installation. The private original is not committed. Astro generates
-the delivery WebP from this redacted capture; both language captions disclose the redaction.
+the delivery WebP from this redacted capture. It is linked as an optional interface detail rather
+than displayed as the product's main image; both language notes disclose the redaction.
 
 ## `wedding-guest-demo.jpg`
 

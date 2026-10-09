@@ -145,8 +145,9 @@ and removal of the temporary gate remain tracked in
 [#12](https://github.com/devantler-tech/business-site/issues/12).
 
 Projects presents six stars-ranked maintained tools, followed by one compact public website example
-and earlier research. The real KSail desktop cluster-overview capture appears in its product card,
-with private details visibly masked and the redaction disclosed in both languages. Expandable English
+and earlier research. KSail's product introduction explains setup, deployment and operation rather
+than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
+with private details masked and the redaction disclosed in both languages. Expandable English
 research and diagrams are sourced from `src/content/docs/projects/completed.mdx`. The legacy
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
