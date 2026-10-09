@@ -32,16 +32,19 @@ and require a reviewed source adoption and verified public deployment.
 
 ## Publication
 
-Website source, tests and the complete reusable publisher belong here. The monorepo aggregates
-this product at `applications/business-site`, and retains its existing GitHub Pages resource,
-`github-pages` environment and `devantler.tech` domain. No DNS or hosting-resource transfer is
-required. The monorepo's thin caller supplies the exact reviewed gitlink revision to an immutable
-publishing-workflow pin. Source and workflow pins are deliberately separate.
+The source-owned `publish-site.yaml` builds this repository's exact main revision on
+main pushes, manual dispatches and daily public-ranking refreshes. Deployment is
+default-off until the repository variable `SITE_PUBLICATION_ENABLED` is exactly
+`true`. A main-branch manual dispatch defaults to artifact-only `preview`; it
+does not deploy, even when publication is enabled. Production receipts identify
+this repository, source SHA, workflow run/attempt and publication mode.
 
-A source merge here is not a live release by itself: adopt its reviewed revision in the monorepo,
-wait for the successful Pages deployment, then verify the actual public routes and the published
-`publication-source.json` receipt. Roll back by reverting the adopting monorepo pin/caller change
-through a reviewed PR and redeploying. Never run a competing publisher or bypass protection.
+The existing monorepo Pages owner and immutable reusable publisher remain the
+live path until the staged ownership transfer in [#25](https://github.com/devantler-tech/business-site/issues/25).
+The [cutover and rollback decision](docs/adr/0003-source-owned-publication.md)
+requires protected main-only deployment, replacement proof and actual HTTPS
+visitor/receipt checks before independently reviewed monorepo cleanup.
+A source merge or preview artifact alone is not live delivery.
 
 ## Source and asset provenance
 
@@ -53,4 +56,5 @@ adds signed commits rather than rewriting historical commits without their signa
 distinguish generated artwork from real portraits, captures and authored diagrams.
 
 Company/contact completion remains [monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917).
-There is no payment flow or client portal here; `client-portal` is a separate application product.
+The unified site's private portal backend, identity, customer isolation and payments
+are not deployed by the static Pages publisher.

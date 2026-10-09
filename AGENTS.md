@@ -12,10 +12,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `public/`, `scripts/` and root package/configuration files.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
-- `.github/workflows/publish-pages.yaml` owns the complete callable publisher. The monorepo
-  retains the existing GitHub Pages resource/domain and calls an immutable workflow pin with
-  its reviewed `applications/business-site` gitlink SHA. This repository has no independent
-  push publisher, cluster tenant, contact backend, checkout or paid subscription system.
+- `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication, default-off
+  until the reviewed #25 cutover. `publish-pages.yaml` retains the old immutable monorepo
+  call path during the transfer. This static publisher does not deploy a private portal
+  backend, identity, customer isolation, checkout or paid subscription system.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
   in their original repository; the source snapshot and asset provenance are linked in the README.
 
@@ -29,6 +29,7 @@ npm run build
 bash scripts/npm-toolchain.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
+bash scripts/site-publication.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
@@ -44,7 +45,8 @@ project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and sy
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness
-preflight; source publication is a separate reviewed monorepo pin adoption plus live readback.
+preflight; a source merge is not publication. The source-owned publisher is default-off
+pending the reviewed Pages/domain transfer in #25; see docs/adr/0003-source-owned-publication.md.
 
 ## Content boundaries
 
