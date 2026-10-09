@@ -5,15 +5,30 @@ import research from '../../assets/editorial/data-research.webp';
 import diagram from '../../assets/data-space-as-a-data-mesh.png';
 import ksailCapture from '../../assets/ksail-cli-dark.png';
 import WorkExample from './WorkExample.astro';
+import ProfessionalWork from './ProfessionalWork.astro';
+import { FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
 import { copy, type Locale } from './content';
 import { supporting } from './supporting';
 import { clientCopy, clientProducts } from './client-facing';
-import { publicProducts } from '../../data/public-products';
+import { publicProducts, selectPublicTools } from '../../data/public-products';
+import catalogue from '../../data/public-products.json';
+import snapshot from '../../data/github-stars.json';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
 const t = clientCopy[locale];
 const s = supporting[locale];
 const home = locale === 'da' ? '/da/' : '/';
+const featured = FEATURE_FEATURED_PORTFOLIO;
+const visibleProducts = featured ? selectPublicTools(catalogue, snapshot) : publicProducts;
+const text = locale === 'da' ? {
+  work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
+  tools: 'Værktøjer med offentlig kildekode', toolsIntro: 'Seks udvalgte, vedligeholdte værktøjer. Rækkefølgen følger antallet af GitHub-stjerner, ikke en vurdering af kvalitet.',
+  checked: 'Rangering kontrolleret', wider: 'Udforsk resten af mit offentlige arbejde', project: 'Udforsk projektet',
+} : {
+  work: 'Selected work', intro: 'A public website you can visit and explore.',
+  tools: 'Tools with public source', toolsIntro: 'Six selected, maintained tools. Their order follows GitHub stars, not a judgement of quality.',
+  checked: 'Ranking checked', wider: 'Explore the rest of my public work', project: 'Explore the project',
+};
 const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'], 'data-product-controller': ['-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
@@ -24,25 +39,28 @@ for (const product of publicProducts) {
   if (!clientProducts[product.repository]?.[locale]) throw new Error(`Missing business description for ${product.repository} (${locale})`);
 }
 ---
-<div data-client-portfolio>
-  <nav class="project-index" aria-label={s.projectIndex}><a href="#family-title">{s.familyTitle}</a><a href="#open-title">{s.currentLabel}</a><a href="#research">{s.researchTitle}</a></nav>
+<div data-client-portfolio data-featured-portfolio={featured || undefined}>
+  <nav class="project-index" aria-label={s.projectIndex}><a href="#family-title">{featured ? text.work : s.familyTitle}</a><a href="#open-title">{featured ? text.tools : s.currentLabel}</a><a href="#research">{s.researchTitle}</a></nav>
   <section aria-labelledby="family-title">
     <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>
-    <div class="section-heading"><p class="eyebrow">{t.familyLabel}</p><h2 id="family-title">{s.familyTitle}</h2><p>{s.familyIntro}</p></div>
-    <div class="family">{copy[locale].workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>
+    <div class="section-heading"><p class="eyebrow">{featured ? '01' : t.familyLabel}</p><h2 id="family-title">{featured ? text.work : s.familyTitle}</h2><p>{featured ? text.intro : s.familyIntro}</p></div>
+    {featured ? <ProfessionalWork locale={locale} /> : <div class="family">{copy[locale].workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>}
     <article data-hosting-project class="hosting"><span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span><h3>{t.platformTitle}</h3><p>{t.platformText}</p></article>
   </section>
   <section aria-labelledby="open-title">
     <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span><span class="legacy-anchor" id="more-public-products" aria-hidden="true"></span>
-    <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">{t.catalogueLabel}</p><h2 id="open-title">{t.catalogueTitle}</h2><p>{t.catalogueIntro}</p></div><Image data-project-art src={workflows} alt="" width={440} format="webp" /></div>
-    <div class="collection">{publicProducts.map((product, i) => <article class:list={['product', { featured: product.repository === 'ksail' }]} data-public-product={product.repository} data-stars={product.stars}>
+    <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">{featured ? '02' : t.catalogueLabel}</p><h2 id="open-title">{featured ? text.tools : t.catalogueTitle}</h2><p>{featured ? text.toolsIntro : t.catalogueIntro}</p>{featured && <p class="checked">{text.checked}: <time datetime={snapshot.fetchedAt}>{snapshot.fetchedAt?.replace('T', ' ').replace('Z', ' UTC')}</time></p>}</div><Image data-project-art src={workflows} alt="" width={440} format="webp" /></div>
+    {featured && publicProducts.filter(product => !visibleProducts.some(item => item.repository === product.repository)).flatMap(product => legacyAnchors[product.repository] ?? []).map(id => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
+    <div class="collection">{visibleProducts.map((product, i) => <article class:list={['product', { featured: product.repository === 'ksail' }]} data-public-product={product.repository} data-stars={product.stars}>
       {(legacyAnchors[product.repository] ?? []).map((id) => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
-      <div class="product-copy"><span class="number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h3>{product.name}</h3><p>{clientProducts[product.repository][locale]}</p>{product.terms && <p class="terms">{product.terms[locale]}</p>}
+      <div class="product-copy"><span class="number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h3>{product.name}</h3><p>{clientProducts[product.repository][locale]}</p>{featured && product.repository === 'ksail' && <p class="terms">{locale === 'da' ? 'Kildekode tilgængelig — se projektets licens.' : 'Source-available — see the project’s licence.'}</p>}{product.terms && <p class="terms">{product.terms[locale]}</p>}
         {product.repository === 'ksail' && <a href="https://ksail.devantler.tech">{t.productVisit} <span aria-hidden="true">↗</span></a>}
+        {featured && <a href={`https://github.com/devantler-tech/${product.repository}`}>{text.project}: {product.name} <span aria-hidden="true">↗</span></a>}
       </div>
       {product.repository === 'ksail' && <figure><Image src={ksailCapture} alt="KSail CLI" width={960} format="webp" /><figcaption>{s.realScreenshot}</figcaption></figure>}
     </article>)}</div>
-    <p class="scope">{t.reuse}</p><a href="/blog/">{t.journal} <span aria-hidden="true">↗</span></a>
+    <p class="scope">{featured ? (locale === 'da' ? 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.' : 'Each project has its own licence. Check its terms before reuse.') : t.reuse}</p><a href="/blog/">{t.journal} <span aria-hidden="true">↗</span></a>
+    {featured && <p><a href="https://github.com/orgs/devantler-tech/repositories">{text.wider} <span aria-hidden="true">↗</span></a></p>}
   </section>
   <aside id="engineering-checks" class="quality-bridge"><p>{t.qualityBridge}</p><a href={`${home}#quality`}>{t.qualityAction}<span aria-hidden="true">↗</span></a></aside>
   <section id="research" aria-labelledby="research-title">
@@ -86,6 +104,8 @@ for (const product of publicProducts) {
   .product h3 { overflow-wrap: anywhere; font-size: 1.2rem; }
   .product p { margin-top: .7rem; font-size: .95rem; }
   .product .terms, .scope { font-size: .8rem; }
+  .product a { margin-right: 1.25rem; }
+  .checked { font-size: .8rem; margin-top: 1rem; }
   .featured { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 0 3rem; align-items: center; padding-block: 2rem; }
   .featured > .legacy-anchor { grid-column: 1 / -1; }
   figure { margin: 0; } figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }

@@ -16,7 +16,7 @@ const valid = (ci) => {
   const index = (flag, run) => steps.flatMap((step, i) => step.env?.FEATURE_CLIENT_PORTFOLIO === flag && step.run === run ? [i] : []);
   const enabled = index('true', 'npm run build');
   const disabled = index('false', 'npm run build');
-  const unset = steps.flatMap((step, i) => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY npm run build' ? [i] : []);
+  const unset = steps.flatMap((step, i) => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO npm run build' ? [i] : []);
   const artifact = steps.flatMap((step, i) => step.with?.name === 'business-site-preview' && step.with.path === 'dist' ? [i] : []);
   return [enabled, disabled, unset, artifact].every((group) => group.length === 1) &&
     enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&

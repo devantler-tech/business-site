@@ -21,6 +21,7 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      FEATURE_FEATURED_PORTFOLIO: envField.boolean({ context: "server", access: "public", default: false }),
       FEATURE_OFFER_COPY: envField.boolean({
         context: "server",
         access: "public",

@@ -1,0 +1,20 @@
+---
+import WorkExample from './WorkExample.astro';
+import { copy, type Locale } from './content';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const item = { ...copy[locale].workItems[0], kind: locale === 'da' ? 'En offentlig hjemmeside' : 'A public website', text: locale === 'da'
+  ? 'En hjemmeside for AS Coaching og Vaner, der præsenterer coachingforløb, priser og kontaktmuligheder i et roligt og overskueligt design.'
+  : 'A website for AS Coaching og Vaner that brings coaching programmes, prices and contact options together in a calm, clear design.' };
+---
+<div class="case-study">
+  <div class="context"><p class="eyebrow">{locale === 'da' ? 'Design i praksis' : 'Design in practice'}</p><p class="statement">{locale === 'da' ? 'Et klart første indtryk. En enkel vej til næste skridt.' : 'A clear first impression. A simple path to the next step.'}</p><p>{locale === 'da' ? 'Se hjemmesiden, og vurder selv udtryk, indhold og navigation.' : 'Visit the website and explore its presentation, content and navigation for yourself.'}</p></div>
+  <WorkExample item={item} locale={locale} />
+</div>
+<style>
+  .case-study { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 3rem; align-items: start; margin-top: 2rem; }
+  .context { padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .eyebrow { font-size: .8rem; color: var(--accent); margin-bottom: 1rem; }
+  .statement { color: var(--ink); font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 600; line-height: 1.2; letter-spacing: -.035em; margin-bottom: 1.5rem; max-width: 450px; }
+  @media (max-width: 760px) { .case-study { grid-template-columns: 1fr; gap: 1.5rem; } }
+</style>

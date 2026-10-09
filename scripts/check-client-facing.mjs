@@ -8,6 +8,7 @@ const [directory, ...extra] = process.argv.slice(2);
 assert.ok(directory && extra.length === 0, 'Usage: check-client-facing.mjs <build-directory>');
 const page = (path) => readFileSync(resolve(directory, path, 'index.html'), 'utf8');
 const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
+const featured = process.env.FEATURE_FEATURED_PORTFOLIO === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const stars = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const anchors = {
@@ -22,19 +23,19 @@ for (const locale of ['en', 'da']) {
   const home = page(prefix);
   const projects = page(`${prefix}projects`);
   test(`${locale}: rollout follows the build-time flag and enabled production default`, () => {
-    assert.equal(home.includes('data-client-quality'), enabled);
-    assert.equal(projects.includes('data-client-portfolio'), enabled);
+    assert.equal(home.includes('data-client-quality'), enabled || featured);
+    assert.equal(projects.includes('data-client-portfolio'), enabled || featured);
   });
-  if (!enabled) {
+  if (!enabled && !featured) {
     test(`${locale}: disabled rollout preserves the existing Home portfolio destination`, () => {
       assert.ok(home.includes(`href="/${prefix}projects/#open-title"`));
     });
     continue;
   }
-  test(`${locale}: Home and Projects do not send business visitors to source code`, () => {
+  test(`${locale}: Home stays client-facing and Projects uses only controlled public destinations`, () => {
     for (const html of [home, projects]) {
       for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
-        assert.ok(!/^https?:\/\/(?:www\.)?github\.com\//i.test(href), `Unexpected source-code destination: ${href}`);
+        assert.ok(!/^https?:\/\/(?:www\.)?github\.com\//i.test(href) || (featured && html === projects && /^https:\/\/github\.com\/(?:devantler-tech\/[\w.-]+|orgs\/devantler-tech\/repositories)$/.test(href)), `Unexpected source-code destination: ${href}`);
       }
     }
   });
@@ -54,18 +55,18 @@ for (const locale of ['en', 'da']) {
     const index = projects.match(/<nav[^>]*class="project-index[^>]*>([\s\S]*?)<\/nav>/)?.[1];
     assert.ok(index);
     assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id), ['family-title', 'open-title', 'research']);
-    assert.ok(projects.includes(locale === 'da' ? 'ikke betalte kundeopgaver' : 'not paid client commissions'));
-    for (const id of ['coaching', 'wedding']) assert.match(projects, new RegExp(`data-work-example="${id}"`));
+    if (!featured) assert.ok(projects.includes(locale === 'da' ? 'ikke betalte kundeopgaver' : 'not paid client commissions'));
+    for (const id of featured ? ['coaching'] : ['coaching', 'wedding']) assert.match(projects, new RegExp(`data-work-example="${id}"`));
     assert.ok(projects.includes('href="https://ascoachingogvaner.dk/"'));
-    assert.ok(projects.includes(locale === 'da' ? 'Anonymiseret demo' : 'Anonymized guest-view demo'));
+    if (!featured) assert.ok(projects.includes(locale === 'da' ? 'Anonymiseret demo' : 'Anonymized guest-view demo'));
   });
-  test(`${locale}: all thirteen products stay visible, ranked and individually identifiable`, () => {
+  test(`${locale}: the selected catalogue stays visible, ranked and individually identifiable`, () => {
     const shelf = projects.match(/<section\b[^>]*aria-labelledby="open-title"[^>]*>([\s\S]*?)<\/section>/)?.[1];
     assert.ok(shelf);
     assert.doesNotMatch(shelf, /<details\b/);
     const cards = [...shelf.matchAll(/<article\b[^>]*data-public-product="([^"]+)"[^>]*data-stars="(\d+)"[^>]*>([\s\S]*?)<\/article>/g)];
-    assert.equal(cards.length, 13);
-    assert.deepEqual(cards.map(([, repo]) => repo).sort(), catalogue.map((item) => item.repository).sort());
+    assert.equal(cards.length, featured ? 6 : 13);
+    if (!featured) assert.deepEqual(cards.map(([, repo]) => repo).sort(), catalogue.map((item) => item.repository).sort());
     for (const [, repo, count, html] of cards) {
       assert.equal(Number(count), stars.repositories[repo]);
       assert.ok(html.includes(catalogue.find((item) => item.repository === repo).name));

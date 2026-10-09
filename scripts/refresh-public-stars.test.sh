@@ -18,16 +18,17 @@ cp "$site_dir/src/data/public-products.json" "$scratch/src/data/"
 cp "$site_dir/scripts/fixtures/github-public-stars.sh" "$scratch/bin/gh"
 chmod +x "$scratch/bin/gh"
 export PATH="$scratch/bin:$PATH" STAR_FIXTURE="$scratch/read.json"
-jq '[map({name: .repository, private: false, archived: false, owner: {login: "devantler-tech"}, stargazers_count: 0})]' "$site_dir/src/data/public-products.json" > "$scratch/read.json"
+jq '[map({name: .repository, private: false, archived: false, fork: false, owner: {login: "devantler-tech"}, stargazers_count: 0})]' "$site_dir/src/data/public-products.json" > "$scratch/read.json"
 bash "$scratch/scripts/refresh-public-stars.sh" > /dev/null
 jq -e --slurpfile manifest "$site_dir/src/data/public-products.json" '(.repositories | length) == ($manifest[0] | length) and .repositories.ksail == 0 and (.observedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' "$scratch/src/data/github-stars.json" > /dev/null
 cp "$scratch/src/data/github-stars.json" "$scratch/result.json"
-for mode in failed missing private archived invalid duplicate; do
+for mode in failed missing private malformed-archived malformed-fork invalid duplicate; do
   case "$mode" in
     failed) export STAR_READ_FAIL=1 ;;
     missing) jq '.[0] |= .[1:]' "$scratch/read.json" > "$scratch/result.json.read" ;;
     private) jq '.[0][0].private = true' "$scratch/read.json" > "$scratch/result.json.read" ;;
-    archived) jq '.[0][0].archived = true' "$scratch/read.json" > "$scratch/result.json.read" ;;
+    malformed-archived) jq '.[0][0].archived = null' "$scratch/read.json" > "$scratch/result.json.read" ;;
+    malformed-fork) jq 'del(.[0][0].fork)' "$scratch/read.json" > "$scratch/result.json.read" ;;
     invalid) jq '.[0][0].stargazers_count = null' "$scratch/read.json" > "$scratch/result.json.read" ;;
     duplicate) jq '.[0] += [.[0][0]]' "$scratch/read.json" > "$scratch/result.json.read" ;;
   esac
@@ -41,6 +42,14 @@ for mode in failed missing private archived invalid duplicate; do
     rm -f -- "$scratch/result.json.read"
   fi
   export STAR_READ_FAIL=0 STAR_FIXTURE="$scratch/read.json"
+done
+for field in archived fork; do
+  jq --arg field "$field" '.[0][0][$field] = true' "$scratch/read.json" > "$scratch/result.json.read"
+  export STAR_FIXTURE="$scratch/result.json.read"
+  bash "$scratch/scripts/refresh-public-stars.sh" > /dev/null
+  first_repository=$(jq -r '.[0].repository' "$site_dir/src/data/public-products.json")
+  jq -e --arg repo "$first_repository" --arg field "$field" '.metadata[$repo][$field] == true and (.fetchedAt | test("^[0-9T:Z-]+$"))' "$scratch/src/data/github-stars.json" > /dev/null
+  rm -f -- "$scratch/result.json.read"
 done
 printf 'Public star refresh preserves the snapshot on failed and incomplete reads.\n'
 finished=true
