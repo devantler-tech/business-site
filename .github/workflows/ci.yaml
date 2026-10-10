@@ -125,6 +125,13 @@ jobs:
         env:
           FEATURE_OFFER_COPY: "true"
         run: npm run build
+      - name: Build legacy revised hosting-offer preview
+        working-directory: .
+        env:
+          FEATURE_CLIENT_PORTFOLIO: "false"
+          FEATURE_FEATURED_PORTFOLIO: "false"
+          FEATURE_OFFER_COPY: "true"
+        run: npm run build
       - name: Build featured portfolio preview
         working-directory: .
         env:
@@ -143,6 +150,8 @@ jobs:
       - name: Build entirely unset production
         working-directory: .
         run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+      - name: Verify offering-copy accessibility controls
+        run: node scripts/check-offering-copy.test.mjs dist
       - name: Verify public portal boundary controls
         run: bash scripts/check-portal-artifacts.test.sh
       - name: Verify the actual public artifact excludes portal identity

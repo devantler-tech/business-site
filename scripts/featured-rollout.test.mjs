@@ -13,26 +13,31 @@ const valid = (ci) => {
   const steps = job?.steps ?? [];
   const indices = (predicate) => steps.flatMap((step, i) => predicate(step) ? [i] : []);
   const enabled = indices(step => step.env?.[flag] === 'true' && step.run === 'npm run build');
-  const disabled = indices(step => step.env?.[flag] === 'false' && step.run === 'npm run build');
+  const disabled = indices(step => step.env?.[flag] === 'false' && step.env?.FEATURE_OFFER_COPY === 'false' && step.run === 'npm run build');
+  const legacyPreview = indices(step => step.env?.[flag] === 'false' && step.env?.FEATURE_CLIENT_PORTFOLIO === 'false' && step.env?.FEATURE_OFFER_COPY === 'true' && step.run === 'npm run build');
   const unset = indices(step => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build' && step.env?.[flag] == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
-  return [enabled, disabled, unset, artifact].every(group => group.length === 1) &&
-    enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
-    [...enabled, ...disabled, ...unset].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
+  return [enabled, disabled, legacyPreview, unset, artifact].every(group => group.length === 1) &&
+    enabled[0] < disabled[0] && legacyPreview[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
+    [...enabled, ...disabled, ...legacyPreview, ...unset].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
 test('reviewed featured portfolio is enabled by default while retaining explicit rollback', () => assert.match(config, /FEATURE_FEATURED_PORTFOLIO:\s*envField\.boolean\(\{\s*context: "server", access: "public", default: true\s*\}\)/));
 test('actual CI builds Featured portfolio enabled, false and entirely unset before uploading production', () => assert.ok(valid(workflow)));
-for (const mode of ['missing-preview', 'missing-false', 'missing-unset', 'skipped-preview', 'ignored-failure', 'reverse', 'inherited-job', 'inherited-workflow', 'inherited-unset']) {
+for (const mode of ['missing-preview', 'missing-false', 'missing-legacy-preview', 'skipped-legacy-preview', 'ignored-legacy-failure', 'missing-unset', 'skipped-preview', 'ignored-failure', 'reverse', 'inherited-job', 'inherited-workflow', 'inherited-unset']) {
   test(`Featured portfolio rollout rejects ${mode}`, () => {
     const ci = structuredClone(workflow);
     const job = ci.jobs['build-docs'];
     assert.ok(valid(ci), 'negative controls start from the validated actual workflow');
     const enabled = job.steps.find(step => step.env?.FEATURE_FEATURED_PORTFOLIO === 'true');
-    const disabled = job.steps.find(step => step.env?.FEATURE_FEATURED_PORTFOLIO === 'false');
+    const disabled = job.steps.find(step => step.env?.FEATURE_FEATURED_PORTFOLIO === 'false' && step.env?.FEATURE_OFFER_COPY === 'false');
+    const legacyPreview = job.steps.find(step => step.env?.FEATURE_FEATURED_PORTFOLIO === 'false' && step.env?.FEATURE_OFFER_COPY === 'true');
     assert.ok(enabled && disabled, 'CI must first supply both flag states');
     if (mode === 'missing-preview') job.steps = job.steps.filter(step => step !== enabled);
     if (mode === 'missing-false') job.steps = job.steps.filter(step => step !== disabled);
+    if (mode === 'missing-legacy-preview') job.steps = job.steps.filter(step => step !== legacyPreview);
+    if (mode === 'skipped-legacy-preview') legacyPreview.if = 'false';
+    if (mode === 'ignored-legacy-failure') legacyPreview['continue-on-error'] = true;
     if (mode === 'missing-unset') job.steps = job.steps.filter(step => !step.run?.startsWith('env -u FEATURE_CLIENT_PORTFOLIO'));
     if (mode === 'skipped-preview') enabled.if = 'false';
     if (mode === 'ignored-failure') enabled['continue-on-error'] = true;

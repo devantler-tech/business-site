@@ -4,9 +4,11 @@ import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
+import { parse } from 'parse5';
 import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
 import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
 import { assertVisitorPrivacy } from './visitor-privacy.mjs';
+import { readerText } from './reader-text.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -40,6 +42,11 @@ const projectInventory = readFileSync(new URL('../src/content/docs/projects/acti
 assert.doesNotMatch(projectInventory, /grouped\s*—\s*a private self-hosted app|source repositories are private/, 'Application grouping must not imply private source repositories');
 const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const escapeText = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const metadata = (node) => [
+  ...(node.tagName === 'meta' ? node.attrs.filter((attr) => attr.name === 'content').map((attr) => attr.value) : []),
+  ...(node.attrs ?? []).filter((attr) => attr.name === 'alt' || attr.name === 'aria-label').map((attr) => attr.value),
+  ...(node.childNodes ?? []).flatMap(metadata),
+];
 
 assert.ok(home.includes('data-business-site'), 'Production build must publish the business homepage without an opt-in flag');
 
@@ -104,6 +111,15 @@ const navigation = (page, locale) => {
 };
 for (const locale of ['en', 'da']) {
   const prefix = locale === 'da' ? 'da/' : '';
+  for (const section of ['', 'about', 'projects']) {
+    const page = html(`${prefix}${section}`);
+    // The official registration type is not an offering-size claim. Keep it
+    // accurate, while checking visitor copy, accessibility labels and metadata (#41).
+    const marketing = [readerText(page), ...metadata(parse(page))]
+      .join(' ').replaceAll('Personally owned small business (PMV)', 'PMV');
+    assert.doesNotMatch(marketing, /(?<!\p{L})(?:small|små|lille)(?!\p{L})/iu,
+      `${locale} ${section || 'Home'}: offering copy must not undersell project size`);
+  }
   for (const section of ['about', 'projects']) {
     const page = html(`${prefix}${section}`);
     navigation(page, locale);

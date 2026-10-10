@@ -5,7 +5,7 @@ import type { Locale } from './content';
 const previewClientCopy = {
   en: {
     qualityEyebrow: 'Care built in', qualityTitle: 'Useful software. Built with care.',
-    qualityIntro: 'A small project deserves the same attention to quality and security as a larger one.',
+    qualityIntro: 'Every project deserves careful attention to quality and security.',
     quality: [
       { title: 'Quality you can try', text: 'Important journeys are tested before delivery. You get to try the result, so we can check that it does the job you agreed to.' },
       { title: 'Security from the start', text: 'Automated checks help spot risky changes and outdated software. Access and data needs are considered as part of the project—not left until the end.' },
@@ -14,7 +14,7 @@ const previewClientCopy = {
     qualityScope: 'Checks are chosen for each project; they are not a certification or a promise of flawless software. Hosted projects include optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. New features and larger iterations need a new agreement; capacity, backups and human support terms are specified in your quote.',
     portfolioBridge: 'Websites, web apps, reusable tools and earlier research. Explore the full range of work behind Devantler Tech.',
     projectsIntro: 'Different projects. The same care for the people who use them.',
-    familyLabel: '01 / Websites & small apps', catalogueLabel: '02 / The wider portfolio', researchLabel: '03 / Earlier research',
+    familyLabel: '01 / Websites & web apps', catalogueLabel: '02 / The wider portfolio', researchLabel: '03 / Earlier research',
     catalogueTitle: 'Tools that make other work possible.',
     catalogueIntro: 'Alongside websites and web apps, I build tools for developing, checking and running software. Here is the complete public collection, including work still in development.',
     reuse: 'Availability does not grant unrestricted reuse. Each project has its own licence; the labels below identify special restrictions. No paid product subscription is available.',
@@ -30,7 +30,7 @@ const previewClientCopy = {
   },
   da: {
     qualityEyebrow: 'Omtanke fra starten', qualityTitle: 'Nyttig software. Bygget med omtanke.',
-    qualityIntro: 'Et lille projekt fortjener samme omtanke for kvalitet og sikkerhed som et større.',
+    qualityIntro: 'Hvert projekt fortjener omtanke for kvalitet og sikkerhed.',
     quality: [
       { title: 'Kvalitet, du kan afprøve', text: 'Vigtige brugerforløb testes før levering. Du får mulighed for at afprøve resultatet, så vi kan kontrollere, at det løser den aftalte opgave.' },
       { title: 'Sikkerhed fra starten', text: 'Automatiske kontroller hjælper med at opdage risikable ændringer og forældet software. Adgang og databehov tænkes ind i projektet—ikke først til sidst.' },
@@ -39,7 +39,7 @@ const previewClientCopy = {
     qualityScope: 'Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Hostede projekter har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Nye funktioner og større videreudvikling kræver en ny aftale; kapacitet, backup og menneskelig support aftales i tilbuddet.',
     portfolioBridge: 'Hjemmesider, webapps, genbrugelige værktøjer og tidligere forskning. Se bredden i arbejdet bag Devantler Tech.',
     projectsIntro: 'Forskellige projekter. Samme omtanke for dem, der bruger dem.',
-    familyLabel: '01 / Hjemmesider og små apps', catalogueLabel: '02 / Den bredere portefølje', researchLabel: '03 / Tidligere forskning',
+    familyLabel: '01 / Hjemmesider og webapps', catalogueLabel: '02 / Den bredere portefølje', researchLabel: '03 / Tidligere forskning',
     catalogueTitle: 'Værktøjer, der gør andet arbejde muligt.',
     catalogueIntro: 'Ud over hjemmesider og webapps bygger jeg værktøjer til at udvikle, kontrollere og drive software. Her er hele den offentlige samling, også projekter under udvikling.',
     reuse: 'Tilgængelighed giver ikke ubegrænset ret til genbrug. Hvert projekt har sin egen licens; mærkaterne nedenfor viser særlige begrænsninger. Der tilbydes ingen betalte produktabonnementer.',
