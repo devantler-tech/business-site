@@ -12,6 +12,9 @@ export function assertVisitorPrivacy(html, path) {
         assert.equal(new URL(attribute.value, 'https://devantler.tech/').origin, 'https://devantler.tech',
           `${path}: automatic scripts stay on the website until external processing is assessed`);
       }
+      if (node.tagName === 'iframe' && attribute.name === 'srcdoc') {
+        inspect(parse(attribute.value));
+      }
     }
     for (const child of node.childNodes ?? []) inspect(child);
   };

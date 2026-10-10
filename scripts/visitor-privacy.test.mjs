@@ -10,6 +10,9 @@ for (const [name, html] of [
   ['HTML references', '<script src="https&#58;//example.invalid/stats.js"></script>'],
   ['statistics registration', '<script src="/stats.js" data-website-id="example"></script>'],
   ['event registration', '<a href="https://example.invalid/" DATA-UMAMI-EVENT="cta">Visit</a>'],
+  ['iframe document scripts', '<iframe srcdoc="&lt;script src=&quot;https://example.invalid/stats.js&quot;&gt;&lt;/script&gt;"></iframe>'],
+  ['iframe document statistics', '<iframe srcdoc="&lt;a data-umami-event=&quot;cta&quot;&gt;Visit&lt;/a&gt;"></iframe>'],
+  ['nested iframe documents', '<iframe srcdoc="&lt;iframe srcdoc=&quot;&amp;lt;script src=&amp;quot;https://example.invalid/stats.js&amp;quot;&amp;gt;&amp;lt;/script&amp;gt;&quot;&gt;&lt;/iframe&gt;"></iframe>'],
 ]) {
   test(`rejects ${name}`, () => assert.throws(() => assertVisitorPrivacy(html, 'fixture.html')));
 }
@@ -20,6 +23,8 @@ for (const [name, html] of [
   ['ordinary external links', '<a href="https://example.invalid/">Visit</a>'],
   ['inert example prose', '<pre>&lt;script src="https://example.invalid/stats.js"&gt;</pre>'],
   ['unrelated data attribute', '<script data-src="https://example.invalid/" src="/theme.js"></script>'],
+  ['local iframe document scripts', '<iframe srcdoc="&lt;script src=&quot;/theme.js&quot;&gt;&lt;/script&gt;"></iframe>'],
+  ['inert srcdoc on another element', '<div srcdoc="&lt;script src=&quot;https://example.invalid/stats.js&quot;&gt;&lt;/script&gt;"></div>'],
 ]) {
   test(`preserves ${name}`, () => assert.doesNotThrow(() => assertVisitorPrivacy(html, 'fixture.html')));
 }
