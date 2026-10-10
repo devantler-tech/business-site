@@ -13,6 +13,19 @@ test('diagnostics do not disclose supplied private values', () => {
   const sensitive = 'Private fixture\t1\n1234 Exampletown';
   assert.throws(() => companyAddress(sensitive, true), (error) => !error.message.includes(sensitive));
 });
+for (const [position, value] of [
+  ['before the first line', '\tExample Road 1\n1234 Exampletown'],
+  ['after the first line', 'Example Road 1\t\n1234 Exampletown'],
+  ['before the second line', 'Example Road 1\n\t1234 Exampletown'],
+  ['after the second line', 'Example Road 1\n1234 Exampletown\t'],
+  ['a bare carriage return', '\rExample Road 1\n1234 Exampletown'],
+  ['a leading form feed', '\fExample Road 1\n1234 Exampletown'],
+  ['a leading format character', '\ufeffExample Road 1\n1234 Exampletown'],
+]) {
+  test(`rejects controls ${position} before whitespace normalization`, () => {
+    assert.throws(() => companyAddress(value, true), /COMPANY_POSTAL_ADDRESS/);
+  });
+}
 test('normalizes CRLF and surrounding whitespace without inventing business facts', () => {
   assert.deepEqual(companyAddress(' Example Road 1 \r\n1234 Exampletown ', true), ['Example Road 1', '1234 Exampletown']);
   assert.deepEqual(companyAddress('Example Road 1\n1234 Exampletown\n', true), ['Example Road 1', '1234 Exampletown']);
