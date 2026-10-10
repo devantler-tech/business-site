@@ -1,6 +1,6 @@
 // Package identity owns the latent, invitation-only portal identity boundary.
-// It registers no HTTP routes. Browser code exchange, sessions and CSRF remain
-// prerequisites for wiring it into an application.
+// Its browser surface stays default-off until an injected OpenFeature provider
+// enables it; production hosting and broker activation are separate gates.
 package identity
 
 import (
@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
+	"golang.org/x/oauth2"
 )
 
 // ErrDenied intentionally reveals no account, invitation or token details.
@@ -27,6 +29,8 @@ var ErrDenied = errors.New("portal access denied")
 type Broker struct {
 	verifier         *oidc.IDTokenVerifier
 	issuer, clientID string
+	endpoint         oauth2.Endpoint
+	client           *http.Client
 }
 
 // Principal cannot be populated by callers. Only a verified broker proof creates
@@ -47,7 +51,23 @@ func NewBroker(ctx context.Context, issuer, clientID string) (*Broker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("discover broker: %w", err)
 	}
-	return &Broker{p.Verifier(&oidc.Config{ClientID: clientID}), issuer, clientID}, nil
+	endpoint := p.Endpoint()
+	for _, address := range []string{endpoint.AuthURL, endpoint.TokenURL} {
+		e, err := url.Parse(address)
+		if err != nil || e.Scheme != "https" || e.Host != u.Host || e.User != nil || e.Fragment != "" {
+			return nil, ErrDenied
+		}
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	if supplied, ok := ctx.Value(oauth2.HTTPClient).(*http.Client); ok && supplied != nil {
+		copy := *supplied
+		copy.Timeout = 10 * time.Second
+		client = &copy
+	}
+	// Authorization codes, PKCE verifiers and client credentials may only be sent
+	// to the configured token endpoint, never forwarded through a redirect.
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Broker{verifier: p.Verifier(&oidc.Config{ClientID: clientID}), issuer: issuer, clientID: clientID, endpoint: endpoint, client: client}, nil
 }
 
 // Verify checks signature, issuer, audience and expiry with go-oidc, and binds the
@@ -91,7 +111,7 @@ func (s *Foundation) ready(ctx context.Context) bool {
 	return err == nil && enabled
 }
 
-// Attempt secrets are for the trusted future browser handler, never logs, public
+// Attempt secrets are for the trusted browser handler, never logs, public
 // assets or a browser-selected role. State/binding are stored only as digests.
 type Attempt struct{ State, BrowserBinding, Nonce, PKCEVerifier string }
 
@@ -137,16 +157,33 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) (string, error) {
 // from an untrusted request. That handler still owes PKCE, redirect and CSRF proof.
 // Consumption happens in PostgreSQL, so another process cannot replay the attempt.
 func (s *Foundation) Complete(ctx context.Context, state, browser, raw, invitation string) (Principal, error) {
-	if !s.ready(ctx) || state == "" || browser == "" {
-		return Principal{}, ErrDenied
+	nonce, _, err := s.consumeAttempt(ctx, state, browser)
+	if err != nil {
+		return Principal{}, err
 	}
-	var nonce string
-	err := s.pool.QueryRow(ctx, `DELETE FROM portal_login_attempts WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>now() RETURNING nonce`, digest(state), digest(browser)).Scan(&nonce)
+	return s.completeProof(ctx, nonce, raw, invitation)
+}
+
+// consumeAttempt is the sole atomic consumer, before any browser code exchange.
+// Request-local deletion alone cannot stop another process replaying a callback.
+func (s *Foundation) consumeAttempt(ctx context.Context, state, browser string) (string, string, error) {
+	if !s.ready(ctx) || state == "" || browser == "" {
+		return "", "", ErrDenied
+	}
+	var nonce, verifier string
+	err := s.pool.QueryRow(ctx, `DELETE FROM portal_login_attempts WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>now() RETURNING nonce,pkce_verifier`, digest(state), digest(browser)).Scan(&nonce, &verifier)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Principal{}, ErrDenied
+		return "", "", ErrDenied
 	}
 	if err != nil {
-		return Principal{}, fmt.Errorf("consume login attempt: %w", err)
+		return "", "", fmt.Errorf("consume login attempt: %w", err)
+	}
+	return nonce, verifier, nil
+}
+
+func (s *Foundation) completeProof(ctx context.Context, nonce, raw, invitation string) (Principal, error) {
+	if !s.ready(ctx) {
+		return Principal{}, ErrDenied
 	}
 	p, err := s.broker.Verify(ctx, raw, nonce)
 	if err != nil {

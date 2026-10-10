@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"><script src="/portal/assets/portal.js" defer></script></head>
+<body><a class="skip" href="#main">{{if eq .Lang "da"}}Gå til indhold{{else}}Skip to content{{end}}</a>
+<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang "da"}}Indstillinger{{else}}Preferences{{end}}"><a href="?lang={{if eq .Lang "da"}}en{{else}}da{{end}}" lang="{{if eq .Lang "da"}}en{{else}}da{{end}}">{{if eq .Lang "da"}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+<main id="main"><div class="intro"><h1>{{.Title}}</h1><p>{{.Intro}}</p></div>
+<section aria-label="{{.Title}}">
+{{if eq .Kind "sign-in"}}<form method="post" action="/portal/sign-in"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><label for="invitation">{{.Invitation}}</label><input id="invitation" name="invitation" autocomplete="off" maxlength="256" spellcheck="false"><p>{{if eq .Lang "da"}}Du skal være inviteret for at få adgang. Brug dit sædvanlige login på næste side.{{else}}Access is invitation-only. Use your usual sign-in on the next page.{{end}}</p><button type="submit">{{.Action}}</button></form>
+{{else if or (eq .Kind "home") (eq .Kind "operator")}}<h2>{{if eq .Kind "operator"}}{{.Operator}}{{else}}{{.SignedIn}}{{end}}</h2><p>{{if eq .Lang "da"}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p><p>{{.Boundary}}</p><form method="post" action="/portal/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
+{{else}}<p role="alert">{{if eq .Kind "unavailable"}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="/portal/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
+</section><a class="back" href="/">{{.Back}}</a></main><footer>Devantler Tech</footer></body></html>

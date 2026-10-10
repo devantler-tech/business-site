@@ -1,25 +1,29 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
-This Go module is the unified product's **latent identity foundation**, not a
-deployed portal. No HTTP server, callback, customer form, payment or agent endpoint
-exists yet. Never present synthetic broker tests as Google/Microsoft login proof.
+This Go module is the unified product's **default-off browser identity boundary**,
+not a deployed portal. It provides sign-in/callback/shell/logout handlers; no
+customer form, payment or agent endpoint exists. Never present synthetic broker
+tests or the loopback visual gateway as Google/Microsoft login or production
+ingress/cookie proof.
 
 Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 `go mod verify`, `go vet ./...`, `go test -race ./... -count=1 -timeout=90s` and
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's three identity tables. Provision a fresh disposable PostgreSQL
+only the fixture's four identity/session tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
 consumption, current membership and concrete record client scopes. A token's
 email/groups or browser fields cannot assign a role. `Invite`/`Revoke` are trusted
 control-plane provisioning methods, not permission to expose unauthenticated APIs.
-Before wiring any browser route, complete monorepo#3936's code exchange/PKCE,
-durable opaque sessions, CSRF, session revocation, accessible EN/DA forms and
-real-provider isolation proof. Keep the release gate off until those gates clear.
+Browser routes use maintained code exchange/PKCE, durable opaque sessions,
+token-based CSRF, current membership and accessible EN/DA forms. Keep the
+production release gate off until monorepo#3936 and #3939's real-provider,
+deployment, recovery and privacy prerequisites clear. Synthetic source tests
+do not grant production activation.
 Use the injected OpenFeature SDK client and false-default `portal-identity`
 boolean on every operation; missing/error/type-mismatched evaluation denies.
 Do not introduce a custom environment-flag parser or cache an earlier on verdict.
