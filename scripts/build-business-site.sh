@@ -3,6 +3,7 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 node --test scripts/theme.test.mjs
+node --test scripts/visitor-privacy.test.mjs
 node --test scripts/journal-navigation.test.mjs
 node --test scripts/public-products.test.mjs
 node --test scripts/public-tools.test.mjs

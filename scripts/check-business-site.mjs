@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
 import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
 import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
+import { assertVisitorPrivacy } from './visitor-privacy.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -19,6 +20,7 @@ for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     const page = readFileSync(resolve(root, path), 'utf8');
     assertNoRetiredRepositoryLinks(page);
+    assertVisitorPrivacy(page, path);
     const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
     if (footer && companyEnabled) {
       for (const fact of [company.name, company.cvr, company.businessType, company.owner, company.email]) {
