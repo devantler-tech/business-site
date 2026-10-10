@@ -3,7 +3,7 @@ import { Image } from 'astro:assets';
 import portrait from '../../assets/profile.jpg';
 import matrix from '../../assets/matrix.png';
 import BusinessLayout from "./BusinessLayout.astro";
-import { copy, offers, inquiryUrl, type Locale } from './content';
+import { copy, offers, inquiryUrl, linkedInUrl, companyIdentityEnabled, type Locale } from './content';
 import WorkExample from './WorkExample.astro';
 import ProfessionalWork from './ProfessionalWork.astro';
 import PreviewBanner from '../PreviewBanner.astro';
@@ -78,7 +78,7 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
         <ol>{t.steps.map((step) => <li><h3>{step.title}</h3><p>{step.text}</p></li>)}</ol>
       </section>
       <section id="contact" class="contact-band" aria-labelledby="contact-title">
-        <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><p class="contact-note">{t.contactNote}</p></div>
+        <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p>{companyIdentityEnabled ? <div class="actions"><a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a></div> : <a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>}<p class="contact-note">{t.contactNote}</p></div>
       </section>
     </main>
 </BusinessLayout>

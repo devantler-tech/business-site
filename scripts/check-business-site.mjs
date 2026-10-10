@@ -5,15 +5,29 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
 import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
+import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
 const root = resolve(directory);
 const clientFacing = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
+const company = JSON.parse(readFileSync(new URL('../src/data/company.json', import.meta.url), 'utf8'));
+const companyContact = `mailto:${company.email}`;
+const companyEnabled = (process.env.FEATURE_COMPANY_IDENTITY ?? 'false') === 'true';
 const featuredPortfolio = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
-    assert.ok(!readFileSync(resolve(root, path), 'utf8').includes('https://github.com/devantler-tech/reusable-workflows'), 'Rendered public pages must not link to retired repositories');
+    const page = readFileSync(resolve(root, path), 'utf8');
+    assertNoRetiredRepositoryLinks(page);
+    const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
+    if (footer && companyEnabled) {
+      for (const fact of [company.name, company.cvr, company.businessType, company.owner, company.email]) {
+        assert.ok(footer.includes(fact), `${path}: shared footer identifies the registered business`);
+      }
+      assert.ok(footer.includes(`href="${companyContact}"`), `${path}: registered email is usable without a form backend`);
+    } else if (footer) {
+      assert.ok(!footer.includes(company.cvr) && !footer.includes(company.email), `${path}: unreleased registration remains absent`);
+    }
   }
 }
 const html = (path) => readFileSync(resolve(root, path, 'index.html'), 'utf8');
@@ -327,7 +341,9 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
     assert.match(page, new RegExp(`data-offer="${service}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     assert.ok(page.includes(locale === 'da' ? danishPrice : englishPrice), 'Starting price uses unambiguous language-appropriate grouping');
   }
-  assert.ok(page.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'), 'Inquiry route must be the verified public profile');
+  assert.ok(page.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'), 'LinkedIn remains an alternative inquiry route');
+  const contact = page.match(/<section\b[^>]*id="contact"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  assert.equal(contact?.includes(`href="${companyContact}"`), companyEnabled, 'Both language homepages follow the registration release flag');
   assert.ok(!page.includes('<form'), 'Do not present a contact form without delivery');
   for (const href of page.matchAll(/href="(\/[^"?#]*)(?:[?#][^"]*)?"/g)) {
     const target = href[1];
