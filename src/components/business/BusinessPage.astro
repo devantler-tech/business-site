@@ -2,10 +2,15 @@
 import BusinessSite from './BusinessSite.astro';
 import BusinessSupporting from './BusinessSupporting.astro';
 import ProjectRedirect from './ProjectRedirect.astro';
+import BusinessCompany from './BusinessCompany.astro';
+import { companyIdentityEnabled } from './content';
 
 const legacy = Astro.url.pathname.replace(/\/$/, '');
 const anchor = legacy === '/projects/active' ? 'open-title' : legacy === '/projects/completed' ? 'research' : null;
 const locale = Astro.url.pathname.startsWith('/da/') ? 'da' : 'en';
 const section = Astro.url.pathname.split('/').filter(Boolean).at(-1);
+if (section === 'company' && !companyIdentityEnabled) {
+  return Astro.redirect(locale === 'da' ? '/da/' : '/');
+}
 ---
-{anchor ? <ProjectRedirect anchor={anchor} /> : section === 'about' || section === 'projects' ? <BusinessSupporting locale={locale} section={section} /> : <BusinessSite locale={locale} />}
+{anchor ? <ProjectRedirect anchor={anchor} /> : section === 'company' ? <BusinessCompany locale={locale} /> : section === 'about' || section === 'projects' ? <BusinessSupporting locale={locale} section={section} /> : <BusinessSite locale={locale} />}

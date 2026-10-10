@@ -4,8 +4,9 @@ The [devantler.tech](https://devantler.tech) site — an [Astro](https://astro.b
 [Starlight](https://starlight.astro.build) static site. Its source lives in
 `devantler-tech/business-site` at the repository root (`src/`, `public/`, `scripts/`).
 This `docs/` directory holds contributor documentation and architecture decisions. The callable
-`.github/workflows/publish-pages.yaml` publishes the reviewed source selected by the monorepo's
-`applications/business-site` pin to the existing monorepo Pages resource and domain.
+`.github/workflows/publish-site.yaml` builds this repository's exact `main` revision and publishes
+to its own Pages resource at devantler.tech. The old callable `publish-pages.yaml` is retained
+only as the legacy immutable caller path; it is not the active production publisher.
 
 ## Develop
 
@@ -84,9 +85,9 @@ it requires a rebuild and publication, not a browser setting. CI builds enabled,
 and entirely-unset states and uploads only the final normal production output.
 `scripts/check-client-facing.mjs` exercises the emitted EN/DA visitor pages;
 `scripts/client-rollout.test.mjs` guards the production default and actual CI invocation.
-Source merges do not publish by themselves: the monorepo must adopt the reviewed source revision
-in both its gitlink and immutable publisher reference. After that adoption and live visitor
-verification, remove this short-lived release flag.
+The source-owned publisher runs after merges to this repository's `main`. A merge still needs a
+successful Pages deployment, a matching live source/run receipt and visitor verification before
+it counts as published. After live visitor verification, remove this short-lived release flag.
 
 ### Featured portfolio (#5)
 
@@ -108,8 +109,8 @@ The callable publisher refreshes the complete metadata before every build with r
 authority; no GitHub API call or token is sent to a visitor's browser. The page displays the actual
 UTC observation timestamp. Failed, partial or malformed reads abort publication and leave the
 previous live artifact with its previous timestamp; they are never presented as a fresh read.
-Automatic recurring data refresh requires the separately reviewed monorepo caller adoption; this
-source has no independent scheduled publisher. GitHub scheduled runs can be delayed or disabled
+The source-owned publisher refreshes the ranking on main pushes, admitted manual publications and
+its daily schedule. GitHub scheduled runs can be delayed or disabled
 after inactivity, so the displayed observation time is the freshness signal, not a promised SLA.
 Implementation, activation, caller adoption, bilingual live proof and release-flag cleanup stay
 tracked on #5. The disabled Codex chat schedule is unrelated and remains disabled.
@@ -139,8 +140,8 @@ available without a permanent documentation sidebar. Search, RSS, authors, tags,
 article bookmarks and copy controls retain their existing behavior. Technical guides keep their
 normal Starlight frame. `FEATURE_JOURNAL_PRESENTATION=false` is a temporary build-time rollback;
 it requires a rebuild and publication, not a browser setting. Every build checks all generated
-Journal routes, and CI validates enabled, explicit-false and entirely-unset states. The monorepo
-must adopt this reviewed source revision before visitors receive the layout. Live verification
+Journal routes, and CI validates enabled, explicit-false and entirely-unset states. The source-owned
+publisher deploys this repository's reviewed main revision. Live verification
 and removal of the temporary gate remain tracked in
 [#12](https://github.com/devantler-tech/business-site/issues/12).
 
@@ -182,8 +183,22 @@ The maintainer has confirmed receipt at the business email. Required company-add
 disclosure and deployed English/Danish proof remain under
 [#3917](https://github.com/devantler-tech/monorepo/issues/3917) and the legal audit in #19.
 The supplied registered address is also private: publish it on the website only where legally
-required, and never duplicate it in public backlog evidence. This preview includes no street
-address and does not claim verified statutory compliance.
+required, and never duplicate it in public backlog evidence. The English/Danish company-information
+pages group the registered facts and physical address behind native footer links. The address is
+rendered as escaped text only on those pages and excluded from the site's search index. Publication
+does not make the address confidential: it will be visible on the public disclosure page.
+
+The source-owned publisher enables `FEATURE_COMPANY_IDENTITY` and supplies the two-line
+`COMPANY_POSTAL_ADDRESS` repository secret to the build step. The build aborts before artifact
+upload if the setting is missing, empty, malformed or contains control characters. The secret is
+server-only configuration, not a browser environment variable; the required address still appears
+in the two public HTML pages. CI uses a fictional fixture, never the registered residential address.
+For a local preview, provide an explicitly fictional two-line `COMPANY_POSTAL_ADDRESS` together
+with `FEATURE_COMPANY_IDENTITY=true`. Explicit-false and entirely-unset builds require no address,
+omit disclosure links and redirect the company routes to their localized homepage. The generated
+disclosure checks run in every build. This resolves only the identification/contact portion of #19;
+it does not establish blanket Danish-law compliance or activate the revised offer, portal orders,
+authentication, agreements, payments or subscriptions. The wider audit remains open.
 There is no contact-form backend, automatic booking,
 payment flow or paid product subscription. Home, About and Projects are translated; the journal,
 CV and detailed technical documentation remain in English and are labelled accordingly.

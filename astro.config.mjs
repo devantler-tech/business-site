@@ -21,6 +21,11 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      COMPANY_POSTAL_ADDRESS: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+      }),
       FEATURE_COMPANY_IDENTITY: envField.boolean({
         context: "server",
         access: "public",
@@ -59,7 +64,7 @@ export default defineConfig({
       name: 'devantler-business-pages',
       hooks: {
         'astro:config:setup': ({ injectRoute }) => {
-          for (const pattern of ['/', '/da/', '/about/', '/da/about/', '/projects/', '/da/projects/', '/projects/active/', '/projects/completed/']) {
+          for (const pattern of ['/', '/da/', '/about/', '/da/about/', '/projects/', '/da/projects/', '/company/', '/da/company/', '/projects/active/', '/projects/completed/']) {
             injectRoute({ pattern, entrypoint: './src/components/business/BusinessPage.astro', prerender: true });
           }
         },
