@@ -44,6 +44,7 @@ const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-prod
 const escapeText = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const metadata = (node) => [
   ...(node.tagName === 'meta' ? node.attrs.filter((attr) => attr.name === 'content').map((attr) => attr.value) : []),
+  ...(node.attrs ?? []).filter((attr) => attr.name === 'alt' || attr.name === 'aria-label').map((attr) => attr.value),
   ...(node.childNodes ?? []).flatMap(metadata),
 ];
 
@@ -113,7 +114,7 @@ for (const locale of ['en', 'da']) {
   for (const section of ['', 'about', 'projects']) {
     const page = html(`${prefix}${section}`);
     // The official registration type is not an offering-size claim. Keep it
-    // accurate, while checking actual visitor copy and sharing metadata (#41).
+    // accurate, while checking visitor copy, accessibility labels and metadata (#41).
     const marketing = [readerText(page), ...metadata(parse(page))]
       .join(' ').replaceAll('Personally owned small business (PMV)', 'PMV');
     assert.doesNotMatch(marketing, /(?<!\p{L})(?:small|små|lille)(?!\p{L})/iu,
