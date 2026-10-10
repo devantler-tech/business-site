@@ -11,6 +11,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - The Astro + Starlight application lives at the repository root: `src/`,
   `public/`, `scripts/` and root package/configuration files.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
+- `server/` contains the latent Go/PostgreSQL portal identity foundation. Read
+  `server/AGENTS.md` before changing it. It exposes no public login or private API.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication, default-off
   until the reviewed #25 cutover. `publish-pages.yaml` retains the old immutable monorepo
