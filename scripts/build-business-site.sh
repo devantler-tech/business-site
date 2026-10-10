@@ -27,3 +27,5 @@ node scripts/check-client-facing.mjs dist
 node scripts/check-featured-portfolio.mjs dist
 node scripts/check-journal-presentation.mjs dist
 bash scripts/retired-public-output.test.sh dist
+bash scripts/check-portal-artifacts.test.sh
+bash scripts/check-portal-artifacts.sh dist

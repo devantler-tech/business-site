@@ -32,6 +32,11 @@ and require a reviewed source adoption and verified public deployment.
 
 ## Publication
 
+The unified product's latent portal identity foundation lives under
+[`server/`](server/README.md), in this same repository. It is tested against an
+actual synthetic OIDC broker and PostgreSQL, but does not yet expose a login,
+customer form or running backend. The static publisher does not deploy it.
+
 The source-owned `publish-site.yaml` builds this repository's exact main revision on
 main pushes, manual dispatches and daily public-ranking refreshes. Deployment is
 default-off until the repository variable `SITE_PUBLICATION_ENABLED` is exactly

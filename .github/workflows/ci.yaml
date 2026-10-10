@@ -143,7 +143,13 @@ jobs:
       - name: Build entirely unset production
         working-directory: .
         run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+      - name: Verify public portal boundary controls
+        run: bash scripts/check-portal-artifacts.test.sh
+      - name: Verify the actual public artifact excludes portal identity
+        run: bash scripts/check-portal-artifacts.sh dist
       - name: Upload reviewable production preview
+        # Only static public output is eligible; server code and identity fixtures
+        # must not enter the preview or Pages artifact.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: business-site-preview
@@ -252,6 +258,56 @@ jobs:
           bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
 
+  test-portal-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: server
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+      PORTAL_TEST_DATABASE_URL: postgres://portal_runtime:fixture-only@localhost:5432/portal_identity_test?sslmode=disable
+      PORTAL_TEST_MIGRATION_DATABASE_URL: postgres://portal_migrator:fixture-only@localhost:5432/portal_identity_test?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+        env:
+          POSTGRES_USER: portal_fixture_owner
+          POSTGRES_PASSWORD: fixture-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portal_fixture_owner"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Provision isolated test database roles
+        env:
+          PGPASSWORD: fixture-only
+        run: psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql
+      - name: Verify dependencies and formatting
+        run: |
+          go mod verify
+          test -z "$(gofmt -l .)"
+          go vet ./...
+      - name: Test broker and durable access boundary
+        run: go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s
+      - name: Scan reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
   status:
     name: CI - Required Checks
     runs-on: ubuntu-latest
@@ -265,6 +321,7 @@ jobs:
       - test-docs-npm-toolchain
       - drift-check-active-projects
       - test-repository-contracts
+      - test-portal-identity
     steps:
       - name: Check job results
         uses: devantler-tech/.github/actions/aggregate-job-checks@8d3327fe87f216d6e107941de4ce1ae019294cea
@@ -277,3 +334,4 @@ jobs:
             ${{ needs.test-docs-npm-toolchain.result }}
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
+            ${{ needs.test-portal-identity.result }}
