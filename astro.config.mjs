@@ -8,6 +8,13 @@ import starlightLinksValidator from "starlight-links-validator";
 
 export default defineConfig({
   site: "https://devantler.tech",
+  // Keep each framework consumer's declared YAML version when prerender chunks
+  // are relocated. A bare external import would resolve the site's newer major.
+  vite: {
+    environments: {
+      prerender: { resolve: { noExternal: ["js-yaml"] } },
+    },
+  },
   // Kept so a renamed page does not break links that already exist in the wild
   // (bookmarks, the platform's own docs, search results). A page rename is a URL
   // change; without an entry here the old URL 404s.
