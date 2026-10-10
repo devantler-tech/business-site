@@ -27,6 +27,7 @@ Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
 npm ci
 npm run build
 bash scripts/npm-toolchain.test.sh
+bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
