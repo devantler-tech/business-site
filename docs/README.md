@@ -203,6 +203,22 @@ There is no contact-form backend, automatic booking,
 payment flow or paid product subscription. Home, About and Projects are translated; the journal,
 CV and detailed technical documentation remain in English and are labelled accordingly.
 
+## Visitor statistics and browser storage
+
+Public pages do not load a visitor-statistics client or tag outbound links for analytics.
+Both the business layout and supporting Journal/documentation layout serve their scripts locally.
+Every production build checks all emitted HTML for automatic external scripts and statistics
+attributes, including explicit rollback builds. Links to other websites remain ordinary links;
+public repository metadata is refreshed by the publisher, not by visitors' browsers.
+
+The appearance selector uses the local `starlight-theme` preference only to remember System,
+Light or Dark. Removing the statistics client does not eliminate requests needed to serve the
+website or establish the absence of hosting logs. Processing purposes, recipients, retention,
+the required privacy notice and any applicable consent remain under the audit in #19.
+Analytics may be introduced only after that processing and its release requirements are assessed
+and reviewed; self-hosting or a cookie-free claim alone does not clear them. Do not claim legal
+compliance, zero processing or measured discovery outcomes from this build check.
+
 ## CV download
 
 The About page offers the CV as an A4 PDF at `/pdfs/nikolai-emil-damm-cv.pdf`. It is not a checked-in
