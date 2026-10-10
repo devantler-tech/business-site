@@ -306,7 +306,7 @@ jobs:
       - name: Test broker and durable access boundary
         run: go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s
       - name: Scan reachable Go vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
   status:
     name: CI - Required Checks

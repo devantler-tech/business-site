@@ -26,6 +26,6 @@ PR or by the static Pages artifact. Dependencies downloaded only for upstream
 tests/tools are not represented as linked application runtime code here.
 
 The module pins patched Go 1.27.2. CI verifies checksums and runs the actual graph
-through pinned govulncheck 1.1.4; a successful scan means no reported reachable
+through pinned govulncheck 1.8.0; a successful scan means no reported reachable
 vulnerability, not immunity from future advisories. Database CI uses disposable
 PostgreSQL 17.11 with a digest-pinned official image, never a production database.
