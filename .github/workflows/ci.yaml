@@ -59,6 +59,7 @@ jobs:
             docs-npm-toolchain:
               - 'package.json'
               - 'scripts/npm-toolchain.test.sh'
+              - 'scripts/dependency-overrides.test.sh'
               - '.github/workflows/**'
             active-projects:
               - 'src/content/**'
@@ -197,6 +198,8 @@ jobs:
           persist-credentials: false
       - name: Test npm toolchain contract
         run: bash scripts/npm-toolchain.test.sh
+      - name: Test dependency override contract
+        run: bash scripts/dependency-overrides.test.sh
 
   drift-check-active-projects:
     needs: changes
