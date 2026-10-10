@@ -7,18 +7,21 @@ import { copy, type Locale } from './content';
 interface Props {
   locale: Locale;
   item: (typeof copy)[Locale]['workItems'][number];
+  compact?: boolean;
 }
-const { locale, item } = Astro.props;
+const { locale, item, compact = false } = Astro.props;
 const t = copy[locale];
 const image = item.id === 'coaching' ? coaching : wedding;
 const alt = item.id === 'coaching' ? t.workPreviewAlt : t.weddingPreviewAlt;
 ---
-<article data-work-example={item.id}>
-  <p class="eyebrow">{item.kind}</p>
-  <h3>{item.title}</h3>
-  <p class="description">{item.text}</p>
+<article class:list={{ compact }} data-work-example={item.id} data-compact-work={compact || undefined}>
+  <div class="example-copy">
+    <p class="eyebrow">{item.kind}</p>
+    <h3>{item.title}</h3>
+    <p class="description">{item.text}</p>
+  </div>
     <a class="preview" data-work-preview href={image.src} target="_blank" rel="noopener">
-      <Image src={image} width={640} widths={[320, 640, 960]} sizes="(max-width: 760px) calc(100vw - 40px), 560px" format="webp" quality={85} alt={alt} loading="lazy" />
+      <Image src={image} width={compact ? 320 : 640} widths={compact ? [160, 240, 320, 480] : [320, 640, 960]} sizes={compact ? '(max-width: 520px) 96px, 240px' : '(max-width: 760px) calc(100vw - 40px), 560px'} format="webp" quality={85} alt={alt} loading="lazy" />
       <span>{t.workPreviewAction} <span aria-hidden="true">↗</span></span>
     </a>
     {item.id === 'coaching'
@@ -37,5 +40,11 @@ const alt = item.id === 'coaching' ? t.workPreviewAlt : t.weddingPreviewAlt;
   .visit { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; color: var(--accent); font-size: .9rem; font-weight: 600; text-underline-offset: .2em; }
   .capture-note { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
   a:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
+  .compact { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 0 2rem; margin-top: 1.5rem; padding-block: 1.5rem; border-bottom: 1px solid var(--line); }
+  .compact .example-copy { grid-column: 1; grid-row: 1; }
+  .compact .description { min-height: 0; max-width: 640px; }
+  .compact .preview { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; }
+  .compact .visit { grid-column: 1; grid-row: 2; justify-self: start; align-self: start; margin-top: .5rem; }
   @media (max-width: 760px) { .description { min-height: 0; } }
+  @media (max-width: 520px) { .compact { grid-template-columns: minmax(0, 1fr) 96px; gap: 0 1rem; } .compact h3 { font-size: 1.1rem; } .compact .preview > span { font-size: .7rem; } }
 </style>

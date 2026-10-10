@@ -16,6 +16,11 @@ test('ranks by stars, resolves ties by repository name and retains zero stars wi
   assert.deepEqual(ranked.map(({ repository, stars }) => [repository, stars]), [['alpha', 100], ['beta', 2], ['zeta', 2], ['zero', 0]]);
   assert.deepEqual(products.map(({ repository }) => repository), ['zeta', 'beta', 'alpha', 'zero']);
 });
+test('a complete all-positive observation does not require or invent a zero-star product', () => {
+  const ranked = rankPublicProducts(products, snapshot({ zeta: 2, beta: 2, alpha: 100, zero: 1 }));
+  assert.deepEqual(ranked.map(({ repository, stars }) => [repository, stars]), [['alpha', 100], ['beta', 2], ['zeta', 2], ['zero', 1]]);
+  assert.equal(ranked.filter(({ stars }) => stars === 0).length, 0);
+});
 test('a partial snapshot cannot quietly replace missing counts with zero', () => {
   assert.throws(() => rankPublicProducts(products, snapshot({ zeta: 2, beta: 2, alpha: 100 })), /complete catalogue/);
   assert.throws(() => rankPublicProducts(products, snapshot({ zeta: 2, beta: 2, alpha: 100, unexpected: 0 })), /Missing or invalid.*zero/);

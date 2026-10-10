@@ -35,6 +35,20 @@ The business homepage is rendered by `src/components/business/BusinessSite.astro
 and `/da/` (Danish). Its offer amounts and translated copy live together in
 `src/components/business/content.ts`. Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
+The app guide covers a focused first version, not a ceiling on application size. Larger builds
+use separately agreed iterations with their own scope, schedule and price. Monthly quotes are
+rounded totals based on hosting costs plus a fixed service fee to Nikolai, with amounts and
+changes agreed before work begins; the site does not invent a fee amount or rounding increment.
+
+`FEATURE_OFFER_COPY=true` previews the revised offer from #15, including larger agreed iterations
+and the clarified maintenance terms. Every client project hosted on the platform includes
+optimization, accessibility improvements, bug fixes and routine upkeep in its agreed monthly price.
+New features and larger iterations require a new agreement. Human support terms are agreed per
+project; tailored automation helps with supported incidents without promising recovery from every
+incident or 24/7 personal availability. This flag defaults to false: Home, About and Projects retain
+their published English/Danish alternatives until reviewed activation. CI builds enabled, explicit
+false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
+live verification and removal of the temporary gate are tracked in #18.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -45,22 +59,22 @@ inactive selector. `scripts/theme.test.mjs` tests the actual controller as part 
 
 The introduction identifies Nikolai with the existing public `profile.jpg` photograph, biography
 and GitHub links. First-person English/Danish copy explains the independent business without
-inventing client endorsements; the family projects remain labelled as such. The real photograph
+inventing client endorsements; the featured business presentation omits personal/family framing. The real photograph
 also supplies the sharing image. Built-page checks verify the portrait and profile journey.
 
 Selected work uses the same `WorkExample.astro` card on Home and Projects in both languages.
 AS Coaching og Vaner includes a real public homepage capture, a compact responsive thumbnail
 linked to its original local JPEG in a new tab, and a separate link to the public website.
-The Wedding App shows its documented local guest demo after sign-in, with names, date,
+The explicit featured-portfolio rollback shows the Wedding App's documented local guest demo after sign-in, with names, date,
 venue/address, countdown values and the venue background removed before capture. The card
 explicitly labels it an anonymized demo and does not link to the private invitation site.
-No production account or guest invitation code is used. Built-page checks verify both
-thumbnails and their readable larger images, as well as the localized visit action.
+No production account or guest invitation code is used. Built-page checks verify the normal
+website example and both rollback thumbnails, their readable larger images and localized visit action.
 
-Home puts plain-language quality and security highlights before prices and two visual examples.
-Projects leads with the real family website/app examples, keeps all thirteen public products
-visible, and retains the hosting and research bookmarks. Business Home/Projects do not link to
-source code; the journal and existing technical documentation retain their own detail. The copy
+Home puts plain-language quality and security highlights before prices and one compact public website example.
+Projects leads with six maintained public tools, followed by the compact website example, hosting
+and research. Home avoids source-code links; Projects offers controlled public project destinations
+and wider-work navigation, not raw code files or workflows. The journal and existing technical documentation retain their own detail. The copy
 describes verified practices rather than universal coverage, certification, vulnerability-free
 software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
 
@@ -74,9 +88,40 @@ Source merges do not publish by themselves: the monorepo must adopt the reviewed
 in both its gitlink and immutable publisher reference. After that adoption and live visitor
 verification, remove this short-lived release flag.
 
+### Featured portfolio (#5)
+
+`FEATURE_FEATURED_PORTFOLIO` defaults to true after the separately reviewed implementation and
+activation. `FEATURE_FEATURED_PORTFOLIO=false` is a temporary build-time rollback that requires
+rebuilding and republishing, not a browser setting. Normal English/Danish Home and Projects show
+the actual public AS Coaching og Vaner website as a compact example and remove personal/family
+framing and the anonymous Wedding App demo from these business entrypoints. It does not invent
+a paid commission, endorsement or measured client outcome. Original technical inventory and
+historical bookmarks remain available; the wider public-work link leads to the organization.
+
+Projects selects exactly six curated maintained tools from complete public GitHub metadata,
+ordered by descending stars and repository-name ties. Games, templates, legacy Actions, forks,
+archived and private repositories cannot enter this showcase. All thirteen entries remain in the
+underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
+unrestricted open source. Stars indicate popularity, not a quality guarantee.
+
+The callable publisher refreshes the complete metadata before every build with read-only GitHub
+authority; no GitHub API call or token is sent to a visitor's browser. The page displays the actual
+UTC observation timestamp. Failed, partial or malformed reads abort publication and leave the
+previous live artifact with its previous timestamp; they are never presented as a fresh read.
+Automatic recurring data refresh requires the separately reviewed monorepo caller adoption; this
+source has no independent scheduled publisher. GitHub scheduled runs can be delayed or disabled
+after inactivity, so the displayed observation time is the freshness signal, not a promised SLA.
+Implementation, activation, caller adoption, bilingual live proof and release-flag cleanup stay
+tracked on #5. The disabled Codex chat schedule is unrelated and remains disabled.
+
+Every build runs ranking, rollout and publisher-boundary controls plus emitted bilingual-page
+checks. CI builds enabled, explicit false and entirely unset states before uploading normal
+production output. Existing quality/security, prices, inquiry, theme, research and image checks
+remain active in the new presentation.
+
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
-distinguishes open-source tools and family examples from client work. The journal and technical
+distinguishes maintained tools, a public website example and research without inventing client outcomes. The journal and technical
 pages reuse the business navigation, typography, colors, footer and appearance control through
 Starlight component overrides. Their search, sidebar, RSS and historical articles remain available.
 Only Starlight Blog's preview cards receive whole-card mouse navigation. Each native title link
@@ -87,25 +132,29 @@ executes the actual head script as part of every build.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
 
-`FEATURE_JOURNAL_PRESENTATION=true` previews the editorial Journal frame from business-site#11.
+Ordinary production builds enable the editorial Journal frame from business-site#11.
 Its introduction, lead story, two-column archive and narrower reading pages use the homepage's
 type and palette. A native “Browse the Journal” disclosure keeps the existing post/topic menu
 available without a permanent documentation sidebar. Search, RSS, authors, tags, pagination,
 article bookmarks and copy controls retain their existing behavior. Technical guides keep their
-normal Starlight frame. The flag defaults to false; every build checks all generated Journal
-routes, and CI validates enabled, explicit-false and entirely-unset states. Activation and removal
-are tracked in [#12](https://github.com/devantler-tech/business-site/issues/12), separately from
-source adoption and live publication.
+normal Starlight frame. `FEATURE_JOURNAL_PRESENTATION=false` is a temporary build-time rollback;
+it requires a rebuild and publication, not a browser setting. Every build checks all generated
+Journal routes, and CI validates enabled, explicit-false and entirely-unset states. The monorepo
+must adopt this reviewed source revision before visitors receive the layout. Live verification
+and removal of the temporary gate remain tracked in
+[#12](https://github.com/devantler-tech/business-site/issues/12).
 
-Projects presents one complete, stars-ranked public software catalogue, followed by family examples
-and earlier research. The real KSail terminal capture appears in its product card; expandable English
+Projects presents six stars-ranked maintained tools, followed by one compact public website example
+and earlier research. KSail's product introduction explains setup, deployment and operation rather
+than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
+with private details masked and the redaction disclosed in both languages. Expandable English
 research and diagrams are sourced from `src/content/docs/projects/completed.mdx`. The legacy
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
-heading fragments, which land on the corresponding public product card or family/research content.
+heading fragments, which land on the corresponding public tool, website example or research content.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
-reusable Platform Template in the public software catalogue. A bookmarked card
-in the collapsed remainder opens that disclosure. Links without a fragment and the no-JavaScript
+reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
+a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript
 fallback use the relevant section. Root horizontal overflow is
 clipped without creating a non-scrolling ancestor
 that would break the documentation header's sticky positioning.
@@ -129,9 +178,12 @@ the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a di
 link to `ned@devantler.tech` with LinkedIn as an alternative. False and entirely unset builds
 retain the existing LinkedIn contact and footer until reviewed activation and live proof.
 The email link opens the visitor's email application; the site does not send messages itself.
-Public street-address approval, receiving an inquiry and live-publication proof remain under
-[#3917](https://github.com/devantler-tech/monorepo/issues/3917). No street address is published
-without explicit approval, and publication does not claim verified statutory compliance.
+The maintainer has confirmed receipt at the business email. Required company-address
+disclosure and deployed English/Danish proof remain under
+[#3917](https://github.com/devantler-tech/monorepo/issues/3917) and the legal audit in #19.
+The supplied registered address is also private: publish it on the website only where legally
+required, and never duplicate it in public backlog evidence. This preview includes no street
+address and does not claim verified statutory compliance.
 There is no contact-form backend, automatic booking,
 payment flow or paid product subscription. Home, About and Projects are translated; the journal,
 CV and detailed technical documentation remain in English and are labelled accordingly.

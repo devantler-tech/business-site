@@ -12,10 +12,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `public/`, `scripts/` and root package/configuration files.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
-- `.github/workflows/publish-pages.yaml` owns the complete callable publisher. The monorepo
-  retains the existing GitHub Pages resource/domain and calls an immutable workflow pin with
-  its reviewed `applications/business-site` gitlink SHA. This repository has no independent
-  push publisher, cluster tenant, contact backend, checkout or paid subscription system.
+- `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication, default-off
+  until the reviewed #25 cutover. `publish-pages.yaml` retains the old immutable monorepo
+  call path during the transfer. This static publisher does not deploy a private portal
+  backend, identity, customer isolation, checkout or paid subscription system.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
   in their original repository; the source snapshot and asset provenance are linked in the README.
 
@@ -27,8 +27,10 @@ Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
 npm ci
 npm run build
 bash scripts/npm-toolchain.test.sh
+bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
+bash scripts/site-publication.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
@@ -44,7 +46,8 @@ project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and sy
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness
-preflight; source publication is a separate reviewed monorepo pin adoption plus live readback.
+preflight; a source merge is not publication. The source-owned publisher is default-off
+pending the reviewed Pages/domain transfer in #25; see docs/adr/0003-source-owned-publication.md.
 
 ## Content boundaries
 
@@ -66,10 +69,20 @@ private address, claim statutory compliance, or add purchases/subscriptions. Con
 identity lives in `src/data/company.json`: Devantler Tech, CVR 46830385, PMV, Nikolai Emil Damm
 and `ned@devantler.tech`. Registration/contact follow-up
 [monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917) remains open for the public
-address decision, inquiry-receipt testing and deployed English/Danish proof. The default-off
+required address disclosure and deployed English/Danish proof. The maintainer has confirmed
+mail receipt and allows the registered address on the website only where legally required;
+keep the street address out of public backlog evidence. The default-off
 `FEATURE_COMPANY_IDENTITY` preview gates the new footer and email route until reviewed activation.
 Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
-plus 299/month for a small app, and 4,995 plus 199/month for a service; extra scope/costs require
-an agreed quote. Preserve real portrait/screenshots/diagrams and generated-art provenance.
+plus 299/month for a focused first app version, and 4,995 plus 199/month for a service.
+These starting prices do not cap application size: larger builds use agreed, priced iterations.
+Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
+amounts and any changes are agreed before work begins, never inferred from the starter guide.
+The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects
+include optimization, accessibility improvements, bug fixes and routine upkeep in their agreed
+monthly price; new features and larger iterations require a new agreement. Human support is not
+24/7 and no universal incident-recovery guarantee is offered. Keep the published alternatives
+until reviewed adoption, activation and bilingual live proof; retire the gate with #18.
+Preserve real portrait/screenshots/diagrams and generated-art provenance.
 
 Scripts are Bash or Go, never Python. Stage explicit paths; never discard another session's work.

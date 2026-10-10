@@ -59,6 +59,7 @@ jobs:
             docs-npm-toolchain:
               - 'package.json'
               - 'scripts/npm-toolchain.test.sh'
+              - 'scripts/dependency-overrides.test.sh'
               - '.github/workflows/**'
             active-projects:
               - 'src/content/**'
@@ -118,6 +119,16 @@ jobs:
         env:
           FEATURE_COMPANY_IDENTITY: "true"
         run: npm run build
+      - name: Build revised hosting-offer preview
+        working-directory: .
+        env:
+          FEATURE_OFFER_COPY: "true"
+        run: npm run build
+      - name: Build featured portfolio preview
+        working-directory: .
+        env:
+          FEATURE_FEATURED_PORTFOLIO: "true"
+        run: npm run build
       - name: Build
         working-directory: .
         env:
@@ -125,10 +136,12 @@ jobs:
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_JOURNAL_PRESENTATION: "false"
           FEATURE_COMPANY_IDENTITY: "false"
+          FEATURE_OFFER_COPY: "false"
+          FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_COMPANY_IDENTITY npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
       - name: Upload reviewable production preview
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -191,6 +204,8 @@ jobs:
           persist-credentials: false
       - name: Test npm toolchain contract
         run: bash scripts/npm-toolchain.test.sh
+      - name: Test dependency override contract
+        run: bash scripts/dependency-overrides.test.sh
 
   drift-check-active-projects:
     needs: changes
@@ -233,6 +248,7 @@ jobs:
       - name: Verify source-owned publishing and editorial contracts
         run: |
           bash scripts/publishing-contract.test.sh
+          bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
 
   status:
@@ -250,7 +266,7 @@ jobs:
       - test-repository-contracts
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@fca583ac795d56928c5b542944b6e0963ea1e270
+        uses: devantler-tech/.github/actions/aggregate-job-checks@8d3327fe87f216d6e107941de4ce1ae019294cea
         with:
           job-results: >-
             ${{ needs.changes.result }}

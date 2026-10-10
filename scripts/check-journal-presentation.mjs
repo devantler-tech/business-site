@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = process.argv[2] ?? 'dist';
-const enabled = process.argv[3] ? process.argv[3] === 'on' : process.env.FEATURE_JOURNAL_PRESENTATION === 'true';
+const enabled = process.argv[3] ? process.argv[3] === 'on' : process.env.FEATURE_JOURNAL_PRESENTATION !== 'false';
 /** Recursively inventory generated index pages, including archive, author and tag routes. */
 function pages(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
