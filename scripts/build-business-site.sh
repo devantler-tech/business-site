@@ -11,6 +11,7 @@ node --test scripts/featured-rollout.test.mjs
 node --test scripts/fresh-publication.test.mjs
 node --test scripts/client-rollout.test.mjs
 node --test scripts/company-rollout.test.mjs
+node --test scripts/company-address.test.mjs
 node --test scripts/journal-rollout.test.mjs
 node --test scripts/journal-style.test.mjs
 node --test scripts/editorial-assets.test.mjs
@@ -18,6 +19,7 @@ node --test scripts/compress-editorial-assets.test.mjs
 node scripts/check-editorial-assets.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
+node --test scripts/company-disclosure.test.mjs
 node scripts/check-offer-rollout.mjs dist
 node scripts/check-business-site.mjs dist
 node scripts/check-client-facing.mjs dist

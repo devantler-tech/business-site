@@ -1,0 +1,48 @@
+---
+import { COMPANY_POSTAL_ADDRESS } from 'astro:env/server';
+import BusinessLayout from './BusinessLayout.astro';
+import { company, companyIdentityEnabled, type Locale } from './content';
+import { companyAddress } from './company-address.mjs';
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const lines = companyAddress(COMPANY_POSTAL_ADDRESS, companyIdentityEnabled);
+const t = locale === 'da' ? {
+  title: 'Virksomhed og kontakt', description: 'Registrering og kontaktoplysninger for Devantler Tech.',
+  intro: 'Devantler Tech er en personligt ejet mindre virksomhed drevet af Nikolai Emil Damm.',
+  name: 'Virksomhed', registration: 'Virksomhedsform', type: 'Personligt ejet mindre virksomhed (PMV)',
+  owner: 'Indehaver', address: 'Registreret virksomhedsadresse', email: 'E-mail',
+  contact: 'Har du et projekt i tankerne? Skriv til mig, så finder vi sammen det næste skridt.',
+} : {
+  title: 'Company information', description: 'Registration and contact information for Devantler Tech.',
+  intro: 'Devantler Tech is a personally owned small business run by Nikolai Emil Damm.',
+  name: 'Business', registration: 'Business type', type: 'Personally owned small business (PMV)',
+  owner: 'Owner', address: 'Registered business address', email: 'Email',
+  contact: 'Have a project in mind? Email me and we can work out the next step together.',
+};
+---
+<BusinessLayout locale={locale} section="company" title={`${t.title} | Devantler Tech`} description={t.description}>
+  <main id="main" class="container company-page">
+    <h1>{t.title}</h1><p class="intro">{t.intro}</p>
+    <dl data-company-disclosure>
+      <div><dt>{t.name}</dt><dd>{company.name}</dd></div>
+      <div><dt>CVR</dt><dd>{company.cvr}</dd></div>
+      <div><dt>{t.registration}</dt><dd>{t.type}</dd></div>
+      <div><dt>{t.owner}</dt><dd>{company.owner}</dd></div>
+      <div><dt>{t.address}</dt><dd><address data-company-address data-pagefind-ignore>{lines.map((line) => <span>{line}</span>)}</address></dd></div>
+      <div><dt>{t.email}</dt><dd><a href={`mailto:${company.email}`}>{company.email}</a></dd></div>
+    </dl>
+    <p class="contact">{t.contact}</p>
+  </main>
+</BusinessLayout>
+<style>
+  .company-page { padding-block: 4rem; max-width: 960px; }
+  h1 { font-size: clamp(2.3rem, 5vw, 4rem); overflow-wrap: anywhere; }
+  .intro { margin-top: 1.5rem; max-width: 650px; font-size: 1.15rem; }
+  dl { margin-block: 2.5rem; border-top: 1px solid var(--line); }
+  dl > div { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr); gap: 1.5rem; padding-block: 1.25rem; border-bottom: 1px solid var(--line); }
+  dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
+  address { font-style: normal; } address span { display: block; }
+  a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); text-underline-offset: .2em; }
+  .contact { max-width: 650px; }
+  @media (max-width: 600px) { .company-page { padding-block: 2.5rem; } dl > div { grid-template-columns: 1fr; gap: .5rem; } }
+</style>

@@ -7,7 +7,7 @@ const prefix = locale === 'da' ? '/da' : '';
 ---
 <footer data-business-footer class="business-footer container">
   <div><a class="brand" href={`${prefix}/`}>{company.name}</a><p>{t.footerIdentity}</p><p>{t.footer}</p>{companyIdentityEnabled && <><p>CVR {company.cvr} · {t.registrationType}</p><a class="company-email" href={inquiryUrl}>{company.email}</a></>}</div>
-  <div class="links"><a href={`${prefix}/about/`}>{t.aboutNav}</a><a href={`${prefix}/projects/`}>{t.projectsNav}</a><a href={`${prefix}/#contact`}>{t.contact}</a></div>
+  <div class="links"><a href={`${prefix}/about/`}>{t.aboutNav}</a><a href={`${prefix}/projects/`}>{t.projectsNav}</a>{companyIdentityEnabled && <a href={`${prefix}/company/`}>{locale === 'da' ? 'Virksomhedsoplysninger' : 'Company information'}</a>}<a href={`${prefix}/#contact`}>{t.contact}</a></div>
 </footer>
 <style>
   .business-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; padding-block: 2.5rem; border-top: 1px solid var(--line); font-family: 'Studio Inter', system-ui, sans-serif; color: var(--ink); text-align: left; }

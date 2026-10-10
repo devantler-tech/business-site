@@ -118,6 +118,7 @@ jobs:
         working-directory: .
         env:
           FEATURE_COMPANY_IDENTITY: "true"
+          COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
         run: npm run build
       - name: Build revised hosting-offer preview
         working-directory: .
