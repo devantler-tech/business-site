@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import sharp from 'sharp';
 import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
+import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -17,7 +18,7 @@ const featuredPortfolio = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') ===
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     const page = readFileSync(resolve(root, path), 'utf8');
-    assert.ok(!page.includes('https://github.com/devantler-tech/reusable-workflows'), 'Rendered public pages must not link to retired repositories');
+    assertNoRetiredRepositoryLinks(page);
     const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
     if (footer && companyEnabled) {
       for (const fact of [company.name, company.cvr, company.businessType, company.owner, company.email]) {
