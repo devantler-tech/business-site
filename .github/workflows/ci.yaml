@@ -290,7 +290,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -324,7 +324,7 @@ jobs:
       - test-portal-identity
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@8d3327fe87f216d6e107941de4ce1ae019294cea
+        uses: devantler-tech/.github/actions/aggregate-job-checks@c1aaea1b8470627e75a3c3f7caee74e0a93ca4de
         with:
           job-results: >-
             ${{ needs.changes.result }}
