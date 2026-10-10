@@ -173,6 +173,14 @@ journeys and supporting pages. The same command is used by CI and GitHub Pages p
 The core business pages are always rendered. Short-lived presentation flags protect reviewable
 redesigns; reverting the publication change and redeploying remains the recovery path.
 
+Business copy describes websites, web apps and services without size-based marketing qualifiers.
+Starting prices cover an agreed first version, not a ceiling on eventual application size; further
+development is scoped and quoted separately. This neutral wording is shared by published, preview
+and rollback presentations. The official PMV registration terminology and historical technical
+writing remain accurate. The generated Home, About and Projects checks cover both languages and
+sharing metadata. The offer-release check distinguishes actual maintenance terms, not app labels
+or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
+
 `src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
 and business email. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
 the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a direct email

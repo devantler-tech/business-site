@@ -18,8 +18,8 @@ export const inquiryUrl = companyIdentityEnabled ? `mailto:${company.email}` : l
 
 const previewCopy = {
   en: {
-    title: 'Websites & software for small businesses | Devantler Tech',
-    description: 'Websites, web apps and web services for Danish small businesses. Agreed prices, step-by-step development and optional hosting from Devantler Tech.',
+    title: 'Websites & software for businesses | Devantler Tech',
+    description: 'Websites, web apps and web services for Danish businesses. Agreed prices, step-by-step development and optional hosting from Devantler Tech.',
     skip: 'Skip to content', navigation: 'Main navigation', language: 'Choose language',
     appearance: 'Appearance', system: 'System', light: 'Light', dark: 'Dark',
     projectsNav: 'Projects', aboutNav: 'About', journalNav: 'Journal',
@@ -27,7 +27,7 @@ const previewCopy = {
     services: 'Services & prices', work: 'Selected work', products: 'Products', process: 'How it works', contact: 'Get in touch',
     eyebrow: 'Hi, I’m Nikolai.',
     headline: 'I build websites\nand useful software.',
-    intro: 'Devantler Tech is my small software business on Funen, Denmark. I build websites, web apps and services for small businesses—and I’m the person you’ll talk to about your project.',
+    intro: 'Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for businesses—and I’m the person you’ll talk to about your project.',
     primary: 'Tell me what you need', secondary: 'Explore services',
     availability: 'Planning projects from November 2026',
     promise: ['Clear scope, room to grow', 'Build + optional hosting', 'Direct contact with the developer'],
@@ -40,7 +40,7 @@ const previewCopy = {
     offerCopy: [
       { title: 'A professional website', description: 'Make your business easy to find, understand and contact.', includes: ['Up to 5 straightforward pages', 'Mobile-friendly design', 'Your content, services and contact details', 'Basic search and sharing metadata'], boundary: 'You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately.' },
       { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
-      { title: 'A web service', description: 'Connect a small process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
+      { title: 'A web service', description: 'Connect a process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
     ],
     priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. No VAT is charged under the current PMV setup.',
     hostingTitle: 'Hosting that fits the project—not the other way around.',
@@ -48,15 +48,15 @@ const previewCopy = {
     fitTitle: 'A good fit for planned, manageable work.',
     fitText: 'Self-healing software and tailored agents help handle supported incidents. Problems needing human judgment are escalated; automatic recovery is not guaranteed for every incident. I am not personally available 24/7. Human support hours and response expectations are agreed for each project.',
     workTitle: 'A couple of things I’ve worked on',
-    workIntro: 'These started as projects for my family. They give you an idea of the websites and small apps I work with; they aren’t paid client commissions.',
+    workIntro: 'These started as projects for my family. They give you an idea of the websites and web apps I work with; they aren’t paid client commissions.',
     workPreviewAlt: 'Screenshot of AS Coaching og Vaner’s homepage.',
     workPreviewAction: 'View larger (opens in a new tab)',
     workVisitAction: 'Visit website',
     weddingPreviewAlt: 'Anonymized preview of the Wedding App guest homepage.',
     weddingPreviewNote: 'Anonymized guest-view demo. Names, date, location and countdown are hidden.',
     workItems: [
-      { id: 'coaching', title: 'AS Coaching og Vaner', kind: 'Family project · Business website', text: 'A small website hosted for a family member: an example of a focused online presence.' },
-      { id: 'wedding', title: 'Wedding App', kind: 'Family project · Web app', text: 'A small self-hosted service created around a family wedding.' },
+      { id: 'coaching', title: 'AS Coaching og Vaner', kind: 'Family project · Business website', text: 'A website hosted for a family member: an example of a focused online presence.' },
+      { id: 'wedding', title: 'Wedding App', kind: 'Family project · Web app', text: 'A self-hosted service created around a family wedding.' },
     ],
     portfolioLink: 'Explore the project portfolio',
     portfolioBridge: 'Beyond websites, I build KSail for creating and operating Kubernetes clusters, and reusable tools for AI coding assistants. The public portfolio shows that work in depth.',
@@ -84,11 +84,11 @@ const previewCopy = {
       ? 'The email link opens your email app. There is no automatic booking or instant-support service.'
       : 'The link opens Nikolai’s public LinkedIn profile. There is no automatic booking or instant-support service.',
     registrationType: 'Personally owned small business (PMV)',
-    footer: 'Websites, software and hosting for small businesses.', englishNote: 'The journal and technical documentation are currently in English.',
+    footer: 'Websites, software and hosting for businesses.', englishNote: 'The journal and technical documentation are currently in English.',
   },
   da: {
-    title: 'Hjemmesider og software til små virksomheder | Devantler Tech',
-    description: 'Hjemmesider, webapps og webservices til danske små virksomheder. Aftalte priser, udvikling i etaper og valgfri hosting hos Devantler Tech.',
+    title: 'Hjemmesider og software til virksomheder | Devantler Tech',
+    description: 'Hjemmesider, webapps og webservices til danske virksomheder. Aftalte priser, udvikling i etaper og valgfri hosting hos Devantler Tech.',
     skip: 'Spring til indhold', navigation: 'Hovednavigation', language: 'Vælg sprog',
     appearance: 'Udseende', system: 'System', light: 'Lys', dark: 'Mørk',
     projectsNav: 'Projekter', aboutNav: 'Om virksomheden', journalNav: 'Journal (engelsk)',
@@ -96,7 +96,7 @@ const previewCopy = {
     services: 'Ydelser og priser', work: 'Udvalgte projekter', products: 'Produkter', process: 'Sådan foregår det', contact: 'Kontakt',
     eyebrow: 'Hej, jeg hedder Nikolai.',
     headline: 'Jeg bygger hjemmesider\nog nyttig software.',
-    intro: 'Devantler Tech er min lille softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til små virksomheder—og det er mig, du taler med om dit projekt.',
+    intro: 'Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til virksomheder—og det er mig, du taler med om dit projekt.',
     primary: 'Fortæl om dit behov', secondary: 'Se ydelserne',
     availability: 'Planlægger projekter fra november 2026',
     promise: ['Klart omfang, plads til at vokse', 'Udvikling og valgfri hosting', 'Direkte kontakt med udvikleren'],
@@ -109,7 +109,7 @@ const previewCopy = {
     offerCopy: [
       { title: 'En professionel hjemmeside', description: 'Gør det nemt at finde, forstå og kontakte din virksomhed.', includes: ['Op til 5 enkle sider', 'Mobilvenligt design', 'Dit indhold, dine ydelser og kontaktoplysninger', 'Grundlæggende metadata til søgning og deling'], boundary: 'Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt.' },
       { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
-      { title: 'En webservice', description: 'Forbind en lille proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
+      { title: 'En webservice', description: 'Forbind en proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
     ],
     priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Der opkræves ikke moms under den nuværende PMV-ordning.',
     hostingTitle: 'Hosting, der passer til projektet—ikke omvendt.',
@@ -117,15 +117,15 @@ const previewCopy = {
     fitTitle: 'Til planlagt og overskueligt arbejde.',
     fitText: 'Selvhelende software og specialtilpassede agenter hjælper ved understøttede driftshændelser. Problemer, der kræver menneskelig vurdering, eskaleres; automatisk genopretning er ikke garanteret ved alle hændelser. Jeg er ikke personligt til rådighed døgnet rundt. Menneskelig support og forventninger til svartid aftales for hvert projekt.',
     workTitle: 'Et par ting, jeg har arbejdet på',
-    workIntro: 'De begyndte som projekter for min familie. De giver et indtryk af de hjemmesider og små apps, jeg arbejder med; de er ikke betalte kundeopgaver.',
+    workIntro: 'De begyndte som projekter for min familie. De giver et indtryk af de hjemmesider og webapps, jeg arbejder med; de er ikke betalte kundeopgaver.',
     workPreviewAlt: 'Skærmbillede af AS Coaching og Vaners forside.',
     workPreviewAction: 'Se større billede (åbner i en ny fane)',
     workVisitAction: 'Besøg hjemmesiden',
     weddingPreviewAlt: 'Anonymiseret forhåndsvisning af Wedding Apps gæsteforside.',
     weddingPreviewNote: 'Anonymiseret demo af gæstevisningen. Navne, dato, sted og nedtælling er skjult.',
     workItems: [
-      { id: 'coaching', title: 'AS Coaching og Vaner', kind: 'Familieprojekt · Hjemmeside', text: 'En lille hjemmeside hostet for et familiemedlem: et eksempel på en fokuseret tilstedeværelse online.' },
-      { id: 'wedding', title: 'Wedding App', kind: 'Familieprojekt · Webapp', text: 'En lille selvhostet tjeneste bygget i forbindelse med et bryllup i familien.' },
+      { id: 'coaching', title: 'AS Coaching og Vaner', kind: 'Familieprojekt · Hjemmeside', text: 'En hjemmeside hostet for et familiemedlem: et eksempel på en fokuseret tilstedeværelse online.' },
+      { id: 'wedding', title: 'Wedding App', kind: 'Familieprojekt · Webapp', text: 'En selvhostet tjeneste bygget i forbindelse med et bryllup i familien.' },
     ],
     portfolioLink: 'Se projektporteføljen',
     portfolioBridge: 'Ud over hjemmesider bygger jeg KSail til at oprette og drive Kubernetes-klynger og genbrugelige værktøjer til AI-kodeassistenter. Den offentlige portefølje viser arbejdet i dybden.',
@@ -153,7 +153,7 @@ const previewCopy = {
       ? 'Emaillinket åbner dit emailprogram. Der er ingen automatisk booking eller øjeblikkelig support.'
       : 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
     registrationType: 'Personligt ejet mindre virksomhed (PMV)',
-    footer: 'Hjemmesider, software og hosting til små virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
+    footer: 'Hjemmesider, software og hosting til virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
 } as const;
 
