@@ -435,12 +435,23 @@ jobs:
             ${{ needs.test-portal-identity.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}
+      - name: Require actual main-push container publication
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          github.repository == 'devantler-tech/business-site'
+        env:
+          PUBLICATION_RESULT: ${{ needs.publish-container.result }}
+        run: test "$PUBLICATION_RESULT" = success
 
   # The same run distributes its tested bytes only after the complete CI gate.
   # No privileged workflow_run crosses from an untrusted PR to registry writes.
   publish-container:
     needs: [validation, test-portal-identity]
     if: >-
+      !cancelled() &&
+      needs.validation.result == 'success' &&
+      needs.test-portal-identity.result == 'success' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       github.repository == 'devantler-tech/business-site'
