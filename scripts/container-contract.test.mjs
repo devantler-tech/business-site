@@ -34,7 +34,8 @@ function assertCI(w) {
   assert.ok(publish, 'Publication must be inside the successful CI chain, not a privileged workflow_run.');
   assert.deepEqual(publish.needs, ['status', 'test-portal-identity']);
   assert.equal(publish.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
-  assert.equal(publish.uses, './.github/workflows/publish-container.yaml');
+  assert.equal(publish.uses, undefined);
+  assert.ok(Array.isArray(publish.steps), 'The main-only publisher must be a native CI job.');
   assert.deepEqual(publish.permissions, { contents: 'read', actions: 'read', packages: 'write', 'id-token': 'write' });
   assert.equal(publish.secrets, undefined);
 }
@@ -57,9 +58,10 @@ test('CI must exercise and retain the actual container before distribution', asy
 });
 
 function assertPublisher(w) {
-  assert.deepEqual(w.on, { workflow_call: null });
+  assert.equal(w.on.workflow_run, undefined);
+  assert.equal(w.on.pull_request_target, undefined);
   assert.deepEqual(w.permissions, {});
-  const j = w.jobs.publish;
+  const j = w.jobs['publish-container'];
   assert.equal(j.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
   assert.equal(j.env.SOURCE_SHA, '${{ github.sha }}');
   assert.equal(j.env.CI_RUN_ID, '${{ github.run_id }}');
@@ -82,21 +84,20 @@ function assertPublisher(w) {
 }
 
 test('publication accepts only successful same-repository main push CI and tests its exact image', async () => {
-  assert.ok(existsSync('.github/workflows/publish-container.yaml'), 'There is no source-owned image publisher.');
   const yaml = await import('js-yaml');
-  const w = yaml.load(readFileSync('.github/workflows/publish-container.yaml', 'utf8'));
+  const w = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
   assertPublisher(w);
   for (const mutate of [
-    w => { w.jobs.publish.if = `true || (${w.jobs.publish.if})`; },
+    w => { w.jobs['publish-container'].if = `true || (${w.jobs['publish-container'].if})`; },
     w => { w.on = { workflow_run: { workflows: ['CI'], types: ['completed'], branches: ['main'] } }; },
-    w => { w.jobs.publish.steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref = 'main'; },
-    w => { delete w.jobs.publish.steps.find(s => s.uses?.startsWith('actions/download-artifact@')).with['run-id']; },
-    w => { w.jobs.publish.steps.find(s => s.run?.includes('cosign verify '))['continue-on-error'] = true; },
-    w => { w.jobs.publish.steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE"')).if = 'false'; },
+    w => { w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref = 'main'; },
+    w => { delete w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/download-artifact@')).with['run-id']; },
+    w => { w.jobs['publish-container'].steps.find(s => s.run?.includes('cosign verify '))['continue-on-error'] = true; },
+    w => { w.jobs['publish-container'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE"')).if = 'false'; },
   ]) {
     const changed = structuredClone(w); mutate(changed); assert.throws(() => assertPublisher(changed));
   }
-  const source = readFileSync('.github/workflows/publish-container.yaml', 'utf8');
+  const source = readFileSync('.github/workflows/ci.yaml', 'utf8');
   assert.match(source, /cosign attest --yes/);
   assert.match(source, /cosign verify-attestation/);
   assert.doesNotMatch(source, /:latest|pull_request_target|secrets\.(?!GITHUB_TOKEN)/);

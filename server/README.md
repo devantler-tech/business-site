@@ -126,7 +126,7 @@ Use HTTP GET `/healthz` for liveness/readiness (it proves the public runtime onl
 The actual-image tests retain EN/DA GET/HEAD bytes, closed private/traversal paths,
 network-disconnected startup, tamper rejection and bounded SIGTERM shutdown.
 
-CI calls `publish-container.yaml` only on main pushes after all required checks
+CI runs its image publisher only on main pushes after all required checks
 and actual-image tests succeed, without a privileged cross-run trigger or rebuild.
 Its 90-day `business-site-container-publication` artifact
 contains `receipt.json`, the runtime receipt, verified signature and signed SLSA
