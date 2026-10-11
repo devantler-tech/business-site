@@ -6,7 +6,9 @@ public snapshot; packages linked dependency notices; builds a pinned, signed
 distroless runtime image; and actually runs that image with a read-only root,
 dropped capabilities and bounded resources. Private identity stays default-off.
 
-The image-only publisher accepts successful same-repository **main push** CI.
+The image-only reusable publisher runs within same-repository **main push** CI,
+after the complete required-check aggregate and actual-image job succeed. It has
+no privileged cross-run trigger, manual dispatch or inherited custom secrets.
 It checks out that immutable source and downloads that run's tested image/package
 artifact, re-exercises it, pushes a run-scoped GHCR staging tag, then signs and
 verifies the returned immutable digest with the portfolio's keyless Cosign flow.
@@ -15,6 +17,9 @@ it does not claim hermeticity, reproducibility or SLSA certification. The final
 check pulls and runs the signed registry digest. The downloadable publication
 receipt binds that digest, source and CI/publication runs. Tags are discovery
 handles, never trusted identities; no moving `latest` alias is published.
+The expected Cosign certificate identity is the caller's
+`https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main`;
+the source-owned reusable workflow is loaded from the same commit as that caller.
 
 This reuses pinned Docker/Cosign actions from the established portfolio publisher.
 Its shared `publish-app` interface requires a semantic-version image/manifests

@@ -30,6 +30,13 @@ function assertCI(w) {
   }
   assert.equal(steps[upload].with.path, 'runtime-dist/container');
   assert.equal(steps[upload].with['if-no-files-found'], 'error');
+  const publish = w.jobs['publish-container'];
+  assert.ok(publish, 'Publication must be inside the successful CI chain, not a privileged workflow_run.');
+  assert.deepEqual(publish.needs, ['status', 'test-portal-identity']);
+  assert.equal(publish.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
+  assert.equal(publish.uses, './.github/workflows/publish-container.yaml');
+  assert.deepEqual(publish.permissions, { contents: 'read', actions: 'read', packages: 'write', 'id-token': 'write' });
+  assert.equal(publish.secrets, undefined);
 }
 
 test('CI must exercise and retain the actual container before distribution', async () => {
@@ -41,21 +48,27 @@ test('CI must exercise and retain the actual container before distribution', asy
     w => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },
     w => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs'))['continue-on-error'] = true; },
     w => { w.jobs['test-portal-identity'].steps.find(s => s.with?.name === 'business-site-container').with.path = '.'; },
+    w => { w.jobs['publish-container'].needs = ['test-portal-identity']; },
+    w => { w.jobs['publish-container'].if = `true || (${w.jobs['publish-container'].if})`; },
+    w => { w.jobs['publish-container'].secrets = 'inherit'; },
   ]) {
     const changed = structuredClone(w); mutate(changed); assert.throws(() => assertCI(changed));
   }
 });
 
 function assertPublisher(w) {
-  assert.deepEqual(w.on, { workflow_run: { workflows: ['CI'], types: ['completed'], branches: ['main'] } });
+  assert.deepEqual(w.on, { workflow_call: null });
   assert.deepEqual(w.permissions, {});
   const j = w.jobs.publish;
-  assert.equal(j.if.replace(/\s+/g, ' ').trim(), "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository");
+  assert.equal(j.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
+  assert.equal(j.env.SOURCE_SHA, '${{ github.sha }}');
+  assert.equal(j.env.CI_RUN_ID, '${{ github.run_id }}');
+  assert.equal(j.env.CI_RUN_ATTEMPT, '${{ github.run_attempt }}');
   assert.deepEqual(j.permissions, { contents: 'read', actions: 'read', packages: 'write', 'id-token': 'write' });
   const steps = j.steps;
-  assert.equal(steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref, '${{ github.sha }}');
   const download = steps.find(s => s.uses?.startsWith('actions/download-artifact@'));
-  assert.equal(download.with['run-id'], '${{ github.event.workflow_run.id }}');
+  assert.equal(download.with['run-id'], '${{ github.run_id }}');
   assert.equal(download.with.name, 'business-site-container');
   const exercise = steps.findIndex(s => s.run?.includes('node scripts/container-smoke.test.mjs business-site:test runtime-dist'));
   const publish = steps.findIndex(s => s.run?.includes('docker push'));
@@ -75,6 +88,7 @@ test('publication accepts only successful same-repository main push CI and tests
   assertPublisher(w);
   for (const mutate of [
     w => { w.jobs.publish.if = `true || (${w.jobs.publish.if})`; },
+    w => { w.on = { workflow_run: { workflows: ['CI'], types: ['completed'], branches: ['main'] } }; },
     w => { w.jobs.publish.steps.find(s => s.uses?.startsWith('actions/checkout@')).with.ref = 'main'; },
     w => { delete w.jobs.publish.steps.find(s => s.uses?.startsWith('actions/download-artifact@')).with['run-id']; },
     w => { w.jobs.publish.steps.find(s => s.run?.includes('cosign verify '))['continue-on-error'] = true; },

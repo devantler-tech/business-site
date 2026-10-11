@@ -126,13 +126,16 @@ Use HTTP GET `/healthz` for liveness/readiness (it proves the public runtime onl
 The actual-image tests retain EN/DA GET/HEAD bytes, closed private/traversal paths,
 network-disconnected startup, tamper rejection and bounded SIGTERM shutdown.
 
-`publish-container.yaml` distributes only a successful main-push CI image,
-without rebuilding it. Its 90-day `business-site-container-publication` artifact
+CI calls `publish-container.yaml` only on main pushes after all required checks
+and actual-image tests succeed, without a privileged cross-run trigger or rebuild.
+Its 90-day `business-site-container-publication` artifact
 contains `receipt.json`, the runtime receipt, verified signature and signed SLSA
 v0.2 provenance. Consume `receipt.image` (the **full registry digest**) rather
 than a tag. Verify its exact signer identity and GitHub issuer using Cosign, plus
-the source/public-digest annotations and attestation source/subject binding. Run
-the same container smoke test against that digest and its matching CI runtime
+the source/public-digest annotations and attestation source/subject binding.
+The expected caller identity is
+`https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main`.
+Run the same container smoke test against that digest and its matching CI runtime
 archive. Registry push, signing and post-publication testing must all succeed;
 a staging tag alone is not release proof.
 
