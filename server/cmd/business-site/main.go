@@ -24,6 +24,7 @@ import (
 // actual audited bytes. An ordinary go build is not a distributable package.
 var revision, publicDigest, buildMode string
 
+// loadPublic confines artifact reads to the configured root and snapshots bytes.
 func loadPublic(directory string) (*webapp.Artifact, error) {
 	root, err := os.OpenRoot(directory)
 	if err != nil {
@@ -33,6 +34,7 @@ func loadPublic(directory string) (*webapp.Artifact, error) {
 	return webapp.Load(root.FS())
 }
 
+// run validates package identity and private dependencies before opening a listener.
 func run(ctx context.Context, args []string, output io.Writer) error {
 	options := flag.NewFlagSet("business-site", flag.ContinueOnError)
 	options.SetOutput(io.Discard)
@@ -84,6 +86,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	return runtimeapp.Serve(ctx, listener, artifact.Handler(portal))
 }
 
+// main maps process termination to bounded HTTP shutdown and generic diagnostics.
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

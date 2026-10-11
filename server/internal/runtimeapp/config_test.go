@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestAbsentConfigurationIsPublicOnlyWithoutConnections ensures public startup needs no private service.
 func TestAbsentConfigurationIsPublicOnlyWithoutConnections(t *testing.T) {
 	cfg, err := ReadConfig(func(string) string { return "" })
 	if err != nil {
@@ -18,6 +19,7 @@ func TestAbsentConfigurationIsPublicOnlyWithoutConnections(t *testing.T) {
 	close()
 }
 
+// TestPartialOrInvalidConfigurationFailsGenerically rejects unsafe or incomplete private wiring.
 func TestPartialOrInvalidConfigurationFailsGenerically(t *testing.T) {
 	valid := map[string]string{
 		"PORTAL_DATABASE_URL": "postgres://runtime:private@db.example.invalid/app?sslmode=verify-full",

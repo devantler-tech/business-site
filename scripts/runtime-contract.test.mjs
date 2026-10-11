@@ -4,6 +4,7 @@ import test from 'node:test';
 import * as yaml from 'js-yaml';
 
 const workflow = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
+/** Reject missing, conditional or error-tolerant runtime checks in the actual CI workflow. */
 function assertRuntime(workflow) {
   const job = workflow.jobs['test-portal-identity'];
   assert.equal(job.if, undefined);

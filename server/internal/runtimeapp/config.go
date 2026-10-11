@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,11 +18,13 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
+// ErrConfig intentionally omits private dependency details from startup errors.
 var ErrConfig = errors.New("portal configuration is invalid")
 
+// Config holds the all-or-none private dependencies, never an activation setting.
 type Config struct{ database, issuer, client, callback, secretFile string }
 
-// A root-confined open accepts projected secrets within their mount, but not
+// readSecret accepts root-confined projected secrets within their mount, but not
 // escapes. Metadata and bounded bytes come from the same open descriptor.
 func readSecret(filename string) (string, error) {
 	root, err := os.OpenRoot(filepath.Dir(filename))
@@ -41,10 +44,19 @@ func readSecret(filename string) (string, error) {
 		return "", ErrConfig
 	}
 	secret, err := io.ReadAll(io.LimitReader(f, 16385))
-	if err != nil || len(secret) == 0 || len(secret) > 16384 {
+	if err != nil || len(secret) > 16384 {
 		return "", ErrConfig
 	}
-	return string(secret), nil
+	value := string(secret)
+	if strings.HasSuffix(value, "\r\n") {
+		value = strings.TrimSuffix(value, "\r\n")
+	} else {
+		value = strings.TrimSuffix(value, "\n")
+	}
+	if value == "" {
+		return "", ErrConfig
+	}
+	return value, nil
 }
 
 // ReadConfig accepts either no identity dependencies or a complete validated

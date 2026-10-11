@@ -138,6 +138,7 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	}
 }
 
+// fixtureTLSDatabase requires PostgreSQL TLS negotiation before bridging the validated fixture.
 func fixtureTLSDatabase(t *testing.T, upstream string, certificate tls.Certificate) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

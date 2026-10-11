@@ -1,6 +1,7 @@
 package runtimeapp
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 )
 
+// TestSecretFIFOIsRejectedWithoutWaitingForWriter prevents unbounded startup before validation.
 func TestSecretFIFOIsRejectedWithoutWaitingForWriter(t *testing.T) {
 	name := filepath.Join(t.TempDir(), "secret-fifo")
 	if err := syscall.Mkfifo(name, 0600); err != nil {
@@ -33,6 +35,7 @@ func TestSecretFIFOIsRejectedWithoutWaitingForWriter(t *testing.T) {
 	}
 }
 
+// TestSecretFileUsesOneConfinedPrivateDescriptor retains projected-secret support without escapes.
 func TestSecretFileUsesOneConfinedPrivateDescriptor(t *testing.T) {
 	dir := t.TempDir()
 	private := filepath.Join(dir, "private")
@@ -75,5 +78,30 @@ func TestSecretFileUsesOneConfinedPrivateDescriptor(t *testing.T) {
 		if _, err := readSecret(private); err != ErrConfig {
 			t.Fatal("empty, oversized or public secret accepted")
 		}
+	}
+}
+
+// One file line ending is presentation, while all other secret bytes remain exact.
+func TestSecretRemovesOnlyOneTrailingLineTerminator(t *testing.T) {
+	name := filepath.Join(t.TempDir(), "secret")
+	for _, tc := range []struct{ input, want string }{
+		{"secret\n", "secret"}, {"secret\r\n", "secret"},
+		{"secret", "secret"}, {" secret ", " secret "},
+		{"secret\r", "secret\r"}, {"secret\n\n", "secret\n"},
+		{"\n", ""}, {"\r\n", ""},
+	} {
+		t.Run(fmt.Sprintf("%q", tc.input), func(t *testing.T) {
+			if err := os.WriteFile(name, []byte(tc.input), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readSecret(name)
+			if tc.want == "" {
+				if err != ErrConfig {
+					t.Fatal("line-ending-only secret accepted")
+				}
+			} else if err != nil || got != tc.want {
+				t.Fatal("one line terminator was not handled without changing other bytes")
+			}
+		})
 	}
 }

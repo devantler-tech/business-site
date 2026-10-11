@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// TestUnpackagedBuildCannotStartAndErrorsArePrivate refuses unbound binaries without path leaks.
 func TestUnpackagedBuildCannotStartAndErrorsArePrivate(t *testing.T) {
 	if err := run(context.Background(), nil, io.Discard); err == nil || strings.Contains(err.Error(), "/Users") {
 		t.Fatal("unpackaged binary was runnable or error disclosed a path")
@@ -18,6 +19,7 @@ func TestUnpackagedBuildCannotStartAndErrorsArePrivate(t *testing.T) {
 	}
 }
 
+// TestCheckCommandUsesActualPublicArtifactAndRejectsTampering checks the real startup digest gate.
 func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "da"), 0700); err != nil {

@@ -22,6 +22,7 @@ type Artifact struct {
 	digest string
 }
 
+// ErrArtifact reports validation failure without exposing local source paths.
 var ErrArtifact = errors.New("public artifact is invalid")
 
 const maxArtifactBytes = 128 << 20
@@ -102,8 +103,10 @@ func Load(source fs.FS) (*Artifact, error) {
 	return a, nil
 }
 
+// Digest identifies the snapshotted public paths and bytes, not a deployment.
 func (a *Artifact) Digest() string { return a.digest }
 
+// miss emits a non-cacheable denial without reflecting the requested path.
 func miss(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

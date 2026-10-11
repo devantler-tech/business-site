@@ -44,6 +44,15 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable table owner", "CREATE ROLE portal_fixture_table_owner NOLOGIN; ALTER TABLE portal_sessions OWNER TO portal_fixture_table_owner; GRANT portal_fixture_table_owner TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"assumable database creator", "CREATE ROLE portal_fixture_database_creator NOLOGIN; GRANT CREATE ON DATABASE portal_identity_test TO portal_fixture_database_creator; GRANT portal_fixture_database_creator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"assumable database owner", "CREATE ROLE portal_fixture_database_owner NOLOGIN; ALTER DATABASE portal_identity_test OWNER TO portal_fixture_database_owner; GRANT portal_fixture_database_owner TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"server program executor", "GRANT pg_execute_server_program TO portal_runtime; SET ROLE portal_runtime", false},
+		{"server file reader", "GRANT pg_read_server_files TO portal_runtime; SET ROLE portal_runtime", false},
+		{"server file writer", "GRANT pg_write_server_files TO portal_runtime; SET ROLE portal_runtime", false},
+		{"all data reader", "GRANT pg_read_all_data TO portal_runtime; SET ROLE portal_runtime", false},
+		{"all data writer", "GRANT pg_write_all_data TO portal_runtime; SET ROLE portal_runtime", false},
+		{"monitor", "GRANT pg_monitor TO portal_runtime; SET ROLE portal_runtime", false},
+		{"replication", "ALTER ROLE portal_runtime REPLICATION; SET ROLE portal_runtime", false},
+		{"assumable replication", "CREATE ROLE portal_fixture_replication NOLOGIN REPLICATION; GRANT portal_fixture_replication TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"indirect predefined privilege", "CREATE ROLE portal_fixture_privileged NOLOGIN; GRANT pg_execute_server_program TO portal_fixture_privileged; GRANT portal_fixture_privileged TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"fixture owner", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

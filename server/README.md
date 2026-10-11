@@ -52,7 +52,7 @@ responsive layout and System/Light/Dark appearance. Only public CSS/JS are expos
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
 `Complete` accepts only a server-obtained token, never a browser authentication claim.
 
-The parent remains open for production broker/provider configuration, ingress and
+The parent remains open for production broker/provider configuration and
 ingress deployment, contact verification, retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates

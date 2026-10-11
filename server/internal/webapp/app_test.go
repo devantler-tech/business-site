@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 )
 
+// publicFixture supplies only synthetic bilingual pages and a public asset.
 func publicFixture() fstest.MapFS {
 	return fstest.MapFS{
 		"index.html":                        {Data: []byte("<h1>English public site</h1>")},
@@ -19,6 +20,7 @@ func publicFixture() fstest.MapFS {
 	}
 }
 
+// TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
 func TestPublicRoutesAndClosedPortal(t *testing.T) {
 	a, err := Load(publicFixture())
 	if err != nil {
@@ -55,6 +57,7 @@ func TestPublicRoutesAndClosedPortal(t *testing.T) {
 	}
 }
 
+// TestRejectsUnsafeArtifact rejects private files, links and incomplete bilingual output.
 func TestRejectsUnsafeArtifact(t *testing.T) {
 	for _, name := range []string{"portal/index.html", "server/key.txt", ".env", ".git/config", "assets/.secret", "identity.sql", "source.go", "go.mod", "private.pem", "key.key"} {
 		t.Run(name, func(t *testing.T) {
@@ -82,6 +85,7 @@ func TestRejectsUnsafeArtifact(t *testing.T) {
 	}
 }
 
+// TestSnapshotAndDigestBindActualPublicBytes detects changes without serving mutable files.
 func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 	files := publicFixture()
 	a, err := Load(files)
@@ -107,6 +111,7 @@ func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 	}
 }
 
+// TestPrivateRoutingNeverFallsBackOrRedirects preserves handler authority and rejects ambiguity.
 func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
 	a, err := Load(publicFixture())
 	if err != nil {
