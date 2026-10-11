@@ -1,0 +1,106 @@
+// Real Docker execution, never a mocked daemon or an extracted-binary substitute.
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { request } from 'node:http';
+import path from 'node:path';
+import test from 'node:test';
+
+const [image, root] = process.argv.slice(2);
+assert.ok(image && root, 'Supply the actual image reference and fresh runtime-dist directory.');
+const packages = readdirSync(root).filter(p => p.startsWith('package.'));
+assert.equal(packages.length, 1, 'Exactly one actual source package is required.');
+const directory = path.resolve(root, packages[0]);
+const receipt = JSON.parse(readFileSync(path.join(directory, 'build-receipt.json')));
+assert.equal(receipt.Repository, 'devantler-tech/business-site');
+assert.equal(receipt.Mode, 'release');
+assert.match(receipt.SourceRevision, /^[0-9a-f]{40}$/);
+assert.match(receipt.PublicDigest, /^[0-9a-f]{64}$/);
+if (process.env.EXPECTED_SOURCE_SHA) assert.equal(receipt.SourceRevision, process.env.EXPECTED_SOURCE_SHA);
+const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 }).trim();
+const logs = id => {
+  const result = spawnSync('docker', ['logs', id], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(result.status, 0, 'Cannot read the owned container logs.');
+  return (result.stdout + result.stderr).trim();
+};
+const bounded = ['--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=128', '--memory=256m', '--cpus=1'];
+
+/** Preserve raw traversal/encoding inputs: fetch() would normalize some away. */
+function get(port, route, method = 'GET') {
+  return new Promise((resolve, reject) => {
+    const req = request({ hostname: '127.0.0.1', port, path: route, method, timeout: 5000 }, res => {
+      let body = ''; res.setEncoding('utf8');
+      res.on('data', b => { body += b });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+    });
+    req.on('error', reject); req.on('timeout', () => req.destroy(new Error('Container request timed out.'))); req.end();
+  });
+}
+
+/** Wait only for this owned process, bounded at ten seconds. */
+async function ready(id) {
+  for (let i = 0; i < 50; i++) {
+    const state = JSON.parse(docker('inspect', id))[0].State;
+    assert.ok(state.Running, 'Actual container exited before readiness.');
+    if (logs(id).includes('runtime ready;')) return;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  assert.fail('Actual container did not become ready in ten seconds.');
+}
+
+test('actual image receipt, restricted runtime, visitor bytes and private/traversal boundaries', async () => {
+  const config = JSON.parse(docker('image', 'inspect', image))[0].Config;
+  assert.equal(config.User, '65532:65532');
+  assert.equal(config.WorkingDir, '/app');
+  assert.deepEqual(config.Entrypoint, ['/app/business-site']);
+  assert.deepEqual(config.Cmd, ['--public', '/app/public', '--listen', '0.0.0.0:8080']);
+  assert.equal(config.Labels['org.opencontainers.image.revision'], receipt.SourceRevision);
+  assert.ok(!(config.Env ?? []).some(e => e.startsWith('PORTAL_')));
+  assert.deepEqual(JSON.parse(docker('run', '--rm', '--network=none', ...bounded, image, '--version')), receipt);
+  const id = docker('run', '--detach', ...bounded, '--publish', '127.0.0.1::8080', image);
+  try {
+    await ready(id);
+    const inspected = JSON.parse(docker('inspect', id))[0];
+    assert.equal(inspected.HostConfig.ReadonlyRootfs, true);
+    const port = inspected.NetworkSettings.Ports['8080/tcp'][0].HostPort;
+    for (const route of ['/', '/da/', '/projects/', '/da/projects/', '/blog/']) {
+      const response = await get(port, route);
+      assert.equal(response.status, 200, route);
+      assert.equal(response.body, readFileSync(path.join(directory, 'public', route, 'index.html'), 'utf8'), route);
+      assert.equal(response.headers['x-content-type-options'], 'nosniff');
+      const head = await get(port, route, 'HEAD'); assert.equal(head.status, 200); assert.equal(head.body, '');
+    }
+    for (const route of ['/portal', '/portal/sign-in', '/portal/operator', '/server/go.mod', '/testdata/provision.sql', '/.env', '/.git/config', '/%70ortal/sign-in', '/portal%2Fsign-in', '/assets/../portal/sign-in', '/assets/%2e%2e/.env', '/%252e%252e/.env', '/portal\\sign-in']) {
+      const response = await get(port, route);
+      assert.equal(response.status, 404, route); assert.equal(response.headers.location, undefined);
+      assert.equal(response.headers['cache-control'], 'no-store');
+      assert.doesNotMatch(response.body, /postgres|secret|token|\/Users\//);
+    }
+    assert.equal((await get(port, '/', 'POST')).status, 405);
+    assert.deepEqual(await get(port, '/healthz', 'HEAD').then(r => [r.status, r.body]), [200, '']);
+    assert.equal((await get(port, '/healthz')).body, 'ok\n');
+    assert.equal(logs(id), 'runtime ready; portal activation is not configured');
+    const started = Date.now(); docker('stop', '--time=12', id);
+    assert.ok(Date.now() - started < 13000, 'SIGTERM must drain within the bound.');
+    assert.equal(JSON.parse(docker('inspect', id))[0].State.ExitCode, 0);
+  } finally { docker('rm', '--force', id); }
+});
+
+test('actual container starts without network or portal dependencies', async () => {
+  const id = docker('run', '--detach', '--network=none', ...bounded, image);
+  try { await ready(id); assert.equal(logs(id), 'runtime ready; portal activation is not configured'); }
+  finally { docker('stop', '--time=12', id); docker('rm', '--force', id); }
+});
+
+test('actual container refuses modified public bytes before readiness', async () => {
+  const temporary = mkdtempSync(path.join(tmpdir(), 'business-container-tamper-'));
+  let id;
+  try {
+    cpSync(path.join(directory, 'public'), path.join(temporary, 'public'), { recursive: true });
+    appendFileSync(path.join(temporary, 'public/index.html'), '\n<!-- tampered fixture -->');
+    id = docker('create', '--network=none', ...bounded, '--mount', `type=bind,source=${temporary}/public,target=/app/public,readonly`, image);
+    docker('start', id); assert.equal(docker('wait', id), '1');
+    assert.equal(logs(id), 'public artifact does not match this runtime package');
+  } finally { if (id) docker('rm', '--force', id); rmSync(temporary, { recursive: true }); }
+});

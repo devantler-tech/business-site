@@ -108,6 +108,42 @@ or plain-HTTP cookie exception is added.
 
 See [the package decision](../docs/adr/0004-combined-runtime-package.md).
 
+## Restricted container distribution
+
+After packaging clean source on Linux, build using **only the generated package
+directory as context**, not this source checkout:
+
+```sh
+docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test runtime-dist/package.<generated-id>
+node scripts/container-smoke.test.mjs business-site:test runtime-dist
+```
+
+The digest-pinned, officially signed distroless base supplies CA roots and its
+upstream notices; the application adds its linked Go notices. It has no shell,
+compiler, test fixtures or source checkout. User/group 65532 serves port 8080;
+run with a read-only root, all capabilities dropped and no new privileges.
+Use HTTP GET `/healthz` for liveness/readiness (it proves the public runtime only).
+The actual-image tests retain EN/DA GET/HEAD bytes, closed private/traversal paths,
+network-disconnected startup, tamper rejection and bounded SIGTERM shutdown.
+
+`publish-container.yaml` distributes only a successful main-push CI image,
+without rebuilding it. Its 90-day `business-site-container-publication` artifact
+contains `receipt.json`, the runtime receipt, verified signature and signed SLSA
+v0.2 provenance. Consume `receipt.image` (the **full registry digest**) rather
+than a tag. Verify its exact signer identity and GitHub issuer using Cosign, plus
+the source/public-digest annotations and attestation source/subject binding. Run
+the same container smoke test against that digest and its matching CI runtime
+archive. Registry push, signing and post-publication testing must all succeed;
+a staging tag alone is not release proof.
+
+If publication fails, keep Pages unchanged and diagnose the specific run; do
+not deploy its unverified staging tag or rebuild an artifact under an old receipt.
+A CI rerun on the same main source can retry distribution of its newly tested
+artifact through the same gates. Roll back a future deployment only to an earlier
+verified immutable digest, never by rewriting a receipt or moving a trusted tag.
+No cluster, domain, identity or payment setting is changed by this publisher.
+See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
+
 ## Actual database tests
 
 Use Go 1.27.2 and a **fresh disposable** PostgreSQL 17 database. Run the fixture

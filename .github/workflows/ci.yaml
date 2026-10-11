@@ -327,7 +327,9 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: Verify combined-runtime CI contract
         working-directory: .
-        run: node --test scripts/runtime-contract.test.mjs
+        run: |
+          node --test scripts/runtime-contract.test.mjs
+          node --test scripts/container-contract.test.mjs
       - name: Build actual combined package
         working-directory: .
         run: bash scripts/package-runtime.sh --release
@@ -340,6 +342,30 @@ jobs:
           extracted="$(mktemp -d)"
           tar -xzf runtime-dist/business-site-runtime.tar.gz -C "$extracted"
           node scripts/runtime-smoke.test.mjs "$extracted"
+      - name: Build actual restricted container
+        working-directory: .
+        run: |
+          package="$(find runtime-dist -maxdepth 1 -type d -name 'package.*')"
+          test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
+          docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$package"
+      - name: Exercise actual restricted container
+        working-directory: .
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/container-smoke.test.mjs business-site:test runtime-dist
+      - name: Archive the tested container and its exact runtime package
+        working-directory: .
+        run: |
+          mkdir -p runtime-dist/container
+          docker save business-site:test | gzip > runtime-dist/container/image.tar.gz
+          cp runtime-dist/business-site-runtime.tar.gz runtime-dist/container/
+      - name: Upload tested container
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: business-site-container
+          path: runtime-dist/container
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload reviewed runtime package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
