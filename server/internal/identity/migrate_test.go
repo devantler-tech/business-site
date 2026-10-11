@@ -60,12 +60,14 @@ func TestMigrationVersionAndConcurrency(t *testing.T) {
 	}
 }
 
+// TestSessionMigrationPreservesIdentity applies later migrations to a real v1
+// fixture while preserving revoked authority and refusing altered ledger history.
 func TestSessionMigrationPreservesIdentity(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
 	ctx := context.Background()
 	// Recreate the actual v1 starting point in the disposable fixture only.
-	if _, err := pool.Exec(ctx, `DROP TABLE portal_sessions; DELETE FROM portal_schema_version WHERE version=2; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_contacts; DROP TABLE portal_sessions; DELETE FROM portal_schema_version WHERE version>=2; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)`); err != nil {
 		t.Fatal(err)
 	}
 	var before string
@@ -103,6 +105,47 @@ func TestSessionMigrationPreservesIdentity(t *testing.T) {
 		t.Fatal("missing ledger prefix accepted")
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO portal_schema_version VALUES(1,$1)`, before); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestContactMigrationPreservesIdentityAndSessions starts at actual v2 and checks
+// that v3 preserves identity/session bytes and detects changed contact schema.
+func TestContactMigrationPreservesIdentityAndSessions(t *testing.T) {
+	fixtureDB(t)
+	pool := migrationDB(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_contacts; DELETE FROM portal_schema_version WHERE version=3; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true); INSERT INTO portal_sessions VALUES('synthetic-session',decode('001122','hex'),now()+interval '1 hour')`); err != nil {
+		t.Fatal(err)
+	}
+	var identityChecksum, sessionChecksum string
+	if err := pool.QueryRow(ctx, "SELECT checksum FROM portal_schema_version WHERE version=1").Scan(&identityChecksum); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT checksum FROM portal_schema_version WHERE version=2").Scan(&sessionChecksum); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	var preserved bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_memberships WHERE subject='existing' AND client_id='client-existing' AND revoked) AND EXISTS(SELECT 1 FROM portal_sessions WHERE token='synthetic-session' AND data=decode('001122','hex')) AND EXISTS(SELECT 1 FROM portal_schema_version WHERE version=1 AND checksum=$1) AND EXISTS(SELECT 1 FROM portal_schema_version WHERE version=2 AND checksum=$2)`, identityChecksum, sessionChecksum).Scan(&preserved); err != nil || !preserved {
+		t.Fatal("v3 migration changed existing identity/session data", err)
+	}
+	var checksum string
+	if err := pool.QueryRow(ctx, "SELECT checksum FROM portal_schema_version WHERE version=3").Scan(&checksum); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE portal_schema_version SET checksum='changed' WHERE version=3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, pool); err == nil {
+		t.Fatal("changed contact migration accepted")
+	}
+	if _, err := pool.Exec(ctx, "UPDATE portal_schema_version SET checksum=$1 WHERE version=3", checksum); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
 }

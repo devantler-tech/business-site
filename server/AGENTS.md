@@ -2,8 +2,9 @@
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
 This Go module is the unified product's **default-off browser identity boundary**,
-not a deployed portal. It provides sign-in/callback/shell/logout handlers; no
-customer form, payment or agent endpoint exists. Never present synthetic broker
+not a deployed portal. It provides sign-in/callback/shell/logout and private contact
+profile handlers; no order, payment or agent endpoint exists. Contact emails remain
+self-declared and unverified, never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
@@ -12,7 +13,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's four identity/session tables. Provision a fresh disposable PostgreSQL
+only the fixture's five identity/session/contact tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database

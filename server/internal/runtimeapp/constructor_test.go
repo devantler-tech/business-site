@@ -133,7 +133,7 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	if err := identity.Migrate(ctx, migrator); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions TO portal_runtime"); err != nil {
+	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
 }

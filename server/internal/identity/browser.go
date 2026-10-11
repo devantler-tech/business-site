@@ -17,7 +17,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -72,6 +72,8 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
+	mux.HandleFunc("GET /portal/contact", b.contact)
+	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/logout", b.logout)
 	// Only the two public presentation assets are served, never template source.
 	for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
@@ -235,12 +237,16 @@ func (b *browser) principal(ctx context.Context) Principal {
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, _, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
 		b.render(w, r, 401, "error", "", "")
 		return
 	}
-	b.render(w, r, 200, "home", client, nosurf.Token(r))
+	kind := "home"
+	if role == "operator" {
+		kind = "operator"
+	}
+	b.render(w, r, 200, kind, client, nosurf.Token(r))
 }
 
 // operator requires the current database role, never token groups or form fields.
@@ -266,6 +272,14 @@ type pageData struct{ Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
+	d := b.data(r, kind, client, token)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
+}
+
+// data shares the same localized, escaped layout with the private contact form.
+func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
 	if d.Lang == "da" {
 		d.Title = "Din kundeportal"
@@ -284,9 +298,5 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 		d.Operator = "Operatør"
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	// The static template is parsed at construction, has no caller-selected names,
-	// and escapes all private display values. No raw errors or tokens are rendered.
-	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
+	return d
 }
