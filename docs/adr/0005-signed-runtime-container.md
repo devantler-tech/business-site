@@ -7,7 +7,9 @@ distroless runtime image; and actually runs that image with a read-only root,
 dropped capabilities and bounded resources. Private identity stays default-off.
 
 The image-only publisher job runs within same-repository **main push** CI,
-after the complete required-check aggregate and actual-image job succeed. It has
+after the complete prepublication aggregate and actual-image job succeed. The
+final required-check aggregate also covers publication and fails if signing,
+provenance verification or the published-digest smoke test fails. The publisher has
 no privileged cross-run trigger, manual dispatch or inherited custom secrets.
 It checks out that immutable source and downloads that run's tested image/package
 artifact, re-exercises it, pushes a run-scoped GHCR staging tag, then signs and

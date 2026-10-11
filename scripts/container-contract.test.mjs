@@ -32,7 +32,16 @@ function assertCI(w) {
   assert.equal(steps[upload].with['if-no-files-found'], 'error');
   const publish = w.jobs['publish-container'];
   assert.ok(publish, 'Publication must be inside the successful CI chain, not a privileged workflow_run.');
-  assert.deepEqual(publish.needs, ['status', 'test-portal-identity']);
+  assert.deepEqual(publish.needs, ['validation', 'test-portal-identity']);
+  assert.ok(w.jobs.status.needs.includes('publish-container'), 'Final required checks must include publication.');
+  assert.ok(w.jobs.status.needs.includes('validation'), 'Final required checks must include prepublication validation.');
+  assert.deepEqual(w.jobs.validation.needs, w.jobs.status.needs.filter(n => !['publish-container', 'validation'].includes(n)));
+  assert.equal(w.jobs.validation.if, 'always()');
+  assert.match(w.jobs.validation.steps[0].uses, /^devantler-tech\/\.github\/actions\/aggregate-job-checks@[0-9a-f]{40}$/);
+  assert.equal(w.jobs.validation.steps.length, 1);
+  assert.equal(w.jobs.validation.steps[0].if, undefined);
+  assert.ok(w.jobs.validation.steps[0]['continue-on-error'] == null || w.jobs.validation.steps[0]['continue-on-error'] === false);
+  assert.deepEqual(w.jobs.validation.steps[0].with['job-results'].trim().split(/\s+(?=\$\{\{)/), w.jobs.validation.needs.map(n => '${{ needs.' + n + '.result }}'));
   assert.equal(publish.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
   assert.equal(publish.uses, undefined);
   assert.ok(Array.isArray(publish.steps), 'The main-only publisher must be a native CI job.');
@@ -50,6 +59,11 @@ test('CI must exercise and retain the actual container before distribution', asy
     w => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs'))['continue-on-error'] = true; },
     w => { w.jobs['test-portal-identity'].steps.find(s => s.with?.name === 'business-site-container').with.path = '.'; },
     w => { w.jobs['publish-container'].needs = ['test-portal-identity']; },
+    w => { w.jobs.status.needs = w.jobs.status.needs.filter(n => n !== 'publish-container'); },
+    w => { w.jobs.validation.needs = w.jobs.validation.needs.filter(n => n !== 'test-portal-identity'); },
+    w => { w.jobs.validation.steps[0]['continue-on-error'] = true; },
+    w => { w.jobs.validation.steps[0].if = 'false'; },
+    w => { w.jobs.validation.steps[0].with['job-results'] = 'success'; },
     w => { w.jobs['publish-container'].if = `true || (${w.jobs['publish-container'].if})`; },
     w => { w.jobs['publish-container'].secrets = 'inherit'; },
   ]) {

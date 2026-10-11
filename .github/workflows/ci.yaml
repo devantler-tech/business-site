@@ -374,8 +374,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  status:
-    name: CI - Required Checks
+  # Publication waits for complete validation; final required checks also
+  # cover signing, provenance verification and the published-image smoke test.
+  validation:
+    name: CI - Prepublication Checks
     runs-on: ubuntu-latest
     if: always()
     permissions: {}
@@ -402,10 +404,42 @@ jobs:
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
 
+  status:
+    name: CI - Required Checks
+    runs-on: ubuntu-latest
+    if: always()
+    permissions: {}
+    needs:
+      - changes
+      - build-docs
+      - audit-docs
+      - test-docs-audit-wrapper
+      - test-docs-npm-toolchain
+      - drift-check-active-projects
+      - test-repository-contracts
+      - test-portal-identity
+      - validation
+      - publish-container
+    steps:
+      - name: Check job results
+        uses: devantler-tech/.github/actions/aggregate-job-checks@c1aaea1b8470627e75a3c3f7caee74e0a93ca4de
+        with:
+          job-results: >-
+            ${{ needs.changes.result }}
+            ${{ needs.build-docs.result }}
+            ${{ needs.audit-docs.result }}
+            ${{ needs.test-docs-audit-wrapper.result }}
+            ${{ needs.test-docs-npm-toolchain.result }}
+            ${{ needs.drift-check-active-projects.result }}
+            ${{ needs.test-repository-contracts.result }}
+            ${{ needs.test-portal-identity.result }}
+            ${{ needs.validation.result }}
+            ${{ needs.publish-container.result }}
+
   # The same run distributes its tested bytes only after the complete CI gate.
   # No privileged workflow_run crosses from an untrusted PR to registry writes.
   publish-container:
-    needs: [status, test-portal-identity]
+    needs: [validation, test-portal-identity]
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
