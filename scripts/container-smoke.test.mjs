@@ -18,7 +18,9 @@ assert.equal(receipt.Mode, 'release');
 assert.match(receipt.SourceRevision, /^[0-9a-f]{40}$/);
 assert.match(receipt.PublicDigest, /^[0-9a-f]{64}$/);
 if (process.env.EXPECTED_SOURCE_SHA) assert.equal(receipt.SourceRevision, process.env.EXPECTED_SOURCE_SHA);
+/** Execute the real Docker CLI with bounded time/output and fail on a nonzero exit. */
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 }).trim();
+/** Read both log streams of an owned container, refusing unreadable or timed-out logs. */
 const logs = id => {
   const result = spawnSync('docker', ['logs', id], { encoding: 'utf8', timeout: 5000 });
   assert.equal(result.status, 0, 'Cannot read the owned container logs.');

@@ -1,6 +1,53 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+
+// Exercise the README's real shell selection/cd/argument handling. A Docker
+// boundary double avoids requiring a daemon for these documentation checks;
+// container-smoke.test.mjs separately exercises the actual image in Linux CI.
+const examples = [...readFileSync('server/README.md', 'utf8').matchAll(/```sh\n([\s\S]*?)\n```/g)].map(match => match[1]);
+const packageExample = examples.find(example => example.includes('./business-site --version'));
+const containerExample = examples.find(example => example.includes('docker build --file Dockerfile'));
+
+for (const [name, example] of [['package', packageExample], ['container', containerExample]]) {
+  for (const directories of [[], ['package.one'], ['package.with spaces'], ['package.one', 'package.two']]) {
+    test(`${name} instructions handle ${directories.length ? directories.join(', ') : 'no generated package'}`, () => {
+      const fixture = realpathSync(mkdtempSync(path.join(tmpdir(), 'runtime-readme-')));
+      try {
+        mkdirSync(path.join(fixture, 'runtime-dist'));
+        for (const directory of directories) mkdirSync(path.join(fixture, 'runtime-dist', directory));
+        const selection = name === 'package'
+          ? example.split('node scripts/runtime-smoke.test.mjs runtime-dist\n')[1]
+            .replace('./business-site --version', 'pwd -P')
+            .replace('./business-site --listen 127.0.0.1:8080', ':')
+          : example.split('\nnode scripts/container-smoke.test.mjs')[0];
+        const capture = name === 'container' ? 'docker() { printf "%s\\0" "$@"; }\ngit() { printf "%s" fixture-revision; }\n' : '';
+        const result = spawnSync('bash', ['-c', capture + selection], { cwd: fixture, encoding: 'utf8', timeout: 5000 });
+        if (directories.length !== 1) {
+          assert.notEqual(result.status, 0, 'Missing or ambiguous package selection must stop.');
+          assert.equal(result.stdout, '', 'A rejected package must not reach execution/build.');
+        } else {
+          assert.equal(result.status, 0, result.stderr);
+          if (name === 'package') {
+            assert.equal(result.stdout.trim(), path.join(fixture, 'runtime-dist', directories[0]));
+          } else {
+            assert.deepEqual(result.stdout.split('\0').slice(0, -1), [
+              'build', '--file', 'Dockerfile', '--label',
+              'org.opencontainers.image.source=https://github.com/devantler-tech/business-site',
+              '--label', 'org.opencontainers.image.revision=fixture-revision',
+              '--tag', 'business-site:test', `runtime-dist/${directories[0]}`,
+            ]);
+          }
+        }
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
+    });
+  }
+}
 
 test('a confined non-root image is supplied for the actual runtime package', () => {
   assert.ok(existsSync('Dockerfile'), 'The combined runtime has no container definition.');
@@ -16,6 +63,7 @@ test('a confined non-root image is supplied for the actual runtime package', () 
   assert.doesNotMatch(file, /^RUN |^ADD |^ENV PORTAL_/m);
 });
 
+/** Reject skipped image validation, broad artifacts or incomplete success aggregation. */
 function assertCI(w) {
   assert.equal(w.jobs['test-portal-identity'].if, undefined);
   const steps = w.jobs['test-portal-identity'].steps;
@@ -71,6 +119,7 @@ test('CI must exercise and retain the actual container before distribution', asy
   }
 });
 
+/** Bind publication to this main-push CI artifact and require verified-image execution. */
 function assertPublisher(w) {
   assert.equal(w.on.workflow_run, undefined);
   assert.equal(w.on.pull_request_target, undefined);

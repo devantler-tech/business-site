@@ -69,16 +69,29 @@ their queries in addition to checking current membership.
 
 ## Build and run the combined package
 
-From the repository root, with Node 24/npm 11 and exact Go 1.27.2:
+From a clean repository root, with Node 24/npm 11, exact Go 1.27.2 and a fresh
+`runtime-dist` output directory:
 
 ```sh
 npm ci
 bash scripts/package-runtime.sh --release
 node scripts/runtime-smoke.test.mjs runtime-dist
-cd runtime-dist/package.<generated-id>
-./business-site --version
-./business-site --listen 127.0.0.1:8080
+set -- runtime-dist/package.*/
+if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+  printf '%s\n' 'Expected exactly one generated runtime package.' >&2
+  exit 1
+fi
+PACKAGE_DIR="${1%/}"
+(
+  cd "$PACKAGE_DIR" || exit 1
+  ./business-site --version
+  ./business-site --listen 127.0.0.1:8080
+)
 ```
+
+The version command prints the source/public-digest receipt. Visit
+`http://127.0.0.1:8080/` for the public snapshot; stop the local server with Ctrl+C.
+The subshell leaves your original shell at the repository root.
 
 Use a fresh output directory for smoke tests. `--release` requires clean source;
 `--development` permits a labelled local build. Each directory contains the actual
@@ -110,11 +123,19 @@ See [the package decision](../docs/adr/0004-combined-runtime-package.md).
 
 ## Restricted container distribution
 
-After packaging clean source on Linux, build using **only the generated package
-directory as context**, not this source checkout:
+After packaging clean source on Linux, return to the repository root with Docker
+available. Build using **only the generated package directory as context**, not
+this source checkout. Missing or multiple packages stop rather than choosing one
+arbitrarily:
 
 ```sh
-docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test runtime-dist/package.<generated-id>
+set -- runtime-dist/package.*/
+if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+  printf '%s\n' 'Expected exactly one generated runtime package.' >&2
+  exit 1
+fi
+PACKAGE_DIR="${1%/}"
+docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$PACKAGE_DIR"
 node scripts/container-smoke.test.mjs business-site:test runtime-dist
 ```
 
