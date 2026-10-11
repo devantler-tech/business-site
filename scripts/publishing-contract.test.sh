@@ -12,7 +12,13 @@ ci_gate_valid() {
     .jobs.status as $gate |
     $gate.if == "always()" and $gate.permissions == {} and
     ($gate.needs | sort) == ([.jobs | keys[] | select(. != "status")] | sort) and
-    ($gate.steps | length) == 1 and
+    ($gate.steps | length) == 2 and
+    $gate.steps[0].if == null and
+    all($gate.steps[]; .["continue-on-error"] == null or .["continue-on-error"] == false) and
+    ($gate.steps[1].if | gsub("[[:space:]]+"; " ") | rtrimstr(" ")) ==
+      "github.event_name == \u0027push\u0027 && github.ref == \u0027refs/heads/main\u0027 && github.repository == \u0027devantler-tech/business-site\u0027" and
+    $gate.steps[1].env == {"PUBLICATION_RESULT":"\u0024{{ needs.publish-container.result }}"} and
+    $gate.steps[1].run == "test \"\u0024PUBLICATION_RESULT\" = success" and
     ($gate.steps[0].uses | test("^devantler-tech/\\.github/actions/aggregate-job-checks@[0-9a-f]{40}$")) and
     ($gate.steps[0].with["job-results"] as $results |
       all($gate.needs[]; . as $job | $results | contains("needs." + $job + ".result")))
@@ -47,7 +53,12 @@ for broken_ci in \
   '.jobs.status.steps[0].uses |= sub("@[0-9a-f]{40}$"; "@main")' \
   '.jobs.status.needs |= map(select(. != "build-docs"))' \
   '.jobs.status.steps[0].with["job-results"] |= sub("needs.build-docs.result"; "ignored")' \
-  '.jobs.status.if = "success()"'; do
+  '.jobs.status.if = "success()"' \
+  '.jobs.status.steps |= .[0:1]' \
+  '.jobs.status.steps[1].if = "true"' \
+  '.jobs.status.steps[1].env.PUBLICATION_RESULT = "success"' \
+  '.jobs.status.steps[1].run = "true"' \
+  '.jobs.status.steps[1]["continue-on-error"] = true'; do
   if ci_gate_valid <<<"$(jq "$broken_ci" <<<"$ci_json")"; then
     fail 'a broken CI aggregate passed its negative control'
   fi

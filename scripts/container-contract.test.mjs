@@ -11,6 +11,63 @@ import test from 'node:test';
 const examples = [...readFileSync('server/README.md', 'utf8').matchAll(/```sh\n([\s\S]*?)\n```/g)].map(match => match[1]);
 const packageExample = examples.find(example => example.includes('./business-site --version'));
 const containerExample = examples.find(example => example.includes('docker build --file Dockerfile'));
+const mainPushCondition = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'";
+const publicationCondition = "!cancelled() && needs.validation.result == 'success' && needs.test-portal-identity.result == 'success' && " + mainPushCondition;
+
+/** Model the documented implicit status check for this bounded conjunction, not a live Actions runner. */
+function allowsPublication(condition, context) {
+  const expression = condition.replace(/\s+/g, ' ').trim();
+  if (!/(?:cancelled|success|failure|always)\(\)/.test(expression)
+    && (context.cancelled || context.ancestors.some(result => result !== 'success'))) return false;
+  return expression.split(' && ').every(term => {
+    if (term === '!cancelled()') return !context.cancelled;
+    const match = /^(github\.(event_name|ref|repository)|needs\.(validation|test-portal-identity)\.result) == '([^']+)'$/.exec(term);
+    assert.ok(match, 'Unexpected publication expression; update the bounded evaluator deliberately.');
+    const actual = match[2] ? context.github[match[2]] : context.needs[match[3]].result;
+    return actual === match[4];
+  });
+}
+
+test('a skipped optional ancestor cannot suppress a fully validated main publication', async () => {
+  const yaml = await import('js-yaml');
+  const w = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
+  const context = {
+    cancelled: false, ancestors: ['success', 'skipped', 'success'],
+    github: { event_name: 'push', ref: 'refs/heads/main', repository: 'devantler-tech/business-site' },
+    needs: { validation: { result: 'success' }, 'test-portal-identity': { result: 'success' } },
+  };
+  assert.equal(allowsPublication(w.jobs['publish-container'].if, context), true);
+  for (const prerequisite of ['validation', 'test-portal-identity']) {
+    for (const result of ['failure', 'skipped', 'cancelled', '']) {
+      const changed = structuredClone(context);
+      changed.needs[prerequisite].result = result;
+      assert.equal(allowsPublication(w.jobs['publish-container'].if, changed), false);
+    }
+  }
+  for (const [field, value] of [['event_name', 'pull_request'], ['event_name', 'merge_group'], ['ref', 'refs/heads/feature'], ['repository', 'example/fork']]) {
+    const changed = structuredClone(context);
+    changed.github[field] = value;
+    assert.equal(allowsPublication(w.jobs['publish-container'].if, changed), false);
+  }
+  assert.equal(allowsPublication(w.jobs['publish-container'].if, { ...context, cancelled: true }), false);
+});
+
+test('the final required check rejects absent or unsuccessful main publication', async () => {
+  const yaml = await import('js-yaml');
+  const w = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
+  const guard = w.jobs.status.steps.find(step => step.env?.PUBLICATION_RESULT);
+  assert.ok(guard, 'A skipped publisher must not pass the main-push required check.');
+  assert.equal(guard.if.replace(/\s+/g, ' ').trim(), mainPushCondition);
+  assert.equal(guard.env.PUBLICATION_RESULT, '${{ needs.publish-container.result }}');
+  assert.ok(guard['continue-on-error'] == null || guard['continue-on-error'] === false);
+  for (const result of ['success', 'failure', 'skipped', 'cancelled', '']) {
+    const execution = spawnSync('bash', ['-e', '-c', guard.run], {
+      env: { PATH: process.env.PATH, PUBLICATION_RESULT: result }, timeout: 5000, encoding: 'utf8',
+    });
+    assert.equal(execution.error, undefined);
+    assert.equal(execution.status === 0, result === 'success', result);
+  }
+});
 
 for (const [name, example] of [['package', packageExample], ['container', containerExample]]) {
   for (const directories of [[], ['package.one'], ['package.with spaces'], ['package.one', 'package.two']]) {
@@ -90,7 +147,7 @@ function assertCI(w) {
   assert.equal(w.jobs.validation.steps[0].if, undefined);
   assert.ok(w.jobs.validation.steps[0]['continue-on-error'] == null || w.jobs.validation.steps[0]['continue-on-error'] === false);
   assert.deepEqual(w.jobs.validation.steps[0].with['job-results'].trim().split(/\s+(?=\$\{\{)/), w.jobs.validation.needs.map(n => '${{ needs.' + n + '.result }}'));
-  assert.equal(publish.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
+  assert.equal(publish.if.replace(/\s+/g, ' ').trim(), publicationCondition);
   assert.equal(publish.uses, undefined);
   assert.ok(Array.isArray(publish.steps), 'The main-only publisher must be a native CI job.');
   assert.deepEqual(publish.permissions, { contents: 'read', actions: 'read', packages: 'write', 'id-token': 'write' });
@@ -125,7 +182,7 @@ function assertPublisher(w) {
   assert.equal(w.on.pull_request_target, undefined);
   assert.deepEqual(w.permissions, {});
   const j = w.jobs['publish-container'];
-  assert.equal(j.if.replace(/\s+/g, ' ').trim(), "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'");
+  assert.equal(j.if.replace(/\s+/g, ' ').trim(), publicationCondition);
   assert.equal(j.env.SOURCE_SHA, '${{ github.sha }}');
   assert.equal(j.env.CI_RUN_ID, '${{ github.run_id }}');
   assert.equal(j.env.CI_RUN_ATTEMPT, '${{ github.run_attempt }}');
