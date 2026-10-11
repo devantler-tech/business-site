@@ -15,9 +15,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
-- `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication, default-off
-  until the reviewed #25 cutover. `publish-pages.yaml` retains the old immutable monorepo
-  call path during the transfer. This static publisher does not deploy a private portal
+- `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
+  reviewed #25 cutover; admission still requires the enabled source switch and protected
+  main-only environment. `publish-pages.yaml` retains legacy immutable callers, not live ownership.
+  This static publisher does not deploy a private portal
   backend, identity, customer isolation, checkout or paid subscription system.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
   in their original repository; the source snapshot and asset provenance are linked in the README.
@@ -49,8 +50,9 @@ project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and sy
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness
-preflight; a source merge is not publication. The source-owned publisher is default-off
-pending the reviewed Pages/domain transfer in #25; see docs/adr/0003-source-owned-publication.md.
+preflight; a source merge is not publication. The #25 source-owned publication cutover is complete;
+admission still uses the enabled source switch and protected main-only environment.
+See docs/adr/0003-source-owned-publication.md.
 
 ## Content boundaries
 
@@ -75,7 +77,8 @@ and `ned@devantler.tech`. Registration/contact follow-up
 required address disclosure and deployed English/Danish proof. The maintainer has confirmed
 mail receipt and allows the registered address on the website only where legally required;
 keep the street address out of public backlog evidence. The default-off
-`FEATURE_COMPANY_IDENTITY` preview gates the new footer and email route until reviewed activation.
+`FEATURE_COMPANY_IDENTITY` source default keeps ordinary local builds closed; the reviewed
+source-owned publisher explicitly enables the footer, email route and required disclosure.
 Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
 plus 299/month for a focused first app version, and 4,995 plus 199/month for a service.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.

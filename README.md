@@ -1,65 +1,75 @@
-# business-site
+# Devantler Tech website
 
-The [Devantler Tech website](https://devantler.tech): a one-person software business, public
-products, journal and technical notes. English is the default; Home, About and Projects also
-support Danish. The static Astro + Starlight application uses the repository root:
-`src/` for application code and content, `public/` for copied assets, and `scripts/`
-for production checks. Contributor documentation and architecture decisions live in `docs/`.
+The source for [devantler.tech](https://devantler.tech): an independent software business's
+website, public project catalogue, Journal and technical guides. Visit the published site to
+explore the work; use this repository to improve its content or presentation. Home, About and
+Projects are available in English and Danish. The Journal, CV and detailed technical guides
+are in English.
 
-## Development
+The public site is an Astro + Starlight static application. A separate, default-off Go portal
+foundation is implemented under [`server/`](server/README.md), but is not deployed by GitHub
+Pages. Its local browser sign-in tests do not establish production authentication, customer
+intake or payments. You do not need a database, cloud account or publishing credentials to
+work on the static site.
 
-Use Node 24 and npm 11. See [contributor instructions](AGENTS.md) and the
-[site/editorial guide](docs/README.md).
+## Run the site locally
+
+Install Git, Bash, Node 24 and npm 11. From the directory where you want your checkout:
 
 ```sh
+git clone https://github.com/devantler-tech/business-site.git
+cd business-site
 npm ci
-LC_ALL=C npm run build
-npm run dev
+npm run dev -- --host 127.0.0.1
 ```
 
-CI builds the normal production experience and uploads `business-site-preview` for review.
-Preview with `npm run preview`; stop the server afterwards.
+Open the local address printed by Astro (normally `http://127.0.0.1:4321/`). Check `/da/` for
+Danish and `/blog/` for the Journal. Stop the server with Ctrl+C. This starts only a local
+development server; it does not publish the website or enable the private portal.
 
-The editorial Journal presentation is behind the default-off
-`FEATURE_JOURNAL_PRESENTATION` release flag. Set it to `true` for a review build;
-CI checks enabled, explicitly false and entirely unset output. It changes the
-Journal's frame and typography, not its article prose, URLs or native browsing controls.
-Each post also owns a distinct topic-specific cover in the existing workshop illustration style;
-the normal build checks that it is not reused for another post or unrelated site subject.
-[The presentation decision](docs/adr/0001-journal-presentation.md) records its scope.
-Activation and flag removal are tracked in [#12](https://github.com/devantler-tech/business-site/issues/12)
-and require a reviewed source adoption and verified public deployment.
+From the repository root, build and inspect the static output with:
 
-## Publication
+```sh
+LC_ALL=C npm run build
+npm run preview -- --host 127.0.0.1
+```
 
-The unified product's latent portal identity foundation lives under
-[`server/`](server/README.md), in this same repository. It is tested against an
-actual synthetic OIDC broker and PostgreSQL, but does not yet expose a login,
-customer form or running backend. The static publisher does not deploy it.
+A successful build creates `dist/` and passes the embedded source and visitor-page checks.
+Use the preview address printed by Astro, then stop it with Ctrl+C. Do not edit `dist/`.
+The Journal frame is permanent; rollback requires a reviewed source revert and publication.
+The curated client-facing portfolio is enabled by default and retains its explicit-false
+build-time rollback. Other previews and their prerequisites are explained in the
+[site reference](docs/README.md#feature-flags-build-time).
 
-The source-owned `publish-site.yaml` builds this repository's exact main revision on
-main pushes, manual dispatches and daily public-ranking refreshes. Deployment is
-default-off until the repository variable `SITE_PUBLICATION_ENABLED` is exactly
-`true`. A main-branch manual dispatch defaults to artifact-only `preview`; it
-does not deploy, even when publication is enabled. Production receipts identify
-this repository, source SHA, workflow run/attempt and publication mode.
+## Contribute or find the right guide
 
-The existing monorepo Pages owner and immutable reusable publisher remain the
-live path until the staged ownership transfer in [#25](https://github.com/devantler-tech/business-site/issues/25).
-The [cutover and rollback decision](docs/adr/0003-source-owned-publication.md)
-requires protected main-only deployment, replacement proof and actual HTTPS
-visitor/receipt checks before independently reviewed monorepo cleanup.
-A source merge or preview artifact alone is not live delivery.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for a safe first change, the complete local check
+sequence and submission requirements. The [site reference](docs/README.md) covers editorial
+standards, bilingual content, the project catalogue, CV and build-time previews.
+[Architecture decisions](docs/adr/) explain the site's design; [AGENTS.md](AGENTS.md) is the
+canonical repository contract. Backend contributors must also follow the
+[portal runtime guide](server/README.md) and its own instructions.
 
-## Source and asset provenance
+## Publication is separate from a source change
 
-The initial source snapshot is from
-[monorepo commit 830043b5b273229ec029cf51f41fb3b4b6471c0d](https://github.com/devantler-tech/monorepo/tree/830043b5b273229ec029cf51f41fb3b4b6471c0d/docs).
-Original file history remains in that repository. Monorepo ADRs were not imported. The extraction
-adds signed commits rather than rewriting historical commits without their signatures.
-[Asset provenance](src/assets/PROVENANCE.md) and [illustration prompts](src/assets/editorial/PROMPTS.md)
-distinguish generated artwork from real portraits, captures and authored diagrams.
+This repository's [`publish-site.yaml`](.github/workflows/publish-site.yaml) owns GitHub Pages
+publication on main pushes, admitted manual runs and daily ranking refreshes. Production
+publication requires `SITE_PUBLICATION_ENABLED=true` and the protected main-only deployment
+environment. Manual runs default to artifact-only `preview`, even when publication is enabled.
+The old reusable publisher is retained for its legacy immutable callers, not as the live owner.
 
-Company/contact completion remains [monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917).
-The unified site's private portal backend, identity, customer isolation and payments
-are not deployed by the static Pages publisher.
+A source merge or preview artifact is not publication evidence. Operators check the successful
+deployment and the live [`publication-source.json`](https://devantler.tech/publication-source.json)
+receipt against its source revision and workflow run, then check the visitor paths. See the
+[publication and rollback decision](docs/adr/0003-source-owned-publication.md). The static
+publisher does not deploy the portal backend, authentication or payments.
+
+## Source, assets and reuse
+
+The initial source snapshot came from
+[monorepo commit 830043b5b273229ec029cf51f41fb3b4b6471c0d](https://github.com/devantler-tech/monorepo/tree/830043b5b273229ec029cf51f41fb3b4b6471c0d/docs);
+original history remains there. [Asset provenance](src/assets/PROVENANCE.md) and
+[illustration prompts](src/assets/editorial/PROMPTS.md) distinguish generated illustrations
+from real photographs, captures and authored diagrams. This repository has no application-source
+license grant; public source and dependency notices do not grant unrestricted reuse of its
+code, content or assets. Check the applicable terms before reusing them.

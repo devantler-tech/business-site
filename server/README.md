@@ -1,8 +1,5 @@
 # Portal identity and browser sign-in
 
-First implementation child: [business-site#33](https://github.com/devantler-tech/business-site/issues/33)
-of [monorepo#3936](https://github.com/devantler-tech/monorepo/issues/3936).
-
 This module supplies a Go executable composing the public Astro output with the
 **default-off HTTP identity handlers**, not a deployed portal. It discovers one configured HTTPS
 OIDC broker through maintained go-oidc, verifies signed ID tokens and the attempt
@@ -10,6 +7,12 @@ nonce, and uses PostgreSQL for browser-bound login attempts, bound invitations
 and current client/operator membership. Accounts use issuer + subject, not email.
 Synthetic tests use a local TLS broker with generated keys; they are not proof of
 live Dex, Google or Microsoft federation.
+
+For the credential-free public-site first run and contribution workflow, start with the
+[repository README](../README.md) and [contribution guide](../CONTRIBUTING.md). This reference
+covers the optional combined runtime and its separate disposable database tests. Implementation
+history starts at [business-site#33](https://github.com/devantler-tech/business-site/issues/33)
+under [monorepo#3936](https://github.com/devantler-tech/monorepo/issues/3936).
 
 The foundation evaluates the boolean OpenFeature flag `portal-identity` with a
 false default on every operation, using the application's injected SDK client.
@@ -79,7 +82,7 @@ to checking current membership; later handlers must preserve the same boundary.
 
 ## Build and run the combined package
 
-From a clean repository root, with Node 24/npm 11, exact Go 1.27.2 and a fresh
+From a clean repository root, with Git, Bash, Node 24/npm 11, exact Go 1.27.2 and a fresh
 `runtime-dist` output directory:
 
 ```sh
@@ -180,10 +183,20 @@ See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
-Use Go 1.27.2 and a **fresh disposable** PostgreSQL 17 database. Run the fixture
-provisioning script as its test owner. It creates only fictional roles/records:
+Use Go 1.27.2, the `psql` client and a **fresh disposable** PostgreSQL 17 service matching
+the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_fixture_owner`
+with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
+The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
+Never use a production service or an existing database containing real data.
+
+The examples assume your owned disposable service is at `localhost:5432`. Confirm the port
+belongs to that fixture, not another service. Tests accept only `localhost:5432`,
+`127.0.0.1:5432` or `127.0.0.1:55444`; for the last option, change all three fixture URLs below
+to that exact host and port. Do not relax the test's endpoint guard. From the repository root:
 
 ```sh
+cd server
+export FIXTURE_OWNER_URL='postgres://portal_fixture_owner:fixture-only@localhost:5432/postgres?sslmode=disable'
 psql "$FIXTURE_OWNER_URL" -v ON_ERROR_STOP=1 -f testdata/provision.sql
 export PORTAL_TEST_MIGRATION_DATABASE_URL='postgres://portal_migrator:fixture-only@localhost:5432/portal_identity_test?sslmode=disable'
 export PORTAL_TEST_DATABASE_URL='postgres://portal_runtime:fixture-only@localhost:5432/portal_identity_test?sslmode=disable'
@@ -204,6 +217,9 @@ grant runtime table DML within the fixture, exercise the restricted role, and
 truncate the five fixture identity/session/contact tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
+
+After testing, stop and remove only the disposable service and data directory you created.
+Keep shared services and databases untouched; do not turn this fixture into a permanent service.
 
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share

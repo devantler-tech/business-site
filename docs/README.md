@@ -1,20 +1,24 @@
-# devantler.tech
+# Business-site contributor reference
 
-The [devantler.tech](https://devantler.tech) site — an [Astro](https://astro.build) +
-[Starlight](https://starlight.astro.build) static site. Its source lives in
-`devantler-tech/business-site` at the repository root (`src/`, `public/`, `scripts/`).
-This `docs/` directory holds contributor documentation and architecture decisions. The callable
-`.github/workflows/publish-site.yaml` builds this repository's exact `main` revision and publishes
-to its own Pages resource at devantler.tech. The old callable `publish-pages.yaml` is retained
-only as the legacy immutable caller path; it is not the active production publisher.
+This directory holds contributor documentation and architecture decisions, not the Astro
+application or rendered Starlight content. Start with the [project README](../README.md) for
+local first use and [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contribution path.
+The reference below covers editorial standards, bilingual content, catalogue maintenance,
+CV data and build-time previews. Application paths are relative to the repository root.
+
+The source-owned `.github/workflows/publish-site.yaml` builds this repository's exact `main`
+revision and publishes to its own Pages resource at devantler.tech when its admission gates
+pass. It is an ordinary push/manual/scheduled workflow, not a callable reusable workflow.
+The old reusable `publish-pages.yaml` is retained for legacy immutable callers; it is not
+the active production publisher. Neither workflow deploys the private portal backend.
 
 ## Develop
 
 ```sh
 # From the repository root
 npm ci
-npm run dev      # local dev server
-npm run build    # production build (this is what CI validates)
+npm run dev -- --host 127.0.0.1  # stop with Ctrl+C
+LC_ALL=C npm run build          # production build and visitor checks
 ```
 
 Use Node 24 and npm 11. CI clean-installs with npm 11.4.2 before repeating the install
@@ -27,8 +31,9 @@ editing the lockfile:
 npx --yes --package=npm@11.4.2 npm install --package-lock-only --ignore-scripts
 ```
 
-Then run both CI install commands and the build. A newer generator's output is
-acceptable only when it passes the same clean-install checks.
+Then run `npx --yes --package=npm@11.4.2 npm ci --ignore-scripts`, ordinary `npm ci` and the build
+from the repository root. A newer generator's output is acceptable only when it passes the same
+clean-install checks. These commands change local dependencies/lockfile, not the published site.
 
 ## Business website
 
@@ -105,7 +110,7 @@ archived and private repositories cannot enter this showcase. All thirteen entri
 underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
 unrestricted open source. Stars indicate popularity, not a quality guarantee.
 
-The callable publisher refreshes the complete metadata before every build with read-only GitHub
+The source-owned publisher refreshes the complete metadata before every build with read-only GitHub
 authority; no GitHub API call or token is sent to a visitor's browser. The page displays the actual
 UTC observation timestamp. Failed, partial or malformed reads abort publication and leave the
 previous live artifact with its previous timestamp; they are never presented as a fresh read.
@@ -286,9 +291,11 @@ Keep this lane single-flight—maintain or measure the current post before start
 
 ## Public product catalogue
 
-The Projects page's “Built in the open” shelf lists public tools, libraries, templates and
-source-available inspiration, not tenant deployments. `src/data/public-products.json` holds the
-curated bilingual descriptions and is the source rendered by both language routes. The
+Normal Projects output selects six maintained public tools as described under Featured portfolio,
+alongside the public website example, hosting and research. The old “Built in the open” shelf of
+tools, libraries, templates and source-available inspiration appears only when both
+`FEATURE_CLIENT_PORTFOLIO` and `FEATURE_FEATURED_PORTFOLIO` are explicitly false.
+`src/data/public-products.json` holds the full curated bilingual descriptions. The
 `public-products:` inventory in `src/content/docs/projects/active.mdx` is checked against this JSON;
 that MDX file holds legacy portfolio metadata, not the public description-editing surface.
 The production contract verifies the rendered catalogue. Shared Actions live in `.github`; the
@@ -297,8 +304,10 @@ and directs new projects to `.github`. Repository licences govern reuse; World a
 whose source is available for study, not unrestricted reuse or hosting.
 
 `src/data/github-stars.json` is generated with an explicit UTC observation date. Cards sort by GitHub
-stars descending, then repository name; the leading six are visible and the rest sit in a native
-disclosure directly below. Builds and visitors need no GitHub connection. Refresh the snapshot when
+stars descending, then repository name. In the legacy rollback, its leading six cards are visible
+and the remainder sits in a native disclosure. Normal output has only the six selected maintained
+tools; `more-public-products` remains a hidden historical anchor, not a remainder disclosure.
+Builds and visitors need no GitHub connection. Refresh the snapshot when
 updating the catalogue and during the monthly site content review:
 
 ```sh
@@ -355,7 +364,12 @@ To review flagged content before production enables it, run a **preview build** 
 FEATURE_PREVIEW_BANNER=true npm run build
 ```
 
-The production build (CI / `publish-pages.yaml`) leaves the flag unset, so it stays off.
+Ordinary CI and `publish-site.yaml` publication leave this example preview-banner flag unset,
+so it stays off. This is not a rule for every flag: client-facing and featured-portfolio
+presentation default to true, and the source-owned publisher explicitly enables company identity.
+The Journal presentation is permanent and no longer has a feature flag.
+That identity preview needs the separately documented fictional address for local use; never copy
+the production address into a local fixture or public artifact.
 
 ### Lifecycle — remove the gate once shipped
 
