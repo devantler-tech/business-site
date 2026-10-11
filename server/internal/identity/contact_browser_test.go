@@ -13,12 +13,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// These controls catch missing/scopeless contact queries, forged identity,
-// stale writes and unsafe form handling through the real TLS application.
+// contactForm builds a synthetic native-form submission for real TLS controls
+// of record scoping, expected revisions and CSRF-protected private writes.
 func contactForm(token, revision, name, email, company string) url.Values {
 	return url.Values{"csrf_token": {token}, "revision": {revision}, "name": {name}, "email": {email}, "company": {company}, "lang": {"en"}}
 }
 
+// TestContactProfilePersistsWithoutGrantingAuthority reconnects the real store
+// and verifies that a saved, unverified address never grants operator access.
 func TestContactProfilePersistsWithoutGrantingAuthority(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -55,6 +57,8 @@ func TestContactProfilePersistsWithoutGrantingAuthority(t *testing.T) {
 	}
 }
 
+// TestContactTwoClientsCannotSelectAnotherRecord exercises two real sessions
+// and rejects browser-selected record IDs and roles without changing either record.
 func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -100,6 +104,8 @@ func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
 	}
 }
 
+// TestContactInvalidFormsNeverSave rejects malformed, oversized, forged and
+// cross-origin forms through the actual secured handler without storing a row.
 func TestContactInvalidFormsNeverSave(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -166,6 +172,95 @@ func TestContactInvalidFormsNeverSave(t *testing.T) {
 	}
 }
 
+// TestContactInvalidEditRecovers verifies a rejected edit keeps the stored
+// revision and only safe single-value input, so correcting it can actually save.
+func TestContactInvalidEditRecovers(t *testing.T) {
+	for _, kind := range []string{"invalid email", "long name", "control name", "long company", "duplicate name", "unknown field", "invalid revision"} {
+		t.Run(kind, func(t *testing.T) {
+			b := newBrowserFixture(t)
+			b.finish(b.start(b.invite("client-a", "client-a", "client")))
+			token := b.csrf("/portal/contact")
+			s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Stored", "stored@example.invalid", "Stored Company"), b.site.URL)
+			if s != 303 {
+				t.Fatalf("initial save=%d", s)
+			}
+			token = b.csrf("/portal/contact")
+			form := contactForm(token, "1", "Draft", "bad", "Draft Company")
+			wantName, wantEmail, wantCompany := "Draft", "bad", "Draft Company"
+			switch kind {
+			case "long name":
+				form.Set("name", strings.Repeat("x", 121))
+				wantName = "Stored"
+			case "control name":
+				form.Set("name", "Unsafe\nName")
+				wantName = "Stored"
+			case "long company":
+				form.Set("company", strings.Repeat("x", 161))
+				wantCompany = "Stored Company"
+			case "duplicate name":
+				form.Add("name", "Other")
+				wantName = "Stored"
+			case "unknown field":
+				form.Set("email_verified", "true")
+			case "invalid revision":
+				form.Set("revision", "-1")
+				wantName, wantEmail, wantCompany = "Stored", "stored@example.invalid", "Stored Company"
+			}
+			s, body, _ := b.request("POST", "/portal/contact", form, b.site.URL)
+			if s != 400 || !strings.Contains(body, `name="revision" value="1"`) {
+				t.Fatalf("rejected edit lost current revision: status=%d body=%s", s, body)
+			}
+			for _, want := range []string{wantName, wantEmail, wantCompany} {
+				if !strings.Contains(body, `value="`+want+`"`) {
+					t.Fatalf("recovery lost safe field %q", want)
+				}
+			}
+			var revision int
+			if err := b.pool.QueryRow(b.f.ctx, "SELECT revision FROM portal_contacts").Scan(&revision); err != nil || revision != 1 {
+				t.Fatal("invalid edit wrote a revision", err)
+			}
+			token = b.csrf("/portal/contact")
+			s, _, _ = b.request("POST", "/portal/contact", contactForm(token, "1", wantName, "corrected@example.invalid", wantCompany), b.site.URL)
+			if s != 303 {
+				t.Fatalf("corrected edit cannot save=%d", s)
+			}
+		})
+	}
+}
+
+// TestContactInvalidStaleEditDoesNotRebase prevents invalid-form recovery from
+// blessing stale draft text with a newer revision and overwriting another edit.
+func TestContactInvalidStaleEditDoesNotRebase(t *testing.T) {
+	b := newBrowserFixture(t)
+	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	token := b.csrf("/portal/contact")
+	s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Original", "original@example.invalid", ""), b.site.URL)
+	if s != 303 {
+		t.Fatalf("initial save=%d", s)
+	}
+	token = b.csrf("/portal/contact")
+	s, _, _ = b.request("POST", "/portal/contact", contactForm(token, "1", "Newer", "newer@example.invalid", ""), b.site.URL)
+	if s != 303 {
+		t.Fatalf("newer save=%d", s)
+	}
+	token = b.csrf("/portal/contact")
+	s, body, _ := b.request("POST", "/portal/contact", contactForm(token, "1", "Stale Draft", "bad", ""), b.site.URL)
+	if s != 409 || !strings.Contains(body, `name="revision" value="2"`) || !strings.Contains(body, `value="Newer"`) || strings.Contains(body, `value="Stale Draft"`) {
+		t.Fatalf("stale invalid draft rebased or wrong recovery=%d %s", s, body)
+	}
+	token = b.csrf("/portal/contact")
+	s, _, _ = b.request("POST", "/portal/contact", contactForm(token, "1", "Stale Draft", "corrected@example.invalid", ""), b.site.URL)
+	if s != 409 {
+		t.Fatalf("stale corrected edit overwrote newer data=%d", s)
+	}
+	_, body, _ = b.request("GET", "/portal/contact", nil, "")
+	if !strings.Contains(body, `value="Newer"`) || !strings.Contains(body, `value="newer@example.invalid"`) {
+		t.Fatal("invalid/stale edit changed the stored profile")
+	}
+}
+
+// TestContactWorkspaceNavigation checks both localized client links and the
+// actual form layout while keeping client-only navigation out of operator pages.
 func TestContactWorkspaceNavigation(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -189,6 +284,8 @@ func TestContactWorkspaceNavigation(t *testing.T) {
 	}
 }
 
+// TestContactAnonymousAndExpiredSessionsDeny exercises GET and POST without
+// durable live authentication and verifies that neither can save contact data.
 func TestContactAnonymousAndExpiredSessionsDeny(t *testing.T) {
 	b := newBrowserFixture(t)
 	token := b.csrf("/portal/sign-in")
@@ -215,6 +312,8 @@ func TestContactAnonymousAndExpiredSessionsDeny(t *testing.T) {
 	}
 }
 
+// TestContactRevisionPreventsConcurrentLostUpdate races six real requests against
+// one expected database revision and requires exactly one accepted update.
 func TestContactRevisionPreventsConcurrentLostUpdate(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -265,6 +364,8 @@ func TestContactRevisionPreventsConcurrentLostUpdate(t *testing.T) {
 	}
 }
 
+// TestContactRevocationOperatorAndClosedFlagsDeny rechecks revoked membership,
+// client-only access and false/error/type-mismatched feature-flag boundaries.
 func TestContactRevocationOperatorAndClosedFlagsDeny(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))
@@ -295,6 +396,8 @@ func TestContactRevocationOperatorAndClosedFlagsDeny(t *testing.T) {
 	}
 }
 
+// TestContactEscapesPrivateDisplayDataAndLocalizes renders submitted markup as
+// escaped data and keeps the unverified-email disclosure in both languages.
 func TestContactEscapesPrivateDisplayDataAndLocalizes(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.finish(b.start(b.invite("client-a", "client-a", "client")))

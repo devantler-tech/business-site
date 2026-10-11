@@ -60,6 +60,8 @@ func TestMigrationVersionAndConcurrency(t *testing.T) {
 	}
 }
 
+// TestSessionMigrationPreservesIdentity applies later migrations to a real v1
+// fixture while preserving revoked authority and refusing altered ledger history.
 func TestSessionMigrationPreservesIdentity(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
@@ -107,6 +109,8 @@ func TestSessionMigrationPreservesIdentity(t *testing.T) {
 	}
 }
 
+// TestContactMigrationPreservesIdentityAndSessions starts at actual v2 and checks
+// that v3 preserves identity/session bytes and detects changed contact schema.
 func TestContactMigrationPreservesIdentityAndSessions(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)

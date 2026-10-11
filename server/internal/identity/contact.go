@@ -23,6 +23,8 @@ type contactData struct {
 	Revision             int64
 }
 
+// contactText bounds UTF-8 display fields and excludes control characters
+// before either persistence or reflection into a recovery form.
 func contactText(s string, max int, required bool) bool {
 	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > max || (required && strings.TrimSpace(s) == "") {
 		return false
@@ -35,6 +37,8 @@ func contactText(s string, max int, required bool) bool {
 	return true
 }
 
+// parseContact accepts only bounded, single-value contact fields and a valid
+// expected revision. Submitted record IDs and verification claims are rejected.
 func parseContact(r *http.Request) (contactData, error) {
 	if r.ParseForm() != nil {
 		return contactData{}, ErrDenied
@@ -116,6 +120,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	return nil
 }
 
+// contact renders only the current client's stored, unverified contact profile.
 func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
@@ -134,6 +139,31 @@ func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 	b.renderContact(w, r, 200, d, "")
 }
 
+// recoverContact retains safe draft text only when its expected revision still
+// matches the store. Invalid revisions reload stored values; stale drafts are
+// never silently rebased onto a newer revision.
+func recoverContact(r *http.Request, current contactData) (contactData, bool) {
+	revision, err := strconv.ParseInt(r.PostForm.Get("revision"), 10, 64)
+	if len(r.PostForm["revision"]) != 1 || err != nil || revision < 0 || revision == int64(^uint64(0)>>1) {
+		return current, false
+	}
+	if revision != current.Revision {
+		return current, true
+	}
+	for _, field := range []struct {
+		key string
+		max int
+		to  *string
+	}{{"name", 120, &current.Name}, {"email", 254, &current.Email}, {"company", 160, &current.Company}} {
+		if values := r.PostForm[field.key]; len(values) == 1 && contactText(values[0], field.max, false) {
+			*field.to = values[0]
+		}
+	}
+	return current, false
+}
+
+// updateContact validates client-only form writes and renders a recoverable
+// rejected edit without resetting its revision or exposing unsafe submitted text.
 func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
 	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
@@ -146,7 +176,17 @@ func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
 	}
 	d, err := parseContact(r)
 	if err != nil {
-		b.renderContact(w, r, 400, contactData{}, "invalid")
+		current, readErr := b.foundation.readContact(r.Context(), b.principal(r.Context()))
+		if readErr != nil {
+			b.render(w, r, 503, "unavailable", "", "")
+			return
+		}
+		recovered, conflict := recoverContact(r, current)
+		if conflict {
+			b.renderContact(w, r, 409, recovered, "conflict")
+		} else {
+			b.renderContact(w, r, 400, recovered, "invalid")
+		}
 		return
 	}
 	err = b.foundation.saveContact(r.Context(), b.principal(r.Context()), d)
@@ -167,6 +207,8 @@ type contactPageData struct {
 	NameLabel, EmailLabel, CompanyLabel, Save, Pending, FormError, Workspace string
 }
 
+// renderContact escapes bounded profile data using the shared private layout,
+// with localized validation/conflict messages and an honest unverified state.
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string) {
 	page := contactPageData{pageData: b.data(r, "contact", "", nosurf.Token(r)), Contact: d, NameLabel: "Your name", EmailLabel: "Contact email", CompanyLabel: "Company (optional)", Save: "Save contact details", Pending: "This contact email is not verified. Saving it does not change your sign-in or authorize an order.", Workspace: "Back to your workspace"}
 	page.Title = "Your contact details"
