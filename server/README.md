@@ -69,16 +69,29 @@ their queries in addition to checking current membership.
 
 ## Build and run the combined package
 
-From the repository root, with Node 24/npm 11 and exact Go 1.27.2:
+From a clean repository root, with Node 24/npm 11, exact Go 1.27.2 and a fresh
+`runtime-dist` output directory:
 
 ```sh
 npm ci
 bash scripts/package-runtime.sh --release
 node scripts/runtime-smoke.test.mjs runtime-dist
-cd runtime-dist/package.<generated-id>
-./business-site --version
-./business-site --listen 127.0.0.1:8080
+set -- runtime-dist/package.*/
+if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+  printf '%s\n' 'Expected exactly one generated runtime package.' >&2
+  exit 1
+fi
+PACKAGE_DIR="${1%/}"
+(
+  cd "$PACKAGE_DIR" || exit 1
+  ./business-site --version
+  ./business-site --listen 127.0.0.1:8080
+)
 ```
+
+The version command prints the source/public-digest receipt. Visit
+`http://127.0.0.1:8080/` for the public snapshot; stop the local server with Ctrl+C.
+The subshell leaves your original shell at the repository root.
 
 Use a fresh output directory for smoke tests. `--release` requires clean source;
 `--development` permits a labelled local build. Each directory contains the actual
@@ -107,6 +120,53 @@ TLS gateway before any production identity activation. No forwarded-header trust
 or plain-HTTP cookie exception is added.
 
 See [the package decision](../docs/adr/0004-combined-runtime-package.md).
+
+## Restricted container distribution
+
+After packaging clean source on Linux, return to the repository root with Docker
+available. Build using **only the generated package directory as context**, not
+this source checkout. Missing or multiple packages stop rather than choosing one
+arbitrarily:
+
+```sh
+set -- runtime-dist/package.*/
+if [ "$#" -ne 1 ] || [ ! -d "$1" ]; then
+  printf '%s\n' 'Expected exactly one generated runtime package.' >&2
+  exit 1
+fi
+PACKAGE_DIR="${1%/}"
+docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$PACKAGE_DIR"
+node scripts/container-smoke.test.mjs business-site:test runtime-dist
+```
+
+The digest-pinned, officially signed distroless base supplies CA roots and its
+upstream notices; the application adds its linked Go notices. It has no shell,
+compiler, test fixtures or source checkout. User/group 65532 serves port 8080;
+run with a read-only root, all capabilities dropped and no new privileges.
+Use HTTP GET `/healthz` for liveness/readiness (it proves the public runtime only).
+The actual-image tests retain EN/DA GET/HEAD bytes, closed private/traversal paths,
+network-disconnected startup, tamper rejection and bounded SIGTERM shutdown.
+
+CI runs its image publisher only on main pushes after all required checks
+and actual-image tests succeed, without a privileged cross-run trigger or rebuild.
+Its 90-day `business-site-container-publication` artifact
+contains `receipt.json`, the runtime receipt, verified signature and signed SLSA
+v0.2 provenance. Consume `receipt.image` (the **full registry digest**) rather
+than a tag. Verify its exact signer identity and GitHub issuer using Cosign, plus
+the source/public-digest annotations and attestation source/subject binding.
+The expected caller identity is
+`https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main`.
+Run the same container smoke test against that digest and its matching CI runtime
+archive. Registry push, signing and post-publication testing must all succeed;
+a staging tag alone is not release proof.
+
+If publication fails, keep Pages unchanged and diagnose the specific run; do
+not deploy its unverified staging tag or rebuild an artifact under an old receipt.
+A CI rerun on the same main source can retry distribution of its newly tested
+artifact through the same gates. Roll back a future deployment only to an earlier
+verified immutable digest, never by rewriting a receipt or moving a trusted tag.
+No cluster, domain, identity or payment setting is changed by this publisher.
+See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
