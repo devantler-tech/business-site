@@ -43,6 +43,17 @@ type browserFixture struct {
 	unexpectedExchanges atomic.Int32
 }
 
+// configure replaces synthetic token behavior while the broker is serving.
+// Claim maps are immutable after publication; each configuration owns its map.
+func (b *browserFixture) configure(claims map[string]any, redirect bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.claims = claims
+	b.redirectExchange = redirect
+}
+
+// newBrowserFixture creates isolated TLS application/broker servers and resets
+// only the explicitly named, disposable identity database.
 func newBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
 	b := &browserFixture{t: t, pool: fixtureDB(t), flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
@@ -71,7 +82,10 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 			http.Redirect(w, r, q.Get("redirect_uri")+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), 303)
 		case "/token":
 			b.exchanges.Add(1)
-			if b.redirectExchange {
+			b.mu.RLock()
+			redirect := b.redirectExchange
+			b.mu.RUnlock()
+			if redirect {
 				http.Redirect(w, r, b.f.issuer+"/unexpected-token", 307)
 				return
 			}
@@ -108,7 +122,9 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 		b.mu.RUnlock()
 		h.ServeHTTP(w, r)
 	}))
+	b.mu.Lock()
 	b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
+	b.mu.Unlock()
 	b.client = b.site.Client()
 	b.client.Jar, _ = cookiejar.New(nil)
 	b.client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -117,6 +133,7 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 	return b
 }
 
+// request sends one TLS application request without following redirects.
 func (b *browserFixture) request(method, path string, form url.Values, origin string) (int, string, http.Header) {
 	b.t.Helper()
 	req, err := http.NewRequest(method, b.site.URL+path, strings.NewReader(form.Encode()))
@@ -143,6 +160,7 @@ func (b *browserFixture) request(method, path string, form url.Values, origin st
 
 var csrfInput = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
+// csrf obtains the actual server-generated token from a rendered form.
 func (b *browserFixture) csrf(path string) string {
 	b.t.Helper()
 	status, body, _ := b.request("GET", path, nil, "")
@@ -155,6 +173,8 @@ func (b *browserFixture) csrf(path string) string {
 	}
 	return html.UnescapeString(m[1])
 }
+
+// invite provisions one fictional subject through the trusted control plane.
 func (b *browserFixture) invite(subject, client, role string) string {
 	b.t.Helper()
 	inv, err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)})
@@ -163,6 +183,8 @@ func (b *browserFixture) invite(subject, client, role string) string {
 	}
 	return inv
 }
+
+// start follows the real CSRF-protected sign-in and synthetic broker redirect.
 func (b *browserFixture) start(inv string) string {
 	b.t.Helper()
 	token := b.csrf("/portal/sign-in?lang=da")
@@ -191,6 +213,8 @@ func (b *browserFixture) start(inv string) string {
 	}
 	return u.RequestURI()
 }
+
+// finish exchanges a callback and requires the fixed workspace redirect.
 func (b *browserFixture) finish(callback string) {
 	b.t.Helper()
 	s, body, h := b.request("GET", callback, nil, "")
@@ -198,6 +222,8 @@ func (b *browserFixture) finish(callback string) {
 		b.t.Fatalf("callback=%d %s %s", s, h.Get("Location"), body)
 	}
 }
+
+// cookie returns the opaque session cookie, never a browser-selected identity.
 func (b *browserFixture) cookie() *http.Cookie {
 	b.t.Helper()
 	u, _ := url.Parse(b.site.URL)
@@ -335,13 +361,13 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 			}
 			switch kind {
 			case "nonce":
-				b.claims = map[string]any{"nonce": "wrong"}
+				b.configure(map[string]any{"nonce": "wrong"}, false)
 			case "issuer":
-				b.claims = map[string]any{"iss": "https://other.example.invalid"}
+				b.configure(map[string]any{"iss": "https://other.example.invalid"}, false)
 			case "audience":
-				b.claims = map[string]any{"aud": "other"}
+				b.configure(map[string]any{"aud": "other"}, false)
 			case "expired token":
-				b.claims = map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}
+				b.configure(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}, false)
 			}
 			callback := b.start(inv)
 			s, _, _ := b.request("GET", callback, nil, "")
@@ -437,10 +463,42 @@ func TestBrowserCSRFAndClosedFlags(t *testing.T) {
 
 func TestBrowserCodeExchangeDoesNotFollowRedirects(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.redirectExchange = true
+	b.configure(nil, true)
 	s, _, _ := b.request("GET", b.start(b.invite("client-a", "client-a", "client")), nil, "")
 	if s != 400 || b.unexpectedExchanges.Load() != 0 {
 		t.Fatalf("code exchange followed a redirect: status=%d unexpected_requests=%d", s, b.unexpectedExchanges.Load())
+	}
+}
+
+// TestBrowserFixtureConcurrentConfiguration exercises both shared token settings
+// against real concurrent TLS requests, rather than only sequential test setup.
+func TestBrowserFixtureConcurrentConfiguration(t *testing.T) {
+	b := newBrowserFixture(t)
+	stop := make(chan struct{})
+	var writers sync.WaitGroup
+	writers.Go(func() {
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+				b.configure(map[string]any{"nonce": "synthetic"}, i%2 == 0)
+			}
+		}
+	})
+	defer func() { close(stop); writers.Wait() }()
+	client := b.broker.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	for range 128 {
+		res, err := client.PostForm(b.broker.URL+"/token", url.Values{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != 400 && res.StatusCode != 307 {
+			t.Fatalf("unexpected synthetic token response: %d", res.StatusCode)
+		}
 	}
 }
 
@@ -458,6 +516,13 @@ func TestBrowserMissingOrInvalidConfigurationHasNoHandler(t *testing.T) {
 	}
 	if h, err := b.svc.Browser(b.site.URL+"/portal/callback", ""); err == nil || h != nil {
 		t.Fatal("missing secret registered routes")
+	}
+	for _, issuer := range []string{"%", "http://example.invalid", "https://user@example.invalid", "https://example.invalid?x=1", "https://example.invalid#x"} {
+		broker := *b.f.broker
+		broker.issuer = issuer
+		if h, err := New(b.pool, &broker, b.flags.NewClient()).Browser(b.site.URL+"/portal/callback", "synthetic-secret"); err == nil || h != nil {
+			t.Errorf("invalid broker policy admitted: %s", issuer)
+		}
 	}
 	pool, err := pgxpool.New(b.f.ctx, b.pool.Config().ConnString())
 	if err != nil {

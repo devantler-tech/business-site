@@ -4,10 +4,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
 
+// browserHandler requires a fully configured, fixed-callback application surface.
 func browserHandler(t *testing.T, foundation *Foundation, callback string) http.Handler {
 	t.Helper()
 	h, err := foundation.Browser(callback, "synthetic-client-secret")
@@ -17,6 +19,8 @@ func browserHandler(t *testing.T, foundation *Foundation, callback string) http.
 	return h
 }
 
+// TestBrowserSignInPage checks rendered native forms and their security headers
+// in both supported languages, without bypassing TLS or CSRF handling.
 func TestBrowserSignInPage(t *testing.T) {
 	f := fixtureBroker(t)
 	svc := enabled(t, fixtureDB(t), f)
@@ -47,6 +51,14 @@ func TestBrowserSignInPage(t *testing.T) {
 		}
 		if got := res.Header.Get("Referrer-Policy"); got != "strict-origin" {
 			t.Errorf("form policy=%q; must preserve same-origin POST Origin without leaking paths or tokens", got)
+		}
+		issuer, err := url.Parse(f.issuer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
+		if got := res.Header.Get("Content-Security-Policy"); got != wantCSP {
+			t.Errorf("security policy=%q want %q", got, wantCSP)
 		}
 	}
 }

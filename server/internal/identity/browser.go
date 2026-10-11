@@ -34,6 +34,11 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "/portal/callback" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
 		return nil, ErrDenied
 	}
+	issuer, err := url.Parse(s.broker.issuer)
+	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
+		return nil, ErrDenied
+	}
+	csp := "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var allowed bool
@@ -89,8 +94,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		// preserves same-origin CSRF checks without sharing callback paths/tokens.
 		w.Header().Set("Referrer-Policy", "strict-origin")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		issuer, _ := url.Parse(s.broker.issuer)
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://"+issuer.Host+"; frame-ancestors 'none'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", csp)
 		if !s.ready(r.Context()) {
 			http.NotFound(w, r)
 			return
@@ -113,6 +117,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 
 const oidcScope = "openid"
 
+// language selects presentation only; neither query nor form data grants access.
 func language(r *http.Request) string {
 	if r.URL.Query().Get("lang") == "da" || (r.URL.Query().Get("lang") == "" && r.PostForm.Get("lang") == "da") {
 		return "da"
@@ -120,10 +125,13 @@ func language(r *http.Request) string {
 	return "en"
 }
 
+// signIn renders a localized form with a fresh token-based CSRF challenge.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 	b.render(w, r, 200, "sign-in", "", nosurf.Token(r))
 }
 
+// begin rotates any prior session and binds one durable PKCE/nonce/state attempt
+// before redirecting to the sole configured broker.
 func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil || len(r.PostForm["invitation"]) > 1 || len(r.PostForm.Get("invitation")) > 256 {
 		b.render(w, r, 400, "error", "", "")
@@ -155,6 +163,8 @@ func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, address, http.StatusSeeOther)
 }
 
+// callback consumes the attempt before exchange, verifies broker proof and
+// invitation membership, then rotates into a bounded authenticated session.
 func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	// Recover presentation language from the durable attempt, never authority or
 	// a redirect destination. Errors retain the language the client chose.
@@ -218,10 +228,12 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/portal/?lang="+lang, http.StatusSeeOther)
 }
 
+// principal reconstructs identity only from the server-owned durable session.
 func (b *browser) principal(ctx context.Context) Principal {
 	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0)}
 }
 
+// home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	client, _, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
@@ -231,6 +243,7 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	b.render(w, r, 200, "home", client, nosurf.Token(r))
 }
 
+// operator requires the current database role, never token groups or form fields.
 func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil || role != "operator" {
@@ -240,6 +253,7 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 	b.render(w, r, 200, "operator", client, nosurf.Token(r))
 }
 
+// logout durably destroys the session before redirecting to the local sign-in.
 func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 	if err := b.sessions.Destroy(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
@@ -250,6 +264,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 
 type pageData struct{ Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string }
 
+// render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
 	if d.Lang == "da" {

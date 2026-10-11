@@ -26,7 +26,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	origin := "http://localhost:" + fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		base, client, path := b.site.URL, b.site.Client(), r.URL.RequestURI()
 		if strings.HasPrefix(r.URL.Path, "/fixture/broker/") {
 			base, client, path = b.broker.URL, b.broker.Client(), strings.TrimPrefix(r.URL.RequestURI(), "/fixture/broker")
