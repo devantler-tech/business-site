@@ -32,7 +32,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
        OR EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=privileged.oid AND c.relnamespace='public'::regnamespace)
        OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)))
  AND (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
-   FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions']) table_name
+   FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts']) table_name
    CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege)
  FROM pg_roles r WHERE r.rolname=current_user`).Scan(&allowed)
 	if err != nil || !allowed {

@@ -52,6 +52,16 @@ responsive layout and System/Light/Dark appearance. Only public CSS/JS are expos
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
 `Complete` accepts only a server-obtained token, never a browser authentication claim.
 
+Authenticated clients can edit their name, contact email and optional company at
+`/portal/contact`. The actual query uses current server-owned issuer/subject membership
+to select the client record; URL/form client IDs and operator overrides are not accepted.
+CSRF/origin checks and bounded single-value fields protect saves. A revision comparison
+rejects stale/concurrent updates instead of silently overwriting newer details.
+The stored email is explicitly **unverified**, including after a change: it does not
+link sign-in identities, authorize orders or verify agreements/payments. This slice
+introduces no verification delivery provider, SMTP connection or verification endpoint.
+Do not enable real contact collection before the parent's privacy/retention gates clear.
+
 The parent remains open for production broker/provider configuration and
 ingress deployment, contact verification, retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
@@ -59,13 +69,13 @@ a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,
 customer intake, payment, queue, MCP or agent execution. No paid service is used.
 
-Schemas v1 (identity) and v2 (sessions) are embedded and transactionally serialized
-with a contiguous version/checksum ledger. The original v1 checksum is unchanged.
+Schemas v1 (identity), v2 (sessions) and v3 (contacts) are embedded and transactionally
+serialized with a contiguous version/checksum ledger. Original v1/v2 bytes are unchanged.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
-not implement database RLS or contact-record queries; future handlers must scope
-their queries in addition to checking current membership.
+not implement database RLS. Contact handlers scope their actual queries in addition
+to checking current membership; later handlers must preserve the same boundary.
 
 ## Build and run the combined package
 
@@ -191,7 +201,7 @@ It does not migrate through the runtime role or activate real providers.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the four fixture identity/session tables between tests. Never reuse a database
+truncate the five fixture identity/session/contact tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 
