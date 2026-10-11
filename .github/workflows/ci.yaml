@@ -303,6 +303,15 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
+      - name: Setup Node.js for combined package
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frontend dependencies
+        working-directory: .
+        run: npm ci
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
@@ -316,6 +325,22 @@ jobs:
         run: go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - name: Verify combined-runtime CI contract
+        working-directory: .
+        run: node --test scripts/runtime-contract.test.mjs
+      - name: Build actual combined package
+        working-directory: .
+        run: bash scripts/package-runtime.sh --release
+      - name: Exercise actual combined package
+        working-directory: .
+        run: node scripts/runtime-smoke.test.mjs runtime-dist
+      - name: Upload reviewed runtime package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: business-site-runtime
+          path: runtime-dist
+          if-no-files-found: error
+          retention-days: 7
 
   status:
     name: CI - Required Checks

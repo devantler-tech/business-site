@@ -3,7 +3,8 @@
 First implementation child: [business-site#33](https://github.com/devantler-tech/business-site/issues/33)
 of [monorepo#3936](https://github.com/devantler-tech/monorepo/issues/3936).
 
-This is a Go **library with HTTP handlers**, not a deployed portal. It discovers one configured HTTPS
+This module supplies a Go executable composing the public Astro output with the
+**default-off HTTP identity handlers**, not a deployed portal. It discovers one configured HTTPS
 OIDC broker through maintained go-oidc, verifies signed ID tokens and the attempt
 nonce, and uses PostgreSQL for browser-bound login attempts, bound invitations
 and current client/operator membership. Accounts use issuer + subject, not email.
@@ -14,8 +15,9 @@ The foundation evaluates the boolean OpenFeature flag `portal-identity` with a
 false default on every operation, using the application's injected SDK client.
 Missing client/flag, false, a wrong type or evaluation error all deny access;
 missing broker/store also denies it. Changing the provider to false closes the
-boundary without creating a new service. No production provider is wired here.
-No environment variable currently activates an HTTP route. Public Pages builds
+boundary without creating a new service. No production activation provider is wired
+here; the executable installs the maintained SDK's no-op provider.
+No environment variable activates a private route. Public Pages builds
 never import this module. The existing mock preview remains a separate simulation.
 The temporary release flag's retirement task is [#34](https://github.com/devantler-tech/business-site/issues/34),
 with a review date of 10 November 2026. An overdue review is not activation
@@ -50,7 +52,7 @@ responsive layout and System/Light/Dark appearance. Only public CSS/JS are expos
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
 `Complete` accepts only a server-obtained token, never a browser authentication claim.
 
-The parent remains open for production broker/provider configuration, listener and
+The parent remains open for production broker/provider configuration, ingress and
 ingress deployment, contact verification, retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
@@ -64,6 +66,44 @@ deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
 not implement database RLS or contact-record queries; future handlers must scope
 their queries in addition to checking current membership.
+
+## Build and run the combined package
+
+From the repository root, with Node 24/npm 11 and exact Go 1.27.2:
+
+```sh
+npm ci
+bash scripts/package-runtime.sh --release
+node scripts/runtime-smoke.test.mjs runtime-dist
+cd runtime-dist/package.<generated-id>
+./business-site --version
+./business-site --listen 127.0.0.1:8080
+```
+
+Use a fresh output directory for smoke tests. `--release` requires clean source;
+`--development` permits a labelled local build. Each directory contains the actual
+Go executable, its digest-bound public snapshot, upstream Go notices and a build
+receipt. An ordinary unconfigured `go build` cannot start a distributable server.
+No package receipt proves deployment. CI builds and exercises the actual package
+unconditionally alongside the existing identity checks; it uploads a review artifact,
+not a production backend. Pages publication is unchanged and uploads only `dist`.
+
+With no `PORTAL_*` dependencies, startup serves public pages without broker/store
+connections and reserves private routes as non-cacheable 404s. For later private
+wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),
+`PORTAL_OIDC_ISSUER`, `PORTAL_OIDC_CLIENT_ID`, fixed HTTPS `PORTAL_CALLBACK_URL`
+ending `/portal/callback`, and absolute `PORTAL_CLIENT_SECRET_FILE`. Store the secret
+as a regular, private file or a confined projected secret; never put it in arguments,
+public assets, build receipts or logs. Partial/unsafe configuration fails generically.
+The Unix service runtime requires an already migrated least-privilege store, fixes its SQL schema,
+caps its pool/timeouts and performs no DDL. Dependency configuration alone does not
+turn on the OpenFeature gate; real provider/ingress/activation remain parent work.
+`/healthz` is public-runtime liveness only. SIGTERM drains requests for up to ten
+seconds; request/header/idle limits are explicit. Serve behind an eventual verified
+TLS gateway before any production identity activation. No forwarded-header trust
+or plain-HTTP cookie exception is added.
+
+See [the package decision](../docs/adr/0004-combined-runtime-package.md).
 
 ## Actual database tests
 
@@ -79,6 +119,11 @@ GOTOOLCHAIN=local go vet ./...
 GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
+
+The constructor test also creates and drops its own uniquely named fixture database,
+uses verified TLS through a synthetic loopback database gateway and discovers a
+synthetic TLS broker; complete dependencies must still leave every private route closed.
+It does not migrate through the runtime role or activate real providers.
 
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
@@ -98,4 +143,5 @@ Review locked dependencies and their upstream licenses before every update.
 The current compiled-module inventory is in [DEPENDENCIES.md](DEPENDENCIES.md).
 The source repository has not introduced a new license grant for its own code.
 Dependency notices do not license Devantler Tech's application source. Include
-the required upstream license/notice texts when distributing a future binary.
+the required upstream license/notice texts when distributing a binary; the runtime
+packager carries the actually linked Go graph and Go standard-library notices.

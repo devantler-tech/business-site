@@ -22,10 +22,10 @@ its repository's own terms. No hosted service or paid enrollment is introduced.
 | golang.org/x/text | 0.42.0 | [BSD-3-Clause](https://github.com/golang/text/blob/v0.42.0/LICENSE) |
 
 The upstream license files retain their respective copyright/redistribution
-conditions. Before shipping a server binary/container, package all applicable
-license and NOTICE texts with that artifact and recheck its full compiled graph,
-base image and tooling. No server binary is distributed by this latent-library
-slice or by the static Pages artifact. Dependencies downloaded only for upstream
+conditions. The combined-runtime packager collects LICENSE, NOTICE and PATENTS
+texts from every actually linked module directory and the Go toolchain. No server
+binary is deployed by the static Pages artifact. A future container must additionally
+check its base image and tooling before distribution. Dependencies downloaded only for upstream
 tests/tools are not represented as linked application runtime code here.
 
 The module pins patched Go 1.27.2. CI verifies checksums and runs the actual graph
