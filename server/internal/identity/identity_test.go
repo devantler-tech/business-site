@@ -147,10 +147,10 @@ func fixtureDB(t *testing.T) *pgxpool.Pool {
 	if err = Migrate(context.Background(), migrator); err != nil {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
-	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships TO portal_runtime"); err != nil {
+	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships"); err != nil {
+	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships, portal_sessions"); err != nil {
 		t.Fatal(err)
 	}
 	return pool

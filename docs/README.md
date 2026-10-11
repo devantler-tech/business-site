@@ -213,6 +213,13 @@ CV and detailed technical documentation remain in English and are labelled accor
 
 ## Visitor statistics and browser storage
 
+The separate Go module in `server/` provides default-off invitation-only browser
+sign-in through one identity broker, with durable private sessions and current
+client/operator authorization. It is not included in the static Pages artifact
+and has no production listener or provider wiring. See its [runtime boundary and
+validation guide](../server/README.md); deploying and enabling the real portal
+requires the remaining provider, operational and legal release gates.
+
 Public pages do not load a visitor-statistics client or tag outbound links for analytics.
 Both the business layout and supporting Journal/documentation layout serve their scripts locally.
 Every production build checks all emitted HTML for automatic external scripts and statistics
