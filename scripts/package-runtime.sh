@@ -46,4 +46,7 @@ cp "$(go env GOROOT)/PATENTS" "$package/notices/Go-PATENTS"
 cp server/DEPENDENCIES.md "$package/notices/DEPENDENCIES.md"
 cp server/README.md "$package/README.md"
 "$package/business-site" --version > "$package/build-receipt.json"
+# ZIP consumers need not retain executable modes. Preserve the complete package
+# inside a tar archive before any artifact service handles it.
+tar -czf runtime-dist/business-site-runtime.tar.gz -C runtime-dist "${package#runtime-dist/}"
 printf 'RUNTIME_PACKAGE=%s\n' "$package"

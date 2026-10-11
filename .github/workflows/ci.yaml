@@ -334,11 +334,17 @@ jobs:
       - name: Exercise actual combined package
         working-directory: .
         run: node scripts/runtime-smoke.test.mjs runtime-dist
+      - name: Exercise extracted runtime archive
+        working-directory: .
+        run: |
+          extracted="$(mktemp -d)"
+          tar -xzf runtime-dist/business-site-runtime.tar.gz -C "$extracted"
+          node scripts/runtime-smoke.test.mjs "$extracted"
       - name: Upload reviewed runtime package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: business-site-runtime
-          path: runtime-dist
+          path: runtime-dist/business-site-runtime.tar.gz
           if-no-files-found: error
           retention-days: 7
 

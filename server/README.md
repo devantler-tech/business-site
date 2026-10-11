@@ -85,8 +85,11 @@ Use a fresh output directory for smoke tests. `--release` requires clean source;
 Go executable, its digest-bound public snapshot, upstream Go notices and a build
 receipt. An ordinary unconfigured `go build` cannot start a distributable server.
 No package receipt proves deployment. CI builds and exercises the actual package
-unconditionally alongside the existing identity checks; it uploads a review artifact,
-not a production backend. Pages publication is unchanged and uploads only `dist`.
+unconditionally alongside the existing identity checks. It also extracts and runs
+`runtime-dist/business-site-runtime.tar.gz`, then uploads that permission-preserving
+archive as the review artifact, not a production backend. After downloading the
+artifact, extract the tar archive before running the executable; no manual `chmod`
+is required. Pages publication is unchanged and uploads only `dist`.
 
 With no `PORTAL_*` dependencies, startup serves public pages without broker/store
 connections and reserves private routes as non-cacheable 404s. For later private
