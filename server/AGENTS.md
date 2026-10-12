@@ -16,6 +16,9 @@ documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
 only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
+The tracked module-local `.go-test-fixture.json` also opts input-free organization
+validation into its closed disposable PostgreSQL fixture. Keep its namespace and
+database aligned with these test-only roles; never add endpoints or credentials.
 Run the actual browser-script controls separately from the repository root with
 Node 24: `node --test scripts/portal-request-limits.test.mjs`. The required source CI
 job runs that exact command unconditionally after explicitly setting up Node 24;
