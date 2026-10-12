@@ -364,8 +364,10 @@ To review flagged content before production enables it, run a **preview build** 
 FEATURE_PREVIEW_BANNER=true npm run build
 ```
 
-Ordinary CI and `publish-site.yaml` publication leave this example preview-banner flag unset,
-so it stays off. This is not a rule for every flag: client-facing and featured-portfolio
+Production builds in CI keep this example preview-banner flag off, testing both an explicit
+`false` value and an entirely unset environment. `publish-site.yaml` publication leaves it unset.
+CI also tests an explicitly enabled preview build.
+This is not a rule for every flag: client-facing and featured-portfolio
 presentation default to true, and the source-owned publisher explicitly enables company identity.
 The Journal presentation is permanent and no longer has a feature flag.
 That identity preview needs the separately documented fictional address for local use; never copy

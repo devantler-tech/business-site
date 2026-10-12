@@ -16,8 +16,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   production authentication, customer intake and payments remain disabled.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
-  reviewed #25 cutover; admission still requires the enabled source switch and protected
-  main-only environment. `publish-pages.yaml` retains legacy immutable callers, not live ownership.
+  reviewed #25 cutover; production deployment still requires the enabled source switch and
+  protected main-only environment. Manual artifact-only previews can run with the switch off.
+  `publish-pages.yaml` retains legacy immutable callers, not live ownership.
   This static publisher does not deploy a private portal
   backend, identity, customer isolation, checkout or paid subscription system.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
@@ -51,7 +52,8 @@ System/Light/Dark appearance before promotion. Stop any local preview server aft
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness
 preflight; a source merge is not publication. The #25 source-owned publication cutover is complete;
-admission still uses the enabled source switch and protected main-only environment.
+production deployment still uses the enabled source switch and protected main-only environment;
+manual artifact-only previews do not require the production switch.
 See docs/adr/0003-source-owned-publication.md.
 
 ## Content boundaries
