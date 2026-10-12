@@ -18,9 +18,10 @@ a real customer database; they refuse non-fixture database/role names and trunca
 only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 
-The optional full quality check is golangci-lint 2.14.0 built with Go 1.27.2:
-`golangci-lint run --no-config --max-same-issues=0 --max-issues-per-linter=0 ./...`.
-`--no-config` rejects ambient configuration so local suppressions cannot hide findings.
+From the repository root, the optional full quality check is
+`bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint
+2.14.0 built with Go 1.27.2 before invoking the entire module's default linter set.
+`--no-config` ignores ambient configuration so local suppressions cannot hide findings.
 The display limits expose all diagnostics; never use a reduced delta as a full
 clean verdict or silence a rule. Fixture cleanup errors fail tests; intentional
 best-effort production cleanup must explain its resource lifecycle at the call.
