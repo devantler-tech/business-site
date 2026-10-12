@@ -23,6 +23,11 @@ Run the actual browser-script controls separately from the repository root with
 Node 24: `node --test scripts/portal-request-limits.test.mjs`. The required source CI
 job runs that exact command unconditionally after explicitly setting up Node 24;
 do not make it optional or couple the Go database suite to an ambient Node version.
+The separate template-quality step uses HTMLHint 1.9.2 and keeps all 23 pinned
+default rules; only the literal Go field `.Request.Product` is allowed through
+the attribute-case rule. Actual rendered offering selections are tested in EN/DA.
+Revive retains its selected-file batch and default rules with package context
+prepended; test all selected files and a genuine missing-package-comment control.
 
 From the repository root, the optional full quality check is
 `bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint

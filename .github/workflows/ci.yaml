@@ -312,6 +312,16 @@ jobs:
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
+      - name: Verify actual Go-template HTML quality and retained attribute failures
+        working-directory: .
+        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+      - name: Verify package documentation with all selected Go files
+        working-directory: .
+        env:
+          GOBIN: ${{ runner.temp }}/portal-quality-tools
+        run: |
+          go install github.com/mgechev/revive@v1.16.0
+          PORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
