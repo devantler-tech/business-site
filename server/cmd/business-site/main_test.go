@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 type writeFunc func([]byte) (int, error)
@@ -37,12 +41,47 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	revision, publicDigest, buildMode = strings.Repeat("a", 40), artifact.Digest(), "development"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	address, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listen := address.Addr().String()
+	if err := address.Close(); err != nil {
+		t.Fatal("fixture port reservation cleanup failed")
+	}
+	ready := make(chan struct{})
+	var once sync.Once
 	output := writeFunc(func(data []byte) (int, error) {
-		cancel()
+		once.Do(func() { close(ready) })
 		return len(data), nil
 	})
-	if err := run(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output); err != nil {
-		t.Fatal("verified public runtime did not start and stop cleanly")
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, []string{"--public", dir, "--listen", listen}, output) }()
+	select {
+	case <-ready:
+	case <-done:
+		t.Fatal("runtime stopped before public serving")
+	case <-time.After(5 * time.Second):
+		t.Fatal("runtime did not begin startup")
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	res, err := client.Get("http://" + listen + "/")
+	if err != nil {
+		t.Fatal("runtime announced readiness without serving the public page")
+	}
+	body, readErr := io.ReadAll(res.Body)
+	closeErr := res.Body.Close()
+	if readErr != nil || closeErr != nil || res.StatusCode != http.StatusOK || string(body) != "public page" {
+		t.Fatal("runtime did not serve the verified public snapshot")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("verified public runtime did not stop cleanly")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("runtime did not stop after an actual public request")
 	}
 }
 
