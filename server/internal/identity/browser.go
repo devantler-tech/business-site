@@ -18,7 +18,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -73,6 +73,8 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
+	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
+	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("GET /portal/requests", b.requests)
@@ -107,6 +109,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			return
 		}
 		if (r.URL.Path == "/portal/requests" || strings.HasPrefix(r.URL.Path, "/portal/requests/")) && !s.requestsReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
+		if (r.URL.Path == "/portal/operator/requests" || strings.HasPrefix(r.URL.Path, "/portal/operator/requests/")) && !s.triageReady(r.Context()) {
 			http.NotFound(w, r)
 			return
 		}
@@ -286,6 +292,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 type pageData struct {
 	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                                        bool
+	TriageEnabled                                                                                                                                          bool
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
@@ -300,6 +307,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
+	d.TriageEnabled = kind == "operator" && b.foundation.triageReady(r.Context())
 	if d.Lang == "da" {
 		d.Title = "Din kundeportal"
 		d.Intro = "Et privat sted for dit samarbejde med Devantler Tech."

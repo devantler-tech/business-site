@@ -75,9 +75,13 @@ production customer intake, payment, queue, MCP or agent execution. No paid serv
 The separately default-off [project-request intake](REQUESTS.md) lets a synthetic
 invited client submit a free brief and revisit a durable private receipt. It does
 not create an order, approve a price, accept an agreement or authorize execution.
+The independent false-default `portal-triage` gate adds read-only operator review
+over those same immutable records, with current operator authorization and bounded
+oldest-first pagination. It neither joins contact profiles nor approves work.
 
-Schemas v1 (identity), v2 (sessions), v3 (contacts) and v4 (requests) are embedded and transactionally
-serialized with a contiguous version/checksum ledger. Original v1/v2/v3 bytes are unchanged.
+Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests) and v5 (triage index)
+are embedded and transactionally serialized with a contiguous version/checksum
+ledger. Original v1–v4 bytes remain unchanged by the index-only triage migration.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does

@@ -43,6 +43,11 @@ Free project requests additionally require false-default `portal-requests` on ev
 operation. A receipt never authorizes a quote, agreement, payment or worker execution.
 The request flag's lifecycle is tracked in business-site#57. Requests are immutable;
 the runtime needs SELECT/INSERT only on that table, not UPDATE/DELETE or DDL.
+Read-only operator review additionally requires false-default `portal-triage`
+on every operation, plus current server-owned operator membership in its SQL.
+It never grants client impersonation or paid-work approval. Keep keyset pagination
+bounded and ordered by original submission time/ID with microsecond precision.
+The triage flag's retirement review is business-site#62, due 12 November 2026.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

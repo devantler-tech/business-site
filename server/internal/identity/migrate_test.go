@@ -158,7 +158,7 @@ func TestRequestMigrationPreservesExistingVersionsAndContacts(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=3`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `DROP TABLE portal_requests; DELETE FROM portal_schema_version WHERE version=4; INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('synthetic-existing','Existing','existing@example.invalid','',2)`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_requests; DELETE FROM portal_schema_version WHERE version>=4; INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('synthetic-existing','Existing','existing@example.invalid','',2)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(ctx, pool); err != nil {

@@ -44,10 +44,36 @@ Operator quoting and the order lifecycle remain monorepo#3937; versioned worker
 API and a thin MCP adapter remain business-site#20. UI and future adapters must
 share this same server-owned authority rather than trust GitHub issue state.
 
+## Operator review
+
+The operator workspace links to `/portal/operator/requests` only when all three
+false-default OpenFeature gates are enabled: `portal-identity`, `portal-requests`
+and `portal-triage`. Every list and detail operation rechecks current operator
+membership, including in its data query and after reading rows. Client sessions,
+revoked or downgraded memberships and expired sessions cannot read the inbox.
+
+The list shows twenty titles, offering types and original UTC submission times
+per page, oldest first. Timestamp/opaque-ID keyset pagination uses microsecond
+precision and fixed `C` text collation. Switching EN/DA retains the page position.
+This is a live list, not a frozen snapshot; newer requests can appear on later
+pages without shifting records already read. Detail pages display escaped inert
+briefs, never contact profiles or internal client identifiers. A missing record
+returns 404 only to an authorized operator; other sessions receive the same
+denial regardless of whether a record exists. Storage failure returns a sanitized
+503, not an empty successful list. Every response is `no-store`.
+
+Reading a request does not approve work. No quote, order, payment, status change
+or agent execution endpoint exists. The triage gate remains off in the production
+no-op provider; there is no environment activation path. Its retirement review is
+tracked in [#62](https://github.com/devantler-tech/business-site/issues/62) for
+12 November 2026, and real intake retains the parent launch prerequisites.
+See [the inbox decision](../docs/adr/0006-private-operator-request-inbox.md).
+
 ## Migration and verification
 
 Before constructing the configured runtime, the separate migration role applies
-the checksummed v4 migration. Existing v1–v3 bytes and ledger history are preserved.
+the checksummed migrations through v5. The triage migration adds a global
+timestamp/ID index only; existing v1–v4 bytes, records and ledger history are preserved.
 Give the restricted runtime SELECT and INSERT on `portal_requests`; it needs no
 UPDATE, DELETE or schema ownership for immutable receipts. Startup rejects UPDATE,
 DELETE and TRUNCATE held directly, inherited or through an assumable role. Do not grant TRUNCATE
@@ -61,6 +87,9 @@ revocation, operator denial, escaped text, native CSRF/origin rejection, malform
 and oversized forms, Danish character limits, safe draft recovery, flag closure,
 migration checksums and least-privilege startup. The suite invokes six controls
 against the actual served browser script with Node 24, not a Go translation.
+Operator controls additionally exercise current role/expiry/revocation, all three
+independent gates, two-client aggregate review, inert detail, reconnect durability,
+bounded tied pagination, malformed cursors and actual denied database reads.
 All accounts/briefs are fictional.
-The `portalvisual` fixture additionally turns on this gate for synthetic browser
+The `portalvisual` fixture additionally turns on all three gates for synthetic browser
 checks; it is never real broker, customer, payment or production ingress proof.

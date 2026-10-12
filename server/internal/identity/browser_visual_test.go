@@ -20,8 +20,20 @@ import (
 // untagged tests exercise the strict HTTPS and origin checks directly.
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	inv := b.invite("client-a", "client-a", "client")
+	triageFlags(t, b, true, true, true)
+	for _, subject := range []string{"client-a", "client-b"} {
+		triageSignIn(t, b, subject, subject, "client")
+		form := requestForm(t, b)
+		form.Set("title", "Fictional "+subject+" project")
+		form.Set("brief", "A fictional brief for reviewing the private inbox.\nNo work is approved by reading this request.")
+		if status, _, _ := b.request("POST", "/portal/requests", form, b.site.URL); status != 303 {
+			t.Fatal("synthetic client request failed")
+		}
+	}
+	b.mu.Lock()
+	b.subject = "operator"
+	b.mu.Unlock()
+	inv := b.invite("operator", "fictional-operator", "operator")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
