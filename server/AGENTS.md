@@ -9,14 +9,17 @@ self-declared and unverified, never identity or order authority. Never present s
 tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
-Use Node 24 for the actual browser-script controls and the exact Go version in
-`go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
+Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 `go mod verify`, `go vet ./...`, `go test -race ./... -count=1 -timeout=90s` and
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
 only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
+Run the actual browser-script controls separately from the repository root with
+Node 24: `node --test scripts/portal-request-limits.test.mjs`. The required source CI
+job runs that exact command unconditionally after explicitly setting up Node 24;
+do not make it optional or couple the Go database suite to an ambient Node version.
 
 From the repository root, the optional full quality check is
 `bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint

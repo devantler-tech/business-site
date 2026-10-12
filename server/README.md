@@ -191,8 +191,7 @@ See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
-Use Go 1.27.2, Node 24 for the actual browser-script controls, the `psql` client
-and a **fresh disposable** PostgreSQL 17 service matching
+Use Go 1.27.2, the `psql` client and a **fresh disposable** PostgreSQL 17 service matching
 the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_fixture_owner`
 with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
 The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
@@ -215,6 +214,13 @@ bash ../scripts/check-portal-quality.sh
 GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
+
+The Go database suite does not require Node. Separately, use Node 24 from the
+repository root to run `node --test scripts/portal-request-limits.test.mjs` against
+the actual served browser asset. The required source CI job explicitly sets up
+Node 24 and runs all six controls unconditionally; its runtime contract rejects
+a missing, conditional or error-tolerant browser check. Moving these controls to
+their own runtime does not make them optional.
 
 The constructor test also creates and drops its own uniquely named fixture database,
 uses verified TLS through a synthetic loopback database gateway and discovers a
