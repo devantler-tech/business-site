@@ -14,7 +14,8 @@ work on the static site.
 
 ## Run the site locally
 
-Install Git, Bash, Node 24 and npm 11. From the directory where you want your checkout:
+Install Git, Bash, Node 24, npm 11 and `jq` (the build runs JSON-based fixture checks).
+From the directory where you want your checkout:
 
 ```sh
 git clone https://github.com/devantler-tech/business-site.git

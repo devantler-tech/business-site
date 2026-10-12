@@ -23,13 +23,14 @@ replace `YOUR-GITHUB-LOGIN` with your own login. From your chosen checkout direc
 ```sh
 git clone https://github.com/YOUR-GITHUB-LOGIN/business-site.git
 cd business-site
-git switch -c docs/my-first-change
+git worktree add -b docs/my-first-change ../business-site-first-change HEAD
+cd ../business-site-first-change
 npm ci
 ```
 
-Read [AGENTS.md](AGENTS.md), the canonical contract, before editing. If you already have another
-session working on this repository, use your own isolated worktree; do not share its physical
-checkout or discard its edits.
+Read [AGENTS.md](AGENTS.md), the canonical contract, before editing. Always make changes in your
+own isolated worktree, as above; do not share another session's physical checkout or discard its
+edits. In the steps below, "repository root" means the root of that worktree.
 
 ## Make one focused change
 
@@ -59,7 +60,8 @@ permission. Do not introduce confidential examples or use real residential addre
 After `npm ci`, run the shared baseline exactly as follows:
 
 ```sh
-LC_ALL=C npm run build
+export LC_ALL=C
+npm run build
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh

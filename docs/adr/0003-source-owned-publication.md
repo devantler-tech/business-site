@@ -1,6 +1,25 @@
 # Source-owned website publication
 
-Status: accepted implementation; resource/domain cutover remains pending #25.
+Status: completed — resource/domain cutover and old monorepo publisher retirement verified
+10 October 2026 in [#25](https://github.com/devantler-tech/business-site/issues/25).
+
+## Current ownership
+
+`business-site` owns the Pages resource and `devantler.tech` domain. Its source-owned
+`publish-site.yaml` is the active push/manual/scheduled publisher; the enabled source switch and
+protected main-only environment still gate deployment. On 12 October, Pages readback showed
+workflow publication, the domain and enforced HTTPS, with one deployment branch policy for
+`main`. The live receipt matched successful source-owned
+[run 38189479066](https://github.com/devantler-tech/business-site/actions/runs/38189479066),
+source `70775006afa71b8fbd5144269cdb74676304e3d6`, attempt 1 and publish mode.
+
+[Monorepo #4082](https://github.com/devantler-tech/monorepo/pull/4082) retired its old publisher.
+The retained reusable `publish-pages.yaml` and its header describe the **legacy** monorepo caller
+contract, not current domain ownership or a live publication path. Its receipt has a
+`callerRevision`; the source-owned receipt instead records `workflowRunId`, `workflowRunAttempt`
+and `publicationMode`. Do not use the legacy caller/header to infer current ownership, invoke a
+second publisher or repeat the domain transfer. The cutover procedure below records the accepted
+migration and rollback constraints; it is not outstanding setup work.
 
 ## Context and decision
 
