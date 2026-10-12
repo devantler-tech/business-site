@@ -11,6 +11,39 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const configPath = join(root, '.htmlhintrc');
 const rules = JSON.parse(readFileSync(configPath, 'utf8'));
 const mega = load(readFileSync(join(root, '.mega-linter.yml'), 'utf8'));
+const workflow = load(readFileSync(join(root, '.github/workflows/ci.yaml'), 'utf8'));
+
+function mandatoryQualityChecks(candidate) {
+  const job = candidate.jobs['test-portal-identity'];
+  assert.equal(job.if, undefined);
+  assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
+  for (const command of [
+    'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
+    'npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
+  ]) {
+    const steps = job.steps.filter(step => step.run === command);
+    assert.equal(steps.length, 1, 'the actual quality entrypoint must occur exactly once');
+    assert.equal(steps[0]['working-directory'], '.');
+    assert.equal(steps[0].if, undefined);
+    assert.ok(steps[0]['continue-on-error'] == null || steps[0]['continue-on-error'] === false);
+  }
+}
+
+test('the actual source CI unconditionally executes every quality observer', () => mandatoryQualityChecks(workflow));
+for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh']) {
+  for (const mutation of ['missing', 'conditional', 'ignored failure']) {
+    test(`${observer} cannot be ${mutation}`, () => {
+      const candidate = structuredClone(workflow);
+      const steps = candidate.jobs['test-portal-identity'].steps;
+      const selected = steps.find(step => step.run?.includes(observer));
+      if (mutation === 'missing') steps.splice(steps.indexOf(selected), 1);
+      else if (mutation === 'conditional') selected.if = 'false';
+      else selected['continue-on-error'] = true;
+      assert.throws(() => mandatoryQualityChecks(candidate));
+    });
+  }
+}
 
 test('package grouping retains selected-file analysis and every HTML rule', () => {
   assert.deepEqual(mega, {
@@ -18,6 +51,8 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     GO_REVIVE_CLI_LINT_MODE: 'list_of_files',
     HTML_HTMLHINT_CONFIG_FILE: '.htmlhintrc',
     HTML_HTMLHINT_RULES_PATH: '/github/workspace',
+    SPELL_CSPELL_CONFIG_FILE: '.cspell.json',
+    SPELL_CSPELL_RULES_PATH: '/github/workspace',
   });
   assert.deepEqual(rules, {
     'tagname-lowercase': true,

@@ -28,6 +28,10 @@ default rules; only the literal Go field `.Request.Product` is allowed through
 the attribute-case rule. Actual rendered offering selections are tested in EN/DA.
 Revive retains its selected-file batch and default rules with package context
 prepended; test all selected files and a genuine missing-package-comment control.
+The CSpell glossary records audited current Danish UI copy and technical names;
+it is not a complete Danish dictionary. Keep default checking enabled and reject
+English/Danish typos. Three exact encoded paths are scoped only to their actual
+refusal fixture, never admitted as ordinary words or whole-file exclusions.
 
 From the repository root, the optional full quality check is
 `bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint

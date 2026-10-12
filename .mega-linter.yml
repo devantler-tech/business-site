@@ -4,3 +4,5 @@ GO_REVIVE_CLI_LINT_MODE: list_of_files
 HTML_HTMLHINT_CONFIG_FILE: .htmlhintrc
 # The required workflow scans the server module from a nested workspace.
 HTML_HTMLHINT_RULES_PATH: /github/workspace
+SPELL_CSPELL_CONFIG_FILE: .cspell.json
+SPELL_CSPELL_RULES_PATH: /github/workspace

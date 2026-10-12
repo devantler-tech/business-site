@@ -315,6 +315,9 @@ jobs:
       - name: Verify actual Go-template HTML quality and retained attribute failures
         working-directory: .
         run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+      - name: Verify portal copy and API vocabulary with retained typo failures
+        working-directory: .
+        run: npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs
       - name: Verify package documentation with all selected Go files
         working-directory: .
         env:
