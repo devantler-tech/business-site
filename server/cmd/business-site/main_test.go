@@ -41,13 +41,15 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	revision, publicDigest, buildMode = strings.Repeat("a", 40), artifact.Digest(), "development"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	address, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	listen := address.Addr().String()
-	if err := address.Close(); err != nil {
-		t.Fatal("fixture port reservation cleanup failed")
+	var listen string
+	listenTCP := func(network, address string) (net.Listener, error) {
+		listener, err := net.Listen(network, address)
+		if err == nil {
+			// The readiness channel synchronizes this address with the HTTP client.
+			// The runtime retains this exact listener until serving shuts down.
+			listen = listener.Addr().String()
+		}
+		return listener, err
 	}
 	ready := make(chan struct{})
 	var once sync.Once
@@ -56,7 +58,9 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		return len(data), nil
 	})
 	done := make(chan error, 1)
-	go func() { done <- run(ctx, []string{"--public", dir, "--listen", listen}, output) }()
+	go func() {
+		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, listenTCP)
+	}()
 	select {
 	case <-ready:
 	case <-done:

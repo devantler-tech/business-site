@@ -40,6 +40,12 @@ func loadPublic(directory string) (*webapp.Artifact, error) {
 
 // run validates package identity and private dependencies before opening a listener.
 func run(ctx context.Context, args []string, output io.Writer) error {
+	return runWithListen(ctx, args, output, net.Listen)
+}
+
+// runWithListen keeps listener creation injectable without releasing a test port.
+// The ordinary command always uses net.Listen; validation and ownership are shared.
+func runWithListen(ctx context.Context, args []string, output io.Writer, listenTCP func(string, string) (net.Listener, error)) error {
 	options := flag.NewFlagSet("business-site", flag.ContinueOnError)
 	options.SetOutput(io.Discard)
 	public := options.String("public", "./public", "packaged public artifact directory")
@@ -85,7 +91,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		return err
 	}
 	defer closePortal()
-	listener, err := net.Listen("tcp", *listen)
+	listener, err := listenTCP("tcp", *listen)
 	if err != nil {
 		return errors.New("runtime listener is unavailable")
 	}
