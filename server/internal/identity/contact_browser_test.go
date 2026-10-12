@@ -9,8 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // contactForm builds a synthetic native-form submission for real TLS controls
@@ -29,14 +27,7 @@ func TestContactProfilePersistsWithoutGrantingAuthority(t *testing.T) {
 	if s != 303 || h.Get("Location") != "/portal/contact?lang=en" {
 		t.Fatalf("contact save=%d location=%s", s, h.Get("Location"))
 	}
-	pool, err := pgxpool.New(context.Background(), b.pool.Config().ConnString())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	b.mu.Lock()
-	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
-	b.mu.Unlock()
+	b.reconnect(context.Background())
 	s, body, h := b.request("GET", "/portal/contact?lang=en", nil, "")
 	if s != 200 || !strings.Contains(body, `value="A Client"`) || !strings.Contains(body, `value="a@example.invalid"`) || !strings.Contains(body, `name="revision" value="1"`) || !strings.Contains(body, "not verified") || h.Get("Cache-Control") != "no-store" {
 		t.Fatalf("durable contact missing: %d %s", s, body)

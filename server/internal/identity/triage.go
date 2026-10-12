@@ -89,15 +89,8 @@ func (s *Foundation) readTriage(ctx context.Context, p Principal, id string, cur
 		return nil, errTriageStorage
 	}
 	defer rows.Close()
-	var result []projectRequest
-	for rows.Next() {
-		var d projectRequest
-		if err = rows.Scan(&d.ID, &d.Product, &d.Title, &d.Brief, &d.Submitted); err != nil {
-			return nil, errTriageStorage
-		}
-		result = append(result, d)
-	}
-	if rows.Err() != nil {
+	result, err := scanProjectRequests(rows)
+	if err != nil {
 		return nil, errTriageStorage
 	}
 	if err = s.triageOperator(ctx, p); err != nil {
@@ -134,7 +127,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && id != "" && len(rows) == 0) {
+	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
 		return
 	}

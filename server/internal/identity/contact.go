@@ -126,13 +126,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 
 // contact renders only the current client's stored, unverified contact profile.
 func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
-	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
-		return
-	}
-	if role != "client" {
-		b.render(w, r, 403, "error", "", "")
+	if !b.requireContactClient(w, r) {
 		return
 	}
 	d, err := b.foundation.readContact(r.Context(), b.principal(r.Context()))
@@ -141,6 +135,20 @@ func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.renderContact(w, r, 200, d, "")
+}
+
+// requireContactClient preserves the authentication and role-denial responses.
+func (b *browser) requireContactClient(w http.ResponseWriter, r *http.Request) bool {
+	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		b.render(w, r, 401, "error", "", "")
+		return false
+	}
+	if role != "client" {
+		b.render(w, r, 403, "error", "", "")
+		return false
+	}
+	return true
 }
 
 // recoverContact retains safe draft text only when its expected revision still
@@ -169,13 +177,7 @@ func recoverContact(r *http.Request, current contactData) (contactData, bool) {
 // updateContact validates client-only form writes and renders a recoverable
 // rejected edit without resetting its revision or exposing unsafe submitted text.
 func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
-	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
-		return
-	}
-	if role != "client" {
-		b.render(w, r, 403, "error", "", "")
+	if !b.requireContactClient(w, r) {
 		return
 	}
 	d, err := parseContact(r)

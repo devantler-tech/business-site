@@ -18,12 +18,8 @@ type writeFunc func([]byte) (int, error)
 
 func (f writeFunc) Write(data []byte) (int, error) { return f(data) }
 
-// Exercise the real startup and cancellation path, including owned cleanup,
-// without a production broker, database, fixed port or sleep-based readiness.
-func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
-		t.Setenv(name, "")
-	}
+func publicArtifactDir(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "da"), 0700); err != nil {
 		t.Fatal(err)
@@ -33,6 +29,16 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	return dir
+}
+
+// Exercise the real startup and cancellation path, including owned cleanup,
+// without a production broker, database, fixed port or sleep-based readiness.
+func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
+		t.Setenv(name, "")
+	}
+	dir := publicArtifactDir(t)
 	artifact, err := loadPublic(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -153,15 +159,7 @@ func TestUnpackagedBuildCannotStartAndErrorsArePrivate(t *testing.T) {
 
 // TestCheckCommandUsesActualPublicArtifactAndRejectsTampering checks the real startup digest gate.
 func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, "da"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"index.html", "da/index.html"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("public page"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	dir := publicArtifactDir(t)
 	var output strings.Builder
 	if err := run(context.Background(), []string{"--check-public", "--public", dir}, &output); err != nil {
 		t.Fatal(err)

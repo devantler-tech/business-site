@@ -62,14 +62,7 @@ func TestOperatorInboxDetailDurabilityAndClientDenial(t *testing.T) {
 		}
 	}
 	triageSignIn(t, b, "operator", "operator-workspace", "operator")
-	pool, err := pgxpool.New(context.Background(), b.pool.Config().ConnString())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	b.mu.Lock()
-	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
-	b.mu.Unlock()
+	b.reconnect(context.Background())
 	status, body, headers := b.request("GET", paths[1]+"?lang=da", nil, "")
 	if status != 200 || !strings.Contains(body, "Ikke godkendt til arbejde") || !strings.Contains(body, "Fictional private request") || !strings.Contains(body, "2026-01-02T03:04:05.123456Z") || !strings.Contains(body, "&lt;script&gt;hostile-brief&lt;/script&gt;") || strings.Contains(body, "<script>hostile") || strings.Contains(body, "private-client-key") || headers.Get("Cache-Control") != "no-store" {
 		t.Fatalf("durable escaped Danish detail missing: %d %s", status, body)

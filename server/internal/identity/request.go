@@ -129,15 +129,8 @@ func (s *Foundation) readRequests(ctx context.Context, p Principal, id string) (
 		return nil, ErrDenied
 	}
 	defer rows.Close()
-	var result []projectRequest
-	for rows.Next() {
-		var d projectRequest
-		if err = rows.Scan(&d.ID, &d.Product, &d.Title, &d.Brief, &d.Submitted); err != nil {
-			return nil, ErrDenied
-		}
-		result = append(result, d)
-	}
-	if rows.Err() != nil || !s.requestsReady(ctx) || !time.Now().Before(p.expires) {
+	result, err := scanProjectRequests(rows)
+	if err != nil || !s.requestsReady(ctx) || !time.Now().Before(p.expires) {
 		return nil, ErrDenied
 	}
 	return result, nil
@@ -158,7 +151,7 @@ func (b *browser) requestReceipt(w http.ResponseWriter, r *http.Request) {
 
 func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string) {
 	rows, err := b.foundation.readRequests(r.Context(), b.principal(r.Context()), id)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && id != "" && len(rows) == 0) {
+	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
 		return
 	}
