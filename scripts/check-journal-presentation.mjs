@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { parse } from 'parse5';
 
 const root = process.argv[2] ?? 'dist';
 /** Recursively inventory generated index pages, including archive, author and tag routes. */
@@ -13,6 +14,16 @@ const articlePaths = readdirSync('src/content/docs/blog').filter(name => /\.mdx?
   .map(name => name.replace(/\.mdx?$/, ''));
 const htmlAt = path => readFileSync(join(root, path, 'index.html'), 'utf8');
 const feed = readFileSync(join(root, 'blog/rss.xml'), 'utf8');
+const businessDescription = 'Devantler Tech — a one-person software business building websites, apps and open-source tools.';
+/** Read emitted, entity-decoded metadata rather than matching HTML source spelling. */
+function descriptionMetadata(node) {
+  const attrs = Object.fromEntries((node.attrs ?? []).map(attr => [attr.name, attr.value]));
+  const key = attrs.name === 'description' ? 'description' : attrs.property === 'og:description' ? 'og:description' : undefined;
+  return [
+    ...(node.tagName === 'meta' && key ? [{ key, content: attrs.content }] : []),
+    ...(node.childNodes ?? []).flatMap(descriptionMetadata),
+  ];
+}
 let assertions = 0;
 for (const path of blogPages) {
   const html = readFileSync(path, 'utf8');
@@ -25,6 +36,14 @@ for (const path of blogPages) {
   assert.equal((html.match(/<h1\b/g) ?? []).length, 1, `${route}: one page heading`);
   assert.match(html, /href="\/blog\/rss.xml"/, `${route}: RSS remains discoverable`);
   assertions += 5;
+  if (html.includes('data-journal-kind="archive"')) {
+    const descriptions = descriptionMetadata(parse(html));
+    for (const key of ['description', 'og:description']) {
+      assert.deepEqual(descriptions.filter(meta => meta.key === key).map(meta => meta.content), [businessDescription],
+        `${route}: ${key} presents application work without a size qualifier`);
+      assertions++;
+    }
+  }
 }
 const index = htmlAt('blog');
 assert.equal((index.match(/<article\b[^>]*class="[^\"]*\bsl-blog-preview\b[^\"]*"/g) ?? []).length, 5, 'first archive page keeps five native post previews');

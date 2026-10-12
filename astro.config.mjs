@@ -76,7 +76,7 @@ export default defineConfig({
     starlight({
       title: "Devantler Tech",
       description:
-        "Devantler Tech — a one-person software business building websites, small apps and open-source tools.",
+        "Devantler Tech — a one-person software business building websites, apps and open-source tools.",
       components: {
         PageFrame: './src/components/business/JournalFrame.astro',
         PageTitle: './src/components/business/JournalTitle.astro',
