@@ -12,7 +12,7 @@ fi
 [[ "$(node --version)" == v24.* && "$(npm --version)" == 11.* ]] || { printf '%s\n' 'Use Node 24 and npm 11 before packaging.' >&2; exit 1; }
 [[ "$(go version)" == "go version go1.27.2 "* ]] || { printf '%s\n' 'Use the exact Go 1.27.2 toolchain before packaging.' >&2; exit 1; }
 export GOTOOLCHAIN=local LC_ALL=C
-env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
 bash scripts/check-portal-artifacts.sh dist
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
   printf '%s\n' 'The public build changed release source; investigate before packaging.' >&2; exit 1

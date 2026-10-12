@@ -109,11 +109,6 @@ jobs:
         env:
           FEATURE_CLIENT_PORTFOLIO: "true"
         run: npm run build
-      - name: Build Journal presentation preview
-        working-directory: .
-        env:
-          FEATURE_JOURNAL_PRESENTATION: "true"
-        run: npm run build
       - name: Build company identity preview
         working-directory: .
         env:
@@ -142,14 +137,16 @@ jobs:
         env:
           FEATURE_PREVIEW_BANNER: "false"
           FEATURE_CLIENT_PORTFOLIO: "false"
-          FEATURE_JOURNAL_PRESENTATION: "false"
           FEATURE_COMPANY_IDENTITY: "false"
           FEATURE_OFFER_COPY: "false"
           FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+      - name: Verify the published Journal presentation
+        working-directory: .
+        run: node scripts/check-journal-presentation.mjs dist
       - name: Verify offering-copy accessibility controls
         run: node scripts/check-offering-copy.test.mjs dist
       - name: Verify public portal boundary controls

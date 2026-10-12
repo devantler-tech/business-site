@@ -4,40 +4,50 @@ import { test } from 'node:test';
 import { load } from 'js-yaml';
 
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
-/** Admit only unconditional enabled, disabled and unset builds before the production artifact. */
+const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build';
+const checkCommand = 'node scripts/check-journal-presentation.mjs dist';
+/** The final artifact must contain the checked Journal, after the production builds. */
 const valid = (ci) => {
-  const flag = 'FEATURE_JOURNAL_PRESENTATION';
-  const job = ci.jobs?.['build-docs'];
-  if (ci.env?.[flag] != null || job?.env?.[flag] != null) return false;
-  const steps = job?.steps ?? [];
+  const steps = ci.jobs?.['build-docs']?.steps ?? [];
   const indices = (predicate) => steps.flatMap((step, i) => predicate(step) ? [i] : []);
-  const enabled = indices(step => step.env?.[flag] === 'true' && step.run === 'npm run build');
-  const disabled = indices(step => step.env?.[flag] === 'false' && step.run === 'npm run build');
-  const unset = indices(step => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_JOURNAL_PRESENTATION -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build' && step.env?.[flag] == null);
+  const disabled = indices(step => step.env?.FEATURE_PREVIEW_BANNER === 'false' && step.run === 'npm run build');
+  const unset = indices(step => step.run === unsetCommand && step.env == null);
+  const checked = indices(step => step.run === checkCommand);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
-  return [enabled, disabled, unset, artifact].every(group => group.length === 1) &&
-    enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
-    [...enabled, ...disabled, ...unset].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
+  return [disabled, unset, checked, artifact].every(group => group.length === 1) &&
+    disabled[0] < unset[0] && unset[0] < checked[0] && checked[0] < artifact[0] &&
+    [...disabled, ...unset, ...checked].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
-test('actual CI builds Journal enabled, false and entirely unset before uploading production', () => assert.ok(valid(workflow)));
-for (const mode of ['missing-preview', 'missing-false', 'missing-unset', 'skipped-preview', 'ignored-failure', 'reverse', 'inherited-job', 'inherited-workflow', 'inherited-unset']) {
-  test(`Journal rollout rejects ${mode}`, () => {
+test('actual CI verifies the final professional Journal before uploading production', () => assert.ok(valid(workflow)));
+for (const mode of ['missing-false', 'missing-unset', 'missing-check', 'missing-artifact', 'skipped-check', 'ignored-check-failure', 'skipped-build', 'ignored-build-failure', 'check-before-production', 'check-after-artifact', 'wrong-directory', 'duplicate-check', 'configured-unset']) {
+  test(`Journal publication rejects ${mode}`, () => {
     const ci = structuredClone(workflow);
-    const job = ci.jobs['build-docs'];
+    const steps = ci.jobs['build-docs'].steps;
     assert.ok(valid(ci), 'negative controls start from the validated actual workflow');
-    const enabled = job.steps.find(step => step.env?.FEATURE_JOURNAL_PRESENTATION === 'true');
-    const disabled = job.steps.find(step => step.env?.FEATURE_JOURNAL_PRESENTATION === 'false');
-    assert.ok(enabled && disabled, 'CI must first supply both flag states');
-    if (mode === 'missing-preview') job.steps = job.steps.filter(step => step !== enabled);
-    if (mode === 'missing-false') job.steps = job.steps.filter(step => step !== disabled);
-    if (mode === 'missing-unset') job.steps = job.steps.filter(step => !step.run?.startsWith('env -u FEATURE_CLIENT_PORTFOLIO'));
-    if (mode === 'skipped-preview') enabled.if = 'false';
-    if (mode === 'ignored-failure') enabled['continue-on-error'] = true;
-    if (mode === 'reverse') job.steps.reverse();
-    if (mode === 'inherited-job') job.env.FEATURE_JOURNAL_PRESENTATION = 'true';
-    if (mode === 'inherited-workflow') ci.env = { FEATURE_JOURNAL_PRESENTATION: 'true' };
-    if (mode === 'inherited-unset') job.steps.find(step => step.run?.startsWith('env -u FEATURE_CLIENT_PORTFOLIO')).env = { FEATURE_JOURNAL_PRESENTATION: 'true' };
+    const disabled = steps.find(step => step.env?.FEATURE_PREVIEW_BANNER === 'false' && step.run === 'npm run build');
+    const unset = steps.find(step => step.run === unsetCommand);
+    const checked = steps.find(step => step.run === checkCommand);
+    const artifact = steps.find(step => step.with?.name === 'business-site-preview');
+    if (mode === 'missing-false') steps.splice(steps.indexOf(disabled), 1);
+    if (mode === 'missing-unset') steps.splice(steps.indexOf(unset), 1);
+    if (mode === 'missing-check') steps.splice(steps.indexOf(checked), 1);
+    if (mode === 'missing-artifact') steps.splice(steps.indexOf(artifact), 1);
+    if (mode === 'skipped-check') checked.if = 'false';
+    if (mode === 'ignored-check-failure') checked['continue-on-error'] = true;
+    if (mode === 'skipped-build') disabled.if = 'false';
+    if (mode === 'ignored-build-failure') unset['continue-on-error'] = true;
+    if (mode === 'check-before-production') {
+      steps.splice(steps.indexOf(checked), 1);
+      steps.splice(steps.indexOf(unset), 0, checked);
+    }
+    if (mode === 'check-after-artifact') {
+      steps.splice(steps.indexOf(checked), 1);
+      steps.splice(steps.indexOf(artifact) + 1, 0, checked);
+    }
+    if (mode === 'wrong-directory') checked['working-directory'] = 'docs';
+    if (mode === 'duplicate-check') steps.push(structuredClone(checked));
+    if (mode === 'configured-unset') unset.env = { FEATURE_OFFER_COPY: 'true' };
     assert.equal(valid(ci), false);
   });
 }

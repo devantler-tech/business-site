@@ -133,17 +133,15 @@ executes the actual head script as part of every build.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
 
-Ordinary production builds enable the editorial Journal frame from business-site#11.
+All builds use the editorial Journal frame.
 Its introduction, lead story, two-column archive and narrower reading pages use the homepage's
 type and palette. A native “Browse the Journal” disclosure keeps the existing post/topic menu
 available without a permanent documentation sidebar. Search, RSS, authors, tags, pagination,
 article bookmarks and copy controls retain their existing behavior. Technical guides keep their
-normal Starlight frame. `FEATURE_JOURNAL_PRESENTATION=false` is a temporary build-time rollback;
-it requires a rebuild and publication, not a browser setting. Every build checks all generated
-Journal routes, and CI validates enabled, explicit-false and entirely-unset states. The source-owned
-publisher deploys this repository's reviewed main revision. Live verification
-and removal of the temporary gate remain tracked in
-[#12](https://github.com/devantler-tech/business-site/issues/12).
+normal Starlight frame. Every build verifies the professional presentation across all generated
+Journal routes, including archives, authors, tags and reading pages. CI checks the final production
+output before uploading its preview. The source-owned publisher deploys this repository's reviewed
+main revision. Presentation rollback requires a reviewed source revert and publication.
 
 Projects presents six stars-ranked maintained tools, followed by one compact public website example
 and earlier research. KSail's product introduction explains setup, deployment and operation rather
