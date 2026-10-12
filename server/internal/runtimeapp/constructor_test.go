@@ -171,12 +171,8 @@ func fixtureTLSDatabase(t *testing.T, upstream string, certificate tls.Certifica
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
-				defer func() {
-					// The fixture teardown can also close this owned connection.
-					if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-						t.Error("fixture gateway connection cleanup failed")
-					}
-				}()
+				// Teardown may also close this owned connection; check both attempts.
+				defer closeFixtureConnection(t, conn)
 				_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 				var request [8]byte
 				if _, err := io.ReadFull(conn, request[:]); err != nil || binary.BigEndian.Uint32(request[:4]) != 8 || binary.BigEndian.Uint32(request[4:]) != 80877103 {
@@ -193,30 +189,95 @@ func fixtureTLSDatabase(t *testing.T, upstream string, certificate tls.Certifica
 				if err != nil {
 					return
 				}
-				defer func() {
-					// The bridge closes the backend to unblock the opposite reader.
-					if err := backend.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-						t.Error("fixture backend connection cleanup failed")
-					}
-				}()
 				_ = backend.SetDeadline(time.Now().Add(30 * time.Second))
-				copied := make(chan struct{})
-				go func() { _, _ = io.Copy(backend, secure); _ = backend.Close(); close(copied) }()
-				_, _ = io.Copy(secure, backend)
-				_ = secure.Close()
-				<-copied
+				bridgeFixtureStreams(t, backend, secure)
 			}()
 		}
 	}()
 	t.Cleanup(func() {
-		_ = listener.Close()
+		closeFixtureConnection(t, listener)
 		<-done
 		mu.Lock()
 		for _, conn := range connections {
-			_ = conn.Close()
+			closeFixtureConnection(t, conn)
 		}
 		mu.Unlock()
 		workers.Wait()
 	})
 	return listener.Addr().String()
+}
+
+type fixtureFailureReporter interface {
+	Helper()
+	Error(...any)
+}
+
+// closeFixtureConnection reports unexpected cleanup failures, including first closes.
+func closeFixtureConnection(t fixtureFailureReporter, connection io.Closer) {
+	t.Helper()
+	if err := connection.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		t.Error("fixture connection cleanup failed")
+	}
+}
+
+// bridgeFixtureStreams is the actual constructor fixture's duplex bridge.
+func bridgeFixtureStreams(t fixtureFailureReporter, backend, secure io.ReadWriteCloser) {
+	defer closeFixtureConnection(t, backend)
+	copied := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(backend, secure)
+		closeFixtureConnection(t, backend)
+		close(copied)
+	}()
+	_, _ = io.Copy(secure, backend)
+	closeFixtureConnection(t, secure)
+	<-copied
+}
+
+type fixtureCloseStream struct {
+	closes        atomic.Int32
+	first, second error
+}
+
+func (*fixtureCloseStream) Read([]byte) (int, error)       { return 0, io.EOF }
+func (*fixtureCloseStream) Write(data []byte) (int, error) { return len(data), nil }
+func (stream *fixtureCloseStream) Close() error {
+	if stream.closes.Add(1) == 1 {
+		return stream.first
+	}
+	return stream.second
+}
+
+type fixtureFailureCounter struct{ failures atomic.Int32 }
+
+func (*fixtureFailureCounter) Helper()              {}
+func (counter *fixtureFailureCounter) Error(...any) { counter.failures.Add(1) }
+
+// The actual bridge must report the first failed cleanup, not just its duplicate.
+func TestFixtureBridgeReportsCleanupFailures(t *testing.T) {
+	failure := errors.New("synthetic cleanup failure")
+	for _, tc := range []struct {
+		name                  string
+		first, second, secure error
+		failures              int32
+	}{
+		{name: "successful first close", second: net.ErrClosed},
+		{name: "already closed", first: net.ErrClosed, second: net.ErrClosed},
+		{name: "first backend failure", first: failure, second: net.ErrClosed, failures: 1},
+		{name: "unexpected duplicate failure", second: failure, failures: 1},
+		{name: "secure close failure", second: net.ErrClosed, secure: failure, failures: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &fixtureCloseStream{first: tc.first, second: tc.second}
+			secure := &fixtureCloseStream{first: tc.secure}
+			counter := &fixtureFailureCounter{}
+			bridgeFixtureStreams(counter, backend, secure)
+			if got := counter.failures.Load(); got != tc.failures {
+				t.Fatalf("reported cleanup failures=%d, want %d", got, tc.failures)
+			}
+			if backend.closes.Load() != 2 || secure.closes.Load() != 1 {
+				t.Fatal("the actual bridge cleanup paths were not exercised")
+			}
+		})
+	}
 }
