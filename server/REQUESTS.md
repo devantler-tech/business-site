@@ -80,13 +80,15 @@ DELETE and TRUNCATE held directly, inherited or through an assumable role. Do no
 outside the disposable test fixture. This is explicit application/query scoping,
 not database RLS or a production privacy certification.
 
-Use Node 24 alongside the exact Go toolchain. Run the [complete disposable database suite](README.md#actual-database-tests),
+Use the exact Go toolchain for the [complete disposable database suite](README.md#actual-database-tests),
 not only the new tests. It exercises actual TLS handlers and PostgreSQL: durable
 receipts, retries/conflicts, concurrent duplicates, two-client isolation,
 revocation, operator denial, escaped text, native CSRF/origin rejection, malformed
 and oversized forms, Danish character limits, safe draft recovery, flag closure,
-migration checksums and least-privilege startup. The suite invokes six controls
-against the actual served browser script with Node 24, not a Go translation.
+migration checksums and least-privilege startup. Separately, run
+`node --test scripts/portal-request-limits.test.mjs` from the repository root with
+Node 24. Required source CI runs these six actual served browser-script controls
+unconditionally; the Go database suite does not depend on Node.
 Operator controls additionally exercise current role/expiry/revocation, all three
 independent gates, two-client aggregate review, inert detail, reconnect durability,
 bounded tied pagination, malformed cursors and actual denied database reads.
