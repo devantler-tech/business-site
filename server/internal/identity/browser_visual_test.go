@@ -20,6 +20,7 @@ import (
 // untagged tests exercise the strict HTTPS and origin checks directly.
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
+	requestFlag(t, b, true)
 	inv := b.invite("client-a", "client-a", "client")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

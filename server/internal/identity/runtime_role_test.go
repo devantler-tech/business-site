@@ -39,6 +39,8 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"restricted", "SET ROLE portal_runtime", true},
 		{"missing DELETE", "REVOKE DELETE ON portal_sessions FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"missing contact UPDATE", "REVOKE UPDATE ON portal_contacts FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing request INSERT", "REVOKE INSERT ON portal_requests FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing request SELECT", "REVOKE SELECT ON portal_requests FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"only SELECT", "REVOKE INSERT,UPDATE,DELETE ON portal_login_attempts FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"schema creator", "GRANT CREATE ON SCHEMA public TO portal_runtime; SET ROLE portal_runtime", false},
 		{"database creator", "GRANT CREATE ON DATABASE portal_identity_test TO portal_runtime; SET ROLE portal_runtime", false},
@@ -62,7 +64,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer tx.Rollback(ctx)
-			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime"); err != nil {
+			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests TO portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {

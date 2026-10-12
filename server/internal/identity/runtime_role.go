@@ -34,6 +34,8 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
  AND (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
    FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts']) table_name
    CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege)
+ AND has_table_privilege(current_user,'portal_requests','SELECT')
+ AND has_table_privilege(current_user,'portal_requests','INSERT')
  FROM pg_roles r WHERE r.rolname=current_user`).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied
