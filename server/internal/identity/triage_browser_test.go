@@ -191,6 +191,18 @@ func TestOperatorInboxRejectsMalformedCursorWithoutDisclosure(t *testing.T) {
 	}
 }
 
+func TestOperatorInboxInvalidPageOffersNativeRecovery(t *testing.T) {
+	b := newBrowserFixture(t)
+	triageFlags(t, b, true, true, true)
+	triageSignIn(t, b, "operator", "operator-workspace", "operator")
+	for _, lang := range []string{"en", "da"} {
+		status, body, _ := b.request("GET", "/portal/operator/requests?cursor=invalid&lang="+lang, nil, "")
+		if status != 400 || !strings.Contains(body, `href="/portal/operator/requests?lang=`+lang+`"`) || strings.Contains(body, `class="button" href="/portal/sign-in`) {
+			t.Fatalf("invalid %s page sends a signed-in operator to sign in rather than the inbox: %d", lang, status)
+		}
+	}
+}
+
 func TestOperatorInboxDeniesDowngradeAndExpiredSession(t *testing.T) {
 	for _, change := range []string{"downgrade", "expiry", "logout"} {
 		t.Run(change, func(t *testing.T) {

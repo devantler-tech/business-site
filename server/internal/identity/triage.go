@@ -130,7 +130,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		}
 	}
 	if !valid {
-		b.render(w, r, 400, "error", "", "")
+		b.render(w, r, 400, "triage-invalid", "", "")
 		return
 	}
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
