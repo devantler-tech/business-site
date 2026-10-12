@@ -25,8 +25,8 @@ type contactData struct {
 
 // contactText bounds UTF-8 display fields and excludes control characters
 // before either persistence or reflection into a recovery form.
-func contactText(s string, max int, required bool) bool {
-	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > max || (required && strings.TrimSpace(s) == "") {
+func contactText(s string, limit int, required bool) bool {
+	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > limit || (required && strings.TrimSpace(s) == "") {
 		return false
 	}
 	for _, r := range s {

@@ -57,9 +57,9 @@ func TestBrowserVisualFixture(t *testing.T) {
 		req.Header.Del("Cookie")
 		for _, cookie := range r.Cookies() {
 			if strings.HasPrefix(cookie.Name, "portal_visual_") {
-				copy := *cookie
-				copy.Name = "__Host-portal_" + strings.TrimPrefix(copy.Name, "portal_visual_")
-				req.AddCookie(&copy)
+				cookieCopy := *cookie
+				cookieCopy.Name = "__Host-portal_" + strings.TrimPrefix(cookieCopy.Name, "portal_visual_")
+				req.AddCookie(&cookieCopy)
 			}
 		}
 		if req.Header.Get("Origin") == origin {
@@ -83,10 +83,10 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 		}
 		for _, cookie := range res.Cookies() {
-			copy := *cookie
-			copy.Name = strings.Replace(copy.Name, "__Host-portal_", "portal_visual_", 1)
-			copy.Secure = false
-			http.SetCookie(w, &copy)
+			cookieCopy := *cookie
+			cookieCopy.Name = strings.Replace(cookieCopy.Name, "__Host-portal_", "portal_visual_", 1)
+			cookieCopy.Secure = false
+			http.SetCookie(w, &cookieCopy)
 		}
 		if location := res.Header.Get("Location"); strings.HasPrefix(location, b.broker.URL) {
 			u, _ := url.Parse(location)

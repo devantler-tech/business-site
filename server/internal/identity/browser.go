@@ -88,7 +88,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		if err != nil {
 			return nil, ErrDenied
 		}
-		mux.HandleFunc("GET /portal/assets/"+name, func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("GET /portal/assets/"+name, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", contentType)
 			_, _ = w.Write(data)
 		})
@@ -192,12 +192,12 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	// Recover presentation language from the durable attempt, never authority or
 	// a redirect destination. Errors retain the language the client chose.
 	if r.URL.Query().Get("lang") == "" && b.sessions.GetString(r.Context(), "lang") == "da" {
-		copy := *r.URL
-		q := copy.Query()
+		urlCopy := *r.URL
+		q := urlCopy.Query()
 		q.Set("lang", "da")
-		copy.RawQuery = q.Encode()
+		urlCopy.RawQuery = q.Encode()
 		r = r.Clone(r.Context())
-		r.URL = &copy
+		r.URL = &urlCopy
 	}
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil || len(q["state"]) != 1 || len(q["code"]) != 1 || len(q["error"]) != 0 || q.Get("state") == "" || q.Get("code") == "" || len(q.Get("code")) > 4096 || len(q.Get("state")) > 128 {

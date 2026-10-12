@@ -12,11 +12,11 @@ func TestAbsentConfigurationIsPublicOnlyWithoutConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, close, err := Portal(context.Background(), cfg, nil)
-	if err != nil || h != nil || close == nil {
+	h, shutdown, err := Portal(context.Background(), cfg, nil)
+	if err != nil || h != nil || shutdown == nil {
 		t.Fatalf("public-only wiring: handler=%v err=%v", h, err)
 	}
-	close()
+	shutdown()
 }
 
 // TestPartialOrInvalidConfigurationFailsGenerically rejects unsafe or incomplete private wiring.

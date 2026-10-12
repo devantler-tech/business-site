@@ -316,7 +316,7 @@ func TestOperatorInboxRejectsInFlightAuthorityClosure(t *testing.T) {
 				_, err := b.svc.readTriage(ctx, p, "", triageCursor{})
 				result <- err
 			}()
-			waitForTriageRead(t, ctx, migrator, relation)
+			waitForTriageRead(ctx, t, migrator, relation)
 			switch change {
 			case "flag":
 				triageFlags(t, b, true, true, false)
@@ -352,7 +352,7 @@ func TestOperatorInboxRejectsInFlightAuthorityClosure(t *testing.T) {
 	}
 }
 
-func waitForTriageRead(t *testing.T, ctx context.Context, pool *pgxpool.Pool, relation uint32) {
+func waitForTriageRead(ctx context.Context, t *testing.T, pool *pgxpool.Pool, relation uint32) {
 	t.Helper()
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
@@ -374,19 +374,19 @@ func waitForTriageRead(t *testing.T, ctx context.Context, pool *pgxpool.Pool, re
 
 func triageSignIn(t *testing.T, b *browserFixture, subject, client, role string) *http.Client {
 	t.Helper()
-	copy := *b.site.Client()
+	clientCopy := *b.site.Client()
 	var err error
-	copy.Jar, err = cookiejar.New(nil)
+	clientCopy.Jar, err = cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	b.client = &copy
+	clientCopy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	b.client = &clientCopy
 	b.mu.Lock()
 	b.subject = subject
 	b.mu.Unlock()
 	b.finish(b.start(b.invite(subject, client, role)))
-	return &copy
+	return &clientCopy
 }
 
 // A missing operator route, a client-scoped aggregate query or raw brief HTML
