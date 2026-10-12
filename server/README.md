@@ -70,10 +70,14 @@ ingress deployment, contact verification, retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,
-customer intake, payment, queue, MCP or agent execution. No paid service is used.
+production customer intake, payment, queue, MCP or agent execution. No paid service is used.
 
-Schemas v1 (identity), v2 (sessions) and v3 (contacts) are embedded and transactionally
-serialized with a contiguous version/checksum ledger. Original v1/v2 bytes are unchanged.
+The separately default-off [project-request intake](REQUESTS.md) lets a synthetic
+invited client submit a free brief and revisit a durable private receipt. It does
+not create an order, approve a price, accept an agreement or authorize execution.
+
+Schemas v1 (identity), v2 (sessions), v3 (contacts) and v4 (requests) are embedded and transactionally
+serialized with a contiguous version/checksum ledger. Original v1/v2/v3 bytes are unchanged.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
@@ -183,7 +187,8 @@ See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
-Use Go 1.27.2, the `psql` client and a **fresh disposable** PostgreSQL 17 service matching
+Use Go 1.27.2, Node 24 for the actual browser-script controls, the `psql` client
+and a **fresh disposable** PostgreSQL 17 service matching
 the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_fixture_owner`
 with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
 The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
@@ -214,7 +219,7 @@ It does not migrate through the runtime role or activate real providers.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the five fixture identity/session/contact tables between tests. Never reuse a database
+truncate the six fixture identity/session/contact/request tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 

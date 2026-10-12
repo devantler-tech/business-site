@@ -3,17 +3,19 @@
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
-profile handlers; no order, payment or agent endpoint exists. Contact emails remain
+profile handlers and separately default-off free project-request intake; no order,
+payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary. Contact emails remain
 self-declared and unverified, never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
-Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
+Use Node 24 for the actual browser-script controls and the exact Go version in
+`go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 `go mod verify`, `go vet ./...`, `go test -race ./... -count=1 -timeout=90s` and
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's five identity/session/contact tables. Provision a fresh disposable PostgreSQL
+only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
@@ -28,6 +30,10 @@ do not grant production activation.
 Use the injected OpenFeature SDK client and false-default `portal-identity`
 boolean on every operation; missing/error/type-mismatched evaluation denies.
 Do not introduce a custom environment-flag parser or cache an earlier on verdict.
+Free project requests additionally require false-default `portal-requests` on every
+operation. A receipt never authorizes a quote, agreement, payment or worker execution.
+The request flag's lifecycle is tracked in business-site#57. Requests are immutable;
+the runtime needs SELECT/INSERT only on that table, not UPDATE/DELETE or DDL.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

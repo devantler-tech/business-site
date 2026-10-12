@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/pgxstore"
@@ -17,7 +18,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -74,6 +75,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
+	mux.HandleFunc("GET /portal/requests", b.requests)
+	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
+	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
+	mux.HandleFunc("POST /portal/requests", b.submitRequest)
 	mux.HandleFunc("POST /portal/logout", b.logout)
 	// Only the two public presentation assets are served, never template source.
 	for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
@@ -101,13 +106,23 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if (r.URL.Path == "/portal/requests" || strings.HasPrefix(r.URL.Path, "/portal/requests/")) && !s.requestsReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		// Do not trust caller-controlled Host or forwarded-origin headers.
 		if r.Host != u.Host {
 			http.Error(w, "Portal unavailable", 421)
 			return
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {
-			r.Body = http.MaxBytesReader(w, r.Body, 8192)
+			limit := int64(8192)
+			// A 1,200-character Unicode brief can expand under native form encoding.
+			// Keep the larger bound confined to the new intake endpoint.
+			if r.URL.Path == "/portal/requests" {
+				limit = 20000
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			if origin := r.Header.Get("Origin"); origin != "" && origin != b.origin {
 				b.render(w, r, 403, "error", "", "")
 				return
@@ -268,7 +283,10 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/portal/sign-in?lang="+language(r), http.StatusSeeOther)
 }
 
-type pageData struct{ Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string }
+type pageData struct {
+	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
+	RequestsEnabled                                                                                                                                        bool
+}
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
@@ -281,6 +299,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
 	if d.Lang == "da" {
 		d.Title = "Din kundeportal"
 		d.Intro = "Et privat sted for dit samarbejde med Devantler Tech."
