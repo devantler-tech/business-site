@@ -1,16 +1,19 @@
 <!doctype html>
 <html lang="{{.Lang}}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"><script src="/portal/assets/portal.js" defer></script></head>
-<body><a class="skip" href="#main">{{if eq .Lang "da"}}Gå til indhold{{else}}Skip to content{{end}}</a>
-<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang "da"}}Indstillinger{{else}}Preferences{{end}}"><a href="?lang={{if eq .Lang "da"}}en{{else}}da{{end}}" lang="{{if eq .Lang "da"}}en{{else}}da{{end}}">{{if eq .Lang "da"}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
-<main id="main"><div class="intro"><h1>{{.Title}}</h1><p>{{.Intro}}</p></div>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
+<body><a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
+<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="?lang={{if eq .Lang `da`}}en{{else}}da{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+<main id="main"><div class="intro"><h1>{{.Title}}</h1>
+<p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
 {{if .FormError}}<p class="form-error" role="alert">{{.FormError}}</p>{{end}}
 <form class="contact-form" method="post" action="/portal/contact">
 <input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="revision" value="{{.Contact.Revision}}">
-<label for="contact-name">{{.NameLabel}} <span class="field-limit">{{if eq .Lang "da"}}(højst 120 tegn){{else}}(up to 120 characters){{end}}</span></label><input id="contact-name" name="name" value="{{.Contact.Name}}" autocomplete="name" maxlength="120" required>
-<label for="contact-email">{{.EmailLabel}} <span class="field-limit">{{if eq .Lang "da"}}(højst 254 tegn){{else}}(up to 254 characters){{end}}</span></label><input id="contact-email" name="email" type="email" value="{{.Contact.Email}}" autocomplete="email" maxlength="254" aria-describedby="contact-pending" required><p id="contact-pending">{{.Pending}}</p>
-<label for="contact-company">{{.CompanyLabel}} <span class="field-limit">{{if eq .Lang "da"}}(højst 160 tegn){{else}}(up to 160 characters){{end}}</span></label><input id="contact-company" name="company" value="{{.Contact.Company}}" autocomplete="organization" maxlength="160">
+<label for="contact-name">{{.NameLabel}} <span class="field-limit">{{if eq .Lang `da`}}(højst 120 tegn){{else}}(up to 120 characters){{end}}</span></label><input id="contact-name" name="name" value="{{.Contact.Name}}" autocomplete="name" maxlength="120" required>
+<label for="contact-email">{{.EmailLabel}} <span class="field-limit">{{if eq .Lang `da`}}(højst 254 tegn){{else}}(up to 254 characters){{end}}</span></label><input id="contact-email" name="email" type="email" value="{{.Contact.Email}}" autocomplete="email" maxlength="254" aria-describedby="contact-pending" required><p id="contact-pending">{{.Pending}}</p>
+<label for="contact-company">{{.CompanyLabel}} <span class="field-limit">{{if eq .Lang `da`}}(højst 160 tegn){{else}}(up to 160 characters){{end}}</span></label><input id="contact-company" name="company" value="{{.Contact.Company}}" autocomplete="organization" maxlength="160">
 <button type="submit">{{.Save}}</button></form>
-<a class="back" href="/portal/contact?lang={{.Lang}}">{{if eq .Lang "da"}}Genindlæs kontaktoplysninger{{else}}Reload contact details{{end}}</a>
-</section><a class="back" href="/portal/?lang={{.Lang}}">{{.Workspace}}</a></main><footer>Devantler Tech</footer></body></html>
+<a class="back" href="/portal/contact?lang={{.Lang}}">{{if eq .Lang `da`}}Genindlæs kontaktoplysninger{{else}}Reload contact details{{end}}</a>
+</section><a class="back" href="/portal/?lang={{.Lang}}">{{.Workspace}}</a></main><footer>Devantler Tech</footer>
+<script src="/portal/assets/portal.js" defer></script>
+</body></html>
