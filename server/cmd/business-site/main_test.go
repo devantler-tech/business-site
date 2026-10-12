@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -40,7 +41,6 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	t.Cleanup(func() { revision, publicDigest, buildMode = oldRevision, oldDigest, oldMode })
 	revision, publicDigest, buildMode = strings.Repeat("a", 40), artifact.Digest(), "development"
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	var listen string
 	listenTCP := func(network, address string) (net.Listener, error) {
 		listener, err := net.Listen(network, address)
@@ -58,7 +58,14 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		return len(data), nil
 	})
 	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	defer func() {
+		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
+			t.Error("runtime fixture cleanup did not join its worker")
+		}
+	}()
 	go func() {
+		defer close(stopped)
 		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, listenTCP)
 	}()
 	select {
@@ -87,6 +94,51 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("runtime did not stop after an actual public request")
 	}
+}
+
+// cancelAndJoinRuntime bounds teardown and joins before dependent fixture cleanup.
+func cancelAndJoinRuntime(cancel context.CancelFunc, stopped <-chan struct{}, timeout time.Duration) error {
+	cancel()
+	// A completed worker succeeds even when the timeout is already expired.
+	select {
+	case <-stopped:
+		return nil
+	default:
+	}
+	select {
+	case <-stopped:
+		return nil
+	case <-time.After(timeout):
+		return context.DeadlineExceeded
+	}
+}
+
+// Exercise the actual deferred cleanup on completed, active and stuck workers.
+func TestRuntimeCancelAndJoin(t *testing.T) {
+	t.Run("already stopped", func(t *testing.T) {
+		stopped := make(chan struct{})
+		close(stopped)
+		called := false
+		if err := cancelAndJoinRuntime(func() { called = true }, stopped, 0); err != nil || !called {
+			t.Fatal("completed worker cleanup did not cancel and join")
+		}
+	})
+	t.Run("active worker", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		stopped := make(chan struct{})
+		var finished atomic.Bool
+		go func() { <-ctx.Done(); finished.Store(true); close(stopped) }()
+		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil || !finished.Load() {
+			t.Fatal("cleanup returned before worker resources were released")
+		}
+	})
+	t.Run("bounded timeout", func(t *testing.T) {
+		called := false
+		if err := cancelAndJoinRuntime(func() { called = true }, make(chan struct{}), 0); err != context.DeadlineExceeded || !called {
+			t.Fatal("unfinished worker was reported joined or cancellation was missed")
+		}
+	})
 }
 
 // TestUnpackagedBuildCannotStartAndErrorsArePrivate refuses unbound binaries without path leaks.

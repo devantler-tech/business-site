@@ -60,7 +60,7 @@ func TestCompleteQualityCheckRequiresPinnedTools(t *testing.T) {
 			}
 			data, err := os.ReadFile(log)
 			if tc.wantRun {
-				if err != nil || string(data) != "run\n--no-config\n--max-same-issues=0\n--max-issues-per-linter=0\n./...\n" {
+				if err != nil || string(data) != "run\n--no-config\n--max-same-issues=0\n--max-issues-per-linter=0\n--uniq-by-line=false\n./...\n" {
 					t.Fatal("complete quality invocation changed or ambient configuration was admitted")
 				}
 				if tc.lintRunExit != "" {

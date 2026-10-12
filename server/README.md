@@ -222,6 +222,7 @@ built with Go 1.27.2 before running the entire module. It fails if version/build
 metadata is missing or differs, never installs tools, and preserves linter failures.
 `--no-config` prevents ambient machine configuration from suppressing diagnostics.
 The two zero-valued display limits show every diagnostic; they disable no rule.
+Line-level deduplication is also disabled, so findings sharing a line remain visible.
 No linter configuration or suppression is required. Fixture response, connection
 and transaction cleanup failures fail their tests. Production read-only descriptor
 cleanup and rollback after a completed transaction preserve the operation's verdict;
