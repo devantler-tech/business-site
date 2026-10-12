@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -75,7 +76,11 @@ func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
 		t.Fatal("verified TLS fixture config rejected")
 	}
 	api := isolated.NewAPI()
-	defer api.Shutdown(context.Background())
+	defer func() {
+		if err := api.Shutdown(context.Background()); err != nil {
+			t.Error("fixture flag provider cleanup failed")
+		}
+	}()
 	if err := api.SetProviderAndWait(context.Background(), openfeature.NoopProvider{}); err != nil {
 		t.Fatal(err)
 	}
@@ -113,14 +118,18 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	name := fmt.Sprintf("portal_constructor_%d_%d", os.Getpid(), time.Now().UnixNano())
 	quoted := pgx.Identifier{name}.Sanitize()
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+quoted+" OWNER portal_migrator"); err != nil {
-		admin.Close(ctx)
+		if err := admin.Close(ctx); err != nil {
+			t.Error("fixture administrator cleanup failed")
+		}
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		if _, err := admin.Exec(ctx, "DROP DATABASE "+quoted+" WITH (FORCE)"); err != nil {
 			t.Error("owned constructor fixture cleanup failed")
 		}
-		admin.Close(ctx)
+		if err := admin.Close(ctx); err != nil {
+			t.Error("fixture administrator cleanup failed")
+		}
 	})
 	database.Path = "/" + name
 	migrationURL := *database
@@ -162,7 +171,12 @@ func fixtureTLSDatabase(t *testing.T, upstream string, certificate tls.Certifica
 			workers.Add(1)
 			go func() {
 				defer workers.Done()
-				defer conn.Close()
+				defer func() {
+					// The fixture teardown can also close this owned connection.
+					if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+						t.Error("fixture gateway connection cleanup failed")
+					}
+				}()
 				_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 				var request [8]byte
 				if _, err := io.ReadFull(conn, request[:]); err != nil || binary.BigEndian.Uint32(request[:4]) != 8 || binary.BigEndian.Uint32(request[4:]) != 80877103 {
@@ -179,7 +193,12 @@ func fixtureTLSDatabase(t *testing.T, upstream string, certificate tls.Certifica
 				if err != nil {
 					return
 				}
-				defer backend.Close()
+				defer func() {
+					// The bridge closes the backend to unblock the opposite reader.
+					if err := backend.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+						t.Error("fixture backend connection cleanup failed")
+					}
+				}()
 				_ = backend.SetDeadline(time.Now().Add(30 * time.Second))
 				copied := make(chan struct{})
 				go func() { _, _ = io.Copy(backend, secure); _ = backend.Close(); close(copied) }()

@@ -207,6 +207,7 @@ export PORTAL_TEST_MIGRATION_DATABASE_URL='postgres://portal_migrator:fixture-on
 export PORTAL_TEST_DATABASE_URL='postgres://portal_runtime:fixture-only@localhost:5432/portal_identity_test?sslmode=disable'
 GOTOOLCHAIN=local go mod verify
 GOTOOLCHAIN=local go vet ./...
+GOTOOLCHAIN=local golangci-lint run --max-same-issues=0 --max-issues-per-linter=0 ./...
 GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
@@ -215,6 +216,13 @@ The constructor test also creates and drops its own uniquely named fixture datab
 uses verified TLS through a synthetic loopback database gateway and discovers a
 synthetic TLS broker; complete dependencies must still leave every private route closed.
 It does not migrate through the runtime role or activate real providers.
+
+The optional complete Go quality check uses golangci-lint 2.14.0 built with Go 1.27.2.
+The two zero-valued display limits show every diagnostic; they disable no rule.
+No linter configuration or suppression is required. Fixture response, connection
+and transaction cleanup failures fail their tests. Production read-only descriptor
+cleanup and rollback after a completed transaction preserve the operation's verdict;
+pgx discards failed rollback connections before releasing them to the pool.
 
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They

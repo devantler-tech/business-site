@@ -18,6 +18,12 @@ a real customer database; they refuse non-fixture database/role names and trunca
 only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 
+The optional full quality check is golangci-lint 2.14.0 built with Go 1.27.2:
+`golangci-lint run --max-same-issues=0 --max-issues-per-linter=0 ./...`.
+The display limits expose all diagnostics; never use a reduced delta as a full
+clean verdict or silence a rule. Fixture cleanup errors fail tests; intentional
+best-effort production cleanup must explain its resource lifecycle at the call.
+
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
 consumption, current membership and concrete record client scopes. A token's
 email/groups or browser fields cannot assign a role. `Invite`/`Revoke` are trusted
