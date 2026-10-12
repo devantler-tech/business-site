@@ -31,14 +31,20 @@ func readSecret(filename string) (string, error) {
 	if err != nil {
 		return "", ErrConfig
 	}
-	defer root.Close()
+	defer func() {
+		// Read-only descriptor cleanup cannot change the validated secret bytes.
+		_ = root.Close()
+	}()
 	// The supported runtime targets are Unix services. Nonblocking open avoids
 	// waiting on a FIFO before the same-descriptor regular-file check.
 	f, err := root.OpenFile(filepath.Base(filename), os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return "", ErrConfig
 	}
-	defer f.Close()
+	defer func() {
+		// No writes need flushing; preserve the read/validation error on failure.
+		_ = f.Close()
+	}()
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 		return "", ErrConfig

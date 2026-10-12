@@ -35,8 +35,12 @@ func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
 			response <- "error"
 			return
 		}
-		defer res.Body.Close()
-		data, _ := io.ReadAll(res.Body)
+		data, readErr := io.ReadAll(res.Body)
+		closeErr := res.Body.Close()
+		if readErr != nil || closeErr != nil {
+			response <- "error"
+			return
+		}
 		response <- string(data)
 	}()
 	select {
@@ -64,7 +68,9 @@ func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
 	}
 	conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
 	if err == nil {
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			t.Error("unexpected fixture connection cleanup failed")
+		}
 		t.Fatal("stopped listener still accepts connections")
 	}
 }

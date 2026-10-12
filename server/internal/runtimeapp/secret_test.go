@@ -22,7 +22,9 @@ func TestSecretFIFOIsRejectedWithoutWaitingForWriter(t *testing.T) {
 		// Release a blocked reader on the pre-fix implementation, without
 		// leaving a test goroutine or requiring a blocking writer.
 		if fd, err := syscall.Open(name, syscall.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
-			syscall.Close(fd)
+			if err := syscall.Close(fd); err != nil {
+				t.Error("fixture FIFO writer cleanup failed")
+			}
 		}
 	})
 	select {

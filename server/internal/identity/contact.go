@@ -97,7 +97,11 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	if err != nil {
 		return ErrDenied
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		// Commit decides success. A committed transaction is already closed;
+		// pgx discards a failed rollback's connection and returns it to the pool.
+		_ = tx.Rollback(ctx)
+	}()
 	var client string
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
 		return ErrDenied

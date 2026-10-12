@@ -65,7 +65,7 @@ func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 func TestBrowserSignInPage(t *testing.T) {
 	f := fixtureBroker(t)
 	svc := enabled(t, fixtureDB(t), f)
-	var handler http.Handler = http.NotFoundHandler()
+	handler := http.NotFoundHandler()
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	defer srv.Close()
 	handler = browserHandler(t, svc, srv.URL+"/portal/callback")
@@ -75,7 +75,9 @@ func TestBrowserSignInPage(t *testing.T) {
 			t.Fatal(err)
 		}
 		body, err := io.ReadAll(res.Body)
-		res.Body.Close()
+		if err := res.Body.Close(); err != nil {
+			t.Error("fixture sign-in response cleanup failed")
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

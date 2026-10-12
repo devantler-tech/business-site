@@ -34,7 +34,7 @@ func publicPath(name string) bool {
 		return false
 	}
 	for i, part := range strings.Split(name, "/") {
-		if strings.HasPrefix(part, ".") && !(i == 0 && part == ".well-known") {
+		if strings.HasPrefix(part, ".") && (i != 0 || part != ".well-known") {
 			return false
 		}
 		if part == "portal" || part == "server" || part == "go.mod" || part == "go.sum" {
@@ -92,7 +92,8 @@ func Load(source fs.FS) (*Artifact, error) {
 			}
 		}
 		a.files[name] = data
-		fmt.Fprintf(hash, "%s\x00%d\x00", name, len(data))
+		// hash.Hash.Write always consumes the input and returns a nil error.
+		_, _ = fmt.Fprintf(hash, "%s\x00%d\x00", name, len(data))
 		hash.Write(data)
 		return nil
 	})

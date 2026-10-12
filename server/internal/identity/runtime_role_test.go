@@ -31,7 +31,11 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer owner.Close(ctx)
+	defer func() {
+		if err := owner.Close(ctx); err != nil {
+			t.Error("fixture owner connection cleanup failed")
+		}
+	}()
 	for _, tc := range []struct {
 		name, setup string
 		allowed     bool
@@ -69,7 +73,11 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback(ctx)
+			defer func() {
+				if err := tx.Rollback(ctx); err != nil {
+					t.Error("fixture privilege transaction cleanup failed")
+				}
+			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
 			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests FROM portal_runtime"); err != nil {

@@ -34,7 +34,11 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("begin migration: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		// Commit decides success. A committed transaction is already closed;
+		// pgx discards a failed rollback's connection and returns it to the pool.
+		_ = tx.Rollback(ctx)
+	}()
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820517)`); err != nil {
 		return fmt.Errorf("lock migration: %w", err)
 	}

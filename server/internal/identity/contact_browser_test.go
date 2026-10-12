@@ -342,7 +342,11 @@ func TestContactRevisionPreventsConcurrentLostUpdate(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			defer res.Body.Close()
+			defer func() {
+				if err := res.Body.Close(); err != nil {
+					t.Error("fixture contact response cleanup failed")
+				}
+			}()
 			if res.StatusCode == 303 {
 				accepted.Add(1)
 			} else if res.StatusCode != 409 {

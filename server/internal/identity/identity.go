@@ -205,7 +205,11 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, token string) erro
 	if err != nil {
 		return fmt.Errorf("begin invitation: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		// Commit decides success. A committed transaction is already closed;
+		// pgx discards a failed rollback's connection and returns it to the pool.
+		_ = tx.Rollback(ctx)
+	}()
 	var client, role string
 	err = tx.QueryRow(ctx, `DELETE FROM portal_invitations WHERE token_digest=$1 AND issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, digest(token), p.issuer, p.subject).Scan(&client, &role)
 	if errors.Is(err, pgx.ErrNoRows) {

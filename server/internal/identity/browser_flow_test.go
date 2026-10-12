@@ -79,14 +79,14 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 			b.mu.Lock()
 			b.codes[code] = q
 			b.mu.Unlock()
-			http.Redirect(w, r, q.Get("redirect_uri")+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), 303)
+			http.Redirect(w, r, q.Get("redirect_uri")+"?code="+url.QueryEscape(code)+"&state="+url.QueryEscape(q.Get("state")), http.StatusSeeOther)
 		case "/token":
 			b.exchanges.Add(1)
 			b.mu.RLock()
 			redirect := b.redirectExchange
 			b.mu.RUnlock()
 			if redirect {
-				http.Redirect(w, r, b.f.issuer+"/unexpected-token", 307)
+				http.Redirect(w, r, b.f.issuer+"/unexpected-token", http.StatusTemporaryRedirect)
 				return
 			}
 			_ = r.ParseForm()
@@ -150,7 +150,11 @@ func (b *browserFixture) request(method, path string, form url.Values, origin st
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			b.t.Error("fixture response cleanup failed")
+		}
+	}()
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		b.t.Fatal(err)
@@ -202,7 +206,11 @@ func (b *browserFixture) start(inv string) string {
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			b.t.Error("fixture authorization response cleanup failed")
+		}
+	}()
 	if res.StatusCode != 303 {
 		body, _ := io.ReadAll(res.Body)
 		b.t.Fatalf("broker rejected actual authorization request: %d %s", res.StatusCode, body)
@@ -303,7 +311,9 @@ func TestBrowserCallbackIsConsumedBeforeExchange(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			res.Body.Close()
+			if err := res.Body.Close(); err != nil {
+				t.Error("fixture callback response cleanup failed")
+			}
 			if res.StatusCode == 303 {
 				successes.Add(1)
 			}

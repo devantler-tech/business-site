@@ -30,12 +30,22 @@ func loadPublic(directory string) (*webapp.Artifact, error) {
 	if err != nil {
 		return nil, webapp.ErrArtifact
 	}
-	defer root.Close()
+	defer func() {
+		// The snapshot owns copied bytes, not this read-only directory handle.
+		// Closing that handle is best-effort cleanup after the load verdict.
+		_ = root.Close()
+	}()
 	return webapp.Load(root.FS())
 }
 
 // run validates package identity and private dependencies before opening a listener.
 func run(ctx context.Context, args []string, output io.Writer) error {
+	return runWithListen(ctx, args, output, net.Listen)
+}
+
+// runWithListen keeps listener creation injectable without releasing a test port.
+// The ordinary command always uses net.Listen; validation and ownership are shared.
+func runWithListen(ctx context.Context, args []string, output io.Writer, listenTCP func(string, string) (net.Listener, error)) error {
 	options := flag.NewFlagSet("business-site", flag.ContinueOnError)
 	options.SetOutput(io.Discard)
 	public := options.String("public", "./public", "packaged public artifact directory")
@@ -71,17 +81,24 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if err := api.SetProviderAndWait(ctx, openfeature.NoopProvider{}); err != nil {
 		return errors.New("identity gate is unavailable")
 	}
-	defer api.Shutdown(context.Background())
+	defer func() {
+		// This executable installs only NoopProvider, with no external resources.
+		// Shutdown releases SDK bookkeeping without changing the runtime verdict.
+		_ = api.Shutdown(context.Background())
+	}()
 	portal, closePortal, err := runtimeapp.Portal(ctx, cfg, api.NewClient())
 	if err != nil {
 		return err
 	}
 	defer closePortal()
-	listener, err := net.Listen("tcp", *listen)
+	listener, err := listenTCP("tcp", *listen)
 	if err != nil {
 		return errors.New("runtime listener is unavailable")
 	}
-	defer listener.Close()
+	defer func() {
+		// Serve owns and closes the listener; this fallback may find it closed.
+		_ = listener.Close()
+	}()
 	_, _ = fmt.Fprintln(output, "runtime ready; portal activation is not configured")
 	return runtimeapp.Serve(ctx, listener, artifact.Handler(portal))
 }
