@@ -315,3 +315,45 @@ func TestProjectRequestReceiptNamesSelectedProduct(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectRequestCountsRawCharactersBeforeNormalization(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		limit int
+	}{{"title", 120}, {"brief", 1200}} {
+		t.Run(tc.field, func(t *testing.T) {
+			b := newBrowserFixture(t)
+			requestFlag(t, b, true)
+			b.finish(b.start(b.invite("client-a", "client-a", "client")))
+			f := requestForm(t, b)
+			f.Set(tc.field, " "+strings.Repeat("a", tc.limit))
+			s, _, _ := b.request("POST", "/portal/requests", f, b.site.URL)
+			if s != 400 {
+				t.Fatalf("raw %s over native limit accepted=%d", tc.field, s)
+			}
+		})
+	}
+}
+
+func TestProjectRequestNativeLineBreakCountingAndRetry(t *testing.T) {
+	b := newBrowserFixture(t)
+	requestFlag(t, b, true)
+	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	f := requestForm(t, b)
+	// Textarea values expose LF; a native form encodes their breaks as CRLF.
+	f.Set("brief", strings.Repeat("a\r\n", 600))
+	s, _, h := b.request("POST", "/portal/requests", f, b.site.URL)
+	if s != 303 {
+		t.Fatalf("valid native multiline bound rejected=%d", s)
+	}
+	location := h.Get("Location")
+	f.Set("brief", strings.Repeat("a\n", 600))
+	s, _, h = b.request("POST", "/portal/requests", f, b.site.URL)
+	if s != 303 || h.Get("Location") != location {
+		t.Fatal("equivalent native line endings change receipt")
+	}
+	var brief string
+	if err := b.pool.QueryRow(b.f.ctx, "SELECT brief FROM portal_requests").Scan(&brief); err != nil || brief != strings.TrimSpace(strings.Repeat("a\n", 600)) {
+		t.Fatal("stored brief did not use the canonical textarea value", err)
+	}
+}

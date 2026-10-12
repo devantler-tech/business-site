@@ -9,7 +9,8 @@ self-declared and unverified, never identity or order authority. Never present s
 tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
-Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
+Use Node 24 for the actual browser-script controls and the exact Go version in
+`go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 `go mod verify`, `go vet ./...`, `go test -race ./... -count=1 -timeout=90s` and
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at

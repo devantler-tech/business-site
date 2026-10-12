@@ -70,8 +70,11 @@ func parseProjectRequest(r *http.Request) (projectRequest, bool) {
 			return projectRequest{}, false
 		}
 	}
-	d := projectRequest{Key: r.PostForm.Get("submission_key"), Product: r.PostForm.Get("product"), Title: strings.TrimSpace(r.PostForm.Get("title")), Brief: strings.TrimSpace(r.PostForm.Get("brief"))}
-	return d, opaqueRequestID.MatchString(d.Key) && (d.Product == "website" || d.Product == "app" || d.Product == "service") && validRequestText(d.Title, 120, false) && validRequestText(d.Brief, 1200, true)
+	// Native textarea values expose LF, but native form submission encodes CRLF.
+	// Canonicalize line breaks before counting and retry comparison, not after.
+	brief := strings.ReplaceAll(strings.ReplaceAll(r.PostForm.Get("brief"), "\r\n", "\n"), "\r", "\n")
+	d := projectRequest{Key: r.PostForm.Get("submission_key"), Product: r.PostForm.Get("product"), Title: strings.TrimSpace(r.PostForm.Get("title")), Brief: strings.TrimSpace(brief)}
+	return d, opaqueRequestID.MatchString(d.Key) && (d.Product == "website" || d.Product == "app" || d.Product == "service") && validRequestText(r.PostForm.Get("title"), 120, false) && validRequestText(brief, 1200, true)
 }
 
 // persistRequest locks current membership through commit; the unique per-client

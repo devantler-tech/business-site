@@ -184,7 +184,7 @@ See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
-Use Go 1.27.2 and a **fresh disposable** PostgreSQL 17 database. Run the fixture
+Use Go 1.27.2, Node 24 for the actual browser-script controls, and a **fresh disposable** PostgreSQL 17 database. Run the fixture
 provisioning script as its test owner. It creates only fictional roles/records:
 
 ```sh

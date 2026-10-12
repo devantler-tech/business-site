@@ -10,8 +10,8 @@ type queryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-// CheckRuntimeRole requires every identity-table DML privilege, without schema
-// creation, table/database ownership or an assumable privileged role. It runs
+// CheckRuntimeRole requires identity-table DML and immutable-request SELECT/INSERT,
+// without request mutation, schema creation, table/database ownership or an assumable privileged role. It runs
 // no migration. Keeping these fixture controls in this package serializes them
 // with other tests touching the same disposable identity tables.
 func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
@@ -30,12 +30,18 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
        OR has_schema_privilege(privileged.oid,'public','CREATE')
        OR has_database_privilege(privileged.oid,current_database(),'CREATE')
        OR EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=privileged.oid AND c.relnamespace='public'::regnamespace)
-       OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)))
+       OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)
+       OR has_table_privilege(privileged.oid,'portal_requests','UPDATE')
+       OR has_table_privilege(privileged.oid,'portal_requests','DELETE')
+       OR has_table_privilege(privileged.oid,'portal_requests','TRUNCATE')))
  AND (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
    FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts']) table_name
    CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege)
  AND has_table_privilege(current_user,'portal_requests','SELECT')
  AND has_table_privilege(current_user,'portal_requests','INSERT')
+ AND NOT has_table_privilege(current_user,'portal_requests','UPDATE')
+ AND NOT has_table_privilege(current_user,'portal_requests','DELETE')
+ AND NOT has_table_privilege(current_user,'portal_requests','TRUNCATE')
  FROM pg_roles r WHERE r.rolname=current_user`).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied
