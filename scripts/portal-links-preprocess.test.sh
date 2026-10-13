@@ -19,6 +19,21 @@ bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scra
 cmp "$root/server/README.md" "$scratch/README.md"
 bash "$root/scripts/portal-links-preprocess.sh" "$root/README.md" >"$scratch/root-README.md"
 cmp "$root/README.md" "$scratch/root-README.md"
+# Observe selector inheritance without requiring an older compiler in source CI.
+# The shim checks the selector, then delegates to the actual admitted compiler.
+mkdir "$scratch/bin"
+compiler="$(command -v go)"
+printf "#!/usr/bin/env bash\n[[ \"\$GOTOOLCHAIN\" == go1.27.2 ]] || exit 41\nexec \"%s\" \"\$@\"\n" "$compiler" >"$scratch/bin/go"
+chmod 755 "$scratch/bin/go"
+PATH="$scratch/bin:$PATH" GOTOOLCHAIN=go1.27.2 bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/selected-README.md"
+cmp "$root/server/README.md" "$scratch/selected-README.md"
+for selector in auto go1.27.2+auto go1.26.3; do
+  if GOTOOLCHAIN="$selector" bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/unsafe-out" 2>"$scratch/unsafe-error"; then
+    echo 'portal-links: an unbound compiler selector was accepted' >&2; exit 1
+  fi
+  [[ ! -s "$scratch/unsafe-out" ]]
+  grep -q 'without auto selection' "$scratch/unsafe-error"
+done
 if bash "$root/scripts/portal-links-preprocess.sh" "$scratch/README.md" >"$scratch/out" 2>"$scratch/error"; then
   echo 'portal-links: outside-repository input was accepted' >&2; exit 1
 fi
