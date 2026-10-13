@@ -1,9 +1,27 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { assertDisclosureArchive, privateDisclosureFixture } from './runtime-disclosure-fixture.mjs';
+
+test('actual numeric archive ownership must match before an image fixture can count', () => {
+  const fixture = privateDisclosureFixture();
+  try {
+    for (const [uid, gid] of [[0, 65532], [65533, 65532], [65532, 65533]]) {
+      const owner = process.platform === 'darwin'
+        ? ['--uid', String(uid), '--gid', String(gid)]
+        : [`--owner=${uid}`, `--group=${gid}`];
+      const archive = execFileSync('tar', [...owner, '-cf', '-', '-C', fixture.directory, 'disclosure'], { timeout: 5000 });
+      assertDisclosureArchive(archive, uid, gid);
+      assert.throws(() => assertDisclosureArchive(archive, uid + 1, gid));
+      assert.throws(() => assertDisclosureArchive(archive, uid, gid + 1));
+    }
+  } finally {
+    fixture.close();
+  }
+});
 
 // Exercise the README's real shell selection/cd/argument handling. A Docker
 // boundary double avoids requiring a daemon for these documentation checks;

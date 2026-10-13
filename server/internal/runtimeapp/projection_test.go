@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+// TestInputLineEnding preserves exactly one terminal ending across private inputs.
+func TestInputLineEnding(t *testing.T) {
+	for _, pair := range [][2]string{{"value", "value"}, {"value\n", "value"}, {"value\r\n", "value"}, {"value\n\r\n", "value\n"}, {"value\r", "value\r"}, {"\n", ""}} {
+		if trimInputLineEnding(pair[0]) != pair[1] {
+			t.Fatal("input line ending changed")
+		}
+	}
+}
+
 // TestProjectedCompanySnapshot exercises the real descriptor boundary, without services.
 func TestProjectedCompanySnapshot(t *testing.T) {
 	input := filepath.Join(t.TempDir(), "disclosure")

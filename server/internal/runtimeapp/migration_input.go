@@ -15,12 +15,7 @@ func migrationConnection(filename string) (string, error) {
 	if err != nil {
 		return "", ErrMigration
 	}
-	value := string(data)
-	if strings.HasSuffix(value, "\r\n") {
-		value = strings.TrimSuffix(value, "\r\n")
-	} else {
-		value = strings.TrimSuffix(value, "\n")
-	}
+	value := trimInputLineEnding(string(data))
 	if value == "" {
 		return "", ErrMigration
 	}

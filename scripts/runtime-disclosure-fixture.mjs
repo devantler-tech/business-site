@@ -1,11 +1,35 @@
 // Fictional private projection for actual package/image controls, never a layer.
 import { execFileSync } from "node:child_process";
+import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 export const disclosureFixture = "Example & Partners Road 1\n1234 Exampletown";
+
+/** Read-only numeric listing verifies the actual copied file, never an input-header assumption. */
+export function assertDisclosureArchive(archive, uid, gid) {
+  const listing = execFileSync("tar", ["--numeric-owner", "-tvf", "-"], {
+    input: archive,
+    encoding: "utf8",
+    timeout: 5000,
+    maxBuffer: 65536,
+    env: { ...process.env, LC_ALL: "C" },
+  })
+    .trim()
+    .split("\n");
+  assert.equal(listing.length, 1, "Expected exactly one copied fixture file.");
+  const fields = listing[0].trim().split(/\s+/);
+  assert.match(fields[0], /^-[rwx-]{9}$/, "Copied fixture must be regular.");
+  assert.equal(fields.at(-1), "disclosure", "Unexpected copied fixture entry.");
+  if (process.platform === "darwin") {
+    assert.equal(fields[2], String(uid), "Copied fixture owner differs.");
+    assert.equal(fields[3], String(gid), "Copied fixture group differs.");
+  } else {
+    assert.equal(fields[1], `${uid}/${gid}`, "Copied fixture ownership differs.");
+  }
+}
 
 /** Create an owner-readable, fictional file outside the package build context. */
 export function privateDisclosureFixture() {
@@ -84,7 +108,15 @@ function containerFixture(image, docker, local, uid, gid, entries, inputFlag) {
         ? ["--uid", String(uid), "--gid", String(gid)]
         : [`--owner=${uid}`, `--group=${gid}`];
     const archive = execFileSync("tar", [...owner, "-cf", "-", "-C", local.directory, ...entries], { timeout: 5000 });
-    execFileSync("docker", ["cp", "--archive", "-", `${carrier}:/projection`], { input: archive, timeout: 30000 });
+    // For streamed tar, --archive remaps entries to the container user instead
+    // of retaining these explicit numeric headers (Moby tarCopyOptions).
+    execFileSync("docker", ["cp", "-", `${carrier}:/projection`], { input: archive, timeout: 30000 });
+    const leaf = entries.includes("..timestamp") ? "..timestamp/disclosure" : "disclosure";
+    const copied = execFileSync("docker", ["cp", `${carrier}:/projection/${leaf}`, "-"], {
+      timeout: 30000,
+      maxBuffer: 65536,
+    });
+    assertDisclosureArchive(copied, uid, gid);
     docker("rm", carrier);
     carrier = undefined;
     return {

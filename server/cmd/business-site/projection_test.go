@@ -15,23 +15,7 @@ import (
 // projectionCommand configures the real production-profile command with fictional bytes.
 func projectionCommand(t *testing.T) ([]string, string) {
 	t.Helper()
-	public := publicArtifactDir(t)
-	for _, name := range []string{"company/index.html", "da/company/index.html"} {
-		filename := filepath.Join(public, name)
-		if err := os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filename, []byte(`<html><body><address data-company-address data-pagefind-ignore><span>__BUSINESS_ADDRESS_LINE_1__</span><span>__BUSINESS_ADDRESS_LINE_2__</span></address></body></html>`), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	artifact, err := loadPublic(public)
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldRevision, oldDigest, oldMode, oldProfile := revision, publicDigest, buildMode, publicProfile
-	t.Cleanup(func() { revision, publicDigest, buildMode, publicProfile = oldRevision, oldDigest, oldMode, oldProfile })
-	revision, publicDigest, buildMode, publicProfile = strings.Repeat("a", 40), artifact.Digest(), "development", "production-template"
+	public := productionArtifactDir(t)
 	mount := t.TempDir()
 	if err := os.Mkdir(filepath.Join(mount, "..timestamp"), 0700); err != nil {
 		t.Fatal(err)

@@ -66,16 +66,19 @@ func readSecret(filename string) (string, error) {
 	if err != nil || len(secret) > 16384 {
 		return "", ErrConfig
 	}
-	value := string(secret)
-	if strings.HasSuffix(value, "\r\n") {
-		value = strings.TrimSuffix(value, "\r\n")
-	} else {
-		value = strings.TrimSuffix(value, "\n")
-	}
+	value := trimInputLineEnding(string(secret))
 	if value == "" {
 		return "", ErrConfig
 	}
 	return value, nil
+}
+
+// trimInputLineEnding removes only one LF or CRLF, preserving all other bytes.
+func trimInputLineEnding(value string) string {
+	if strings.HasSuffix(value, "\r\n") {
+		return strings.TrimSuffix(value, "\r\n")
+	}
+	return strings.TrimSuffix(value, "\n")
 }
 
 // ReadCompanyDisclosure uses the same bounded private projection boundary as
