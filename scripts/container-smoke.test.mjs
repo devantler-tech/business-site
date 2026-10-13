@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { request } from "node:http";
 import path from "node:path";
 import test from "node:test";
-import { containerDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
+import { containerDisclosureFixture, containerGroupDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
 
 const [image, root] = process.argv.slice(2);
 assert.ok(image && root, "Supply the actual image reference and fresh runtime-dist directory.");
@@ -36,6 +36,129 @@ const bounded = [
   "--memory=256m",
   "--cpus=1",
 ];
+
+test("actual non-root image snapshots a root-owned matching-group projection on a read-only filesystem", async () => {
+  const fixture = containerGroupDisclosureFixture(image, docker);
+  let id;
+  try {
+    const result = spawnSync(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "--network=none",
+        ...bounded,
+        ...fixture.mount,
+        image,
+        "--public",
+        "/app/public",
+        ...fixture.arguments,
+        "--check-serving-public",
+      ],
+      { encoding: "utf8", timeout: 30000 },
+    );
+    assert.ifError(result.error);
+    if (receipt.PublicProfile === "production-template") {
+      assert.equal(result.status, 0);
+      const served = JSON.parse(result.stdout);
+      assert.equal(served.PublicDigest, receipt.PublicDigest);
+      assert.match(served.EffectivePublicDigest, /^[0-9a-f]{64}$/);
+      assert.notEqual(served.EffectivePublicDigest, receipt.PublicDigest);
+      assert.equal(result.stderr, "");
+      assert.doesNotMatch(result.stdout, /Example|\/projection/);
+      id = docker(
+        "run",
+        "--detach",
+        ...bounded,
+        ...fixture.mount,
+        "--publish",
+        "127.0.0.1::8080",
+        image,
+        ...runtimeArguments(fixture),
+      );
+      await ready(id);
+      const inspected = JSON.parse(docker("inspect", id))[0];
+      assert.equal(inspected.HostConfig.ReadonlyRootfs, true);
+      const port = inspected.NetworkSettings.Ports["8080/tcp"][0].HostPort;
+      for (const route of ["/company/", "/da/company/"]) {
+        const response = await get(port, route);
+        assert.equal(response.status, 200);
+        assert.match(response.body, /Example &amp; Partners Road 1/);
+        assert.match(response.body, /1234 Exampletown/);
+        assert.doesNotMatch(response.body, /__BUSINESS_ADDRESS_LINE_/);
+      }
+      assert.equal((await get(port, "/portal")).status, 404);
+      assert.doesNotMatch(logs(id), /Example|1234 Exampletown|\/projection/);
+    } else {
+      assert.equal(result.status, 1);
+      assert.equal(result.stdout, "");
+      assert.equal(result.stderr, "company disclosure projection is unavailable\n");
+    }
+    const ordinary = spawnSync(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "--network=none",
+        ...bounded,
+        ...fixture.mount,
+        image,
+        "--public",
+        "/app/public",
+        "--company-disclosure-file",
+        "/projection/disclosure",
+        "--check-serving-public",
+      ],
+      { encoding: "utf8", timeout: 30000 },
+    );
+    assert.ifError(ordinary.error);
+    assert.equal(ordinary.status, 1, "ordinary owner-only input must not accept group-readable files");
+    assert.equal(ordinary.stdout, "");
+    assert.doesNotMatch(ordinary.stderr, /Example|\/projection/);
+  } finally {
+    try {
+      if (id) docker("rm", "--force", id);
+    } finally {
+      fixture.close();
+    }
+  }
+});
+
+for (const [scenario, owner, group, mode] of [
+  ["foreign owner", 65533, 65532, 0o440],
+  ["foreign group", 65532, 65533, 0o440],
+  ["world read", 0, 65532, 0o444],
+  ["group write", 0, 65532, 0o460],
+  ["executable", 0, 65532, 0o540],
+]) {
+  test(`actual restricted image refuses ${scenario} company projection`, () => {
+    const fixture = containerGroupDisclosureFixture(image, docker, owner, group, mode);
+    try {
+      const result = spawnSync(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--network=none",
+          ...bounded,
+          ...fixture.mount,
+          image,
+          "--public",
+          "/app/public",
+          ...fixture.arguments,
+          "--check-serving-public",
+        ],
+        { encoding: "utf8", timeout: 30000 },
+      );
+      assert.ifError(result.error);
+      assert.equal(result.status, 1);
+      assert.equal(result.stdout, "");
+      assert.equal(result.stderr, "company disclosure projection is unavailable\n");
+    } finally {
+      fixture.close();
+    }
+  });
+}
 
 test("restricted image exposes only an explicitly configured migration job", () => {
   const result = spawnSync(

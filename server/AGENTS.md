@@ -118,3 +118,13 @@ database errors in public responses/logs. No server files under `public/` or the
 Astro content collection. Static Pages publication remains source-owned and
 uploads only `dist`; it does not deploy this module. Application code stays here,
 never in the monorepo or a separate portal source repository.
+
+The production public-content profile accepts explicit company-disclosure input
+only. Its separate `--company-disclosure-projection` mode reads a confined,
+bounded, root/current-user-owned file with optional primary-group read access
+into an immutable in-memory snapshot. Reject writable groups, other-user access,
+execution/special bits, mixed input options and default-profile use. Preserve the
+owner-only credential reader and use no writable scratch or copied private file.
+Actual image controls use fictional atomic projections; platform#4854 still owns
+real Kubernetes projection/controller proof. This configuration grants no portal
+activation, migration or authentication authority.

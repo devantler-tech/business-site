@@ -56,6 +56,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	check := options.Bool("check-public", false, "validate public bytes and print their digest without starting services")
 	version := options.Bool("version", false, "print package identity without starting services")
 	disclosure := options.String("company-disclosure-file", "", "private projected two-line company disclosure")
+	projection := options.String("company-disclosure-projection", "", "explicit confined company projection for the non-root application group")
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
@@ -102,6 +103,10 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		_, err := fmt.Fprintln(output, "portal schema migration completed")
 		return err
 	}
+	projected := seen["company-disclosure-projection"] != 0
+	if projected && (seen["company-disclosure-projection"] != 1 || seen["company-disclosure-file"] != 0 || *projection == "" || *check || *version || publicProfile != "production-template") {
+		return runtimeapp.ErrCompanyProjection
+	}
 	if *check {
 		artifact, err := loadPublic(*public)
 		if err != nil {
@@ -121,7 +126,12 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		return errors.New("public artifact does not match this runtime package")
 	}
 	if publicProfile == "production-template" {
-		input, err := runtimeapp.ReadCompanyDisclosure(*disclosure)
+		var input string
+		if projected {
+			input, err = runtimeapp.ReadProjectedCompanyDisclosure(*projection)
+		} else {
+			input, err = runtimeapp.ReadCompanyDisclosure(*disclosure)
+		}
 		if err != nil {
 			return err
 		}

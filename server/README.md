@@ -209,6 +209,24 @@ unsafe or malformed input fails before opening a listener. The default profile
 does not accept or read this input. No actual address belongs in package source,
 build environment, image layers, logs or receipts.
 
+For a root-owned, group-readable atomic volume projection, use the separate
+`--company-disclosure-projection <absolute-path>` instead. This mode requires a
+non-root process and a regular file owned by root or the process user. Any group
+read permission must match the process's primary group; group write, other-user
+access, executable bits and special modes are refused. For the restricted image,
+project mode `0440` with group 65532 and searchable directories; the leaf and
+its symlink targets must stay within the supplied parent directory. Reads are
+bounded to 16 KiB on the same descriptor and create no scratch file. The approved
+two-line content is retained only in the immutable in-memory serving snapshot.
+Mixed or duplicate input options and the ordinary default profile reject this mode.
+
+This is permanent, explicit company-content configuration, not a portal release
+flag or an identity/migration-secret transport. The original owner-only reader
+remains unchanged for `--company-disclosure-file` and other private credentials.
+Synthetic image tests cover projection ownership and permissions; actual
+Kubernetes volume wiring/controller proof remains platform#4854. Restart to rotate
+the snapshot rather than claiming live rereads of a rotated volume.
+
 `--version` reports `PublicProfile` and the signed template's `PublicDigest`.
 `--check-serving-public --public <packaged-public-directory>` with the same
 projection validates the effective immutable serving snapshot and reports its
@@ -218,7 +236,8 @@ certification. Restart deliberately to rotate the projected disclosure.
 
 The same runtime/container smoke scripts support both profiles. Their production
 controls use fictional private input outside the build context; image controls
-project it in a disposable, read-only volume owned by UID 65532. CI preserves the
+exercise both an owner-only volume and a root-owned, matching-group atomic
+projection in disposable, read-only volumes. CI preserves the
 default checks, additionally tests and archives the production variant, and signs
 that exact production-template image with source, digest and profile annotations.
 See [the profile decision](../docs/adr/0008-production-public-content-profile.md).
