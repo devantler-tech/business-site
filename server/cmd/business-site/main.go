@@ -85,6 +85,17 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		if !validPackageIdentity() {
 			return errors.New("build a verified runtime package before starting")
 		}
+		// This is an exclusive one-shot process, never web startup. Discard its
+		// PostgreSQL-prefixed ambient settings before the native parser can read
+		// an unrelated service/credential file. The parent host is unchanged.
+		for _, setting := range os.Environ() {
+			name, _, _ := strings.Cut(setting, "=")
+			if strings.HasPrefix(name, "PG") {
+				if err := os.Unsetenv(name); err != nil {
+					return runtimeapp.ErrMigration
+				}
+			}
+		}
 		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile); err != nil {
 			return err
 		}

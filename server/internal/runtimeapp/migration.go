@@ -3,10 +3,13 @@ package runtimeapp
 import (
 	"context"
 	"errors"
+	"io"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/identity"
@@ -59,6 +62,11 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 // migrationConfig admits a complete single-target URI before using pgx's TLS
 // parser. Core identity/routing cannot come from environment or query overrides.
 func migrationConfig(connection string) (*pgxpool.Config, error) {
+	// The command clears ambient settings. Direct internal callers fail closed
+	// rather than letting the library read an environment-selected service file.
+	if os.Getenv("PGSERVICE") != "" || os.Getenv("PGSERVICEFILE") != "" {
+		return nil, ErrMigration
+	}
 	u, err := url.Parse(connection)
 	if err != nil || u.Scheme != "postgres" && u.Scheme != "postgresql" || u.User == nil || u.User.Username() == "" || u.Hostname() == "" || strings.Contains(u.Host, ",") || u.Fragment != "" || strings.Count(u.Path, "/") != 1 || len(u.Path) < 2 {
 		return nil, ErrMigration
@@ -81,9 +89,66 @@ func migrationConfig(connection string) (*pgxpool.Config, error) {
 			return nil, ErrMigration
 		}
 	}
-	cfg, err := pgxpool.ParseConfig(connection)
+	certificate, err := migrationCertificate(query.Get("sslrootcert"))
+	if err != nil {
+		return nil, ErrMigration
+	}
+	// pgx still owns TLS parsing. Give it our bounded regular-file snapshot,
+	// never the projected path again or implicit home-directory client keys.
+	ca, err := os.CreateTemp("", "business-site-migration-ca-")
+	if err != nil {
+		return nil, ErrMigration
+	}
+	defer func() {
+		// This contains only the operator's trust material, no connection values.
+		// Best-effort cleanup cannot change the parsed TLS or migration verdict.
+		_ = ca.Close()
+		_ = os.Remove(ca.Name())
+	}()
+	if _, err := ca.Write(certificate); err != nil || ca.Close() != nil {
+		return nil, ErrMigration
+	}
+	query.Set("sslrootcert", ca.Name())
+	query.Set("sslcert", "")
+	query.Set("sslkey", "")
+	query.Set("sslpassword", "")
+	query.Set("target_session_attrs", "any")
+	query.Set("sslnegotiation", "postgres")
+	u.RawQuery = query.Encode()
+	cfg, err := pgxpool.ParseConfig(u.String())
 	if err != nil || cfg.ConnConfig.Host != u.Hostname() || cfg.ConnConfig.Port != uint16(port) || cfg.ConnConfig.Database != database || cfg.ConnConfig.User != u.User.Username() || cfg.ConnConfig.Password != password || cfg.ConnConfig.TLSConfig == nil || cfg.ConnConfig.TLSConfig.InsecureSkipVerify || cfg.ConnConfig.TLSConfig.ServerName != u.Hostname() || len(cfg.ConnConfig.TLSConfig.Certificates) != 0 || len(cfg.ConnConfig.Fallbacks) != 0 {
 		return nil, ErrMigration
 	}
 	return cfg, nil
+}
+
+// migrationCertificate reads public trust material, not a credential. Preserve
+// the secret reader's same-descriptor/nonblocking confinement while permitting
+// ordinary readable certificate permissions and a bounded 64 KiB CA bundle.
+func migrationCertificate(filename string) ([]byte, error) {
+	root, err := os.OpenRoot(filepath.Dir(filename))
+	if err != nil {
+		return nil, ErrMigration
+	}
+	defer func() {
+		// Read-only descriptor cleanup cannot change the validated certificate.
+		_ = root.Close()
+	}()
+	file, err := root.OpenFile(filepath.Base(filename), os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, ErrMigration
+	}
+	defer func() {
+		// No writes need flushing; preserve the read/validation verdict.
+		_ = file.Close()
+	}()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, ErrMigration
+	}
+	certificate, err := io.ReadAll(io.LimitReader(file, 65537))
+	if err != nil || len(certificate) == 0 || len(certificate) > 65536 {
+		return nil, ErrMigration
+	}
+	return certificate, nil
 }

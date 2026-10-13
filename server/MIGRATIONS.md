@@ -28,11 +28,19 @@ match. This check is not proof that the underlying database is tenant-isolated.
 Project the migration connection into an absolute-path, regular private file
 readable by the job's UID. The file must have no group/other permission bits and
 contain at most 16 KiB. Confined projected-secret links are supported; escapes
-and non-regular files are refused. The connection requires verified TLS without
-insecure or plaintext fallbacks. Supply a complete `postgres`/`postgresql` URI
+and non-regular files are refused. Use TLS with full certificate verification,
+without insecure or plaintext fallbacks. Supply a complete `postgres`/`postgresql` URI
 with explicit host, port, database, user and password. Only `sslmode=verify-full`
 and an absolute `sslrootcert` path are accepted as query settings; no ambient
 credential, service-file, client-certificate or query routing override is used.
+The explicit job discards PostgreSQL-prefixed environment settings inside its
+own process; it changes no persistent host settings. The CA bundle must be a
+readable regular file containing at most 64 KiB. Its permissions need not be
+private because it is public trust material, not a credential. The job reads a
+confined nonblocking snapshot and passes a private temporary copy to the native
+TLS parser, then removes it. Provide writable ephemeral temporary space even
+when the application root filesystem is read-only; the reviewed restricted
+container tests already supply this temporary mount.
 Administrative/default databases are refused. Keep connection values and passwords out of
 arguments. Keep private paths and values out of application images, public
 assets, receipts and logs. Do not
@@ -80,9 +88,9 @@ proposals. No schema/ledger ownership, DDL, broad role membership or
 UPDATE/DELETE/TRUNCATE of request/proposal history belongs to that role. Actual
 web startup independently checks this boundary and refuses incomplete grants.
 
-Before staging or publication, monorepo#3939 still requires observed restricted-role
+Before staging or publication, demonstrate the restricted-role
 startup, persistence/restart, backup/restore, resource bounds and rollback through
-the enacting deployment path. A schema commit or source test does not prove
+the enacting deployment path tracked by monorepo#3939. A schema commit or source test does not prove
 those outcomes. Never downgrade or erase the ledger for a rollback: choose a
 compatible reviewed artifact and recover from a verified backup when required.
 Broker registration, real-provider isolation and privacy/legal checks remain

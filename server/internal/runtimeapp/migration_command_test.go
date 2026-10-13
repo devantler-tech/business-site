@@ -378,6 +378,9 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 			if ambient {
 				t.Setenv("PGSERVICE", "unintended")
 				t.Setenv("PGSERVICEFILE", pipe)
+				if err := os.Chmod(database.Query().Get("sslrootcert"), 0644); err != nil {
+					t.Fatal("public certificate permissions fixture failed")
+				}
 			} else {
 				query := database.Query()
 				query.Set("sslrootcert", pipe)
@@ -395,6 +398,10 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 				if err != nil || output != "portal schema migration completed\n" {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
+				var versions int
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 6 {
+					t.Fatal("explicit migration did not apply its six schema versions")
+				}
 			} else {
 				if err == nil || output != "portal schema migration failed\n" {
 					t.Fatal("non-regular certificate input was not refused privately")
@@ -405,5 +412,25 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Trust material has its own size boundary; ordinary public certificate
+// permissions never relax the separate private connection-file requirement.
+func TestMigrationCertificateSizeBoundary(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "trust-material")
+	for _, size := range []int{65536, 65537, 0} {
+		content := strings.Repeat("a", size)
+		if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+			t.Fatal("certificate size fixture failed")
+		}
+		certificate, err := migrationCertificate(file)
+		if size == 65536 {
+			if err != nil || string(certificate) != content {
+				t.Fatal("complete bounded public certificate bytes were changed")
+			}
+		} else if err != ErrMigration || certificate != nil {
+			t.Fatal("empty or oversized certificate bytes were accepted")
+		}
 	}
 }
