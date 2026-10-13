@@ -12,6 +12,7 @@ import (
 
 const on = `{"defaultVariant":"on","variants":[{"name":"on","value":true}]}`
 
+// activeClient installs the maintained provider with a fictional, cleanup-owned lease.
 func activeClient(ctx context.Context, t *testing.T, until time.Time) (*openfeature.Client, *openfeature.EvaluationAPI) {
 	t.Helper()
 	t.Setenv("PORTAL_IDENTITY_FLAG", on)
@@ -32,6 +33,7 @@ func activeClient(ctx context.Context, t *testing.T, until time.Time) (*openfeat
 	return api.NewClient(), api
 }
 
+// enabled requires a successful false-default evaluation, not merely a true value.
 func enabled(t *testing.T, client *openfeature.Client) bool {
 	t.Helper()
 	value, err := client.BooleanValue(context.Background(), "portal-identity", false, openfeature.NewEvaluationContext("", nil))
@@ -102,6 +104,7 @@ func TestLeaseExpiresAndCannotBeExtendedInPlace(t *testing.T) {
 	}
 }
 
+// TestInvalidLeaseCannotInitialize rejects missing, malformed, expired and excessive authority.
 func TestInvalidLeaseCannotInitialize(t *testing.T) {
 	t.Setenv("PORTAL_IDENTITY_FLAG", on)
 	for _, value := range []string{"", "invalid", time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano), time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)} {

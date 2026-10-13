@@ -32,6 +32,7 @@ func publicArtifactDir(t *testing.T) string {
 	return dir
 }
 
+// configuredPublicArtifact binds startup to real validated public bytes and restores build identity.
 func configuredPublicArtifact(t *testing.T) string {
 	t.Helper()
 	dir := publicArtifactDir(t)

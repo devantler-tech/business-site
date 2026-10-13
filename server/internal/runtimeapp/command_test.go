@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,10 +47,20 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		t.Fatalf("actual command compilation failed: %s", output)
 	}
 	var issuer string
+	var delayDiscovery atomic.Bool
+	delayDiscovery.Store(true)
 	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
 			http.NotFound(w, r)
 			return
+		}
+		// Slow but valid broker startup must leave time for the enabled assertion.
+		if delayDiscovery.CompareAndSwap(true, false) {
+			select {
+			case <-time.After(5 * time.Second):
+			case <-r.Context().Done():
+				return
+			}
 		}
 		if err := json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}); err != nil {
 			t.Error("synthetic discovery response failed")
@@ -79,14 +90,14 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		name, flag string
 		want       int
 	}{
-		{"explicit identity", on, 200},
+		{"explicit identity after slow startup", on, 200},
 		{"missing flag", "", 404},
 		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404},
 		{"malformed", "{invalid", 404},
 		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			until := time.Now().Add(4 * time.Second)
+			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
 			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
 				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on)
@@ -107,6 +118,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	}
 }
 
+// commandStatus observes the real route status and private-response cache policy.
 func commandStatus(t *testing.T, address, route string, want int) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+address+route, nil)
@@ -128,6 +140,7 @@ func commandStatus(t *testing.T, address, route string, want int) {
 	}
 }
 
+// startActualCommand owns the executable through readiness, lease expiry and clean shutdown.
 func startActualCommand(t *testing.T, binary, public string, environment []string) (string, func()) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -138,7 +151,7 @@ func startActualCommand(t *testing.T, binary, public string, environment []strin
 	if err := listener.Close(); err != nil {
 		t.Fatal("fixture port release failed")
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	command := exec.CommandContext(ctx, binary, "--public", public, "--listen", address)
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "PORTAL_") && !strings.HasPrefix(value, "portal-") && !strings.HasPrefix(value, "SSL_CERT_FILE=") {

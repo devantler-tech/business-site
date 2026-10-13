@@ -44,6 +44,7 @@ func New(ctx context.Context) (openfeature.FeatureProvider, error) {
 	return &provider{mapped, lifetime, cancel, deadline, lease}, nil
 }
 
+// Init refuses a lease that expired or was cancelled before SDK registration.
 func (p *provider) Init(openfeature.EvaluationContext) error {
 	if p.lifetime.Err() != nil || !time.Now().Before(p.until) {
 		return ErrInvalid
@@ -51,8 +52,10 @@ func (p *provider) Init(openfeature.EvaluationContext) error {
 	return nil
 }
 
+// Shutdown revokes the process lease, including clients retained outside the SDK.
 func (p *provider) Shutdown() { p.cancel() }
 
+// valid checks request lifetime and the original bounded, unmodified operator lease.
 func (p *provider) valid(ctx context.Context) bool {
 	return ctx != nil && ctx.Err() == nil && p.lifetime.Err() == nil && time.Now().Before(p.until) &&
 		os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == p.lease && len(os.Getenv("PORTAL_IDENTITY_FLAG")) <= 16384
