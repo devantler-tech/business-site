@@ -1,7 +1,7 @@
 // Fictional private projection for actual package/image controls, never a layer.
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +25,48 @@ export function privateDisclosureFixture() {
  */
 export function containerDisclosureFixture(image, docker) {
   const local = privateDisclosureFixture();
+  return containerFixture(image, docker, local, 65532, 65532, ["disclosure"], "--company-disclosure-file");
+}
+
+/** Preserve a synthetic Kubernetes-style atomic projection's root/group ownership.
+ * This is an actual Docker filesystem control, not a live kubelet/controller proof.
+ */
+export function containerGroupDisclosureFixture(image, docker, owner = 0, group = 65532, mode = 0o440) {
+  const directory = mkdtempSync(path.join(tmpdir(), "runtime-group-disclosure-"));
+  const timestamp = path.join(directory, "..timestamp");
+  let timestampCreated = false;
+  const close = () => {
+    try {
+      if (timestampCreated) chmodSync(timestamp, 0o700);
+    } finally {
+      rmSync(directory, { recursive: true });
+    }
+  };
+  try {
+    mkdirSync(timestamp, { mode: 0o700 });
+    timestampCreated = true;
+    writeFileSync(path.join(timestamp, "disclosure"), disclosureFixture, { mode });
+    chmodSync(path.join(timestamp, "disclosure"), mode);
+    symlinkSync("..timestamp", path.join(directory, "..data"));
+    symlinkSync("..data/disclosure", path.join(directory, "disclosure"));
+    chmodSync(timestamp, 0o550);
+  } catch (error) {
+    close();
+    throw error;
+  }
+  return containerFixture(
+    image,
+    docker,
+    { directory, close },
+    owner,
+    group,
+    ["..timestamp", "..data", "disclosure"],
+    "--company-disclosure-projection",
+  );
+}
+
+/** Archive ownership is applied by Docker, never by a privileged host operation. */
+function containerFixture(image, docker, local, uid, gid, entries, inputFlag) {
   const volume = `business-disclosure-${randomUUID()}`;
   let carrier;
   try {
@@ -38,14 +80,16 @@ export function containerDisclosureFixture(image, docker) {
       "--version",
     );
     const owner =
-      process.platform === "darwin" ? ["--uid", "65532", "--gid", "65532"] : ["--owner=65532", "--group=65532"];
-    const archive = execFileSync("tar", [...owner, "-cf", "-", "-C", local.directory, "disclosure"], { timeout: 5000 });
+      process.platform === "darwin"
+        ? ["--uid", String(uid), "--gid", String(gid)]
+        : [`--owner=${uid}`, `--group=${gid}`];
+    const archive = execFileSync("tar", [...owner, "-cf", "-", "-C", local.directory, ...entries], { timeout: 5000 });
     execFileSync("docker", ["cp", "--archive", "-", `${carrier}:/projection`], { input: archive, timeout: 30000 });
     docker("rm", carrier);
     carrier = undefined;
     return {
       mount: ["--mount", `type=volume,source=${volume},target=/projection,readonly`],
-      arguments: ["--company-disclosure-file", "/projection/disclosure"],
+      arguments: [inputFlag, "/projection/disclosure"],
       close: () => {
         try {
           docker("volume", "rm", volume);
