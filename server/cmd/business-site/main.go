@@ -106,8 +106,10 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 // main maps process termination to bounded HTTP shutdown and generic diagnostics.
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
+	err := run(ctx, os.Args[1:], os.Stdout)
+	// Release signal registration on both outcomes before os.Exit, which skips defers.
+	cancel()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

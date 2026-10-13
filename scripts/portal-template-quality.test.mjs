@@ -20,6 +20,7 @@ function mandatoryQualityChecks(candidate) {
   for (const command of [
     'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
     'npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
     const steps = job.steps.filter(step => step.run === command);
@@ -31,7 +32,7 @@ function mandatoryQualityChecks(candidate) {
 }
 
 test('the actual source CI unconditionally executes every quality observer', () => mandatoryQualityChecks(workflow));
-for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh']) {
+for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh', 'portal-go-analyzer-quality.test.mjs']) {
   for (const mutation of ['missing', 'conditional', 'ignored failure']) {
     test(`${observer} cannot be ${mutation}`, () => {
       const candidate = structuredClone(workflow);
@@ -47,6 +48,7 @@ for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-qua
 
 test('package grouping retains selected-file analysis and every HTML rule', () => {
   assert.deepEqual(mega, {
+    GO_GOLANGCI_LINT_CLI_EXECUTABLE: ['go', 'run', 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0'],
     GO_REVIVE_ARGUMENTS: ['./...'],
     GO_REVIVE_CLI_LINT_MODE: 'list_of_files',
     HTML_HTMLHINT_CONFIG_FILE: '.htmlhintrc',

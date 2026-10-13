@@ -28,6 +28,11 @@ default rules; only the literal Go field `.Request.Product` is allowed through
 the attribute-case rule. Actual rendered offering selections are tested in EN/DA.
 Revive retains its selected-file batch and default rules with package context
 prepended; test all selected files and a genuine missing-package-comment control.
+MegaLinter's supported executable override runs pinned golangci-lint 2.14.0 using
+the declared compiler, preserving its native rules, project scope and fix mode.
+The analyzer regression exercises all actual module packages and a genuine format
+diagnostic against the pinned container's rule snapshot; native container proof is
+still separate. Never replace it with a disabled scanner or ignored failures.
 The CSpell glossary records audited current Danish UI copy and technical names;
 it is not a complete Danish dictionary. Keep default checking enabled and reject
 English/Danish typos. Three exact encoded paths are scoped only to their actual
