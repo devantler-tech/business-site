@@ -20,7 +20,7 @@ import (
 // untagged tests exercise the strict HTTPS and origin checks directly.
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
-	proposalFlags(t, b, true, true, true, true)
+	sharingFlags(t, b, true, true, true, true, true)
 	for _, subject := range []string{"client-a", "client-b"} {
 		triageSignIn(t, b, subject, subject, "client")
 		form := requestForm(t, b)
@@ -40,6 +40,19 @@ func TestBrowserVisualFixture(t *testing.T) {
 	}
 	origin := "http://localhost:" + fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Fixed fictional broker actors only, confined to this opt-in test gateway.
+		// Switching the simulated actor is not real authentication or federation.
+		if r.Method == http.MethodGet && (r.URL.Path == "/fixture/client" || r.URL.Path == "/fixture/operator") {
+			subject := "operator"
+			if r.URL.Path == "/fixture/client" {
+				subject = "client-a"
+			}
+			b.mu.Lock()
+			b.subject = subject
+			b.mu.Unlock()
+			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
+			return
+		}
 		base, client, path := b.site.URL, b.site.Client(), r.URL.RequestURI()
 		if strings.HasPrefix(r.URL.Path, "/fixture/broker/") {
 			base, client, path = b.broker.URL, b.broker.Client(), strings.TrimPrefix(r.URL.RequestURI(), "/fixture/broker")

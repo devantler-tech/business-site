@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 20, "contact.html": 6, "requests.html": 24, "triage.html": 20} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 6, "requests.html": 30, "triage.html": 24} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -118,8 +118,8 @@ func TestPortalLinkRequestContexts(t *testing.T) {
 	}
 	for langIndex, lang := range []string{"en", "da"} {
 		for productIndex := range 3 {
-			for viewIndex, path := range []string{"/portal/requests/new", "/portal/requests", "/portal/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ"} {
-				page := pages[langIndex*12+productIndex*3+viewIndex]
+			for viewIndex, path := range []string{"/portal/requests/new", "/portal/requests", "/portal/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ", "/portal/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ"} {
+				page := pages[langIndex*15+productIndex*4+viewIndex]
 				if page.uri != path+"?lang="+lang {
 					t.Errorf("render context=%s want=%s", page.uri, path+"?lang="+lang)
 				}
@@ -227,7 +227,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict"} {
+			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
 				switch kind {
 				case "sign-in", "unavailable":
@@ -260,12 +260,12 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 		case "requests.html":
 			for _, product := range []string{"website", "app", "service"} {
 				request.Product = product
-				for _, view := range []string{"new", "invalid", "receipt"} {
+				for _, view := range []string{"new", "invalid", "receipt", "shared"} {
 					uri := "/portal/requests"
 					switch view {
 					case "new":
 						uri += "/new"
-					case "receipt":
+					case "receipt", "shared":
 						uri += "/" + request.ID
 					}
 					if err := add(uri, func(w *httptest.ResponseRecorder, r *http.Request) error {
@@ -274,7 +274,12 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 							problem, selected = "invalid", "new"
 							r.Method = http.MethodPost
 						}
-						return browserPage.ExecuteTemplate(w, name, b.requestPage(r, selected, request, nil, problem))
+						page := b.requestPage(r, selected, request, nil, problem)
+						if view == "shared" {
+							page.View = "receipt"
+							page.SharedProposal = &projectProposal{Version: 1, Scope: "Fictional shared scope", Deliverables: "Fictional deliverables", OneTimeMinor: 299500, MonthlyMinor: 9900}
+						}
+						return browserPage.ExecuteTemplate(w, name, page)
 					}); err != nil {
 						return nil, err
 					}
@@ -313,7 +318,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					return nil, err
 				}
 			}
-			for _, view := range []string{"empty", "history", "full", "hostile"} {
+			for _, view := range []string{"empty", "history", "full", "hostile", "sharing", "withdrawal"} {
 				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					page := b.triagePage(r, []projectRequest{request}, request.ID, "")
 					var proposals []projectProposal
@@ -327,6 +332,14 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 						proposals[0].Scope = "<script>inert</script>"
 					}
 					b.proposalPresentation(r, &page, proposals)
+					if view == "sharing" || view == "withdrawal" {
+						page.SharingEnabled = true
+						page.SharingKey = "fictional-sharing-key"
+						page.Visibility.Shared = make(map[int]bool)
+						if view == "withdrawal" {
+							page.Visibility = proposalVisibility{Event: 1, Active: 1, Shared: map[int]bool{1: true}}
+						}
+					}
 					return browserPage.ExecuteTemplate(w, name, page)
 				}); err != nil {
 					return nil, err

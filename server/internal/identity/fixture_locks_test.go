@@ -34,6 +34,8 @@ func lockFixtureRead(ctx context.Context, t *testing.T, pool *pgxpool.Pool, tabl
 		query = `LOCK TABLE portal_requests IN ACCESS EXCLUSIVE MODE`
 	case "portal_proposals":
 		query = `LOCK TABLE portal_proposals IN ACCESS EXCLUSIVE MODE`
+	case "portal_proposal_visibility":
+		query = `LOCK TABLE portal_proposal_visibility IN ACCESS EXCLUSIVE MODE`
 	default:
 		t.Fatal("unsupported fixture read lock")
 	}

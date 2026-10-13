@@ -165,7 +165,17 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 		kind = "receipt"
 		receipt = rows[0]
 	}
-	b.renderRequests(w, r, 200, kind, receipt, rows, "")
+	page := b.requestPage(r, kind, receipt, rows, "")
+	if id != "" && b.foundation.sharingReady(r.Context()) {
+		page.SharedProposal, err = b.foundation.readSharedProposal(r.Context(), b.principal(r.Context()), id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
 }
 
 func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +215,7 @@ type requestPageData struct {
 	View, FormError string
 	Request         projectRequest
 	Requests        []projectRequest
+	SharedProposal  *projectProposal
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {

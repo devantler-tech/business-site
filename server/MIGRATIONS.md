@@ -97,8 +97,8 @@ membership, dispatch offers or enable any release flag. The reviewed store
 provisioning must give the separate web role schema usage and only its required
 table DML: SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
 memberships, sessions and contacts; SELECT/INSERT only on immutable requests and
-proposals. No schema/ledger ownership, DDL, broad role membership or
-UPDATE/DELETE/TRUNCATE of request/proposal history belongs to that role. Actual
+proposals and proposal-visibility events. No schema/ledger ownership, DDL, broad role membership or
+UPDATE/DELETE/TRUNCATE of request/proposal/visibility history belongs to that role. Actual
 web startup independently checks this boundary and refuses incomplete grants.
 
 Before staging or publication, demonstrate the restricted-role

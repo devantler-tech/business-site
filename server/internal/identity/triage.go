@@ -143,6 +143,15 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		b.proposalPresentation(r, &page, proposals)
+		if b.foundation.sharingReady(r.Context()) {
+			page.Visibility, err = b.foundation.readVisibility(r.Context(), p, id)
+			if err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+			page.SharingEnabled = true
+			page.SharingKey = secret()
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -201,4 +210,7 @@ type triagePageData struct {
 	Proposals         []projectProposal
 	ExpectedVersion   int
 	ProposalKey       string
+	SharingEnabled    bool
+	SharingKey        string
+	Visibility        proposalVisibility
 }

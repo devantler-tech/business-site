@@ -393,7 +393,7 @@ func TestProposalMigrationPreservesPriorLedgerAndIntake(t *testing.T) {
 	if err := migrator.QueryRow(b.f.ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=5`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DELETE FROM portal_schema_version WHERE version=6`); err != nil {
+	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposal_visibility; DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DELETE FROM portal_schema_version WHERE version>=6`); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

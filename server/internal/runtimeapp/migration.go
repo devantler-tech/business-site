@@ -63,7 +63,7 @@ func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool
  AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND starts_with(c.relname,'portal_') AND c.relowner<>r.oid)
  AND (NOT $1::boolean OR (
    SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
-   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals']) managed(name)
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility']) managed(name)
    LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
  FROM pg_roles r WHERE r.rolname=current_user`, complete).Scan(&allowed)
 	return err == nil && allowed
