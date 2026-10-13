@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,14 +57,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	}))
 	t.Cleanup(broker.Close)
 	issuer = broker.URL
-	database, err := url.Parse(os.Getenv("PORTAL_TEST_DATABASE_URL"))
-	if err != nil || database == nil || database.Host != "127.0.0.1:55444" && database.Host != "127.0.0.1:5432" && database.Host != "localhost:5432" || database.Path != "/portal_identity_test" || database.User == nil || database.User.Username() != "portal_runtime" {
-		t.Fatal("fresh loopback runtime fixture URL is required")
-	}
-	password, _ := database.User.Password()
-	if password != "fixture-only" {
-		t.Fatal("synthetic fixture credentials are required")
-	}
+	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
 	database.Host = fixtureTLSDatabase(t, database.Host, broker.TLS.Certificates[0])
 	ca, secret := filepath.Join(dir, "ca.pem"), filepath.Join(dir, "secret")

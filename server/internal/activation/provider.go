@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	fromenv "github.com/open-feature/go-sdk-contrib/providers/from-env/pkg"
+	environment "github.com/open-feature/go-sdk-contrib/providers/from-env/pkg"
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
@@ -35,7 +35,7 @@ func New(ctx context.Context) (openfeature.FeatureProvider, error) {
 	// Retain a monotonic deadline even though the operator supplies wall time.
 	deadline := now.Add(remaining)
 	lifetime, cancel := context.WithDeadline(ctx, deadline)
-	mapped := fromenv.NewProvider(fromenv.WithFlagToEnvMapper(func(key string) string {
+	mapped := environment.NewProvider(environment.WithFlagToEnvMapper(func(key string) string {
 		if key == "portal-identity" {
 			return "PORTAL_IDENTITY_FLAG"
 		}

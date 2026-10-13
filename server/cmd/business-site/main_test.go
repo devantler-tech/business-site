@@ -32,12 +32,8 @@ func publicArtifactDir(t *testing.T) string {
 	return dir
 }
 
-// Exercise the real startup and cancellation path, including owned cleanup,
-// without a production broker, database, fixed port or sleep-based readiness.
-func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
-		t.Setenv(name, "")
-	}
+func configuredPublicArtifact(t *testing.T) string {
+	t.Helper()
 	dir := publicArtifactDir(t)
 	artifact, err := loadPublic(dir)
 	if err != nil {
@@ -46,6 +42,16 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	oldRevision, oldDigest, oldMode := revision, publicDigest, buildMode
 	t.Cleanup(func() { revision, publicDigest, buildMode = oldRevision, oldDigest, oldMode })
 	revision, publicDigest, buildMode = strings.Repeat("a", 40), artifact.Digest(), "development"
+	return dir
+}
+
+// Exercise the real startup and cancellation path, including owned cleanup,
+// without a production broker, database, fixed port or sleep-based readiness.
+func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
+		t.Setenv(name, "")
+	}
+	dir := configuredPublicArtifact(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	var listen string
 	listenTCP := func(network, address string) (net.Listener, error) {

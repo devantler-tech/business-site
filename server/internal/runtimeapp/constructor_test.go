@@ -28,19 +28,26 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/isolated"
 )
 
-// The real constructor must assemble its private file, verified TLS database
-// connection, read-only role gate, broker discovery and closed browser handler.
-// This synthetic TLS gateway bridges only to the disposable PostgreSQL fixture;
-// it never loosens TLS in the production constructor or contacts a real broker.
-func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
+// Only the fixed synthetic, loopback runtime fixture may feed either test.
+func runtimeFixtureDatabase(t *testing.T) *url.URL {
+	t.Helper()
 	database, err := url.Parse(os.Getenv("PORTAL_TEST_DATABASE_URL"))
-	if err != nil || database.Host != "127.0.0.1:55444" && database.Host != "127.0.0.1:5432" && database.Host != "localhost:5432" || database.Path != "/portal_identity_test" || database.User == nil || database.User.Username() != "portal_runtime" {
+	if err != nil || database == nil || database.Host != "127.0.0.1:55444" && database.Host != "127.0.0.1:5432" && database.Host != "localhost:5432" || database.Path != "/portal_identity_test" || database.User == nil || database.User.Username() != "portal_runtime" {
 		t.Fatal("fresh loopback runtime fixture URL is required")
 	}
 	password, _ := database.User.Password()
 	if password != "fixture-only" {
 		t.Fatal("synthetic fixture credentials are required")
 	}
+	return database
+}
+
+// The real constructor must assemble its private file, verified TLS database
+// connection, read-only role gate, broker discovery and closed browser handler.
+// This synthetic TLS gateway bridges only to the disposable PostgreSQL fixture;
+// it never loosens TLS in the production constructor or contacts a real broker.
+func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
+	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
 	var issuer string
 	var discoveries atomic.Int32
