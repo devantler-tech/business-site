@@ -37,6 +37,12 @@ The CSpell glossary records audited current Danish UI copy and technical names;
 it is not a complete Danish dictionary. Keep default checking enabled and reject
 English/Danish typos. Three exact encoded paths are scoped only to their actual
 refusal fixture, never admitted as ordinary words or whole-file exclusions.
+The credential scanner retains its complete recommended preset. Only five fully
+anchored fictional database strings are recognized; altered host, password, role
+or database still fails. Preserve the independent private-key control and never
+print source content or detected credential values in test diagnostics. The
+pinned upstream detector itself does not report every placeholder or repeated
+password; the regression is not a claim to overcome that upstream limitation.
 
 From the repository root, the optional full quality check is
 `bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint

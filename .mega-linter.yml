@@ -9,3 +9,4 @@ HTML_HTMLHINT_CONFIG_FILE: .htmlhintrc
 HTML_HTMLHINT_RULES_PATH: /github/workspace
 SPELL_CSPELL_CONFIG_FILE: .cspell.json
 SPELL_CSPELL_RULES_PATH: /github/workspace
+REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
