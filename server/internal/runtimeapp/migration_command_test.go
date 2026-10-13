@@ -526,3 +526,65 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
+
+// A current ledger is not permission to report success with a non-owning role.
+// Each control changes only its uniquely named, fully migrated disposable store.
+func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
+	for _, relation := range []string{"wrong credential", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals"} {
+		t.Run(relation, func(t *testing.T) {
+			file, pool, database := migrationCommandFixture(t)
+			binary := buildMigrationCommand(t)
+			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err != nil || output != "portal schema migration completed\n" {
+				t.Fatal("owned complete-schema fixture migration failed")
+			}
+			if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','retained','client-retained','client',true)"); err != nil {
+				t.Fatal("owned schema-preservation fixture failed")
+			}
+			adminURL := runtimeFixtureDatabase(t)
+			adminURL.Path = database.Path
+			adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
+			admin, err := pgx.Connect(t.Context(), adminURL.String())
+			if err != nil {
+				t.Fatal("owned authority-fixture administrator unavailable")
+			}
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := admin.Close(ctx); err != nil {
+					t.Error("owned authority administrator cleanup failed")
+				}
+			})
+			connection := database.String()
+			if relation == "wrong credential" {
+				role := fmt.Sprintf("portal_migration_reader_%d_%d", os.Getpid(), time.Now().UnixNano())
+				quoted := pgx.Identifier{role}.Sanitize()
+				if _, err := admin.Exec(t.Context(), "CREATE ROLE "+quoted+" LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT; GRANT USAGE,CREATE ON SCHEMA public TO "+quoted+"; GRANT SELECT ON ALL TABLES IN SCHEMA public TO "+quoted); err != nil {
+					t.Fatal("owned wrong-credential role fixture failed")
+				}
+				t.Cleanup(func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					if _, err := admin.Exec(ctx, "DROP OWNED BY "+quoted+"; DROP ROLE "+quoted); err != nil {
+						t.Error("owned wrong-credential role cleanup failed")
+					}
+				})
+				connection = migrationFixtureRole(database, role)
+			} else {
+				quoted := pgx.Identifier{"public", relation}.Sanitize()
+				if _, err := admin.Exec(t.Context(), "ALTER TABLE "+quoted+" OWNER TO portal_fixture_owner; GRANT SELECT ON ALL TABLES IN SCHEMA public TO portal_migrator"); err != nil {
+					t.Fatal("owned partial-ownership fixture failed")
+				}
+			}
+			if err := os.WriteFile(file, []byte(connection), 0600); err != nil {
+				t.Fatal("owned migration-authority projection failed")
+			}
+			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err == nil || output != "portal schema migration failed\n" {
+				t.Error("actual job reported success without owning the managed schema")
+			}
+			var preserved bool
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=6 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+				t.Fatal("ownership refusal changed the ledger or retained record")
+			}
+		})
+	}
+}
