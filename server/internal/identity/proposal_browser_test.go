@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
@@ -100,7 +99,7 @@ func TestProposalRejectsInvalidAndForgedForms(t *testing.T) {
 		{"empty scope", "scope", " "}, {"scope bound", "scope", strings.Repeat("x", 1201)},
 		{"deliverables bound", "deliverables", strings.Repeat("x", 1201)}, {"terms bound", "monthly_terms", strings.Repeat("x", 601)},
 		{"currency", "currency", "EUR"}, {"fraction", "one_time_dkk", "1.99"}, {"negative", "monthly_dkk", "-1"},
-		{"overflow", "one_time_dkk", "999999999999999999999"}, {"version", "expected_version", "-1"},
+		{"overflow", "one_time_dkk", "999999999999999999999"}, {"above price bound", "one_time_dkk", "10000001"}, {"version", "expected_version", "-1"},
 		{"owner", "client_id", "different-client"}, {"role", "role", "operator"}, {"accepted", "accepted", "true"},
 		{"duplicate", "scope", "duplicate"}, {"control", "scope", "\x00unsafe"},
 	} {
@@ -125,10 +124,8 @@ func TestProposalRejectsInvalidAndForgedForms(t *testing.T) {
 func TestProposalGatesAndCurrentOperatorAuthority(t *testing.T) {
 	b := proposalFixture(t)
 	f := proposalForm(t, b)
+	saveFixtureProposal(t, b, f)
 	path := "/portal/operator/requests/" + proposalRequestID + "/proposals"
-	if status, _, _ := b.request("POST", path, f, b.site.URL); status != 303 {
-		t.Fatal("private history fixture not persisted")
-	}
 	for gate := range 4 {
 		for _, closed := range []any{nil, false, "true"} {
 			values := []any{true, true, true, true}
@@ -189,15 +186,19 @@ func TestProposalConcurrentVersionsAndRetries(t *testing.T) {
 func TestProposalCrossOperatorRetryCollisionIsConflict(t *testing.T) {
 	b := proposalFixture(t)
 	f := proposalForm(t, b)
-	path := "/portal/operator/requests/" + proposalRequestID + "/proposals"
-	if status, _, _ := b.request("POST", path, f, b.site.URL); status != 303 {
-		t.Fatal("first operator did not save")
-	}
+	saveFixtureProposal(t, b, f)
 	triageSignIn(t, b, "second-operator", "other-operator-workspace", "operator")
 	collision := proposalForm(t, b)
 	collision.Set("submission_key", f.Get("submission_key"))
-	if status, _, _ := b.request("POST", path, collision, b.site.URL); status != 409 {
+	if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", collision, b.site.URL); status != 409 {
 		t.Fatalf("request-scoped key collision became %d, want conflict", status)
+	}
+}
+
+func saveFixtureProposal(t *testing.T, b *browserFixture, form url.Values) {
+	t.Helper()
+	if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 303 {
+		t.Fatal("fixture proposal save failed")
 	}
 }
 
@@ -209,15 +210,7 @@ func TestProposalMutationRejectsInFlightAuthorityClosure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
-			tx, err := migrator.Begin(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := tx.Rollback(context.Background()); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-					t.Error("fixture advisory lock cleanup failed")
-				}
-			}()
+			tx := beginFixtureTransaction(ctx, t, migrator)
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, proposalRequestID); err != nil {
 				t.Fatal(err)
 			}
@@ -247,9 +240,7 @@ func TestProposalMutationRejectsInFlightAuthorityClosure(t *testing.T) {
 			case "flag":
 				proposalFlags(t, b, true, true, true, false)
 			case "revocation":
-				if err := b.svc.Revoke(ctx, b.f.issuer, "blocking-operator"); err != nil {
-					t.Fatal(err)
-				}
+				revokeFixtureAccess(ctx, t, b, "blocking-operator")
 			case "downgrade":
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE subject='blocking-operator'`); err != nil {
 					t.Fatal(err)
@@ -264,13 +255,7 @@ func TestProposalMutationRejectsInFlightAuthorityClosure(t *testing.T) {
 					}
 				}()
 			case "expiry":
-				timer := time.NewTimer(time.Until(p.expires) + time.Millisecond)
-				defer timer.Stop()
-				select {
-				case <-timer.C:
-				case <-ctx.Done():
-					t.Fatal("bounded fixture expiry failed")
-				}
+				waitForFixtureExpiry(ctx, t, p.expires)
 			}
 			if err := tx.Commit(ctx); err != nil {
 				t.Fatal(err)
@@ -315,22 +300,7 @@ func TestProposalHistoryRejectsInFlightClosure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
-			var relation uint32
-			if err := migrator.QueryRow(ctx, `SELECT 'portal_proposals'::regclass::oid`).Scan(&relation); err != nil {
-				t.Fatal(err)
-			}
-			tx, err := migrator.Begin(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := tx.Rollback(context.Background()); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-					t.Error("fixture history lock cleanup failed")
-				}
-			}()
-			if _, err := tx.Exec(ctx, `LOCK TABLE portal_proposals IN ACCESS EXCLUSIVE MODE`); err != nil {
-				t.Fatal(err)
-			}
+			tx, relation := lockFixtureRead(ctx, t, migrator, "portal_proposals")
 			if change == "expiry" {
 				p.expires = time.Now().Add(time.Second)
 			}
@@ -341,17 +311,9 @@ func TestProposalHistoryRejectsInFlightClosure(t *testing.T) {
 			case "flag":
 				proposalFlags(t, b, true, true, true, false)
 			case "revocation":
-				if err := b.svc.Revoke(ctx, b.f.issuer, "history-operator"); err != nil {
-					t.Fatal(err)
-				}
+				revokeFixtureAccess(ctx, t, b, "history-operator")
 			case "expiry":
-				timer := time.NewTimer(time.Until(p.expires) + time.Millisecond)
-				defer timer.Stop()
-				select {
-				case <-timer.C:
-				case <-ctx.Done():
-					t.Fatal("bounded history expiry failed")
-				}
+				waitForFixtureExpiry(ctx, t, p.expires)
 			}
 			if err := tx.Commit(ctx); err != nil {
 				t.Fatal(err)

@@ -40,7 +40,7 @@ func (s *Foundation) proposalOperator(ctx context.Context, p Principal) error {
 	return s.triageOperator(ctx, p)
 }
 
-func proposalNumber(raw string, ceiling int64) (int64, bool) {
+func proposalNumber(raw string, ceiling int) (int, bool) {
 	if raw == "" || len(raw) > 8 || (len(raw) > 1 && raw[0] == '0') {
 		return 0, false
 	}
@@ -49,7 +49,7 @@ func proposalNumber(raw string, ceiling int64) (int64, bool) {
 			return 0, false
 		}
 	}
-	n, err := strconv.ParseInt(raw, 10, 64)
+	n, err := strconv.Atoi(raw)
 	return n, err == nil && n <= ceiling
 }
 
@@ -70,7 +70,7 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 	version, vok := proposalNumber(r.PostForm.Get("expected_version"), 49)
 	one, ook := proposalNumber(r.PostForm.Get("one_time_dkk"), 10000000)
 	monthly, mok := proposalNumber(r.PostForm.Get("monthly_dkk"), 10000000)
-	d := projectProposal{Key: r.PostForm.Get("submission_key"), Expected: int(version), Currency: r.PostForm.Get("currency"), OneTimeMinor: one * 100, MonthlyMinor: monthly * 100}
+	d := projectProposal{Key: r.PostForm.Get("submission_key"), Expected: version, Currency: r.PostForm.Get("currency"), OneTimeMinor: int64(one) * 100, MonthlyMinor: int64(monthly) * 100}
 	for _, field := range []struct {
 		name   string
 		limit  int

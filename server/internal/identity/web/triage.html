@@ -27,7 +27,8 @@
 </form>
 {{else}}<p>{{if eq .Lang `da`}}Historikken er fuld med 50 versioner. Intet tidligere udkast er ændret.{{else}}History is full at 50 versions. No earlier draft has changed.{{end}}</p>{{end}}
 <h2>{{if eq .Lang `da`}}Tidligere versioner{{else}}Saved versions{{end}}</h2>
-{{range .Proposals}}<article><h3>{{if eq $.Lang `da`}}Version{{else}}Version{{end}} {{.Version}}</h3><time datetime="{{.Prepared.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Prepared.UTC.Format `2006-01-02 15:04`}} UTC</time>
+{{range .Proposals}}<article><h3>{{if eq $.Lang `da`}}Version{{else}}Version{{end}} {{.Version}}</h3>
+<time datetime="{{.Prepared.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Prepared.UTC.Format `2006-01-02 15:04`}} UTC</time>
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Omfang{{else}}Scope{{end}}</dt><dd class="request-brief">{{.Scope}}</dd><dt>{{if eq $.Lang `da`}}Leverancer{{else}}Deliverables{{end}}</dt><dd class="request-brief">{{.Deliverables}}</dd><dt>{{if eq $.Lang `da`}}Engangspris{{else}}One-time price{{end}}</dt><dd>{{.OneTimeDKK}} DKK</dd><dd class="request-brief">{{.OneTimeTerms}}</dd><dt>{{if eq $.Lang `da`}}Månedspris{{else}}Monthly price{{end}}</dt><dd>{{.MonthlyDKK}} DKK</dd><dd class="request-brief">{{.MonthlyTerms}}</dd></dl></article>
 {{else}}<p>{{if eq .Lang `da`}}Ingen gemte udkast endnu. Forbered det første ovenfor.{{else}}No saved drafts yet. Prepare the first above.{{end}}</p>{{end}}
 {{end}}
