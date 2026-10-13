@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { request } from "node:http";
 import path from "node:path";
 import test from "node:test";
+import { containerDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
 
 const [image, root] = process.argv.slice(2);
 assert.ok(image && root, "Supply the actual image reference and fresh runtime-dist directory.");
@@ -35,6 +36,18 @@ const bounded = [
   "--memory=256m",
   "--cpus=1",
 ];
+
+/** Preserve ordinary container controls while projecting only fictional input. */
+function projection() {
+  return receipt.PublicProfile === "production-template"
+    ? containerDisclosureFixture(image, docker)
+    : { mount: [], arguments: [], close() {} };
+}
+
+/** Keep explicit public/listener arguments when replacing the image's CMD. */
+function runtimeArguments(fixture) {
+  return ["--public", "/app/public", "--listen", "0.0.0.0:8080", ...fixture.arguments];
+}
 
 /** Preserve raw traversal/encoding inputs: fetch() would normalize some away. */
 function get(port, route, method = "GET") {
@@ -73,8 +86,36 @@ test("actual image receipt, restricted runtime, visitor bytes and private/traver
   assert.equal(config.Labels["org.opencontainers.image.revision"], receipt.SourceRevision);
   assert.ok(!(config.Env ?? []).some((e) => e.startsWith("PORTAL_")));
   assert.deepEqual(JSON.parse(docker("run", "--rm", "--network=none", ...bounded, image, "--version")), receipt);
-  const id = docker("run", "--detach", ...bounded, "--publish", "127.0.0.1::8080", image);
+  const fixture = projection();
+  let id;
   try {
+    const served = JSON.parse(
+      docker(
+        "run",
+        "--rm",
+        "--network=none",
+        ...bounded,
+        ...fixture.mount,
+        image,
+        "--public",
+        "/app/public",
+        ...fixture.arguments,
+        "--check-serving-public",
+      ),
+    );
+    assert.equal(served.PublicDigest, receipt.PublicDigest);
+    assert.match(served.EffectivePublicDigest, /^[0-9a-f]{64}$/);
+    assert.equal(served.EffectivePublicDigest === receipt.PublicDigest, receipt.PublicProfile === "default");
+    id = docker(
+      "run",
+      "--detach",
+      ...bounded,
+      ...fixture.mount,
+      "--publish",
+      "127.0.0.1::8080",
+      image,
+      ...runtimeArguments(fixture),
+    );
     await ready(id);
     const inspected = JSON.parse(docker("inspect", id))[0];
     assert.equal(inspected.HostConfig.ReadonlyRootfs, true);
@@ -87,6 +128,16 @@ test("actual image receipt, restricted runtime, visitor bytes and private/traver
       const head = await get(port, route, "HEAD");
       assert.equal(head.status, 200);
       assert.equal(head.body, "");
+    }
+    if (receipt.PublicProfile === "production-template") {
+      for (const route of ["/company/", "/da/company/"]) {
+        const response = await get(port, route);
+        assert.equal(response.status, 200);
+        assert.match(response.body, /Example &amp; Partners Road 1/);
+        assert.match(response.body, /1234 Exampletown/);
+        assert.match(response.body, /46830385/);
+        assert.doesNotMatch(response.body, /__BUSINESS_ADDRESS_LINE_/);
+      }
     }
     for (const route of [
       "/portal",
@@ -119,19 +170,43 @@ test("actual image receipt, restricted runtime, visitor bytes and private/traver
     assert.ok(Date.now() - started < 13000, "SIGTERM must drain within the bound.");
     assert.equal(JSON.parse(docker("inspect", id))[0].State.ExitCode, 0);
   } finally {
-    docker("rm", "--force", id);
+    try {
+      if (id) docker("rm", "--force", id);
+    } finally {
+      fixture.close();
+    }
   }
 });
 
 test("actual container starts without network or portal dependencies", async () => {
-  const id = docker("run", "--detach", "--network=none", ...bounded, image);
+  const fixture = projection();
+  let id;
   try {
+    id = docker("run", "--detach", "--network=none", ...bounded, ...fixture.mount, image, ...runtimeArguments(fixture));
     await ready(id);
     assert.equal(logs(id), "runtime ready; portal activation is not configured");
   } finally {
-    docker("stop", "--time=12", id);
-    docker("rm", "--force", id);
+    try {
+      if (id) docker("stop", "--time=12", id);
+    } finally {
+      try {
+        if (id) docker("rm", "--force", id);
+      } finally {
+        fixture.close();
+      }
+    }
   }
+});
+
+test("production image refuses absent disclosure before listening", () => {
+  if (receipt.PublicProfile !== "production-template") return;
+  const result = spawnSync("docker", ["run", "--rm", "--network=none", ...bounded, image], {
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /company disclosure is unavailable/);
+  assert.doesNotMatch(result.stdout + result.stderr, /runtime ready|Example|\/projection/);
 });
 
 test("actual container refuses modified public bytes before readiness", async () => {

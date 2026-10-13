@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { selectPublicTools } from '../src/data/public-products.ts';
+import { selectPublicTools, publicStarSnapshot as snapshot } from '../src/data/public-products.ts';
 import catalogue from '../src/data/public-products.json' with { type: 'json' };
-import snapshot from '../src/data/github-stars.json' with { type: 'json' };
 import { readerText } from './reader-text.mjs';
 const directory = process.argv[2];
 assert.ok(directory, 'Usage: check-featured-portfolio.mjs <build-directory>');

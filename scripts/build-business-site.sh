@@ -7,6 +7,8 @@ node --test scripts/visitor-privacy.test.mjs
 node --test scripts/journal-navigation.test.mjs
 node --test scripts/public-products.test.mjs
 node --test scripts/public-tools.test.mjs
+node --test scripts/public-profile.test.mjs
+node --test scripts/package-profile-contract.test.mjs
 node --test scripts/reader-text.test.mjs
 node --test scripts/featured-rollout.test.mjs
 node --test scripts/fresh-publication.test.mjs

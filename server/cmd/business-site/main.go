@@ -24,6 +24,9 @@ import (
 // actual audited bytes. An ordinary go build is not a distributable package.
 var revision, publicDigest, buildMode string
 
+// publicProfile is a permanent package variant, not a portal activation gate.
+var publicProfile = "default"
+
 // loadPublic confines artifact reads to the configured root and snapshots bytes.
 func loadPublic(directory string) (*webapp.Artifact, error) {
 	root, err := os.OpenRoot(directory)
@@ -52,6 +55,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	listen := options.String("listen", "127.0.0.1:8080", "HTTP listener behind an eventual trusted TLS gateway")
 	check := options.Bool("check-public", false, "validate public bytes and print their digest without starting services")
 	version := options.Bool("version", false, "print package identity without starting services")
+	disclosure := options.String("company-disclosure-file", "", "private projected two-line company disclosure")
+	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
 	}
@@ -63,15 +68,30 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		_, err = fmt.Fprintln(output, artifact.Digest())
 		return err
 	}
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(revision) || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(publicDigest) || buildMode != "release" && buildMode != "development" {
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(revision) || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(publicDigest) || buildMode != "release" && buildMode != "development" || publicProfile != "default" && publicProfile != "production-template" {
 		return errors.New("build a verified runtime package before starting")
 	}
 	if *version {
-		return json.NewEncoder(output).Encode(struct{ Repository, SourceRevision, PublicDigest, Mode string }{"devantler-tech/business-site", revision, publicDigest, buildMode})
+		return json.NewEncoder(output).Encode(struct{ Repository, SourceRevision, PublicDigest, Mode, PublicProfile string }{"devantler-tech/business-site", revision, publicDigest, buildMode, publicProfile})
 	}
 	artifact, err := loadPublic(*public)
 	if err != nil || artifact.Digest() != publicDigest {
 		return errors.New("public artifact does not match this runtime package")
+	}
+	if publicProfile == "production-template" {
+		input, err := runtimeapp.ReadCompanyDisclosure(*disclosure)
+		if err != nil {
+			return err
+		}
+		artifact, err = artifact.WithCompanyDisclosure(input)
+		if err != nil {
+			return errors.New("company disclosure is invalid")
+		}
+	} else if *disclosure != "" || artifact.HasCompanySlots() {
+		return errors.New("public profile does not accept company disclosure")
+	}
+	if *checkServing {
+		return json.NewEncoder(output).Encode(struct{ Repository, SourceRevision, PublicDigest, EffectivePublicDigest, PublicProfile string }{"devantler-tech/business-site", revision, publicDigest, artifact.Digest(), publicProfile})
 	}
 	cfg, err := runtimeapp.ReadConfig(os.Getenv)
 	if err != nil {

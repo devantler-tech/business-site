@@ -65,6 +65,19 @@ func readSecret(filename string) (string, error) {
 	return value, nil
 }
 
+// ReadCompanyDisclosure uses the same bounded private projection boundary as
+// identity configuration, without activating or connecting portal dependencies.
+func ReadCompanyDisclosure(filename string) (string, error) {
+	if !filepath.IsAbs(filename) {
+		return "", errors.New("company disclosure is unavailable")
+	}
+	value, err := readSecret(filename)
+	if err != nil {
+		return "", errors.New("company disclosure is unavailable")
+	}
+	return value, nil
+}
+
 // ReadConfig accepts either no identity dependencies or a complete validated
 // set. It parses no activation flag; the real OpenFeature SDK remains the gate.
 func ReadConfig(getenv func(string) string) (Config, error) {

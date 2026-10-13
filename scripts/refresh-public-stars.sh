@@ -3,8 +3,9 @@
 set -euo pipefail
 site_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 manifest="$site_dir/src/data/public-products.json"
-destination="$site_dir/src/data/github-stars.json"
-scratch=$(mktemp -d "$site_dir/src/data/.github-stars.XXXXXX")
+[[ "$#" -le 1 ]] || { printf '%s\n' 'Supply at most one build-local output file.' >&2; exit 1; }
+destination="${1:-$site_dir/src/data/github-stars.json}"
+scratch=$(mktemp -d "$(dirname -- "$destination")/.github-stars.XXXXXX")
 finished=false
 cleanup() {
   status=$?

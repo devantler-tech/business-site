@@ -32,7 +32,9 @@ for (const [prefix, locale] of [['', 'en'], ['da/', 'da']]) {
     assert.ok(address, 'A physical business address is required, not merely a CVR');
     assert.ok(attr(address, 'data-pagefind-ignore') !== undefined, 'Do not duplicate the residential address in the site search index');
     assert.ok(walk(address).every((node) => !node.tagName || ['address', 'span'].includes(node.tagName)), 'Address values are escaped text, not executable markup');
-    const lines = (process.env.COMPANY_POSTAL_ADDRESS ?? '').replace(/\r\n/g, '\n').trim().split('\n').map((line) => line.trim());
+    const lines = (process.env.PUBLIC_CONTENT_PROFILE === 'production-template'
+      ? '__BUSINESS_ADDRESS_LINE_1__\n__BUSINESS_ADDRESS_LINE_2__'
+      : process.env.COMPANY_POSTAL_ADDRESS ?? '').replace(/\r\n/g, '\n').trim().split('\n').map((line) => line.trim());
     assert.equal(lines.length, 2, 'The test requires an explicitly supplied two-line address');
     for (const line of lines) assert.ok(line && text(address).includes(line), 'The configured address is rendered');
     assert.ok(walk(details).some((node) => attr(node, 'href') === 'mailto:ned@devantler.tech'), 'Email is directly usable');
