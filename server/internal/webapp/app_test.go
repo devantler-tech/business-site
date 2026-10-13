@@ -83,6 +83,11 @@ func TestRejectsUnsafeArtifact(t *testing.T) {
 	if _, err := Load(files); err == nil {
 		t.Fatal("identity data accepted")
 	}
+	files = publicFixture()
+	files["asset.json"] = &fstest.MapFile{Data: []byte("portal_proposals")}
+	if _, err := Load(files); err == nil {
+		t.Fatal("private proposal storage accepted")
+	}
 }
 
 // TestSnapshotAndDigestBindActualPublicBytes detects changes without serving mutable files.

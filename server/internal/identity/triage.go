@@ -136,6 +136,14 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	page := b.triagePage(r, rows, id, q.Get("cursor"))
+	if id != "" && b.foundation.proposalsReady(r.Context()) {
+		proposals, err := b.foundation.readProposals(r.Context(), p, id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+		b.proposalPresentation(r, &page, proposals)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = browserPage.ExecuteTemplate(w, "triage.html", page)
@@ -189,4 +197,8 @@ type triagePageData struct {
 	Requests          []projectRequest
 	Detail            bool
 	Next, LanguageURL string
+	ProposalsEnabled  bool
+	Proposals         []projectProposal
+	ExpectedVersion   int
+	ProposalKey       string
 }

@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
@@ -261,7 +260,7 @@ func TestOperatorInboxIndexMigrationPreservesRequests(t *testing.T) {
 	if err := migrator.QueryRow(b.f.ctx, `SELECT checksum FROM portal_schema_version WHERE version=5`).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := migrator.Exec(b.f.ctx, `DROP INDEX portal_requests_triage; DELETE FROM portal_schema_version WHERE version=5`); err != nil {
+	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DROP INDEX portal_requests_triage; DELETE FROM portal_schema_version WHERE version>=5`); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(b.f.ctx, migrator); err != nil {
@@ -285,22 +284,7 @@ func TestOperatorInboxRejectsInFlightAuthorityClosure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
-			var relation uint32
-			if err := migrator.QueryRow(ctx, `SELECT 'portal_requests'::regclass::oid`).Scan(&relation); err != nil {
-				t.Fatal(err)
-			}
-			tx, err := migrator.Begin(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() {
-				if err := tx.Rollback(context.Background()); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-					t.Error(err)
-				}
-			}()
-			if _, err := tx.Exec(ctx, `LOCK TABLE portal_requests IN ACCESS EXCLUSIVE MODE`); err != nil {
-				t.Fatal(err)
-			}
+			tx, relation := lockFixtureRead(ctx, t, migrator, "portal_requests")
 			if change == "expiry" {
 				p.expires = time.Now().Add(time.Second)
 			}
@@ -314,21 +298,13 @@ func TestOperatorInboxRejectsInFlightAuthorityClosure(t *testing.T) {
 			case "flag":
 				triageFlags(t, b, true, true, false)
 			case "revocation":
-				if err := b.svc.Revoke(ctx, b.f.issuer, "operator"); err != nil {
-					t.Fatal(err)
-				}
+				revokeFixtureAccess(ctx, t, b, "operator")
 			case "downgrade":
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE subject='operator'`); err != nil {
 					t.Fatal(err)
 				}
 			case "expiry":
-				timer := time.NewTimer(time.Until(p.expires) + time.Millisecond)
-				defer timer.Stop()
-				select {
-				case <-timer.C:
-				case <-ctx.Done():
-					t.Fatal("fixture expiry wait exceeded bound")
-				}
+				waitForFixtureExpiry(ctx, t, p.expires)
 			}
 			if err := tx.Commit(ctx); err != nil {
 				t.Fatal(err)

@@ -9,6 +9,29 @@
 {{if .Detail}}
 {{range .Requests}}<h2>{{.Title}}</h2>
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Type{{else}}Offering{{end}}</dt><dd>{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</dd><dt>{{if eq $.Lang `da`}}Modtaget (UTC){{else}}Received (UTC){{end}}</dt><dd><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></dd><dt>{{if eq $.Lang `da`}}Forespørgsel{{else}}Brief{{end}}</dt><dd class="request-brief">{{.Brief}}</dd></dl>{{end}}
+{{if .ProposalsEnabled}}
+<h2>{{if eq .Lang `da`}}Udkast til tilbud{{else}}Draft proposals{{end}}</h2>
+<p>{{if eq .Lang `da`}}Ikke accepteret eller godkendt til arbejde. Priser og endelige vilkår kræver særskilt aftale.{{else}}Not accepted or approved for work. Prices and final terms require a separate agreement.{{end}}</p>
+{{if lt .ExpectedVersion 50}}
+<form class="request-form" method="post" action="/portal/operator/requests/{{(index .Requests 0).ID}}/proposals">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="submission_key" value="{{.ProposalKey}}"><input type="hidden" name="expected_version" value="{{.ExpectedVersion}}"><input type="hidden" name="currency" value="DKK">
+<label for="scope">{{if eq .Lang `da`}}Omfang{{else}}Scope{{end}}</label><textarea id="scope" name="scope" rows="4" maxlength="2400" data-character-limit="1200" required></textarea>
+<label for="deliverables">{{if eq .Lang `da`}}Leverancer{{else}}Deliverables{{end}}</label><textarea id="deliverables" name="deliverables" rows="4" maxlength="2400" data-character-limit="1200" required></textarea>
+<p class="field-limit">{{if eq .Lang `da`}}Højst 1.200 tegn i hvert felt.{{else}}Up to 1,200 characters in each field.{{end}}</p>
+<label for="one-time">{{if eq .Lang `da`}}Engangspris (hele DKK){{else}}One-time price (whole DKK){{end}}</label><input id="one-time" name="one_time_dkk" type="number" min="0" max="10000000" step="1" required>
+<label for="one-time-terms">{{if eq .Lang `da`}}Vilkår for iterationen{{else}}Iteration terms{{end}}</label><textarea id="one-time-terms" name="one_time_terms" rows="3" maxlength="1200" data-character-limit="600" required></textarea>
+<label for="monthly">{{if eq .Lang `da`}}Månedspris (hele DKK){{else}}Monthly price (whole DKK){{end}}</label><input id="monthly" name="monthly_dkk" type="number" min="0" max="10000000" step="1" required>
+<label for="monthly-terms">{{if eq .Lang `da`}}Vilkår for hosting og vedligeholdelse{{else}}Hosting and maintenance terms{{end}}</label><textarea id="monthly-terms" name="monthly_terms" rows="3" maxlength="1200" data-character-limit="600" required></textarea>
+<p class="field-limit">{{if eq .Lang `da`}}Højst 600 tegn i hvert felt med vilkår. Nye funktioner kræver en ny aftale.{{else}}Up to 600 characters in each terms field. New features require a new agreement.{{end}}</p>
+<button type="submit">{{if eq .Lang `da`}}Gem ny version af udkast{{else}}Save new draft version{{end}}</button>
+</form>
+{{else}}<p>{{if eq .Lang `da`}}Historikken er fuld med 50 versioner. Intet tidligere udkast er ændret.{{else}}History is full at 50 versions. No earlier draft has changed.{{end}}</p>{{end}}
+<h2>{{if eq .Lang `da`}}Tidligere versioner{{else}}Saved versions{{end}}</h2>
+{{range .Proposals}}<article><h3>{{if eq $.Lang `da`}}Version{{else}}Version{{end}} {{.Version}}</h3>
+<time datetime="{{.Prepared.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Prepared.UTC.Format `2006-01-02 15:04`}} UTC</time>
+<dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Omfang{{else}}Scope{{end}}</dt><dd class="request-brief">{{.Scope}}</dd><dt>{{if eq $.Lang `da`}}Leverancer{{else}}Deliverables{{end}}</dt><dd class="request-brief">{{.Deliverables}}</dd><dt>{{if eq $.Lang `da`}}Engangspris{{else}}One-time price{{end}}</dt><dd>{{.OneTimeDKK}} DKK</dd><dd class="request-brief">{{.OneTimeTerms}}</dd><dt>{{if eq $.Lang `da`}}Månedspris{{else}}Monthly price{{end}}</dt><dd>{{.MonthlyDKK}} DKK</dd><dd class="request-brief">{{.MonthlyTerms}}</dd></dl></article>
+{{else}}<p>{{if eq .Lang `da`}}Ingen gemte udkast endnu. Forbered det første ovenfor.{{else}}No saved drafts yet. Prepare the first above.{{end}}</p>{{end}}
+{{end}}
 {{else}}
 {{if .Requests}}<ul class="request-list">{{range .Requests}}<li><div><a href="/portal/operator/requests/{{.ID}}?lang={{$.Lang}}">{{.Title}}</a><p class="field-limit">{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</p></div><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></li>{{end}}</ul>{{else}}<p>{{if eq .Lang `da`}}Ingen projektforespørgsler endnu. Nye forespørgsler vises her, når en inviteret kunde sender dem.{{else}}No project requests yet. New requests appear here when an invited client submits one.{{end}}</p>{{end}}
 {{if .Next}}<a class="button" href="{{.Next}}" rel="next">{{if eq .Lang `da`}}Næste forespørgsler{{else}}Next requests{{end}}</a>{{end}}

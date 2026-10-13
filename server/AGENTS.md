@@ -14,7 +14,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's six identity/session/contact/request tables. Provision a fresh disposable PostgreSQL
+only the fixture's seven identity/session/contact/request/proposal tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -81,6 +81,14 @@ on every operation, plus current server-owned operator membership in its SQL.
 It never grants client impersonation or paid-work approval. Keep keyset pagination
 bounded and ordered by original submission time/ID with microsecond precision.
 The triage flag's retirement review is business-site#62, due 12 November 2026.
+
+Operator draft preparation and history additionally require false-default
+`portal-proposals`; its retirement review is business-site#65, due 12 November 2026.
+Read `PROPOSALS.md`. Proposals append immutable versions, require expected-version
+and content-bound retry keys, and retain original intake order. Grant their table
+SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
+not a dispatched offer, agreement, payment or work authorization. Keep acceptance,
+credited funds, worker claims and API/MCP execution outside this slice.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

@@ -67,7 +67,7 @@ func TestSessionMigrationPreservesIdentity(t *testing.T) {
 	pool := migrationDB(t)
 	ctx := context.Background()
 	// Recreate the actual v1 starting point in the disposable fixture only.
-	if _, err := pool.Exec(ctx, `DROP TABLE portal_requests; DROP TABLE portal_contacts; DROP TABLE portal_sessions; DELETE FROM portal_schema_version WHERE version>=2; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_proposals; DROP TABLE portal_requests; DROP TABLE portal_contacts; DROP TABLE portal_sessions; DELETE FROM portal_schema_version WHERE version>=2; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)`); err != nil {
 		t.Fatal(err)
 	}
 	var before string
@@ -115,7 +115,7 @@ func TestContactMigrationPreservesIdentityAndSessions(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
 	ctx := context.Background()
-	if _, err := pool.Exec(ctx, `DROP TABLE portal_requests; DROP TABLE portal_contacts; DELETE FROM portal_schema_version WHERE version>=3; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true); INSERT INTO portal_sessions VALUES('synthetic-session',decode('001122','hex'),now()+interval '1 hour')`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_proposals; DROP TABLE portal_requests; DROP TABLE portal_contacts; DELETE FROM portal_schema_version WHERE version>=3; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true); INSERT INTO portal_sessions VALUES('synthetic-session',decode('001122','hex'),now()+interval '1 hour')`); err != nil {
 		t.Fatal(err)
 	}
 	var identityChecksum, sessionChecksum string
@@ -158,7 +158,7 @@ func TestRequestMigrationPreservesExistingVersionsAndContacts(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=3`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `DROP TABLE portal_requests; DELETE FROM portal_schema_version WHERE version>=4; INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('synthetic-existing','Existing','existing@example.invalid','',2)`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP TABLE portal_proposals; DROP TABLE portal_requests; DELETE FROM portal_schema_version WHERE version>=4; INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('synthetic-existing','Existing','existing@example.invalid','',2)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(ctx, pool); err != nil {

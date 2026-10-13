@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 16, "contact.html": 6, "requests.html": 24, "triage.html": 12} {
+	for name, want := range map[string]int{"portal.html": 20, "contact.html": 6, "requests.html": 24, "triage.html": 20} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -82,6 +82,7 @@ func TestPortalLinkRejections(t *testing.T) {
 		"associated form override":      `<form id="logout" method="post" action="/portal/logout"></form><button form="logout" formmethod="get">Out</button>`,
 		"non-canonical router redirect": `<a href="/portal//contact">Contact</a>`,
 		"invalid ID":                    `<a href="/portal/operator/requests/not-an-id">Request</a>`,
+		"invalid nested ID":             `<form method="post" action="/portal/operator/requests/not-an-id/proposals"></form>`,
 		"invalid cursor":                `<a href="/portal/operator/requests?cursor=invalid">Next</a>`,
 		"duplicate language":            `<a href="/portal/?lang=en&amp;lang=da">Home</a>`,
 		"unknown language":              `<a href="/portal/?lang=de">Home</a>`,
@@ -99,6 +100,14 @@ func TestPortalLinkRejections(t *testing.T) {
 				t.Fatal("invalid rendered target was accepted")
 			}
 		})
+	}
+}
+
+func TestPortalLinkNestedProposalMethod(t *testing.T) {
+	markup := `<html><body><a href="/">Home</a><form method="post" action="/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/proposals"><button>Save</button></form></body></html>`
+	output, count, err := validateRenderedLinks(linkPage{"/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ?lang=en", markup})
+	if err != nil || count != 3 || !strings.Contains(output, `data-route-checked-action="/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/proposals"`) {
+		t.Fatalf("registered nested proposal POST rejected: count=%d error=%v", count, err)
 	}
 }
 
@@ -218,7 +227,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links"} {
+			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict"} {
 				uri := "/portal/"
 				switch kind {
 				case "sign-in", "unavailable":
@@ -300,6 +309,25 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 				request.Product = product
 				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					return browserPage.ExecuteTemplate(w, name, b.triagePage(r, []projectRequest{request}, request.ID, ""))
+				}); err != nil {
+					return nil, err
+				}
+			}
+			for _, view := range []string{"empty", "history", "full", "hostile"} {
+				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					page := b.triagePage(r, []projectRequest{request}, request.ID, "")
+					var proposals []projectProposal
+					if view != "empty" {
+						proposals = []projectProposal{{Version: 1, Scope: "Fictional scope", Deliverables: "Fictional deliverables", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One iteration", MonthlyTerms: "Hosting and maintenance", Prepared: request.Submitted}}
+					}
+					if view == "full" {
+						proposals[0].Version = 50
+					}
+					if view == "hostile" {
+						proposals[0].Scope = "<script>inert</script>"
+					}
+					b.proposalPresentation(r, &page, proposals)
+					return browserPage.ExecuteTemplate(w, name, page)
 				}); err != nil {
 					return nil, err
 				}
@@ -484,8 +512,14 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 	if pattern == "" {
 		return errors.New("target is not registered for its HTTP method")
 	}
-	if strings.Contains(pattern, "{id}") && !opaqueRequestID.MatchString(filepath.Base(target.Path)) {
-		return errors.New("target has an invalid request identity")
+	if strings.Contains(pattern, "{id}") {
+		registered := strings.Split(strings.SplitN(pattern, " ", 2)[1], "/")
+		actual := strings.Split(target.Path, "/")
+		for index, segment := range registered {
+			if segment == "{id}" && (index >= len(actual) || !opaqueRequestID.MatchString(actual[index])) {
+				return errors.New("target has an invalid request identity")
+			}
+		}
 	}
 	query, err := url.ParseQuery(target.RawQuery)
 	if err != nil {

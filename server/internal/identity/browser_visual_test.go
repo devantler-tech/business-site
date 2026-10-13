@@ -20,7 +20,7 @@ import (
 // untagged tests exercise the strict HTTPS and origin checks directly.
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
-	triageFlags(t, b, true, true, true)
+	proposalFlags(t, b, true, true, true, true)
 	for _, subject := range []string{"client-a", "client-b"} {
 		triageSignIn(t, b, subject, subject, "client")
 		form := requestForm(t, b)
