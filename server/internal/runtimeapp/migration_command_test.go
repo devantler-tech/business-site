@@ -203,9 +203,9 @@ func TestActualMigrationRejectsUnsafeInputAndAuthority(t *testing.T) {
 
 // migrationFixtureRole changes only a generated fixture URL, never ambient credentials.
 func migrationFixtureRole(database *url.URL, role string) string {
-	copy := *database
-	copy.User = url.UserPassword(role, "fixture-only")
-	return copy.String()
+	connectionURL := *database
+	connectionURL.User = url.UserPassword(role, "fixture-only")
+	return connectionURL.String()
 }
 
 // An occupied transaction lock must fail within the job's fixed lock budget,
@@ -350,11 +350,11 @@ func TestMigrationRefusesAmbientAndOverriddenConnectionIdentity(t *testing.T) {
 		}
 	}
 	for _, key := range []string{"host", "port", "dbname", "user", "password", "options", "service"} {
-		copy := *database
-		query := copy.Query()
+		connectionURL := *database
+		query := connectionURL.Query()
 		query.Set(key, "unintended")
-		copy.RawQuery = query.Encode()
-		if err := os.WriteFile(file, []byte(copy.String()), 0600); err != nil {
+		connectionURL.RawQuery = query.Encode()
+		if err := os.WriteFile(file, []byte(connectionURL.String()), 0600); err != nil {
 			t.Fatal("overridden migration projection failed")
 		}
 		if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err == nil || output != "portal schema migration failed\n" {
