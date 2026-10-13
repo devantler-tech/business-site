@@ -72,6 +72,14 @@ do not grant production activation.
 Use the injected OpenFeature SDK client and false-default `portal-identity`
 boolean on every operation; missing/error/type-mismatched evaluation denies.
 Do not introduce a custom environment-flag parser or cache an earlier on verdict.
+The executable's optional staging composition uses maintained OpenFeature from-env
+v0.1.6, mapping only identity and requiring an operator lease of at most ten minutes.
+Environment rotation requires restarting the process; expiry, cancellation and SDK
+shutdown revoke retained clients. Test the compiled command, real disposable
+database and synthetic TLS broker. No service or production activation is implied.
+Check SDK READY before and after each identity evaluation; ERROR/STALE can otherwise
+still evaluate through the SDK. Keep private activation values out of build assets,
+images, receipts and logs, and keep other work decisions independently closed.
 Free project requests additionally require false-default `portal-requests` on every
 operation. A receipt never authorizes a quote, agreement, payment or worker execution.
 The request flag's lifecycle is tracked in business-site#57. Requests are immutable;

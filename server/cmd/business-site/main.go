@@ -16,7 +16,6 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/runtimeapp"
 	"github.com/devantler-tech/business-site/server/internal/webapp"
-	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/open-feature/go-sdk/openfeature/isolated"
 )
 
@@ -97,15 +96,19 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if err != nil {
 		return err
 	}
-	api := isolated.NewAPI()
-	if err := api.SetProviderAndWait(ctx, openfeature.NoopProvider{}); err != nil {
-		return errors.New("identity gate is unavailable")
+	provider, err := runtimeapp.IdentityProvider(ctx, cfg)
+	if err != nil {
+		return err
 	}
+	api := isolated.NewAPI()
 	defer func() {
-		// This executable installs only NoopProvider, with no external resources.
-		// Shutdown releases SDK bookkeeping without changing the runtime verdict.
+		// Both supported providers own no external resource. Staging shutdown
+		// cancels its lease before the SDK releases evaluation bookkeeping.
 		_ = api.Shutdown(context.Background())
 	}()
+	if err := api.SetProviderAndWait(ctx, provider); err != nil {
+		return errors.New("identity gate is unavailable")
+	}
 	portal, closePortal, err := runtimeapp.Portal(ctx, cfg, api.NewClient())
 	if err != nil {
 		return err
@@ -119,7 +122,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		// Serve owns and closes the listener; this fallback may find it closed.
 		_ = listener.Close()
 	}()
-	_, _ = fmt.Fprintln(output, "runtime ready; portal activation is not configured")
+	_, _ = fmt.Fprintln(output, "runtime ready; private routes remain independently gated")
 	return runtimeapp.Serve(ctx, listener, artifact.Handler(portal))
 }
 

@@ -104,11 +104,11 @@ func New(pool *pgxpool.Pool, broker *Broker, flags *openfeature.Client) *Foundat
 }
 
 func (s *Foundation) ready(ctx context.Context) bool {
-	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.flags == nil {
+	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.flags == nil || s.flags.State() != openfeature.ReadyState {
 		return false
 	}
 	enabled, err := s.flags.BooleanValue(ctx, "portal-identity", false, openfeature.NewEvaluationContext("", nil))
-	return err == nil && enabled
+	return err == nil && enabled && s.flags.State() == openfeature.ReadyState
 }
 
 // Attempt secrets are for the trusted browser handler, never logs, public

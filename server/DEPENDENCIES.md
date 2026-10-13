@@ -10,6 +10,7 @@ its repository's own terms. No hosted service or paid enrollment is introduced.
 | coreos/go-oidc/v3        | 3.21.0                            | [Apache-2.0](https://github.com/coreos/go-oidc/blob/v3.21.0/LICENSE)                            |
 | jackc/pgx/v5             | 5.11.0                            | [MIT](https://github.com/jackc/pgx/blob/v5.11.0/LICENSE)                                        |
 | open-feature/go-sdk      | 1.19.0                            | [Apache-2.0](https://github.com/open-feature/go-sdk/blob/v1.19.0/LICENSE)                       |
+| open-feature/go-sdk-contrib/providers/from-env | 0.1.6 | [Apache-2.0](https://github.com/open-feature/go-sdk-contrib/blob/7c63f0470c103b3189cc89d8c9b916cdf2ac92d4/providers/from-env/LICENSE) |
 | alexedwards/scs/v2       | 2.9.0                             | [MIT](https://github.com/alexedwards/scs/blob/v2.9.0/LICENSE)                                   |
 | alexedwards/scs/pgxstore | 0.0.0-20251002162104-209de6e426de | [MIT](https://github.com/alexedwards/scs/blob/209de6e426de9259665975ce16b91331d228f052/LICENSE) |
 | justinas/nosurf          | 1.2.0                             | [MIT](https://github.com/justinas/nosurf/blob/v1.2.0/LICENSE)                                   |
@@ -40,3 +41,9 @@ Nosurf 1.2.0 is the upstream-patched version for
 [CVE-2025-46721](https://github.com/justinas/nosurf/security/advisories/GHSA-w9hf-35q4-vcjw).
 Every state-changing handler requires its token; origin checks alone are insufficient.
 No direct Google/Microsoft SDK or paid identity service is added.
+
+The from-env provider was assessed on 13 October 2026. Its maintained JSON
+evaluation is process-local and uncached; its minimum SDK version does not
+downgrade the application's locked SDK. The application adds a bounded staging
+lifetime, not a replacement flag parser. The actual linked notice collector
+includes this provider's Apache-2.0 license in distributed packages.
