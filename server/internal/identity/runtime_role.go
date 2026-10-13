@@ -10,10 +10,10 @@ type queryRower interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-// CheckRuntimeRole requires identity-table DML and immutable-request SELECT/INSERT,
-// without request mutation, schema creation, table/database ownership or an assumable privileged role. It runs
-// no migration. Keeping these fixture controls in this package serializes them
-// with other tests touching the same disposable identity tables.
+// CheckRuntimeRole requires identity-table DML and SELECT/INSERT on immutable
+// request and proposal tables. It refuses mutation of either table, schema and
+// database creation, public-table/database ownership and assumable privileged
+// roles. It validates runtime access; it never applies migrations.
 func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	var allowed bool
 	err := pool.QueryRow(ctx, `SELECT NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
