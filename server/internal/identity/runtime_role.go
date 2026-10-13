@@ -33,7 +33,10 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
        OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)
        OR has_table_privilege(privileged.oid,'portal_requests','UPDATE')
        OR has_table_privilege(privileged.oid,'portal_requests','DELETE')
-       OR has_table_privilege(privileged.oid,'portal_requests','TRUNCATE')))
+       OR has_table_privilege(privileged.oid,'portal_requests','TRUNCATE')
+       OR has_table_privilege(privileged.oid,'portal_proposals','UPDATE')
+       OR has_table_privilege(privileged.oid,'portal_proposals','DELETE')
+       OR has_table_privilege(privileged.oid,'portal_proposals','TRUNCATE')))
  AND (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
    FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts']) table_name
    CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege)
@@ -42,6 +45,11 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
  AND NOT has_table_privilege(current_user,'portal_requests','UPDATE')
  AND NOT has_table_privilege(current_user,'portal_requests','DELETE')
  AND NOT has_table_privilege(current_user,'portal_requests','TRUNCATE')
+ AND has_table_privilege(current_user,'portal_proposals','SELECT')
+ AND has_table_privilege(current_user,'portal_proposals','INSERT')
+ AND NOT has_table_privilege(current_user,'portal_proposals','UPDATE')
+ AND NOT has_table_privilege(current_user,'portal_proposals','DELETE')
+ AND NOT has_table_privilege(current_user,'portal_proposals','TRUNCATE')
  FROM pg_roles r WHERE r.rolname=current_user`).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied

@@ -20,7 +20,7 @@ while IFS= read -r -d '' file; do
   [[ -f "$file" ]] || continue
   [[ -r "$file" ]] || { printf '%s\n' 'Portal artifact boundary: unreadable file' >&2; exit 1; }
   rc=0
-  grep -aEq 'portal_login_attempts|portal_invitations|portal_memberships|PORTAL_TEST_DATABASE_URL|portal_fixture_owner|fixture-only' "$file" || rc=$?
+  grep -aEq 'portal_login_attempts|portal_invitations|portal_memberships|portal_proposals|PORTAL_TEST_DATABASE_URL|portal_fixture_owner|fixture-only' "$file" || rc=$?
   case "$rc" in
     0) printf '%s\n' 'Portal artifact boundary: private identity content refused' >&2; exit 1 ;;
     1) ;;

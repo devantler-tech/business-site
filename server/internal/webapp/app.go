@@ -86,7 +86,7 @@ func Load(source fs.FS) (*Artifact, error) {
 		if total > maxArtifactBytes {
 			return ErrArtifact
 		}
-		for _, marker := range []string{"portal_login_attempts", "portal_invitations", "portal_memberships", "PORTAL_TEST_DATABASE_URL", "portal_fixture_owner", "fixture-only"} {
+		for _, marker := range []string{"portal_login_attempts", "portal_invitations", "portal_memberships", "portal_proposals", "PORTAL_TEST_DATABASE_URL", "portal_fixture_owner", "fixture-only"} {
 			if bytes.Contains(data, []byte(marker)) {
 				return ErrArtifact
 			}

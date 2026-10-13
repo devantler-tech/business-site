@@ -78,10 +78,13 @@ not create an order, approve a price, accept an agreement or authorize execution
 The independent false-default `portal-triage` gate adds read-only operator review
 over those same immutable records, with current operator authorization and bounded
 oldest-first pagination. It neither joins contact profiles nor approves work.
+The independently gated [draft proposal history](PROPOSALS.md) lets the operator
+prepare bounded immutable scope and price versions; it does not dispatch an offer,
+obtain acceptance or authorize work.
 
-Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests) and v5 (triage index)
+Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index) and v6 (draft proposals)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. Original v1–v4 bytes remain unchanged by the index-only triage migration.
+ledger. Original v1–v5 bytes remain unchanged by the proposal migration.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
@@ -241,7 +244,7 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the six fixture identity/session/contact/request tables between tests. Never reuse a database
+truncate the seven fixture identity/session/contact/request/proposal tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 

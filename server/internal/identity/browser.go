@@ -94,6 +94,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposals") && !s.proposalsReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		// Do not trust caller-controlled Host or forwarded-origin headers.
 		if r.Host != u.Host {
 			http.Error(w, "Portal unavailable", 421)
@@ -105,6 +109,9 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			// Keep the larger bound confined to the new intake endpoint.
 			if r.URL.Path == "/portal/requests" {
 				limit = 20000
+			}
+			if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/proposals") {
+				limit = 60000
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, limit)
 			if origin := r.Header.Get("Origin"); origin != "" && origin != b.origin {
@@ -129,6 +136,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
 	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("GET /portal/requests", b.requests)
@@ -324,6 +332,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	// Recovery links must not GET a POST-only route or replay an OIDC callback.
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
+	}
+	if kind == "proposal-invalid" || kind == "proposal-conflict" {
+		path = "/portal/operator/requests"
 	}
 	d.LanguageURL = path + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())

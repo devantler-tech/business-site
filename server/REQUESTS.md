@@ -40,7 +40,8 @@ retains safe bounded fields; a conflicting submitted form requires a new form.
 
 A request is only a brief. It provides **no paid eligibility, queue claim,
 agreement, payment confirmation, automated execution or completion verdict**.
-Operator quoting and the order lifecycle remain monorepo#3937; versioned worker
+Operator-only [draft preparation](PROPOSALS.md) does not deliver or accept an offer.
+Client agreement and the order lifecycle remain monorepo#3937; versioned worker
 API and a thin MCP adapter remain business-site#20. UI and future adapters must
 share this same server-owned authority rather than trust GitHub issue state.
 
@@ -62,8 +63,9 @@ returns 404 only to an authorized operator; other sessions receive the same
 denial regardless of whether a record exists. Storage failure returns a sanitized
 503, not an empty successful list. Every response is `no-store`.
 
-Reading a request does not approve work. No quote, order, payment, status change
-or agent execution endpoint exists. The triage gate remains off in the production
+Reading a request does not approve work. Draft preparation is independently gated;
+no client acceptance, order, payment, status change or agent execution endpoint exists.
+The triage gate remains off in the production
 no-op provider; there is no environment activation path. Its retirement review is
 tracked in [#62](https://github.com/devantler-tech/business-site/issues/62) for
 12 November 2026, and real intake retains the parent launch prerequisites.
@@ -72,7 +74,7 @@ See [the inbox decision](../docs/adr/0006-private-operator-request-inbox.md).
 ## Migration and verification
 
 Before constructing the configured runtime, the separate migration role applies
-the checksummed migrations through v5. The triage migration adds a global
+the checksummed migrations through v6. The triage migration adds a global
 timestamp/ID index only; existing v1–v4 bytes, records and ledger history are preserved.
 Give the restricted runtime SELECT and INSERT on `portal_requests`; it needs no
 UPDATE, DELETE or schema ownership for immutable receipts. Startup rejects UPDATE,

@@ -2,6 +2,37 @@
   "version": "0.2",
   "language": "en",
   "words": [
+    "accepteret",
+    "angivne",
+    "endelige",
+    "engangspris",
+    "forbered",
+    "fuld",
+    "funktioner",
+    "gemmes",
+    "gemte",
+    "hashtext",
+    "hele",
+    "historikken",
+    "hvert",
+    "intet",
+    "iterationen",
+    "kræver",
+    "leverancer",
+    "locktype",
+    "månedspris",
+    "ovenfor",
+    "overskrevet",
+    "priser",
+    "sammenlign",
+    "særskilt",
+    "tegngrænser",
+    "tidligere",
+    "tilbud",
+    "udkast",
+    "udkastet",
+    "vedligeholdelse",
+    "vilkår",
     "adgang",
     "adgangskoder",
     "aftale",
@@ -183,11 +214,7 @@
   "overrides": [
     {
       "filename": "server/internal/webapp/app_test.go",
-      "ignoreRegExpList": [
-        "/%70ortal/sign-in",
-        "/portal%2fsign-in",
-        "/%2fportal"
-      ]
+      "ignoreRegExpList": ["/%70ortal/sign-in", "/portal%2fsign-in", "/%2fportal"]
     }
   ]
 }
