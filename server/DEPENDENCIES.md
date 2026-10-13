@@ -6,7 +6,7 @@ license for Devantler Tech's application. The application remains governed by
 its repository's own terms. No hosted service or paid enrollment is introduced.
 
 | Compiled module                                | Version                           | Upstream license                                                                                                                      |
-| ---------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+|------------------------------------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
 | coreos/go-oidc/v3                              | 3.21.0                            | [Apache-2.0](https://github.com/coreos/go-oidc/blob/v3.21.0/LICENSE)                                                                  |
 | jackc/pgx/v5                                   | 5.11.0                            | [MIT](https://github.com/jackc/pgx/blob/v5.11.0/LICENSE)                                                                              |
 | open-feature/go-sdk                            | 1.19.0                            | [Apache-2.0](https://github.com/open-feature/go-sdk/blob/v1.19.0/LICENSE)                                                             |
