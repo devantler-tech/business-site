@@ -10,6 +10,16 @@ import (
 	"testing"
 )
 
+// readPublicReceipt decodes the actual command output for both package profiles.
+func readPublicReceipt(t *testing.T, output string) map[string]string {
+	t.Helper()
+	var receipt map[string]string
+	if err := json.Unmarshal([]byte(output), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	return receipt
+}
+
 // TestPackageReceiptNamesPublicProfile binds the actual executable's receipt,
 // rather than assuming that a successful ordinary build contains company pages.
 func TestPackageReceiptNamesPublicProfile(t *testing.T) {
@@ -20,10 +30,7 @@ func TestPackageReceiptNamesPublicProfile(t *testing.T) {
 	if err := run(context.Background(), []string{"--version"}, &output); err != nil {
 		t.Fatal(err)
 	}
-	var receipt map[string]string
-	if err := json.Unmarshal([]byte(output.String()), &receipt); err != nil {
-		t.Fatal(err)
-	}
+	receipt := readPublicReceipt(t, output.String())
 	if receipt["PublicProfile"] != "default" {
 		t.Fatal("the actual package receipt does not bind its default public-content profile")
 	}
@@ -62,10 +69,7 @@ func TestProductionDisclosureReceipt(t *testing.T) {
 	if err := runWithListen(context.Background(), []string{"--public", dir, "--company-disclosure-file", projection, "--check-serving-public"}, &output, listen); err != nil {
 		t.Fatal(err)
 	}
-	var receipt map[string]string
-	if err := json.Unmarshal([]byte(output.String()), &receipt); err != nil {
-		t.Fatal(err)
-	}
+	receipt := readPublicReceipt(t, output.String())
 	if receipt["PublicProfile"] != "production-template" || receipt["PublicDigest"] != artifact.Digest() || receipt["EffectivePublicDigest"] == artifact.Digest() || len(receipt["EffectivePublicDigest"]) != 64 {
 		t.Fatal("template and served public identities were not distinguished")
 	}

@@ -60,7 +60,7 @@ func companySlots(data []byte) bool {
 	return valid && counts == [2]int{1, 1}
 }
 
-// HasCompanySlots refuses an unmaterialized template under the ordinary profile.
+// HasCompanySlots refuses unfinished address templates under the ordinary profile.
 func (a *Artifact) HasCompanySlots() bool {
 	for _, data := range a.files {
 		for _, slot := range addressSlots {
