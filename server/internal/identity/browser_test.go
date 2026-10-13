@@ -26,35 +26,75 @@ func browserHandler(t *testing.T, foundation *Foundation, callback string) http.
 	return public.Handler(h)
 }
 
+type browserGateCase struct {
+	state string
+	value any
+}
+
+// browserGateCases retains distinct SDK values, including absent and wrong-type
+// evaluations. These are fixture inputs, not production flag parsing.
+func browserGateCases() []browserGateCase {
+	return []browserGateCase{{"true", true}, {"false", false}, {"missing", nil}, {"wrong-type", "true"}}
+}
+
 // TestCombinedPublicAndPrivateFlagBoundary uses the actual Browser handler and
 // SDK provider, not a stub portal. Public pages remain available in either state.
 func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
-	for _, state := range []string{"true", "false", "missing", "wrong-type"} {
-		var value any
-		switch state {
-		case "true":
-			value = true
-		case "false":
-			value = false
-		case "wrong-type":
-			value = "true"
-		}
-		svc := New(pool, f.broker, flagAPI(t, value).NewClient())
+	for _, tc := range browserGateCases() {
+		svc := New(pool, f.broker, flagAPI(t, tc.value).NewClient())
 		h := browserHandler(t, svc, "https://app.example.invalid/portal/callback")
 		for _, route := range []string{"/", "/da/", "/portal/sign-in?lang=da"} {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid"+route, nil))
 			want := 200
-			if strings.HasPrefix(route, "/portal") && state != "true" {
+			if strings.HasPrefix(route, "/portal") && tc.state != "true" {
 				want = 404
 			}
 			if w.Code != want {
-				t.Fatalf("state=%s route=%s status=%d want=%d", state, route, w.Code, want)
+				t.Fatalf("state=%s route=%s status=%d want=%d", tc.state, route, w.Code, want)
 			}
 			if strings.HasPrefix(route, "/portal") && w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("combined private response cacheable")
+			}
+		}
+	}
+}
+
+// TestBrowserPresentationAssets exercises the actual handlers, bytes and default-off
+// boundary. Template files and unknown assets are never a public file server.
+func TestBrowserPresentationAssets(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	for _, tc := range browserGateCases() {
+		h := browserHandler(t, New(pool, f.broker, flagAPI(t, tc.value).NewClient()), "https://app.example.invalid/portal/callback")
+		for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
+			data, err := browserFiles.ReadFile("web/" + name)
+			if err != nil || len(data) == 0 {
+				t.Fatal("actual presentation asset is missing")
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid/portal/assets/"+name, nil))
+			if tc.state == "true" {
+				if w.Code != http.StatusOK || w.Header().Get("Content-Type") != contentType || w.Body.String() != string(data) {
+					t.Fatalf("state=%s asset=%s is not the actual correctly typed asset", tc.state, name)
+				}
+				if w.Header().Get("X-Content-Type-Options") != "nosniff" {
+					t.Fatal("presentation asset permits content sniffing")
+				}
+			} else if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), string(data)) {
+				t.Fatal("default-off gate exposed a presentation asset")
+			}
+			if w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("portal presentation response is cacheable")
+			}
+		}
+		for _, name := range []string{"unknown.css", "portal.html", "contact.html", "requests.html", "triage.html"} {
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid/portal/assets/"+name, nil))
+			if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "{{") {
+				t.Fatalf("state=%s asset=%s exposed an unknown asset or template source", tc.state, name)
 			}
 		}
 	}

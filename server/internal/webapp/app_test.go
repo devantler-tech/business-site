@@ -118,7 +118,7 @@ func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	portal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusForbidden)

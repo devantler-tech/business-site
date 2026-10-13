@@ -20,8 +20,20 @@ import (
 // untagged tests exercise the strict HTTPS and origin checks directly.
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	inv := b.invite("client-a", "client-a", "client")
+	triageFlags(t, b, true, true, true)
+	for _, subject := range []string{"client-a", "client-b"} {
+		triageSignIn(t, b, subject, subject, "client")
+		form := requestForm(t, b)
+		form.Set("title", "Fictional "+subject+" project")
+		form.Set("brief", "A fictional brief for reviewing the private inbox.\nNo work is approved by reading this request.")
+		if status, _, _ := b.request("POST", "/portal/requests", form, b.site.URL); status != 303 {
+			t.Fatal("synthetic client request failed")
+		}
+	}
+	b.mu.Lock()
+	b.subject = "operator"
+	b.mu.Unlock()
+	inv := b.invite("operator", "fictional-operator", "operator")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -45,9 +57,9 @@ func TestBrowserVisualFixture(t *testing.T) {
 		req.Header.Del("Cookie")
 		for _, cookie := range r.Cookies() {
 			if strings.HasPrefix(cookie.Name, "portal_visual_") {
-				copy := *cookie
-				copy.Name = "__Host-portal_" + strings.TrimPrefix(copy.Name, "portal_visual_")
-				req.AddCookie(&copy)
+				cookieCopy := *cookie
+				cookieCopy.Name = "__Host-portal_" + strings.TrimPrefix(cookieCopy.Name, "portal_visual_")
+				req.AddCookie(&cookieCopy)
 			}
 		}
 		if req.Header.Get("Origin") == origin {
@@ -71,10 +83,10 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 		}
 		for _, cookie := range res.Cookies() {
-			copy := *cookie
-			copy.Name = strings.Replace(copy.Name, "__Host-portal_", "portal_visual_", 1)
-			copy.Secure = false
-			http.SetCookie(w, &copy)
+			cookieCopy := *cookie
+			cookieCopy.Name = strings.Replace(cookieCopy.Name, "__Host-portal_", "portal_visual_", 1)
+			cookieCopy.Secure = false
+			http.SetCookie(w, &cookieCopy)
 		}
 		if location := res.Header.Get("Location"); strings.HasPrefix(location, b.broker.URL) {
 			u, _ := url.Parse(location)

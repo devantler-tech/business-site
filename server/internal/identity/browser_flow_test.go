@@ -52,6 +52,32 @@ func (b *browserFixture) configure(claims map[string]any, redirect bool) {
 	b.redirectExchange = redirect
 }
 
+// reconnect replaces only the handler; its separate pool is owned by the test.
+func (b *browserFixture) reconnect(ctx context.Context) *pgxpool.Pool {
+	b.t.Helper()
+	pool, err := pgxpool.New(ctx, b.pool.Config().ConnString())
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	b.t.Cleanup(pool.Close)
+	handler := browserHandler(b.t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
+	b.mu.Lock()
+	b.handler = handler
+	b.mu.Unlock()
+	return pool
+}
+
+func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values) {
+	t.Helper()
+	b := newBrowserFixture(t)
+	callback := b.start(b.invite("client-a", "client-a", "client"))
+	u, err := url.Parse(callback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, u, u.Query()
+}
+
 // newBrowserFixture creates isolated TLS application/broker servers and resets
 // only the explicitly named, disposable identity database.
 func newBrowserFixture(t *testing.T) *browserFixture {
@@ -261,14 +287,7 @@ func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 		t.Fatal("identity leaked into cookie")
 	}
 	// A separately constructed application and pool reads the durable session.
-	pool, err := pgxpool.New(b.f.ctx, b.pool.Config().ConnString())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	b.mu.Lock()
-	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
-	b.mu.Unlock()
+	b.reconnect(b.f.ctx)
 	s, _, _ = b.request("GET", "/portal/", nil, "")
 	if s != 200 {
 		t.Fatal("session lost after application restart")
@@ -332,10 +351,7 @@ func TestBrowserCallbackIsConsumedBeforeExchange(t *testing.T) {
 func TestBrowserInvalidCallbacksNeverExchange(t *testing.T) {
 	for _, kind := range []string{"state", "browser", "expired", "broker error", "duplicate code", "duplicate state"} {
 		t.Run(kind, func(t *testing.T) {
-			b := newBrowserFixture(t)
-			callback := b.start(b.invite("client-a", "client-a", "client"))
-			u, _ := url.Parse(callback)
-			q := u.Query()
+			b, u, q := startedBrowserAttempt(t)
 			switch kind {
 			case "state":
 				q.Set("state", "wrong")
@@ -572,10 +588,7 @@ func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 }
 
 func TestBrowserErrorsPreserveChosenLanguage(t *testing.T) {
-	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
-	u, _ := url.Parse(callback)
-	q := u.Query()
+	b, u, q := startedBrowserAttempt(t)
 	q.Set("state", "incorrect")
 	u.RawQuery = q.Encode()
 	s, body, _ := b.request("GET", u.RequestURI(), nil, "")

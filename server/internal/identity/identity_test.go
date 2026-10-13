@@ -186,6 +186,16 @@ func setFlag(t *testing.T, api *openfeature.EvaluationAPI, value any) {
 
 func enroll(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Principal {
 	t.Helper()
+	inv, a := invitedAttempt(t, svc, f, subject, client, role)
+	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil), inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func invitedAttempt(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) (string, Attempt) {
+	t.Helper()
 	inv, err := svc.Invite(f.ctx, Invitation{f.issuer, subject, client, role, time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
@@ -194,11 +204,7 @@ func enroll(t *testing.T, svc *Foundation, f brokerFixture, subject, client, rol
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil), inv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
+	return inv, a
 }
 
 func TestDurableInvitationAndAuthorization(t *testing.T) {
@@ -265,18 +271,11 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
-	inv, err := svc.Invite(f.ctx, Invitation{f.issuer, "atomic", "client-atomic", "client", time.Now().Add(time.Hour)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := svc.Begin(f.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	inv, a := invitedAttempt(t, svc, f, "atomic", "client-atomic", "client")
 	if a.State == a.BrowserBinding || a.State == a.Nonce || a.PKCEVerifier == "" {
 		t.Fatal("attempt secrets are missing or reused")
 	}
-	if _, err = svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, nil), inv); err == nil {
+	if _, err := svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, nil), inv); err == nil {
 		t.Fatal("wrong browser accepted")
 	}
 	var successes atomic.Int32
@@ -296,7 +295,7 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 		t.Fatalf("callback successful consumers=%d want 1", successes.Load())
 	}
 	// Independent valid login attempts race for the same invitation.
-	inv, err = svc.Invite(f.ctx, Invitation{f.issuer, "invite-race", "client-race", "client", time.Now().Add(time.Hour)})
+	inv, err := svc.Invite(f.ctx, Invitation{f.issuer, "invite-race", "client-race", "client", time.Now().Add(time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}

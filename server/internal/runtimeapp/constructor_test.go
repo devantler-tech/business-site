@@ -85,11 +85,11 @@ func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := oidc.ClientContext(context.Background(), broker.Client())
-	handler, close, err := Portal(ctx, cfg, api.NewClient())
+	handler, shutdown, err := Portal(ctx, cfg, api.NewClient())
 	if err != nil || handler == nil {
 		t.Fatal("configured constructor did not assemble the actual closed handler")
 	}
-	defer close()
+	defer shutdown()
 	if discoveries.Load() != 1 {
 		t.Fatal("constructor did not discover the real synthetic TLS broker")
 	}

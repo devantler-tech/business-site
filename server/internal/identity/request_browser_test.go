@@ -10,7 +10,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
@@ -25,6 +24,14 @@ func requestFlag(t *testing.T, b *browserFixture, value any) {
 	if err := b.flags.SetProviderAndWait(context.Background(), memprovider.NewInMemoryProvider(flags)); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func clientRequestForm(t *testing.T) (*browserFixture, url.Values) {
+	t.Helper()
+	b := newBrowserFixture(t)
+	requestFlag(t, b, true)
+	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	return b, requestForm(t, b)
 }
 
 func TestProjectRequestInvalidFormsNeverPersist(t *testing.T) {
@@ -76,10 +83,7 @@ func TestProjectRequestInvalidFormsNeverPersist(t *testing.T) {
 }
 
 func TestProjectRequestFlagAndCurrentMembership(t *testing.T) {
-	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
-	f := requestForm(t, b)
+	b, f := clientRequestForm(t)
 	s, _, h := b.request("POST", "/portal/requests", f, b.site.URL)
 	if s != 303 {
 		t.Fatalf("create=%d", s)
@@ -177,10 +181,7 @@ func TestProjectRequestClientIsolationAndEscaping(t *testing.T) {
 }
 
 func TestProjectRequestConcurrentRetriesCommitOne(t *testing.T) {
-	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
-	f := requestForm(t, b)
+	b, f := clientRequestForm(t)
 	locations := make(chan string, 6)
 	var wg sync.WaitGroup
 	for range 6 {
@@ -242,14 +243,7 @@ func TestProjectRequestDurableReceiptAndRetry(t *testing.T) {
 	if err := b.pool.QueryRow(b.f.ctx, "SELECT submitted_at::text FROM portal_requests").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	pool, err := pgxpool.New(context.Background(), b.pool.Config().ConnString())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	b.mu.Lock()
-	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
-	b.mu.Unlock()
+	pool := b.reconnect(context.Background())
 	s, _, h = b.request("POST", "/portal/requests", form, b.site.URL)
 	if s != 303 || h.Get("Location") != location {
 		t.Fatal("retry did not return original durable receipt")
@@ -267,10 +261,7 @@ func TestProjectRequestDurableReceiptAndRetry(t *testing.T) {
 }
 
 func TestProjectRequestDanishCharacterLimits(t *testing.T) {
-	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
-	f := requestForm(t, b)
+	b, f := clientRequestForm(t)
 	f.Set("title", strings.Repeat("æ", 120))
 	f.Set("brief", strings.Repeat("ø", 1200))
 	f.Set("lang", "da")
@@ -285,10 +276,7 @@ func TestProjectRequestDanishCharacterLimits(t *testing.T) {
 }
 
 func TestProjectRequestInvalidFormKeepsSafeDraft(t *testing.T) {
-	b := newBrowserFixture(t)
-	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
-	f := requestForm(t, b)
+	b, f := clientRequestForm(t)
 	f.Set("product", "wrong")
 	s, body, _ := b.request("POST", "/portal/requests", f, b.site.URL)
 	if s != 400 || !strings.Contains(body, `value="Fictional booking website"`) || !strings.Contains(body, f.Get("brief")) || !strings.Contains(body, `name="submission_key" value="`+f.Get("submission_key")+`"`) {
@@ -299,10 +287,7 @@ func TestProjectRequestInvalidFormKeepsSafeDraft(t *testing.T) {
 func TestProjectRequestReceiptNamesSelectedProduct(t *testing.T) {
 	for _, tc := range []struct{ product, label string }{{"website", "Website"}, {"app", "Web app"}, {"service", "Service or integration"}} {
 		t.Run(tc.product, func(t *testing.T) {
-			b := newBrowserFixture(t)
-			requestFlag(t, b, true)
-			b.finish(b.start(b.invite("client-a", "client-a", "client")))
-			f := requestForm(t, b)
+			b, f := clientRequestForm(t)
 			f.Set("product", tc.product)
 			s, _, h := b.request("POST", "/portal/requests", f, b.site.URL)
 			if s != 303 {
@@ -322,10 +307,7 @@ func TestProjectRequestCountsRawCharactersBeforeNormalization(t *testing.T) {
 		limit int
 	}{{"title", 120}, {"brief", 1200}} {
 		t.Run(tc.field, func(t *testing.T) {
-			b := newBrowserFixture(t)
-			requestFlag(t, b, true)
-			b.finish(b.start(b.invite("client-a", "client-a", "client")))
-			f := requestForm(t, b)
+			b, f := clientRequestForm(t)
 			f.Set(tc.field, " "+strings.Repeat("a", tc.limit))
 			s, _, _ := b.request("POST", "/portal/requests", f, b.site.URL)
 			if s != 400 {

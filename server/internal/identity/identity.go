@@ -60,9 +60,9 @@ func NewBroker(ctx context.Context, issuer, clientID string) (*Broker, error) {
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	if supplied, ok := ctx.Value(oauth2.HTTPClient).(*http.Client); ok && supplied != nil {
-		copy := *supplied
-		copy.Timeout = 10 * time.Second
-		client = &copy
+		clientCopy := *supplied
+		clientCopy.Timeout = 10 * time.Second
+		client = &clientCopy
 	}
 	// Authorization codes, PKCE verifiers and client credentials may only be sent
 	// to the configured token endpoint, never forwarded through a redirect.

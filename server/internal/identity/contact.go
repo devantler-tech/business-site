@@ -25,8 +25,8 @@ type contactData struct {
 
 // contactText bounds UTF-8 display fields and excludes control characters
 // before either persistence or reflection into a recovery form.
-func contactText(s string, max int, required bool) bool {
-	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > max || (required && strings.TrimSpace(s) == "") {
+func contactText(s string, limit int, required bool) bool {
+	if !utf8.ValidString(s) || utf8.RuneCountInString(s) > limit || (required && strings.TrimSpace(s) == "") {
 		return false
 	}
 	for _, r := range s {
@@ -126,13 +126,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 
 // contact renders only the current client's stored, unverified contact profile.
 func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
-	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
-		return
-	}
-	if role != "client" {
-		b.render(w, r, 403, "error", "", "")
+	if !b.requireContactClient(w, r) {
 		return
 	}
 	d, err := b.foundation.readContact(r.Context(), b.principal(r.Context()))
@@ -141,6 +135,20 @@ func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.renderContact(w, r, 200, d, "")
+}
+
+// requireContactClient preserves the authentication and role-denial responses.
+func (b *browser) requireContactClient(w http.ResponseWriter, r *http.Request) bool {
+	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		b.render(w, r, 401, "error", "", "")
+		return false
+	}
+	if role != "client" {
+		b.render(w, r, 403, "error", "", "")
+		return false
+	}
+	return true
 }
 
 // recoverContact retains safe draft text only when its expected revision still
@@ -169,13 +177,7 @@ func recoverContact(r *http.Request, current contactData) (contactData, bool) {
 // updateContact validates client-only form writes and renders a recoverable
 // rejected edit without resetting its revision or exposing unsafe submitted text.
 func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
-	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
-		return
-	}
-	if role != "client" {
-		b.render(w, r, 403, "error", "", "")
+	if !b.requireContactClient(w, r) {
 		return
 	}
 	d, err := parseContact(r)
@@ -214,6 +216,12 @@ type contactPageData struct {
 // renderContact escapes bounded profile data using the shared private layout,
 // with localized validation/conflict messages and an honest unverified state.
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = browserPage.ExecuteTemplate(w, "contact.html", b.contactPage(r, d, problem))
+}
+
+func (b *browser) contactPage(r *http.Request, d contactData, problem string) contactPageData {
 	page := contactPageData{pageData: b.data(r, "contact", "", nosurf.Token(r)), Contact: d, NameLabel: "Your name", EmailLabel: "Contact email", CompanyLabel: "Company (optional)", Save: "Save contact details", Pending: "This contact email is not verified. Saving it does not change your sign-in or authorize an order.", Workspace: "Back to your workspace"}
 	page.Title = "Your contact details"
 	page.Intro = "Keep your details together in your private client profile."
@@ -239,7 +247,5 @@ func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status i
 			page.FormError = "Din profil er ændret, siden formularen blev åbnet. Genindlæs dine kontaktoplysninger, før du gemmer igen."
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "contact.html", page)
+	return page
 }
