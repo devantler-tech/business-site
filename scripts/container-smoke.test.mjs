@@ -37,6 +37,27 @@ const bounded = [
   "--cpus=1",
 ];
 
+test("restricted image exposes only an explicitly configured migration job", () => {
+  const result = spawnSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--network=none",
+      ...bounded,
+      image,
+      "--migrate",
+      "--migration-database-file",
+      "/missing/private-connection",
+    ],
+    { encoding: "utf8", timeout: 30000 },
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "portal schema migration failed\n");
+});
+
 /** Preserve ordinary container controls while projecting only fictional input. */
 function projection() {
   return receipt.PublicProfile === "production-template"
@@ -145,6 +166,8 @@ test("actual image receipt, restricted runtime, visitor bytes and private/traver
       "/portal/operator",
       "/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/proposals",
       "/server/go.mod",
+      "/MIGRATIONS.md",
+      "/server/MIGRATIONS.md",
       "/testdata/provision.sql",
       "/.env",
       "/.git/config",

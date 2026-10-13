@@ -101,6 +101,12 @@ credited funds, worker claims and API/MCP execution outside this slice.
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
 here uses explicit current membership, NOT a claim of database row-level security.
+The actual executable's `--migrate` job requires a private verified-TLS migration
+connection file, rejects broad/assumable authority and mixed server options, and
+has fixed connection/statement/lock/overall deadlines. Read `MIGRATIONS.md` before
+changing it. Normal web startup must never read migration credentials or perform
+DDL. Exercise the compiled job against its uniquely named disposable databases;
+source proof never authorizes a production migration or customer activation.
 Customer-record handlers must authorize the server-owned record's client ID and
 scope the data query; an application helper is not blanket database isolation.
 

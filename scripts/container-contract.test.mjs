@@ -111,7 +111,7 @@ test('a confined non-root image is supplied for the actual runtime package', () 
   const file = readFileSync('Dockerfile', 'utf8');
   assert.match(file, /^FROM gcr\.io\/distroless\/static-debian13:nonroot@sha256:[a-f0-9]{64}$/m);
   assert.match(file, /^USER 65532:65532$/m);
-  assert.match(file, /^COPY --chown=65532:65532 business-site build-receipt\.json README\.md \/app\/$/m);
+  assert.match(file, /^COPY --chown=65532:65532 business-site build-receipt\.json README\.md MIGRATIONS\.md \/app\/$/m);
   assert.match(file, /^COPY --chown=65532:65532 public\/ \/app\/public\/$/m);
   assert.match(file, /^COPY --chown=65532:65532 notices\/ \/app\/notices\/$/m);
   assert.doesNotMatch(file, /^COPY .*\. \/app\//m);

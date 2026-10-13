@@ -49,6 +49,8 @@ func configuredPublicArtifact(t *testing.T) string {
 // Exercise the real startup and cancellation path, including owned cleanup,
 // without a production broker, database, fixed port or sleep-based readiness.
 func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
+	// Private migration configuration cannot turn ordinary web startup into DDL.
+	t.Setenv("PORTAL_MIGRATION_DATABASE_FILE", "/missing/private-migration-file")
 	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
 		t.Setenv(name, "")
 	}

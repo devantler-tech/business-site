@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"syscall"
 
 	"github.com/devantler-tech/business-site/server/internal/runtimeapp"
@@ -56,8 +57,39 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	version := options.Bool("version", false, "print package identity without starting services")
 	disclosure := options.String("company-disclosure-file", "", "private projected two-line company disclosure")
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
+	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
+	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
+	}
+	seen := map[string]int{}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+			seen[name]++
+		}
+	}
+	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 {
+		return runtimeapp.ErrMigration
+	}
+	if *migrate || seen["migration-database-file"] != 0 {
+		allowed := *migrate && *migrationFile != ""
+		options.Visit(func(option *flag.Flag) {
+			if option.Name != "migrate" && option.Name != "migration-database-file" {
+				allowed = false
+			}
+		})
+		if !allowed || seen["migrate"] != 1 || seen["migration-database-file"] != 1 {
+			return runtimeapp.ErrMigration
+		}
+		if !validPackageIdentity() {
+			return errors.New("build a verified runtime package before starting")
+		}
+		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(output, "portal schema migration completed")
+		return err
 	}
 	if *check {
 		artifact, err := loadPublic(*public)
@@ -67,7 +99,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		_, err = fmt.Fprintln(output, artifact.Digest())
 		return err
 	}
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(revision) || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(publicDigest) || buildMode != "release" && buildMode != "development" || publicProfile != "default" && publicProfile != "production-template" {
+	if !validPackageIdentity() {
 		return errors.New("build a verified runtime package before starting")
 	}
 	if *version {
@@ -124,6 +156,12 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	}()
 	_, _ = fmt.Fprintln(output, "runtime ready; private routes remain independently gated")
 	return runtimeapp.Serve(ctx, listener, artifact.Handler(portal))
+}
+
+// validPackageIdentity applies the same source/profile receipt gate to both
+// serving and one-shot jobs; neither an ordinary build nor an unknown variant runs.
+func validPackageIdentity() bool {
+	return regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(revision) && regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(publicDigest) && (buildMode == "release" || buildMode == "development") && (publicProfile == "default" || publicProfile == "production-template")
 }
 
 // main maps process termination to bounded HTTP shutdown and generic diagnostics.

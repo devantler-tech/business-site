@@ -146,6 +146,17 @@ or plain-HTTP cookie exception is added.
 
 See [the package decision](../docs/adr/0004-combined-runtime-package.md).
 
+### Separate schema migration job
+
+The same verified executable offers an explicit one-shot `--migrate` mode. It
+uses a private verified-TLS connection file and a separate, constrained migration
+role; ordinary web startup never reads that file or performs DDL. The job has
+bounded connection, statement, lock and overall deadlines, prints a generic
+completion or failure, and exits without opening HTTP or contacting the broker.
+See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
+permissions and failure handling. No migration enables a portal operation or
+establishes a production deployment.
+
 ### Bounded identity staging
 
 With the complete private identity configuration above, an authorized disposable
