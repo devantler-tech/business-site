@@ -136,8 +136,11 @@ wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback
 ending `/portal/callback`, and absolute `PORTAL_CLIENT_SECRET_FILE`. Store the secret
 as a regular, private file or a confined projected secret; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
-The Unix service runtime requires an already migrated least-privilege store, fixes its SQL schema,
-caps its pool/timeouts and performs no DDL. Dependency configuration alone does not
+The Unix service runtime requires an already migrated least-privilege store. Its
+configured database login must match both the session and effective role before
+the existing permission check and broker discovery; switching a broader login
+into a restricted role is refused. It fixes its SQL schema, caps its pool/timeouts
+and performs no DDL. Dependency configuration alone does not
 turn on the OpenFeature gate; real federation/ingress/activation remain parent work.
 `/healthz` is public-runtime liveness only. SIGTERM drains requests for up to ten
 seconds; request/header/idle limits are explicit. Serve behind an eventual verified

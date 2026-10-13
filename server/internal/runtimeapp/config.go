@@ -156,6 +156,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		return nil, closed, ErrConfig
 	}
 	fail := func() (http.Handler, func(), error) { pool.Close(); return nil, closed, ErrConfig }
+	// Assess the actual configured login, not a restricted role adopted by a
+	// broader credential. Both identities must agree before checking its grants.
+	var loginMatches bool
+	if err := pool.QueryRow(startup, "SELECT current_user::text = $1 AND session_user::text = $1", cfg.ConnConfig.User).Scan(&loginMatches); err != nil || !loginMatches {
+		return fail()
+	}
 	if err := identity.CheckRuntimeRole(startup, pool); err != nil {
 		return fail()
 	}
