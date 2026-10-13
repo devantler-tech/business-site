@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/devantler-tech/business-site/server/internal/activation"
 	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
@@ -23,6 +24,18 @@ var ErrConfig = errors.New("portal configuration is invalid")
 
 // Config holds the all-or-none private dependencies, never an activation setting.
 type Config struct{ database, issuer, client, callback, secretFile string }
+
+// IdentityProvider keeps ordinary startup closed. Explicit staging additionally
+// requires complete validated private dependencies and a bounded operator lease.
+func IdentityProvider(ctx context.Context, c Config) (openfeature.FeatureProvider, error) {
+	if os.Getenv("PORTAL_IDENTITY_FLAG") == "" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" {
+		return openfeature.NoopProvider{}, nil
+	}
+	if c == (Config{}) {
+		return nil, activation.ErrInvalid
+	}
+	return activation.New(ctx)
+}
 
 // readSecret accepts root-confined projected secrets within their mount, but not
 // escapes. Metadata and bounded bytes come from the same open descriptor.

@@ -117,7 +117,7 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
       }
       assert.equal((await fetch(origin, { method: "POST" })).status, 405);
       assert.equal(await (await fetch(origin + "/healthz")).text(), "ok\n");
-      assert.equal(logs.trim(), "runtime ready; portal activation is not configured");
+      assert.equal(logs.trim(), "runtime ready; private routes remain independently gated");
     } finally {
       child.kill("SIGTERM");
       const timer = setTimeout(() => child.kill("SIGKILL"), 12000);

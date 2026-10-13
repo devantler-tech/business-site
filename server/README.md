@@ -18,9 +18,10 @@ The foundation evaluates the boolean OpenFeature flag `portal-identity` with a
 false default on every operation, using the application's injected SDK client.
 Missing client/flag, false, a wrong type or evaluation error all deny access;
 missing broker/store also denies it. Changing the provider to false closes the
-boundary without creating a new service. No production activation provider is wired
-here; the executable installs the maintained SDK's no-op provider.
-No environment variable activates a private route. Public Pages builds
+boundary without creating a new service. Ordinary startup installs the maintained
+SDK's no-op provider. The optional [bounded staging provider](#bounded-identity-staging)
+uses operator-only process configuration; it is not production activation.
+Public Pages builds
 never import this module. The existing mock preview remains a separate simulation.
 The temporary release flag's retirement task is [#34](https://github.com/devantler-tech/business-site/issues/34),
 with a review date of 10 November 2026. An overdue review is not activation
@@ -137,13 +138,47 @@ as a regular, private file or a confined projected secret; never put it in argum
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
 The Unix service runtime requires an already migrated least-privilege store, fixes its SQL schema,
 caps its pool/timeouts and performs no DDL. Dependency configuration alone does not
-turn on the OpenFeature gate; real provider/ingress/activation remain parent work.
+turn on the OpenFeature gate; real federation/ingress/activation remain parent work.
 `/healthz` is public-runtime liveness only. SIGTERM drains requests for up to ten
 seconds; request/header/idle limits are explicit. Serve behind an eventual verified
 TLS gateway before any production identity activation. No forwarded-header trust
 or plain-HTTP cookie exception is added.
 
 See [the package decision](../docs/adr/0004-combined-runtime-package.md).
+
+### Bounded identity staging
+
+With the complete private identity configuration above, an authorized disposable
+staging process may additionally supply `PORTAL_IDENTITY_FLAG` in the maintained
+OpenFeature from-env provider's JSON format and `PORTAL_IDENTITY_LEASE_UNTIL`
+as an RFC3339 timestamp in the future, at most ten minutes away. Both belong to
+the operator's private process configuration, never public assets, images,
+receipts or logs. No provider service, direct Google/Microsoft SDK or paid
+enrollment is introduced. This does not authorize using real customer data.
+
+The provider evaluates only `portal-identity`. Missing, false, malformed,
+wrong-type or oversized values deny; unhealthy SDK state, process cancellation,
+shutdown and lease expiry also deny, including existing sessions. The
+`portal-requests`, `portal-triage` and `portal-proposals` decisions remain
+separate and closed in this composition. A valid identity lease cannot submit a
+request, approve an offer, confirm funds or execute work.
+
+Configuration is owned by one process. Changing an external environment file
+does **not** change that process: stop and restart it to rotate or revoke the
+configuration. The lease cannot be extended in place. Expiry closes private
+access while the verified public pages continue serving. Incomplete or unsafe
+private dependencies and missing or invalid leases fail generically before a
+listener opens. Invalid flag values deny private access during evaluation while
+the public pages remain available.
+
+The required Go suite runs the compiled command against a disposable restricted
+database and synthetic TLS broker, covering actual on/off/error HTTP routes and
+expiry. Separate real TLS-browser/session controls use the same maintained
+provider and verify invitation redemption, current membership and revocation.
+These are synthetic staging proofs, not live Dex/Google/Microsoft registration,
+production ingress, customer isolation or a legal-compliance verdict. Keep
+monorepo#3936/#3939, website #19 and portal #21 open for their remaining release
+proofs. See [the staging decision](../docs/adr/0009-bounded-identity-staging.md).
 
 ### Production public-content template
 
