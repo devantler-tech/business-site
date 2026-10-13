@@ -145,6 +145,35 @@ or plain-HTTP cookie exception is added.
 
 See [the package decision](../docs/adr/0004-combined-runtime-package.md).
 
+### Production public-content template
+
+Use `bash scripts/package-runtime.sh --release --production-template` to build
+`runtime-production-dist`. This explicit profile refreshes the complete public
+portfolio into build-local scratch and includes EN/DA company information, but
+**never embeds the registered address**. Missing or invalid ranking data fails;
+ordinary default builds remain network-free. `--development` labels local source.
+
+Before starting this variant, supply `--company-disclosure-file` with an absolute
+path to a regular, owner-readable private projected file containing the approved
+two-line address. The same-descriptor read is bounded and root-confined. Missing,
+unsafe or malformed input fails before opening a listener. The default profile
+does not accept or read this input. No actual address belongs in package source,
+build environment, image layers, logs or receipts.
+
+`--version` reports `PublicProfile` and the signed template's `PublicDigest`.
+`--check-serving-public --public <packaged-public-directory>` with the same
+projection validates the effective immutable serving snapshot and reports its
+separate `EffectivePublicDigest`, never the address or filename. This is a
+deployment configuration check, not provider/portal activation or compliance
+certification. Restart deliberately to rotate the projected disclosure.
+
+The same runtime/container smoke scripts support both profiles. Their production
+controls use fictional private input outside the build context; image controls
+project it in a disposable, read-only volume owned by UID 65532. CI preserves the
+default checks, additionally tests and archives the production variant, and signs
+that exact production-template image with source, digest and profile annotations.
+See [the profile decision](../docs/adr/0008-production-public-content-profile.md).
+
 ## Restricted container distribution
 
 After packaging clean source on Linux, return to the repository root with Docker

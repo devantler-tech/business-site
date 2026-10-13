@@ -9,6 +9,7 @@ import { imageDigest, readJournalCovers } from './check-editorial-assets.mjs';
 import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
 import { assertVisitorPrivacy } from './visitor-privacy.mjs';
 import { readerText } from './reader-text.mjs';
+import { publicStarSnapshot as starSnapshot } from '../src/data/public-products.ts';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -37,7 +38,6 @@ for (const path of readdirSync(root, { recursive: true })) {
 const html = (path) => readFileSync(resolve(root, path, 'index.html'), 'utf8');
 const home = html('');
 const publicRepositories = ['.github', 'actions', 'agent-plugins', 'agent-skills', 'data-product-controller', 'dotnet-template', 'go-template', 'ksail', 'kyverno-policies', 'platform-template', 'platform-tenant-template', 'provider-upjet-unifi', 'world-at-ruin'];
-const starSnapshot = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const projectInventory = readFileSync(new URL('../src/content/docs/projects/active.mdx', import.meta.url), 'utf8');
 assert.doesNotMatch(projectInventory, /grouped\s*—\s*a private self-hosted app|source repositories are private/, 'Application grouping must not imply private source repositories');
 const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));

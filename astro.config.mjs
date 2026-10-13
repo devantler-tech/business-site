@@ -28,6 +28,9 @@ export default defineConfig({
   // Convention + lifecycle (remove the gate once shipped) live in docs/README.md.
   env: {
     schema: {
+      PUBLIC_CONTENT_PROFILE: envField.enum({
+        context: "server", access: "public", values: ["default", "production-template"], default: "default",
+      }),
       COMPANY_POSTAL_ADDRESS: envField.string({
         context: "server",
         access: "secret",

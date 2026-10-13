@@ -195,8 +195,10 @@ function assertPublisher(w) {
   const exercise = steps.findIndex(s => s.run?.includes('node scripts/container-smoke.test.mjs business-site:test runtime-dist'));
   const publish = steps.findIndex(s => s.run?.includes('docker push'));
   const verify = steps.findIndex(s => s.run?.includes('cosign verify '));
-  const publishedSmoke = steps.findIndex(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-dist'));
+  const publishedSmoke = steps.findIndex(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-production-dist'));
   assert.ok(exercise >= 0 && publish > exercise && verify > publish && publishedSmoke > verify);
+  assert.match(steps[publish].run, /docker tag business-site:production-test/);
+  assert.match(steps[exercise].run, /node scripts\/container-smoke\.test\.mjs business-site:production-test runtime-production-dist/);
   for (const i of [exercise, publish, verify, publishedSmoke]) {
     assert.equal(steps[i].if, undefined);
     assert.ok(steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false);
@@ -220,5 +222,7 @@ test('publication accepts only successful same-repository main push CI and tests
   const source = readFileSync('.github/workflows/ci.yaml', 'utf8');
   assert.match(source, /cosign attest --yes/);
   assert.match(source, /cosign verify-attestation/);
+  assert.match(source, /devantler.public-profile=production-template/);
+  assert.match(source, /\.PublicProfile == "production-template"/);
   assert.doesNotMatch(source, /:latest|pull_request_target|secrets\.(?!GITHUB_TOKEN)/);
 });

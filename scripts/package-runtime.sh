@@ -3,7 +3,11 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 mode="${1:---release}"
-[[ "$#" -le 1 && ( "$mode" == --release || "$mode" == --development ) ]] || { printf '%s\n' 'Use --release for clean source or --development for a labelled local package.' >&2; exit 1; }
+variant="${2:---default}"
+[[ "$#" -le 2 && ( "$mode" == --release || "$mode" == --development ) && ( "$variant" == --default || "$variant" == --production-template ) ]] || { printf '%s\n' 'Use --release or --development, optionally followed by --production-template.' >&2; exit 1; }
+profile=default
+output=runtime-dist
+if [[ "$variant" == --production-template ]]; then profile=production-template; output=runtime-production-dist; fi
 revision="$(git rev-parse HEAD)"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || exit 1
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
@@ -12,20 +16,32 @@ fi
 [[ "$(node --version)" == v24.* && "$(npm --version)" == 11.* ]] || { printf '%s\n' 'Use Node 24 and npm 11 before packaging.' >&2; exit 1; }
 [[ "$(go version)" == "go version go1.27.2 "* ]] || { printf '%s\n' 'Use the exact Go 1.27.2 toolchain before packaging.' >&2; exit 1; }
 export GOTOOLCHAIN=local LC_ALL=C
-env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+mkdir -p "$output"
+inputs=""
+cleanup_inputs() {
+  if [[ -n "$inputs" ]]; then rm -f -- "$inputs/stars.json"; rmdir -- "$inputs"; fi
+}
+trap cleanup_inputs EXIT
+build_env=(env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
+build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
+if [[ "$profile" == production-template ]]; then
+  inputs="$(mktemp -d "$output/public-inputs.XXXXXX")"
+  bash scripts/refresh-public-stars.sh "$inputs/stars.json"
+  build_env+=("PUBLIC_CONTENT_PROFILE=production-template" "FEATURE_COMPANY_IDENTITY=true" "PUBLIC_STARS_SNAPSHOT=$PWD/$inputs/stars.json")
+fi
+"${build_env[@]}" npm run build
 bash scripts/check-portal-artifacts.sh dist
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
   printf '%s\n' 'The public build changed release source; investigate before packaging.' >&2; exit 1
 fi
-mkdir -p runtime-dist
-package="$(mktemp -d runtime-dist/package.XXXXXX)"
+package="$(mktemp -d "$output/package.XXXXXX")"
 mkdir -p "$package/public" "$package/notices"
 cp -R dist/. "$package/public/"
 digest="$(cd server && go run ./cmd/business-site --check-public --public "../$package/public")"
 [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || { printf '%s\n' 'Public artifact validation did not return a digest.' >&2; exit 1; }
 (
   cd server
-  CGO_ENABLED=0 go build -trimpath -ldflags "-X main.revision=$revision -X main.publicDigest=$digest -X main.buildMode=${mode#--}" -o "../$package/business-site" ./cmd/business-site
+  CGO_ENABLED=0 go build -trimpath -ldflags "-X main.revision=$revision -X main.publicDigest=$digest -X main.buildMode=${mode#--} -X main.publicProfile=$profile" -o "../$package/business-site" ./cmd/business-site
   # Every actually linked third-party module, not test-only dependencies.
   go list -deps -f '{{if and .Module (not .Module.Main)}}{{.Module.Path}}{{"\t"}}{{.Module.Version}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/business-site | sort -u | while IFS=$'\t' read -r module version directory; do
     [[ -n "$module" ]] || continue
@@ -48,5 +64,5 @@ cp server/README.md "$package/README.md"
 "$package/business-site" --version > "$package/build-receipt.json"
 # ZIP consumers need not retain executable modes. Preserve the complete package
 # inside a tar archive before any artifact service handles it.
-tar -czf runtime-dist/business-site-runtime.tar.gz -C runtime-dist "${package#runtime-dist/}"
+tar -czf "$output/business-site-runtime.tar.gz" -C "$output" "${package#"$output"/}"
 printf 'RUNTIME_PACKAGE=%s\n' "$package"

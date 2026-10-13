@@ -10,9 +10,8 @@ import { FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
 import { type Locale } from './content';
 import { supporting } from './supporting';
 import { clientCopy, clientProducts } from './client-facing';
-import { publicProducts, selectPublicTools } from '../../data/public-products';
+import { publicProducts, selectPublicTools, publicStarSnapshot as snapshot } from '../../data/public-products';
 import catalogue from '../../data/public-products.json';
-import snapshot from '../../data/github-stars.json';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
 const t = clientCopy[locale];

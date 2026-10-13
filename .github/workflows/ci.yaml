@@ -381,6 +381,36 @@ jobs:
           mkdir -p runtime-dist/container
           docker save business-site:test | gzip > runtime-dist/container/image.tar.gz
           cp runtime-dist/business-site-runtime.tar.gz runtime-dist/container/
+      - name: Build the production public-content template
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/package-runtime.sh --release --production-template
+      - name: Exercise production template with private fictional disclosure
+        working-directory: .
+        run: node scripts/runtime-smoke.test.mjs runtime-production-dist
+      - name: Exercise extracted production archive
+        working-directory: .
+        run: |
+          extracted="$(mktemp -d)"
+          tar -xzf runtime-production-dist/business-site-runtime.tar.gz -C "$extracted"
+          node scripts/runtime-smoke.test.mjs "$extracted"
+      - name: Build actual production-profile container
+        working-directory: .
+        run: |
+          package="$(find runtime-production-dist -maxdepth 1 -type d -name 'package.*')"
+          test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
+          docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:production-test "$package"
+      - name: Exercise actual production-profile container
+        working-directory: .
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/container-smoke.test.mjs business-site:production-test runtime-production-dist
+      - name: Archive the tested production container and package
+        working-directory: .
+        run: |
+          docker save business-site:production-test | gzip > runtime-dist/container/production-image.tar.gz
+          cp runtime-production-dist/business-site-runtime.tar.gz runtime-dist/container/business-site-production-runtime.tar.gz
       - name: Upload tested container
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -513,6 +543,10 @@ jobs:
           tar -xzf runtime-dist/container/business-site-runtime.tar.gz -C runtime-dist
           docker load --input runtime-dist/container/image.tar.gz
           node scripts/container-smoke.test.mjs business-site:test runtime-dist
+          mkdir -p runtime-production-dist
+          tar -xzf runtime-dist/container/business-site-production-runtime.tar.gz -C runtime-production-dist
+          docker load --input runtime-dist/container/production-image.tar.gz
+          node scripts/container-smoke.test.mjs business-site:production-test runtime-production-dist
       - name: Setup Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Log in to GHCR
@@ -530,7 +564,7 @@ jobs:
           set -euo pipefail
           image=ghcr.io/devantler-tech/business-site
           tag="$image:staging-$RUN_ID-$RUN_ATTEMPT"
-          docker tag business-site:test "$tag"
+          docker tag business-site:production-test "$tag"
           docker push "$tag"
           ref="$(docker image inspect "$tag" --format '{{index .RepoDigests 0}}')"
           [[ "$ref" =~ ^ghcr.io/devantler-tech/business-site@sha256:[0-9a-f]{64}$ ]]
@@ -549,13 +583,14 @@ jobs:
           [[ "$WORKFLOW_IDENTITY" == https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main ]]
           mkdir -p runtime-dist/container-publication
           docker run --rm --network=none --read-only --cap-drop=ALL --security-opt=no-new-privileges "$PUBLISHED_IMAGE" --version > runtime-dist/container-publication/runtime.json
-          public_digest="$(jq -er --arg sha "$SOURCE_SHA" 'select(.Repository == "devantler-tech/business-site" and .SourceRevision == $sha and .Mode == "release") | .PublicDigest' runtime-dist/container-publication/runtime.json)"
+          public_digest="$(jq -er --arg sha "$SOURCE_SHA" 'select(.Repository == "devantler-tech/business-site" and .SourceRevision == $sha and .Mode == "release" and .PublicProfile == "production-template") | .PublicDigest' runtime-dist/container-publication/runtime.json)"
           [[ "$public_digest" =~ ^[0-9a-f]{64}$ ]]
           digest="${PUBLISHED_IMAGE##*@}"
           annotations=(
             -a devantler.repository=devantler-tech/business-site
             -a "devantler.source-sha=$SOURCE_SHA"
             -a "devantler.public-digest=$public_digest"
+            -a devantler.public-profile=production-template
             -a "devantler.ci-run-id=$CI_RUN_ID"
             -a "devantler.ci-run-attempt=$CI_RUN_ATTEMPT"
             -a "devantler.run-id=$RUN_ID"
@@ -564,19 +599,19 @@ jobs:
           )
           cosign sign --yes "${annotations[@]}" "$PUBLISHED_IMAGE"
           cosign verify --certificate-identity "$WORKFLOW_IDENTITY" --certificate-oidc-issuer https://token.actions.githubusercontent.com "${annotations[@]}" "$PUBLISHED_IMAGE" > runtime-dist/container-publication/signature.json
-          jq -n --arg identity "$WORKFLOW_IDENTITY" --arg sha "$SOURCE_SHA" --arg ci "$CI_RUN_ID" --arg attempt "$CI_RUN_ATTEMPT" --arg run "$RUN_ID" --arg digest "$public_digest" '{builder:{id:$identity},buildType:"https://devantler.tech/build-types/combined-runtime-container/v1",invocation:{configSource:{uri:"git+https://github.com/devantler-tech/business-site",digest:{sha1:$sha},entryPoint:".github/workflows/ci.yaml"},parameters:{ciRunId:$ci,ciRunAttempt:$attempt,publicDigest:$digest}},metadata:{buildInvocationId:("https://github.com/devantler-tech/business-site/actions/runs/"+$run),completeness:{parameters:true,environment:false,materials:false},reproducible:false},materials:[{uri:"git+https://github.com/devantler-tech/business-site",digest:{sha1:$sha}}]}' > runtime-dist/container-publication/provenance.json
+          jq -n --arg identity "$WORKFLOW_IDENTITY" --arg sha "$SOURCE_SHA" --arg ci "$CI_RUN_ID" --arg attempt "$CI_RUN_ATTEMPT" --arg run "$RUN_ID" --arg digest "$public_digest" '{builder:{id:$identity},buildType:"https://devantler.tech/build-types/combined-runtime-container/v1",invocation:{configSource:{uri:"git+https://github.com/devantler-tech/business-site",digest:{sha1:$sha},entryPoint:".github/workflows/ci.yaml"},parameters:{ciRunId:$ci,ciRunAttempt:$attempt,publicDigest:$digest,publicProfile:"production-template"}},metadata:{buildInvocationId:("https://github.com/devantler-tech/business-site/actions/runs/"+$run),completeness:{parameters:true,environment:false,materials:false},reproducible:false},materials:[{uri:"git+https://github.com/devantler-tech/business-site",digest:{sha1:$sha}}]}' > runtime-dist/container-publication/provenance.json
           cosign attest --yes --type slsaprovenance --predicate runtime-dist/container-publication/provenance.json "$PUBLISHED_IMAGE"
           cosign verify-attestation --type slsaprovenance --certificate-identity "$WORKFLOW_IDENTITY" --certificate-oidc-issuer https://token.actions.githubusercontent.com "$PUBLISHED_IMAGE" > runtime-dist/container-publication/attestation.json
           # Check the signed statement's actual subject and source, not only that
           # some statement exists under this publisher's identity.
           jq -es --arg sha "$SOURCE_SHA" --arg digest "${digest#sha256:}" '[.[] | .payload | @base64d | fromjson | select(.predicateType == "https://slsa.dev/provenance/v0.2" and .predicate.invocation.configSource.digest.sha1 == $sha and any(.subject[]; .digest.sha256 == $digest))] | length > 0' runtime-dist/container-publication/attestation.json
-          jq -n --arg ref "$PUBLISHED_IMAGE" --arg source "$SOURCE_SHA" --arg public "$public_digest" --arg identity "$WORKFLOW_IDENTITY" --arg workflow "$WORKFLOW_SHA" --arg ci "$CI_RUN_ID" --arg attempt "$CI_RUN_ATTEMPT" --arg run "$RUN_ID" --arg runAttempt "$RUN_ATTEMPT" '{repository:"devantler-tech/business-site",sourceRevision:$source,publicDigest:$public,image:$ref,signerIdentity:$identity,workflowRevision:$workflow,ciRunId:$ci,ciRunAttempt:$attempt,publicationRunId:$run,publicationRunAttempt:$runAttempt}' > runtime-dist/container-publication/receipt.json
+          jq -n --arg ref "$PUBLISHED_IMAGE" --arg source "$SOURCE_SHA" --arg public "$public_digest" --arg identity "$WORKFLOW_IDENTITY" --arg workflow "$WORKFLOW_SHA" --arg ci "$CI_RUN_ID" --arg attempt "$CI_RUN_ATTEMPT" --arg run "$RUN_ID" --arg runAttempt "$RUN_ATTEMPT" '{repository:"devantler-tech/business-site",sourceRevision:$source,publicDigest:$public,publicProfile:"production-template",image:$ref,signerIdentity:$identity,workflowRevision:$workflow,ciRunId:$ci,ciRunAttempt:$attempt,publicationRunId:$run,publicationRunAttempt:$runAttempt}' > runtime-dist/container-publication/receipt.json
       - name: Pull and exercise the signed published digest, not its tag
         env:
           PUBLISHED_IMAGE: ${{ steps.image.outputs.ref }}
         run: |
           docker pull "$PUBLISHED_IMAGE"
-          node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-dist
+          node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-production-dist
       - name: Upload source/digest/signature/provenance receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

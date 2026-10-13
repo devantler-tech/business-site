@@ -6,7 +6,7 @@ scratch=$(mktemp -d)
 finished=false
 cleanup() {
   status=$?
-  rm -f -- "$scratch/bin/gh" "$scratch/scripts/refresh-public-stars.sh" "$scratch/src/data/public-products.json" "$scratch/src/data/github-stars.json" "$scratch/read.json" "$scratch/result.json" "$scratch/result.json.read" "$scratch/failure.log"
+  rm -f -- "$scratch/bin/gh" "$scratch/scripts/refresh-public-stars.sh" "$scratch/src/data/public-products.json" "$scratch/src/data/github-stars.json" "$scratch/read.json" "$scratch/result.json" "$scratch/result.json.read" "$scratch/failure.log" "$scratch/custom.json"
   rmdir -- "$scratch/bin" "$scratch/scripts" "$scratch/src/data" "$scratch/src" "$scratch"
   if ! $finished && [ "$status" -eq 0 ]; then status=2; fi
   exit "$status"
@@ -22,6 +22,9 @@ jq '[map({name: .repository, private: false, archived: false, fork: false, owner
 bash "$scratch/scripts/refresh-public-stars.sh" > /dev/null
 jq -e --slurpfile manifest "$site_dir/src/data/public-products.json" '(.repositories | length) == ($manifest[0] | length) and .repositories.ksail == 0 and (.observedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' "$scratch/src/data/github-stars.json" > /dev/null
 cp "$scratch/src/data/github-stars.json" "$scratch/result.json"
+bash "$scratch/scripts/refresh-public-stars.sh" "$scratch/custom.json" > /dev/null
+jq -e '.repositories.ksail == 0' "$scratch/custom.json" > /dev/null
+cmp "$scratch/result.json" "$scratch/src/data/github-stars.json"
 for mode in failed missing private malformed-archived malformed-fork invalid duplicate; do
   case "$mode" in
     failed) export STAR_READ_FAIL=1 ;;

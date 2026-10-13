@@ -3,6 +3,7 @@ node_modules/
 dist/
 .astro/
 /runtime-dist/
+/runtime-production-dist/
 /server/coverage.out
 .playwright-mcp/
 /megalinter-reports/

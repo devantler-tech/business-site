@@ -1,11 +1,12 @@
 ---
-import { COMPANY_POSTAL_ADDRESS } from 'astro:env/server';
+import { COMPANY_POSTAL_ADDRESS, PUBLIC_CONTENT_PROFILE } from 'astro:env/server';
 import BusinessLayout from './BusinessLayout.astro';
 import { company, companyIdentityEnabled, type Locale } from './content';
 import { companyAddress } from './company-address.mjs';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
-const lines = companyAddress(COMPANY_POSTAL_ADDRESS, companyIdentityEnabled);
+const lines = companyAddress(PUBLIC_CONTENT_PROFILE === 'production-template'
+  ? '__BUSINESS_ADDRESS_LINE_1__\n__BUSINESS_ADDRESS_LINE_2__' : COMPANY_POSTAL_ADDRESS, companyIdentityEnabled);
 const t = locale === 'da' ? {
   title: 'Virksomhed og kontakt', description: 'Registrering og kontaktoplysninger for Devantler Tech.',
   intro: 'Devantler Tech er en personligt ejet mindre virksomhed drevet af Nikolai Emil Damm.',

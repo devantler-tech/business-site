@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { publicStarSnapshot as stars } from '../src/data/public-products.ts';
 
 const [directory, ...extra] = process.argv.slice(2);
 assert.ok(directory && extra.length === 0, 'Usage: check-client-facing.mjs <build-directory>');
@@ -10,7 +11,6 @@ const page = (path) => readFileSync(resolve(directory, path, 'index.html'), 'utf
 const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
 const featured = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
-const stars = JSON.parse(readFileSync(new URL('../src/data/github-stars.json', import.meta.url), 'utf8'));
 const anchors = {
   ksail: ['️-ksail---'], 'data-product-controller': ['-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
