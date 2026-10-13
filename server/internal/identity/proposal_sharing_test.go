@@ -77,11 +77,11 @@ func visibilityForm(t *testing.T, b *browserFixture, event, latest, version, act
 }
 
 func cloneValues(values url.Values) url.Values {
-	copy := make(url.Values, len(values))
+	cloned := make(url.Values, len(values))
 	for key, values := range values {
-		copy[key] = append([]string(nil), values...)
+		cloned[key] = append([]string(nil), values...)
 	}
-	return copy
+	return cloned
 }
 
 func saveVisibility(t *testing.T, b *browserFixture, form url.Values) {
