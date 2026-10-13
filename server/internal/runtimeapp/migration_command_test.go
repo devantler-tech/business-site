@@ -27,17 +27,10 @@ func migrationCommandFixture(t *testing.T) (string, *pgxpool.Pool, *url.URL) {
 	database := runtimeFixtureDatabase(t)
 	adminURL := *database
 	adminURL.Path = "/postgres"
-	adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
-	admin, err := pgx.Connect(t.Context(), adminURL.String())
-	if err != nil {
-		t.Fatal("disposable migration administrator unavailable")
-	}
+	admin := migrationFixtureAdministrator(t, &adminURL)
 	name := fmt.Sprintf("portal_migration_%d_%d", os.Getpid(), time.Now().UnixNano())
 	quoted := pgx.Identifier{name}.Sanitize()
 	if _, err := admin.Exec(t.Context(), "CREATE DATABASE "+quoted+" OWNER portal_migrator"); err != nil {
-		if err := admin.Close(t.Context()); err != nil {
-			t.Error("migration administrator cleanup failed")
-		}
 		t.Fatal("disposable migration database creation failed")
 	}
 	t.Cleanup(func() {
@@ -45,9 +38,6 @@ func migrationCommandFixture(t *testing.T) (string, *pgxpool.Pool, *url.URL) {
 		defer cancel()
 		if _, err := admin.Exec(ctx, "DROP DATABASE "+quoted+" WITH (FORCE)"); err != nil {
 			t.Error("owned migration database cleanup failed")
-		}
-		if err := admin.Close(ctx); err != nil {
-			t.Error("migration administrator cleanup failed")
 		}
 	})
 	database.Path = "/" + name
@@ -77,6 +67,41 @@ func migrationCommandFixture(t *testing.T) (string, *pgxpool.Pool, *url.URL) {
 		t.Fatal("migration fixture private file write failed")
 	}
 	return file, pool, database
+}
+
+// migrationFixtureAdministrator uses only the validated loopback fixture and
+// closes after the later-registered owned database/role cleanup callbacks.
+func migrationFixtureAdministrator(t *testing.T, database *url.URL) *pgx.Conn {
+	t.Helper()
+	adminURL := runtimeFixtureDatabase(t)
+	adminURL.Path = database.Path
+	adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
+	admin, err := pgx.Connect(t.Context(), adminURL.String())
+	if err != nil {
+		t.Fatal("owned migration-fixture administrator unavailable")
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := admin.Close(ctx); err != nil {
+			t.Error("owned migration-fixture administrator cleanup failed")
+		}
+	})
+	return admin
+}
+
+// cleanupMigrationFixtureRole removes only a generated test role and its local
+// disposable-database privileges before the administrator connection is closed.
+func cleanupMigrationFixtureRole(t *testing.T, admin *pgx.Conn, role string) {
+	t.Helper()
+	quoted := pgx.Identifier{role}.Sanitize()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := admin.Exec(ctx, "DROP OWNED BY "+quoted+"; DROP ROLE "+quoted); err != nil {
+			t.Error("owned migration-fixture role cleanup failed")
+		}
+	})
 }
 
 // buildMigrationCommand binds the actual command to a source receipt. Migration
@@ -244,31 +269,13 @@ func TestActualMigrationLockWaitIsBounded(t *testing.T) {
 func TestActualMigrationRejectsBroaderRoleGrants(t *testing.T) {
 	file, pool, database := migrationCommandFixture(t)
 	binary := buildMigrationCommand(t)
-	adminURL := runtimeFixtureDatabase(t)
-	adminURL.Path = database.Path
-	adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
-	admin, err := pgx.Connect(t.Context(), adminURL.String())
-	if err != nil {
-		t.Fatal("migration authority fixture unavailable")
-	}
+	admin := migrationFixtureAdministrator(t, database)
 	role := fmt.Sprintf("portal_migration_role_%d_%d", os.Getpid(), time.Now().UnixNano())
 	quoted := pgx.Identifier{role}.Sanitize()
 	if _, err := admin.Exec(t.Context(), "CREATE ROLE "+quoted+" LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT; GRANT CREATE ON SCHEMA public TO "+quoted); err != nil {
-		if err := admin.Close(t.Context()); err != nil {
-			t.Error("migration authority administrator cleanup failed")
-		}
 		t.Fatal("owned migration role creation failed")
 	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := admin.Exec(ctx, "DROP OWNED BY "+quoted+"; DROP ROLE "+quoted); err != nil {
-			t.Error("owned migration role cleanup failed")
-		}
-		if err := admin.Close(ctx); err != nil {
-			t.Error("migration authority administrator cleanup failed")
-		}
-	})
+	cleanupMigrationFixtureRole(t, admin, role)
 	if err := os.WriteFile(file, []byte(migrationFixtureRole(database, role)), 0600); err != nil {
 		t.Fatal("migration role projection failed")
 	}
@@ -540,20 +547,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 			if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','retained','client-retained','client',true)"); err != nil {
 				t.Fatal("owned schema-preservation fixture failed")
 			}
-			adminURL := runtimeFixtureDatabase(t)
-			adminURL.Path = database.Path
-			adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
-			admin, err := pgx.Connect(t.Context(), adminURL.String())
-			if err != nil {
-				t.Fatal("owned authority-fixture administrator unavailable")
-			}
-			t.Cleanup(func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := admin.Close(ctx); err != nil {
-					t.Error("owned authority administrator cleanup failed")
-				}
-			})
+			admin := migrationFixtureAdministrator(t, database)
 			connection := database.String()
 			if relation == "wrong credential" {
 				role := fmt.Sprintf("portal_migration_reader_%d_%d", os.Getpid(), time.Now().UnixNano())
@@ -561,13 +555,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				if _, err := admin.Exec(t.Context(), "CREATE ROLE "+quoted+" LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT; GRANT USAGE,CREATE ON SCHEMA public TO "+quoted+"; GRANT SELECT ON ALL TABLES IN SCHEMA public TO "+quoted); err != nil {
 					t.Fatal("owned wrong-credential role fixture failed")
 				}
-				t.Cleanup(func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer cancel()
-					if _, err := admin.Exec(ctx, "DROP OWNED BY "+quoted+"; DROP ROLE "+quoted); err != nil {
-						t.Error("owned wrong-credential role cleanup failed")
-					}
-				})
+				cleanupMigrationFixtureRole(t, admin, role)
 				connection = migrationFixtureRole(database, role)
 			} else {
 				quoted := pgx.Identifier{"public", relation}.Sanitize()
