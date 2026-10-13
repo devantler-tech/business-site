@@ -5,3 +5,4 @@ dist/
 /runtime-dist/
 /server/coverage.out
 .playwright-mcp/
+/megalinter-reports/

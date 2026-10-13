@@ -1,1 +1,0 @@
-{ "kind": "postgresql17", "namespace": "portal", "database": "portal_identity_test" }

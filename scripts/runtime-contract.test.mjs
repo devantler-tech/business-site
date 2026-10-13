@@ -1,9 +1,33 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import * as yaml from 'js-yaml';
 
 const workflow = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
+test('generated lint reports stay ignored without excluding source', () => {
+  for (const path of [
+    'megalinter-reports/megalinter.log',
+    'megalinter-reports/updated_sources/megalinter-reports/sbom/trivy.json',
+  ]) {
+    const ignored = spawnSync('git', ['-c', 'core.excludesFile=/dev/null', 'check-ignore', '--no-index', '--verbose', '--', path], { encoding: 'utf8' });
+    assert.ifError(ignored.error);
+    assert.equal(ignored.status, 0, `${path} must be ignored by the repository`);
+    assert.match(ignored.stdout, /^\.gitignore:\d+:\/megalinter-reports\//);
+  }
+  for (const path of ['server/internal/identity/portal_links_test.go', 'server/DEPENDENCIES.md', 'scripts/runtime-contract.test.mjs']) {
+    const source = spawnSync('git', ['-c', 'core.excludesFile=/dev/null', 'check-ignore', '--no-index', '--', path], { encoding: 'utf8' });
+    assert.ifError(source.error);
+    assert.equal(source.status, 1, `${path} must remain eligible for validation and fixes`);
+    assert.equal(source.stdout, '');
+  }
+});
+test('the shipped source does not track generated lint reports', () => {
+  const tracked = spawnSync('git', ['ls-files', '-z', '--', 'megalinter-reports'], { encoding: 'utf8' });
+  assert.ifError(tracked.error);
+  assert.equal(tracked.status, 0);
+  assert.equal(tracked.stdout, '', 'lint artifacts belong in the workflow artifact, not the application source');
+});
 /** Reject missing, conditional or error-tolerant runtime checks in the actual CI workflow. */
 function assertRuntime(workflow) {
   const job = workflow.jobs['test-portal-identity'];
