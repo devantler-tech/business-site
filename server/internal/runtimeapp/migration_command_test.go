@@ -443,3 +443,46 @@ func TestMigrationCertificateSizeBoundary(t *testing.T) {
 		t.Fatal("untrusted writable certificate material was accepted")
 	}
 }
+
+// A protected leaf file cannot establish trust when a selected parent permits
+// replacement. Observe the compiled job and independently verify no DDL.
+func TestActualMigrationRejectsReplaceableInputPaths(t *testing.T) {
+	for _, input := range []string{"certificate", "connection"} {
+		t.Run(input, func(t *testing.T) {
+			file, pool, database := migrationCommandFixture(t)
+			binary := buildMigrationCommand(t)
+			parent := filepath.Join(t.TempDir(), "replaceable")
+			if err := os.Mkdir(parent, 0700); err != nil {
+				t.Fatal("owned path-boundary fixture creation failed")
+			}
+			if err := os.Chmod(parent, 0777); err != nil {
+				t.Fatal("replaceable parent fixture permissions failed")
+			}
+			if input == "certificate" {
+				certificate, err := os.ReadFile(database.Query().Get("sslrootcert"))
+				if err != nil {
+					t.Fatal("owned certificate fixture unavailable")
+				}
+				ca := filepath.Join(parent, "ca.pem")
+				if err := os.WriteFile(ca, certificate, 0644); err != nil {
+					t.Fatal("owned replaceable certificate fixture failed")
+				}
+				query := database.Query()
+				query.Set("sslrootcert", ca)
+				database.RawQuery = query.Encode()
+			} else {
+				file = filepath.Join(parent, "migration-database")
+			}
+			if err := os.WriteFile(file, []byte(database.String()), 0600); err != nil {
+				t.Fatal("owned replaceable connection fixture failed")
+			}
+			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err == nil || output != "portal schema migration failed\n" {
+				t.Fatal("actual migration accepted a replaceable input path")
+			}
+			var absent bool
+			if err := pool.QueryRow(t.Context(), "SELECT to_regclass('public.portal_schema_version') IS NULL").Scan(&absent); err != nil || !absent {
+				t.Fatal("refused replaceable input path modified the schema")
+			}
+		})
+	}
+}
