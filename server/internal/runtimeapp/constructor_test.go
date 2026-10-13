@@ -107,6 +107,36 @@ func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
 			t.Fatal("complete dependencies activated the closed portal")
 		}
 	}
+	for _, tc := range []struct {
+		name, parameter, value string
+	}{
+		{"effective role differs from login", "role", "portal_runtime"},
+		{"startup options change effective role", "options", "-c role=portal_runtime"},
+		{"session identity differs from login", "session_authorization", "portal_runtime"},
+		{"startup options change session identity", "options", "-c session_authorization=portal_runtime"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			misconfigured := *database
+			misconfigured.User = url.UserPassword("portal_fixture_owner", "fixture-only")
+			query := misconfigured.Query()
+			query.Set(tc.parameter, tc.value)
+			misconfigured.RawQuery = query.Encode()
+			values := map[string]string{"PORTAL_DATABASE_URL": misconfigured.String(), "PORTAL_OIDC_ISSUER": issuer, "PORTAL_OIDC_CLIENT_ID": "portal-fixture", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": secret}
+			unsafe, err := ReadConfig(func(key string) string { return values[key] })
+			if err != nil {
+				t.Fatal("constructor regression did not reach its database boundary")
+			}
+			before := discoveries.Load()
+			handler, shutdown, err := Portal(ctx, unsafe, api.NewClient())
+			defer shutdown()
+			if !errors.Is(err, ErrConfig) || handler != nil {
+				t.Error("constructor accepted a login outside the restricted identity")
+			}
+			if discoveries.Load() != before {
+				t.Error("rejected database identity reached broker discovery")
+			}
+		})
+	}
 }
 
 // Separate database avoids concurrent table migration/grant mutations from the

@@ -101,6 +101,9 @@ credited funds, worker claims and API/MCP execution outside this slice.
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
 here uses explicit current membership, NOT a claim of database row-level security.
+The web constructor binds both session and effective database identity to the
+parsed login before its permission gate and broker discovery. Preserve the real
+restricted-login positive control and mismatched-login refusal controls.
 The actual executable's `--migrate` job requires a private verified-TLS migration
 connection file, rejects broad/assumable authority and mixed server options, and
 has fixed connection/statement/lock/overall deadlines. Read `MIGRATIONS.md` before
