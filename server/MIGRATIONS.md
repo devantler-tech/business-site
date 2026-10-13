@@ -27,8 +27,14 @@ match. This check is not proof that the underlying database is tenant-isolated.
 
 Project the migration connection into an absolute-path, regular private file
 readable by the job's UID. The file must have no group/other permission bits and
-contain at most 16 KiB. Confined projected-secret links are supported; escapes
-and non-regular files are refused. Use TLS with full certificate verification,
+contain at most 16 KiB. Both this file and the CA file must be owned by the
+job's operator UID or root. Every selected directory and symlink, including
+directories reached through links, must have that ownership. Directories must
+not be group/other-writable, except root/operator-owned sticky shared directories
+whose selected entries have the same trusted ownership. A private leaf alone
+does not protect an input under a replaceable parent. Use canonical absolute
+input paths without `.` or `..` components. Confined projected-secret links are
+supported; escapes, link cycles and non-regular files are refused. Use TLS with full certificate verification,
 without insecure or plaintext fallbacks. Supply a complete `postgres`/`postgresql` URI
 with explicit host, port, database, user and password. Only `sslmode=verify-full`
 and an absolute `sslrootcert` path are accepted as query settings; no ambient
@@ -41,7 +47,8 @@ write permissions are refused to protect its integrity. The job reads a
 confined nonblocking snapshot and passes a private temporary copy to the native
 TLS parser, then removes it. Provide writable ephemeral temporary space even
 when the application root filesystem is read-only; the reviewed restricted
-container tests already supply this temporary mount.
+container tests already supply this temporary mount. Temporary-copy paths must
+meet the same ownership and directory-integrity requirements.
 Administrative/default databases are refused. Keep connection values and passwords out of
 arguments. Keep private paths and values out of application images, public
 assets, receipts and logs. Do not

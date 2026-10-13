@@ -486,3 +486,43 @@ func TestActualMigrationRejectsReplaceableInputPaths(t *testing.T) {
 		})
 	}
 }
+
+// The production projection shape remains supported for both inputs, while the
+// command still operates only on this test's uniquely named disposable database.
+func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
+	_, pool, database := migrationCommandFixture(t)
+	binary := buildMigrationCommand(t)
+	certificate, err := os.ReadFile(database.Query().Get("sslrootcert"))
+	if err != nil {
+		t.Fatal("owned projected certificate source unavailable")
+	}
+	dir := t.TempDir()
+	version := filepath.Join(dir, "version")
+	if err := os.Mkdir(version, 0700); err != nil {
+		t.Fatal("owned projection generation failed")
+	}
+	if err := os.Symlink("version", filepath.Join(dir, "..data")); err != nil {
+		t.Fatal("owned projection generation link failed")
+	}
+	for _, name := range []string{"ca.pem", "migration-database"} {
+		if err := os.Symlink("..data/"+name, filepath.Join(dir, name)); err != nil {
+			t.Fatal("owned projection entry link failed")
+		}
+	}
+	if err := os.WriteFile(filepath.Join(version, "ca.pem"), certificate, 0644); err != nil {
+		t.Fatal("owned projected trust material failed")
+	}
+	query := database.Query()
+	query.Set("sslrootcert", filepath.Join(dir, "ca.pem"))
+	database.RawQuery = query.Encode()
+	if err := os.WriteFile(filepath.Join(version, "migration-database"), []byte(database.String()+"\n"), 0600); err != nil {
+		t.Fatal("owned projected private connection failed")
+	}
+	if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", filepath.Join(dir, "migration-database")); err != nil || output != "portal schema migration completed\n" {
+		t.Fatal("actual job refused trusted confined projected inputs")
+	}
+	var versions int
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 6 {
+		t.Fatal("actual projected-input migration did not apply every version")
+	}
+}

@@ -3,13 +3,11 @@ package runtimeapp
 import (
 	"context"
 	"errors"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/identity"
@@ -28,7 +26,7 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 	if ctx.Err() != nil || !filepath.IsAbs(filename) {
 		return ErrMigration
 	}
-	connection, err := readSecret(filename)
+	connection, err := migrationConnection(filename)
 	if err != nil {
 		return ErrMigration
 	}
@@ -108,6 +106,9 @@ func migrationConfig(connection string) (*pgxpool.Config, error) {
 	if _, err := ca.Write(certificate); err != nil || ca.Close() != nil {
 		return nil, ErrMigration
 	}
+	if _, err := trustedMigrationPath(ca.Name()); err != nil {
+		return nil, ErrMigration
+	}
 	query.Set("sslrootcert", ca.Name())
 	query.Set("sslcert", "")
 	query.Set("sslkey", "")
@@ -126,29 +127,5 @@ func migrationConfig(connection string) (*pgxpool.Config, error) {
 // the secret reader's same-descriptor/nonblocking confinement while permitting
 // ordinary readable certificate permissions and a bounded 64 KiB CA bundle.
 func migrationCertificate(filename string) ([]byte, error) {
-	root, err := os.OpenRoot(filepath.Dir(filename))
-	if err != nil {
-		return nil, ErrMigration
-	}
-	defer func() {
-		// Read-only descriptor cleanup cannot change the validated certificate.
-		_ = root.Close()
-	}()
-	file, err := root.OpenFile(filepath.Base(filename), os.O_RDONLY|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, ErrMigration
-	}
-	defer func() {
-		// No writes need flushing; preserve the read/validation verdict.
-		_ = file.Close()
-	}()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
-		return nil, ErrMigration
-	}
-	certificate, err := io.ReadAll(io.LimitReader(file, 65537))
-	if err != nil || len(certificate) == 0 || len(certificate) > 65536 {
-		return nil, ErrMigration
-	}
-	return certificate, nil
+	return readMigrationInput(filename, 65536, 0022)
 }
