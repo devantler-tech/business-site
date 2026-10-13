@@ -1,0 +1,42 @@
+# Dependency review
+
+Reviewed on 11 October 2026 against the locked, actually compiled Go module
+graph. This is an engineering inventory, not Danish legal clearance or a new
+license for Devantler Tech's application. The application remains governed by
+its repository's own terms. No hosted service or paid enrollment is introduced.
+
+| Compiled module          | Version                           | Upstream license                                                                                |
+|--------------------------|-----------------------------------|-------------------------------------------------------------------------------------------------|
+| coreos/go-oidc/v3        | 3.21.0                            | [Apache-2.0](https://github.com/coreos/go-oidc/blob/v3.21.0/LICENSE)                            |
+| jackc/pgx/v5             | 5.11.0                            | [MIT](https://github.com/jackc/pgx/blob/v5.11.0/LICENSE)                                        |
+| open-feature/go-sdk      | 1.19.0                            | [Apache-2.0](https://github.com/open-feature/go-sdk/blob/v1.19.0/LICENSE)                       |
+| alexedwards/scs/v2       | 2.9.0                             | [MIT](https://github.com/alexedwards/scs/blob/v2.9.0/LICENSE)                                   |
+| alexedwards/scs/pgxstore | 0.0.0-20251002162104-209de6e426de | [MIT](https://github.com/alexedwards/scs/blob/209de6e426de9259665975ce16b91331d228f052/LICENSE) |
+| justinas/nosurf          | 1.2.0                             | [MIT](https://github.com/justinas/nosurf/blob/v1.2.0/LICENSE)                                   |
+| go-jose/go-jose/v4       | 4.1.4                             | [Apache-2.0](https://github.com/go-jose/go-jose/blob/v4.1.4/LICENSE)                            |
+| jackc/pgpassfile         | 1.0.0                             | [MIT](https://github.com/jackc/pgpassfile/blob/v1.0.0/LICENSE)                                  |
+| jackc/pgservicefile      | 0.0.0-20240606120523-5a60cdf6a761 | [MIT](https://github.com/jackc/pgservicefile/blob/5a60cdf6a761/LICENSE)                         |
+| jackc/puddle/v2          | 2.2.2                             | [MIT](https://github.com/jackc/puddle/blob/v2.2.2/LICENSE)                                      |
+| golang.org/x/oauth2      | 0.36.0                            | [BSD-3-Clause](https://github.com/golang/oauth2/blob/v0.36.0/LICENSE)                           |
+| golang.org/x/sync        | 0.23.0                            | [BSD-3-Clause](https://github.com/golang/sync/blob/v0.23.0/LICENSE)                             |
+| golang.org/x/text        | 0.42.0                            | [BSD-3-Clause](https://github.com/golang/text/blob/v0.42.0/LICENSE)                             |
+
+The upstream license files retain their respective copyright/redistribution
+conditions. The combined-runtime packager collects LICENSE, NOTICE and PATENTS
+texts from every actually linked module directory and the Go toolchain. No server
+binary is deployed by the static Pages artifact. A future container must additionally
+check its base image and tooling before distribution. Dependencies downloaded only for upstream
+tests/tools are not represented as linked application runtime code here.
+
+The module pins patched Go 1.27.2. CI verifies checksums and runs the actual graph
+through pinned govulncheck 1.8.0; a successful scan means no reported reachable
+vulnerability, not immunity from future advisories. Database CI uses disposable
+PostgreSQL 17.11 with a digest-pinned official image, never a production database.
+
+SCS supplies opaque sessions with its maintained pgx/v5 store, not an application
+reimplementation of session cryptography. The application explicitly rotates and
+destroys tokens, hashes stored tokens and checks current membership on each request.
+Nosurf 1.2.0 is the upstream-patched version for
+[CVE-2025-46721](https://github.com/justinas/nosurf/security/advisories/GHSA-w9hf-35q4-vcjw).
+Every state-changing handler requires its token; origin checks alone are insufficient.
+No direct Google/Microsoft SDK or paid identity service is added.

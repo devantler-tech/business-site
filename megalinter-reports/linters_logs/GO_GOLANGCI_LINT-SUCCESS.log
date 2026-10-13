@@ -1,0 +1,5 @@
+Results of golangci-lint linter (version 2.13.2)
+See documentation on https://megalinter.io/10.1.0/descriptors/go_golangci_lint/
+-----------------------------------------------
+
+✅ [SUCCESS] for workspace server
