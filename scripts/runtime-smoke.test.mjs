@@ -1,6 +1,6 @@
 // Exercise the actual packaged executable. No broker, database or customer data.
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -14,6 +14,21 @@ const packages = readdirSync(root).filter((p) => p.startsWith("package."));
 assert.equal(packages.length, 1, "Use a fresh output directory: exactly one actual package is required.");
 const directory = path.resolve(root, packages[0]);
 const binary = path.join(directory, "business-site");
+
+test("packaged migration job refuses missing private input without serving", () => {
+  assert.equal(
+    readFileSync(path.join(directory, "MIGRATIONS.md"), "utf8"),
+    readFileSync("server/MIGRATIONS.md", "utf8"),
+  );
+  const result = spawnSync(binary, ["--migrate", "--migration-database-file", "/missing/private-connection"], {
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "portal schema migration failed\n");
+});
 
 test("packaged source identity, EN/DA public paths and reserved private routes", async () => {
   const identity = JSON.parse(execFileSync(binary, ["--version"], { encoding: "utf8" }));
@@ -104,6 +119,8 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
         "/portal/operator",
         "/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/proposals",
         "/server/go.mod",
+        "/MIGRATIONS.md",
+        "/server/MIGRATIONS.md",
         "/.env",
         "/does-not-exist",
         "/%70ortal/sign-in",
