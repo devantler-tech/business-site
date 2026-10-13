@@ -45,16 +45,28 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	defer pool.Close()
-	var allowed bool
-	err = pool.QueryRow(ctx, `SELECT current_user=session_user
- AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
- AND has_schema_privilege(current_user,'public','CREATE')
- AND NOT EXISTS (SELECT 1 FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>'pg_database_owner' AND pg_has_role(current_user,other.oid,'MEMBER'))
- FROM pg_roles r WHERE r.rolname=current_user`).Scan(&allowed)
-	if err != nil || !allowed || identity.Migrate(ctx, pool) != nil {
+	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) {
 		return ErrMigration
 	}
 	return nil
+}
+
+// migrationRoleAllowed checks authority before DDL and a complete owned schema
+// afterward. SELECT grants and a current ledger cannot substitute for ownership;
+// the portal_ namespace also covers managed indexes and later managed relations.
+func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool) bool {
+	var allowed bool
+	err := pool.QueryRow(ctx, `SELECT current_user=session_user
+ AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
+ AND has_schema_privilege(current_user,'public','CREATE')
+ AND NOT EXISTS (SELECT 1 FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>'pg_database_owner' AND pg_has_role(current_user,other.oid,'MEMBER'))
+ AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND starts_with(c.relname,'portal_') AND c.relowner<>r.oid)
+ AND (NOT $1::boolean OR (
+   SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals']) managed(name)
+   LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
+ FROM pg_roles r WHERE r.rolname=current_user`, complete).Scan(&allowed)
+	return err == nil && allowed
 }
 
 // migrationConfig admits a complete single-target URI before using pgx's TLS

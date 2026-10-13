@@ -23,7 +23,12 @@ own its dedicated database. It must not
 be a superuser, bypass row-level security, create roles/databases, replicate, or
 assume another role. The database-scoped implicit `pg_database_owner` membership
 is the sole membership exception. The effective and session identities must
-match. This check is not proof that the underlying database is tenant-isolated.
+match. Existing `portal_` relations in `public` must belong to the current role
+before migration; success additionally requires the complete managed table set
+to exist and belong to that role. A current readable ledger or table grants alone
+cannot produce a successful job. Keep this table set aligned with the embedded
+migrations when evolving the schema. This check is not proof that the underlying
+database is tenant-isolated.
 
 Project the migration connection into an absolute-path, regular private file
 readable by the job's UID. The file must have no group/other permission bits and
