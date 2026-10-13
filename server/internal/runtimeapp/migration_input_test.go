@@ -55,7 +55,7 @@ func TestMigrationInputPathIntegrity(t *testing.T) {
 	}
 	for _, name := range []string{escape, loop, dir + "/version/../certificate"} {
 		if certificate, err := migrationCertificate(name); err != ErrMigration || certificate != nil {
-			t.Fatal("escaped, cyclic or noncanonical migration path was accepted")
+			t.Fatal("escaped, cyclic or non-canonical migration path was accepted")
 		}
 	}
 }
