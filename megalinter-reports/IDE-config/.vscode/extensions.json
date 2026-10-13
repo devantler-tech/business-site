@@ -1,11 +1,11 @@
 {
     "recommendations": [
+        "esbenp.prettier-vscode",
         "HTMLHint.vscode-htmlhint",
         "ms-vscode.Go",
-        "stylelint.vscode-stylelint",
         "monosans.djlint",
         "streetsidesoftware.code-spell-checker",
         "AquaSecurityOfficial.trivy-vulnerability-scanner",
-        "esbenp.prettier-vscode"
+        "stylelint.vscode-stylelint"
     ]
 }
