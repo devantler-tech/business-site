@@ -143,7 +143,7 @@ func migrationCertificate(filename string) ([]byte, error) {
 		_ = file.Close()
 	}()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
 		return nil, ErrMigration
 	}
 	certificate, err := io.ReadAll(io.LimitReader(file, 65537))

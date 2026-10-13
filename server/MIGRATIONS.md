@@ -36,7 +36,8 @@ credential, service-file, client-certificate or query routing override is used.
 The explicit job discards PostgreSQL-prefixed environment settings inside its
 own process; it changes no persistent host settings. The CA bundle must be a
 readable regular file containing at most 64 KiB. Its permissions need not be
-private because it is public trust material, not a credential. The job reads a
+private because it is public trust material, not a credential, but group/other
+write permissions are refused to protect its integrity. The job reads a
 confined nonblocking snapshot and passes a private temporary copy to the native
 TLS parser, then removes it. Provide writable ephemeral temporary space even
 when the application root filesystem is read-only; the reviewed restricted

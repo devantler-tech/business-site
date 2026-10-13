@@ -433,4 +433,13 @@ func TestMigrationCertificateSizeBoundary(t *testing.T) {
 			t.Fatal("empty or oversized certificate bytes were accepted")
 		}
 	}
+	if err := os.WriteFile(file, []byte("trust material"), 0644); err != nil {
+		t.Fatal("certificate integrity fixture failed")
+	}
+	if err := os.Chmod(file, 0666); err != nil {
+		t.Fatal("writable certificate permissions fixture failed")
+	}
+	if certificate, err := migrationCertificate(file); err != ErrMigration || certificate != nil {
+		t.Fatal("untrusted writable certificate material was accepted")
+	}
 }
