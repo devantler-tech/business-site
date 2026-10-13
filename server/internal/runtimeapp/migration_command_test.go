@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -360,5 +361,49 @@ func TestMigrationRefusesAmbientAndOverriddenConnectionIdentity(t *testing.T) {
 		if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err == nil || output != "portal schema migration failed\n" {
 			t.Fatal("query override changed migration identity or startup parameters")
 		}
+	}
+}
+
+// File parsing must reject a certificate pipe and ignore an ambient service
+// pipe before either can defeat the job's operation deadline.
+func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
+	for _, ambient := range []bool{false, true} {
+		t.Run(fmt.Sprintf("ambient-%t", ambient), func(t *testing.T) {
+			file, pool, database := migrationCommandFixture(t)
+			binary := buildMigrationCommand(t)
+			pipe := filepath.Join(t.TempDir(), "unreadable.pipe")
+			if err := syscall.Mkfifo(pipe, 0600); err != nil {
+				t.Fatal("owned file-boundary fixture creation failed")
+			}
+			if ambient {
+				t.Setenv("PGSERVICE", "unintended")
+				t.Setenv("PGSERVICEFILE", pipe)
+			} else {
+				query := database.Query()
+				query.Set("sslrootcert", pipe)
+				database.RawQuery = query.Encode()
+				if err := os.WriteFile(file, []byte(database.String()), 0600); err != nil {
+					t.Fatal("owned certificate projection failed")
+				}
+			}
+			started := time.Now()
+			output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file)
+			if time.Since(started) > 2*time.Second {
+				t.Fatal("file parsing blocked before the database deadline")
+			}
+			if ambient {
+				if err != nil || output != "portal schema migration completed\n" {
+					t.Fatal("explicit connection inherited ambient service-file access")
+				}
+			} else {
+				if err == nil || output != "portal schema migration failed\n" {
+					t.Fatal("non-regular certificate input was not refused privately")
+				}
+				var absent bool
+				if err := pool.QueryRow(t.Context(), "SELECT to_regclass('public.portal_schema_version') IS NULL").Scan(&absent); err != nil || !absent {
+					t.Fatal("refused certificate input modified the schema")
+				}
+			}
+		})
 	}
 }

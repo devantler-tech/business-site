@@ -164,6 +164,8 @@
     "PGOPTIONS",
     "PGPASSWORD",
     "PGPORT",
+    "PGSERVICE",
+    "PGSERVICEFILE",
     "PGSSLROOTCERT",
     "PGSSLMODE",
     "PGUSER",

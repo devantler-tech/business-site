@@ -17,8 +17,9 @@ public pages, so it needs neither a company-disclosure projection nor a broker.
 
 Provision a dedicated logical database and separate migration and web-runtime
 roles through the reviewed store/secret contract. The migration role needs
-creation rights on the `public` schema and ownership/rights over its migration
-ledger and application tables. It may own its dedicated database. It must not
+creation rights on the `public` schema and ownership of its migration ledger
+and application tables. Table GRANT privileges do not replace ownership. It may
+own its dedicated database. It must not
 be a superuser, bypass row-level security, create roles/databases, replicate, or
 assume another role. The database-scoped implicit `pg_database_owner` membership
 is the sole membership exception. The effective and session identities must
