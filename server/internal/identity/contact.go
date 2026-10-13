@@ -216,6 +216,12 @@ type contactPageData struct {
 // renderContact escapes bounded profile data using the shared private layout,
 // with localized validation/conflict messages and an honest unverified state.
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = browserPage.ExecuteTemplate(w, "contact.html", b.contactPage(r, d, problem))
+}
+
+func (b *browser) contactPage(r *http.Request, d contactData, problem string) contactPageData {
 	page := contactPageData{pageData: b.data(r, "contact", "", nosurf.Token(r)), Contact: d, NameLabel: "Your name", EmailLabel: "Contact email", CompanyLabel: "Company (optional)", Save: "Save contact details", Pending: "This contact email is not verified. Saving it does not change your sign-in or authorize an order.", Workspace: "Back to your workspace"}
 	page.Title = "Your contact details"
 	page.Intro = "Keep your details together in your private client profile."
@@ -241,7 +247,5 @@ func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status i
 			page.FormError = "Din profil er ændret, siden formularen blev åbnet. Genindlæs dine kontaktoplysninger, før du gemmer igen."
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "contact.html", page)
+	return page
 }

@@ -208,6 +208,12 @@ type requestPageData struct {
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = browserPage.ExecuteTemplate(w, "requests.html", b.requestPage(r, view, d, rows, problem))
+}
+
+func (b *browser) requestPage(r *http.Request, view string, d projectRequest, rows []projectRequest, problem string) requestPageData {
 	page := requestPageData{pageData: b.data(r, "requests", "", nosurf.Token(r)), View: view, FormError: problem, Request: d, Requests: rows}
 	page.Title = "Your project requests"
 	page.Intro = "Tell us what you would like to build. Sending a request is free and does not start paid work."
@@ -215,7 +221,5 @@ func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status 
 		page.Title = "Dine projektforespørgsler"
 		page.Intro = "Fortæl os, hvad du gerne vil bygge. Det er gratis at sende en forespørgsel og starter ikke betalt arbejde."
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
+	return page
 }

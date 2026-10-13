@@ -2,7 +2,7 @@
 <html lang="{{.Lang}}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
 <body><a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
-<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="?lang={{if eq .Lang `da`}}en{{else}}da{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{.LanguageURL}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">

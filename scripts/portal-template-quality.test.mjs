@@ -21,6 +21,7 @@ function mandatoryQualityChecks(candidate) {
     'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
     'npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs',
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
+    'bash scripts/portal-links-preprocess.test.sh',
     'npx --yes --package=secretlint@13.0.5 --package=@secretlint/secretlint-rule-preset-recommend@13.0.5 -- node --test scripts/portal-credential-quality.test.mjs',
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
@@ -33,7 +34,7 @@ function mandatoryQualityChecks(candidate) {
 }
 
 test('the actual source CI unconditionally executes every quality observer', () => mandatoryQualityChecks(workflow));
-for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh', 'portal-go-analyzer-quality.test.mjs', 'portal-credential-quality.test.mjs']) {
+for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-quality.test.mjs', 'portal-package-quality.test.sh', 'portal-go-analyzer-quality.test.mjs', 'portal-credential-quality.test.mjs', 'portal-links-preprocess.test.sh']) {
   for (const mutation of ['missing', 'conditional', 'ignored failure']) {
     test(`${observer} cannot be ${mutation}`, () => {
       const candidate = structuredClone(workflow);
@@ -57,6 +58,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     SPELL_CSPELL_CONFIG_FILE: '.cspell.json',
     SPELL_CSPELL_RULES_PATH: '/github/workspace',
     REPOSITORY_SECRETLINT_RULES_PATH: '/github/workspace',
+    SPELL_LYCHEE_ARGUMENTS: ['--preprocess', '/github/workspace/scripts/portal-links-preprocess.sh'],
   });
   assert.deepEqual(rules, {
     'tagname-lowercase': true,

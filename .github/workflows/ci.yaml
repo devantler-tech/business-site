@@ -318,6 +318,9 @@ jobs:
       - name: Verify compatible embedded Go analysis and genuine finding rejection
         working-directory: .
         run: node --test scripts/portal-go-analyzer-quality.test.mjs
+      - name: Verify rendered portal targets and ordinary document passthrough
+        working-directory: .
+        run: bash scripts/portal-links-preprocess.test.sh
       - name: Verify exact fictional credential examples and adjacent leak rejection
         working-directory: .
         run: npx --yes --package=secretlint@13.0.5 --package=@secretlint/secretlint-rule-preset-recommend@13.0.5 -- node --test scripts/portal-credential-quality.test.mjs

@@ -9,6 +9,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/justinas/nosurf v1.2.0
 	github.com/open-feature/go-sdk v1.19.0
+	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.36.0
 )
 

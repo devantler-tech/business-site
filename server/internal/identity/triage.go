@@ -135,6 +135,15 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		b.triageError(w, r, err)
 		return
 	}
+	page := b.triagePage(r, rows, id, q.Get("cursor"))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = browserPage.ExecuteTemplate(w, "triage.html", page)
+}
+
+// triagePage builds presentation only, after showTriage's current authority and
+// bounded data reads. The link contract uses the same cursor/language builder.
+func (b *browser) triagePage(r *http.Request, rows []projectRequest, id, cursor string) triagePageData {
 	page := triagePageData{pageData: b.data(r, "triage", "", ""), Requests: rows, Detail: id != ""}
 	page.Title = "Project request inbox"
 	page.Intro = "Review client briefs, oldest first. Reading a request does not approve work."
@@ -152,13 +161,11 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	if page.Lang == "da" {
 		other = "en"
 	}
-	page.LanguageURL = triageURL(q.Get("cursor"), other)
+	page.LanguageURL = triageURL(cursor, other)
 	if id != "" {
 		page.LanguageURL = "/portal/operator/requests/" + id + "?lang=" + other
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "triage.html", page)
+	return page
 }
 
 func (b *browser) triageError(w http.ResponseWriter, r *http.Request, err error) {

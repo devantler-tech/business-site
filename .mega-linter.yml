@@ -10,3 +10,6 @@ HTML_HTMLHINT_RULES_PATH: /github/workspace
 SPELL_CSPELL_CONFIG_FILE: .cspell.json
 SPELL_CSPELL_RULES_PATH: /github/workspace
 REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
+# Private forms have mixed methods and authentication. The adapter retains every
+# target in explicit method-aware coverage; ordinary documents stay byte-identical.
+SPELL_LYCHEE_ARGUMENTS: ["--preprocess", "/github/workspace/scripts/portal-links-preprocess.sh"]

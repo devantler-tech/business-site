@@ -33,6 +33,13 @@ the declared compiler, preserving its native rules, project scope and fix mode.
 The analyzer regression exercises all actual module packages and a genuine format
 diagnostic against the pinned container's rule snapshot; native container proof is
 still separate. Never replace it with a disabled scanner or ignored failures.
+Lychee's test-only preprocessor renders all four actual private templates in EN/DA.
+It checks effective form methods against the production route registrations and
+canonical public/private boundary, and exercises actual asset handlers. Ordinary
+public links and documents retain normal Lychee checking; no status is exempted.
+Run `bash scripts/portal-links-preprocess.test.sh`; `--native` additionally requires
+the actual Lychee executable and checks a broken public link and adapter failure.
+Rendered route contracts are not authenticated browser, database or live proof.
 The CSpell glossary records audited current Danish UI copy and technical names;
 it is not a complete Danish dictionary. Keep default checking enabled and reject
 English/Danish typos. Three exact encoded paths are scoped only to their actual

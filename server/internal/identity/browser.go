@@ -67,31 +67,9 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /portal/sign-in", b.signIn)
-	mux.HandleFunc("POST /portal/sign-in", b.begin)
-	mux.HandleFunc("GET /portal/callback", b.callback)
-	mux.HandleFunc("GET /portal/{$}", b.home)
-	mux.HandleFunc("GET /portal/operator", b.operator)
-	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
-	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
-	mux.HandleFunc("GET /portal/contact", b.contact)
-	mux.HandleFunc("POST /portal/contact", b.updateContact)
-	mux.HandleFunc("GET /portal/requests", b.requests)
-	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
-	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
-	mux.HandleFunc("POST /portal/requests", b.submitRequest)
-	mux.HandleFunc("POST /portal/logout", b.logout)
-	// Only the two public presentation assets are served, never template source.
-	for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
-		data, err := browserFiles.ReadFile("web/" + name)
-		if err != nil {
-			return nil, ErrDenied
-		}
-		mux.HandleFunc("GET /portal/assets/"+name, func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", contentType)
-			_, _ = w.Write(data)
-		})
+	mux, err := b.routes()
+	if err != nil {
+		return nil, err
 	}
 	csrf := nosurf.New(mux)
 	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
@@ -139,6 +117,38 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 }
 
 const oidcScope = "openid"
+
+// routes is the single method-aware registration used by the secured Browser
+// and the rendered-link contract. Registration is not authentication evidence.
+func (b *browser) routes() (*http.ServeMux, error) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /portal/sign-in", b.signIn)
+	mux.HandleFunc("POST /portal/sign-in", b.begin)
+	mux.HandleFunc("GET /portal/callback", b.callback)
+	mux.HandleFunc("GET /portal/{$}", b.home)
+	mux.HandleFunc("GET /portal/operator", b.operator)
+	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
+	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
+	mux.HandleFunc("GET /portal/contact", b.contact)
+	mux.HandleFunc("POST /portal/contact", b.updateContact)
+	mux.HandleFunc("GET /portal/requests", b.requests)
+	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
+	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
+	mux.HandleFunc("POST /portal/requests", b.submitRequest)
+	mux.HandleFunc("POST /portal/logout", b.logout)
+	// Only the two public presentation assets are served, never template source.
+	for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
+		data, err := browserFiles.ReadFile("web/" + name)
+		if err != nil {
+			return nil, ErrDenied
+		}
+		mux.HandleFunc("GET /portal/assets/"+name, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", contentType)
+			_, _ = w.Write(data)
+		})
+	}
+	return mux, nil
+}
 
 // language selects presentation only; neither query nor form data grants access.
 func language(r *http.Request) string {
@@ -290,6 +300,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
+	LanguageURL                                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                                        bool
 	TriageEnabled                                                                                                                                          bool
@@ -306,6 +317,15 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	other, path := "da", r.URL.Path
+	if d.Lang == "da" {
+		other = "en"
+	}
+	// Recovery links must not GET a POST-only route or replay an OIDC callback.
+	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
+		path = "/portal/sign-in"
+	}
+	d.LanguageURL = path + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
 	d.TriageEnabled = kind == "operator" && b.foundation.triageReady(r.Context())
 	if d.Lang == "da" {
