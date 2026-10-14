@@ -251,6 +251,17 @@ bump the `updated` date in `src/data/cv.ts` so the PDF says when it last changed
 
 ## Blog editorial standard
 
+The article footer's modification date comes from the committed history of that content file,
+not the build or deployment date. The publication date remains the post's explicit frontmatter.
+All maintained Astro builders fetch complete Git history. The shared production build rejects
+shallow, absent, enclosing or unreadable history rather than publishing misleading freshness.
+Use a complete checkout for local production builds; for an existing shallow clone, run
+`git fetch --unshallow` before rebuilding. Git-less source archives cannot establish these dates.
+An untracked file has no committed modification date, so Starlight omits that footer date.
+`bash scripts/journal-history.test.sh` exercises real commit histories and the checkout depths
+configured by CI, source publication and legacy callers. Article revisions advance the date;
+unrelated commits do not. Publication, provider authority and portal rollout boundaries are unchanged.
+
 The blog is a maintained product for people outside the repository, not a release-note feed or an
 internal engineering diary. A worthwhile post starts from a real audience and problem, helps readers
 understand why the work matters, and gives them a useful next step.
