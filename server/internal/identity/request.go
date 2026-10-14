@@ -179,6 +179,14 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			return
 		}
 	}
+	if id != "" && b.foundation.acceptanceReady(r.Context()) {
+		page.AcceptanceEnabled = true
+		page.Acceptances, page.CanAccept, err = b.foundation.readProposalAcceptances(r.Context(), b.principal(r.Context()), id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
@@ -218,10 +226,14 @@ func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
 
 type requestPageData struct {
 	pageData
-	View, FormError string
-	Request         projectRequest
-	Requests        []projectRequest
-	SharedProposal  *projectProposal
+	View, FormError   string
+	Request           projectRequest
+	Requests          []projectRequest
+	SharedProposal    *projectProposal
+	Review            *proposalReview
+	Acceptances       []proposalAcceptance
+	CanAccept         bool
+	AcceptanceEnabled bool
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
@@ -232,6 +244,17 @@ func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status 
 
 func (b *browser) requestPage(r *http.Request, view string, d projectRequest, rows []projectRequest, problem string) requestPageData {
 	page := requestPageData{pageData: b.data(r, "requests", "", nosurf.Token(r)), View: view, FormError: problem, Request: d, Requests: rows}
+	if view == "review" || view == "acceptance-conflict" {
+		other := "da"
+		if page.Lang == "da" {
+			other = "en"
+		}
+		path := "/portal/requests"
+		if opaqueRequestID.MatchString(d.ID) {
+			path += "/" + d.ID
+		}
+		page.LanguageURL = path + "?lang=" + other
+	}
 	page.Title = "Your project requests"
 	page.Intro = "Tell us what you would like to build. Sending a request is free and does not start paid work."
 	if page.Lang == "da" {

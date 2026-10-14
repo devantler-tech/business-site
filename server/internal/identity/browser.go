@@ -152,6 +152,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/requests", b.requests)
 	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
 	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
+	mux.HandleFunc("POST /portal/requests/{id}/proposal-review", b.reviewProposal)
+	mux.HandleFunc("POST /portal/requests/{id}/proposal-acceptance", b.confirmProposal)
 	mux.HandleFunc("POST /portal/requests", b.submitRequest)
 	mux.HandleFunc("POST /portal/logout", b.logout)
 	// Only the two public presentation assets are served, never template source.

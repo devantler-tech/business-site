@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 30, "triage.html": 24} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -119,7 +119,7 @@ func TestPortalLinkRequestContexts(t *testing.T) {
 	for langIndex, lang := range []string{"en", "da"} {
 		for productIndex := range 3 {
 			for viewIndex, path := range []string{"/portal/requests/new", "/portal/requests", "/portal/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ", "/portal/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ"} {
-				page := pages[langIndex*15+productIndex*4+viewIndex]
+				page := pages[langIndex*19+productIndex*4+viewIndex]
 				if page.uri != path+"?lang="+lang {
 					t.Errorf("render context=%s want=%s", page.uri, path+"?lang="+lang)
 				}
@@ -302,6 +302,23 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 				return browserPage.ExecuteTemplate(w, name, b.requestPage(r, "conflict", request, nil, "conflict"))
 			}); err != nil {
 				return nil, err
+			}
+			for _, view := range []string{"review", "acceptance-conflict", "accepted-current", "accepted-historical"} {
+				if err := add("/portal/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					page := b.requestPage(r, view, request, nil, "")
+					page.AcceptanceEnabled = true
+					proposal := projectProposal{Version: 1, Scope: "Fictional scope", Deliverables: "Fictional deliverables", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One iteration", MonthlyTerms: "Hosting"}
+					if view == "review" {
+						page.Review = &proposalReview{Key: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Proposal: proposal}
+						page.SharedProposal = &proposal
+					} else if view != "acceptance-conflict" {
+						page.View = "receipt"
+						page.Acceptances = []proposalAcceptance{{ID: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Proposal: proposal, Recorded: request.Submitted, Current: view == "accepted-current"}}
+					}
+					return browserPage.ExecuteTemplate(w, name, page)
+				}); err != nil {
+					return nil, err
+				}
 			}
 		case "triage.html":
 			many := make([]projectRequest, triagePageSize+1)

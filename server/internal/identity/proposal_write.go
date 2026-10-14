@@ -38,8 +38,8 @@ func (s *Foundation) beginProposalWrite(ctx context.Context, p Principal, id str
 // lockProposalClient holds the operator membership through the transaction and
 // derives client scope from the immutable request, never from browser input.
 func lockProposalClient(ctx context.Context, tx pgx.Tx, p Principal, id string) (string, error) {
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, id); err != nil {
-		return "", errTriageStorage
+	if err := lockProposalRequest(ctx, tx, id); err != nil {
+		return "", err
 	}
 	var role, client string
 	if err := tx.QueryRow(ctx, `SELECT role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&role); err != nil {
@@ -55,6 +55,15 @@ func lockProposalClient(ctx context.Context, tx pgx.Tx, p Principal, id string) 
 		return "", errTriageStorage
 	}
 	return client, nil
+}
+
+// lockProposalRequest serializes draft, visibility and client-consent decisions.
+// It grants no role or record access; each caller separately locks its membership.
+func lockProposalRequest(ctx context.Context, tx pgx.Tx, id string) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, id); err != nil {
+		return errTriageStorage
+	}
+	return nil
 }
 
 // rollbackProposalWrite releases unfinished work. Commit determines success;

@@ -99,6 +99,16 @@ func TestPublicArtifactRejectsProposalVisibilityStorage(t *testing.T) {
 	}
 }
 
+func TestPublicArtifactRejectsProposalConsentStorage(t *testing.T) {
+	for _, table := range []string{"portal_proposal_reviews", "portal_proposal_acceptances"} {
+		files := publicFixture()
+		files["asset.json"] = &fstest.MapFile{Data: []byte(table)}
+		if _, err := Load(files); err == nil {
+			t.Fatal("private consent storage accepted")
+		}
+	}
+}
+
 // TestSnapshotAndDigestBindActualPublicBytes detects changes without serving mutable files.
 func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 	files := publicFixture()

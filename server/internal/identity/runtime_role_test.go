@@ -41,6 +41,21 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		allowed     bool
 	}{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"mutable acceptance UPDATE", "GRANT UPDATE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
+		{"missing acceptance SELECT", "REVOKE SELECT ON portal_proposal_acceptances FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing acceptance INSERT", "REVOKE INSERT ON portal_proposal_acceptances FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable acceptance DELETE", "GRANT DELETE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable acceptance TRUNCATE", "GRANT TRUNCATE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable acceptance UPDATE", "CREATE ROLE portal_fixture_consent_mutator NOLOGIN; GRANT UPDATE ON portal_proposal_acceptances TO portal_fixture_consent_mutator; GRANT portal_fixture_consent_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable acceptance DELETE", "CREATE ROLE portal_fixture_consent_mutator NOLOGIN; GRANT DELETE ON portal_proposal_acceptances TO portal_fixture_consent_mutator; GRANT portal_fixture_consent_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable acceptance TRUNCATE", "CREATE ROLE portal_fixture_consent_mutator NOLOGIN; GRANT TRUNCATE ON portal_proposal_acceptances TO portal_fixture_consent_mutator; GRANT portal_fixture_consent_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"missing review SELECT", "REVOKE SELECT ON portal_proposal_reviews FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing review INSERT", "REVOKE INSERT ON portal_proposal_reviews FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing review UPDATE", "REVOKE UPDATE ON portal_proposal_reviews FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable review DELETE", "GRANT DELETE ON portal_proposal_reviews TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable review TRUNCATE", "GRANT TRUNCATE ON portal_proposal_reviews TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable review DELETE", "CREATE ROLE portal_fixture_review_mutator NOLOGIN; GRANT DELETE ON portal_proposal_reviews TO portal_fixture_review_mutator; GRANT portal_fixture_review_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable review TRUNCATE", "CREATE ROLE portal_fixture_review_mutator NOLOGIN; GRANT TRUNCATE ON portal_proposal_reviews TO portal_fixture_review_mutator; GRANT portal_fixture_review_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"missing visibility SELECT", "REVOKE SELECT ON portal_proposal_visibility FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"missing visibility INSERT", "REVOKE INSERT ON portal_proposal_visibility FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"mutable visibility UPDATE", "GRANT UPDATE ON portal_proposal_visibility TO portal_runtime; SET ROLE portal_runtime", false},
@@ -96,7 +111,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
-			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility FROM portal_runtime"); err != nil {
+			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {
