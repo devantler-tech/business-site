@@ -2,6 +2,7 @@
 # Git-backed article dates need complete history from this source repository.
 set -euo pipefail
 root="${1:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)}"
+# Report unavailable history and the supported recovery path, then stop the build.
 fail() {
   printf '%s\n' "source history: FAIL — $*" \
     'Use a complete business-site Git checkout. Fetch missing history with git fetch --unshallow before rebuilding.' >&2

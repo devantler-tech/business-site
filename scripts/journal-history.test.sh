@@ -9,6 +9,7 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 scratch="$(cd -- "$scratch" && pwd -P)"
 trap 'rm -rf "$scratch"' EXIT
+# Report the failed behavioral control and terminate this fixture run.
 fail() { printf 'journal history: FAIL — %s\n' "$*" >&2; exit 1; }
 fixture="$scratch/source"
 mkdir -p "$fixture/src/content/docs/blog"
@@ -18,6 +19,7 @@ git -C "$fixture" config user.email fixture@example.invalid
 git -C "$fixture" config commit.gpgsign false
 printf '%s\n' 'A committed article.' > "$fixture/src/content/docs/blog/history.md"
 # Commit timestamps are independent literal expectations, not renderer-derived values.
+# Commit one fixture path at the supplied literal timestamp with its description.
 commit() {
   git -C "$fixture" add -- "$1"
   GIT_AUTHOR_DATE="$2" GIT_COMMITTER_DATE="$2" git -C "$fixture" commit -qm "$3"
@@ -25,6 +27,7 @@ commit() {
 commit src/content/docs/blog/history.md 2020-01-01T12:00:00Z article
 printf '%s\n' 'Unrelated release work.' > "$fixture/unrelated.txt"
 commit unrelated.txt 2020-02-01T12:00:00Z unrelated
+# Compare the actual maintained collector's article date with a literal expectation.
 assert_date() {
   node --input-type=module - "$root" "$1" "$2" <<'JS'
 import assert from 'node:assert/strict';
@@ -83,6 +86,7 @@ done < "$scratch/checkouts"
 [[ "$count" == 4 ]] || fail 'not every maintained builder was examined'
 
 bash "$guard" "$fixture" || fail 'complete source history rejected'
+# Require the supplied source directory to fail specifically inside the history guard.
 reject() {
   if bash "$guard" "$1" > "$scratch/rejection" 2>&1; then fail "$2 accepted"; fi
   grep -q 'source history: FAIL' "$scratch/rejection" || fail "$2 failed outside the history guard"
@@ -161,6 +165,7 @@ touch "$HISTORY_RENDER_RECEIPT"
 exit 0
 SH
 chmod +x "$scratch/build-bin/bash" "$scratch/build-bin/node" "$scratch/build-bin/astro"
+# Verify the actual wrapper rejects shallow history before starting its renderer.
 build_rejected() {
   local output="$scratch/build-output" receipt="$scratch/renderer-started"
   rm -f "$receipt"
