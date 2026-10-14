@@ -78,6 +78,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("synthetic-constructor-secret"), 0600); err != nil {
 		t.Fatal("synthetic client configuration write failed")
 	}
+	projection := projectedIdentityFixture(t, []byte("synthetic-constructor-secret"), 0440)
 	query := database.Query()
 	query.Set("sslmode", "verify-full")
 	query.Set("sslrootcert", ca)
@@ -89,16 +90,30 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	for _, tc := range []struct {
 		name, flag string
 		want       int
+		projected  bool
 	}{
-		{"explicit identity after slow startup", on, 200},
-		{"missing flag", "", 404},
-		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404},
-		{"malformed", "{invalid", 404},
-		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404},
+		{"explicit identity after slow startup", on, 200, false},
+		{"missing flag", "", 404, false},
+		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404, false},
+		{"malformed", "{invalid", 404, false},
+		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404, false},
+		{"explicit projected identity", on, 200, true},
+		{"projected identity remains off", "", 404, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
+			if tc.projected {
+				// Discovery is already warm; retain an independently observed expiry.
+				until = time.Now().Add(5 * time.Second)
+				env = nil
+				for _, value := range environment {
+					if !strings.HasPrefix(value, "PORTAL_CLIENT_SECRET_FILE=") {
+						env = append(env, value)
+					}
+				}
+				env = append(env, "PORTAL_CLIENT_SECRET_PROJECTION_FILE="+projection)
+			}
 			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
 				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on)
 			address, stop := startActualCommand(t, binary, public, env)

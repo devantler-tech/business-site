@@ -47,6 +47,14 @@ func runtimeFixtureDatabase(t *testing.T) *url.URL {
 // This synthetic TLS gateway bridges only to the disposable PostgreSQL fixture;
 // it never loosens TLS in the production constructor or contacts a real broker.
 func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
+	for _, projected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("projected=%t", projected), func(t *testing.T) { configuredPortalConstructor(t, projected) })
+	}
+}
+
+// configuredPortalConstructor exercises each transport through the real dependency assembly.
+func configuredPortalConstructor(t *testing.T, projected bool) {
+	t.Helper()
 	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
 	var issuer string
@@ -73,11 +81,16 @@ func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("synthetic-constructor-secret"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	secretKey := "PORTAL_CLIENT_SECRET_FILE"
+	if projected {
+		secret = projectedIdentityFixture(t, []byte("synthetic-constructor-secret"), 0440)
+		secretKey = "PORTAL_CLIENT_SECRET_PROJECTION_FILE"
+	}
 	query := database.Query()
 	query.Set("sslmode", "verify-full")
 	query.Set("sslrootcert", ca)
 	database.RawQuery = query.Encode()
-	values := map[string]string{"PORTAL_DATABASE_URL": database.String(), "PORTAL_OIDC_ISSUER": issuer, "PORTAL_OIDC_CLIENT_ID": "portal-fixture", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": secret}
+	values := map[string]string{"PORTAL_DATABASE_URL": database.String(), "PORTAL_OIDC_ISSUER": issuer, "PORTAL_OIDC_CLIENT_ID": "portal-fixture", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", secretKey: secret}
 	cfg, err := ReadConfig(func(key string) string { return values[key] })
 	if err != nil {
 		t.Fatal("verified TLS fixture config rejected")
@@ -121,7 +134,7 @@ func TestConfiguredPortalConstructorWithVerifiedTLS(t *testing.T) {
 			query := misconfigured.Query()
 			query.Set(tc.parameter, tc.value)
 			misconfigured.RawQuery = query.Encode()
-			values := map[string]string{"PORTAL_DATABASE_URL": misconfigured.String(), "PORTAL_OIDC_ISSUER": issuer, "PORTAL_OIDC_CLIENT_ID": "portal-fixture", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": secret}
+			values := map[string]string{"PORTAL_DATABASE_URL": misconfigured.String(), "PORTAL_OIDC_ISSUER": issuer, "PORTAL_OIDC_CLIENT_ID": "portal-fixture", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", secretKey: secret}
 			unsafe, err := ReadConfig(func(key string) string { return values[key] })
 			if err != nil {
 				t.Fatal("constructor regression did not reach its database boundary")
