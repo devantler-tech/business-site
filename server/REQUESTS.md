@@ -32,6 +32,13 @@ actual record to that client's current membership; operator membership is not a
 client impersonation permission. The receipt route uses an opaque server-created
 ID, escapes client text and carries `no-store`. IDs are not access credentials.
 
+List and receipt reads evaluate independent release gates before a final current
+membership check. Revocation, a changed role or a different client binding denies
+the result with no private rows. Membership SQL completion also checks identity
+expiry and cancellation; a successful query alone does not authorize release.
+This is a final authorization checkpoint, not an atomic guarantee against a
+change after that checkpoint or a way to retract content already received.
+
 The unique `(client_id, submission_key)` pair is the retry boundary. Identical
 normalized content returns the original ID and database-assigned timestamp, even
 after a process reconnect or concurrent submissions. Different content with the

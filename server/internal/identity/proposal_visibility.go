@@ -93,10 +93,14 @@ func (s *Foundation) readVisibility(ctx context.Context, p Principal, id string)
 	if err != nil {
 		return proposalVisibility{}, err
 	}
+	// Independent SDK evaluations precede the final current-authority checkpoint.
+	if !s.sharingReady(ctx) {
+		return proposalVisibility{}, ErrDenied
+	}
 	if err := s.sharingOperator(ctx, p); err != nil {
 		return proposalVisibility{}, err
 	}
-	if !s.sharingReady(ctx) || !time.Now().Before(p.expires) {
+	if !time.Now().Before(p.expires) {
 		return proposalVisibility{}, ErrDenied
 	}
 	return v, nil
@@ -162,8 +166,11 @@ func (s *Foundation) readSharedProposal(ctx context.Context, p Principal, id str
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, errTriageStorage
 	}
+	if !s.sharingReady(ctx) {
+		return nil, ErrDenied
+	}
 	current, currentRole, check := s.membership(ctx, p)
-	if check != nil || currentRole != "client" || current != client || !s.sharingReady(ctx) || !time.Now().Before(p.expires) {
+	if check != nil || currentRole != "client" || current != client || !time.Now().Before(p.expires) {
 		if check != nil && !errors.Is(check, ErrDenied) {
 			return nil, errTriageStorage
 		}

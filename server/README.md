@@ -59,6 +59,10 @@ HTTP endpoints. An operator workspace does not expose these operations. Likewise
 Authenticated clients can edit their name, contact email and optional company at
 `/portal/contact`. The actual query uses current server-owned issuer/subject membership
 to select the client record; URL/form client IDs and operator overrides are not accepted.
+After reading, it rechecks current client membership and the original client
+binding before returning even an empty profile. Membership SQL completion also
+checks expiry and cancellation. These are final read authorization checkpoints,
+not an atomic guarantee against a later change or a way to retract received data.
 CSRF/origin checks and bounded single-value fields protect saves. A revision comparison
 rejects stale/concurrent updates instead of silently overwriting newer details.
 The stored email is explicitly **unverified**, including after a change: it does not

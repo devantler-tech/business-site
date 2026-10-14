@@ -74,14 +74,19 @@ func parseContact(r *http.Request) (contactData, error) {
 // readContact scopes its actual data query by current server-owned membership.
 // Operators have no client-profile override; no URL/form client ID is accepted.
 func (s *Foundation) readContact(ctx context.Context, p Principal) (contactData, error) {
-	if _, role, err := s.membership(ctx, p); err != nil || role != "client" {
+	client, role, err := s.membership(ctx, p)
+	if err != nil || role != "client" {
 		return contactData{}, ErrDenied
 	}
 	var d contactData
-	err := s.pool.QueryRow(ctx, `SELECT coalesce(c.name,''),coalesce(c.email,''),coalesce(c.company,''),coalesce(c.revision,0)
+	err = s.pool.QueryRow(ctx, `SELECT coalesce(c.name,''),coalesce(c.email,''),coalesce(c.company,''),coalesce(c.revision,0)
  FROM portal_memberships m LEFT JOIN portal_contacts c ON c.client_id=m.client_id
- WHERE m.issuer=$1 AND m.subject=$2 AND m.role='client' AND NOT m.revoked`, p.issuer, p.subject).Scan(&d.Name, &d.Email, &d.Company, &d.Revision)
+ WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked`, p.issuer, p.subject, client).Scan(&d.Name, &d.Email, &d.Company, &d.Revision)
 	if err != nil {
+		return contactData{}, ErrDenied
+	}
+	current, currentRole, check := s.membership(ctx, p)
+	if check != nil || currentRole != "client" || current != client {
 		return contactData{}, ErrDenied
 	}
 	return d, nil
