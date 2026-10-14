@@ -9,23 +9,13 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
 const proposalRequestID = "AAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 func proposalFlags(t *testing.T, b *browserFixture, values ...any) {
 	t.Helper()
-	flags := map[string]memprovider.InMemoryFlag{}
-	for i, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals"} {
-		if values[i] != nil {
-			flags[name] = memprovider.InMemoryFlag{Key: name, State: memprovider.Enabled, DefaultVariant: "value", Variants: map[string]any{"value": values[i]}}
-		}
-	}
-	if err := b.flags.SetProviderAndWait(context.Background(), memprovider.NewInMemoryProvider(flags)); err != nil {
-		t.Fatal(err)
-	}
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals"}, values)
 }
 
 func proposalFixture(t *testing.T) *browserFixture {
@@ -210,32 +200,14 @@ func TestProposalMutationRejectsInFlightAuthorityClosure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
-			tx := beginFixtureTransaction(ctx, t, migrator)
-			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, proposalRequestID); err != nil {
-				t.Fatal(err)
-			}
+			tx := blockFixtureProposalWrite(ctx, t, migrator)
 			d := projectProposal{Key: "BBBBBBBBBBBBBBBBBBBBBBBBBB", Scope: "Blocked draft", Deliverables: "Fictional deliverables", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One iteration", MonthlyTerms: "Hosting"}
 			if change == "expiry" {
 				p.expires = time.Now().Add(time.Second)
 			}
 			result := make(chan error, 1)
 			go func() { result <- b.svc.persistProposal(ctx, p, proposalRequestID, d) }()
-			ticker := time.NewTicker(10 * time.Millisecond)
-			defer ticker.Stop()
-			for {
-				var waiting bool
-				if err := migrator.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted)`).Scan(&waiting); err != nil {
-					t.Fatal(err)
-				}
-				if waiting {
-					break
-				}
-				select {
-				case <-ticker.C:
-				case <-ctx.Done():
-					t.Fatal("fixture did not reach locked write")
-				}
-			}
+			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 			switch change {
 			case "flag":
 				proposalFlags(t, b, true, true, true, false)
@@ -393,7 +365,7 @@ func TestProposalMigrationPreservesPriorLedgerAndIntake(t *testing.T) {
 	if err := migrator.QueryRow(b.f.ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=5`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DELETE FROM portal_schema_version WHERE version=6`); err != nil {
+	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposal_visibility; DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DELETE FROM portal_schema_version WHERE version>=6`); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {

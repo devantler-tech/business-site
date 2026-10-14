@@ -28,6 +28,12 @@ if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
   failed=1
 fi
 rm "$fixture/proposals.txt"
+printf 'portal_proposal_visibility\n' > "$fixture/sharing.txt"
+if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
+  printf '%s\n' 'FAIL: accepted private proposal sharing storage content' >&2
+  failed=1
+fi
+rm "$fixture/sharing.txt"
 mkdir "$fixture/portal"
 printf '<h1>Sign in</h1>\n' > "$fixture/portal/index.html"
 if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
@@ -42,4 +48,4 @@ if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
   failed=1
 fi
 [[ "$failed" == 0 ]] || exit 1
-printf '%s\n' 'Portal artifact boundary: 9 negative controls and public output PASS'
+printf '%s\n' 'Portal artifact boundary: 10 negative controls and public output PASS'

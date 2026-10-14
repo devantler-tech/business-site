@@ -131,35 +131,11 @@ func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string
 	if err := s.proposalOperator(ctx, p); err != nil {
 		return err
 	}
-	if !opaqueRequestID.MatchString(id) {
-		return pgx.ErrNoRows
-	}
-	tx, err := s.pool.Begin(ctx)
+	tx, client, err := s.beginProposalWrite(ctx, p, id)
 	if err != nil {
-		return errTriageStorage
+		return err
 	}
-	defer func() {
-		// Commit determines success. pgx discards failed rollback connections;
-		// a transaction already committed needs no further cleanup.
-		_ = tx.Rollback(ctx)
-	}()
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, id); err != nil {
-		return errTriageStorage
-	}
-	var role string
-	if err = tx.QueryRow(ctx, `SELECT role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&role); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrDenied
-		}
-		return errTriageStorage
-	}
-	var client string
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_requests WHERE id=$1`, id).Scan(&client); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		return errTriageStorage
-	}
+	defer rollbackProposalWrite(ctx, tx)
 	var keyOwner bool
 	err = tx.QueryRow(ctx, `SELECT operator_issuer=$4 AND operator_subject=$5 FROM portal_proposals WHERE request_id=$1 AND client_id=$2 AND submission_key=$3`, id, client, d.Key, p.issuer, p.subject).Scan(&keyOwner)
 	if err == nil && !keyOwner {
@@ -188,13 +164,7 @@ func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string
 			return errTriageStorage
 		}
 	}
-	if !s.proposalsReady(ctx) || !time.Now().Before(p.expires) {
-		return ErrDenied
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return errTriageStorage
-	}
-	return nil
+	return commitProposalWrite(ctx, p, tx, s.proposalsReady)
 }
 
 func (b *browser) submitProposal(w http.ResponseWriter, r *http.Request) {
@@ -209,19 +179,7 @@ func (b *browser) submitProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := b.foundation.persistProposal(r.Context(), p, r.PathValue("id"), d)
-	if errors.Is(err, errProposalConflict) {
-		b.render(w, r, 409, "proposal-conflict", "", "")
-		return
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		b.triageError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, "/portal/operator/requests/"+r.PathValue("id")+"?lang="+language(r), http.StatusSeeOther)
+	b.proposalMutationResult(w, r, err, "proposal-conflict")
 }
 
 func (b *browser) proposalPresentation(r *http.Request, page *triagePageData, rows []projectProposal) {

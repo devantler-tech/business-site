@@ -260,7 +260,7 @@ func TestOperatorInboxIndexMigrationPreservesRequests(t *testing.T) {
 	if err := migrator.QueryRow(b.f.ctx, `SELECT checksum FROM portal_schema_version WHERE version=5`).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DROP INDEX portal_requests_triage; DELETE FROM portal_schema_version WHERE version>=5`); err != nil {
+	if _, err := migrator.Exec(b.f.ctx, `DROP TABLE portal_proposal_visibility; DROP TABLE portal_proposals; ALTER TABLE portal_requests DROP CONSTRAINT portal_request_client; DROP INDEX portal_requests_triage; DELETE FROM portal_schema_version WHERE version>=5`); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(b.f.ctx, migrator); err != nil {
@@ -321,24 +321,10 @@ func TestOperatorInboxRejectsInFlightAuthorityClosure(t *testing.T) {
 	}
 }
 
+// waitForTriageRead observes the blocked read against its exact relation.
 func waitForTriageRead(ctx context.Context, t *testing.T, pool *pgxpool.Pool, relation uint32) {
 	t.Helper()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		var waiting bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE relation=$1 AND mode='AccessShareLock' AND NOT granted)`, relation).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			t.Fatal("fixture never reached the blocked data read")
-		}
-	}
+	waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE relation=$1 AND mode='AccessShareLock' AND NOT granted)`, relation)
 }
 
 func triageSignIn(t *testing.T, b *browserFixture, subject, client, role string) *http.Client {

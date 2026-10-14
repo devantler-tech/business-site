@@ -14,7 +14,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's seven identity/session/contact/request/proposal tables. Provision a fresh disposable PostgreSQL
+only the fixture's eight identity/session/contact/request/proposal/visibility tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -97,6 +97,15 @@ and content-bound retry keys, and retain original intake order. Grant their tabl
 SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
 not a dispatched offer, agreement, payment or work authorization. Keep acceptance,
 credited funds, worker claims and API/MCP execution outside this slice.
+
+Explicit sharing/withdrawal additionally requires false-default
+`portal-proposal-sharing`; review retirement under business-site#78 by 13 November
+2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only
+the latest explicitly shared version of their own request, never draft history
+or retry/actor metadata. Withdrawal hides future reads without restoring an older
+version. Keep the same per-request writer lock, current membership rechecks,
+content/actor-bound retries and SELECT/INSERT-only immutable history permissions.
+Read `PROPOSALS.md`; client acceptance and ordering remain absent.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

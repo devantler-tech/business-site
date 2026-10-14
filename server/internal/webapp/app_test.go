@@ -90,6 +90,15 @@ func TestRejectsUnsafeArtifact(t *testing.T) {
 	}
 }
 
+// TestPublicArtifactRejectsProposalVisibilityStorage guards the static boundary.
+func TestPublicArtifactRejectsProposalVisibilityStorage(t *testing.T) {
+	files := publicFixture()
+	files["asset.json"] = &fstest.MapFile{Data: []byte("portal_proposal_visibility")}
+	if _, err := Load(files); err == nil {
+		t.Fatal("private proposal sharing storage accepted")
+	}
+}
+
 // TestSnapshotAndDigestBindActualPublicBytes detects changes without serving mutable files.
 func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 	files := publicFixture()
