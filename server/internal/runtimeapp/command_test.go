@@ -47,17 +47,17 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		t.Fatalf("actual command compilation failed: %s", output)
 	}
 	var issuer string
-	var delayDiscovery atomic.Bool
-	delayDiscovery.Store(true)
+	var discoveryDelay atomic.Int64
+	discoveryDelay.Store(int64(5 * time.Second))
 	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
 			http.NotFound(w, r)
 			return
 		}
 		// Slow but valid broker startup must leave time for the enabled assertion.
-		if delayDiscovery.CompareAndSwap(true, false) {
+		if delay := time.Duration(discoveryDelay.Swap(0)); delay > 0 {
 			select {
-			case <-time.After(5 * time.Second):
+			case <-time.After(delay):
 			case <-r.Context().Done():
 				return
 			}
@@ -104,8 +104,12 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
 			if tc.projected {
-				// Discovery is already warm; retain an independently observed expiry.
-				until = time.Now().Add(5 * time.Second)
+				if tc.want == 200 {
+					// Projection startup must also tolerate a slow but valid discovery.
+					discoveryDelay.Store(int64(7 * time.Second))
+				}
+				// Leave margin beyond the executable's 45-second startup deadline.
+				until = time.Now().Add(time.Minute)
 				env = nil
 				for _, value := range environment {
 					if !strings.HasPrefix(value, "PORTAL_CLIENT_SECRET_FILE=") {
@@ -124,7 +128,8 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			}
 			commandStatus(t, address, "/portal/requests", 404)
 			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
-			if tc.want == 200 {
+			// The ordinary transport retains the actual shared-provider expiry proof.
+			if tc.want == 200 && !tc.projected {
 				<-time.After(time.Until(until) + time.Millisecond)
 				commandStatus(t, address, "/portal/sign-in", 404)
 				commandStatus(t, address, "/", 200)
