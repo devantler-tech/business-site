@@ -246,19 +246,7 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 			}
 			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
-			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-			defer cancel()
-			done := make(chan error, 1)
-			finished := make(chan struct{})
-			go func() { defer close(finished); _, err := b.svc.confirmContact(ctx, p, d, raw, nonce); done <- err }()
-			defer func() {
-				cancel()
-				select {
-				case <-finished:
-				case <-time.After(time.Second):
-					t.Error("confirmation worker did not finish")
-				}
-			}()
+			ctx, cancel, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-tracer.blocked:
 			case <-ctx.Done():
@@ -316,19 +304,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 			}
 			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
-			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-			defer cancel()
-			done := make(chan error, 1)
-			finished := make(chan struct{})
-			go func() { defer close(finished); _, err := b.svc.confirmContact(ctx, p, d, raw, nonce); done <- err }()
-			defer func() {
-				cancel()
-				select {
-				case <-finished:
-				case <-time.After(time.Second):
-					t.Error("final SDK fixture worker did not finish")
-				}
-			}()
+			ctx, _, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-provider.blocked:
 			case <-ctx.Done():
@@ -351,6 +327,29 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 			assertContactUnconfirmed(t, b)
 		})
 	}
+}
+
+// startContactConfirmation owns and joins the same bounded real write worker
+// for SQL and SDK checkpoints, before fixture pools and brokers are closed.
+func startContactConfirmation(t *testing.T, b *browserFixture, p Principal, d contactVerification, raw, nonce string) (context.Context, context.CancelFunc, <-chan error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	done := make(chan error, 1)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		_, err := b.svc.confirmContact(ctx, p, d, raw, nonce)
+		done <- err
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-finished:
+		case <-time.After(time.Second):
+			t.Error("confirmation worker did not finish")
+		}
+	})
+	return ctx, cancel, done
 }
 
 func TestContactVerificationControlEvaluationPrecedesPrivateRead(t *testing.T) {
