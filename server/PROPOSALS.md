@@ -55,7 +55,7 @@ retries, client denial, gate and authority closure, storage errors, hostile text
 migrations and restricted startup. The bounded `portalvisual` fixture enables
 four gates only for fictional local interaction.
 
-Client acceptance, tax calculation, invoices, funds, worker claims,
+Tax calculation, invoices, funds, worker claims,
 agent execution and API/MCP endpoints are absent. No client-orders repository is
 used. Business-site#19/#21 and monorepo#3936/#3939 retain real-data, privacy,
 identity and deployment prerequisites. A source merge or container is not portal
@@ -75,7 +75,7 @@ not release it. Sharing another version replaces the visible selection. Withdraw
 hides it from future reads without falling back to a previously shared version;
 it cannot retract copies already seen or saved. A withdrawn version cannot be
 shared again: prepare a new version if the proposal should be offered for review again.
-Acceptance and ordering are not available in this interface.
+Exact acceptance is separately gated as described below; ordering is unavailable.
 
 POST `/portal/operator/requests/{id}/proposal-visibility` accepts only a share or
 withdraw decision, an exact version, the expected latest draft/event and an opaque
@@ -101,5 +101,55 @@ unshared history is returned to clients or allowed in public build artifacts.
 
 The synthetic `portalvisual` gateway enables all five gates for manual review;
 its fixed `/fixture/client` and `/fixture/operator` actor selectors are test-only,
-not authentication. This adds no real customer activation, acceptance, payment,
+not authentication. This adds no real customer activation, payment,
 agent execution, API/MCP endpoint or client-orders repository.
+
+## Exact client review and acceptance
+
+The independently false-default `portal-proposal-acceptance` decision requires all
+five proposal-sharing gates. Review its release lifecycle under [#106](https://github.com/devantler-tech/business-site/issues/106)
+by 14 November 2026. Ordinary production composition cannot enable it. Source
+consent is not a legal-launch or paid-work permission.
+
+On their own private receipt, a currently authorized client chooses **Review before
+accepting**, reads the exact shared scope, deliverables, integer DKK prices and
+separate terms, then explicitly confirms that version. English/Danish native
+forms, CSRF, fixed Host/Origin, session expiry and no-store remain mandatory.
+No new contractual, consumer, tax or cancellation promises are invented.
+
+POST `/portal/requests/{id}/proposal-review` creates or reuses one short-lived
+server context for that request/client/issuer/subject. It copies the current draft,
+share event and a canonical typed-content SHA256 binding, and uses the existing
+opaque random-token primitive. Matching reuse never extends its original deadline;
+rotation after expiry or a state change invalidates the old context. There is no
+custom signed browser payload or session write on GET that could revive logged-out
+authority. The context alone never grants access or proves a legal signature.
+
+POST `/portal/requests/{id}/proposal-acceptance` accepts only the context key,
+explicit confirmation, language and CSRF; unknown or duplicate fields fail. It
+shares the operator writers' per-request advisory lock but independently locks
+current client membership and scopes the actual request. Current draft must equal
+the latest explicit share, with exact event/version/content and unexpired context.
+A newer unshared draft rejects acceptance neutrally without leaking its version
+or content; withdrawal also denies. Gates, principal/context expiry and cancellation
+are checked after waits and before commit. Display SDK waits precede final current
+membership SQL, rather than releasing a previously read client's data afterward.
+These checkpoints are not atomic wire-time revocation or cancellation of an already
+running request by logout.
+
+Checksummed v9 preserves unchanged v1–v8. `portal_proposal_reviews` is mutable,
+bounded ephemeral presentation state with SELECT/INSERT/UPDATE, never DELETE or
+TRUNCATE runtime access. `portal_proposal_acceptances` is an append-only audited
+ledger with SELECT/INSERT only, including inherited/assumable mutation refusal.
+Receipts copy bindings and refer only to immutable requests/proposals, not mutable
+contexts. One request/client/version can have one acceptance. An original actor/key
+retry returns its original receipt after current access checks, including reconnect,
+but cannot append or accept a replacement proposal. Historical receipt text and
+prices remain available when the proposal is replaced or withdrawn; that historical
+decision is not current-scope authorization.
+
+Acceptance does not approve a payment, invoice, credited funds, order or worker
+execution. The selected portal-owned queue/API/MCP remains separate under #20.
+Privacy/retention and real consumer/legal review remain launch conditions under
+issues #19/#21 and monorepo#3936/#3939. Included hosting maintenance cannot be forced into
+a new feature purchase. Synthetic database/browser proof is not customer activation.

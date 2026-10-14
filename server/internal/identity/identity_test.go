@@ -151,10 +151,10 @@ func fixtureDB(t *testing.T) *pgxpool.Pool {
 	if err = Migrate(context.Background(), migrator); err != nil {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
-	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime; GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility TO portal_runtime"); err != nil {
+	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime; GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances TO portal_runtime; GRANT SELECT,INSERT,UPDATE,TRUNCATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility"); err != nil {
+	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances"); err != nil {
 		t.Fatal(err)
 	}
 	return pool

@@ -34,6 +34,14 @@ if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
   failed=1
 fi
 rm "$fixture/sharing.txt"
+for table in portal_proposal_reviews portal_proposal_acceptances; do
+  printf '%s\n' "$table" > "$fixture/consent.txt"
+  if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
+    printf '%s\n' 'FAIL: accepted private consent storage content' >&2
+    failed=1
+  fi
+  rm "$fixture/consent.txt"
+done
 mkdir "$fixture/portal"
 printf '<h1>Sign in</h1>\n' > "$fixture/portal/index.html"
 if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
@@ -48,4 +56,4 @@ if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
   failed=1
 fi
 [[ "$failed" == 0 ]] || exit 1
-printf '%s\n' 'Portal artifact boundary: 10 negative controls and public output PASS'
+printf '%s\n' 'Portal artifact boundary: 12 negative controls and public output PASS'

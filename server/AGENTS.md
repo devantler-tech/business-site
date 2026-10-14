@@ -15,7 +15,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's eight identity/session/contact/request/proposal/visibility tables. Provision a fresh disposable PostgreSQL
+only the fixture's ten identity/session/contact/request/proposal/visibility/consent tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -106,8 +106,8 @@ Operator draft preparation and history additionally require false-default
 Read `PROPOSALS.md`. Proposals append immutable versions, require expected-version
 and content-bound retry keys, and retain original intake order. Grant their table
 SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
-not a dispatched offer, agreement, payment or work authorization. Keep acceptance,
-credited funds, worker claims and API/MCP execution outside this slice.
+not a dispatched offer, agreement, payment or work authorization. Keep credited
+funds, worker claims and API/MCP execution separate from draft preparation.
 
 Explicit sharing/withdrawal additionally requires false-default
 `portal-proposal-sharing`; review retirement under business-site#78 by 13 November
@@ -116,7 +116,26 @@ the latest explicitly shared version of their own request, never draft history
 or retry/actor metadata. Withdrawal hides future reads without restoring an older
 version. Keep the same per-request writer lock, current membership rechecks,
 content/actor-bound retries and SELECT/INSERT-only immutable history permissions.
-Read `PROPOSALS.md`; client acceptance and ordering remain absent.
+Read `PROPOSALS.md`; ordering remains absent. Exact client consent additionally
+requires independent false-default `portal-proposal-acceptance`, with release-gate
+review business-site#106 due 14 November 2026. Explicit native POST review creates
+a short, actor/request/client/content/version/event-bound context, never a session
+write on GET. v9 follows unchanged v1–v8. Review contexts alone may be updated;
+their bounded row does not own consent history. Acceptance receipts copy immutable
+bindings with SELECT/INSERT-only runtime authority and no FK to mutable contexts.
+Shared key/event/hash domains retain column NOT NULL constraints; migration
+completeness checks their ownership and base types. Refuse direct or assumable
+runtime domain ownership, which could weaken those validation constraints.
+Share only the request lock, never the operator writer's authorization helper.
+Lock current client membership after that request lock and independently derive
+request ownership. Recheck gates/expiry/cancellation before commit. Final display
+SDK waits precede the final membership SQL checkpoint.
+Optional receipt-display SDK evaluations, including false/error outcomes, precede
+all private reads; the readers retain their independent authorization checkpoints.
+Original actor-bound retries return historical receipts, not consent to later scope.
+New unshared drafts remain
+readable only through the old shared snapshot and are never acceptable or exposed.
+No environment activation mapping, credited funds or worker eligibility is added.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

@@ -119,7 +119,8 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 				env = append(env, "PORTAL_CLIENT_SECRET_PROJECTION_FILE="+projection)
 			}
 			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
-				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on)
+				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on,
+				"portal-proposal-sharing="+on, "portal-proposal-acceptance="+on)
 			address, stop := startActualCommand(t, binary, public, env)
 			defer stop()
 			commandStatus(t, address, "/portal/sign-in", tc.want)
@@ -127,6 +128,8 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 				commandStatus(t, address, route, 200)
 			}
 			commandStatus(t, address, "/portal/requests", 404)
+			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-review", 404)
+			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-acceptance", 404)
 			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
 			// The ordinary transport retains the actual shared-provider expiry proof.
 			if tc.want == 200 && !tc.projected {

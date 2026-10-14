@@ -18,16 +18,19 @@ public pages, so it needs neither a company-disclosure projection nor a broker.
 Provision a dedicated logical database and separate migration and web-runtime
 roles through the reviewed store/secret contract. The migration role needs
 creation rights on the `public` schema and ownership of its migration ledger
-and application tables. Table GRANT privileges do not replace ownership. It may
+and application tables and consent-binding domains. Table GRANT privileges do not replace ownership. It may
 own its dedicated database. It must not
 be a superuser, bypass row-level security, create roles/databases, replicate, or
 assume another role. The database-scoped implicit `pg_database_owner` membership
 is the sole membership exception. The effective and session identities must
 match. Existing `portal_` relations in `public` must belong to the current role
-before migration; success additionally requires the complete managed table set
+before migration; the same ownership requirement covers `portal_` domains.
+Success additionally requires the complete managed table set
 to exist and belong to that role. A current readable ledger or table grants alone
 cannot produce a successful job. Keep this table set aligned with the embedded
-migrations when evolving the schema. This check is not proof that the underlying
+migrations when evolving the schema. The three consent domains must also exist
+as owned domains in `public`, with their expected text/integer base types.
+This check is not proof that the underlying
 database is tenant-isolated.
 
 Project the migration connection into an absolute-path, regular private file
@@ -97,8 +100,15 @@ membership, dispatch offers or enable any release flag. The reviewed store
 provisioning must give the separate web role schema usage and only its required
 table DML: SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
 memberships, sessions and contacts; SELECT/INSERT only on immutable requests and
-proposals and proposal-visibility events. No schema/ledger ownership, DDL, broad role membership or
-UPDATE/DELETE/TRUNCATE of request/proposal/visibility history belongs to that role. Actual
+proposals, proposal-visibility events and acceptance receipts; SELECT/INSERT/UPDATE
+only on the bounded ephemeral proposal-review contexts. The shared key, event and
+content-hash domains centralize binding validation; each column retains NOT NULL.
+Neither direct nor assumable domain ownership belongs to the runtime: it could
+alter those constraints. No schema/ledger ownership,
+DDL, broad role membership or UPDATE/DELETE/TRUNCATE of immutable
+request/proposal/visibility/acceptance history belongs to that role. Review-context
+DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledger.
+Actual
 web startup independently checks this boundary and refuses incomplete grants.
 
 Before staging or publication, demonstrate the restricted-role

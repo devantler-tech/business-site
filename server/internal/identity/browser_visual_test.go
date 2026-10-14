@@ -4,6 +4,7 @@ package identity
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification"}, []any{true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance"}, []any{true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -61,6 +62,9 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 			b.mu.Lock()
 			b.subject = subject
+			// Both fixed actors are already provisioned once the visual gateway
+			// starts. Subsequent sign-in uses current membership, not re-invitation.
+			inv = ""
 			b.mu.Unlock()
 			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
 			return
@@ -100,7 +104,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		}
 		defer res.Body.Close()
 		for key, values := range res.Header {
-			if key == "Set-Cookie" {
+			if key == "Set-Cookie" || key == "Content-Length" {
 				continue
 			}
 			for _, value := range values {
@@ -120,11 +124,24 @@ func TestBrowserVisualFixture(t *testing.T) {
 			w.Header().Set("Location", origin+strings.TrimPrefix(location, b.site.URL))
 		}
 		w.WriteHeader(res.StatusCode)
+		if r.Method == http.MethodGet && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
+			// Fictional, disposable gateway only: preload its synthetic invitation
+			// so UI evaluation does not expose any token in terminal diagnostics.
+			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
+			if readErr != nil || len(body) > 64*1024 {
+				return
+			}
+			b.mu.RLock()
+			invitation := inv
+			b.mu.RUnlock()
+			_, _ = io.WriteString(w, strings.Replace(string(body), `id="invitation"`, `id="invitation" value="`+html.EscapeString(invitation)+`"`, 1))
+			return
+		}
 		_, _ = io.Copy(w, res.Body)
 	})}
 	t.Cleanup(func() { _ = server.Close() })
 	go func() { _ = server.Serve(listener) }()
-	fmt.Printf("SYNTHETIC_VISUAL_URL=%s/portal/sign-in?lang=da\nSYNTHETIC_INVITATION=%s\n", origin, inv)
+	fmt.Printf("SYNTHETIC_VISUAL_URL=%s/portal/sign-in?lang=da\n", origin)
 	// Bounded interactive proof, never an unattended production service.
 	select {
 	case <-t.Context().Done():

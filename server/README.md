@@ -88,11 +88,15 @@ over those same immutable records, with current operator authorization and bound
 oldest-first pagination. It neither joins contact profiles nor approves work.
 The independently gated [draft proposal history](PROPOSALS.md) lets the operator
 prepare bounded immutable scope and price versions; it does not dispatch an offer,
-obtain acceptance or authorize work.
+obtain acceptance or authorize work. Independently default-off exact client
+acceptance records an audited
+version/content-bound receipt after explicit review; it never approves payments or
+worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
-Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index) and v6 (draft proposals)
+Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
+v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation) and v9 (exact consent)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. Original v1–v5 bytes remain unchanged by the proposal migration.
+ledger. Original v1–v8 bytes remain unchanged by the consent migration.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
