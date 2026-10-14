@@ -47,17 +47,17 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		t.Fatalf("actual command compilation failed: %s", output)
 	}
 	var issuer string
-	var delayDiscovery atomic.Bool
-	delayDiscovery.Store(true)
+	var discoveryDelay atomic.Int64
+	discoveryDelay.Store(int64(5 * time.Second))
 	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
 			http.NotFound(w, r)
 			return
 		}
 		// Slow but valid broker startup must leave time for the enabled assertion.
-		if delayDiscovery.CompareAndSwap(true, false) {
+		if delay := time.Duration(discoveryDelay.Swap(0)); delay > 0 {
 			select {
-			case <-time.After(5 * time.Second):
+			case <-time.After(delay):
 			case <-r.Context().Done():
 				return
 			}
@@ -78,6 +78,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("synthetic-constructor-secret"), 0600); err != nil {
 		t.Fatal("synthetic client configuration write failed")
 	}
+	projection := projectedIdentityFixture(t, []byte("synthetic-constructor-secret"), 0440)
 	query := database.Query()
 	query.Set("sslmode", "verify-full")
 	query.Set("sslrootcert", ca)
@@ -89,16 +90,34 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	for _, tc := range []struct {
 		name, flag string
 		want       int
+		projected  bool
 	}{
-		{"explicit identity after slow startup", on, 200},
-		{"missing flag", "", 404},
-		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404},
-		{"malformed", "{invalid", 404},
-		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404},
+		{"explicit identity after slow startup", on, 200, false},
+		{"missing flag", "", 404, false},
+		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404, false},
+		{"malformed", "{invalid", 404, false},
+		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404, false},
+		{"explicit projected identity", on, 200, true},
+		{"projected identity remains off", "", 404, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
+			if tc.projected {
+				if tc.want == 200 {
+					// Projection startup must also tolerate a slow but valid discovery.
+					discoveryDelay.Store(int64(7 * time.Second))
+				}
+				// Leave margin beyond the executable's 45-second startup deadline.
+				until = time.Now().Add(time.Minute)
+				env = nil
+				for _, value := range environment {
+					if !strings.HasPrefix(value, "PORTAL_CLIENT_SECRET_FILE=") {
+						env = append(env, value)
+					}
+				}
+				env = append(env, "PORTAL_CLIENT_SECRET_PROJECTION_FILE="+projection)
+			}
 			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
 				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on)
 			address, stop := startActualCommand(t, binary, public, env)
@@ -109,7 +128,8 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			}
 			commandStatus(t, address, "/portal/requests", 404)
 			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
-			if tc.want == 200 {
+			// The ordinary transport retains the actual shared-provider expiry proof.
+			if tc.want == 200 && !tc.projected {
 				<-time.After(time.Until(until) + time.Millisecond)
 				commandStatus(t, address, "/portal/sign-in", 404)
 				commandStatus(t, address, "/", 200)

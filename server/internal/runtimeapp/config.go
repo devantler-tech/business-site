@@ -23,7 +23,10 @@ import (
 var ErrConfig = errors.New("portal configuration is invalid")
 
 // Config holds the all-or-none private dependencies, never an activation setting.
-type Config struct{ database, issuer, client, callback, secretFile string }
+type Config struct {
+	database, issuer, client, callback, secretFile string
+	secretProjected                                bool
+}
 
 // IdentityProvider keeps ordinary startup closed. Explicit staging additionally
 // requires complete validated private dependencies and a bounded operator lease.
@@ -97,7 +100,13 @@ func ReadCompanyDisclosure(filename string) (string, error) {
 // ReadConfig accepts either no identity dependencies or a complete validated
 // set. It parses no activation flag; the real OpenFeature SDK remains the gate.
 func ReadConfig(getenv func(string) string) (Config, error) {
-	c := Config{getenv("PORTAL_DATABASE_URL"), getenv("PORTAL_OIDC_ISSUER"), getenv("PORTAL_OIDC_CLIENT_ID"), getenv("PORTAL_CALLBACK_URL"), getenv("PORTAL_CLIENT_SECRET_FILE")}
+	c := Config{database: getenv("PORTAL_DATABASE_URL"), issuer: getenv("PORTAL_OIDC_ISSUER"), client: getenv("PORTAL_OIDC_CLIENT_ID"), callback: getenv("PORTAL_CALLBACK_URL"), secretFile: getenv("PORTAL_CLIENT_SECRET_FILE")}
+	if projected := getenv("PORTAL_CLIENT_SECRET_PROJECTION_FILE"); projected != "" {
+		if c.secretFile != "" {
+			return Config{}, ErrConfig
+		}
+		c.secretFile, c.secretProjected = projected, true
+	}
 	count := 0
 	for _, value := range []string{c.database, c.issuer, c.client, c.callback, c.secretFile} {
 		if value != "" {
@@ -125,6 +134,25 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	return c, nil
 }
 
+// readIdentitySecret selects only the explicitly configured transport and hides input diagnostics.
+func readIdentitySecret(c Config) (string, error) {
+	if !c.secretProjected {
+		return readSecret(c.secretFile)
+	}
+	if !filepath.IsAbs(c.secretFile) || os.Geteuid() <= 0 || os.Getegid() <= 0 {
+		return "", ErrConfig
+	}
+	data, err := projectionBytes(c.secretFile)
+	if err != nil {
+		return "", ErrConfig
+	}
+	value := trimInputLineEnding(string(data))
+	if value == "" {
+		return "", ErrConfig
+	}
+	return value, nil
+}
+
 // Portal connects only when all dependencies were explicitly supplied. It never
 // migrates, enrolls customers, or enables the injected provider. Errors are generic.
 func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Handler, func(), error) {
@@ -135,7 +163,7 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if flags == nil {
 		return nil, closed, ErrConfig
 	}
-	secret, err := readSecret(c.secretFile)
+	secret, err := readIdentitySecret(c)
 	if err != nil {
 		return nil, closed, ErrConfig
 	}

@@ -140,8 +140,16 @@ With no `PORTAL_*` dependencies, startup serves public pages without broker/stor
 connections and reserves private routes as non-cacheable 404s. For later private
 wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),
 `PORTAL_OIDC_ISSUER`, `PORTAL_OIDC_CLIENT_ID`, fixed HTTPS `PORTAL_CALLBACK_URL`
-ending `/portal/callback`, and absolute `PORTAL_CLIENT_SECRET_FILE`. Store the secret
-as a regular, private file or a confined projected secret; never put it in arguments,
+ending `/portal/callback`, and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
+`PORTAL_CLIENT_SECRET_PROJECTION_FILE`. The ordinary file input requires owner-only
+permissions. The explicit projection input supports a non-root Unix process and
+a root/current-user-owned regular file with read access for its primary group only;
+writable groups, other-user access, execution/special bits and escaping links are
+refused. Both readers bound the same-descriptor read to 16 KiB, remove only one
+terminal LF/CRLF, and create no scratch copy. Mixed inputs fail before connections.
+For the restricted image, project mode `0440` with group 65532 and searchable
+directories. Configuration is snapshotted at startup; restart to rotate it.
+Store the secret privately; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
 The Unix service runtime requires an already migrated least-privilege store. Its
 configured database login must match both the session and effective role before
@@ -149,6 +157,7 @@ the existing permission check and broker discovery; switching a broader login
 into a restricted role is refused. It fixes its SQL schema, caps its pool/timeouts
 and performs no DDL. Dependency configuration alone does not
 turn on the OpenFeature gate; real federation/ingress/activation remain parent work.
+This sign-in transport does not change the separate migration credential reader.
 `/healthz` is public-runtime liveness only. SIGTERM drains requests for up to ten
 seconds; request/header/idle limits are explicit. Serve behind an eventual verified
 TLS gateway before any production identity activation. No forwarded-header trust
