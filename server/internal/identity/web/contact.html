@@ -13,6 +13,9 @@
 <label for="contact-email">{{.EmailLabel}} <span class="field-limit">{{if eq .Lang `da`}}(højst 254 tegn){{else}}(up to 254 characters){{end}}</span></label><input id="contact-email" name="email" type="email" value="{{.Contact.Email}}" autocomplete="email" maxlength="254" aria-describedby="contact-pending" required><p id="contact-pending">{{.Pending}}</p>
 <label for="contact-company">{{.CompanyLabel}} <span class="field-limit">{{if eq .Lang `da`}}(højst 160 tegn){{else}}(up to 160 characters){{end}}</span></label><input id="contact-company" name="company" value="{{.Contact.Company}}" autocomplete="organization" maxlength="160">
 <button type="submit">{{.Save}}</button></form>
+{{if .VerificationEnabled}}<form method="post" action="/portal/contact/verify">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="revision" value="{{.Contact.Revision}}">
+<p id="contact-verification-help">{{.VerificationHelp}}</p><button type="submit" aria-describedby="contact-verification-help">{{.Verify}}</button></form>{{end}}
 <a class="back" href="/portal/contact?lang={{.Lang}}">{{if eq .Lang `da`}}Genindlæs kontaktoplysninger{{else}}Reload contact details{{end}}</a>
 </section><a class="back" href="/portal/?lang={{.Lang}}">{{.Workspace}}</a></main><footer>Devantler Tech</footer>
 <script src="/portal/assets/portal.js" defer></script>

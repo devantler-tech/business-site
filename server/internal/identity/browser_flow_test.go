@@ -37,6 +37,7 @@ type browserFixture struct {
 	handler             http.Handler
 	subject             string
 	claims              map[string]any
+	expectedScope       string
 	codes               map[string]url.Values
 	exchanges           atomic.Int32
 	redirectExchange    bool
@@ -97,7 +98,13 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 			_ = json.NewEncoder(w).Encode(map[string]any{"keys": []any{map[string]any{"kty": "RSA", "kid": "fixture", "use": "sig", "alg": "RS256", "n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()), "e": "AQAB"}}})
 		case "/authorize":
 			q := r.URL.Query()
-			if q.Get("client_id") != "portal-fixture" || q.Get("response_type") != "code" || q.Get("scope") != "openid" || q.Get("nonce") == "" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || q.Get("redirect_uri") != b.site.URL+"/portal/callback" {
+			b.mu.RLock()
+			scope := b.expectedScope
+			b.mu.RUnlock()
+			if scope == "" {
+				scope = "openid"
+			}
+			if q.Get("client_id") != "portal-fixture" || q.Get("response_type") != "code" || q.Get("scope") != scope || q.Get("nonce") == "" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || q.Get("redirect_uri") != b.site.URL+"/portal/callback" {
 				http.Error(w, "invalid synthetic authorization", 400)
 				return
 			}

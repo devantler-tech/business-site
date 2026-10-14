@@ -74,20 +74,30 @@ func NewBroker(ctx context.Context, issuer, clientID string) (*Broker, error) {
 // nonce to this login attempt. OIDC's multi-audience authorized party is checked
 // explicitly; a valid token for a different relying party grants no access.
 func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, error) {
-	if b == nil || b.verifier == nil || nonce == "" || len(raw) > 16384 {
+	token, err := b.verifiedToken(ctx, raw, nonce)
+	if err != nil {
 		return Principal{}, ErrDenied
+	}
+	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
+}
+
+// verifiedToken retains the validated token for a purpose-specific claim consumer.
+// Ordinary identity verification never depends on optional email claims.
+func (b *Broker) verifiedToken(ctx context.Context, raw, nonce string) (*oidc.IDToken, error) {
+	if b == nil || b.verifier == nil || nonce == "" || len(raw) > 16384 {
+		return nil, ErrDenied
 	}
 	token, err := b.verifier.Verify(ctx, raw)
 	if err != nil || token.Subject == "" || !time.Now().Before(token.Expiry) || subtle.ConstantTimeCompare([]byte(token.Nonce), []byte(nonce)) != 1 {
-		return Principal{}, ErrDenied
+		return nil, ErrDenied
 	}
 	var claims struct {
 		AuthorizedParty string `json:"azp"`
 	}
 	if err = token.Claims(&claims); err != nil || (len(token.Audience) > 1 && claims.AuthorizedParty != b.clientID) || (claims.AuthorizedParty != "" && claims.AuthorizedParty != b.clientID) {
-		return Principal{}, ErrDenied
+		return nil, ErrDenied
 	}
-	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
+	return token, nil
 }
 
 // Foundation has no in-memory identity/entitlement authority. New defaults off.
@@ -171,7 +181,7 @@ func (s *Foundation) consumeAttempt(ctx context.Context, state, browser string) 
 		return "", "", ErrDenied
 	}
 	var nonce, verifier string
-	err := s.pool.QueryRow(ctx, `DELETE FROM portal_login_attempts WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>now() RETURNING nonce,pkce_verifier`, digest(state), digest(browser)).Scan(&nonce, &verifier)
+	err := s.pool.QueryRow(ctx, `DELETE FROM portal_login_attempts WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>now() AND purpose='sign-in' RETURNING nonce,pkce_verifier`, digest(state), digest(browser)).Scan(&nonce, &verifier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrDenied
 	}

@@ -60,7 +60,7 @@ func installCompletedRead(t *testing.T, b *browserFixture, query string) *comple
 func installReadProvider(t *testing.T, b *browserFixture, key string, blockAt int32) *finalRequestProvider {
 	t.Helper()
 	flags := map[string]memprovider.InMemoryFlag{}
-	for _, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing"} {
+	for _, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification"} {
 		flags[name] = memprovider.InMemoryFlag{Key: name, State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
 	}
 	p := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(flags), key: key, blockAt: blockAt, blocked: make(chan struct{}), release: make(chan struct{})}

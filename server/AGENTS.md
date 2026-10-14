@@ -5,7 +5,8 @@ This Go module is the unified product's **default-off browser identity boundary*
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,
 payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary. Contact emails remain
-self-declared and unverified, never identity or order authority. Never present synthetic broker
+self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
+succeeds; they are never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
@@ -80,6 +81,16 @@ database and synthetic TLS broker. No service or production activation is implie
 Check SDK READY before and after each identity evaluation; ERROR/STALE can otherwise
 still evaluate through the SDK. Keep private activation values out of build assets,
 images, receipts and logs, and keep other work decisions independently closed.
+Contact confirmation additionally requires false-default `portal-contact-verification`;
+its retirement review is business-site#93, due 14 November 2026. Read `CONTACTS.md`.
+Only an explicit, CSRF-protected purpose-bound flow requests email claims. Confirm
+the exact saved revision/address for the same broker identity and current client;
+never use email to link identities, grant roles or authorize work. Ordinary sign-in
+does not confirm contacts. SDK waits precede private-read authorization and final
+write expiry/cancellation checks. Edits clear confirmation/provenance; recovered
+draft values cannot inherit a saved address's confirmation. The environment provider
+remains identity-only, with no new activation mapping. Preserve unchanged v1–v7;
+v8 adds bound purposes and confirmation provenance without broadening table authority.
 Free project requests additionally require false-default `portal-requests` on every
 operation. A receipt never authorizes a quote, agreement, payment or worker execution.
 The request flag's lifecycle is tracked in business-site#57. Requests are immutable;

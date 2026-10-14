@@ -361,6 +361,7 @@ func TestProposalSameRetryKeyRemainsRequestClientScoped(t *testing.T) {
 func TestProposalMigrationPreservesPriorLedgerAndIntake(t *testing.T) {
 	b := proposalFixture(t)
 	migrator := migrationDB(t)
+	rewindContactVerificationFixture(t, migrator)
 	var before, after string
 	if err := migrator.QueryRow(b.f.ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=5`).Scan(&before); err != nil {
 		t.Fatal(err)
