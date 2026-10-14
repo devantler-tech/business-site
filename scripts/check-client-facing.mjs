@@ -12,7 +12,7 @@ const enabled = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') === 'true';
 const featured = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const anchors = {
-  ksail: ['️-ksail---'], 'data-product-controller': ['-data-product-controller--'],
+  ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
   'agent-skills': ['-agent-skills--'], 'agent-plugins': ['-agent-plugins---'],
   'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
