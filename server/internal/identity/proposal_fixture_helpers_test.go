@@ -38,10 +38,10 @@ func blockFixtureProposalWrite(ctx context.Context, t *testing.T, pool *pgxpool.
 	return tx
 }
 
-// waitForFixtureProposalWrite observes the actual blocked database operation.
-func waitForFixtureProposalWrite(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
+// waitForFixtureProposalWrite observes only this database's blocked request write.
+func waitForFixtureProposalWrite(ctx context.Context, t *testing.T, pool *pgxpool.Pool, requestID string) {
 	t.Helper()
-	waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted)`)
+	waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND classid=1869820518 AND objid=hashtext($1)::oid AND objsubid=2 AND NOT granted)`, requestID)
 }
 
 // waitForFixtureDatabaseLock bounds observation of a real lock with the caller's deadline.

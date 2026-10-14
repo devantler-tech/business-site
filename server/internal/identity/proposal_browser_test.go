@@ -207,7 +207,7 @@ func TestProposalMutationRejectsInFlightAuthorityClosure(t *testing.T) {
 			}
 			result := make(chan error, 1)
 			go func() { result <- b.svc.persistProposal(ctx, p, proposalRequestID, d) }()
-			waitForFixtureProposalWrite(ctx, t, migrator)
+			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 			switch change {
 			case "flag":
 				proposalFlags(t, b, true, true, true, false)

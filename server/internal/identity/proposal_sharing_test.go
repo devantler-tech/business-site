@@ -245,7 +245,7 @@ func TestSharingMutationRejectsInFlightClosure(t *testing.T) {
 			go func() {
 				result <- b.svc.persistVisibility(ctx, p, proposalRequestID, visibilityDecision{Proposal: 1, ExpectedProposal: 1, Action: "share", Key: secret()})
 			}()
-			waitForFixtureProposalWrite(ctx, t, migrator)
+			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 			closeFixtureSharing(ctx, t, b, p, change)
 			releaseFixtureAndRequireDenial(ctx, t, tx, result, change)
 			assertFixtureVisibilityCount(ctx, t, b, 0)
