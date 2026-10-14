@@ -41,6 +41,8 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		allowed     bool
 	}{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"consent domain owner", "GRANT CREATE ON SCHEMA public TO portal_runtime; ALTER DOMAIN portal_consent_key OWNER TO portal_runtime; REVOKE CREATE ON SCHEMA public FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable consent domain owner", "CREATE ROLE portal_fixture_domain_owner NOLOGIN; GRANT CREATE ON SCHEMA public TO portal_fixture_domain_owner; ALTER DOMAIN portal_consent_hash OWNER TO portal_fixture_domain_owner; REVOKE CREATE ON SCHEMA public FROM portal_fixture_domain_owner; GRANT portal_fixture_domain_owner TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"mutable acceptance UPDATE", "GRANT UPDATE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
 		{"missing acceptance SELECT", "REVOKE SELECT ON portal_proposal_acceptances FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"missing acceptance INSERT", "REVOKE INSERT ON portal_proposal_acceptances FROM portal_runtime; SET ROLE portal_runtime", false},

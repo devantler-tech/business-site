@@ -154,7 +154,9 @@ func (s *Foundation) prepareProposalReview(ctx context.Context, p Principal, id 
 		if p.expires.Before(review.Expires) {
 			review.Expires = p.expires
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposal_reviews(request_id,client_id,client_issuer,client_subject,context_key,proposal_version,visibility_event,content_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(request_id,client_id,client_issuer,client_subject) DO UPDATE SET context_key=EXCLUDED.context_key,proposal_version=EXCLUDED.proposal_version,visibility_event=EXCLUDED.visibility_event,content_hash=EXCLUDED.content_hash,expires_at=EXCLUDED.expires_at`, id, client, p.issuer, p.subject, review.Key, review.Proposal.Version, review.Event, review.Hash, review.Expires); err != nil {
+		// PostgreSQL stores microseconds. Return its actual deadline so a reuse
+		// reads precisely the same value, without rounding the deadline upward.
+		if err = tx.QueryRow(ctx, `INSERT INTO portal_proposal_reviews(request_id,client_id,client_issuer,client_subject,context_key,proposal_version,visibility_event,content_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(request_id,client_id,client_issuer,client_subject) DO UPDATE SET context_key=EXCLUDED.context_key,proposal_version=EXCLUDED.proposal_version,visibility_event=EXCLUDED.visibility_event,content_hash=EXCLUDED.content_hash,expires_at=EXCLUDED.expires_at RETURNING expires_at`, id, client, p.issuer, p.subject, review.Key, review.Proposal.Version, review.Event, review.Hash, review.Expires).Scan(&review.Expires); err != nil {
 			return proposalReview{}, errTriageStorage
 		}
 	}
@@ -320,13 +322,14 @@ func (b *browser) confirmProposal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *browser) acceptanceResult(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, errProposalConflict) {
+	switch {
+	case errors.Is(err, errProposalConflict):
 		b.acceptanceError(w, r, 409)
-	} else if errors.Is(err, pgx.ErrNoRows) {
+	case errors.Is(err, pgx.ErrNoRows):
 		http.NotFound(w, r)
-	} else if err != nil {
+	case err != nil:
 		b.triageError(w, r, err)
-	} else {
+	default:
 		http.Redirect(w, r, "/portal/requests/"+r.PathValue("id")+"?lang="+language(r), http.StatusSeeOther)
 	}
 }

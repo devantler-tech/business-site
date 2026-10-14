@@ -537,7 +537,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 // A current ledger is not permission to report success with a non-owning role.
 // Each control changes only its uniquely named, fully migrated disposable store.
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
-	for _, relation := range []string{"wrong credential", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances"} {
+	for _, relation := range []string{"wrong credential", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash"} {
 		t.Run(relation, func(t *testing.T) {
 			file, pool, database := migrationCommandFixture(t)
 			binary := buildMigrationCommand(t)
@@ -559,7 +559,11 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				connection = migrationFixtureRole(database, role)
 			} else {
 				quoted := pgx.Identifier{"public", relation}.Sanitize()
-				if _, err := admin.Exec(t.Context(), "ALTER TABLE "+quoted+" OWNER TO portal_fixture_owner; GRANT SELECT ON ALL TABLES IN SCHEMA public TO portal_migrator"); err != nil {
+				kind := "TABLE"
+				if strings.HasPrefix(relation, "portal_consent_") {
+					kind = "DOMAIN"
+				}
+				if _, err := admin.Exec(t.Context(), "ALTER "+kind+" "+quoted+" OWNER TO portal_fixture_owner; GRANT SELECT ON ALL TABLES IN SCHEMA public TO portal_migrator"); err != nil {
 					t.Fatal("owned partial-ownership fixture failed")
 				}
 			}

@@ -151,5 +151,5 @@ decision is not current-scope authorization.
 Acceptance does not approve a payment, invoice, credited funds, order or worker
 execution. The selected portal-owned queue/API/MCP remains separate under #20.
 Privacy/retention and real consumer/legal review remain launch conditions under
-#19/#21 and monorepo#3936/#3939. Included hosting maintenance cannot be forced into
+issues #19/#21 and monorepo#3936/#3939. Included hosting maintenance cannot be forced into
 a new feature purchase. Synthetic database/browser proof is not customer activation.

@@ -123,6 +123,9 @@ a short, actor/request/client/content/version/event-bound context, never a sessi
 write on GET. v9 follows unchanged v1–v8. Review contexts alone may be updated;
 their bounded row does not own consent history. Acceptance receipts copy immutable
 bindings with SELECT/INSERT-only runtime authority and no FK to mutable contexts.
+Shared key/event/hash domains retain column NOT NULL constraints; migration
+completeness checks their ownership and base types. Refuse direct or assumable
+runtime domain ownership, which could weaken those validation constraints.
 Share only the request lock, never the operator writer's authorization helper.
 Lock current client membership after that request lock and independently derive
 request ownership. Recheck gates/expiry/cancellation before commit. Final display

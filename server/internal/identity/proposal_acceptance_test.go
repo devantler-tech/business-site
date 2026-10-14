@@ -18,7 +18,19 @@ import (
 
 func acceptanceFlags(t *testing.T, b *browserFixture, values ...any) {
 	t.Helper()
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"}, values)
+	setFixturePortalFlags(t, b, acceptanceFlagNames(), values)
+}
+
+func acceptanceFlagNames() []string {
+	return []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"}
+}
+
+func acceptanceMemoryFlags() map[string]memprovider.InMemoryFlag {
+	flags := map[string]memprovider.InMemoryFlag{}
+	for _, name := range acceptanceFlagNames() {
+		flags[name] = memprovider.InMemoryFlag{State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
+	}
+	return flags
 }
 
 type lateAcceptanceProvider struct {
@@ -41,11 +53,7 @@ func (p *lateAcceptanceProvider) BooleanEvaluation(ctx context.Context, key stri
 func TestAcceptanceReviewRechecksMembershipAfterFinalSDKWait(t *testing.T) {
 	b := acceptanceFixture(t)
 	form := acceptanceReviewForm(t, b)
-	flags := map[string]memprovider.InMemoryFlag{}
-	for _, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"} {
-		flags[name] = memprovider.InMemoryFlag{State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
-	}
-	provider := &lateAcceptanceProvider{FeatureProvider: memprovider.NewInMemoryProvider(flags), blocked: make(chan struct{}), release: make(chan struct{})}
+	provider := &lateAcceptanceProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), blocked: make(chan struct{}), release: make(chan struct{})}
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { close(provider.release) }) }
 	defer release()
@@ -154,11 +162,7 @@ func TestAcceptanceSDKErrorAndStaleDenyActualHandlers(t *testing.T) {
 		t.Run(string(event), func(t *testing.T) {
 			b := acceptanceFixture(t)
 			f := acceptanceForm(t, b)
-			flags := map[string]memprovider.InMemoryFlag{}
-			for _, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"} {
-				flags[name] = memprovider.InMemoryFlag{State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
-			}
-			provider := &unsettledProvider{FeatureProvider: memprovider.NewInMemoryProvider(flags), events: make(chan openfeature.Event, 1)}
+			provider := &unsettledProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), events: make(chan openfeature.Event, 1)}
 			if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
 				t.Fatal(err)
 			}
@@ -183,6 +187,8 @@ func TestAcceptanceSDKErrorAndStaleDenyActualHandlers(t *testing.T) {
 func TestAcceptanceContextsAreBoundedAndHistoricalRetriesSurviveReconnect(t *testing.T) {
 	b := acceptanceFixture(t)
 	p := enroll(t, b.svc, b.f, "consent-direct", "private-client-key", "client")
+	// Force sub-microsecond precision, rather than relying on host clock luck.
+	p.expires = time.Now().Add(time.Minute).Truncate(time.Second).Add(123 * time.Nanosecond)
 	first, err := b.svc.prepareProposalReview(t.Context(), p, proposalRequestID)
 	if err != nil {
 		t.Fatal(err)
@@ -232,13 +238,8 @@ func TestAcceptanceRealConcurrentDuplicatesAndDraftWithdrawalRaces(t *testing.T)
 	for _, change := range []string{"draft", "withdrawal"} {
 		for _, consentFirst := range []bool{true, false} {
 			t.Run(change+map[bool]string{true: "/consent-first", false: "/change-first"}[consentFirst], func(t *testing.T) {
-				b := acceptanceFixture(t)
-				p := enroll(t, b.svc, b.f, "race-consent-client", "private-client-key", "client")
+				b, p, review := preparedConsentFixture(t, "race-consent-client")
 				op := enroll(t, b.svc, b.f, "race-consent-operator", "operator-workspace", "operator")
-				review, err := b.svc.prepareProposalReview(t.Context(), p, proposalRequestID)
-				if err != nil {
-					t.Fatal(err)
-				}
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
 				migrator := migrationDB(t)
@@ -272,7 +273,7 @@ func TestAcceptanceRealConcurrentDuplicatesAndDraftWithdrawalRaces(t *testing.T)
 				if err := <-mutate; err != nil {
 					t.Fatal("competing operator mutation failed", err)
 				}
-				err = <-consent
+				err := <-consent
 				if (consentFirst && err != nil) || (!consentFirst && !errors.Is(err, errProposalConflict)) {
 					t.Fatal("serialization admitted stale consent or lost first decision", err)
 				}
@@ -316,12 +317,7 @@ func TestAcceptanceRechecksAccessAndGatesAfterWaiting(t *testing.T) {
 	for _, operation := range []string{"review", "accept"} {
 		for _, change := range []string{"revocation", "rebind", "role", "flag", "expiry", "cancel"} {
 			t.Run(operation+"/"+change, func(t *testing.T) {
-				b := acceptanceFixture(t)
-				p := enroll(t, b.svc, b.f, "waiting-consent-client", "private-client-key", "client")
-				review, err := b.svc.prepareProposalReview(t.Context(), p, proposalRequestID)
-				if err != nil {
-					t.Fatal(err)
-				}
+				b, p, review := preparedConsentFixture(t, "waiting-consent-client")
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
 				migrator := migrationDB(t)
@@ -421,6 +417,17 @@ func acceptanceFixture(t *testing.T) *browserFixture {
 	acceptanceFlags(t, b, true, true, true, true, true, true)
 	triageSignIn(t, b, "consent-client", "private-client-key", "client")
 	return b
+}
+
+func preparedConsentFixture(t *testing.T, subject string) (*browserFixture, Principal, proposalReview) {
+	t.Helper()
+	b := acceptanceFixture(t)
+	p := enroll(t, b.svc, b.f, subject, "private-client-key", "client")
+	review, err := b.svc.prepareProposalReview(t.Context(), p, proposalRequestID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, p, review
 }
 
 func acceptanceReviewForm(t *testing.T, b *browserFixture) url.Values {

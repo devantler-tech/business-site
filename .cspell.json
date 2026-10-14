@@ -2,6 +2,13 @@
   "version": "0.2",
   "language": "en",
   "words": [
+    "pgconn",
+    "regtype",
+    "typbasetype",
+    "typname",
+    "typnamespace",
+    "typowner",
+    "typtype",
     "registreret",
     "bekræfter",
     "gennemgå",

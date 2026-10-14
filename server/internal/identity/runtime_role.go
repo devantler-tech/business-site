@@ -20,6 +20,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
  AND NOT has_schema_privilege(current_user,'public','CREATE')
  AND NOT has_database_privilege(current_user,current_database(),'CREATE')
  AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=r.oid AND c.relnamespace='public'::regnamespace)
+ AND NOT EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=r.oid AND t.typnamespace='public'::regnamespace AND t.typtype='d')
  AND NOT EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=r.oid)
  AND NOT EXISTS (SELECT 1 FROM pg_roles predefined WHERE starts_with(predefined.rolname,'pg_') AND pg_has_role(current_user,predefined.oid,'MEMBER'))
  AND NOT EXISTS (
@@ -30,6 +31,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
        OR has_schema_privilege(privileged.oid,'public','CREATE')
        OR has_database_privilege(privileged.oid,current_database(),'CREATE')
        OR EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=privileged.oid AND c.relnamespace='public'::regnamespace)
+       OR EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=privileged.oid AND t.typnamespace='public'::regnamespace AND t.typtype='d')
        OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)
        OR has_table_privilege(privileged.oid,'portal_requests','UPDATE')
        OR has_table_privilege(privileged.oid,'portal_requests','DELETE')
