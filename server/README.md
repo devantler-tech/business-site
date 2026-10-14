@@ -88,7 +88,8 @@ over those same immutable records, with current operator authorization and bound
 oldest-first pagination. It neither joins contact profiles nor approves work.
 The independently gated [draft proposal history](PROPOSALS.md) lets the operator
 prepare bounded immutable scope and price versions; it does not dispatch an offer,
-authorize work. Independently default-off exact client acceptance records an audited
+obtain acceptance or authorize work. Independently default-off exact client
+acceptance records an audited
 version/content-bound receipt after explicit review; it never approves payments or
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 

@@ -16,15 +16,18 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+// acceptanceFlags configures the six independent SDK gates in their fixed order.
 func acceptanceFlags(t *testing.T, b *browserFixture, values ...any) {
 	t.Helper()
 	setFixturePortalFlags(t, b, acceptanceFlagNames(), values)
 }
 
+// acceptanceFlagNames returns a fresh gate list so fixtures cannot mutate others.
 func acceptanceFlagNames() []string {
 	return []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"}
 }
 
+// acceptanceMemoryFlags provides the ordinary enabled provider around wait controls.
 func acceptanceMemoryFlags() map[string]memprovider.InMemoryFlag {
 	flags := map[string]memprovider.InMemoryFlag{}
 	for _, name := range acceptanceFlagNames() {
@@ -33,12 +36,25 @@ func acceptanceMemoryFlags() map[string]memprovider.InMemoryFlag {
 	return flags
 }
 
+// installAcceptanceWait releases blocked requests before fixture-server cleanup.
+func installAcceptanceWait(t *testing.T, b *browserFixture, provider openfeature.FeatureProvider, channel chan struct{}) func() {
+	t.Helper()
+	var once sync.Once
+	release := func() { once.Do(func() { close(channel) }) }
+	t.Cleanup(release)
+	if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
+		t.Fatal(err)
+	}
+	return release
+}
+
 type lateAcceptanceProvider struct {
 	openfeature.FeatureProvider
 	reads            atomic.Int32
 	blocked, release chan struct{}
 }
 
+// BooleanEvaluation pauses the final POST display check, retaining SDK behavior.
 func (p *lateAcceptanceProvider) BooleanEvaluation(ctx context.Context, key string, fallback bool, evaluation openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
 	if key == "portal-proposal-acceptance" && p.reads.Add(1) == 4 {
 		close(p.blocked)
@@ -50,16 +66,12 @@ func (p *lateAcceptanceProvider) BooleanEvaluation(ctx context.Context, key stri
 	return p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, evaluation)
 }
 
+// TestAcceptanceReviewRechecksMembershipAfterFinalSDKWait denies post-wait revocation.
 func TestAcceptanceReviewRechecksMembershipAfterFinalSDKWait(t *testing.T) {
 	b := acceptanceFixture(t)
 	form := acceptanceReviewForm(t, b)
 	provider := &lateAcceptanceProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), blocked: make(chan struct{}), release: make(chan struct{})}
-	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(func() { close(provider.release) }) }
-	defer release()
-	if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
-		t.Fatal(err)
-	}
+	release := installAcceptanceWait(t, b, provider, provider.release)
 	result := make(chan string, 1)
 	go func() {
 		_, body, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/proposal-review", form, b.site.URL)
@@ -86,6 +98,7 @@ func TestAcceptanceReviewRechecksMembershipAfterFinalSDKWait(t *testing.T) {
 	}
 }
 
+// TestAcceptanceRejectsForgedFormsAndOtherClients exercises actual scoped handlers.
 func TestAcceptanceRejectsForgedFormsAndOtherClients(t *testing.T) {
 	b := acceptanceFixture(t)
 	f := acceptanceForm(t, b)
@@ -114,6 +127,7 @@ func TestAcceptanceRejectsForgedFormsAndOtherClients(t *testing.T) {
 	assertAcceptanceCount(t, b, 0)
 }
 
+// assertAcceptanceCount observes the durable ledger rather than a response claim.
 func assertAcceptanceCount(t *testing.T, b *browserFixture, want int) {
 	t.Helper()
 	var count int
@@ -122,6 +136,7 @@ func assertAcceptanceCount(t *testing.T, b *browserFixture, want int) {
 	}
 }
 
+// TestAcceptanceIndependentSDKGatesAndNativeCSRF retains every gate and CSRF refusal.
 func TestAcceptanceIndependentSDKGatesAndNativeCSRF(t *testing.T) {
 	b := acceptanceFixture(t)
 	f := acceptanceForm(t, b)
@@ -157,6 +172,7 @@ func TestAcceptanceIndependentSDKGatesAndNativeCSRF(t *testing.T) {
 	assertAcceptanceCount(t, b, 0)
 }
 
+// TestAcceptanceSDKErrorAndStaleDenyActualHandlers checks settled provider states.
 func TestAcceptanceSDKErrorAndStaleDenyActualHandlers(t *testing.T) {
 	for _, event := range []openfeature.EventType{openfeature.ProviderError, openfeature.ProviderStale} {
 		t.Run(string(event), func(t *testing.T) {
@@ -184,6 +200,8 @@ func TestAcceptanceSDKErrorAndStaleDenyActualHandlers(t *testing.T) {
 	}
 }
 
+// TestAcceptanceContextsAreBoundedAndHistoricalRetriesSurviveReconnect distinguishes
+// an original immutable decision from a rotated review or later proposal version.
 func TestAcceptanceContextsAreBoundedAndHistoricalRetriesSurviveReconnect(t *testing.T) {
 	b := acceptanceFixture(t)
 	p := enroll(t, b.svc, b.f, "consent-direct", "private-client-key", "client")
@@ -234,6 +252,8 @@ func TestAcceptanceContextsAreBoundedAndHistoricalRetriesSurviveReconnect(t *tes
 	assertAcceptanceCount(t, b, 1)
 }
 
+// TestAcceptanceRealConcurrentDuplicatesAndDraftWithdrawalRaces observes both
+// real database lock orders and exactly-once receipt identity for duplicate retries.
 func TestAcceptanceRealConcurrentDuplicatesAndDraftWithdrawalRaces(t *testing.T) {
 	for _, change := range []string{"draft", "withdrawal"} {
 		for _, consentFirst := range []bool{true, false} {
@@ -313,6 +333,7 @@ func TestAcceptanceRealConcurrentDuplicatesAndDraftWithdrawalRaces(t *testing.T)
 	assertAcceptanceCount(t, b, 1)
 }
 
+// TestAcceptanceRechecksAccessAndGatesAfterWaiting closes authority during lock waits.
 func TestAcceptanceRechecksAccessAndGatesAfterWaiting(t *testing.T) {
 	for _, operation := range []string{"review", "accept"} {
 		for _, change := range []string{"revocation", "rebind", "role", "flag", "expiry", "cancel"} {
@@ -364,6 +385,8 @@ func TestAcceptanceRechecksAccessAndGatesAfterWaiting(t *testing.T) {
 	}
 }
 
+// TestAcceptanceStorageDenialAndV9PreserveHistory retains fail-closed storage and
+// unchanged earlier migrations through actual disposable schema reconstruction.
 func TestAcceptanceStorageDenialAndV9PreserveHistory(t *testing.T) {
 	b := acceptanceFixture(t)
 	f := acceptanceForm(t, b)
@@ -410,6 +433,7 @@ func TestAcceptanceStorageDenialAndV9PreserveHistory(t *testing.T) {
 	}
 }
 
+// acceptanceFixture shares a fictional proposal before signing in its own client.
 func acceptanceFixture(t *testing.T) *browserFixture {
 	t.Helper()
 	b := sharingFixture(t)
@@ -419,6 +443,7 @@ func acceptanceFixture(t *testing.T) *browserFixture {
 	return b
 }
 
+// preparedConsentFixture creates a real actor-bound review for direct race controls.
 func preparedConsentFixture(t *testing.T, subject string) (*browserFixture, Principal, proposalReview) {
 	t.Helper()
 	b := acceptanceFixture(t)
@@ -430,11 +455,13 @@ func preparedConsentFixture(t *testing.T, subject string) (*browserFixture, Prin
 	return b, p, review
 }
 
+// acceptanceReviewForm uses a real session CSRF token without browser-supplied scope.
 func acceptanceReviewForm(t *testing.T, b *browserFixture) url.Values {
 	t.Helper()
 	return url.Values{"csrf_token": {b.csrf("/portal/contact")}, "lang": {"en"}}
 }
 
+// acceptanceForm obtains the context and CSRF token from the actual review response.
 func acceptanceForm(t *testing.T, b *browserFixture) url.Values {
 	t.Helper()
 	status, body, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/proposal-review", acceptanceReviewForm(t, b), b.site.URL)
@@ -446,6 +473,7 @@ func acceptanceForm(t *testing.T, b *browserFixture) url.Values {
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "context_key": {key[1]}, "confirm": {"yes"}, "lang": {"en"}}
 }
 
+// TestAcceptanceActualReviewConfirmationAndReceipt covers localized durable retries.
 func TestAcceptanceActualReviewConfirmationAndReceipt(t *testing.T) {
 	b := acceptanceFixture(t)
 	f := acceptanceForm(t, b)

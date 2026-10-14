@@ -156,6 +156,11 @@ func (b *browser) requestReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string) {
+	// Optional display evaluations may wait even when they return false/error.
+	// Perform them before private reads, whose own gates and final membership
+	// checkpoints still authorize every request independently.
+	sharing := id != "" && b.foundation.sharingReady(r.Context())
+	acceptance := id != "" && b.foundation.acceptanceReady(r.Context())
 	rows, err := b.foundation.readRequests(r.Context(), b.principal(r.Context()), id)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -172,14 +177,14 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 		receipt = rows[0]
 	}
 	page := b.requestPage(r, kind, receipt, rows, "")
-	if id != "" && b.foundation.sharingReady(r.Context()) {
+	if sharing {
 		page.SharedProposal, err = b.foundation.readSharedProposal(r.Context(), b.principal(r.Context()), id)
 		if err != nil {
 			b.triageError(w, r, err)
 			return
 		}
 	}
-	if id != "" && b.foundation.acceptanceReady(r.Context()) {
+	if acceptance {
 		page.AcceptanceEnabled = true
 		page.Acceptances, page.CanAccept, err = b.foundation.readProposalAcceptances(r.Context(), b.principal(r.Context()), id)
 		if err != nil {

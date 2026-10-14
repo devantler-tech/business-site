@@ -27,6 +27,7 @@ type proposalAcceptance struct {
 	Proposal projectProposal
 }
 
+// acceptanceReady requires the independent consent gate and every sharing prerequisite.
 func (s *Foundation) acceptanceReady(ctx context.Context) bool {
 	if !s.sharingReady(ctx) {
 		return false
@@ -37,14 +38,17 @@ func (s *Foundation) acceptanceReady(ctx context.Context) bool {
 
 // proposalContentHash binds the typed, normalized stored content, not browser
 // assertions or ambiguous delimiter concatenation. It is not a legal signature.
-func proposalContentHash(d projectProposal) string {
+func proposalContentHash(d projectProposal) (string, error) {
 	content := struct {
 		Scope, Deliverables, Currency, OneTimeTerms, MonthlyTerms string
 		OneTimeMinor, MonthlyMinor                                int64
 	}{d.Scope, d.Deliverables, d.Currency, d.OneTimeTerms, d.MonthlyTerms, d.OneTimeMinor, d.MonthlyMinor}
-	data, _ := json.Marshal(content) // This fixed scalar struct has no failing marshaler.
+	data, err := json.Marshal(content)
+	if err != nil {
+		return "", errTriageStorage
+	}
 	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // beginClientProposalWrite locks the request before current client membership,
@@ -109,7 +113,11 @@ func currentProposalReview(ctx context.Context, tx pgx.Tx, id, client string) (p
 	if err := tx.QueryRow(ctx, `SELECT version,scope,deliverables,currency,one_time_minor,monthly_minor,one_time_terms,monthly_terms,prepared_at FROM portal_proposals WHERE request_id=$1 AND client_id=$2 AND version=$3`, id, client, selected).Scan(&d.Version, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared); err != nil {
 		return proposalReview{}, errTriageStorage
 	}
-	review.Hash = proposalContentHash(*d)
+	hash, err := proposalContentHash(*d)
+	if err != nil {
+		return proposalReview{}, err
+	}
+	review.Hash = hash
 	return review, nil
 }
 
@@ -261,6 +269,7 @@ func (s *Foundation) readProposalAcceptances(ctx context.Context, p Principal, i
 	return result, stateErr == nil && !acceptedCurrent, nil
 }
 
+// parseAcceptanceForm admits only native confirmation fields, never scope or prices.
 func parseAcceptanceForm(r *http.Request, confirmation bool) (string, bool) {
 	if err := r.ParseForm(); err != nil {
 		return "", false
@@ -274,6 +283,7 @@ func parseAcceptanceForm(r *http.Request, confirmation bool) (string, bool) {
 	return key, !confirmation || (opaqueRequestID.MatchString(key) && r.PostForm.Get("confirm") == "yes")
 }
 
+// reviewProposal prepares a POST-only context and reauthorizes its private display.
 func (b *browser) reviewProposal(w http.ResponseWriter, r *http.Request) {
 	if !b.foundation.acceptanceReady(r.Context()) {
 		http.NotFound(w, r)
@@ -307,6 +317,7 @@ func (b *browser) reviewProposal(w http.ResponseWriter, r *http.Request) {
 	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
 }
 
+// confirmProposal records an explicit server-bound decision, not a payment or order.
 func (b *browser) confirmProposal(w http.ResponseWriter, r *http.Request) {
 	if !b.foundation.acceptanceReady(r.Context()) {
 		http.NotFound(w, r)
@@ -321,6 +332,7 @@ func (b *browser) confirmProposal(w http.ResponseWriter, r *http.Request) {
 	b.acceptanceResult(w, r, err)
 }
 
+// acceptanceResult keeps conflict, missing-record and storage failures distinct.
 func (b *browser) acceptanceResult(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errProposalConflict):
@@ -334,6 +346,7 @@ func (b *browser) acceptanceResult(w http.ResponseWriter, r *http.Request, err e
 	}
 }
 
+// acceptanceError exposes no unpublished proposal version or original retry key.
 func (b *browser) acceptanceError(w http.ResponseWriter, r *http.Request, status int) {
 	b.renderRequests(w, r, status, "acceptance-conflict", projectRequest{ID: r.PathValue("id")}, nil, "")
 }

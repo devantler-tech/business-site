@@ -14,6 +14,7 @@ import (
 type finalRequestProvider struct {
 	openfeature.FeatureProvider
 	key              string
+	resolutionError  openfeature.ResolutionError
 	blockAt          int32
 	reads            atomic.Int32
 	denied           atomic.Bool
@@ -30,7 +31,7 @@ func (p *finalRequestProvider) BooleanEvaluation(ctx context.Context, key string
 		}
 	}
 	if key == p.key && p.denied.Load() {
-		return openfeature.BoolResolutionDetail{Value: false}
+		return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{ResolutionError: p.resolutionError}}
 	}
 	return p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, evaluation)
 }
