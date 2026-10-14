@@ -2,8 +2,11 @@ package identity
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // TestProposalWriteObservationIgnoresUnrelatedLocks keeps authority-race tests
@@ -27,15 +30,20 @@ func TestProposalWriteObservationIgnoresUnrelatedLocks(t *testing.T) {
 				t.Fatal(err)
 			}
 			unrelatedDone := make(chan error, 1)
-			go func() { _, err := unrelated.Exec(ctx, tc.query); unrelatedDone <- err }()
-			t.Cleanup(func() {
-				if err := blocker.Commit(context.Background()); err != nil {
+			go func() {
+				defer close(unrelatedDone)
+				_, err := unrelated.Exec(ctx, tc.query)
+				unrelatedDone <- err
+			}()
+			releaseUnrelated := func() {
+				if err := blocker.Commit(context.Background()); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 					t.Error(err)
 				}
 				if err := <-unrelatedDone; err != nil {
 					t.Error(err)
 				}
-			})
+			}
+			t.Cleanup(releaseUnrelated)
 			waitForFixtureDatabaseLock(ctx, t, pool, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid=$1 AND NOT granted)`, pid)
 
 			observed := make(chan struct{})
@@ -44,6 +52,12 @@ func TestProposalWriteObservationIgnoresUnrelatedLocks(t *testing.T) {
 			case <-observed:
 				t.Fatal("unrelated advisory lock was accepted as the request write")
 			case <-time.After(100 * time.Millisecond):
+			}
+			// Return the unrelated connections before observing the matching lock;
+			// pgx's default pool on a small CI runner has only four connections.
+			releaseUnrelated()
+			if err := unrelated.Commit(ctx); err != nil {
+				t.Fatal(err)
 			}
 
 			requestBlocker := blockFixtureProposalWrite(ctx, t, pool)
