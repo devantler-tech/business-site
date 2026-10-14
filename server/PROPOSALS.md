@@ -90,7 +90,12 @@ again. Retries bind the original actor and decision and never reapply a withdraw
 selection. At most one share and one withdrawal per version bound the complete
 history at 100 events, preserving room to withdraw the final shared version.
 Client reads bind the server-owned request/client and recheck current membership,
-client binding, expiry and gates after the query. Missing storage is unavailable,
+client binding, expiry and gates after the query. Independent gate evaluations
+precede the final membership read; SQL completion also checks expiry and
+cancellation before releasing data. Operator visibility history retains current
+operator authority without requiring a fixed operator client workspace. Authorized
+clients with no shared version still receive an empty result. These are bounded
+authorization checkpoints, not atomic wire-time revocation. Missing storage is unavailable,
 never an empty successful result. Neither retry keys, operator attribution nor
 unshared history is returned to clients or allowed in public build artifacts.
 

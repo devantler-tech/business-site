@@ -259,6 +259,10 @@ func (s *Foundation) membership(ctx context.Context, p Principal) (string, strin
 	}
 	var own, role string
 	err := s.pool.QueryRow(ctx, `SELECT client_id,role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked`, p.issuer, p.subject).Scan(&own, &role)
+	// SQL completion is not authority to release expired or cancelled reads.
+	if ctx.Err() != nil || !time.Now().Before(p.expires) {
+		return "", "", ErrDenied
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrDenied
 	}

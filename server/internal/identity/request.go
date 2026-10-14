@@ -116,6 +116,8 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 	return saved, nil
 }
 
+// readRequests scopes the query and rechecks current client access after reading
+// and evaluating its release gates. No private rows accompany an access denial.
 func (s *Foundation) readRequests(ctx context.Context, p Principal, id string) ([]projectRequest, error) {
 	client, err := s.requestClient(ctx, p)
 	if err != nil {
@@ -131,6 +133,10 @@ func (s *Foundation) readRequests(ctx context.Context, p Principal, id string) (
 	defer rows.Close()
 	result, err := scanProjectRequests(rows)
 	if err != nil || !s.requestsReady(ctx) || !time.Now().Before(p.expires) {
+		return nil, ErrDenied
+	}
+	current, role, check := s.membership(ctx, p)
+	if check != nil || role != "client" || current != client || !time.Now().Before(p.expires) {
 		return nil, ErrDenied
 	}
 	return result, nil
