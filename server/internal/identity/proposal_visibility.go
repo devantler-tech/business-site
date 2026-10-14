@@ -110,33 +110,11 @@ func (s *Foundation) persistVisibility(ctx context.Context, p Principal, id stri
 	if err := s.sharingOperator(ctx, p); err != nil {
 		return err
 	}
-	if !opaqueRequestID.MatchString(id) {
-		return pgx.ErrNoRows
-	}
-	tx, err := s.pool.Begin(ctx)
+	tx, client, err := s.beginProposalWrite(ctx, p, id)
 	if err != nil {
-		return errTriageStorage
+		return err
 	}
-	defer func() {
-		// Commit determines success; rollback only releases an unfinished transaction.
-		_ = tx.Rollback(ctx)
-	}()
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, id); err != nil {
-		return errTriageStorage
-	}
-	var role, client string
-	if err = tx.QueryRow(ctx, `SELECT role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&role); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrDenied
-		}
-		return errTriageStorage
-	}
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_requests WHERE id=$1`, id).Scan(&client); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		return errTriageStorage
-	}
+	defer rollbackProposalWrite(ctx, tx)
 	var saved visibilityDecision
 	var issuer, subject string
 	err = tx.QueryRow(ctx, `SELECT expected_event,expected_proposal,proposal_version,action,operator_issuer,operator_subject FROM portal_proposal_visibility WHERE request_id=$1 AND submission_key=$2`, id, d.Key).Scan(&saved.ExpectedEvent, &saved.ExpectedProposal, &saved.Proposal, &saved.Action, &issuer, &subject)
@@ -163,13 +141,7 @@ func (s *Foundation) persistVisibility(ctx context.Context, p Principal, id stri
 			return errTriageStorage
 		}
 	}
-	if !s.sharingReady(ctx) || !time.Now().Before(p.expires) {
-		return ErrDenied
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return errTriageStorage
-	}
-	return nil
+	return commitProposalWrite(ctx, p, tx, s.sharingReady)
 }
 
 // readSharedProposal selects only the latest explicit decision for this client's
@@ -215,17 +187,5 @@ func (b *browser) submitVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := b.foundation.persistVisibility(r.Context(), p, r.PathValue("id"), d)
-	if errors.Is(err, errProposalConflict) {
-		b.render(w, r, 409, "sharing-conflict", "", "")
-		return
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		http.NotFound(w, r)
-		return
-	}
-	if err != nil {
-		b.triageError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, "/portal/operator/requests/"+r.PathValue("id")+"?lang="+language(r), http.StatusSeeOther)
+	b.proposalMutationResult(w, r, err, "sharing-conflict")
 }

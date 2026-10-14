@@ -16,15 +16,7 @@ import (
 
 func sharingFlags(t *testing.T, b *browserFixture, values ...any) {
 	t.Helper()
-	flags := map[string]memprovider.InMemoryFlag{}
-	for i, name := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing"} {
-		if values[i] != nil {
-			flags[name] = memprovider.InMemoryFlag{Key: name, State: memprovider.Enabled, DefaultVariant: "value", Variants: map[string]any{"value": values[i]}}
-		}
-	}
-	if err := b.flags.SetProviderAndWait(context.Background(), memprovider.NewInMemoryProvider(flags)); err != nil {
-		t.Fatal(err)
-	}
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing"}, values)
 }
 
 func sharingFixture(t *testing.T) *browserFixture {
@@ -234,10 +226,7 @@ func TestSharingRejectsStaleForgedAndCrossActorDecisions(t *testing.T) {
 	if status != 409 {
 		t.Fatalf("cross-actor retry status=%d", status)
 	}
-	var count int
-	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_proposal_visibility`).Scan(&count); err != nil || count != 1 {
-		t.Fatal("denied decision persisted", err)
-	}
+	assertFixtureVisibilityCount(b.f.ctx, t, b, 1)
 }
 
 func TestSharingMutationRejectsInFlightClosure(t *testing.T) {
@@ -248,10 +237,7 @@ func TestSharingMutationRejectsInFlightClosure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
-			tx := beginFixtureTransaction(ctx, t, migrator)
-			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1869820518,hashtext($1))`, proposalRequestID); err != nil {
-				t.Fatal(err)
-			}
+			tx := blockFixtureProposalWrite(ctx, t, migrator)
 			if change == "expiry" {
 				p.expires = time.Now().Add(time.Second)
 			}
@@ -259,44 +245,10 @@ func TestSharingMutationRejectsInFlightClosure(t *testing.T) {
 			go func() {
 				result <- b.svc.persistVisibility(ctx, p, proposalRequestID, visibilityDecision{Proposal: 1, ExpectedProposal: 1, Action: "share", Key: secret()})
 			}()
-			ticker := time.NewTicker(10 * time.Millisecond)
-			defer ticker.Stop()
-			for {
-				var waiting bool
-				if err := migrator.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted)`).Scan(&waiting); err != nil {
-					t.Fatal(err)
-				}
-				if waiting {
-					break
-				}
-				select {
-				case <-ticker.C:
-				case <-ctx.Done():
-					t.Fatal("fixture did not reach blocked sharing write")
-				}
-			}
-			switch change {
-			case "flag":
-				sharingFlags(t, b, true, true, true, true, false)
-			case "revocation":
-				revokeFixtureAccess(ctx, t, b, p.subject)
-			case "downgrade":
-				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE subject=$1`, p.subject); err != nil {
-					t.Fatal(err)
-				}
-			case "expiry":
-				waitForFixtureExpiry(ctx, t, p.expires)
-			}
-			if err := tx.Commit(ctx); err != nil {
-				t.Fatal(err)
-			}
-			if err := <-result; !errors.Is(err, ErrDenied) {
-				t.Fatalf("inflight %s allowed sharing: %v", change, err)
-			}
-			var count int
-			if err := b.pool.QueryRow(ctx, `SELECT count(*) FROM portal_proposal_visibility`).Scan(&count); err != nil || count != 0 {
-				t.Fatal("denied write left visibility event", err)
-			}
+			waitForFixtureProposalWrite(ctx, t, migrator)
+			closeFixtureSharing(ctx, t, b, p, change)
+			releaseFixtureAndRequireDenial(ctx, t, tx, result, change)
+			assertFixtureVisibilityCount(ctx, t, b, 0)
 		})
 	}
 }
@@ -415,24 +367,8 @@ func TestSharingReadFailsOnStorageAndInFlightRevocation(t *testing.T) {
 			result := make(chan error, 1)
 			go func() { _, err := b.svc.readSharedProposal(ctx, p, proposalRequestID); result <- err }()
 			waitForTriageRead(ctx, t, migrator, relation)
-			switch change {
-			case "flag":
-				sharingFlags(t, b, true, true, true, true, false)
-			case "revocation":
-				revokeFixtureAccess(ctx, t, b, p.subject)
-			case "rebind":
-				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET client_id='different-client' WHERE subject=$1`, p.subject); err != nil {
-					t.Fatal(err)
-				}
-			case "expiry":
-				waitForFixtureExpiry(ctx, t, p.expires)
-			}
-			if err := tx.Commit(ctx); err != nil {
-				t.Fatal(err)
-			}
-			if err := <-result; !errors.Is(err, ErrDenied) {
-				t.Fatalf("inflight %s released content: %v", change, err)
-			}
+			closeFixtureSharing(ctx, t, b, p, change)
+			releaseFixtureAndRequireDenial(ctx, t, tx, result, change)
 		})
 	}
 }
