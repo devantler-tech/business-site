@@ -90,6 +90,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if r.URL.Path == "/portal/contact/verify" && !s.contactVerificationReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		if (r.URL.Path == "/portal/operator/requests" || strings.HasPrefix(r.URL.Path, "/portal/operator/requests/")) && !s.triageReady(r.Context()) {
 			http.NotFound(w, r)
 			return
@@ -144,6 +148,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposal-visibility", b.submitVisibility)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
+	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)
 	mux.HandleFunc("GET /portal/requests", b.requests)
 	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
 	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
@@ -227,7 +232,18 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	nonce, verifier, err := b.foundation.consumeAttempt(r.Context(), q.Get("state"), b.sessions.GetString(r.Context(), "browser"))
+	contactFlow := b.sessions.GetString(r.Context(), "purpose") == "contact"
+	var binding contactVerification
+	var nonce, verifier string
+	if contactFlow {
+		if !b.foundation.contactVerificationReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
+		binding, nonce, verifier, err = b.foundation.consumeContactVerification(r.Context(), q.Get("state"), b.sessions.GetString(r.Context(), "browser"))
+	} else {
+		nonce, verifier, err = b.foundation.consumeAttempt(r.Context(), q.Get("state"), b.sessions.GetString(r.Context(), "browser"))
+	}
 	if err != nil {
 		b.render(w, r, 400, "error", "", "")
 		return
@@ -245,9 +261,18 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	p, err := b.foundation.completeProof(ctx, nonce, raw, b.sessions.GetString(r.Context(), "invitation"))
+	var p Principal
+	if contactFlow {
+		p, err = b.foundation.confirmContact(ctx, b.principal(r.Context()), binding, raw, nonce)
+	} else {
+		p, err = b.foundation.completeProof(ctx, nonce, raw, b.sessions.GetString(r.Context(), "invitation"))
+	}
 	if err != nil {
-		b.render(w, r, 400, "error", "", "")
+		if contactFlow {
+			b.contactVerificationFailure(w, r)
+		} else {
+			b.render(w, r, 400, "error", "", "")
+		}
 		return
 	}
 	lang := b.sessions.GetString(r.Context(), "lang")
@@ -271,7 +296,11 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	if lang != "da" {
 		lang = "en"
 	}
-	http.Redirect(w, r, "/portal/?lang="+lang, http.StatusSeeOther)
+	destination := "/portal/?lang="
+	if contactFlow {
+		destination = "/portal/contact?lang="
+	}
+	http.Redirect(w, r, destination+lang, http.StatusSeeOther)
 }
 
 // principal reconstructs identity only from the server-owned durable session.

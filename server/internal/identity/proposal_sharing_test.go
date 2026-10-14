@@ -125,6 +125,7 @@ func TestSharingSerializesConcurrentDecisionsAndDraftRevisions(t *testing.T) {
 func TestSharingV7MigrationPreservesExistingDraftsAndAllChecksums(t *testing.T) {
 	b := sharingFixture(t)
 	migrator := migrationDB(t)
+	rewindContactVerificationFixture(t, migrator)
 	var before string
 	if err := migrator.QueryRow(b.f.ctx, `SELECT string_agg(version::text||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=6`).Scan(&before); err != nil {
 		t.Fatal(err)

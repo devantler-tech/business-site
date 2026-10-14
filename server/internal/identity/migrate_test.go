@@ -4,7 +4,23 @@ import (
 	"context"
 	"sync"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// rewindContactVerificationFixture reconstructs the pre-v8 columns and floor in
+// the disposable fixture before a historical migration test rewinds its ledger.
+func rewindContactVerificationFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_login_attempts DROP CONSTRAINT portal_contact_attempt_binding,
+ DROP COLUMN purpose, DROP COLUMN verification_issuer, DROP COLUMN verification_subject,
+ DROP COLUMN verification_client, DROP COLUMN verification_email, DROP COLUMN verification_revision;
+ ALTER TABLE portal_contacts DROP CONSTRAINT portal_contact_verification_provenance,
+ DROP COLUMN email_verified_at, ADD CONSTRAINT portal_contacts_email_verified_check CHECK (NOT email_verified);
+ DELETE FROM portal_schema_version WHERE version=8`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-confirmation schema", err)
+	}
+}
 
 func TestRuntimeHasNoMigrationAuthority(t *testing.T) {
 	pool := fixtureDB(t)
@@ -65,6 +81,7 @@ func TestMigrationVersionAndConcurrency(t *testing.T) {
 func TestSessionMigrationPreservesIdentity(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
+	rewindContactVerificationFixture(t, pool)
 	ctx := context.Background()
 	// Recreate the actual v1 starting point in the disposable fixture only.
 	if _, err := pool.Exec(ctx, `DROP TABLE portal_proposal_visibility; DROP TABLE portal_proposals; DROP TABLE portal_requests; DROP TABLE portal_contacts; DROP TABLE portal_sessions; DELETE FROM portal_schema_version WHERE version>=2; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)`); err != nil {
@@ -114,6 +131,7 @@ func TestSessionMigrationPreservesIdentity(t *testing.T) {
 func TestContactMigrationPreservesIdentityAndSessions(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
+	rewindContactVerificationFixture(t, pool)
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `DROP TABLE portal_proposal_visibility; DROP TABLE portal_proposals; DROP TABLE portal_requests; DROP TABLE portal_contacts; DELETE FROM portal_schema_version WHERE version>=3; INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true); INSERT INTO portal_sessions VALUES('synthetic-session',decode('001122','hex'),now()+interval '1 hour')`); err != nil {
 		t.Fatal(err)
@@ -153,6 +171,7 @@ func TestContactMigrationPreservesIdentityAndSessions(t *testing.T) {
 func TestRequestMigrationPreservesExistingVersionsAndContacts(t *testing.T) {
 	fixtureDB(t)
 	pool := migrationDB(t)
+	rewindContactVerificationFixture(t, pool)
 	ctx := context.Background()
 	var before string
 	if err := pool.QueryRow(ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=3`).Scan(&before); err != nil {

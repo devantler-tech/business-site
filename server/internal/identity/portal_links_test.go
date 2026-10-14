@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 6, "requests.html": 30, "triage.html": 24} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 30, "triage.html": 24} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -250,9 +250,14 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 				}
 			}
 		case "contact.html":
-			for _, problem := range []string{"", "invalid", "conflict"} {
+			for _, problem := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
 				if err := add("/portal/contact", func(w *httptest.ResponseRecorder, r *http.Request) error {
-					return browserPage.ExecuteTemplate(w, name, b.contactPage(r, contactData{Name: "Fictional client", Email: "fixture@example.invalid"}, problem))
+					d := contactData{Name: "Fictional client", Email: "fixture@example.invalid", Revision: 1, EmailVerified: problem == "confirmed"}
+					view := problem
+					if problem == "confirm" || problem == "confirmed" {
+						view = ""
+					}
+					return browserPage.ExecuteTemplate(w, name, b.contactPage(r, d, view, problem == "confirm"))
 				}); err != nil {
 					return nil, err
 				}

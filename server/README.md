@@ -65,13 +65,16 @@ checks expiry and cancellation. These are final read authorization checkpoints,
 not an atomic guarantee against a later change or a way to retract received data.
 CSRF/origin checks and bounded single-value fields protect saves. A revision comparison
 rejects stale/concurrent updates instead of silently overwriting newer details.
-The stored email is explicitly **unverified**, including after a change: it does not
-link sign-in identities, authorize orders or verify agreements/payments. This slice
-introduces no verification delivery provider, SMTP connection or verification endpoint.
+Saved addresses are **unverified** unless the client explicitly completes the
+separately default-off [sign-in-provider confirmation](CONTACTS.md) for that exact
+saved address/revision. Any profile edit clears confirmation. Neither state links
+sign-in identities, authorizes orders or verifies agreements/payments. No mail
+delivery provider, SMTP connection or individual identity-provider SDK is used.
 Do not enable real contact collection before the parent's privacy/retention gates clear.
 
 The parent remains open for production broker/provider configuration and
-ingress deployment, contact verification, retention/expired-record cleanup and
+ingress deployment, configured-provider contact proof, other-address verification,
+retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,

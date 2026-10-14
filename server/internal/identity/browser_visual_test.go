@@ -21,6 +21,10 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification"}, []any{true, true, true, true, true, true})
+	b.mu.Lock()
+	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
+	b.mu.Unlock()
 	for _, subject := range []string{"client-a", "client-b"} {
 		triageSignIn(t, b, subject, subject, "client")
 		form := requestForm(t, b)
@@ -40,6 +44,14 @@ func TestBrowserVisualFixture(t *testing.T) {
 	}
 	origin := "http://localhost:" + fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && (r.URL.Path == "/portal/sign-in" || r.URL.Path == "/portal/contact/verify") {
+			b.mu.Lock()
+			b.expectedScope = "openid"
+			if r.URL.Path == "/portal/contact/verify" {
+				b.expectedScope = "openid email"
+			}
+			b.mu.Unlock()
+		}
 		// Fixed fictional broker actors only, confined to this opt-in test gateway.
 		// Switching the simulated actor is not real authentication or federation.
 		if r.Method == http.MethodGet && (r.URL.Path == "/fixture/client" || r.URL.Path == "/fixture/operator") {

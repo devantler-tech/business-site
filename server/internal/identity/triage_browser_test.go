@@ -252,6 +252,7 @@ func TestOperatorInboxIndexMigrationPreservesRequests(t *testing.T) {
 	b := newBrowserFixture(t)
 	seedTriageRequest(t, b, "AAAAAAAAAAAAAAAAAAAAAAAAAA", "Durable request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
 	migrator := migrationDB(t)
+	rewindContactVerificationFixture(t, migrator)
 	var indexed bool
 	if err := migrator.QueryRow(b.f.ctx, `SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE tablename='portal_requests' AND indexname='portal_requests_triage')`).Scan(&indexed); err != nil || !indexed {
 		t.Fatal("global oldest-first inbox has no matching index", err)
