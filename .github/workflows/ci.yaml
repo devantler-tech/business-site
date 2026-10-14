@@ -156,7 +156,7 @@ jobs:
       - name: Upload reviewable production preview
         # Only static public output is eligible; server code and identity fixtures
         # must not enter the preview or Pages artifact.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: business-site-preview
           path: dist
@@ -412,14 +412,14 @@ jobs:
           docker save business-site:production-test | gzip > runtime-dist/container/production-image.tar.gz
           cp runtime-production-dist/business-site-runtime.tar.gz runtime-dist/container/business-site-production-runtime.tar.gz
       - name: Upload tested container
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: business-site-container
           path: runtime-dist/container
           if-no-files-found: error
           retention-days: 7
       - name: Upload reviewed runtime package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: business-site-runtime
           path: runtime-dist/business-site-runtime.tar.gz
@@ -613,7 +613,7 @@ jobs:
           docker pull "$PUBLISHED_IMAGE"
           node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-production-dist
       - name: Upload source/digest/signature/provenance receipt
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: business-site-container-publication
           path: runtime-dist/container-publication
