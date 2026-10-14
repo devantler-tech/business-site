@@ -52,3 +52,33 @@ func TestPartialOrInvalidConfigurationFailsGenerically(t *testing.T) {
 		t.Fatal("valid configuration rejected")
 	}
 }
+
+// TestExplicitIdentityProjectionSelection makes transport choice independent of activation.
+func TestExplicitIdentityProjectionSelection(t *testing.T) {
+	values := map[string]string{
+		"PORTAL_DATABASE_URL": "postgres://runtime:private@db.example.invalid/app?sslmode=verify-full",
+		"PORTAL_OIDC_ISSUER":  "https://broker.example.invalid", "PORTAL_OIDC_CLIENT_ID": "portal",
+		"PORTAL_CALLBACK_URL":                  "https://app.example.invalid/portal/callback",
+		"PORTAL_CLIENT_SECRET_PROJECTION_FILE": "/private/mount/secret",
+	}
+	if _, err := ReadConfig(func(key string) string { return values[key] }); err != nil {
+		t.Fatal("complete explicit identity projection was rejected")
+	}
+	for _, tc := range []struct{ name, key, value string }{
+		{"mixed readers", "PORTAL_CLIENT_SECRET_FILE", "/private/mount/secret"},
+		{"relative projection", "PORTAL_CLIENT_SECRET_PROJECTION_FILE", "relative-secret"},
+		{"partial dependencies", "PORTAL_DATABASE_URL", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ReadConfig(func(key string) string {
+				if key == tc.key {
+					return tc.value
+				}
+				return values[key]
+			})
+			if !errors.Is(err, ErrConfig) {
+				t.Fatal("unsafe projection selection was accepted")
+			}
+		})
+	}
+}

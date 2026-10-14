@@ -12,7 +12,7 @@ import (
 // Activation must be checked by the actual command before it opens a listener.
 // Without the private dependencies, an activation attempt cannot quietly start.
 func TestStagingIdentityRequiresCompleteDependencies(t *testing.T) {
-	for _, key := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
+	for _, key := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("PORTAL_IDENTITY_FLAG", `{"defaultVariant":"on","variants":[{"name":"on","value":true}]}`)

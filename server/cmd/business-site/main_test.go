@@ -51,7 +51,7 @@ func configuredPublicArtifact(t *testing.T) string {
 func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	// Private migration configuration cannot turn ordinary web startup into DDL.
 	t.Setenv("PORTAL_MIGRATION_DATABASE_FILE", "/missing/private-migration-file")
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
 		t.Setenv(name, "")
 	}
 	dir := configuredPublicArtifact(t)

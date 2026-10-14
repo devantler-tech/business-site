@@ -158,6 +158,16 @@ Astro content collection. Static Pages publication remains source-owned and
 uploads only `dist`; it does not deploy this module. Application code stays here,
 never in the monorepo or a separate portal source repository.
 
+Sign-in credentials select exactly one ordinary owner-only file or explicit
+`PORTAL_CLIENT_SECRET_PROJECTION_FILE`. The latter requires a non-root process,
+confined same-descriptor regular-file reads and root/current-user ownership;
+optional group read must match the primary group. Reject mixed/relative inputs,
+group writes, other-user access, executable/special modes and oversized/empty data.
+Keep generic diagnostics, no scratch copy and restart-based rotation. Configuration
+cannot activate identity. Preserve the separate migration credential transport.
+Real constructor and compiled staging tests use atomic links and matching-group
+files; actual Kubernetes controller/wiring remains platform#4854.
+
 The production public-content profile accepts explicit company-disclosure input
 only. Its separate `--company-disclosure-projection` mode reads a confined,
 bounded, root/current-user-owned file with optional primary-group read access
