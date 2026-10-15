@@ -190,10 +190,7 @@ func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 			if !valid {
 				t.Fatal("fixture invoice invalid")
 			}
-			op := enroll(t, b.svc, b.f, "blocked-invoice-operator", "operator-workspace", "operator")
-			if change == "expiry" {
-				op.expires = time.Now().Add(300 * time.Millisecond)
-			}
+			op := timedFixtureOperator(t, b, "blocked-invoice-operator", change)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
@@ -228,6 +225,16 @@ func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 			}
 		})
 	}
+}
+
+// timedFixtureOperator gives blocked-writer controls the same optional expiry boundary.
+func timedFixtureOperator(t *testing.T, b *browserFixture, subject, change string) Principal {
+	t.Helper()
+	op := enroll(t, b.svc, b.f, subject, "operator-workspace", "operator")
+	if change == "expiry" {
+		op.expires = time.Now().Add(300 * time.Millisecond)
+	}
+	return op
 }
 
 // TestInvoiceStorageFailureIsNotEmpty refuses a real privilege failure without leaking table details.

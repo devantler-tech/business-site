@@ -228,10 +228,7 @@ func TestCreditWriteRechecksBlockedAuthority(t *testing.T) {
 			if !ok {
 				t.Fatal("invalid fixture credit")
 			}
-			op := enroll(t, b.svc, b.f, "blocked-credit-operator", "operator-workspace", "operator")
-			if change == "expiry" {
-				op.expires = time.Now().Add(300 * time.Millisecond)
-			}
+			op := timedFixtureOperator(t, b, "blocked-credit-operator", change)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
@@ -296,7 +293,7 @@ func TestCreditMissingInvoiceCannotRead(t *testing.T) {
 
 // cloneCreditInvoice creates a second internally consistent fictional client invoice
 // using the privileged fixture role; global allocation is still attempted through HTTP.
-func cloneCreditInvoice(t *testing.T, b *browserFixture) string {
+func cloneCreditInvoice(t *testing.T) string {
 	t.Helper()
 	id, acceptance := secret(), secret()
 	m := migrationDB(t)
@@ -321,7 +318,7 @@ func cloneCreditInvoice(t *testing.T, b *browserFixture) string {
 // TestCreditGlobalAllocationAcrossClients races different request locks against the actual unique identity.
 func TestCreditGlobalAllocationAcrossClients(t *testing.T) {
 	b := creditFixture(t)
-	otherPath := cloneCreditInvoice(t, b)
+	otherPath := cloneCreditInvoice(t)
 	f, other := creditForm(t, b), creditForm(t, b)
 	start := make(chan struct{})
 	results := make(chan int, 2)
