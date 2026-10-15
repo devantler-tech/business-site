@@ -34,7 +34,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
        OR EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=privileged.oid AND t.typnamespace='public'::regnamespace AND t.typtype='d')
        OR EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=privileged.oid)
        OR EXISTS (
-         SELECT 1 FROM unnest(ARRAY['portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_acceptances','portal_invoices']) AS immutable(table_name)
+         SELECT 1 FROM unnest(ARRAY['portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions']) AS immutable(table_name)
          WHERE has_any_column_privilege(privileged.oid,immutable.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION')
             OR has_table_privilege(privileged.oid,immutable.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
        OR has_table_privilege(privileged.oid,'portal_proposal_reviews','DELETE')
@@ -43,7 +43,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
    FROM unnest(ARRAY['portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts']) table_name
    CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege)
  AND NOT EXISTS (
-   SELECT 1 FROM unnest(ARRAY['portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_acceptances','portal_invoices']) AS immutable(table_name)
+   SELECT 1 FROM unnest(ARRAY['portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions']) AS immutable(table_name)
    WHERE has_any_column_privilege(current_user,immutable.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION')
       OR has_table_privilege(current_user,immutable.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
  AND has_table_privilege(current_user,'portal_requests','SELECT')
@@ -57,6 +57,10 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
  AND has_table_privilege(current_user,'portal_proposal_reviews','SELECT')
  AND has_table_privilege(current_user,'portal_invoices','SELECT')
  AND has_table_privilege(current_user,'portal_invoices','INSERT')
+ AND has_table_privilege(current_user,'portal_credit_transfers','SELECT')
+ AND has_table_privilege(current_user,'portal_credit_transfers','INSERT')
+ AND has_table_privilege(current_user,'portal_credit_revisions','SELECT')
+ AND has_table_privilege(current_user,'portal_credit_revisions','INSERT')
  AND has_table_privilege(current_user,'portal_proposal_reviews','INSERT')
  AND has_table_privilege(current_user,'portal_proposal_reviews','UPDATE')
  AND NOT has_table_privilege(current_user,'portal_proposal_reviews','DELETE')

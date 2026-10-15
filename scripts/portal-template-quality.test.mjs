@@ -96,15 +96,28 @@ function lint(files) {
   return { status: result.status, output: result.stdout + result.stderr };
 }
 
-test('the pinned checker analyzes all four actual Go HTML templates', () => {
+test('the pinned checker analyzes all five actual Go HTML templates', () => {
   const version = spawnSync('htmlhint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
   assert.equal(version.stdout.trim(), '1.9.2');
-  const result = lint(['portal', 'contact', 'requests', 'triage'].map(name =>
+  const result = lint(['portal', 'contact', 'requests', 'triage', 'credits'].map(name =>
     join(root, 'server/internal/identity/web', `${name}.html`)));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Scanned 4 files/);
+  assert.match(result.output, /Scanned 5 files/);
+});
+
+test('the actual credit identity patterns retain native Unicode-v validation', () => {
+  const source = readFileSync(join(root, 'server/internal/identity/web/credits.html'), 'utf8');
+  const patterns = [...source.matchAll(/pattern="([^"]+)"/g)];
+  assert.equal(patterns.length, 2);
+  for (const [, pattern] of patterns) {
+    const native = new RegExp(`^(?:${pattern})$`, 'v');
+    assert.ok(native.test('bank-01/transfer_2.3'));
+    assert.ok(!native.test('bank account'));
+    assert.ok(!native.test('bank:account'));
+    assert.ok(!native.test('A'.repeat(65)));
+  }
 });
 
 for (const [name, content] of [

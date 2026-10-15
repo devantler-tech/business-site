@@ -125,6 +125,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"portal_requests", "brief"}, {"portal_proposals", "scope"},
 		{"portal_proposal_visibility", "action"}, {"portal_proposal_acceptances", "content_hash"},
 		{"portal_invoices", "amount_minor"},
+		{"portal_credit_transfers", "reference"}, {"portal_credit_revisions", "amount_minor"},
 	} {
 		for _, grant := range []struct{ privilege, option string }{
 			{"TRIGGER", ""}, {"REFERENCES", ""}, {"REFERENCES(" + history.column + ")", ""}, {"MAINTAIN", ""},
@@ -135,6 +136,16 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			cases = append(cases,
 				privilegeCase{name, fmt.Sprintf("GRANT %s ON %s TO portal_runtime%s; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false},
 				privilegeCase{"assumable/" + name, fmt.Sprintf("CREATE ROLE portal_fixture_history_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_history_guard%s; GRANT portal_fixture_history_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false})
+		}
+		if history.table == "portal_credit_transfers" || history.table == "portal_credit_revisions" {
+			for _, privilege := range []string{"SELECT", "INSERT"} {
+				cases = append(cases, privilegeCase{history.table + "/missing " + privilege, fmt.Sprintf("REVOKE %s ON %s FROM portal_runtime; SET ROLE portal_runtime", privilege, history.table), false})
+			}
+			for _, privilege := range []string{"UPDATE", "UPDATE(" + history.column + ")", "DELETE", "TRUNCATE"} {
+				cases = append(cases,
+					privilegeCase{history.table + "/" + privilege, fmt.Sprintf("GRANT %s ON %s TO portal_runtime; SET ROLE portal_runtime", privilege, history.table), false},
+					privilegeCase{"assumable/" + history.table + "/" + privilege, fmt.Sprintf("CREATE ROLE portal_fixture_credit_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_credit_guard; GRANT portal_fixture_credit_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", privilege, history.table), false})
+			}
 		}
 	}
 	for _, tc := range cases {
@@ -150,7 +161,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
-			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
+			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {

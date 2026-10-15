@@ -18,7 +18,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/credits.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -110,6 +110,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/credits") && !s.creditsReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		// Do not trust caller-controlled Host or forwarded-origin headers.
 		if r.Host != u.Host {
 			http.Error(w, "Portal unavailable", 421)
@@ -151,6 +155,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposal-visibility", b.submitVisibility)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices", b.submitInvoice)
+	mux.HandleFunc("GET /portal/operator/requests/{id}/invoices/{invoice}/credits", b.showCredits)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices/{invoice}/credits", b.submitCredit)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)
@@ -374,7 +380,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
 	}
-	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" || kind == "invoice-error" {
+	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" || kind == "invoice-error" || kind == "credit-error" {
 		path = "/portal/operator/requests"
 	}
 	d.LanguageURL = path + "?lang=" + other

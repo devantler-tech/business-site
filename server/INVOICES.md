@@ -37,8 +37,9 @@ New drafts, sharing changes and withdrawal prevent new records against old
 acceptance. Original identical retries can still return their historical record;
 they never attach it to replacement scope. History labels the accepted version
 as current or historical. These labels do not verify that an invoice is valid or
-paid. Corrections, credit notes, disputed payments, allocation and full credited
-funds remain separate reconciliation work under #20. Do not use these records as
+paid. Separately default-off [bank-credit evidence](CREDITS.md) records manual
+observations, partial funds, disputes and append-only corrections against these
+invoices. It is not invoice/credit-note generation or payment processing. Do not use these records as
 work-queue eligibility, monthly entitlement or worker authority.
 
 ## Access, storage and release
@@ -62,4 +63,5 @@ mapping exists. Review its retirement in [#117](https://github.com/devantler-tec
 by 15 November 2026. Merged source and synthetic tests do not activate collection
 of real invoice or customer data. Deployment, identity, retention/correction and
 legal/consumer prerequisites remain separate release conditions. There is no
-payment collection, credited-funds or agent execution endpoint.
+payment collection or agent execution endpoint; bank-credit evidence has its own
+independent release gate and operator-only routes.
