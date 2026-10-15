@@ -19,11 +19,33 @@ import (
 
 const creditPath = "/portal/operator/requests/" + proposalRequestID + "/invoices/1/credits"
 
-// creditFixture creates an accepted, invoiced fictional request with each independent gate enabled.
+// creditFixture reuses the signed-in proposal operator while real service calls
+// prepare the client's consent. Credit controls do not need unrelated extra logins.
 func creditFixture(t *testing.T) *browserFixture {
 	t.Helper()
-	b := invoiceFixture(t)
+	b := sharingFixture(t)
+	saveVisibility(t, b, visibilityForm(t, b, "0", "1", "1", "share"))
+	creditFixtureFlags(t, b)
+	client := enroll(t, b.svc, b.f, "credit-fixture-client", "private-client-key", "client")
+	review, err := b.svc.prepareProposalReview(t.Context(), client, proposalRequestID)
+	if err != nil {
+		t.Fatal("fixture consent review failed", err)
+	}
+	if _, err := b.svc.acceptProposal(t.Context(), client, proposalRequestID, review.Key); err != nil {
+		t.Fatal("fixture consent failed", err)
+	}
+	return issueCreditFixtureInvoice(t, b)
+}
+
+// creditFixtureFlags enables only the same synthetic decisions in both setups.
+func creditFixtureFlags(t *testing.T, b *browserFixture) {
+	t.Helper()
 	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation"}, []any{true, true, true, true, true, true, true, true})
+}
+
+// issueCreditFixtureInvoice retains the real native invoice form and TLS writer.
+func issueCreditFixtureInvoice(t *testing.T, b *browserFixture) *browserFixture {
+	t.Helper()
 	if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/invoices", invoiceForm(t, b), b.site.URL); status != 303 {
 		t.Fatal("fixture invoice unavailable")
 	}
@@ -47,7 +69,10 @@ func creditForm(t *testing.T, b *browserFixture) url.Values {
 
 // TestCreditNativePartialAndFull uses the real TLS writer and exact stored minor units.
 func TestCreditNativePartialAndFull(t *testing.T) {
-	b := creditFixture(t)
+	// Keep the complete upstream client/operator journey as well as the focused setups.
+	b := invoiceFixture(t)
+	creditFixtureFlags(t, b)
+	issueCreditFixtureInvoice(t, b)
 	f := creditForm(t, b)
 	if status, _, _ := b.request("POST", creditPath, f, b.site.URL); status != 303 {
 		t.Fatalf("credit rejected: %d", status)
@@ -218,9 +243,10 @@ func TestCreditIndependentGateAndClientDenial(t *testing.T) {
 
 // TestCreditWriteRechecksBlockedAuthority changes authority while the real SQL writer waits.
 func TestCreditWriteRechecksBlockedAuthority(t *testing.T) {
+	b := creditFixture(t)
 	for _, change := range []string{"flag", "revocation", "downgrade", "expiry", "cancel"} {
 		t.Run(change, func(t *testing.T) {
-			b := creditFixture(t)
+			creditFixtureFlags(t, b)
 			f := creditForm(t, b)
 			r := httptest.NewRequest(http.MethodPost, "https://fixture.invalid/credits", strings.NewReader(f.Encode()))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -228,7 +254,7 @@ func TestCreditWriteRechecksBlockedAuthority(t *testing.T) {
 			if !ok {
 				t.Fatal("invalid fixture credit")
 			}
-			op := timedFixtureOperator(t, b, "blocked-credit-operator", change)
+			op := timedFixtureOperator(t, b, "blocked-credit-operator-"+change, change)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
@@ -369,14 +395,14 @@ func TestCreditGlobalAllocationAcrossClients(t *testing.T) {
 
 // TestCreditReadClosure refuses release/expiry changes after materializing actual private rows.
 func TestCreditReadClosure(t *testing.T) {
+	b := creditFixture(t)
+	op := enroll(t, b.svc, b.f, "credit-reader", "operator-workspace", "operator")
+	d := creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "confirmed", AmountMinor: 1, Note: "Fictional evidence"}
+	if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, d); err != nil {
+		t.Fatal(err)
+	}
 	for _, change := range []string{"unchanged", "expiry", "flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
-			b := creditFixture(t)
-			op := enroll(t, b.svc, b.f, "credit-reader", "operator-workspace", "operator")
-			d := creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "confirmed", AmountMinor: 1, Note: "Fictional evidence"}
-			if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, d); err != nil {
-				t.Fatal(err)
-			}
 			flags := acceptanceMemoryFlags()
 			for _, key := range []string{"portal-invoices", "portal-credit-reconciliation"} {
 				flags[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
@@ -386,6 +412,7 @@ func TestCreditReadClosure(t *testing.T) {
 				t.Fatal(err)
 			}
 			tracer := installCompletedRead(t, b, "SELECT source,reference,submission_key,state,note,revision")
+			t.Cleanup(func() { b.svc.pool = b.pool })
 			read := func(ctx context.Context, p Principal) (bool, error) {
 				h, err := b.svc.readCredits(ctx, p, proposalRequestID, 1)
 				return len(h.Transfers) != 0, err
