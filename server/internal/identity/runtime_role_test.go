@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -36,10 +37,11 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			t.Error("fixture owner connection cleanup failed")
 		}
 	}()
-	for _, tc := range []struct {
+	type privilegeCase struct {
 		name, setup string
 		allowed     bool
-	}{
+	}
+	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
 		{"invoice column UPDATE", "GRANT UPDATE(amount_minor) ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable invoice column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(reference) ON portal_invoices TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
@@ -118,7 +120,24 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable replication", "CREATE ROLE portal_fixture_replication NOLOGIN REPLICATION; GRANT portal_fixture_replication TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"indirect predefined privilege", "CREATE ROLE portal_fixture_privileged NOLOGIN; GRANT pg_execute_server_program TO portal_fixture_privileged; GRANT portal_fixture_privileged TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"fixture owner", "", false},
+	}
+	for _, history := range []struct{ table, column string }{
+		{"portal_requests", "brief"}, {"portal_proposals", "scope"},
+		{"portal_proposal_visibility", "action"}, {"portal_proposal_acceptances", "content_hash"},
+		{"portal_invoices", "amount_minor"},
 	} {
+		for _, grant := range []struct{ privilege, option string }{
+			{"TRIGGER", ""}, {"REFERENCES", ""}, {"REFERENCES(" + history.column + ")", ""}, {"MAINTAIN", ""},
+			{"SELECT", " WITH GRANT OPTION"}, {"SELECT(" + history.column + ")", " WITH GRANT OPTION"},
+			{"INSERT", " WITH GRANT OPTION"}, {"INSERT(" + history.column + ")", " WITH GRANT OPTION"},
+		} {
+			name := history.table + "/" + grant.privilege + grant.option
+			cases = append(cases,
+				privilegeCase{name, fmt.Sprintf("GRANT %s ON %s TO portal_runtime%s; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false},
+				privilegeCase{"assumable/" + name, fmt.Sprintf("CREATE ROLE portal_fixture_history_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_history_guard%s; GRANT portal_fixture_history_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false})
+		}
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx, err := owner.Begin(ctx)
 			if err != nil {

@@ -51,8 +51,9 @@ not an empty history. Private responses are non-cacheable and HTML-escaped.
 
 Migration v10 appends the invoice table and its exact acceptance foreign-key
 binding after unchanged v1–v9. The runtime needs SELECT/INSERT only; table- and
-column-level mutation, ownership and assumable broader privileges are refused for
-every immutable request, proposal, sharing, acceptance and invoice table. A migration rollback must
+column-level mutation, triggers, references, maintenance, grant options, ownership
+and assumable broader privileges are refused for every immutable request, proposal,
+sharing, acceptance and invoice table. A migration rollback must
 not erase the ledger. See [the migration procedure](MIGRATIONS.md).
 
 The release decision defaults false and is evaluated on every operation. Missing,
