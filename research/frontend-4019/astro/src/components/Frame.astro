@@ -1,0 +1,6 @@
+---
+import '#sample/site.css';
+import {copy} from '#sample/data.js';
+const {locale='en',portal=false}=Astro.props;const t=copy[locale];const home=locale==='da'?'/da/':'/';
+---
+<!doctype html><html lang={locale}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>{portal?t.portal:t.title} — Framework sample</title><meta name="description" content={t.intro}/></head><body><a href="#main" class="skip">{locale==='da'?'Gå til indhold':'Skip to content'}</a><header><nav class="wrap" aria-label="Navigation"><a class="brand" href={home}>Framework sample</a><a href={home}>{t.projects}</a><a href={`${home}portal/`}>{t.portal}</a><a hreflang={locale==='en'?'da':'en'} href={`${locale==='en'?'/da/':'/'}${portal?'portal/':''}`}>{t.language}</a></nav></header><main id="main" class="wrap"><slot/></main><footer class="wrap">Fictional framework evaluation. No customers, sign-in or payment processing.</footer></body></html>

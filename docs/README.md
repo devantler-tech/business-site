@@ -344,6 +344,13 @@ web island — explicitly out of scope for the static site today.)
 
 ### The convention — `astro:env`
 
+The isolated SvelteKit migration candidate in `web/` uses its own framework-native
+`FEATURE_SVELTE_FRONTEND` setting, not the Astro schema. It remains default-off and is not part
+of publication or the Go package. See the [candidate guide](../web/README.md) for its enabled,
+false and entirely unset checks. Restart the preview process after rebuilding a different
+setting: a running preview has already loaded the old compiled server. Gate review is tracked
+by [#125](https://github.com/devantler-tech/business-site/issues/125).
+
 Flags are declared in the Zod-validated [`astro:env`](https://docs.astro.build/en/guides/environment-variables/)
 `env.schema` in [`astro.config.mjs`](../astro.config.mjs) — type-safe over raw `import.meta.env`:
 

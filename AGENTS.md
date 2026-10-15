@@ -10,6 +10,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 - The Astro + Starlight application lives at the repository root: `src/`,
   `public/`, `scripts/` and root package/configuration files.
+- `web/` is the isolated SvelteKit migration candidate for #124. Its framework-native
+  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits only bilingual About output.
+  Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
@@ -31,6 +34,8 @@ Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
 ```sh
 npm ci
 npm run build
+npm --prefix web ci
+bash scripts/check-svelte-frontend.sh
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh

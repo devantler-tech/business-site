@@ -40,7 +40,7 @@ func (p *finalRequestProvider) BooleanEvaluation(ctx context.Context, key string
 // while retaining an unchanged-authority positive control for both selectors.
 func TestRequestReadRechecksAuthorityAfterFinalEvaluation(t *testing.T) {
 	for _, selector := range []string{"list", "receipt"} {
-		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry", "flag", "cancel", "storage"} {
+		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "flag", "cancel", "storage"} {
 			t.Run(selector+"/"+change, func(t *testing.T) {
 				b := newBrowserFixture(t)
 				requestFlag(t, b, true)

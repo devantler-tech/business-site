@@ -81,7 +81,14 @@ func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values)
 // only the explicitly named, disposable identity database.
 func newBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
-	b := &browserFixture{t: t, pool: fixtureDB(t), flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
+	return newBrowserFixtureOnPool(t, fixtureDB(t))
+}
+
+// newBrowserFixtureOnPool keeps independent TLS brokers, sessions and SDKs while
+// a parent-owned expiry cohort shares its already-reset disposable database.
+func newBrowserFixtureOnPool(t *testing.T, pool *pgxpool.Pool) *browserFixture {
+	t.Helper()
+	b := &browserFixture{t: t, pool: pool, flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
 	key, err := fixtureSigningKey()
 	if err != nil {
 		t.Fatal(err)

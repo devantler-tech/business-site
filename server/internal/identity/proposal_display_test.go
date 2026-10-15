@@ -30,18 +30,14 @@ func closedDisplayCheckpoint(t *testing.T, b *browserFixture, key, outcome strin
 // The real TLS/session/SQL handler waits inside the SDK, not a mocked read.
 func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
 	for _, outcome := range []string{"false", "error"} {
-		for _, change := range []string{"unchanged", "revocation", "rebind", "role", "expiry"} {
+		for _, change := range []string{"unchanged", "revocation", "rebind", "role"} {
 			t.Run(outcome+"/"+change, func(t *testing.T) {
 				b := acceptanceFixture(t)
 				var title, brief string
 				if err := b.pool.QueryRow(t.Context(), `SELECT title,brief FROM portal_requests WHERE id=$1`, proposalRequestID).Scan(&title, &brief); err != nil {
 					t.Fatal("fictional request unavailable")
 				}
-				// JWT expiry uses whole seconds; retain a full second for setup.
-				expires := time.Now().Add(2 * time.Second).Truncate(time.Second)
-				if change == "expiry" {
-					b.configure(map[string]any{"exp": expires.Unix()}, false)
-				}
+				expires := time.Now().Add(time.Hour)
 				triageSignIn(t, b, "display-client", "private-client-key", "client")
 				provider, release := closedDisplayCheckpoint(t, b, "portal-proposal-acceptance", outcome)
 				ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
@@ -55,9 +51,6 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 				case <-provider.blocked:
 				case <-ctx.Done():
 					t.Fatal("optional display checkpoint not reached")
-				}
-				if change == "expiry" && !time.Now().Before(expires) {
-					t.Fatal("fixture authority expired before its receipt checkpoint")
 				}
 				principal := Principal{issuer: b.f.issuer, subject: "display-client", audience: b.f.broker.clientID, expires: expires}
 				closeRequestReadAuthority(ctx, t, b, principal, provider, change, cancel)
@@ -81,16 +74,12 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
 	for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices"} {
 		for _, outcome := range []string{"false", "error"} {
-			for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry"} {
+			for _, change := range []string{"unchanged", "revocation", "role", "rebind"} {
 				t.Run(key+"/"+outcome+"/"+change, func(t *testing.T) {
 					b := newBrowserFixture(t)
 					proposalFlags(t, b, true, true, true, true)
 					seedTriageRequest(t, b, proposalRequestID, "Fictional proposal request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
-					// Preserve real JWT expiry with room to reach the SDK barrier.
-					expires := time.Now().Add(2 * time.Second).Truncate(time.Second)
-					if change == "expiry" {
-						b.configure(map[string]any{"exp": expires.Unix()}, false)
-					}
+					expires := time.Now().Add(time.Hour)
 					triageSignIn(t, b, "proposal-operator", "operator-workspace", "operator")
 					form := proposalForm(t, b)
 					if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 303 {
@@ -112,9 +101,6 @@ func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					case <-provider.blocked:
 					case <-ctx.Done():
 						t.Fatal("operator display checkpoint not reached")
-					}
-					if change == "expiry" && !time.Now().Before(expires) {
-						t.Fatal("fixture authority expired before its operator checkpoint")
 					}
 					principal := Principal{issuer: b.f.issuer, subject: "proposal-operator", audience: b.f.broker.clientID, expires: expires}
 					if change == "role" {
