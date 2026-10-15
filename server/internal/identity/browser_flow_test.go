@@ -2,8 +2,6 @@ package identity
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -84,7 +82,7 @@ func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values)
 func newBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
 	b := &browserFixture{t: t, pool: fixtureDB(t), flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := fixtureSigningKey()
 	if err != nil {
 		t.Fatal(err)
 	}

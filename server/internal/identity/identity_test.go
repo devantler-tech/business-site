@@ -35,7 +35,7 @@ type brokerFixture struct {
 
 func fixtureBroker(t *testing.T) brokerFixture {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := fixtureSigningKey()
 	if err != nil {
 		t.Fatal(err)
 	}
