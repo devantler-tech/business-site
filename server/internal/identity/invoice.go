@@ -26,8 +26,13 @@ type projectInvoice struct {
 	Current                                   bool
 }
 
-func (d projectInvoice) AmountDKK() string {
-	return fmt.Sprintf("%d.%02d", d.AmountMinor/100, d.AmountMinor%100)
+// AmountDKK displays exact minor units with the locale's decimal separator and no grouping.
+func (d projectInvoice) AmountDKK(lang string) string {
+	separator := "."
+	if lang == "da" {
+		separator = ","
+	}
+	return fmt.Sprintf("%d%s%02d", d.AmountMinor/100, separator, d.AmountMinor%100)
 }
 
 type invoiceHistory struct {
@@ -36,6 +41,7 @@ type invoiceHistory struct {
 	Expected   int
 }
 
+// invoicesReady requires every prerequisite and a fresh independent invoice decision.
 func (s *Foundation) invoicesReady(ctx context.Context) bool {
 	if !s.acceptanceReady(ctx) {
 		return false
@@ -44,6 +50,7 @@ func (s *Foundation) invoicesReady(ctx context.Context) bool {
 	return err == nil && enabled && s.ready(ctx) && ctx.Err() == nil
 }
 
+// invoiceOperator combines the invoice release decision with current operator authority.
 func (s *Foundation) invoiceOperator(ctx context.Context, p Principal) error {
 	if !s.invoicesReady(ctx) {
 		return ErrDenied
@@ -73,6 +80,7 @@ func invoiceMinorUnits(raw string) (int64, bool) {
 	return minor, minor > 0 && minor <= 1000000000
 }
 
+// parseInvoice accepts one bounded native form without caller-supplied client or payment state.
 func parseInvoice(r *http.Request) (projectInvoice, bool) {
 	if err := r.ParseForm(); err != nil {
 		return projectInvoice{}, false
@@ -95,6 +103,7 @@ func parseInvoice(r *http.Request) (projectInvoice, bool) {
 
 const invoiceColumns = `i.sequence,i.expected_sequence,i.submission_key,i.acceptance_id,i.proposal_version,i.visibility_event,i.content_hash,i.reference,i.purpose,i.amount_minor,i.recorded_at`
 
+// scanInvoice materializes the explicit private invoice columns, preserving storage errors.
 func scanInvoice(row pgx.Row) (projectInvoice, error) {
 	var d projectInvoice
 	err := row.Scan(&d.Sequence, &d.Expected, &d.Key, &d.Acceptance, &d.Version, &d.Event, &d.Hash, &d.Reference, &d.Purpose, &d.AmountMinor, &d.Recorded)
@@ -214,6 +223,7 @@ func (s *Foundation) readInvoices(ctx context.Context, p Principal, id string) (
 	return result, nil
 }
 
+// submitInvoice records an authorized native POST and returns the ordinary request-detail result.
 func (b *browser) submitInvoice(w http.ResponseWriter, r *http.Request) {
 	if err := b.foundation.invoiceOperator(r.Context(), b.principal(r.Context())); err != nil {
 		b.triageError(w, r, err)

@@ -17,12 +17,14 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+// httptestInvoiceForm supplies the same encoded body as the native invoice form.
 func httptestInvoiceForm(f url.Values) *http.Request {
 	r := httptest.NewRequest("POST", "https://fixture.invalid/invoices", strings.NewReader(f.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return r
 }
 
+// invoiceFixture provisions fictional accepted scope and a current operator over TLS and SQL.
 func invoiceFixture(t *testing.T) *browserFixture {
 	t.Helper()
 	b, _, _ := acceptedOperatorFixture(t)
@@ -31,6 +33,7 @@ func invoiceFixture(t *testing.T) *browserFixture {
 	return b
 }
 
+// TestInvoiceRejectsUnboundedOrForgedInput retains each rejected field as an actual HTTP control.
 func TestInvoiceRejectsUnboundedOrForgedInput(t *testing.T) {
 	b := invoiceFixture(t)
 	for _, tc := range []struct{ field, value string }{
@@ -57,6 +60,7 @@ func TestInvoiceRejectsUnboundedOrForgedInput(t *testing.T) {
 	}
 }
 
+// TestInvoiceExactDecimalAmounts checks stored minor units, not a reformatted input string.
 func TestInvoiceExactDecimalAmounts(t *testing.T) {
 	b := invoiceFixture(t)
 	for _, tc := range []struct {
@@ -78,6 +82,7 @@ func TestInvoiceExactDecimalAmounts(t *testing.T) {
 	}
 }
 
+// TestInvoiceGatesAndClientIsolation denies closed gates and clients with genuine CSRF tokens.
 func TestInvoiceGatesAndClientIsolation(t *testing.T) {
 	b := invoiceFixture(t)
 	f := invoiceForm(t, b)
@@ -108,6 +113,7 @@ func TestInvoiceGatesAndClientIsolation(t *testing.T) {
 	}
 }
 
+// TestInvoiceRetriesConcurrencyAndScopeChanges arbitrates stale forms and preserves historical retries.
 func TestInvoiceRetriesConcurrencyAndScopeChanges(t *testing.T) {
 	b := invoiceFixture(t)
 	f, other := invoiceForm(t, b), invoiceForm(t, b)
@@ -150,6 +156,7 @@ func TestInvoiceRetriesConcurrencyAndScopeChanges(t *testing.T) {
 	}
 }
 
+// TestInvoiceCrossOperatorAndDuplicateReferenceConflict binds retries to actors and unique references.
 func TestInvoiceCrossOperatorAndDuplicateReferenceConflict(t *testing.T) {
 	b := invoiceFixture(t)
 	f := invoiceForm(t, b)
@@ -171,6 +178,7 @@ func TestInvoiceCrossOperatorAndDuplicateReferenceConflict(t *testing.T) {
 	}
 }
 
+// TestInvoiceWriteRechecksBlockedAuthority changes authority while the actual SQL writer is blocked.
 func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 	for _, change := range []string{"flag", "revocation", "downgrade", "expiry", "cancel"} {
 		t.Run(change, func(t *testing.T) {
@@ -221,6 +229,7 @@ func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 	}
 }
 
+// TestInvoiceStorageFailureIsNotEmpty refuses a real privilege failure without leaking table details.
 func TestInvoiceStorageFailureIsNotEmpty(t *testing.T) {
 	b := invoiceFixture(t)
 	migrator := migrationDB(t)
@@ -238,6 +247,7 @@ func TestInvoiceStorageFailureIsNotEmpty(t *testing.T) {
 	}
 }
 
+// TestInvoiceReadClosureAndMissingRequest rechecks release and access after materializing private rows.
 func TestInvoiceReadClosureAndMissingRequest(t *testing.T) {
 	for _, change := range []string{"unchanged", "expiry", "flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
@@ -269,6 +279,7 @@ func TestInvoiceReadClosureAndMissingRequest(t *testing.T) {
 	}
 }
 
+// TestInvoiceMigrationPreservesConsent reapplies v10 without changing prior consent or checksums.
 func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 	invoiceFixture(t)
 	migrator := migrationDB(t)
@@ -296,6 +307,7 @@ func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 	}
 }
 
+// TestInvoiceCompleteBoundedImmutableHistory verifies all 50 rows and actual runtime mutation refusal.
 func TestInvoiceCompleteBoundedImmutableHistory(t *testing.T) {
 	b := invoiceFixture(t)
 	d, valid := parseInvoice(httptestInvoiceForm(invoiceForm(t, b)))
@@ -328,6 +340,7 @@ func TestInvoiceCompleteBoundedImmutableHistory(t *testing.T) {
 	}
 }
 
+// invoiceForm reads server-issued identity, sequence and consent from the rendered operator form.
 func invoiceForm(t *testing.T, b *browserFixture) url.Values {
 	t.Helper()
 	status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID, nil, "")
@@ -342,7 +355,7 @@ func invoiceForm(t *testing.T, b *browserFixture) url.Values {
 	return f
 }
 
-// A missing write or invoice/acceptance binding must fail this actual TLS/SQL flow.
+// TestInvoiceDurablePrivateRecord checks stored binding, locale display, escaping and reconnect.
 func TestInvoiceDurablePrivateRecord(t *testing.T) {
 	b := invoiceFixture(t)
 	f := invoiceForm(t, b)
@@ -355,8 +368,12 @@ func TestInvoiceDurablePrivateRecord(t *testing.T) {
 	}
 	b.reconnect(t.Context())
 	for _, lang := range []string{"en", "da"} {
+		amount := "1234.56 DKK"
+		if lang == "da" {
+			amount = "1234,56 DKK"
+		}
 		status, body, h := b.request("GET", path+"?lang="+lang, nil, "")
-		if status != 200 || !strings.Contains(body, "TEST-2026-01") || !strings.Contains(body, "1234.56 DKK") || h.Get("Cache-Control") != "no-store" {
+		if status != 200 || !strings.Contains(body, "TEST-2026-01") || !strings.Contains(body, amount) || h.Get("Cache-Control") != "no-store" {
 			t.Fatal("durable localized private invoice record unavailable")
 		}
 		if strings.Contains(body, "<script>fictional-private-invoice</script>") || !strings.Contains(body, "&lt;script&gt;fictional-private-invoice&lt;/script&gt;") {

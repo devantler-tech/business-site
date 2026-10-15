@@ -39,6 +39,7 @@ func proposalForm(t *testing.T, b *browserFixture) url.Values {
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "submission_key": {key[1]}, "expected_version": {version[1]}, "scope": {"A fictional first iteration"}, "deliverables": {"A website and accessible contact page"}, "currency": {"DKK"}, "one_time_dkk": {"2995"}, "monthly_dkk": {"99"}, "one_time_terms": {"One agreed iteration"}, "monthly_terms": {"Hosting and routine maintenance"}, "lang": {"en"}}
 }
 
+// concurrentPortalPosts starts two genuine requests and returns both unordered outcomes.
 func concurrentPortalPosts(b *browserFixture, path string, first, second url.Values) (int, int) {
 	statuses := make(chan int, 2)
 	for _, form := range []url.Values{first, second} {

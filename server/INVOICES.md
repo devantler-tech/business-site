@@ -13,7 +13,8 @@ external reference, invoiced purpose or period, and the actual positive DKK amou
 The amount supports up to two decimal places, using a dot or comma without
 thousands separators, and is stored exactly in integer minor units. It is never
 computed from the proposal's one-time and monthly prices. The maximum is
-DKK 10,000,000 per record.
+DKK 10,000,000 per record. History uses a decimal comma in Danish and a decimal
+point in English, without thousands grouping.
 
 References use up to 64 ASCII letters, digits, dots, slashes, hyphens or
 underscores, beginning with a letter or digit. Surrounding spaces are removed
