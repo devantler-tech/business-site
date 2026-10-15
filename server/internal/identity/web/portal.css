@@ -82,6 +82,19 @@
   line-height: 1.7;
 }
 
+.acceptance-receipt {
+  border-bottom: 1px solid var(--line);
+  padding: 1rem 0;
+  overflow-wrap: anywhere;
+}
+
+.acceptance-receipt summary {
+  cursor: pointer;
+  min-height: 44px;
+  line-height: 1.7;
+  font-weight: 600;
+}
+
 .request-list {
   list-style: none;
   padding: 0;

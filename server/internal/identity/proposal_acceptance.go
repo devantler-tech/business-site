@@ -22,6 +22,7 @@ type proposalReview struct {
 
 type proposalAcceptance struct {
 	ID       string
+	Event    int
 	Recorded time.Time
 	Current  bool
 	Proposal projectProposal
@@ -237,6 +238,19 @@ func (s *Foundation) readProposalAcceptances(ctx context.Context, p Principal, i
 		return nil, false, err
 	}
 	defer rollbackProposalWrite(ctx, tx)
+	result, canAccept, err := proposalAcceptanceHistory(ctx, tx, id, client)
+	if err != nil {
+		return nil, false, err
+	}
+	if err = s.commitClientProposal(ctx, p, tx, time.Time{}); err != nil {
+		return nil, false, err
+	}
+	return result, canAccept, nil
+}
+
+// proposalAcceptanceHistory reads canonical receipts inside an already scoped,
+// request-locked transaction. It grants neither client nor operator authority.
+func proposalAcceptanceHistory(ctx context.Context, tx pgx.Tx, id, client string) ([]proposalAcceptance, bool, error) {
 	current, stateErr := currentProposalReview(ctx, tx, id, client)
 	if stateErr != nil && !errors.Is(stateErr, errProposalConflict) {
 		return nil, false, stateErr
@@ -249,22 +263,18 @@ func (s *Foundation) readProposalAcceptances(ctx context.Context, p Principal, i
 	acceptedCurrent := false
 	for rows.Next() {
 		var d proposalAcceptance
-		var event int
 		q := &d.Proposal
-		if err = rows.Scan(&d.ID, &q.Version, &event, &d.Recorded, &q.Scope, &q.Deliverables, &q.Currency, &q.OneTimeMinor, &q.MonthlyMinor, &q.OneTimeTerms, &q.MonthlyTerms); err != nil {
+		if err = rows.Scan(&d.ID, &q.Version, &d.Event, &d.Recorded, &q.Scope, &q.Deliverables, &q.Currency, &q.OneTimeMinor, &q.MonthlyMinor, &q.OneTimeTerms, &q.MonthlyTerms); err != nil {
 			rows.Close()
 			return nil, false, errTriageStorage
 		}
-		d.Current = stateErr == nil && event == current.Event && q.Version == current.Proposal.Version
+		d.Current = stateErr == nil && d.Event == current.Event && q.Version == current.Proposal.Version
 		acceptedCurrent = acceptedCurrent || d.Current
 		result = append(result, d)
 	}
 	rows.Close()
 	if rows.Err() != nil {
 		return nil, false, errTriageStorage
-	}
-	if err = s.commitClientProposal(ctx, p, tx, time.Time{}); err != nil {
-		return nil, false, err
 	}
 	return result, stateErr == nil && !acceptedCurrent, nil
 }

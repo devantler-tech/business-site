@@ -159,3 +159,26 @@ execution. The selected portal-owned queue/API/MCP remains separate under #20.
 Privacy/retention and real consumer/legal review remain launch conditions under
 issues #19/#21 and monorepo#3936/#3939. Included hosting maintenance cannot be forced into
 a new feature purchase. Synthetic database/browser proof is not customer activation.
+
+### Operator acceptance view
+
+The same acceptance gate additionally exposes bounded receipts on the existing
+operator request detail. Before editing drafts, the operator can inspect each
+receipt's immutable ID, version, share event, recorded UTC time and exact accepted
+scope, deliverables, DKK amounts and separate terms. Native English/Danish
+disclosures distinguish current, historical and no recorded acceptance. Payment
+and permission to start work remain unverified; there is no second approval action.
+
+The reader derives the client from the stored request under the same per-request
+lock as draft, sharing and consent decisions. It locks current operator membership
+through completion, independently of the unchanged client-only authorization path.
+It rechecks SDK readiness, expiry and cancellation before returning data. Optional
+acceptance evaluations, including false/error results, finish before any private
+detail read. These are bounded read checkpoints, not wire-time revocation.
+
+A newer draft, even unshared, or a withdrawal makes previous consent historical.
+It never changes the original receipt or intake order. A later exact acceptance
+appears first; at most 50 version-bound receipts are read. Missing consent is an
+honest empty state, while failed storage returns unavailable. Reconnect retains
+receipt identity and time. The existing #106 lifecycle and default-off production
+boundary are unchanged; no schema, environment mapping, billing or work queue is added.
