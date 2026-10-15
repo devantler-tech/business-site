@@ -10,6 +10,22 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+type displayResponse struct {
+	status int
+	body   string
+}
+
+// closedDisplayCheckpoint delays only the real SDK's optional presentation check.
+func closedDisplayCheckpoint(t *testing.T, b *browserFixture, key, outcome string) (*finalRequestProvider, func()) {
+	t.Helper()
+	provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), key: key, blockAt: 1, blocked: make(chan struct{}), release: make(chan struct{})}
+	provider.denied.Store(true)
+	if outcome == "error" {
+		provider.resolutionError = openfeature.NewGeneralResolutionError("synthetic unavailable evaluation")
+	}
+	return provider, installAcceptanceWait(t, b, provider, provider.release)
+}
+
 // A closed optional display gate must not bypass current request authority.
 // The real TLS/session/SQL handler waits inside the SDK, not a mocked read.
 func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
@@ -26,22 +42,13 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					b.configure(map[string]any{"exp": expires.Unix()}, false)
 				}
 				triageSignIn(t, b, "display-client", "private-client-key", "client")
-				provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), key: "portal-proposal-acceptance", blockAt: 1, blocked: make(chan struct{}), release: make(chan struct{})}
-				provider.denied.Store(true)
-				if outcome == "error" {
-					provider.resolutionError = openfeature.NewGeneralResolutionError("synthetic unavailable evaluation")
-				}
-				release := installAcceptanceWait(t, b, provider, provider.release)
+				provider, release := closedDisplayCheckpoint(t, b, "portal-proposal-acceptance", outcome)
 				ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 				defer cancel()
-				type response struct {
-					status int
-					body   string
-				}
-				result := make(chan response, 1)
+				result := make(chan displayResponse, 1)
 				go func() {
 					status, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID, nil, "")
-					result <- response{status, body}
+					result <- displayResponse{status, body}
 				}()
 				select {
 				case <-provider.blocked:
@@ -84,26 +91,17 @@ func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 303 {
 						t.Fatal("fictional proposal setup failed")
 					}
-					provider := installReadProvider(t, b, key, 1)
-					provider.denied.Store(true)
-					if outcome == "error" {
-						provider.resolutionError = openfeature.NewGeneralResolutionError("synthetic unavailable evaluation")
-					}
-					release := installAcceptanceWait(t, b, provider, provider.release)
+					provider, release := closedDisplayCheckpoint(t, b, key, outcome)
 					ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
 					defer cancel()
-					type response struct {
-						status int
-						body   string
-					}
-					result := make(chan response, 1)
+					result := make(chan displayResponse, 1)
 					go func() {
 						path := "/portal/operator/requests/" + proposalRequestID
 						if outcome == "error" {
 							path += "?lang=da"
 						}
 						status, body, _ := b.request("GET", path, nil, "")
-						result <- response{status, body}
+						result <- displayResponse{status, body}
 					}()
 					select {
 					case <-provider.blocked:
