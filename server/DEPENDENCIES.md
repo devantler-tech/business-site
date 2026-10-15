@@ -7,7 +7,7 @@ license for Devantler Tech's application. The application remains governed by
 its repository's own terms. No hosted service or paid enrollment is introduced.
 
 | Compiled module                                           | Version                            | Upstream license                                                                                                                                |
-| --------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+|-----------------------------------------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | github.com/alexedwards/scs/pgxstore                       | v0.0.0-20251002162104-209de6e426de | [MIT](https://raw.githubusercontent.com/alexedwards/scs/209de6e426de9259665975ce16b91331d228f052/LICENSE)                                       |
 | github.com/alexedwards/scs/v2                             | v2.9.0                             | [MIT](https://raw.githubusercontent.com/alexedwards/scs/ab20b3feb5e9981c1f79cee8a97a289810134163/LICENSE)                                       |
 | github.com/coreos/go-oidc/v3                              | v3.21.0                            | [Apache-2.0](https://raw.githubusercontent.com/coreos/go-oidc/c914bd380327a5a3a81403774d1a5d5b73772ce7/LICENSE)                                 |
