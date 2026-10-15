@@ -82,13 +82,15 @@
   line-height: 1.7;
 }
 
-.acceptance-receipt {
+.acceptance-receipt,
+.invoice-record {
   border-bottom: 1px solid var(--line);
   padding: 1rem 0;
   overflow-wrap: anywhere;
 }
 
-.acceptance-receipt summary {
+.acceptance-receipt summary,
+.invoice-record summary {
   cursor: pointer;
   min-height: 44px;
   line-height: 1.7;
