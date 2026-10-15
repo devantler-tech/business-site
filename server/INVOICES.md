@@ -17,8 +17,10 @@ DKK 10,000,000 per record. History uses a decimal comma in Danish and a decimal
 point in English, without thousands grouping.
 
 References use up to 64 ASCII letters, digits, dots, slashes, hyphens or
-underscores, beginning with a letter or digit. Surrounding spaces are removed
-and letters normalized to uppercase. A reference can identify only one stored
+underscores, beginning with a letter or digit. Surrounding whitespace is removed
+and letters normalized to uppercase before checking the 64-character limit. The
+native form leaves these checks to the bounded server parser so pasted whitespace
+does not reject an otherwise valid reference. A reference can identify only one stored
 invoice across the application; allocating one invoice across multiple requests
 is not supported. The purpose/period permits up to 300 characters. Do not paste
 bank details or supporting documents into this field.
@@ -48,8 +50,9 @@ stays locked through the transaction. A failed database read returns unavailable
 not an empty history. Private responses are non-cacheable and HTML-escaped.
 
 Migration v10 appends the invoice table and its exact acceptance foreign-key
-binding after unchanged v1–v9. The runtime needs SELECT/INSERT only; mutation,
-ownership and assumable broader privileges are refused. A migration rollback must
+binding after unchanged v1–v9. The runtime needs SELECT/INSERT only; table- and
+column-level mutation, ownership and assumable broader privileges are refused for
+every immutable request, proposal, sharing, acceptance and invoice table. A migration rollback must
 not erase the ledger. See [the migration procedure](MIGRATIONS.md).
 
 The release decision defaults false and is evaluated on every operation. Missing,

@@ -41,6 +41,16 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		allowed     bool
 	}{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"invoice column UPDATE", "GRANT UPDATE(amount_minor) ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable invoice column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(reference) ON portal_invoices TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"acceptance column UPDATE", "GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable acceptance column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"visibility column UPDATE", "GRANT UPDATE(action) ON portal_proposal_visibility TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable visibility column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(action) ON portal_proposal_visibility TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"proposal column UPDATE", "GRANT UPDATE(scope) ON portal_proposals TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable proposal column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(scope) ON portal_proposals TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"request column UPDATE", "GRANT UPDATE(brief) ON portal_requests TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable request column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(brief) ON portal_requests TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"missing invoice SELECT", "REVOKE SELECT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"missing invoice INSERT", "REVOKE INSERT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"mutable invoice UPDATE", "GRANT UPDATE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},

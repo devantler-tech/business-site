@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
+	markup "golang.org/x/net/html"
 )
 
 // httptestInvoiceForm supplies the same encoded body as the native invoice form.
@@ -353,6 +354,40 @@ func invoiceForm(t *testing.T, b *browserFixture) url.Values {
 		f.Set(name, html.UnescapeString(match[1]))
 	}
 	return f
+}
+
+// TestInvoiceReferenceNativeNormalization keeps native fields compatible with server-side trimming.
+func TestInvoiceReferenceNativeNormalization(t *testing.T) {
+	b := invoiceFixture(t)
+	path := "/portal/operator/requests/" + proposalRequestID
+	status, body, _ := b.request("GET", path, nil, "")
+	doc, err := markup.Parse(strings.NewReader(body))
+	if err != nil || status != 200 {
+		t.Fatal("invoice form unavailable", err)
+	}
+	found := false
+	for n := range doc.Descendants() {
+		if linkAttribute(n, "id") == "invoice-reference" {
+			found = true
+			for _, a := range n.Attr {
+				if a.Key == "pattern" || a.Key == "maxlength" {
+					t.Fatal("raw native constraint prevents normalized references")
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("native invoice reference field missing")
+	}
+	f := invoiceForm(t, b)
+	f.Set("reference", " \t"+strings.Repeat("a", 64)+"\u00a0 ")
+	if status, _, _ := b.request("POST", path+"/invoices", f, b.site.URL); status != 303 {
+		t.Fatalf("normalized reference refused: %d", status)
+	}
+	var reference string
+	if err := b.pool.QueryRow(t.Context(), "SELECT reference FROM portal_invoices").Scan(&reference); err != nil || reference != strings.Repeat("A", 64) {
+		t.Fatal("reference was not trimmed and normalized", err)
+	}
 }
 
 // TestInvoiceDurablePrivateRecord checks stored binding, locale display, escaping and reconnect.
