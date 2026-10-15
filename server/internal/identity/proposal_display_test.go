@@ -37,7 +37,8 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 				if err := b.pool.QueryRow(t.Context(), `SELECT title,brief FROM portal_requests WHERE id=$1`, proposalRequestID).Scan(&title, &brief); err != nil {
 					t.Fatal("fictional request unavailable")
 				}
-				expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
+				// JWT expiry uses whole seconds; retain a full second for setup.
+				expires := time.Now().Add(2 * time.Second).Truncate(time.Second)
 				if change == "expiry" {
 					b.configure(map[string]any{"exp": expires.Unix()}, false)
 				}
@@ -54,6 +55,9 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 				case <-provider.blocked:
 				case <-ctx.Done():
 					t.Fatal("optional display checkpoint not reached")
+				}
+				if change == "expiry" && !time.Now().Before(expires) {
+					t.Fatal("fixture authority expired before its receipt checkpoint")
 				}
 				principal := Principal{issuer: b.f.issuer, subject: "display-client", audience: b.f.broker.clientID, expires: expires}
 				closeRequestReadAuthority(ctx, t, b, principal, provider, change, cancel)
@@ -82,7 +86,8 @@ func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					b := newBrowserFixture(t)
 					proposalFlags(t, b, true, true, true, true)
 					seedTriageRequest(t, b, proposalRequestID, "Fictional proposal request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
-					expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
+					// Preserve real JWT expiry with room to reach the SDK barrier.
+					expires := time.Now().Add(2 * time.Second).Truncate(time.Second)
 					if change == "expiry" {
 						b.configure(map[string]any{"exp": expires.Unix()}, false)
 					}
@@ -107,6 +112,9 @@ func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					case <-provider.blocked:
 					case <-ctx.Done():
 						t.Fatal("operator display checkpoint not reached")
+					}
+					if change == "expiry" && !time.Now().Before(expires) {
+						t.Fatal("fixture authority expired before its operator checkpoint")
 					}
 					principal := Principal{issuer: b.f.issuer, subject: "proposal-operator", audience: b.f.broker.clientID, expires: expires}
 					if change == "role" {

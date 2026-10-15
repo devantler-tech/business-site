@@ -76,7 +76,7 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if change == "expiry" {
-		p.expires = time.Now().Add(time.Second)
+		p.expires = time.Now().Add(500 * time.Millisecond)
 	}
 	type result struct {
 		data bool
@@ -101,6 +101,9 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 	case <-blocked:
 	case <-ctx.Done():
 		t.Fatal("private reader did not reach selected completion checkpoint")
+	}
+	if change == "expiry" && !time.Now().Before(p.expires) {
+		t.Fatal("fixture authority expired before its private-read checkpoint")
 	}
 	if change == "role" && operator {
 		tag, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE issuer=$1 AND subject=$2`, p.issuer, p.subject)
