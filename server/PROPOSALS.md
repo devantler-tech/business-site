@@ -36,6 +36,12 @@ roles, owners, email and groups grant no authority. Native CSRF, fixed Host/Orig
 session expiry and no-store apply. Only this form receives a 60,000-byte encoded
 body bound; other forms retain their bounds. Text renders inert and escaped.
 
+Operator detail pages finish optional proposal and sharing checks before reading
+private records, including disabled or unavailable evaluations. Each enabled
+reader independently checks current operator access. These are final read
+checkpoints, not an atomic guarantee against a later change or a way to retract
+data already received.
+
 Transactions serialize per request without UPDATE authority on immutable intake.
 Expected version rejects stale writes. A request-scoped opaque retry key binds
 normalized content and the original operator: an identical retry returns its

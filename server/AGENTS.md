@@ -130,8 +130,9 @@ Share only the request lock, never the operator writer's authorization helper.
 Lock current client membership after that request lock and independently derive
 request ownership. Recheck gates/expiry/cancellation before commit. Final display
 SDK waits precede the final membership SQL checkpoint.
-Optional receipt-display SDK evaluations, including false/error outcomes, precede
-all private reads; the readers retain their independent authorization checkpoints.
+Optional client and operator detail-display SDK evaluations, including false/error
+outcomes, precede all private reads; the readers retain their independent
+authorization checkpoints.
 Original actor-bound retries return historical receipts, not consent to later scope.
 New unshared drafts remain
 readable only through the old shared snapshot and are never acceptable or exposed.
