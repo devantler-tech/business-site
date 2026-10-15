@@ -65,7 +65,7 @@ func TestProposalImmutableRevisionsAndDurableRetries(t *testing.T) {
 		t.Fatal("content-changing retry overwrote history")
 	}
 	status, body, h := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=da", nil, "")
-	for _, want := range []string{"&lt;script&gt;fictional-private-scope&lt;/script&gt;", "A separately priced next iteration", "2995", "7995", "99", "Ikke accepteret"} {
+	for _, want := range []string{"&lt;script&gt;fictional-private-scope&lt;/script&gt;", "A separately priced next iteration", "2995", "7995", "99", "godkender ikke arbejde"} {
 		if status != 200 || !strings.Contains(body, want) {
 			t.Fatalf("durable Danish proposal history missing %q", want)
 		}

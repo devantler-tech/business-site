@@ -11,7 +11,17 @@
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Type{{else}}Offering{{end}}</dt><dd>{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</dd><dt>{{if eq $.Lang `da`}}Modtaget (UTC){{else}}Received (UTC){{end}}</dt><dd><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></dd><dt>{{if eq $.Lang `da`}}Forespørgsel{{else}}Brief{{end}}</dt><dd class="request-brief">{{.Brief}}</dd></dl>{{end}}
 {{if .ProposalsEnabled}}
 <h2>{{if eq .Lang `da`}}Udkast til tilbud{{else}}Draft proposals{{end}}</h2>
-<p>{{if eq .Lang `da`}}Ikke accepteret eller godkendt til arbejde. Priser og endelige vilkår kræver særskilt aftale.{{else}}Not accepted or approved for work. Prices and final terms require a separate agreement.{{end}}</p>
+<p>{{if eq .Lang `da`}}At gemme et udkast indhenter ikke kundens accept og godkender ikke arbejde.{{else}}Saving a draft does not obtain client acceptance or approve work.{{end}}</p>
+{{if .AcceptanceEnabled}}
+<aside aria-labelledby="acceptance-heading"><h3 id="acceptance-heading">{{if eq .Lang `da`}}Kundens accept{{else}}Client acceptance{{end}}</h3>
+<p>{{if eq .Lang `da`}}Betaling og tilladelse til at starte arbejdet er fortsat uafklaret. En historisk accept gælder ikke et nyt eller tilbagetrukket tilbud.{{else}}Payment and permission to start work remain unverified. A historical acceptance does not apply to a revised or withdrawn proposal.{{end}}</p>
+{{range .Acceptances}}
+<details class="acceptance-receipt"><summary>{{if .Current}}{{if eq $.Lang `da`}}Aktuel accept{{else}}Current acceptance{{end}}{{else}}{{if eq $.Lang `da`}}Historisk accept{{else}}Historical acceptance{{end}}{{end}} — version {{.Proposal.Version}} · <time datetime="{{.Recorded.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Recorded.UTC.Format `2006-01-02 15:04`}} UTC</time></summary>
+<p>{{if eq $.Lang `da`}}Kvittering{{else}}Receipt{{end}} <code>{{.ID}}</code> · {{if eq $.Lang `da`}}Deling{{else}}Share event{{end}} {{.Event}}</p>
+<dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Accepteret omfang{{else}}Accepted scope{{end}}</dt><dd class="request-brief">{{.Proposal.Scope}}</dd><dt>{{if eq $.Lang `da`}}Accepterede leverancer{{else}}Accepted deliverables{{end}}</dt><dd class="request-brief">{{.Proposal.Deliverables}}</dd><dt>{{if eq $.Lang `da`}}Engangsbeløb og vilkår{{else}}One-time amount and terms{{end}}</dt><dd>{{.Proposal.OneTimeDKK}} DKK</dd><dd class="request-brief">{{.Proposal.OneTimeTerms}}</dd><dt>{{if eq $.Lang `da`}}Månedsbeløb og vilkår{{else}}Monthly amount and terms{{end}}</dt><dd>{{.Proposal.MonthlyDKK}} DKK</dd><dd class="request-brief">{{.Proposal.MonthlyTerms}}</dd></dl>
+</details>
+{{else}}<p>{{if eq .Lang `da`}}Ingen registreret kundeaccept.{{else}}No recorded client acceptance.{{end}}</p>{{end}}</aside>
+{{end}}
 {{if lt .ExpectedVersion 50}}
 <form class="request-form" method="post" action="/portal/operator/requests/{{(index .Requests 0).ID}}/proposals">
 <input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="submission_key" value="{{.ProposalKey}}"><input type="hidden" name="expected_version" value="{{.ExpectedVersion}}"><input type="hidden" name="currency" value="DKK">

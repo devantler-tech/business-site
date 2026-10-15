@@ -130,6 +130,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	// Complete them before private reads retain their own current-access checks.
 	proposalsEnabled := id != "" && b.foundation.proposalsReady(r.Context())
 	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
+	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -156,6 +157,14 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			page.SharingEnabled = true
 			page.SharingKey = secret()
 		}
+	}
+	if acceptanceEnabled {
+		page.Acceptances, err = b.foundation.readOperatorProposalAcceptances(r.Context(), p, id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+		page.AcceptanceEnabled = true
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -217,4 +226,6 @@ type triagePageData struct {
 	SharingEnabled    bool
 	SharingKey        string
 	Visibility        proposalVisibility
+	AcceptanceEnabled bool
+	Acceptances       []proposalAcceptance
 }
