@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$repo"
+npm --prefix web audit
+npm --prefix web test
+npm --prefix web run check
+FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
+node web/tests/check-output.mjs enabled
+FEATURE_SVELTE_FRONTEND=false npm --prefix web run build
+node web/tests/check-output.mjs disabled
+env -u FEATURE_SVELTE_FRONTEND npm --prefix web run build
+node web/tests/check-output.mjs disabled

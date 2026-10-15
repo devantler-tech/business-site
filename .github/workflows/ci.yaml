@@ -36,6 +36,8 @@ jobs:
         with:
           filters: |
             docs:
+              - 'research/**'
+              - 'web/**'
               - 'src/**'
               - 'public/**'
               - 'scripts/**'
@@ -100,6 +102,16 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: npm ci
+      - name: Verify candidate frontend lockfile with older supported npm
+        working-directory: web
+        run: npx --yes --package=npm@11.4.2 npm ci --ignore-scripts
+      - name: Install candidate frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Verify the isolated Svelte frontend in both release states
+        run: bash scripts/check-svelte-frontend.sh
+      - name: Verify the retained frontend decision samples
+        run: bash scripts/check-frontend-research.sh
       - name: Build enabled preview
         working-directory: .
         env:

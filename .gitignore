@@ -7,3 +7,7 @@ dist/
 /server/coverage.out
 .playwright-mcp/
 /megalinter-reports/
+/web/.svelte-kit/
+/web/build/
+/web/.env
+/web/.env.local

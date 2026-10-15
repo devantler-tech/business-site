@@ -1,0 +1,2 @@
+{"sample":"astro","node":"24.19.0","npm":"11.19.1","lockSha256":"aa1086caf43f2145825c4f677f5c1261096d6caaadf96a10c23017504a84185f","buildSeconds":[1.97,1.31,1.24],"allEmittedJsBytes":0,"allEmittedJsGzipBytes":0,"dependencyNodes":308}
+{"sample":"svelte","node":"24.19.0","npm":"11.19.1","lockSha256":"6789be912b833aefb90aafd332cc6ac8b92539b448eb75676fc0c3b108d8b75c","buildSeconds":[2.32,1.96,2.05],"allEmittedJsBytes":93917,"allEmittedJsGzipBytes":37360,"dependencyNodes":73}

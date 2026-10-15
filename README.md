@@ -12,6 +12,10 @@ Pages. Its local browser sign-in tests do not establish production authenticatio
 intake or payments. You do not need a database, cloud account or publishing credentials to
 work on the static site.
 
+The separate [SvelteKit frontend candidate](web/README.md) currently implements English/Danish
+About pages for migration evaluation. It is default-off, built separately and not published.
+The existing Astro application remains the live public source.
+
 ## Run the site locally
 
 Install Git, Bash, Node 24, npm 11 and `jq` (the build runs JSON-based fixture checks).

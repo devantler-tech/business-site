@@ -1,0 +1,5 @@
+---
+import Frame from '../components/Frame.astro';import Projects from '../components/Projects.astro';import {copy} from '#sample/data.js';
+export const prerender=true;export function getStaticPaths(){return [{params:{locale:undefined}},{params:{locale:'da'}}];}const locale=Astro.params.locale||'en';
+---
+<Frame locale={locale}><h1>{copy[locale].title}</h1><p class="intro">{copy[locale].intro}</p><Projects locale={locale}/></Frame>
