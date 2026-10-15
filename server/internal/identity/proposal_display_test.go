@@ -75,7 +75,7 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 // Optional operator presentation checks must finish before private data reads,
 // even when a disabled or unavailable feature renders no extra controls.
 func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
-	for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance"} {
+	for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices"} {
 		for _, outcome := range []string{"false", "error"} {
 			for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry"} {
 				t.Run(key+"/"+outcome+"/"+change, func(t *testing.T) {

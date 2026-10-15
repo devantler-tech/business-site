@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -36,11 +37,30 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			t.Error("fixture owner connection cleanup failed")
 		}
 	}()
-	for _, tc := range []struct {
+	type privilegeCase struct {
 		name, setup string
 		allowed     bool
-	}{
+	}
+	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"invoice column UPDATE", "GRANT UPDATE(amount_minor) ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable invoice column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(reference) ON portal_invoices TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"acceptance column UPDATE", "GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable acceptance column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"visibility column UPDATE", "GRANT UPDATE(action) ON portal_proposal_visibility TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable visibility column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(action) ON portal_proposal_visibility TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"proposal column UPDATE", "GRANT UPDATE(scope) ON portal_proposals TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable proposal column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(scope) ON portal_proposals TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"request column UPDATE", "GRANT UPDATE(brief) ON portal_requests TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable request column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(brief) ON portal_requests TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"missing invoice SELECT", "REVOKE SELECT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing invoice INSERT", "REVOKE INSERT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice UPDATE", "GRANT UPDATE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice DELETE", "GRANT DELETE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice TRUNCATE", "GRANT TRUNCATE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable invoice UPDATE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT UPDATE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable invoice DELETE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT DELETE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable invoice TRUNCATE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT TRUNCATE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"consent domain owner", "GRANT CREATE ON SCHEMA public TO portal_runtime; ALTER DOMAIN portal_consent_key OWNER TO portal_runtime; REVOKE CREATE ON SCHEMA public FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable consent domain owner", "CREATE ROLE portal_fixture_domain_owner NOLOGIN; GRANT CREATE ON SCHEMA public TO portal_fixture_domain_owner; ALTER DOMAIN portal_consent_hash OWNER TO portal_fixture_domain_owner; REVOKE CREATE ON SCHEMA public FROM portal_fixture_domain_owner; GRANT portal_fixture_domain_owner TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"mutable acceptance UPDATE", "GRANT UPDATE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
@@ -100,7 +120,24 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable replication", "CREATE ROLE portal_fixture_replication NOLOGIN REPLICATION; GRANT portal_fixture_replication TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"indirect predefined privilege", "CREATE ROLE portal_fixture_privileged NOLOGIN; GRANT pg_execute_server_program TO portal_fixture_privileged; GRANT portal_fixture_privileged TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"fixture owner", "", false},
+	}
+	for _, history := range []struct{ table, column string }{
+		{"portal_requests", "brief"}, {"portal_proposals", "scope"},
+		{"portal_proposal_visibility", "action"}, {"portal_proposal_acceptances", "content_hash"},
+		{"portal_invoices", "amount_minor"},
 	} {
+		for _, grant := range []struct{ privilege, option string }{
+			{"TRIGGER", ""}, {"REFERENCES", ""}, {"REFERENCES(" + history.column + ")", ""}, {"MAINTAIN", ""},
+			{"SELECT", " WITH GRANT OPTION"}, {"SELECT(" + history.column + ")", " WITH GRANT OPTION"},
+			{"INSERT", " WITH GRANT OPTION"}, {"INSERT(" + history.column + ")", " WITH GRANT OPTION"},
+		} {
+			name := history.table + "/" + grant.privilege + grant.option
+			cases = append(cases,
+				privilegeCase{name, fmt.Sprintf("GRANT %s ON %s TO portal_runtime%s; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false},
+				privilegeCase{"assumable/" + name, fmt.Sprintf("CREATE ROLE portal_fixture_history_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_history_guard%s; GRANT portal_fixture_history_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false})
+		}
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx, err := owner.Begin(ctx)
 			if err != nil {
@@ -113,7 +150,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
-			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
+			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {

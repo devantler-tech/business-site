@@ -100,13 +100,13 @@ membership, dispatch offers or enable any release flag. The reviewed store
 provisioning must give the separate web role schema usage and only its required
 table DML: SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
 memberships, sessions and contacts; SELECT/INSERT only on immutable requests and
-proposals, proposal-visibility events and acceptance receipts; SELECT/INSERT/UPDATE
+proposals, proposal-visibility events, acceptance receipts and external invoice records; SELECT/INSERT/UPDATE
 only on the bounded ephemeral proposal-review contexts. The shared key, event and
 content-hash domains centralize binding validation; each column retains NOT NULL.
 Neither direct nor assumable domain ownership belongs to the runtime: it could
 alter those constraints. No schema/ledger ownership,
 DDL, broad role membership or UPDATE/DELETE/TRUNCATE of immutable
-request/proposal/visibility/acceptance history belongs to that role. Review-context
+request/proposal/visibility/acceptance/invoice history belongs to that role. Review-context
 DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledger.
 Actual
 web startup independently checks this boundary and refuses incomplete grants.

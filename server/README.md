@@ -93,10 +93,16 @@ acceptance records an audited
 version/content-bound receipt after explicit review; it never approves payments or
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
+Private [external invoice records](INVOICES.md) let the operator associate an
+explicit invoiced amount and purpose with exact current client acceptance.
+They do not generate invoices, confirm funds or authorize work, and remain
+independently default-off with no environment activation mapping.
+
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
-v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation) and v9 (exact consent)
+v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
+and v10 (external invoice records)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. Original v1–v8 bytes remain unchanged by the consent migration.
+ledger. The invoice migration preserves the original v1–v9 bytes.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
@@ -361,7 +367,7 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the eight fixture identity/session/contact/request/proposal/visibility tables between tests. Never reuse a database
+truncate the eleven fixture identity/session/contact/request/proposal/visibility/consent/invoice tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 

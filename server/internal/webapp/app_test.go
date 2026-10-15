@@ -100,7 +100,7 @@ func TestPublicArtifactRejectsProposalVisibilityStorage(t *testing.T) {
 }
 
 func TestPublicArtifactRejectsProposalConsentStorage(t *testing.T) {
-	for _, table := range []string{"portal_proposal_reviews", "portal_proposal_acceptances"} {
+	for _, table := range []string{"portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices"} {
 		files := publicFixture()
 		files["asset.json"] = &fstest.MapFile{Data: []byte(table)}
 		if _, err := Load(files); err == nil {
