@@ -20,6 +20,11 @@ only the fixture's ten identity/session/contact/request/proposal/visibility/cons
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
 database aligned with these test-only roles; never add endpoints or credentials.
+Run `bash scripts/runtime-dependencies.test.sh` from the repository root. Packaging
+compares `DEPENDENCIES.md` with the actual executable's module metadata before
+copying upstream notices. Missing/stale/extra entries and incomplete reads fail;
+test-only dependencies are not linked runtime modules. Licence links use verified
+immutable raw files, not HTML presentation pages. This is not legal clearance.
 Run the actual browser-script controls separately from the repository root with
 Node 24: `node --test scripts/portal-request-limits.test.mjs`. The required source CI
 job runs that exact command unconditionally after explicitly setting up Node 24;

@@ -42,6 +42,7 @@ digest="$(cd server && go run ./cmd/business-site --check-public --public "../$p
 (
   cd server
   CGO_ENABLED=0 go build -trimpath -ldflags "-X main.revision=$revision -X main.publicDigest=$digest -X main.buildMode=${mode#--} -X main.publicProfile=$profile" -o "../$package/business-site" ./cmd/business-site
+  bash ../scripts/check-runtime-dependencies.sh "../$package/business-site" DEPENDENCIES.md
   # Every actually linked third-party module, not test-only dependencies.
   go list -deps -f '{{if and .Module (not .Module.Main)}}{{.Module.Path}}{{"\t"}}{{.Module.Version}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/business-site | sort -u | while IFS=$'\t' read -r module version directory; do
     [[ -n "$module" ]] || continue

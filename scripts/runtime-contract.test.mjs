@@ -51,6 +51,9 @@ function assertRuntime(workflow) {
   const build = steps.findIndex(
     (s) => s.run === "bash scripts/package-runtime.sh --release" && s["working-directory"] === ".",
   );
+  const inventory = steps.findIndex(
+    (s) => s.run === "bash scripts/runtime-dependencies.test.sh" && s["working-directory"] === ".",
+  );
   const smoke = steps.findIndex(
     (s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-dist" && s["working-directory"] === ".",
   );
@@ -62,13 +65,14 @@ function assertRuntime(workflow) {
   const uploadIndex = steps.findIndex((s) => s.with?.name === "business-site-runtime");
   assert.equal(steps[node]?.with?.["node-version"], "24");
   assert.ok(node >= 0 && install > node && build > install && smoke > build);
+  assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
     browser > install && browser < build,
     "run the actual served browser controls with explicitly configured Node before packaging",
   );
   assert.ok(extract > smoke && uploadIndex > extract, "test the extracted archive before upload");
   assert.match(steps[extract]?.run ?? "", /node scripts\/runtime-smoke\.test\.mjs "\$extracted"/);
-  for (const index of [node, install, browser, build, smoke, extract, uploadIndex]) {
+  for (const index of [node, install, browser, inventory, build, smoke, extract, uploadIndex]) {
     assert.equal(steps[index].if, undefined, "required runtime steps cannot be conditional");
     assert.ok(
       steps[index]["continue-on-error"] == null || steps[index]["continue-on-error"] === false,
@@ -153,6 +157,29 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "missing compiled inventory checks",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => s.run !== "bash scripts/runtime-dependencies.test.sh",
+      );
+    },
+  ],
+  [
+    "conditional compiled inventory checks",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh").if =
+        "false";
+    },
+  ],
+  [
+    "ignored compiled inventory failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh")[
+        "continue-on-error"
+      ] = true;
+    },
+  ],
   [
     "conditional build",
     (w) => {
