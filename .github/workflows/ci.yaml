@@ -354,6 +354,9 @@ jobs:
         run: |
           node --test scripts/runtime-contract.test.mjs
           node --test scripts/container-contract.test.mjs
+      - name: Verify compiled dependency inventory and failed-read refusals
+        working-directory: .
+        run: bash scripts/runtime-dependencies.test.sh
       - name: Build actual combined package
         working-directory: .
         run: bash scripts/package-runtime.sh --release
