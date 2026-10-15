@@ -1,5 +1,11 @@
 version: 2
 updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
   - package-ecosystem: gomod
     directory: /server
     schedule:

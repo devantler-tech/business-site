@@ -1,0 +1,5 @@
+---
+import Frame from '../../components/Frame.astro';import Projects from '../../components/Projects.astro';import {copy,validAmount,amountPattern} from '#sample/data.js';
+const locale=Astro.params.locale||'en';if(locale!=='en'&&locale!=='da')return new Response('Not found',{status:404});Astro.response.headers.set('cache-control','no-store');const t=copy[locale];let amount='';let ok=false;let invalid=false;if(Astro.request.method==='POST'){amount=(await Astro.request.formData()).get('amount');ok=validAmount(amount);invalid=!ok;if(invalid)Astro.response.status=400;}
+---
+<Frame locale={locale} portal><h1>{t.portal}</h1><p>Fictional invoice form; no transfer or accounting action.</p>{invalid&&<p class="error" role="alert">{t.invalid}</p>}{ok&&<p class="result" role="status">{t.result}: {amount} DKK</p>}<form method="post"><label for="amount">{t.amount} (DKK)</label><input id="amount" name="amount" type="text" inputmode="decimal" pattern={amountPattern} required/><button>{t.save}</button></form><Projects locale={locale}/></Frame>
