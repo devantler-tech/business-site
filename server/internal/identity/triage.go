@@ -131,6 +131,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	proposalsEnabled := id != "" && b.foundation.proposalsReady(r.Context())
 	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
+	invoicesEnabled := acceptanceEnabled && b.foundation.invoicesReady(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -165,6 +166,14 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		page.AcceptanceEnabled = true
+	}
+	if invoicesEnabled {
+		page.Invoices, err = b.foundation.readInvoices(r.Context(), p, id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+		page.InvoicesEnabled, page.InvoiceKey = true, secret()
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -228,4 +237,7 @@ type triagePageData struct {
 	Visibility        proposalVisibility
 	AcceptanceEnabled bool
 	Acceptances       []proposalAcceptance
+	InvoicesEnabled   bool
+	InvoiceKey        string
+	Invoices          invoiceHistory
 }

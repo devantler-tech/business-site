@@ -41,6 +41,14 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		allowed     bool
 	}{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"missing invoice SELECT", "REVOKE SELECT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing invoice INSERT", "REVOKE INSERT ON portal_invoices FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice UPDATE", "GRANT UPDATE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice DELETE", "GRANT DELETE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable invoice TRUNCATE", "GRANT TRUNCATE ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable invoice UPDATE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT UPDATE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable invoice DELETE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT DELETE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable invoice TRUNCATE", "CREATE ROLE portal_fixture_invoice_mutator NOLOGIN; GRANT TRUNCATE ON portal_invoices TO portal_fixture_invoice_mutator; GRANT portal_fixture_invoice_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"consent domain owner", "GRANT CREATE ON SCHEMA public TO portal_runtime; ALTER DOMAIN portal_consent_key OWNER TO portal_runtime; REVOKE CREATE ON SCHEMA public FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable consent domain owner", "CREATE ROLE portal_fixture_domain_owner NOLOGIN; GRANT CREATE ON SCHEMA public TO portal_fixture_domain_owner; ALTER DOMAIN portal_consent_hash OWNER TO portal_fixture_domain_owner; REVOKE CREATE ON SCHEMA public FROM portal_fixture_domain_owner; GRANT portal_fixture_domain_owner TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"mutable acceptance UPDATE", "GRANT UPDATE ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
@@ -113,7 +121,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
-			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
+			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
 			if tc.setup != "" {

@@ -4,7 +4,8 @@ The parent repository's AGENTS.md and reviewed shared engineering contract apply
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,
-payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary. Contact emails remain
+payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
+`INVOICES.md` for private external invoice metadata. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
 succeeds; they are never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
@@ -15,7 +16,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's ten identity/session/contact/request/proposal/visibility/consent tables. Provision a fresh disposable PostgreSQL
+only the fixture's eleven identity/session/contact/request/proposal/visibility/consent/invoice tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -142,6 +143,17 @@ Original actor-bound retries return historical receipts, not consent to later sc
 New unshared drafts remain
 readable only through the old shared snapshot and are never acceptable or exposed.
 No environment activation mapping, credited funds or worker eligibility is added.
+
+External invoice metadata additionally requires independent false-default
+`portal-invoices`; review retirement under business-site#117 by 15 November 2026.
+Read `INVOICES.md`. Record only explicit external references, purpose/period and
+exact positive DKK minor units against current accepted proposal content. Never
+derive a first-month invoice from proposal prices. v10 follows unchanged v1–v9;
+its composite foreign key preserves the immutable acceptance binding. Retain
+SELECT/INSERT-only runtime privileges, content/actor-bound retries, bounded
+history and the shared request/operator lock. Optional display SDK waits precede
+private reads. Historical invoices grant no payment, monthly or execution
+authority; no environment activation mapping or client/agent invoice route exists.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization

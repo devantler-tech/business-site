@@ -22,7 +22,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance"}, []any{true, true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices"}, []any{true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -34,6 +34,26 @@ func TestBrowserVisualFixture(t *testing.T) {
 		if status, _, _ := b.request("POST", "/portal/requests", form, b.site.URL); status != 303 {
 			t.Fatal("synthetic client request failed")
 		}
+	}
+	var requestID string
+	if err := b.pool.QueryRow(t.Context(), `SELECT id FROM portal_requests WHERE client_id='client-a'`).Scan(&requestID); err != nil {
+		t.Fatal(err)
+	}
+	operator := enroll(t, b.svc, b.f, "visual-preparation", "fictional-operator", "operator")
+	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
+	if err := b.svc.persistProposal(t.Context(), operator, requestID, proposal); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.persistVisibility(t.Context(), operator, requestID, visibilityDecision{Key: secret(), ExpectedProposal: 1, Proposal: 1, Action: "share"}); err != nil {
+		t.Fatal(err)
+	}
+	client := enroll(t, b.svc, b.f, "visual-consent", "client-a", "client")
+	review, err := b.svc.prepareProposalReview(t.Context(), client, requestID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key); err != nil {
+		t.Fatal(err)
 	}
 	b.mu.Lock()
 	b.subject = "operator"

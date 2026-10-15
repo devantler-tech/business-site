@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24} {
+	for name, want := range map[string]int{"portal.html": 26, "contact.html": 12, "requests.html": 38, "triage.html": 28} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -227,7 +227,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
+			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error"} {
 				uri := "/portal/"
 				switch kind {
 				case "sign-in", "unavailable":
@@ -340,7 +340,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					return nil, err
 				}
 			}
-			for _, view := range []string{"empty", "history", "full", "hostile", "sharing", "withdrawal"} {
+			for _, view := range []string{"empty", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full"} {
 				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					page := b.triagePage(r, []projectRequest{request}, request.ID, "")
 					var proposals []projectProposal
@@ -354,6 +354,13 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 						proposals[0].Scope = "<script>inert</script>"
 					}
 					b.proposalPresentation(r, &page, proposals)
+					if strings.HasPrefix(view, "invoice") {
+						page.InvoicesEnabled, page.InvoiceKey = true, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+						page.Invoices = invoiceHistory{Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Records: []projectInvoice{{Version: 1, Reference: "TEST-01", Purpose: "Fictional invoice", Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", AmountMinor: 123456, Recorded: request.Submitted}}}
+						if view == "invoice-full" {
+							page.Invoices.Expected = 50
+						}
+					}
 					if view == "sharing" || view == "withdrawal" {
 						page.SharingEnabled = true
 						page.SharingKey = "fictional-sharing-key"

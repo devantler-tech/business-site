@@ -25,6 +25,9 @@ func rewindContactVerificationFixture(t *testing.T, pool *pgxpool.Pool) {
 
 func rewindAcceptanceFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_invoices; ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_invoice_binding; DELETE FROM portal_schema_version WHERE version=10`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-invoice schema", err)
+	}
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_proposal_acceptances; DROP TABLE portal_proposal_reviews; DROP DOMAIN portal_consent_key,portal_consent_event,portal_consent_hash; DELETE FROM portal_schema_version WHERE version=9`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-consent schema", err)
 	}
