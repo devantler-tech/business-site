@@ -126,6 +126,10 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		b.render(w, r, 400, "triage-invalid", "", "")
 		return
 	}
+	// Optional display evaluations may wait even when they return false/error.
+	// Complete them before private reads retain their own current-access checks.
+	proposalsEnabled := id != "" && b.foundation.proposalsReady(r.Context())
+	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -136,14 +140,14 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	page := b.triagePage(r, rows, id, q.Get("cursor"))
-	if id != "" && b.foundation.proposalsReady(r.Context()) {
+	if proposalsEnabled {
 		proposals, err := b.foundation.readProposals(r.Context(), p, id)
 		if err != nil {
 			b.triageError(w, r, err)
 			return
 		}
 		b.proposalPresentation(r, &page, proposals)
-		if b.foundation.sharingReady(r.Context()) {
+		if sharingEnabled {
 			page.Visibility, err = b.foundation.readVisibility(r.Context(), p, id)
 			if err != nil {
 				b.triageError(w, r, err)

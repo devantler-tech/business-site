@@ -64,3 +64,74 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 		}
 	}
 }
+
+// Optional operator presentation checks must finish before private data reads,
+// even when a disabled or unavailable feature renders no extra controls.
+func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
+	for _, key := range []string{"portal-proposals", "portal-proposal-sharing"} {
+		for _, outcome := range []string{"false", "error"} {
+			for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry"} {
+				t.Run(key+"/"+outcome+"/"+change, func(t *testing.T) {
+					b := newBrowserFixture(t)
+					proposalFlags(t, b, true, true, true, true)
+					seedTriageRequest(t, b, proposalRequestID, "Fictional proposal request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+					expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
+					if change == "expiry" {
+						b.configure(map[string]any{"exp": expires.Unix()}, false)
+					}
+					triageSignIn(t, b, "proposal-operator", "operator-workspace", "operator")
+					form := proposalForm(t, b)
+					if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 303 {
+						t.Fatal("fictional proposal setup failed")
+					}
+					provider := installReadProvider(t, b, key, 1)
+					provider.denied.Store(true)
+					if outcome == "error" {
+						provider.resolutionError = openfeature.NewGeneralResolutionError("synthetic unavailable evaluation")
+					}
+					release := installAcceptanceWait(t, b, provider, provider.release)
+					ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
+					defer cancel()
+					type response struct {
+						status int
+						body   string
+					}
+					result := make(chan response, 1)
+					go func() {
+						path := "/portal/operator/requests/" + proposalRequestID
+						if outcome == "error" {
+							path += "?lang=da"
+						}
+						status, body, _ := b.request("GET", path, nil, "")
+						result <- response{status, body}
+					}()
+					select {
+					case <-provider.blocked:
+					case <-ctx.Done():
+						t.Fatal("operator display checkpoint not reached")
+					}
+					principal := Principal{issuer: b.f.issuer, subject: "proposal-operator", audience: b.f.broker.clientID, expires: expires}
+					if change == "role" {
+						tag, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE issuer=$1 AND subject=$2`, principal.issuer, principal.subject)
+						if err != nil || tag.RowsAffected() != 1 {
+							t.Fatal("fictional operator downgrade failed", err)
+						}
+					} else {
+						closeRequestReadAuthority(ctx, t, b, principal, provider, change, cancel)
+					}
+					release()
+					select {
+					case got := <-result:
+						visible := strings.Contains(got.body, "Fictional proposal request") || strings.Contains(got.body, "hostile-brief") || strings.Contains(got.body, "A fictional first iteration")
+						allowed := change == "unchanged" || change == "rebind"
+						if (allowed && (got.status != 200 || !visible)) || (!allowed && (got.status == 200 || visible)) {
+							t.Fatal("closed operator display check bypassed current private-read authority")
+						}
+					case <-ctx.Done():
+						t.Fatal("operator detail did not finish after SDK release")
+					}
+				})
+			}
+		}
+	}
+}
