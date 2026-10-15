@@ -113,11 +113,7 @@ func TestInvoiceRetriesConcurrencyAndScopeChanges(t *testing.T) {
 	f, other := invoiceForm(t, b), invoiceForm(t, b)
 	other.Set("reference", "TEST-2026-02")
 	path := "/portal/operator/requests/" + proposalRequestID + "/invoices"
-	statuses := make(chan int, 2)
-	for _, form := range []url.Values{f, other} {
-		go func() { status, _, _ := b.request("POST", path, form, b.site.URL); statuses <- status }()
-	}
-	a, c := <-statuses, <-statuses
+	a, c := concurrentPortalPosts(b, path, f, other)
 	if (a != 303 || c != 409) && (a != 409 || c != 303) {
 		t.Fatalf("stale concurrent writes=%d/%d", a, c)
 	}
@@ -128,10 +124,7 @@ func TestInvoiceRetriesConcurrencyAndScopeChanges(t *testing.T) {
 	if savedKey == other.Get("invoice_key") {
 		f = other
 	}
-	for range 2 {
-		go func() { status, _, _ := b.request("POST", path, f, b.site.URL); statuses <- status }()
-	}
-	if a, c = <-statuses, <-statuses; a != 303 || c != 303 {
+	if a, c = concurrentPortalPosts(b, path, f, f); a != 303 || c != 303 {
 		t.Fatal("identical concurrent retry lost its receipt")
 	}
 	stale := invoiceForm(t, b)
