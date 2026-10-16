@@ -19,10 +19,10 @@ its repository's own terms. No hosted service or paid enrollment is introduced.
 | github.com/justinas/nosurf                                | v1.2.0                             | [MIT](https://raw.githubusercontent.com/justinas/nosurf/ec9bb776d8e5ba9e906b6eb70428f4e7b009feee/LICENSE)                                       |
 | github.com/open-feature/go-sdk                            | v1.19.0                            | [Apache-2.0](https://raw.githubusercontent.com/open-feature/go-sdk/5540b6a49436ba4687cfcc530e570caa6d472e40/LICENSE)                            |
 | github.com/open-feature/go-sdk-contrib/providers/from-env | v0.1.6                             | [Apache-2.0](https://raw.githubusercontent.com/open-feature/go-sdk-contrib/7c63f0470c103b3189cc89d8c9b916cdf2ac92d4/providers/from-env/LICENSE) |
-| golang.org/x/net                                          | v0.60.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/net/18ece0ce30bc35fa81fe72028bf309bb3ff3f4a5/LICENSE)                                   |
+| golang.org/x/net                                          | v0.61.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/net/c1d31df183e51b1075a2fd670d6f6f4efb871773/LICENSE)                                   |
 | golang.org/x/oauth2                                       | v0.37.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/oauth2/c624b89dadc3221560b7345c090bbe69e90808ee/LICENSE)                                |
-| golang.org/x/sync                                         | v0.23.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/sync/f75267d8412fc1dfd12b343644a7ea46e4d9c85d/LICENSE)                                  |
-| golang.org/x/text                                         | v0.42.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/text/fafe4a06967e06550e69ee42787d9902845d2a3f/LICENSE)                                  |
+| golang.org/x/sync                                         | v0.24.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/sync/36f2d70ecde9857dc4e363242a1369c7645d6770/LICENSE)                                  |
+| golang.org/x/text                                         | v0.43.0                            | [BSD-3-Clause](https://raw.githubusercontent.com/golang/text/ac40b0f06c159afb5bfca4d1860f8b4b60dbc160/LICENSE)                                  |
 
 The upstream license files retain their respective copyright/redistribution
 conditions. The combined-runtime packager collects LICENSE, NOTICE and PATENTS
