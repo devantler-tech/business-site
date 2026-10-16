@@ -18,6 +18,10 @@ for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/
     ['missing outside-EU hold', value => value.replace(locale === 'da' ? 'Opgaver uden for EU er ikke åbne' : 'Work outside the EU is not open', 'All countries welcome')],
     ['stale invitation', value => value.replace('</main>', '<p>Websites for businesses.</p></main>')],
     ['stale sharing metadata', value => value.replace(/(<meta\b[^>]*property="og:description"[^>]*content=")[^"]*/, '$1Websites for businesses.')],
+    ...(route === '' ? [
+      ['duplicate normal description', value => value.replace('property="og:description"', 'name="description"')],
+      ['duplicate sharing description', value => value.replace('name="description"', 'property="og:description"')],
+    ] : []),
   ]) {
     assert.throws(() => check(mutate(html)), undefined, `${locale} ${route || 'Home'}: reject ${name}`);
     controls++;

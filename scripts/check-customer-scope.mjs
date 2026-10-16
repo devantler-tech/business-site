@@ -21,6 +21,14 @@ const attr = (node, name) => node.attrs?.find(item => item.name === name)?.value
 const text = node => node.nodeName === '#text' ? node.value :
   ['script', 'style', 'template'].includes(node.tagName) ? '' : (node.childNodes ?? []).map(text).join(' ');
 
+/**
+ * Assert the emitted page's customer audience, visible invitation and heading.
+ * Home pages must also have exactly one normal and one sharing description,
+ * each stating the confirmed audience; these checks do not authorize orders.
+ * @param {string} html Emitted visitor HTML, including its metadata.
+ * @param {'en' | 'da'} locale Language of the expected customer invitation.
+ * @param {boolean} home Whether to check Home placement and metadata.
+ */
 export function assertCustomerScope(html, locale, home = false) {
   const document = nodes(parse(html));
   const section = document.find(node => attr(node, 'data-customer-scope') !== undefined);
@@ -34,13 +42,17 @@ export function assertCustomerScope(html, locale, home = false) {
   for (const sentence of expected[locale]) assert.ok(scope.includes(sentence), `${locale}: confirmed customer scope includes ${sentence}`);
   assert.ok(nodes(section).some(node => node.tagName === 'a' && /#contact$/.test(attr(node, 'href') ?? '')) ||
     (home && document.some(node => attr(node, 'id') === 'contact' && nodes(node).includes(section))), 'scope belongs to the actual contact invitation');
-  const descriptions = document.filter(node => node.tagName === 'meta' &&
-    (attr(node, 'name') === 'description' || attr(node, 'property') === 'og:description')).map(node => attr(node, 'content'));
-  const marketing = [readerText(html), ...descriptions].join(' ');
+  const descriptions = {
+    normal: document.filter(node => node.tagName === 'meta' && attr(node, 'name') === 'description').map(node => attr(node, 'content')),
+    sharing: document.filter(node => node.tagName === 'meta' && attr(node, 'property') === 'og:description').map(node => attr(node, 'content')),
+  };
+  const metadata = [...descriptions.normal, ...descriptions.sharing];
+  const marketing = [readerText(html), ...metadata].join(' ');
   assert.doesNotMatch(marketing, /for (?:Danish )?businesses(?:[.—]|\s*[|<])|til (?:danske )?virksomheder(?:[.—]|\s*[|<])/iu, 'no unrestricted business invitation remains');
   if (home) {
-    assert.equal(descriptions.length, 2, 'Home has normal and sharing descriptions');
-    for (const description of descriptions) assert.match(description, locale === 'da' ? /privatkunder i EU og virksomheder i Danmark/ : /private customers in the EU and businesses in Denmark/, 'Home metadata includes the confirmed audience');
+    assert.equal(descriptions.normal.length, 1, 'Home has exactly one normal description');
+    assert.equal(descriptions.sharing.length, 1, 'Home has exactly one sharing description');
+    for (const description of metadata) assert.match(description, locale === 'da' ? /privatkunder i EU og virksomheder i Danmark/ : /private customers in the EU and businesses in Denmark/, 'Home metadata includes the confirmed audience');
   }
 }
 
