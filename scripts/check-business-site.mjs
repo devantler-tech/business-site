@@ -37,11 +37,10 @@ for (const path of readdirSync(root, { recursive: true })) {
 }
 const html = (path) => readFileSync(resolve(root, path, 'index.html'), 'utf8');
 const home = html('');
-const publicRepositories = ['.github', 'actions', 'agent-plugins', 'agent-skills', 'data-product-controller', 'dotnet-template', 'go-template', 'ksail', 'kyverno-policies', 'platform-template', 'platform-tenant-template', 'provider-upjet-unifi', 'world-at-ruin'];
+const publicRepositories = ['.github', 'actions', 'agent-plugins', 'agent-skills', 'dotnet-template', 'go-template', 'khoist', 'ksail', 'kyverno-policies', 'platform-template', 'platform-tenant-template', 'provider-upjet-unifi', 'world-at-ruin'];
 const projectInventory = readFileSync(new URL('../src/content/docs/projects/active.mdx', import.meta.url), 'utf8');
 assert.doesNotMatch(projectInventory, /grouped\s*—\s*a private self-hosted app|source repositories are private/, 'Application grouping must not imply private source repositories');
 const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
-const escapeText = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 const metadata = (node) => [
   ...(node.tagName === 'meta' ? node.attrs.filter((attr) => attr.name === 'content').map((attr) => attr.value) : []),
   ...(node.attrs ?? []).filter((attr) => attr.name === 'alt' || attr.name === 'aria-label').map((attr) => attr.value),
@@ -162,7 +161,7 @@ for (const locale of ['en', 'da']) {
       for (const repository of publicRepositories) assert.ok(shelf.includes(`href="https://github.com/devantler-tech/${repository}"`), `${repository} retains its real repository link`);
       for (const product of publicCatalogue) {
         const card = [...shelf.matchAll(/<article\b[^>]*data-public-product="([^"]+)"[^>]*>([\s\S]*?)<\/article>/g)].find((match) => match[1] === product.repository)?.[2];
-        assert.ok(card?.includes(escapeText(product.description[locale])), `${product.repository} renders its documented ${locale} description source`);
+        assert.ok(card && readerText(card).includes(product.description[locale]), `${product.repository} renders its documented ${locale} description source`);
       }
       assert.ok(page.includes('href="https://ksail.devantler.tech"'), 'Projects link to their real public product');
       for (const id of ['open-title', 'family-title', 'research']) {
@@ -196,7 +195,7 @@ for (const locale of ['en', 'da']) {
       assert.ok(platform.includes(locale === 'da' ? 'ikke en hostinggaranti' : 'not a hosting guarantee'), 'The hosting example does not promise an operational guarantee');
       for (const [repository, anchors] of [
         ['ksail', ['️-ksail---']],
-        ['data-product-controller', ['-data-product-controller--']],
+        ['khoist', ['data-product-controller', '-data-product-controller--']],
         ['world-at-ruin', ['️-world-at-ruin--']],
         ['actions', ['-reusable-workflows-', '-actions-']],
         ['agent-skills', ['-agent-skills--']],
