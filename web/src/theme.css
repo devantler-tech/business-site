@@ -20,6 +20,10 @@
   --canvas: #080d0b;
   --paper: #101a15;
   --line: #314539;
+  --card: #0c1510;
+  --hero-shield: #080d0bf0;
+  --art-opacity: .45;
+  --contact: #101f15;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -31,6 +35,10 @@
   --canvas: #f6faf7;
   --paper: #edf4ee;
   --line: #c4d5c8;
+  --card: #fff;
+  --hero-shield: #f6faf7f2;
+  --art-opacity: .2;
+  --contact: #e3eee5;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
@@ -43,6 +51,10 @@
     --canvas: #f6faf7;
     --paper: #edf4ee;
     --line: #c4d5c8;
+    --card: #fff;
+    --hero-shield: #f6faf7f2;
+    --art-opacity: .2;
+    --contact: #e3eee5;
   }
 }
 * {
