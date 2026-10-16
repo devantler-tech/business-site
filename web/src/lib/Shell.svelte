@@ -7,8 +7,9 @@
     description,
     page = "about",
     journalPage = 1,
+    journalSlug = "",
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal"; journalPage?:number; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal"; journalPage?:number; journalSlug?:string; children: Snippet } = $props();
   const words = {
     en: {
       skip: "Skip to content",
@@ -42,12 +43,12 @@
   let t = $derived(words[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
-  let suffix = $derived(page === "home" ? "" : page === "journal" ? `blog/${journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
+  let suffix = $derived(page === "home" ? "" : page === "journal" ? `blog/${journalSlug ? `${journalSlug}/` : journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
 </script>
 
 <svelte:head>
   <title>{title} | Devantler Tech</title><meta name="description" content={description} />
-  <meta property="og:description" content={description} />
+  {#if !journalSlug}<meta property="og:description" content={description} />{/if}
   <link rel="canonical" href={`${publishedHome}${suffix}`} />
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
   {#if page !== "journal"}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}

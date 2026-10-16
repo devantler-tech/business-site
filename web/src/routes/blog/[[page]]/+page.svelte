@@ -29,7 +29,7 @@
       <section class="browse-group" aria-labelledby="journal-tags"><h2 id="journal-tags">Tags</h2><ul>{#each data.browse.tags as tag}<li><a href={tag.href}>{tag.label} ({tag.count})</a></li>{/each}</ul></section>
       <a href="https://devantler.tech/blog/rss.xml">RSS</a>
       <p><a href="https://devantler.tech/blog/authors/nikolai-emil-damm/">Articles by Nikolai Emil Damm</a></p>
-      <p>Articles and topic archives are available on the published website.</p>
+      <p>Other articles and topic archives open on the published website.</p>
     </div></details>
     <section class="posts" aria-label="Journal articles">
       {#each data.posts as post, index}

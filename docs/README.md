@@ -146,7 +146,11 @@ journal and technical articles remain reading surfaces. `scripts/journal-navigat
 executes the actual head script as part of every build.
 The isolated Svelte candidate shares that controller, archive configuration and introductory copy.
 Its main English archive reads the authored Astro collection at build time, with exact generated-card
-comparisons across all main archive pages. Article reading, topics, authors and RSS stay on their
+comparisons across all main archive pages. One full reading route, `/blog/building-ksail-from-shell-to-dotnet-to-go/`,
+uses an input-bound build-only reference from the maintained Astro renderer. The candidate retains
+its complete prose, bookmarks, code/copy controls, metadata, dates and actual local assets, without
+a second Markdown renderer. `scripts/build-journal-reference.sh` builds that private generated input;
+the normal production publisher neither runs nor consumes it. Other reading routes, topics, authors and RSS stay on their
 published destinations; Danish business navigation does not invent translated Journal articles.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
