@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, openSync, fstatSync, closeSync, constants, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, openSync, fstatSync, lstatSync, closeSync, constants, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, parseFragment, serialize } from "parse5";
@@ -104,8 +104,15 @@ export function readingFingerprint() {
     try {
       const info = fstatSync(descriptor);
       hash.update(path + "\0");
-      if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(`${path}/${name}`);
-      else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(descriptor)); }
+      if (info.isDirectory()) {
+        for (const name of readdirSync(file).sort()) visit(`${path}/${name}`);
+        // Node cannot list an open directory descriptor, so prove afterwards that the
+        // path still names the opened directory. A directory replaced, or swapped for a
+        // symlink, while it or anything below it was read fails closed.
+        const after = lstatSync(file);
+        assert.ok(after.isDirectory() && after.dev === info.dev && after.ino === info.ino,
+          "Journal renderer input directory changed while it was read");
+      } else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(descriptor)); }
     } finally { closeSync(descriptor); }
   }
   for (const path of ["src", "public", "astro.config.mjs", "package.json", "package-lock.json"]) visit(path);
