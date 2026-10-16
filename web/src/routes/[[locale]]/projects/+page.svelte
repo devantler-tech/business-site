@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
   import revealScript from "../../../../../src/components/business/project-reveal.js?url";
   import desktop from "../../../../../src/assets/ksail-desktop.png?enhanced";
@@ -57,7 +58,7 @@
         <details><summary>{t.details}</summary><div class="research-detail" lang="en"><h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p><h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><enhanced:img src="../../../../../src/assets/data-space-as-a-data-mesh.png?w=480;960" alt="Data Space as a Data Mesh" /></div></details>
       </section>
     </div>
-    <a class="contact-link" href={`${home}#contact`}>{data.contact}<span aria-hidden="true">↗</span></a>
+    <CustomerScope locale={data.locale} href={`${home}#contact`} label={data.contact} />
   </main>
 </Shell>
 
@@ -114,7 +115,6 @@
   .hosting { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 3rem; margin-top: 2.5rem; padding: 1.5rem 0 0; border-top: 1px solid var(--line); }
   .hosting .legacy-anchor { grid-column: 1 / -1; }
   .hosting h3 { font-size: 1.15rem; } .hosting p { font-size: .9rem; }
-  .contact-link { margin-top: 3rem; }
   @media (max-width: 760px) { .projects-page { padding-block: 2.5rem; } section { padding-block: 2.5rem; } .collection, .featured, .research-heading, .hosting { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading :global(picture), .catalogue-heading :global(img) { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 2rem; padding-block: 2rem; } .ksail-story { padding-left: 1.25rem; } }
   @media (max-width: 520px) { .work-example { grid-template-columns: minmax(0, 1fr) 96px; gap: 0 1rem; } .work-example h3 { font-size: 1.1rem; } .work-preview > span { font-size: .7rem; } }
 </style>

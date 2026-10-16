@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
   import coachingOriginal from "../../../../src/assets/ascoaching-homepage.jpg?url";
   import type { load } from "./+page.server";
@@ -69,7 +70,7 @@
       <ol>{#each t.steps as step}<li><h3>{step.title}</h3><p>{step.text}</p></li>{/each}</ol>
     </section>
     <section id="contact" class="contact-band" aria-labelledby="contact-title">
-      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><p class="contact-note">{t.contactNote}</p></div>
+      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={data.locale} heading="h3" /><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><p class="contact-note">{t.contactNote}</p></div>
     </section>
   </main>
 </Shell>

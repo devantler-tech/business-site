@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import portrait from '../../assets/profile.jpg';
 import BusinessLayout from './BusinessLayout.astro';
+import CustomerScope from './CustomerScope.astro';
 import BusinessProjects from './BusinessProjects.astro';
 import ClientPortfolio from './ClientPortfolio.astro';
 import { FEATURE_CLIENT_PORTFOLIO, FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
@@ -29,7 +30,7 @@ const about = section === 'about';
     </> : <>
       {FEATURE_CLIENT_PORTFOLIO || FEATURE_FEATURED_PORTFOLIO ? <ClientPortfolio locale={locale} /> : <BusinessProjects locale={locale} />}
     </>}
-    <a class="contact-link" href={`${home}#contact`}>{t.contact}</a>
+    <CustomerScope locale={locale}><a class="contact-link" href={`${home}#contact`}>{t.contact}</a></CustomerScope>
   </main>
 </BusinessLayout>
 <style>

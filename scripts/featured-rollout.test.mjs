@@ -15,7 +15,7 @@ const valid = (ci) => {
   const enabled = indices(step => step.env?.[flag] === 'true' && step.run === 'npm run build');
   const disabled = indices(step => step.env?.[flag] === 'false' && step.env?.FEATURE_OFFER_COPY === 'false' && step.run === 'npm run build');
   const legacyPreview = indices(step => step.env?.[flag] === 'false' && step.env?.FEATURE_CLIENT_PORTFOLIO === 'false' && step.env?.FEATURE_OFFER_COPY === 'true' && step.run === 'npm run build');
-  const unset = indices(step => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build' && step.env?.[flag] == null);
+  const unset = indices(step => step.run === 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build' && step.env?.[flag] == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
   return [enabled, disabled, legacyPreview, unset, artifact].every(group => group.length === 1) &&
     enabled[0] < disabled[0] && legacyPreview[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&

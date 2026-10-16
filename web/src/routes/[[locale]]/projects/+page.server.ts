@@ -38,8 +38,8 @@ export const load = ({ params }: { params: { locale?: string } }) => {
       researchBackgroundText: t.researchBackgroundText, researchDiagram: t.researchDiagram,
     },
     work: professionalWork[locale],
-    workPreviewAlt: createBusinessCopy(false, false)[locale].workPreviewAlt,
-    workPreviewAction: createBusinessCopy(false, false)[locale].workPreviewAction,
-    workVisitAction: createBusinessCopy(false, false)[locale].workVisitAction,
+    workPreviewAlt: createBusinessCopy(false, false, true)[locale].workPreviewAlt,
+    workPreviewAction: createBusinessCopy(false, false, true)[locale].workPreviewAction,
+    workVisitAction: createBusinessCopy(false, false, true)[locale].workVisitAction,
   };
 };

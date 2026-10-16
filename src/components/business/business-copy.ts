@@ -1,4 +1,5 @@
 import { publishedOffer } from './published-offer.ts';
+import { customerScopeCopy } from './customer-scope.ts';
 export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
@@ -12,10 +13,10 @@ export const offers = [
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
 /**
  * Build shared bilingual homepage copy from the caller's explicit release decisions.
- * Company identity selects contact wording; revised offers remain opt-in.
+ * Identity, revised offers and customer scope are separate release decisions.
  * No framework environment or private company input is read here.
  */
-export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean) {
+export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false) {
 const previewCopy = {
   en: {
     title: 'Websites & software for businesses | Devantler Tech',
@@ -157,10 +158,25 @@ const previewCopy = {
   },
 } as const;
 
-return revisedOffer ? previewCopy : {
+const selected = revisedOffer ? previewCopy : {
   en: { ...previewCopy.en, ...publishedOffer.copy.en },
   da: { ...previewCopy.da, ...publishedOffer.copy.da },
 } as const;
 
+if (!customerScopeEnabled) return selected;
+return {
+  en: {
+    ...selected.en,
+    ...customerScopeCopy.en,
+    offerCopy: selected.en.offerCopy.map((offer, index) => index === 0 ? { ...offer, description: customerScopeCopy.en.websiteDescription } : offer),
+    steps: selected.en.steps.map((step, index) => index === 0 ? { ...step, text: customerScopeCopy.en.firstStep } : step),
+  },
+  da: {
+    ...selected.da,
+    ...customerScopeCopy.da,
+    offerCopy: selected.da.offerCopy.map((offer, index) => index === 0 ? { ...offer, description: customerScopeCopy.da.websiteDescription } : offer),
+    steps: selected.da.steps.map((step, index) => index === 0 ? { ...step, text: customerScopeCopy.da.firstStep } : step),
+  },
+};
 }
 
