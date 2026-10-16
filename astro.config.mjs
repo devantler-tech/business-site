@@ -5,6 +5,8 @@ import { defineConfig, envField } from "astro/config";
 import starlightBlog from "starlight-blog";
 import starlightGithubAlerts from "starlight-github-alerts";
 import starlightLinksValidator from "starlight-links-validator";
+import { readFileSync } from "node:fs";
+import { journalConfig } from "./src/components/business/journal-config.js";
 
 export default defineConfig({
   site: "https://devantler.tech",
@@ -117,17 +119,7 @@ export default defineConfig({
       },
       customCss: ["./src/styles/custom.css", "./src/styles/business-docs.css"],
       plugins: [
-        starlightBlog({
-          title: "Devantler Tech Journal",
-          authors: {
-            devantler: {
-              name: "Nikolai Emil Damm",
-              title: "Founder & developer, Devantler Tech",
-              picture: "/author-avatar.png",
-              url: "https://github.com/devantler",
-            },
-          },
-        }),
+        starlightBlog(journalConfig),
         starlightGithubAlerts(),
         starlightLinksValidator({
           errorOnRelativeLinks: false,
@@ -157,22 +149,7 @@ export default defineConfig({
         },
         {
           tag: "script",
-          content: `document.addEventListener('DOMContentLoaded', () => {
-            const cards = 'article.sl-blog-preview';
-            const destination = 'a.sl-blog-preview-link';
-            const interactive = 'a, button, input, select, textarea, summary, [role="button"], [role="link"], [contenteditable]';
-            function navigate(card) {
-              const link = card.querySelector(destination);
-              if (link) window.location.href = link.href;
-            }
-            document.addEventListener('click', (event) => {
-              const card = event.target.closest(cards);
-              if (!card) return;
-              const control = event.target.closest(interactive);
-              if (control && control !== card) return;
-              navigate(card);
-            });
-          });`,
+          content: readFileSync(new URL('./src/components/business/journal-navigation.js', import.meta.url), 'utf8').trimEnd(),
         },
       ],
       sidebar: [

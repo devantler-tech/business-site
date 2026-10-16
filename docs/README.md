@@ -144,6 +144,10 @@ provides the single keyboard destination without making its article a second foc
 form controls, disclosure toggles and editable descendants retain their own interaction; individual
 journal and technical articles remain reading surfaces. `scripts/journal-navigation.test.mjs`
 executes the actual head script as part of every build.
+The isolated Svelte candidate shares that controller, archive configuration and introductory copy.
+Its main English archive reads the authored Astro collection at build time, with exact generated-card
+comparisons across all main archive pages. Article reading, topics, authors and RSS stay on their
+published destinations; Danish business navigation does not invent translated Journal articles.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
 

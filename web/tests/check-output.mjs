@@ -26,6 +26,7 @@ for (const [path, locale, title] of pages) {
   for (const language of ["en", "da", "x-default"]) assert.ok(html.includes(`hreflang="${language}"`));
   assert.ok(html.includes('href="#main"') && html.includes('id="main"'));
   assert.ok(html.includes('id="theme-select"'));
+  assert.ok(!html.includes('href="https://devantler.tech/blog/"'), "migrated Journal archive actions stay local");
   if (!isHome) assert.ok(html.includes("/pdfs/nikolai-emil-damm-cv.pdf"));
   if (isHome) {
     for (const section of ["hero-title", "quality-title", "services", "work", "process", "contact"]) {

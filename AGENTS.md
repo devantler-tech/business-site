@@ -12,7 +12,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `public/`, `scripts/` and root package/configuration files.
 - `web/` is the isolated SvelteKit migration candidate for #124/#139. Its framework-native
   `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
-  with the two historical English project redirects.
+  with the two historical English project redirects and the English Journal's paginated main archive.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
@@ -20,6 +20,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
   `client-products.ts` and `portfolio-content.ts`; both frontends use the same ranking implementation
   and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.
+- The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
+  using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
+  configuration, introductory copy and the native-link card controller. Reading, topic/author archives
+  and RSS remain on the published Astro site; never invent Danish article routes.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
