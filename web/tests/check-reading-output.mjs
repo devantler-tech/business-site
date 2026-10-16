@@ -110,6 +110,7 @@ if (process.argv[2] === "disabled") {
     ["wrong destination", v => v.replace('href="https://github.com/devantler"', 'href="https://example.com/"'), /destinations/],
     ["fabricated modified date", v => v.replace(`datetime="${attr(all(reference).filter(node => node.tagName === "time").at(-1),"datetime")}"`, 'datetime="2000-01-01T00:00:00.000Z"'), /dates survive/],
     ["missing sharing metadata", v => v.replace('property="og:title"', 'property="wrong:title"'), /sharing metadata/],
+    ["duplicate sharing description", v => v.replace(/(<meta\b[^>]*property="og:description"[^>]*>)/, '$1$1'), /sharing metadata/],
     ["unmigrated relative topic", v => v.replace('href="https://devantler.tech/blog/tags/ksail/"', 'href="/blog/tags/ksail/"'), /unmigrated body destinations/],
   ];
   for (const [name, mutate, failure] of mutations) {

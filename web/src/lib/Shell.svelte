@@ -48,7 +48,7 @@
 
 <svelte:head>
   <title>{title} | Devantler Tech</title><meta name="description" content={description} />
-  <meta property="og:description" content={description} />
+  {#if !journalSlug}<meta property="og:description" content={description} />{/if}
   <link rel="canonical" href={`${publishedHome}${suffix}`} />
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
   {#if page !== "journal"}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}
