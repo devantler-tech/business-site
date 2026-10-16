@@ -36,7 +36,7 @@ for (const [path, locale, title] of pages) {
       assert.match(html, new RegExp(`data-offer="${id}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     }
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
-    assert.ok(html.includes(`href="https://devantler.tech/${locale === "da" ? "da/" : ""}projects/"`));
+    assert.ok(html.includes(`href="/${locale === "da" ? "da/" : ""}projects/"`));
     assert.ok(html.includes(`href="/${locale === "da" ? "da/" : ""}about/"`));
     assert.ok(html.includes('href="/" lang="en"') && html.includes('href="/da/" lang="da"'));
     assert.ok(!/Family project|family member|Familieprojekt|familiemedlem|Wedding App|github\.com/.test(html));
