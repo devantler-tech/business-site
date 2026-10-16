@@ -13,7 +13,7 @@ intake or payments. You do not need a database, cloud account or publishing cred
 work on the static site.
 
 The separate [SvelteKit frontend candidate](web/README.md) currently implements English/Danish
-About pages for migration evaluation. It is default-off, built separately and not published.
+Home and About pages for migration evaluation. It is default-off, built separately and not published.
 The existing Astro application remains the live public source.
 
 ## Run the site locally

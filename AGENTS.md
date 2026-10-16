@@ -10,9 +10,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 - The Astro + Starlight application lives at the repository root: `src/`,
   `public/`, `scripts/` and root package/configuration files.
-- `web/` is the isolated SvelteKit migration candidate for #124. Its framework-native
-  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits only bilingual About output.
+- `web/` is the isolated SvelteKit migration candidate for #124/#139. Its framework-native
+  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home and About output.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
+- Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
+  under `src/components/business/`; the existing Astro adapters retain its release configuration.
+  The Svelte candidate uses published offer copy and LinkedIn contact, never company/private inputs.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;

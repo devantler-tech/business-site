@@ -39,7 +39,11 @@ clean-install checks. These commands change local dependencies/lockfile, not the
 
 The business homepage is rendered by `src/components/business/BusinessSite.astro` at `/` (English)
 and `/da/` (Danish). Its offer amounts and translated copy live together in
-`src/components/business/content.ts`. Prices are introductory guides, not an automatic checkout:
+`src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
+Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
+These framework-neutral sources are also used by the isolated Svelte Home candidate; its published
+offer/LinkedIn-only configuration is documented in `web/README.md`.
+Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds
 use separately agreed iterations with their own scope, schedule and price. Monthly quotes are

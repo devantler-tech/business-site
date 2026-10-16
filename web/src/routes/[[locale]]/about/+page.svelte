@@ -42,7 +42,7 @@
         >
       </div>
     </section>
-    <a class="contact-link" href={`https://devantler.tech/${data.locale === "da" ? "da/" : ""}#contact`}
+    <a class="contact-link" href={`${data.locale === "da" ? "/da/" : "/"}#contact`}
       >{data.about.contact}</a
     >
   </main>

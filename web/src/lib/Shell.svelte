@@ -5,8 +5,9 @@
     locale,
     title,
     description,
+    page = "about",
     children,
-  }: { locale: "en" | "da"; title: string; description: string; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about"; children: Snippet } = $props();
   const words = {
     en: {
       skip: "Skip to content",
@@ -38,15 +39,17 @@
     },
   };
   let t = $derived(words[locale]);
-  let home = $derived(`https://devantler.tech/${locale === "da" ? "da/" : ""}`);
+  let home = $derived(locale === "da" ? "/da/" : "/");
+  let publishedHome = $derived(`https://devantler.tech${home}`);
+  let suffix = $derived(page === "home" ? "" : "about/");
 </script>
 
 <svelte:head>
   <title>{title} | Devantler Tech</title><meta name="description" content={description} />
-  <link rel="canonical" href={`${home}about/`} />
-  <link rel="alternate" hreflang="en" href="https://devantler.tech/about/" />
-  <link rel="alternate" hreflang="da" href="https://devantler.tech/da/about/" />
-  <link rel="alternate" hreflang="x-default" href="https://devantler.tech/about/" />
+  <link rel="canonical" href={`${publishedHome}${suffix}`} />
+  <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
+  <link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />
+  <link rel="alternate" hreflang="x-default" href={`https://devantler.tech/${suffix}`} />
   <script src={themeScript}></script>
 </svelte:head>
 
@@ -59,9 +62,9 @@
       ><span>Devantler<span class="brand-tech"> Tech</span></span></a
     >
     <nav aria-label={t.navigation}>
-      <a href={`${home}#services`}>{t.services}</a><a href={`${home}projects/`}>{t.projects}</a><a
+      <a href={`${home}#services`}>{t.services}</a><a href={`${publishedHome}projects/`}>{t.projects}</a><a
         href={locale === "da" ? "/da/about/" : "/about/"}
-        aria-current="page">{t.about}</a
+        aria-current={page === "about" ? "page" : undefined}>{t.about}</a
       ><a href="https://devantler.tech/blog/">{t.journal}</a><a href={`${home}#contact`}>{t.contact}</a>
     </nav>
     <div class="controls">
@@ -73,9 +76,9 @@
         >
       </div>
       <div class="languages" aria-label={locale === "da" ? "Vælg sprog" : "Choose language"}>
-        <a href="/about/" lang="en" aria-current={locale === "en" ? "page" : undefined}>EN</a><span aria-hidden="true"
+        <a href={`/${suffix}`} lang="en" aria-current={locale === "en" ? "page" : undefined}>EN</a><span aria-hidden="true"
           >/</span
-        ><a href="/da/about/" lang="da" aria-current={locale === "da" ? "page" : undefined}>DA</a>
+        ><a href={`/da/${suffix}`} lang="da" aria-current={locale === "da" ? "page" : undefined}>DA</a>
       </div>
     </div>
   </div>
