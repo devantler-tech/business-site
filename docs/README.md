@@ -43,6 +43,11 @@ and `/da/` (Danish). Its offer amounts and translated copy live together in
 Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
 These framework-neutral sources are also used by the isolated Svelte Home candidate; its published
 offer/LinkedIn-only configuration is documented in `web/README.md`.
+The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
+the existing ranking implementation and complete dated snapshot with Astro. It preserves
+the curated six-tool output, compact public website example, research disclosure and old bookmarks
+without changing the source-owned publisher. Its enabled/false/unset and actual snapshot-path
+checks are included in `scripts/check-svelte-frontend.sh`.
 Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds

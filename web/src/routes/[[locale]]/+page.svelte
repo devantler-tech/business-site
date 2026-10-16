@@ -61,7 +61,7 @@
           </a>
           <a class="text-link visit" href="https://ascoachingogvaner.dk/">{t.workVisitAction}<span aria-hidden="true">↗</span></a>
         </article>
-        <div id="products" class="portfolio-bridge"><p>{t.portfolioBridge}</p><a class="text-link" href={`https://devantler.tech${home}projects/`}>{t.portfolioLink}<span aria-hidden="true">↗</span></a></div>
+        <div id="products" class="portfolio-bridge"><p>{t.portfolioBridge}</p><a class="text-link" href={`${home}projects/`}>{t.portfolioLink}<span aria-hidden="true">↗</span></a></div>
       </div>
     </section>
     <section id="process" class="section container process" aria-labelledby="process-title">

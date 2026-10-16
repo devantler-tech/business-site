@@ -7,7 +7,11 @@ npm --prefix web test
 npm --prefix web run check
 FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
 node web/tests/check-output.mjs enabled
+node web/tests/check-projects-output.mjs enabled
+node web/tests/check-snapshot-builds.mjs
 FEATURE_SVELTE_FRONTEND=false npm --prefix web run build
 node web/tests/check-output.mjs disabled
+node web/tests/check-projects-output.mjs disabled
 env -u FEATURE_SVELTE_FRONTEND npm --prefix web run build
 node web/tests/check-output.mjs disabled
+node web/tests/check-projects-output.mjs disabled

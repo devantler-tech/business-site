@@ -7,7 +7,7 @@
     description,
     page = "about",
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about"; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects"; children: Snippet } = $props();
   const words = {
     en: {
       skip: "Skip to content",
@@ -41,7 +41,7 @@
   let t = $derived(words[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
-  let suffix = $derived(page === "home" ? "" : "about/");
+  let suffix = $derived(page === "home" ? "" : `${page}/`);
 </script>
 
 <svelte:head>
@@ -62,7 +62,7 @@
       ><span>Devantler<span class="brand-tech"> Tech</span></span></a
     >
     <nav aria-label={t.navigation}>
-      <a href={`${home}#services`}>{t.services}</a><a href={`${publishedHome}projects/`}>{t.projects}</a><a
+      <a href={`${home}#services`}>{t.services}</a><a href={`${home}projects/`} aria-current={page === "projects" ? "page" : undefined}>{t.projects}</a><a
         href={locale === "da" ? "/da/about/" : "/about/"}
         aria-current={page === "about" ? "page" : undefined}>{t.about}</a
       ><a href="https://devantler.tech/blog/">{t.journal}</a><a href={`${home}#contact`}>{t.contact}</a>
