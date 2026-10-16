@@ -19,7 +19,6 @@
     <details class="contents"><summary>On this page</summary><nav aria-label="On this page"><ol>{#each data.headings as heading}<li class:subheading={heading.level > 2}><a href={`#${heading.id}`}>{heading.title}</a></li>{/each}</ol></nav></details>
     <article aria-labelledby="_top"><div class="sl-markdown-content">{@html data.html}</div></article>
     <p class="modified">Last updated: <time datetime={data.modified}>{new Intl.DateTimeFormat("en", {year:"numeric",month:"short",day:"numeric",timeZone:"UTC"}).format(new Date(data.modified))}</time></p>
-    <nav class="adjacent" aria-label="More articles">{#each data.adjacent as item}<a href={item.href} rel={item.rel}><span>{item.rel === "prev" ? "Newer article" : "Older article"}</span><strong>{item.title}</strong></a>{/each}</nav>
   </main>
 </Shell>
 
@@ -57,10 +56,10 @@
   article :global(hr) { margin-block:2rem; border:0; border-top:1px solid var(--line); }
   article :global(a) { overflow-wrap:anywhere; }
   .modified { margin-top:2rem; color:var(--muted); font-size:.85rem; }
-  .adjacent { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2rem; border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem; }
-  .adjacent a { text-decoration:none; }
-  .adjacent span,.adjacent strong { display:block; }
-  .adjacent span { font-size:.8rem; color:var(--muted); margin-bottom:.5rem; }
-  .adjacent strong { font-size:1.1rem; }
-  @media(max-width:600px) { header { padding-top:2rem; } .adjacent { grid-template-columns:1fr; } }
+  article :global(.sl-blog-tags-list) { display:flex; flex-wrap:wrap; list-style:none; padding:0; gap:.5rem 1rem; }
+  article :global(.sl-blog-pagination) { border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem; }
+  article :global(.sl-blog-pagination .card-grid) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2rem; }
+  article :global(.sl-blog-pagination a) { text-decoration:none; font-size:1.05rem; font-weight:600; }
+  article :global(.sl-blog-pagination svg) { width:1rem; height:1rem; margin-top:.75rem; }
+  @media(max-width:600px) { header { padding-top:2rem; } article :global(.sl-blog-pagination .card-grid) { grid-template-columns:1fr; } }
 </style>

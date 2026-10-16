@@ -52,6 +52,16 @@ export function extractReading(html, post) {
     assert.ok(typeof payload === "string" && payload.trim(), "Journal actual copy payload required");
   }
   for (const node of nodes) {
+    if (node.tagName === "a") {
+      const href = node.attrs?.find(item => item.name === "href");
+      if (href && !href.value.startsWith("#")) href.value = new URL(href.value, `https://devantler.tech${readingPath}`).href;
+    }
+    if (hasClass(node, "sl-blog-pagination")) {
+      // Reuse the renderer's one real adjacent navigation, rather than adding
+      // another copy beneath the preserved body.
+      node.tagName = node.nodeName = "nav";
+      node.attrs?.push({name:"aria-label",value:"More articles"});
+    }
     assert.ok(!["iframe", "form", "input", "object", "embed"].includes(node.tagName ?? ""), "Journal unsupported interactive body");
     assert.ok(!(node.attrs ?? []).some(item => /^on/i.test(item.name)), "Journal unsupported inline handler");
     if (node.tagName === "script") {

@@ -18,7 +18,7 @@ const text = node => ["script","style"].includes(node.tagName ?? "") ? "" : node
 /** @param {MarkupNode|undefined} node */
 const normalized = node => { assert.ok(node); return text(node).replace(/\s+/g, " ").trim(); };
 /** @param {string|undefined} href */
-const absolute = href => { assert.ok(href); return new URL(href, "https://devantler.tech").href; };
+const absolute = href => { assert.ok(href); return new URL(href, `https://devantler.tech/${path.replace('index.html','')}`).href; };
 /** @param {Buffer} bytes */
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 /** @param {URL} directory @param {string|undefined} href */
@@ -45,6 +45,10 @@ function check(html) {
   /** @param {MarkupNode[]} ns */
   const links = ns => ns.filter(node => node.tagName === "a").map(node => [normalized(node), absolute(attr(node,"href"))]);
   assert.deepEqual(links(nodes), links(previous), "all authored, author and topic destinations survive");
+  for (const link of nodes.filter(node => node.tagName === "a")) {
+    const href = attr(link,"href");
+    assert.ok(href?.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(href ?? ""), "unmigrated body destinations must explicitly use the published site, not a local missing route");
+  }
   /** @param {MarkupNode[]} ns */
   const times = ns => ns.filter(node => node.tagName === "time").map(node => [attr(node,"datetime"),normalized(node)]);
   assert.deepEqual(times(document), times(all(reference)), "publication and committed modification dates survive");
@@ -56,8 +60,9 @@ function check(html) {
   const navigation = document.find(node => node.tagName === "nav" && attr(node,"aria-label") === "More articles");
   assert.ok(navigation);
   const expectedAdjacent = adjacent(all(reference));
-  const actualAdjacent = all(navigation).filter(node => node.tagName === "a").map(node => [attr(node,"rel"),absolute(attr(node,"href")),normalized(all(node).find(child => child.tagName === "strong"))]);
+  const actualAdjacent = adjacent(all(navigation));
   assert.deepEqual(actualAdjacent, expectedAdjacent, "adjacent articles retain real titles and published destinations");
+  assert.deepEqual(adjacent(document), expectedAdjacent, "one adjacent navigation, not a second set after the body");
   /** @param {MarkupNode[]} ns */
   const metadata = ns => ns.filter(node => node.tagName === "meta" && (attr(node,"property") || ["description","author","twitter:card","twitter:image"].includes(attr(node,"name") ?? ""))).map(node => [attr(node,"name") ?? attr(node,"property"),attr(node,"content")]).sort();
   assert.deepEqual(metadata(document), metadata(all(reference)), "article sharing metadata is retained");
@@ -105,11 +110,12 @@ if (process.argv[2] === "disabled") {
     ["wrong destination", v => v.replace('href="https://github.com/devantler"', 'href="https://example.com/"'), /destinations/],
     ["fabricated modified date", v => v.replace(`datetime="${attr(all(reference).filter(node => node.tagName === "time").at(-1),"datetime")}"`, 'datetime="2000-01-01T00:00:00.000Z"'), /dates survive/],
     ["missing sharing metadata", v => v.replace('property="og:title"', 'property="wrong:title"'), /sharing metadata/],
+    ["unmigrated relative topic", v => v.replace('href="https://devantler.tech/blog/tags/ksail/"', 'href="/blog/tags/ksail/"'), /unmigrated body destinations/],
   ];
   for (const [name, mutate, failure] of mutations) {
     const changed = mutate(html);
     assert.notEqual(changed, html, `mutation must reach actual output: ${name}`);
     assert.throws(() => check(changed), failure, `reject ${name}`);
   }
-  console.log(`Svelte reading: complete body, ${all(original).filter(n=>/^h[2-6]$/.test(n.tagName??"")).length} bookmarks, ${all(original).filter(n=>n.tagName==="button").length} actual copy controls, assets, dates, metadata and six rejection controls verified`);
+  console.log(`Svelte reading: complete body, ${all(original).filter(n=>/^h[2-6]$/.test(n.tagName??"")).length} bookmarks, ${all(original).filter(n=>n.tagName==="button").length} actual copy controls, assets, dates, metadata and ${mutations.length} rejection controls verified`);
 }
