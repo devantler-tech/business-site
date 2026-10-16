@@ -47,6 +47,15 @@ No content, license, legal, price or contact policy changes are part of this dec
 
 ## Adoption and exit
 
+The first complete Journal reading route uses a build-only, input-bound projection of the
+maintained Astro output. This preserves the authored body, existing highlighting/copy payloads,
+committed dates, assets and metadata without selecting a second Markdown pipeline during parity
+work. Its generated input stays outside both public artifacts; only the admitted public reading
+data and required assets enter the enabled candidate. The ordinary Astro publisher does not run
+the bridge. Missing, stale or incomplete references fail the candidate build. The remaining rich
+content and the eventual native content pipeline are migration work under #130, not a permanent
+dependency on two published applications.
+
 Migrate public routes incrementally with bilingual URL/content/asset/metadata/accessibility parity.
 Then prove the private frontend against the existing Go authority. Production replacement requires
 the source-owned deployment receipt, real EN/DA visitor checks, launch prerequisites and a tested

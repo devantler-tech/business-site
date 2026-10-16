@@ -128,7 +128,7 @@ for (const [index, path] of paths.entries()) {
 }
 if (enabled) {
   const dirs = await readdir(new URL("blog/", candidate), { withFileTypes: true });
-  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), paths.slice(1).map(path => path.split("/")[1]).sort(), "only main archive pages enter the candidate");
+  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), [...paths.slice(1).map(path => path.split("/")[1]), "building-ksail-from-shell-to-dotnet-to-go"].sort(), "only main archives and the one admitted reading route enter the candidate");
   assert.ok(count > 0);
 }
 console.log(`Svelte Journal: ${enabled ? `${count} actual posts across ${paths.length} Astro-matched archives` : `${paths.length} archives absent`} verified`);
