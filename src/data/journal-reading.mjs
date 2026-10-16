@@ -147,7 +147,7 @@ export function captureReadingReference() {
 /** Read a complete current reference; a missing/stale build never becomes an empty article. */
 export function readReadingReference() {
   const value = JSON.parse(readFileSync(generated, "utf8"));
-  assert.ok(value.version === 1 && value.path === readingPath && value.fingerprint === readingFingerprint(), "Journal reference is stale; run the root production build");
+  assert.ok(value.version === 1 && value.path === readingPath && value.fingerprint === readingFingerprint(), "Journal reference is stale; run bash scripts/build-journal-reference.sh");
   const {checksum,...content} = value;
   assert.equal(checksum,digest(JSON.stringify(content)), "Journal reference content is incomplete or altered");
   assert.ok(typeof value.html === "string" && value.html.trim() && Array.isArray(value.headings) && value.headings.length, "Journal complete reading body required");

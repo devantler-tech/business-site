@@ -24,7 +24,7 @@ try {
     const value = structuredClone(valid);
     mutate(value);
     writeFileSync(file, JSON.stringify(value));
-    assert.throws(() => readReadingReference(), /Journal/, `reject ${name}`);
+    assert.throws(() => readReadingReference(), name === "stale source" ? /run bash scripts\/build-journal-reference\.sh/ : /Journal/, `reject ${name}`);
   }
 } finally { writeFileSync(file, original); }
 readReadingReference();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
   import type { load } from "./+page.server";
   let { data }: { data: ReturnType<typeof load> } = $props();
@@ -42,9 +43,7 @@
         >
       </div>
     </section>
-    <a class="contact-link" href={`${data.locale === "da" ? "/da/" : "/"}#contact`}
-      >{data.about.contact}</a
-    >
+    <CustomerScope locale={data.locale} href={`${data.locale === "da" ? "/da/" : "/"}#contact`} label={data.about.contact} />
   </main>
 </Shell>
 
@@ -124,17 +123,6 @@
     min-height: 44px;
     color: var(--accent);
     text-underline-offset: 0.2em;
-  }
-  .contact-link {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: 6px;
-    padding: 0.75rem 1.25rem;
-    font-weight: 600;
-  }
-  .contact-link:hover {
-    color: var(--accent-ink);
-    background: var(--accent-hover);
   }
   @media (max-width: 760px) {
     .supporting-page {

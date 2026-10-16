@@ -8,7 +8,7 @@ export const load = ({ params }: { params: { locale?: string } }) => {
   if (!FEATURE_SVELTE_FRONTEND || (params.locale !== undefined && params.locale !== "da")) error(404);
   const locale: "en" | "da" = params.locale === "da" ? "da" : "en";
   // This public candidate does not consume company/private environment values or activate revised offers.
-  const t = createBusinessCopy(false, false)[locale];
+  const t = createBusinessCopy(false, false, true)[locale];
   const c = createClientCopy(false)[locale];
   return {
     locale,
