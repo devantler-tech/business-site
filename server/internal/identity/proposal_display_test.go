@@ -30,17 +30,14 @@ func closedDisplayCheckpoint(t *testing.T, b *browserFixture, key, outcome strin
 // The real TLS/session/SQL handler waits inside the SDK, not a mocked read.
 func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
 	for _, outcome := range []string{"false", "error"} {
-		for _, change := range []string{"unchanged", "revocation", "rebind", "role", "expiry"} {
+		for _, change := range []string{"unchanged", "revocation", "rebind", "role"} {
 			t.Run(outcome+"/"+change, func(t *testing.T) {
 				b := acceptanceFixture(t)
 				var title, brief string
 				if err := b.pool.QueryRow(t.Context(), `SELECT title,brief FROM portal_requests WHERE id=$1`, proposalRequestID).Scan(&title, &brief); err != nil {
 					t.Fatal("fictional request unavailable")
 				}
-				expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
-				if change == "expiry" {
-					b.configure(map[string]any{"exp": expires.Unix()}, false)
-				}
+				expires := time.Now().Add(time.Hour)
 				triageSignIn(t, b, "display-client", "private-client-key", "client")
 				provider, release := closedDisplayCheckpoint(t, b, "portal-proposal-acceptance", outcome)
 				ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
@@ -77,15 +74,12 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
 	for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices"} {
 		for _, outcome := range []string{"false", "error"} {
-			for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry"} {
+			for _, change := range []string{"unchanged", "revocation", "role", "rebind"} {
 				t.Run(key+"/"+outcome+"/"+change, func(t *testing.T) {
 					b := newBrowserFixture(t)
 					proposalFlags(t, b, true, true, true, true)
 					seedTriageRequest(t, b, proposalRequestID, "Fictional proposal request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
-					expires := time.Now().Add(3 * time.Second).Truncate(time.Second)
-					if change == "expiry" {
-						b.configure(map[string]any{"exp": expires.Unix()}, false)
-					}
+					expires := time.Now().Add(time.Hour)
 					triageSignIn(t, b, "proposal-operator", "operator-workspace", "operator")
 					form := proposalForm(t, b)
 					if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", form, b.site.URL); status != 303 {

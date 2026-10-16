@@ -98,11 +98,18 @@ explicit invoiced amount and purpose with exact current client acceptance.
 They do not generate invoices, confirm funds or authorize work, and remain
 independently default-off with no environment activation mapping.
 
+Separately default-off [bank-credit evidence](CREDITS.md) records operator
+observations and append-only corrections against those invoices. Exact confirmed
+totals distinguish partial/full/excess credit; disputes and unverified evidence
+prevent a fully-credited result. A globally reserved transfer identity cannot
+belong to two invoices or clients. This is manual evidence, not payment processing
+or work-start authority; no bank connection or activation mapping is added.
+
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
-and v10 (external invoice records)
+v10 (external invoice records) and v11 (bank-credit evidence)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. The invoice migration preserves the original v1–v9 bytes.
+ledger. The credit migration preserves the original v1–v10 bytes.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
@@ -367,7 +374,7 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the eleven fixture identity/session/contact/request/proposal/visibility/consent/invoice tables between tests. Never reuse a database
+truncate the thirteen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 

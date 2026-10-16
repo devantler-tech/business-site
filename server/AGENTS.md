@@ -5,7 +5,8 @@ This Go module is the unified product's **default-off browser identity boundary*
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,
 payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
-`INVOICES.md` for private external invoice metadata. Contact emails remain
+`INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
+bank-credit evidence. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
 succeeds; they are never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
@@ -16,7 +17,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's eleven identity/session/contact/request/proposal/visibility/consent/invoice tables. Provision a fresh disposable PostgreSQL
+only the fixture's thirteen identity/session/contact/request/proposal/visibility/consent/invoice/credit tables. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -40,7 +41,7 @@ the declared compiler, preserving its native rules, project scope and fix mode.
 The analyzer regression exercises all actual module packages and a genuine format
 diagnostic against the pinned container's rule snapshot; native container proof is
 still separate. Never replace it with a disabled scanner or ignored failures.
-Lychee's test-only preprocessor renders all four actual private templates in EN/DA.
+Lychee's test-only preprocessor renders all five actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
 public links and documents retain normal Lychee checking; no status is exempted.
@@ -158,6 +159,19 @@ authority; no environment activation mapping or client/agent invoice route exist
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
 here uses explicit current membership, NOT a claim of database row-level security.
+
+Manual bank-credit evidence additionally requires independent false-default
+`portal-credit-reconciliation`; review retirement under business-site#120 by
+15 November 2026. Read `CREDITS.md`. v11 follows unchanged v1–v10. Reserve each
+case-sensitive source/reference pair globally to its immutable invoice/client,
+including after invalidation. Append corrections under the shared request lock;
+never sum historical confirmations. Unverified/disputed evidence prevents full
+credit, and excess is distinct. Keep 32 identities per invoice and 16 revisions
+per identity, reserving the last for invalidation. Preserve complete history,
+content/actor-bound retries and SELECT/INSERT-only runtime permissions. Historical
+money remains recordable after a re-quote but never approves its replacement.
+No environment mapping, bank connection, client/agent route or work-start
+authority is introduced. Optional display SDK waits precede private reads.
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real
 restricted-login positive control and mismatched-login refusal controls.

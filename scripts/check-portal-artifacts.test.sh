@@ -34,7 +34,7 @@ if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
   failed=1
 fi
 rm "$fixture/sharing.txt"
-for table in portal_proposal_reviews portal_proposal_acceptances portal_invoices; do
+for table in portal_proposal_reviews portal_proposal_acceptances portal_invoices portal_credit_transfers portal_credit_revisions; do
   printf '%s\n' "$table" > "$fixture/consent.txt"
   if bash "$script_dir/check-portal-artifacts.sh" "$fixture" >/dev/null 2>&1; then
     printf '%s\n' 'FAIL: accepted private consent storage content' >&2

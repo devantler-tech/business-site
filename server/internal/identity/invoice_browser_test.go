@@ -190,10 +190,7 @@ func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 			if !valid {
 				t.Fatal("fixture invoice invalid")
 			}
-			op := enroll(t, b.svc, b.f, "blocked-invoice-operator", "operator-workspace", "operator")
-			if change == "expiry" {
-				op.expires = time.Now().Add(300 * time.Millisecond)
-			}
+			op := timedFixtureOperator(t, b, "blocked-invoice-operator", change)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			migrator := migrationDB(t)
@@ -228,6 +225,16 @@ func TestInvoiceWriteRechecksBlockedAuthority(t *testing.T) {
 			}
 		})
 	}
+}
+
+// timedFixtureOperator gives blocked-writer controls the same optional expiry boundary.
+func timedFixtureOperator(t *testing.T, b *browserFixture, subject, change string) Principal {
+	t.Helper()
+	op := enroll(t, b.svc, b.f, subject, "operator-workspace", "operator")
+	if change == "expiry" {
+		op.expires = time.Now().Add(300 * time.Millisecond)
+	}
+	return op
 }
 
 // TestInvoiceStorageFailureIsNotEmpty refuses a real privilege failure without leaking table details.
@@ -291,6 +298,7 @@ func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 	if err := migrator.QueryRow(t.Context(), `SELECT id FROM portal_proposal_acceptances`).Scan(&acceptance); err != nil {
 		t.Fatal(err)
 	}
+	rewindCreditsFixture(t, migrator)
 	if _, err := migrator.Exec(t.Context(), `DROP TABLE portal_invoices; ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_invoice_binding; DELETE FROM portal_schema_version WHERE version=10`); err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +311,7 @@ func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 		t.Fatal("invoice migration changed prior schema ledger", err)
 	}
 	var retained bool
-	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=10 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
+	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=11 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
 		t.Fatal("invoice migration changed consent or omitted its own version", err)
 	}
 }

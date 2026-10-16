@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 26, "contact.html": 12, "requests.html": 38, "triage.html": 28} {
+	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -83,6 +83,7 @@ func TestPortalLinkRejections(t *testing.T) {
 		"non-canonical router redirect": `<a href="/portal//contact">Contact</a>`,
 		"invalid ID":                    `<a href="/portal/operator/requests/not-an-id">Request</a>`,
 		"invalid nested ID":             `<form method="post" action="/portal/operator/requests/not-an-id/proposals"></form>`,
+		"invalid invoice":               `<a href="/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/invoices/0/credits">Credits</a>`,
 		"invalid cursor":                `<a href="/portal/operator/requests?cursor=invalid">Next</a>`,
 		"duplicate language":            `<a href="/portal/?lang=en&amp;lang=da">Home</a>`,
 		"unknown language":              `<a href="/portal/?lang=de">Home</a>`,
@@ -227,7 +228,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error"} {
+			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error", "credit-error"} {
 				uri := "/portal/"
 				switch kind {
 				case "sign-in", "unavailable":
@@ -340,7 +341,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					return nil, err
 				}
 			}
-			for _, view := range []string{"empty", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full"} {
+			for _, view := range []string{"empty", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full", "invoice-credits"} {
 				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					page := b.triagePage(r, []projectRequest{request}, request.ID, "")
 					var proposals []projectProposal
@@ -356,7 +357,8 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					b.proposalPresentation(r, &page, proposals)
 					if strings.HasPrefix(view, "invoice") {
 						page.InvoicesEnabled, page.InvoiceKey = true, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-						page.Invoices = invoiceHistory{Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Records: []projectInvoice{{Version: 1, Reference: "TEST-01", Purpose: "Fictional invoice", Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", AmountMinor: 123456, Recorded: request.Submitted}}}
+						page.CreditsEnabled = view == "invoice-credits"
+						page.Invoices = invoiceHistory{Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Records: []projectInvoice{{Sequence: 1, Version: 1, Reference: "TEST-01", Purpose: "Fictional invoice", Acceptance: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", AmountMinor: 123456, Recorded: request.Submitted}}}
 						if view == "invoice-full" {
 							page.Invoices.Expected = 50
 						}
@@ -367,6 +369,31 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 						page.Visibility.Shared = make(map[int]bool)
 						if view == "withdrawal" {
 							page.Visibility = proposalVisibility{Event: 1, Active: 1, Shared: map[int]bool{1: true}}
+						}
+					}
+					return browserPage.ExecuteTemplate(w, name, page)
+				}); err != nil {
+					return nil, err
+				}
+			}
+		case "credits.html":
+			for _, view := range []string{"empty", "confirmed", "disputed", "invalidated", "full-bound", "historical"} {
+				path := "/portal/operator/requests/" + request.ID + "/invoices/1/credits"
+				if err := add(path, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					page := creditPageData{pageData: b.data(r, "credits", "", "fictional-csrf"), Path: path, LanguageURL: path + "?lang=en", Form: creditFormData{Lang: lang, Path: path, Key: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", CSRF: "fictional-csrf"}, History: creditHistory{Invoice: projectInvoice{Reference: "TEST-01", AmountMinor: 123456, Current: view != "historical"}}}
+					if view != "empty" {
+						d := creditRevision{Source: "fixture-bank", Reference: "transfer-01", Key: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Revision: 1, State: view, AmountMinor: 1, Note: "Fictional evidence", Recorded: request.Submitted}
+						if view == "historical" || view == "full-bound" {
+							d.State = "confirmed"
+						}
+						f := page.Form
+						f.Source, f.Reference, f.Expected = d.Source, d.Reference, d.Revision
+						page.History.Transfers = []creditTransfer{{Latest: d, History: []creditRevision{d}, Form: f}}
+					}
+					if view == "full-bound" {
+						page.History.Transfers[0].Latest.Revision = 16
+						for len(page.History.Transfers) < 32 {
+							page.History.Transfers = append(page.History.Transfers, page.History.Transfers[0])
 						}
 					}
 					return browserPage.ExecuteTemplate(w, name, page)
@@ -560,6 +587,12 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 		for index, segment := range registered {
 			if segment == "{id}" && (index >= len(actual) || !opaqueRequestID.MatchString(actual[index])) {
 				return errors.New("target has an invalid request identity")
+			}
+			if segment == "{invoice}" {
+				sequence, valid := proposalNumber(actual[index], 50)
+				if !valid || sequence < 1 {
+					return errors.New("target has an invalid invoice sequence")
+				}
 			}
 		}
 	}

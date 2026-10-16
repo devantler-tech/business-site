@@ -22,7 +22,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices"}, []any{true, true, true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation"}, []any{true, true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()

@@ -64,7 +64,7 @@ func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool
  AND NOT EXISTS (SELECT 1 FROM pg_type t WHERE t.typnamespace='public'::regnamespace AND starts_with(t.typname,'portal_') AND t.typtype='d' AND t.typowner<>r.oid)
  AND (NOT $1::boolean OR (
    SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
-   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices']) managed(name)
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions']) managed(name)
    LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
  AND (NOT $1::boolean OR (
    SELECT bool_and(t.oid IS NOT NULL AND t.typtype='d' AND t.typowner=r.oid AND t.typbasetype=managed.base::regtype)
