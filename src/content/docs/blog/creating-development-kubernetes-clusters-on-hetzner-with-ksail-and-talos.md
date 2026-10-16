@@ -163,7 +163,7 @@ ksail cluster start     # Start a stopped cluster
 
 Your kubeconfig is automatically configured, so standard `kubectl` commands work too.
 
-For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-root).
+For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/cli-flags/cluster/cluster-root/).
 
 ## Step 9: Deploying Workloads
 
@@ -234,7 +234,7 @@ The `push` command packages your `k8s/` directory as an OCI artifact and pushes 
 > [!TIP]
 > You can also set the registry via environment variable: `KSAIL_REGISTRY='ghcr.io/org/repo' ksail workload push`
 
-For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/configuration/cli-flags/workload/workload-root).
+For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/cli-flags/workload/workload-root/).
 
 ## Cleaning Up
 

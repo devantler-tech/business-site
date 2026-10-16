@@ -108,7 +108,7 @@ ksail cluster start     # Start a stopped cluster
 
 Your kubeconfig is automatically configured, so standard `kubectl` commands work too.
 
-For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-root).
+For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/cli-flags/cluster/cluster-root/).
 
 ## Step 5: Deploying Workloads
 
@@ -120,7 +120,7 @@ ksail workload push              # Push to GitOps source
 ksail workload reconcile         # Trigger GitOps reconciliation
 ```
 
-For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/configuration/cli-flags/workload/workload-root).
+For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/cli-flags/workload/workload-root/).
 
 ## Cleaning Up
 
