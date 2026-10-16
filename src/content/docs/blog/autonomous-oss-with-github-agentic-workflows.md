@@ -78,7 +78,7 @@ flowchart LR
     class D ci;
 ```
 
-Weekly Strategy produces the "what to work on." Repo Assist turns that into issues and, where appropriate, draft PRs. Everything sits in Draft until I promote it. CI runs on every change. Agent Merge (implemented as a [Skill](https://github.com/features/copilot-skills)) rebases and addresses final review feedback.
+Weekly Strategy produces the "what to work on." Repo Assist turns that into issues and, where appropriate, draft PRs. Everything sits in Draft until I promote it. CI runs on every change. Agent Merge (implemented as a [Skill](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)) rebases and addresses final review feedback.
 
 ## The Guardrails
 
