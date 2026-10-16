@@ -103,6 +103,19 @@ test("image parity rejects a permutation of otherwise unique, valid cover assets
     assert.throws(() => assertSameJournalCover(`/_app/immutable/assets/${swapped}.hash.avif`, `/_astro/${stem}.different.webp`), /own authored editorial cover/);
   }
 });
+test("topic browse groups equivalent labels by their published slug, retaining first label and combined count", async () => {
+  const { readJournal } = await adapter();
+  const { browseJournal } = await import("../../src/components/business/journal-pages.js");
+  const dir = mkdtempSync(join(tmpdir(), "journal-topics-"));
+  try {
+    writeFileSync(join(dir, "new.md"), post("New", "2026-02-01").replace("[Kubernetes, Hello World]", "[Go]"));
+    writeFileSync(join(dir, "old.md"), post("Old").replace("[Kubernetes, Hello World]", "[go, Kubernetes]"));
+    assert.deepEqual(browseJournal(readJournal(pathToFileURL(dir + "/"))).tags, [
+      {label:"Go",href:"https://devantler.tech/blog/tags/go/",count:2},
+      {label:"Kubernetes",href:"https://devantler.tech/blog/tags/kubernetes/",count:1},
+    ]);
+  } finally { rmSync(dir, { recursive:true, force:true }); }
+});
 test("empty and unreadable inventories cannot become a reassuring empty archive", async () => {
   const { readJournal } = await adapter();
   const dir = mkdtempSync(join(tmpdir(), "journal-empty-"));

@@ -5,9 +5,9 @@ export function browseJournal(posts) {
   /** @type {Map<string,{label:string,href:string,count:number}>} */
   const topics = new Map();
   for (const post of posts) for (const tag of post.tags) {
-    const topic = topics.get(tag.label) ?? { ...tag, count:0 };
+    const topic = topics.get(tag.href) ?? { ...tag, count:0 };
     topic.count++;
-    topics.set(tag.label, topic);
+    topics.set(tag.href, topic);
   }
   return { recent:posts.slice(0, journalConfig.recentPostCount),
     tags:[...topics.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)) };
