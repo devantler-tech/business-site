@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, openSync, fstatSync, closeSync, constants, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, parseFragment, serialize } from "parse5";
@@ -97,11 +97,16 @@ export function readingFingerprint() {
   /** @param {string} path */
   function visit(path) {
     const file = join(root, path);
-    const info = lstatSync(file);
-    assert.ok(!info.isSymbolicLink(), "Journal renderer inputs must be regular");
-    hash.update(path + "\0");
-    if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(`${path}/${name}`);
-    else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(file)); }
+    // Inspect and read the same open descriptor. A path check followed by a
+    // separate path read can consume replacement bytes instead of the checked file.
+    assert.ok(Number.isInteger(constants.O_NOFOLLOW), "Journal requires no-follow input reads");
+    const descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    try {
+      const info = fstatSync(descriptor);
+      hash.update(path + "\0");
+      if (info.isDirectory()) for (const name of readdirSync(file).sort()) visit(`${path}/${name}`);
+      else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(descriptor)); }
+    } finally { closeSync(descriptor); }
   }
   for (const path of ["src", "public", "astro.config.mjs", "package.json", "package-lock.json"]) visit(path);
   const env = {...process.env};
