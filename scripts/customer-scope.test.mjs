@@ -7,6 +7,18 @@ assert.ok(process.argv.length === 3 || process.argv.length === 4, 'Usage: custom
 const enabled = process.argv[3] ?? 'true';
 assert.ok(['true', 'false'].includes(enabled));
 let controls = 0;
+// Exercise each independently publishable fragment in both languages, without
+// importing the checker inventory: partial leaks must not need an audience or marker.
+const unreleasedFragments = [
+  'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
+  'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
+  'Work outside the EU is not open while its requirements are being confirmed.',
+  'Who I work with',
+  'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
+  'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
+  'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
+  'Hvem jeg samarbejder med',
+];
 for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/']) {
   const html = readFileSync(resolve(process.argv[2], locale === 'da' ? 'da' : '.', route, 'index.html'), 'utf8');
   const check = value => (enabled === 'true' ? assertCustomerScope : assertCustomerScopeDisabled)(value, locale, route === '');
@@ -15,6 +27,11 @@ for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/
     ['leaked scope', value => value.replace('</main>', '<div data-customer-scope></div></main>')],
     ['leaked audience', value => value.replace('</main>', '<p>Private customers in the EU</p></main>')],
     ['leaked sharing metadata', value => value.replace(/(<meta\b[^>]*property="og:description"[^>]*content=")[^"]*/, '$1Private customers in the EU')],
+    ...unreleasedFragments.flatMap((fragment, index) => [
+      [`isolated fragment ${index} in body`, value => value.replace('</main>', `<p>${fragment}</p></main>`)],
+      [`isolated fragment ${index} in normal metadata`, value => value.replace(/(<meta\b[^>]*name="description"[^>]*content=")[^"]*/, `$1${fragment}`)],
+      [`isolated fragment ${index} in sharing metadata`, value => value.replace(/(<meta\b[^>]*property="og:description"[^>]*content=")[^"]*/, `$1${fragment}`)],
+    ]),
   ] : [
     ['missing scope', value => value.replace('data-customer-scope', 'data-removed-scope')],
     ['hidden scope', value => value.replace('data-customer-scope', 'data-customer-scope hidden')],
@@ -29,7 +46,9 @@ for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/
       ['duplicate sharing description', value => value.replace('name="description"', 'property="og:description"')],
     ] : []),
   ]) {
-    assert.throws(() => check(mutate(html)), undefined, `${locale} ${route || 'Home'}: reject ${name}`);
+    const changed = mutate(html);
+    assert.notEqual(changed, html, `${locale} ${route || 'Home'}: mutation reaches ${name}`);
+    assert.throws(() => check(changed), undefined, `${locale} ${route || 'Home'}: reject ${name}`);
     controls++;
   }
 }

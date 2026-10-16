@@ -9,11 +9,13 @@ import { readerText } from './reader-text.mjs';
 const expected = {
   en: [
     'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
-    'I cannot currently take on projects for businesses in other EU countries under the PMV setup. Work outside the EU is not open while its requirements are being confirmed.',
+    'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
+    'Work outside the EU is not open while its requirements are being confirmed.',
   ],
   da: [
     'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
-    'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande. Opgaver uden for EU er ikke åbne, mens kravene afklares.',
+    'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
+    'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
   ],
 };
 const nodes = node => [node, ...(node.childNodes ?? []).flatMap(nodes)];
@@ -61,6 +63,14 @@ export function assertCustomerScopeDisabled(html, locale, home = false) {
   const document = nodes(parse(html));
   assert.ok(!document.some(node => attr(node, 'data-customer-scope') !== undefined), 'unreleased customer scope is absent');
   assert.doesNotMatch(html, /private customers|privatkunder|Who I work with|Hvem jeg samarbejder med/iu, 'unreleased audience copy and metadata are absent');
+  // Check every independent sentence, in either language, in both decoded
+  // reader text and metadata. A partial leak need not contain its neighbouring
+  // sentence, heading, audience or release marker.
+  const emittedCopy = [readerText(html), ...document.filter(node => node.tagName === 'meta')
+    .map(node => attr(node, 'content') ?? '')].join(' ').replace(/\s+/g, ' ').toLowerCase();
+  for (const sentence of Object.values(expected).flat()) {
+    assert.ok(!emittedCopy.includes(sentence.toLowerCase()), `unreleased sentence is absent: ${sentence}`);
+  }
   if (home) {
     const description = document.filter(node => node.tagName === 'meta' && attr(node, 'name') === 'description');
     const sharing = document.filter(node => node.tagName === 'meta' && attr(node, 'property') === 'og:description');
