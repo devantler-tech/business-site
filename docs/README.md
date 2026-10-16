@@ -197,6 +197,15 @@ writing remain accurate. The generated Home, About and Projects checks cover bot
 sharing metadata. The offer-release check distinguishes actual maintenance terms, not app labels
 or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
 
+The public customer invitation covers private customers in Denmark and the rest of the EU
+and businesses in Denmark. The contact section explains that businesses in other EU countries
+cannot currently be served under the PMV setup, and outside-EU work is not open pending
+confirmation. `customer-scope.ts` supplies this boundary to Astro and the isolated Svelte
+candidate independently of offer and identity release flags. Every build checks all six
+English/Danish Home, About and Projects routes, including emitted metadata and deliberate
+output mutations. This copy is not order authorization: tax confirmations remain under #147,
+server-side eligibility under #146, and the separate hosted-offer assessment under #18.
+
 `src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
 and business email. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
 the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a direct email

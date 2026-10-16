@@ -18,8 +18,8 @@ export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786
 export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean) {
 const previewCopy = {
   en: {
-    title: 'Websites & software for businesses | Devantler Tech',
-    description: 'Websites, web apps and web services for Danish businesses. Agreed prices, step-by-step development and optional hosting from Devantler Tech.',
+    title: 'Websites & useful software | Devantler Tech',
+    description: 'Websites, web apps and services for private customers in the EU and businesses in Denmark. Agreed prices and step-by-step development from Devantler Tech.',
     skip: 'Skip to content', navigation: 'Main navigation', language: 'Choose language',
     appearance: 'Appearance', system: 'System', light: 'Light', dark: 'Dark',
     projectsNav: 'Projects', aboutNav: 'About', journalNav: 'Journal',
@@ -27,7 +27,7 @@ const previewCopy = {
     services: 'Services & prices', work: 'Selected work', products: 'Products', process: 'How it works', contact: 'Get in touch',
     eyebrow: 'Hi, I’m Nikolai.',
     headline: 'I build websites\nand useful software.',
-    intro: 'Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for businesses—and I’m the person you’ll talk to about your project.',
+    intro: 'Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for private customers and Danish businesses—and I’m the person you’ll talk to about your project.',
     primary: 'Tell me what you need', secondary: 'Explore services',
     availability: 'Planning projects from November 2026',
     promise: ['Clear scope, room to grow', 'Build + optional hosting', 'Direct contact with the developer'],
@@ -71,24 +71,24 @@ const previewCopy = {
     qualityLink: 'See the checks in practice',
     processTitle: 'A clear agreement before a line of code.',
     steps: [
-      { title: 'Describe the need', text: 'Share what your business does, the problem you want solved, your budget and your preferred timing.' },
+      { title: 'Describe the need', text: 'Share what you want to achieve, the problem you want solved, your budget and your preferred timing.' },
       { title: 'Agree the first iteration', text: 'Receive a written proposal covering deliverables, price, hosting needs, ownership, support and a realistic schedule.' },
       { title: 'Review, launch, grow', text: 'Try the result before launch. We can build on it through further iterations, agreeing the scope, price and any monthly cost changes before each one.' },
     ],
     profile: 'About Devantler Tech', blog: 'Read the journal', technical: 'Technical projects',
     contactTitle: 'What would make your working day easier?',
-    contactText: 'Send me a few lines about your business and what you’d like to make easier. A rough budget and timing help, but you don’t need to arrive with a technical specification.',
+    contactText: 'Send me a few lines about your project and what you’d like to make easier. A rough budget and timing help, but you don’t need to arrive with a technical specification.',
     contactAction: companyIdentityEnabled ? 'Email me' : 'Message me on LinkedIn',
     contactAlternative: 'Or find me on LinkedIn',
     contactNote: companyIdentityEnabled
       ? 'The email link opens your email app. There is no automatic booking or instant-support service.'
       : 'The link opens Nikolai’s public LinkedIn profile. There is no automatic booking or instant-support service.',
     registrationType: 'Personally owned small business (PMV)',
-    footer: 'Websites, software and hosting for businesses.', englishNote: 'The journal and technical documentation are currently in English.',
+    footer: 'Websites and software for private customers in the EU and businesses in Denmark.', englishNote: 'The journal and technical documentation are currently in English.',
   },
   da: {
-    title: 'Hjemmesider og software til virksomheder | Devantler Tech',
-    description: 'Hjemmesider, webapps og webservices til danske virksomheder. Aftalte priser, udvikling i etaper og valgfri hosting hos Devantler Tech.',
+    title: 'Hjemmesider og nyttig software | Devantler Tech',
+    description: 'Hjemmesider, webapps og services til privatkunder i EU og virksomheder i Danmark. Aftalte priser og udvikling i etaper hos Devantler Tech.',
     skip: 'Spring til indhold', navigation: 'Hovednavigation', language: 'Vælg sprog',
     appearance: 'Udseende', system: 'System', light: 'Lys', dark: 'Mørk',
     projectsNav: 'Projekter', aboutNav: 'Om virksomheden', journalNav: 'Journal (engelsk)',
@@ -96,7 +96,7 @@ const previewCopy = {
     services: 'Ydelser og priser', work: 'Udvalgte projekter', products: 'Produkter', process: 'Sådan foregår det', contact: 'Kontakt',
     eyebrow: 'Hej, jeg hedder Nikolai.',
     headline: 'Jeg bygger hjemmesider\nog nyttig software.',
-    intro: 'Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til virksomheder—og det er mig, du taler med om dit projekt.',
+    intro: 'Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til privatkunder og danske virksomheder—og det er mig, du taler med om dit projekt.',
     primary: 'Fortæl om dit behov', secondary: 'Se ydelserne',
     availability: 'Planlægger projekter fra november 2026',
     promise: ['Klart omfang, plads til at vokse', 'Udvikling og valgfri hosting', 'Direkte kontakt med udvikleren'],
@@ -140,20 +140,20 @@ const previewCopy = {
     qualityLink: 'Se kontrollen i praksis',
     processTitle: 'En klar aftale før den første linje kode.',
     steps: [
-      { title: 'Beskriv dit behov', text: 'Fortæl, hvad din virksomhed laver, hvilket problem du vil løse, dit budget og din ønskede tidsplan.' },
+      { title: 'Beskriv dit behov', text: 'Fortæl, hvad du vil opnå, hvilket problem du vil løse, dit budget og din ønskede tidsplan.' },
       { title: 'Aftal den første etape', text: 'Få et skriftligt forslag med leverancer, pris, hostingbehov, ejerskab, support og en realistisk tidsplan.' },
       { title: 'Afprøv, lancér, udbyg', text: 'Afprøv resultatet før lancering. Vi kan bygge videre i nye etaper og aftaler omfang, pris og eventuelle ændringer i månedsprisen før hver etape.' },
     ],
     profile: 'Om Devantler Tech', blog: 'Læs journalen (engelsk)', technical: 'Tekniske projekter (engelsk)',
     contactTitle: 'Hvad ville gøre din arbejdsdag lettere?',
-    contactText: 'Send mig et par linjer om din virksomhed og det, du gerne vil gøre lettere. Et omtrentligt budget og en tidsplan hjælper, men du behøver ikke en teknisk specifikation.',
+    contactText: 'Send mig et par linjer om dit projekt og det, du gerne vil gøre lettere. Et omtrentligt budget og en tidsplan hjælper, men du behøver ikke en teknisk specifikation.',
     contactAction: companyIdentityEnabled ? 'Skriv en email til mig' : 'Skriv til mig på LinkedIn',
     contactAlternative: 'Eller find mig på LinkedIn',
     contactNote: companyIdentityEnabled
       ? 'Emaillinket åbner dit emailprogram. Der er ingen automatisk booking eller øjeblikkelig support.'
       : 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
     registrationType: 'Personligt ejet mindre virksomhed (PMV)',
-    footer: 'Hjemmesider, software og hosting til virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
+    footer: 'Hjemmesider og software til privatkunder i EU og virksomheder i Danmark.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
 } as const;
 
