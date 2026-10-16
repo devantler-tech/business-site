@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { readReadingReference } from "../../src/data/journal-reading.mjs";
 
@@ -6,26 +7,37 @@ const file = new URL("../../.astro/journal-reading.json", import.meta.url);
 const original = readFileSync(file, "utf8");
 const valid = JSON.parse(original);
 assert.ok(valid.assets.length > 1, "partial asset failure needs a healthy asset beside the rejected one");
+/**
+ * Recompute the checksum so a mutation reaches the check it is named after,
+ * instead of every one stopping at the checksum comparison.
+ * @param {Record<string, unknown>} value
+ */
+const resign = value => {
+  const {checksum, ...content} = value;
+  value.checksum = createHash("sha256").update(JSON.stringify(content)).digest("hex");
+};
 try {
   readReadingReference();
   unlinkSync(file);
   assert.throws(() => readReadingReference(), /ENOENT/);
   writeFileSync(file, original.slice(0, -1));
   assert.throws(() => readReadingReference(), SyntaxError);
-  /** @type {[string,(value:ReturnType<typeof readReadingReference>)=>void][]} */
+  /** @type {[string,(value:ReturnType<typeof readReadingReference>)=>void,RegExp,boolean][]} */
   const mutations = [
-    ["stale source", value => { value.fingerprint = "stale"; }],
-    ["partial body", value => { value.html = "<p>partial output</p>"; }],
-    ["missing body", value => { delete value.html; }],
-    ["missing asset inventory", value => { value.assets = []; }],
-    ["second asset corrupted", value => { value.assets[1].source = "broken"; }],
+    ["stale source", value => { value.fingerprint = "stale"; }, /run bash scripts\/build-journal-reference\.sh/, true],
+    ["altered body without a matching checksum", value => { value.html = "<p>partial output</p>"; }, /content is incomplete or altered/, false],
+    ["empty body", value => { value.html = " "; }, /complete reading body required/, true],
+    ["missing body", value => { delete value.html; }, /complete reading body required/, true],
+    ["missing asset inventory", value => { value.assets = []; }, /asset inventory is missing/, true],
+    ["second asset corrupted", value => { value.assets[1].source = "broken"; }, /asset digest mismatch/, true],
   ];
-  for (const [name, mutate] of mutations) {
+  for (const [name, mutate, failure, signed] of mutations) {
     const value = structuredClone(valid);
     mutate(value);
+    if (signed) resign(value);
     writeFileSync(file, JSON.stringify(value));
-    assert.throws(() => readReadingReference(), name === "stale source" ? /run bash scripts\/build-journal-reference\.sh/ : /Journal/, `reject ${name}`);
+    assert.throws(() => readReadingReference(), failure, `reject ${name}`);
   }
 } finally { writeFileSync(file, original); }
 readReadingReference();
-console.log("Journal reference: missing, truncated, stale, partial body and partial asset observations rejected; healthy reference retained");
+console.log("Journal reference: missing, truncated, stale, altered, empty-body and partial asset observations each rejected by their own check; healthy reference retained");
