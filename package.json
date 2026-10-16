@@ -19,7 +19,7 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/internal-helpers": "0.10.0",
+    "@astrojs/internal-helpers": "0.12.0",
     "github-slugger": "2.0.0",
     "satteri": "0.10.5",
     "@astrojs/markdown-satteri": "^0.4.3",
