@@ -19,6 +19,8 @@ node --test scripts/featured-rollout.test.mjs
 node --test scripts/fresh-publication.test.mjs
 node --test scripts/client-rollout.test.mjs
 node --test scripts/company-rollout.test.mjs
+node --test scripts/customer-scope-rollout.test.mjs
+node --test scripts/customer-copy.test.mjs
 node --test scripts/company-address.test.mjs
 node --test scripts/journal-rollout.test.mjs
 node --test scripts/journal-style.test.mjs
@@ -31,8 +33,8 @@ bash scripts/journal-history.test.sh dist
 node --test scripts/company-disclosure.test.mjs
 node scripts/check-offer-rollout.mjs dist
 node scripts/check-business-site.mjs dist
-node scripts/check-customer-scope.mjs dist
-node scripts/customer-scope.test.mjs dist
+node scripts/check-customer-scope.mjs dist "${FEATURE_CUSTOMER_SCOPE:-false}"
+node scripts/customer-scope.test.mjs dist "${FEATURE_CUSTOMER_SCOPE:-false}"
 node scripts/check-client-facing.mjs dist
 node scripts/check-featured-portfolio.mjs dist
 node scripts/check-journal-presentation.mjs dist

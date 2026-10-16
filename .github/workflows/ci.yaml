@@ -128,6 +128,11 @@ jobs:
           FEATURE_COMPANY_IDENTITY: "true"
           COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
         run: npm run build
+      - name: Build customer-scope preview
+        working-directory: .
+        env:
+          FEATURE_CUSTOMER_SCOPE: "true"
+        run: npm run build
       - name: Build revised hosting-offer preview
         working-directory: .
         env:
@@ -151,12 +156,13 @@ jobs:
           FEATURE_PREVIEW_BANNER: "false"
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
+          FEATURE_CUSTOMER_SCOPE: "false"
           FEATURE_OFFER_COPY: "false"
           FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build
       - name: Verify the published Journal presentation
         working-directory: .
         run: node scripts/check-journal-presentation.mjs dist

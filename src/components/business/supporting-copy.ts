@@ -1,3 +1,6 @@
+import { publishedOffer } from './published-offer.ts';
+import { customerScopeCopy } from './customer-scope.ts';
+
 export const previewSupporting = {
   en: {
     aboutTitle: 'About Devantler Tech',
@@ -10,7 +13,7 @@ export const previewSupporting = {
     principles: [
       { title: 'A clear first version, with room to grow', text: 'We agree what the software needs to do first, what it costs and what can wait. Larger applications grow through further iterations with agreed scope and prices.' },
       { title: 'Included maintenance, agreed development', text: 'Hosted projects include optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. New features and larger iterations need a new agreement. I am not personally available 24/7; human support terms are agreed for each project.' },
-      { title: 'Something you can understand and use', text: 'You get a chance to try the result and a practical handover. The technical choices serve what you need to get done.' },
+      { title: 'Something you can understand and use', text: 'You get a chance to try the result and a practical handover. The technical choices serve the work your business needs to get done.' },
     ],
     backgroundTitle: 'Background & public work',
     backgroundText: 'My background spans software development, developer tools and running applications. The CV contains the professional detail; the public projects and journal show the work itself.',
@@ -54,7 +57,7 @@ export const previewSupporting = {
     principles: [
       { title: 'En klar første version med plads til at vokse', text: 'Vi aftaler, hvad softwaren skal kunne først, hvad det koster, og hvad der kan vente. Større applikationer vokser gennem nye etaper med aftalt omfang og pris.' },
       { title: 'Inkluderet vedligeholdelse, aftalt udvikling', text: 'Hostede projekter har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Nye funktioner og større videreudvikling kræver en ny aftale. Jeg er ikke personligt til rådighed døgnet rundt; menneskelig support aftales for hvert projekt.' },
-      { title: 'Noget, du kan forstå og bruge', text: 'Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det, du har brug for at få gjort.' },
+      { title: 'Noget, du kan forstå og bruge', text: 'Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det arbejde, din virksomhed har brug for at få gjort.' },
     ],
     backgroundTitle: 'Baggrund og offentlige projekter',
     backgroundText: 'Min baggrund omfatter softwareudvikling, udviklerværktøjer og drift af applikationer. CV’et indeholder de faglige detaljer; de offentlige projekter og journalen viser selve arbejdet.',
@@ -88,3 +91,16 @@ export const previewSupporting = {
     thesis: 'Læs specialet (engelsk PDF)', researchExpand: 'Forskningsbaggrund og diagrammer (engelsk)',
   },
 } as const;
+
+/** Select public supporting copy without reading framework or private environment. */
+export function createSupportingCopy(revisedOffer: boolean, customerScopeEnabled = false) {
+  const selected = revisedOffer ? previewSupporting : {
+    en: { ...previewSupporting.en, ...publishedOffer.supporting.en },
+    da: { ...previewSupporting.da, ...publishedOffer.supporting.da },
+  };
+  if (!customerScopeEnabled) return selected;
+  return {
+    en: { ...selected.en, principles: selected.en.principles.map((item, index) => index === 2 ? { ...item, text: customerScopeCopy.en.principle } : item) },
+    da: { ...selected.da, principles: selected.da.principles.map((item, index) => index === 2 ? { ...item, text: customerScopeCopy.da.principle } : item) },
+  };
+}

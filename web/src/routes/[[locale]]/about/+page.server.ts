@@ -1,12 +1,11 @@
 import { error } from "@sveltejs/kit";
 import { FEATURE_SVELTE_FRONTEND } from "$app/env/private";
-import { previewSupporting } from "../../../../../src/components/business/supporting-copy";
-import { publishedOffer } from "../../../../../src/components/business/published-offer";
+import { createSupportingCopy } from "../../../../../src/components/business/supporting-copy";
 
 export const load = ({ params }: { params: { locale?: string } }) => {
   if (!FEATURE_SVELTE_FRONTEND || (params.locale !== undefined && params.locale !== "da")) error(404);
   const locale: "en" | "da" = params.locale === "da" ? "da" : "en";
-  const t = { ...previewSupporting[locale], ...publishedOffer.supporting[locale] };
+  const t = createSupportingCopy(false, true)[locale];
   return {
     locale,
     about: {

@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { assertCustomerScope } from './check-customer-scope.mjs';
+import { assertCustomerScope, assertCustomerScopeDisabled } from './check-customer-scope.mjs';
 
-assert.equal(process.argv.length, 3, 'Usage: customer-scope.test.mjs <build-directory>');
+assert.ok(process.argv.length === 3 || process.argv.length === 4, 'Usage: customer-scope.test.mjs <build-directory> [true|false]');
+const enabled = process.argv[3] ?? 'true';
+assert.ok(['true', 'false'].includes(enabled));
 let controls = 0;
 for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/']) {
   const html = readFileSync(resolve(process.argv[2], locale === 'da' ? 'da' : '.', route, 'index.html'), 'utf8');
-  const check = value => assertCustomerScope(value, locale, route === '');
+  const check = value => (enabled === 'true' ? assertCustomerScope : assertCustomerScopeDisabled)(value, locale, route === '');
   check(html);
-  for (const [name, mutate] of [
+  for (const [name, mutate] of enabled === 'false' ? [
+    ['leaked scope', value => value.replace('</main>', '<div data-customer-scope></div></main>')],
+    ['leaked audience', value => value.replace('</main>', '<p>Private customers in the EU</p></main>')],
+    ['leaked sharing metadata', value => value.replace(/(<meta\b[^>]*property="og:description"[^>]*content=")[^"]*/, '$1Private customers in the EU')],
+  ] : [
     ['missing scope', value => value.replace('data-customer-scope', 'data-removed-scope')],
     ['hidden scope', value => value.replace('data-customer-scope', 'data-customer-scope hidden')],
     ['hidden parent', value => value.replace(/<main\b/, '<main hidden')],

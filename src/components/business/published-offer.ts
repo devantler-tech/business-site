@@ -2,8 +2,8 @@
 export const publishedOffer = {
   "copy": {
     "en": {
-      "description": "Websites, web apps and services for private customers in the EU and businesses in Denmark. Clear introductory prices and agreed scope from Devantler Tech.",
-      "intro": "Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for private customers and Danish businesses—and I’m the person you’ll talk to about your project.",
+      "description": "Websites, web apps and web services for Danish businesses. Clear introductory prices, agreed scope and optional hosting from Devantler Tech.",
+      "intro": "Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for businesses—and I’m the person you’ll talk to about your project.",
       "promise": [
         "Clearly defined projects",
         "Build + optional hosting",
@@ -13,7 +13,7 @@ export const publishedOffer = {
       "offerCopy": [
         {
           "title": "A professional website",
-          "description": "Present what you do with a clear, professional website.",
+          "description": "Make your business easy to find, understand and contact.",
           "includes": [
             "Up to 5 straightforward pages",
             "Mobile-friendly design",
@@ -53,7 +53,7 @@ export const publishedOffer = {
       "steps": [
         {
           "title": "Describe the need",
-          "text": "Share what you want to achieve, the problem you want solved, your budget and your preferred timing."
+          "text": "Share what your business does, the problem you want solved, your budget and your preferred timing."
         },
         {
           "title": "Agree the scope",
@@ -66,8 +66,8 @@ export const publishedOffer = {
       ]
     },
     "da": {
-      "description": "Hjemmesider, webapps og services til privatkunder i EU og virksomheder i Danmark. Vejledende introduktionspriser og aftalt omfang hos Devantler Tech.",
-      "intro": "Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til privatkunder og danske virksomheder—og det er mig, du taler med om dit projekt.",
+      "description": "Hjemmesider, webapps og webservices til danske virksomheder. Vejledende introduktionspriser, aftalt omfang og valgfri hosting hos Devantler Tech.",
+      "intro": "Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til virksomheder—og det er mig, du taler med om dit projekt.",
       "promise": [
         "Klart afgrænsede projekter",
         "Udvikling og valgfri hosting",
@@ -77,7 +77,7 @@ export const publishedOffer = {
       "offerCopy": [
         {
           "title": "En professionel hjemmeside",
-          "description": "Præsenter det, du laver, med en klar og professionel hjemmeside.",
+          "description": "Gør det nemt at finde, forstå og kontakte din virksomhed.",
           "includes": [
             "Op til 5 enkle sider",
             "Mobilvenligt design",
@@ -117,7 +117,7 @@ export const publishedOffer = {
       "steps": [
         {
           "title": "Beskriv dit behov",
-          "text": "Fortæl, hvad du vil opnå, hvilket problem du vil løse, dit budget og din ønskede tidsplan."
+          "text": "Fortæl, hvad din virksomhed laver, hvilket problem du vil løse, dit budget og din ønskede tidsplan."
         },
         {
           "title": "Aftal omfanget",
@@ -157,7 +157,7 @@ export const publishedOffer = {
         },
         {
           "title": "Something you can understand and use",
-          "text": "You get a chance to try the result and a practical handover. The technical choices serve what you need to get done."
+          "text": "You get a chance to try the result and a practical handover. The technical choices serve the work your business needs to get done."
         }
       ],
       "engineeringScope": "These are working practices, not a certification or a promise of flawless software. Checks are selected for each project; ongoing care is scoped separately.",
@@ -177,7 +177,7 @@ export const publishedOffer = {
         },
         {
           "title": "Noget, du kan forstå og bruge",
-          "text": "Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det, du har brug for at få gjort."
+          "text": "Du får mulighed for at afprøve resultatet og en praktisk overdragelse. De tekniske valg skal understøtte det arbejde, din virksomhed har brug for at få gjort."
         }
       ],
       "engineeringScope": "Det er arbejdsmetoder, ikke en certificering eller et løfte om fejlfri software. Kontrollen vælges til hvert projekt; løbende vedligeholdelse aftales særskilt.",

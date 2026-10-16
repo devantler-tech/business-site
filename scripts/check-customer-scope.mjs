@@ -56,13 +56,29 @@ export function assertCustomerScope(html, locale, home = false) {
   }
 }
 
+/** Verify the default-off artifact retains the previously published invitation. */
+export function assertCustomerScopeDisabled(html, locale, home = false) {
+  const document = nodes(parse(html));
+  assert.ok(!document.some(node => attr(node, 'data-customer-scope') !== undefined), 'unreleased customer scope is absent');
+  assert.doesNotMatch(html, /private customers|privatkunder|Who I work with|Hvem jeg samarbejder med/iu, 'unreleased audience copy and metadata are absent');
+  if (home) {
+    const description = document.filter(node => node.tagName === 'meta' && attr(node, 'name') === 'description');
+    const sharing = document.filter(node => node.tagName === 'meta' && attr(node, 'property') === 'og:description');
+    assert.equal(description.length, 1);
+    assert.equal(sharing.length, 1);
+    for (const node of [...description, ...sharing]) assert.match(attr(node, 'content'), locale === 'da' ? /til danske virksomheder/ : /for Danish businesses/, 'published metadata is retained');
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  assert.equal(process.argv.length, 3, 'Usage: check-customer-scope.mjs <build-directory>');
+  assert.ok(process.argv.length === 3 || process.argv.length === 4, 'Usage: check-customer-scope.mjs <build-directory> [true|false]');
+  const enabled = process.argv[3] ?? 'true';
+  assert.ok(['true', 'false'].includes(enabled), 'release state must be explicit true or false');
   const failures = [];
   for (const locale of ['en', 'da']) for (const route of ['', 'about/', 'projects/']) {
     try {
-      assertCustomerScope(readFileSync(resolve(process.argv[2], locale === 'da' ? 'da' : '.', route, 'index.html'), 'utf8'), locale, route === '');
-      console.log(`PASS ${locale} ${route || 'Home'} customer scope`);
+      (enabled === 'true' ? assertCustomerScope : assertCustomerScopeDisabled)(readFileSync(resolve(process.argv[2], locale === 'da' ? 'da' : '.', route, 'index.html'), 'utf8'), locale, route === '');
+      console.log(`PASS ${locale} ${route || 'Home'} customer scope ${enabled === 'true' ? 'enabled' : 'disabled'}`);
     } catch (error) { failures.push(`${locale} ${route || 'Home'}: ${error.message}`); }
   }
   assert.deepEqual(failures, [], 'All six emitted visitor routes must explain customer scope');
