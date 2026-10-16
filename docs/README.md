@@ -206,7 +206,9 @@ candidate independently of offer and identity release flags. Astro requires the 
 published invitation and metadata. The already default-off Svelte candidate explicitly selects
 the corrected copy. Every build checks all six English/Danish Home, About and Projects routes,
 including emitted metadata and deliberate output mutations in enabled and disabled states.
-Activation and subsequent flag removal require reviewed publication and live proof.
+The source-owned publisher explicitly enables `FEATURE_CUSTOMER_SCOPE`; ordinary local builds
+remain default-off for the rollback checks. Removing the short-lived flag requires matching
+publication evidence and live proof of all six English/Danish visitor routes.
 This copy is not order authorization: tax confirmations remain under #147,
 server-side eligibility under #146, and the separate hosted-offer assessment under #18.
 

@@ -71,6 +71,7 @@ jobs:
         env:
           PUBLIC_CONTENT_PROFILE: "default"
           FEATURE_COMPANY_IDENTITY: "true"
+          FEATURE_CUSTOMER_SCOPE: "true"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}
         run: npm run build
       - name: Record source-owned identity

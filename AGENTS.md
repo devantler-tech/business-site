@@ -35,6 +35,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `publish-pages.yaml` retains legacy immutable callers, not live ownership.
   This static publisher does not deploy a private portal
   backend, identity, customer isolation, checkout or paid subscription system.
+  It explicitly enables `FEATURE_CUSTOMER_SCOPE` for the confirmed customer invitation;
+  local builds remain default-off until the post-publication flag cleanup in #149.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
   in their original repository; the source snapshot and asset provenance are linked in the README.
 
