@@ -6,6 +6,7 @@
   import type { load } from "./+page.server";
   let { data }: { data:ReturnType<typeof load> } = $props();
   const covers = import.meta.glob<Picture>("../../../../../src/assets/editorial/journal-*.webp", { eager:true, import:"default", query:"?enhanced&w=480;800;1200" });
+  /** Resolve an authored cover to its build-optimized local asset, never a fallback for another post. */
   function cover(name:string) {
     const image = covers[`../../../../../src/assets/editorial/${name}`];
     if (!image) throw new Error(`Journal cover missing from the local image map: ${name}`);

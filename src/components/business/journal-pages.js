@@ -1,6 +1,8 @@
 import { journalConfig } from "./journal-config.js";
 
-/** @param {import('../../data/journal.mjs').JournalPost[]} posts */
+/** Group published topic destinations, retaining the first label and the archive's recent-post order.
+ * @param {import('../../data/journal.mjs').JournalPost[]} posts
+ */
 export function browseJournal(posts) {
   /** @type {Map<string,{label:string,href:string,count:number}>} */
   const topics = new Map();

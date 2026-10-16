@@ -75,6 +75,7 @@ export function readJournal(directory = defaultDirectory) {
 
 export { paginateJournal } from "../components/business/journal-pages.js";
 
+/** Admit exactly the main archive pages required by the authored production inventory. */
 export function journalPaths() {
   const count = Math.ceil(readJournal().length / journalConfig.postCount);
   return Array.from({ length:count }, (_, index) => index === 0 ? "/blog/" : `/blog/${index + 1}/`);
