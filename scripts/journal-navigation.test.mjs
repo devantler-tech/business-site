@@ -6,8 +6,8 @@ import { runInNewContext } from 'node:vm';
 // Execute the actual inline head script. Only browser event/element boundaries
 // are simulated; navigation, card selection and accessibility are production code.
 const config = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
-const script = config.match(/content:\s*`(document\.addEventListener\('DOMContentLoaded'[\s\S]*?)`,/)?.[1];
-assert.ok(script, 'The journal navigation script must be wired into the page head');
+assert.match(config, /content: readFileSync\(new URL\('\.\/src\/components\/business\/journal-navigation\.js'/, 'The shared controller must be wired into the page head');
+const script = readFileSync(new URL('../src/components/business/journal-navigation.js', import.meta.url), 'utf8');
 
 class Element {
   constructor(tag, attributes = {}, parent = null) {

@@ -38,7 +38,7 @@
       <p>{data.about.backgroundText}</p>
       <div class="links">
         <a href="https://devantler.tech/pdfs/nikolai-emil-damm-cv.pdf">{data.about.cv}</a><a
-          href="https://devantler.tech/blog/">{data.locale === "da" ? "Læs journalen (engelsk)" : "Read the Journal"}</a
+          href="/blog/">{data.locale === "da" ? "Læs journalen (engelsk)" : "Read the Journal"}</a
         >
       </div>
     </section>

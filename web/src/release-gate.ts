@@ -1,3 +1,5 @@
+import { journalPaths } from "../../src/data/journal.mjs";
+
 /** Validate the framework-native build-time release setting. */
 export function parseFrontendRelease(value: string | undefined): boolean {
   if (value === undefined || value === "false") return false;
@@ -7,13 +9,13 @@ export function parseFrontendRelease(value: string | undefined): boolean {
 
 /** Enumerate only the reviewed public candidate routes. */
 export function frontendEntries(value: string | undefined): `/${string}`[] {
-  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/"] : [];
+  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", ...journalPaths() as `/${string}`[]] : [];
 }
 
 /** Fail for missing enabled/new routes; allow only the deliberately disabled candidate. */
 export function checkUnseenRoutes(value: string | undefined, routes: string[]): void {
   const enabled = parseFrontendRelease(value);
-  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]"];
+  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]"];
   if (enabled || routes.some((route) => !disabled.includes(route))) {
     throw new Error(`Unexpected unrendered Svelte routes: ${routes.join(", ")}`);
   }

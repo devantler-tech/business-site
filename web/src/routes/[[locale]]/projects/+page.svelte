@@ -38,7 +38,7 @@
             </article>
           {/each}
         </div>
-        <p class="scope">{data.text.reuse}</p><a href="https://devantler.tech/blog/">{t.journal}<span aria-hidden="true">↗</span></a>
+        <p class="scope">{data.text.reuse}</p><a href="/blog/">{t.journal}<span aria-hidden="true">→</span></a>
         <p><a href="https://github.com/orgs/devantler-tech/repositories">{data.text.wider}<span aria-hidden="true">↗</span></a></p>
       </section>
       <section aria-labelledby="family-title">

@@ -8,7 +8,8 @@ test("the candidate stays off unless explicitly enabled", () => {
     assert.deepEqual(frontendEntries(value), []);
   }
   assert.equal(parseFrontendRelease("true"), true);
-  assert.deepEqual(frontendEntries("true"), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/"]);
+  assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/"]);
+  assert.ok(frontendEntries("true").includes("/blog/"), "enabled artifact must admit the real Journal archive");
 });
 
 test("only the deliberately disabled candidate may be absent from the artifact", () => {
@@ -17,6 +18,7 @@ test("only the deliberately disabled candidate may be absent from the artifact",
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/[[locale]]", "/[[locale]]/about"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/[[locale]]"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/[[locale]]/projects", "/projects/[legacy]"]));
+    assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/[[page]]"]));
     assert.throws(() => checkUnseenRoutes(value, ["/unreviewed"]), /Unexpected/);
     assert.throws(() => checkUnseenRoutes(value, ["/[[locale]]/about", "/unreviewed"]), /Unexpected/);
   }
