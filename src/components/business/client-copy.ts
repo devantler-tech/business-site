@@ -1,5 +1,9 @@
 import { publishedOffer } from './published-offer.ts';
 
+/**
+ * Build shared bilingual quality/portfolio copy without framework configuration.
+ * Use published offer wording unless the caller explicitly enables its revision.
+ */
 export function createClientCopy(revisedOffer: boolean) {
 const previewClientCopy = {
   en: {

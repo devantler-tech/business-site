@@ -10,6 +10,11 @@ export const offers = [
 ] as const;
 
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
+/**
+ * Build shared bilingual homepage copy from the caller's explicit release decisions.
+ * Company identity selects contact wording; revised offers remain opt-in.
+ * No framework environment or private company input is read here.
+ */
 export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean) {
 const previewCopy = {
   en: {
