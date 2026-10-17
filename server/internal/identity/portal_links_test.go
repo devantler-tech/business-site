@@ -213,6 +213,12 @@ func preprocessLinkInput(source string) ([]byte, error) {
 }
 
 func renderedLinkPages(name string) ([]linkPage, error) {
+	return renderedLinkPagesUsing(name, browserPage)
+}
+
+// renderedLinkPagesUsing applies the complete fictional view inventory to one
+// compiled template set without replacing the process-wide production renderer.
+func renderedLinkPagesUsing(name string, templates *template.Template) ([]linkPage, error) {
 	b := &browser{}
 	request := projectRequest{ID: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Key: "fictional-submission", Product: "website", Title: "Fictional request", Brief: "Synthetic link-validation content", Submitted: time.Date(2026, 10, 1, 12, 0, 0, 123000, time.UTC)}
 	var pages []linkPage
@@ -244,7 +250,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					d := b.data(r, strings.TrimSuffix(kind, "-links"), "fictional-client", "fictional-csrf")
 					d.RequestsEnabled = kind == "home-links"
 					d.TriageEnabled = kind == "operator-links"
-					return browserPage.ExecuteTemplate(w, name, d)
+					return templates.ExecuteTemplate(w, name, d)
 				})
 				if err != nil {
 					return nil, err
@@ -258,7 +264,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 					if problem == "confirm" || problem == "confirmed" {
 						view = ""
 					}
-					return browserPage.ExecuteTemplate(w, name, b.contactPage(r, d, view, problem == "confirm"))
+					return templates.ExecuteTemplate(w, name, b.contactPage(r, d, view, problem == "confirm"))
 				}); err != nil {
 					return nil, err
 				}
@@ -285,7 +291,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 							page.View = "receipt"
 							page.SharedProposal = &projectProposal{Version: 1, Scope: "Fictional shared scope", Deliverables: "Fictional deliverables", OneTimeMinor: 299500, MonthlyMinor: 9900}
 						}
-						return browserPage.ExecuteTemplate(w, name, page)
+						return templates.ExecuteTemplate(w, name, page)
 					}); err != nil {
 						return nil, err
 					}
@@ -293,14 +299,14 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 			}
 			for _, rows := range [][]projectRequest{nil, {request}} {
 				if err := add("/portal/requests", func(w *httptest.ResponseRecorder, r *http.Request) error {
-					return browserPage.ExecuteTemplate(w, name, b.requestPage(r, "list", request, rows, ""))
+					return templates.ExecuteTemplate(w, name, b.requestPage(r, "list", request, rows, ""))
 				}); err != nil {
 					return nil, err
 				}
 			}
 			if err := add("/portal/requests", func(w *httptest.ResponseRecorder, r *http.Request) error {
 				r.Method = http.MethodPost
-				return browserPage.ExecuteTemplate(w, name, b.requestPage(r, "conflict", request, nil, "conflict"))
+				return templates.ExecuteTemplate(w, name, b.requestPage(r, "conflict", request, nil, "conflict"))
 			}); err != nil {
 				return nil, err
 			}
@@ -316,7 +322,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 						page.View = "receipt"
 						page.Acceptances = []proposalAcceptance{{ID: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Proposal: proposal, Recorded: request.Submitted, Current: view == "accepted-current"}}
 					}
-					return browserPage.ExecuteTemplate(w, name, page)
+					return templates.ExecuteTemplate(w, name, page)
 				}); err != nil {
 					return nil, err
 				}
@@ -328,7 +334,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 			}
 			for _, rows := range [][]projectRequest{nil, {request}, many} {
 				if err := add("/portal/operator/requests", func(w *httptest.ResponseRecorder, r *http.Request) error {
-					return browserPage.ExecuteTemplate(w, name, b.triagePage(r, rows, "", ""))
+					return templates.ExecuteTemplate(w, name, b.triagePage(r, rows, "", ""))
 				}); err != nil {
 					return nil, err
 				}
@@ -336,7 +342,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 			for _, product := range []string{"website", "app", "service"} {
 				request.Product = product
 				if err := add("/portal/operator/requests/"+request.ID, func(w *httptest.ResponseRecorder, r *http.Request) error {
-					return browserPage.ExecuteTemplate(w, name, b.triagePage(r, []projectRequest{request}, request.ID, ""))
+					return templates.ExecuteTemplate(w, name, b.triagePage(r, []projectRequest{request}, request.ID, ""))
 				}); err != nil {
 					return nil, err
 				}
@@ -371,7 +377,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 							page.Visibility = proposalVisibility{Event: 1, Active: 1, Shared: map[int]bool{1: true}}
 						}
 					}
-					return browserPage.ExecuteTemplate(w, name, page)
+					return templates.ExecuteTemplate(w, name, page)
 				}); err != nil {
 					return nil, err
 				}
@@ -396,7 +402,7 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 							page.History.Transfers = append(page.History.Transfers, page.History.Transfers[0])
 						}
 					}
-					return browserPage.ExecuteTemplate(w, name, page)
+					return templates.ExecuteTemplate(w, name, page)
 				}); err != nil {
 					return nil, err
 				}

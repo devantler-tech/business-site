@@ -52,6 +52,11 @@ protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
 responsive layout and System/Light/Dark appearance. Only public CSS/JS are exposed.
 
+The five private page templates share their document metadata, header and footer
+through ordinary Go `html/template` definitions in `portal.html`. Each page keeps
+its existing native forms, content and navigation targets. This presentation
+sharing adds no renderer process or new authentication boundary.
+
 `Invite` and `Revoke` remain **trusted control-plane operations**, not public
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
 `Complete` accepts only a server-obtained token, never a browser authentication claim.
