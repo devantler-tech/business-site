@@ -153,6 +153,13 @@ archive as the review artifact, not a production backend. After downloading the
 artifact, extract the tar archive before running the executable; no manual `chmod`
 is required. Pages publication is unchanged and uploads only `dist`.
 
+Packaging copies the selected Go distribution's license and patent notice. Official
+distributions keep both under `GOROOT`; Homebrew keeps `LICENSE` at the same-version
+formula prefix and `PATENTS` under `libexec`. The resolver checks the compiler against
+the distribution's `VERSION` and confines that fallback to its matching formula, not
+another installed Go. Missing or empty notices still stop packaging. Run
+`bash scripts/package-go-notices.test.sh` for the supported layouts and refusal controls.
+
 With no `PORTAL_*` dependencies, startup serves public pages without broker/store
 connections and reserves private routes as non-cacheable 404s. For later private
 wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),

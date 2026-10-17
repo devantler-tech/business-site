@@ -13,6 +13,7 @@ node --test scripts/journal-navigation.test.mjs
 node --test scripts/public-products.test.mjs
 node --test scripts/public-tools.test.mjs
 node --test scripts/public-profile.test.mjs
+bash scripts/package-go-notices.test.sh
 node --test scripts/package-profile-contract.test.mjs
 node --test scripts/reader-text.test.mjs
 node --test scripts/featured-rollout.test.mjs
