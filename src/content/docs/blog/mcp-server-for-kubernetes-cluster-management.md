@@ -62,7 +62,7 @@ For Cursor, the setup is similar — add the MCP server in settings and point it
 
 This is the part I find genuinely interesting to think about.
 
-KSail's CLI is built with [Cobra](https://github.com/spf13/cobra). Every command — `ksail cluster create`, `ksail workload apply`, `ksail cipher encrypt` — is defined as a Cobra command with flags, arguments, and descriptions.
+KSail's CLI is built with [Cobra](https://github.com/spf13/cobra). Every command — `ksail cluster create`, `ksail workload apply`, `ksail workload cipher encrypt` — is defined as a Cobra command with flags, arguments, and descriptions.
 
 Rather than manually writing MCP tool definitions for each command, I built a code generator that walks the Cobra command tree and auto-generates the tool definitions. The generator reads each command's description, flags, and argument patterns, and produces the corresponding MCP tool schema.
 

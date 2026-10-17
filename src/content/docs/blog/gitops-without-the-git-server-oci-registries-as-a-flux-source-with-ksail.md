@@ -202,7 +202,7 @@ Both workflows coexist without conflict. It's a per-session choice.
 
 ## A Note on Secret Management
 
-Regardless of whether you use a local registry or GHCR, secrets shouldn't be in your manifests in plain text. KSail has built-in SOPS integration (`ksail cipher encrypt`) for secret management — encrypt secrets before they land in `k8s/`.
+Regardless of whether you use a local registry or GHCR, secrets shouldn't be in your manifests in plain text. KSail has built-in SOPS integration (`ksail workload cipher encrypt`) for secret management — encrypt secrets before they land in `k8s/`.
 
 If you use GHCR, packages inherit from your repository's visibility by default. For anything sensitive, set the package visibility explicitly in GitHub's package settings, or use a private repository.
 
