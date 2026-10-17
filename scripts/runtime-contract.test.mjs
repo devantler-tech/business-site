@@ -63,7 +63,8 @@ function assertRuntime(workflow) {
       s["working-directory"] === ".",
   );
   const uploadIndex = steps.findIndex((s) => s.with?.name === "business-site-runtime");
-  assert.equal(steps[node]?.with?.["node-version"], "24");
+  assert.equal(steps[node]?.with?.["node-version-file"], ".node-version");
+  assert.equal(steps[node]?.with?.["node-version"], undefined);
   assert.ok(node >= 0 && install > node && build > install && smoke > build);
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(

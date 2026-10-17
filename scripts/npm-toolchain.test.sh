@@ -16,7 +16,7 @@
 #      onFail "error".
 #   2. Every job in .github/workflows that invokes npm/npx or the audit wrapper
 #      (see jobs_query) has exactly one actions/setup-node step before that invocation, with an explicit
-#      node-version on a Node line whose bundled npm is that major. The known jobs must all be
+#      root .node-version selecting a Node line whose bundled npm is that major. The known jobs must all be
 #      found, so an empty discovery cannot pass.
 #   3. The build first proves npm 11.4.2 can clean-install the lockfile, then installs
 #      with the runner's current npm 11. Both installs are unconditional and propagate
@@ -62,7 +62,11 @@ required_jobs=(
 
 # Paths the CI filter gating this test must list, so a change to any input reruns it.
 required_filter_paths=(
+  .node-version
   package.json
+  web/package.json
+  web/package-lock.json
+  .github/dependabot.yaml
   scripts/npm-toolchain.test.sh
   '.github/workflows/**'
 )
@@ -85,7 +89,7 @@ def docs_dir: test("(^|/)docs(/|$)");
 def enters_docs:
   test("(^|[\\s;&|(])(cd|pushd)\\s+([^;&|\\n]*[/\"'\\s])?docs([\"'/\\s;&|)]|$)")
   or test("--prefix[ =]([^\\s;&|]*[/\"'])?docs([\"'/\\s;&|)]|$)");
-def runs_npm: test("(^|[\\s;&|(])(npm|npx)(\\s|$)");
+def runs_npm: test("(^|[\\s;&|(])(npm|npx|node)(\\s|$)");
 def runs_audit: test("(^|[/\\s;&|(])audit-dependencies(\\.test)?\\.sh([\\s;&|)]|$)");
 (((.defaults // {}).run // {})["working-directory"]) as $workflow_default |
 (.jobs // {}) | to_entries[] |
@@ -99,12 +103,14 @@ def runs_audit: test("(^|[/\\s;&|(])audit-dependencies(\\.test)?\\.sh([\\s;&|)]|
   (($steps[.].run // "") | runs_audit) or
   ($default_docs and ($steps[.].run != null))
 )] as $docs |
-select($default_docs or ($docs | length > 0)) |
 [range(0; $steps | length) | select(($steps[.].uses // "") | test("^actions/setup-node@"))] as $setup |
+select($default_docs or ($docs | length > 0) or ($setup | length > 0)) |
 [.key, ($setup | length | tostring),
  (if ($setup | length) > 0 then ($steps[$setup[0]].with["node-version"] // "-" | tostring) else "-" end),
  (if ($setup | length) > 0 then ($steps[$setup[0]].with["node-version-file"] // "-" | tostring) else "-" end),
- (if ($setup | length) > 0 and ($docs | length) > 0 then ($setup[0] < $docs[0]) else true end | tostring)]
+ (if ($setup | length) > 0 and ($docs | length) > 0 then ($setup[0] < $docs[0]) else true end | tostring),
+ (if ($setup | length) > 0 then ($steps[$setup[0]] | .if == null and
+   (.["continue-on-error"] == null or .["continue-on-error"] == false)) else false end | tostring)]
 | @tsv
 JQ
 
@@ -135,14 +141,41 @@ check() {
     return 1
   declared_major="${BASH_REMATCH[1]}"
 
-  local workflow base json rows job count node_version node_version_file ordered line npm_major
+  local root node_line engine package types
+  root="$(dirname "${package_json}")"
+  node_line="$(cat "${root}/.node-version" 2>/dev/null)" ||
+    violation "cannot read .node-version" || return 1
+  [[ "${node_line}" =~ ^[1-9][0-9]*$ ]] ||
+    violation ".node-version must declare one numeric Node major" || return 1
+  for package in package.json web/package.json; do
+    engine="$(jq -er '.engines.node' "${root}/${package}")" ||
+      violation "cannot read ${package} engines.node" || return 1
+    [ "${engine}" = "^${node_line}" ] ||
+      violation "${package} engines.node must match ^${node_line}" || return 1
+  done
+  types="$(jq -er '.devDependencies["@types/node"]' "${root}/web/package.json")" || return 1
+  [[ "${types}" == "${node_line}."* ]] ||
+    violation "@types/node must match Node ${node_line}" || return 1
+  local lock policy
+  lock="$(jq -er '.packages["node_modules/@types/node"].version' "${root}/web/package-lock.json")" ||
+    violation "cannot read locked @types/node" || return 1
+  [ "${lock}" = "${types}" ] || violation "locked @types/node must match its manifest" || return 1
+  policy="$(yq -o=json '.' "${root}/.github/dependabot.yaml" | jq -r '
+    [.updates[] | select(."package-ecosystem" == "npm" and .directory == "/web")] as $web |
+    ($web | length) == 1 and
+    any($web[0].ignore[]?; ."dependency-name" == "@types/node" and
+      ."update-types" == ["version-update:semver-major"] and .versions == null)
+  ')" || violation "cannot read Node types update policy" || return 1
+  [ "${policy}" = true ] || violation "Node types major updates must be coordinated with the runtime" || return 1
+
+  local workflow base json rows job count node_version node_version_file ordered mandatory line npm_major
   local found=" "
   for workflow in "${workflows_dir}"/*.yaml "${workflows_dir}"/*.yml; do
     [ -f "${workflow}" ] || continue
     base="$(basename "${workflow}")"
     json="$(yq -o=json '.' "${workflow}")" || violation "cannot parse ${base}" || return 1
     rows="$(jq -r "${jobs_query}" <<<"${json}")" || violation "cannot read the jobs of ${base}" || return 1
-    while IFS=$'\t' read -r job count node_version node_version_file ordered; do
+    while IFS=$'\t' read -r job count node_version node_version_file ordered mandatory; do
       [ -n "${job}" ] || continue
       found="${found}${base}:${job} "
       [ "${count}" = "1" ] ||
@@ -151,18 +184,22 @@ check() {
       [ "${ordered}" = "true" ] ||
         violation "${base}:${job} sets up Node after its first step in docs/, so that step runs on the runner's default Node" ||
         return 1
-      [ "${node_version_file}" = "-" ] && [ "${node_version}" != "-" ] ||
-        violation "${base}:${job} must pin node-version explicitly, so the npm major it installs with is reviewable" ||
-        return 1
-      [[ "${node_version}" =~ ^v?([0-9]+)(\.|$) ]] ||
-        violation "${base}:${job} node-version '${node_version}' does not name a Node release line" || return 1
-      line="${BASH_REMATCH[1]}"
+      line="${node_line}"
+      if [ "${node_version}" != "-" ]; then
+        [[ "${node_version}" =~ ^v?([0-9]+)(\.|$) ]] ||
+          violation "${base}:${job} node-version '${node_version}' does not name a Node release line" || return 1
+        line="${BASH_REMATCH[1]}"
+      fi
       npm_major="$(bundled_npm_major "${line}")" ||
         violation "${base}:${job} uses Node ${line}, whose bundled npm major this test does not know yet" ||
         return 1
       [ "${npm_major}" = "${declared_major}" ] ||
         violation "${base}:${job} sets up Node ${node_version}, which bundles npm ${npm_major}; package.json declares npm ${declared_major}" ||
         return 1
+      [ "${node_version_file}" = ".node-version" ] && [ "${node_version}" = "-" ] ||
+        violation "${base}:${job} must read the root .node-version without an overriding node-version" || return 1
+      [ "${mandatory}" = true ] ||
+        violation "${base}:${job} Node setup must run and propagate failures" || return 1
     done <<<"${rows}"
   done
 
@@ -226,12 +263,77 @@ expect_failure() {
 reset_fixture() {
   fixture="${tmp_dir}/fixture"
   rm -rf "${fixture}"
-  mkdir -p "${fixture}/docs" "${fixture}/.github"
+  mkdir -p "${fixture}/docs" "${fixture}/.github" "${fixture}/web"
   cp "${repo_root}/package.json" "${fixture}/package.json"
+  cp "${repo_root}/web/package.json" "${fixture}/web/package.json"
+  cp "${repo_root}/web/package-lock.json" "${fixture}/web/package-lock.json"
+  cp "${repo_root}/.node-version" "${fixture}/.node-version"
+  cp "${repo_root}/.github/dependabot.yaml" "${fixture}/.github/dependabot.yaml"
   cp -R "${repo_root}/.github/workflows" "${fixture}/.github/workflows"
 }
 
 output="$(check "${repo_root}/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
+
+# A version-file consumer must fail closed on absent or conflicting authority,
+# and type checking must not admit APIs newer than the selected runtime.
+reset_fixture
+rm -f "${fixture}/.node-version"
+expect_failure "missing Node declaration" "cannot read .node-version"
+
+reset_fixture
+printf 'latest\n' >"${fixture}/.node-version"
+expect_failure "floating Node declaration" "must declare one numeric Node major"
+
+reset_fixture
+jq '.engines.node = ">=22.18.0"' "${fixture}/package.json" >"${fixture}/package-broken.json"
+mv "${fixture}/package-broken.json" "${fixture}/package.json"
+expect_failure "root engine admits another line" "package.json engines.node"
+
+reset_fixture
+jq '.engines.node = "^26"' "${fixture}/web/package.json" >"${fixture}/web/package-broken.json"
+mv "${fixture}/web/package-broken.json" "${fixture}/web/package.json"
+expect_failure "candidate engine drifts" "web/package.json engines.node"
+
+reset_fixture
+jq '.devDependencies["@types/node"] = "26.6.5"' "${fixture}/web/package.json" >"${fixture}/web/package-broken.json"
+mv "${fixture}/web/package-broken.json" "${fixture}/web/package.json"
+expect_failure "types admit newer APIs" "@types/node must match Node"
+
+reset_fixture
+jq '.packages["node_modules/@types/node"].version = "26.6.5"' "${fixture}/web/package-lock.json" >"${fixture}/web/lock-broken.json"
+mv "${fixture}/web/lock-broken.json" "${fixture}/web/package-lock.json"
+expect_failure "lockfile types drift" "locked @types/node must match"
+
+reset_fixture
+yq -i 'del(.updates[] | select(.directory == "/web") | .ignore)' "${fixture}/.github/dependabot.yaml"
+expect_failure "uncoordinated Node types major update" "Node types major updates must be coordinated"
+
+reset_fixture
+yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version-file") = "web/.node-version"' "${fixture}/.github/workflows/publish-pages.yaml"
+expect_failure "second Node authority" "must read the root .node-version"
+
+reset_fixture
+yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "24"' "${fixture}/.github/workflows/publish-pages.yaml"
+expect_failure "inline version overrides declaration" "must read the root .node-version"
+
+reset_fixture
+yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
+  {"uses": "actions/setup-node@fixture", "with": {"node-version": "24"}},
+  {"run": "node --test tests/example.mjs"}]}' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "Node-only job also reads declaration" "must read the root .node-version"
+
+reset_fixture
+yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
+  {"run": "node --test tests/example.mjs"}]}' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "Node-only job missing setup" "ci.yaml:extra works in docs/ but has 0"
+
+for control in '.if = "false"' '.["continue-on-error"] = true'; do
+  reset_fixture
+  yq -o=json '.' "${fixture}/.github/workflows/publish-pages.yaml" |
+    jq "(.jobs.build.steps[] | select((.uses // \"\") | startswith(\"actions/setup-node@\"))) |= (${control})" >"${fixture}/conditional-node.json"
+  yq -P '.' "${fixture}/conditional-node.json" >"${fixture}/.github/workflows/publish-pages.yaml"
+  expect_failure "Node setup cannot be skipped: ${control}" "Node setup must run and propagate failures"
+done
 
 # A root-native application still audits through its wrapper, not a literal npm
 # command. Discover that invocation even when a workflow inherits the root.
