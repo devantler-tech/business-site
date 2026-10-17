@@ -18,6 +18,9 @@ cover:
 
 K3s is Rancher's lightweight Kubernetes distribution, and when combined with [K3d](https://k3d.io/) and [KSail](https://github.com/devantler-tech/ksail), you get a fast, batteries-included local development experience. This post shows you how to get started.
 
+> [!NOTE]
+> The commands in this guide match KSail v7.203 (checked on 17 October 2026).
+
 ## Why K3d + KSail?
 
 **K3s** is a lightweight, certified Kubernetes distribution designed for resource-constrained environments. It comes with sensible defaults and includes components like Traefik ingress, local-path storage provisioner, and metrics-server out of the box.
@@ -54,7 +57,7 @@ brew install --cask devantler-tech/tap/ksail
 Or with Go:
 
 ```bash
-go install github.com/devantler-tech/ksail/v5@latest
+go install github.com/devantler-tech/ksail/v7@latest
 ```
 
 Verify the installation:
@@ -65,18 +68,18 @@ ksail --version
 
 ## Step 2: Scaffold Your Cluster Project
 
-KSail's `init` command scaffolds a complete project structure:
+KSail's `project init` command scaffolds a complete project structure:
 
 ```bash
 mkdir my-cluster && cd my-cluster
-ksail cluster init --distribution K3s
+ksail project init --distribution K3s
 ```
 
-This creates `ksail.yaml` (cluster configuration), `k3d.yaml` (K3d config), and `k8s/` (your Kubernetes manifests).
+This creates `ksail.yaml` (cluster configuration), `k3d.yaml` (K3d config), `k8s/` (your Kubernetes manifests) and `.devcontainer/` (an optional dev container setup; skip it with `--no-devcontainer`).
 
 For all available flags and configuration options, see the [KSail documentation](https://ksail.devantler.tech):
 
-- [CLI flags reference](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-init) — All `cluster init` options
+- [CLI flags reference](https://ksail.devantler.tech/cli-flags/project/project-init/) — All `project init` options
 - [ksail.yaml reference](https://ksail.devantler.tech/configuration/declarative-configuration) — Configuration file schema
 - [Features overview](https://ksail.devantler.tech/features) — CNI, CSI, GitOps, and more
 
