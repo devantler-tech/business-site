@@ -153,7 +153,7 @@ archive as the review artifact, not a production backend. After downloading the
 artifact, extract the tar archive before running the executable; no manual `chmod`
 is required. Pages publication is unchanged and uploads only `dist`.
 
-Packaging copies the selected Go distribution's licence and patent notice. Official
+Packaging copies the selected Go distribution's license and patent notice. Official
 distributions keep both under `GOROOT`; Homebrew keeps `LICENSE` at the same-version
 formula prefix and `PATENTS` under `libexec`. The resolver checks the compiler against
 the distribution's `VERSION` and confines that fallback to its matching formula, not

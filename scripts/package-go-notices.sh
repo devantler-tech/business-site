@@ -12,9 +12,9 @@ distribution_version=""
 IFS= read -r distribution_version < "$go_root/VERSION" || fail
 [[ "$distribution_version" == "$compiler_version" ]] || fail
 
-licence="$go_root/LICENSE"
+license="$go_root/LICENSE"
 patents="$go_root/PATENTS"
-if [[ ! -e "$licence" && ! -L "$licence" ]]; then
+if [[ ! -e "$license" && ! -L "$license" ]]; then
   # Homebrew moves LICENSE to the formula prefix but leaves PATENTS in libexec.
   # Confine this one fallback to the same formula version that supplied GOROOT.
   [[ "${go_root##*/}" == libexec ]] || fail
@@ -31,12 +31,12 @@ if [[ ! -e "$licence" && ! -L "$licence" ]]; then
     "$version"_*) [[ "${formula_version#"$version"_}" =~ ^[0-9]+$ ]] || fail ;;
     *) fail ;;
   esac
-  licence="$prefix/LICENSE"
+  license="$prefix/LICENSE"
 fi
 
 # Validate both before copying either: incomplete distributions never appear complete.
-for notice in "$licence" "$patents"; do
+for notice in "$license" "$patents"; do
   [[ -f "$notice" && -r "$notice" && -s "$notice" ]] || fail
 done
-cp -- "$licence" "$destination/Go-LICENSE"
+cp -- "$license" "$destination/Go-LICENSE"
 cp -- "$patents" "$destination/Go-PATENTS"

@@ -16,7 +16,7 @@ prepare() {
   mkdir -p "$scratch/case/output" "$scratch/case/$1"
   fixture_root="$scratch/case/$1"
   printf 'go1.27.2\ntime fixture\n' > "$fixture_root/VERSION"
-  printf 'fictional Go licence\n' > "$fixture_root/LICENSE"
+  printf 'fictional Go license\n' > "$fixture_root/LICENSE"
   printf 'fictional Go patent notice\n' > "$fixture_root/PATENTS"
 }
 run_copy() {
@@ -25,7 +25,7 @@ run_copy() {
 }
 accept() {
   run_copy || fail "$1 rejected"
-  printf 'fictional Go licence\n' | cmp -s - "$scratch/case/output/Go-LICENSE" || fail "$1 licence differs"
+  printf 'fictional Go license\n' | cmp -s - "$scratch/case/output/Go-LICENSE" || fail "$1 license differs"
   printf 'fictional Go patent notice\n' | cmp -s - "$scratch/case/output/Go-PATENTS" || fail "$1 patent notice differs"
 }
 reject() {
@@ -51,7 +51,7 @@ accept 'versioned Homebrew formula'
 
 prepare official/go
 rm -- "$fixture_root/LICENSE"
-reject 'missing licence'
+reject 'missing license'
 
 prepare official/go
 rm -- "$fixture_root/PATENTS"
@@ -59,7 +59,7 @@ reject 'missing patent notice'
 
 prepare official/go
 : > "$fixture_root/LICENSE"
-reject 'empty licence'
+reject 'empty license'
 
 prepare official/go
 printf 'go1.26.1\n' > "$fixture_root/VERSION"
@@ -67,7 +67,7 @@ reject 'compiler and distribution version mismatch'
 
 prepare unrelated/1.27.2/libexec
 mv "$fixture_root/LICENSE" "${fixture_root%/libexec}/LICENSE"
-reject 'unrelated parent licence'
+reject 'unrelated parent license'
 
 prepare Cellar/go/1.26.1/libexec
 mv "$fixture_root/LICENSE" "${fixture_root%/libexec}/LICENSE"
