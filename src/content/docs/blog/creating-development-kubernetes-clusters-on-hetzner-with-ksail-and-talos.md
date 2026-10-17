@@ -88,10 +88,10 @@ KSail is distributed as a single binary. The easiest installation method is via 
 brew install --cask devantler-tech/tap/ksail
 ```
 
-Alternatively, if you have Go installed:
+Alternatively, with the install script:
 
 ```bash
-go install github.com/devantler-tech/ksail/v7@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 Verify the installation:

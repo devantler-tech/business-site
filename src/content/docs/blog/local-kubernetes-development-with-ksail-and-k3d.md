@@ -54,10 +54,10 @@ KSail is distributed as a single binary. Install via Homebrew:
 brew install --cask devantler-tech/tap/ksail
 ```
 
-Or with Go:
+Or with the install script:
 
 ```bash
-go install github.com/devantler-tech/ksail/v7@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 Verify the installation:

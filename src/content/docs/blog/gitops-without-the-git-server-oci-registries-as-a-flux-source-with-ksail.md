@@ -158,11 +158,9 @@ A minimal GitHub Actions workflow step:
       docker login ghcr.io -u ${{ github.actor }} --password-stdin
     ksail workload push \
       oci://ghcr.io/${{ github.repository_owner }}/my-cluster-manifests:${{ github.sha }}
-  env:
-    KSAIL_CLUSTER_NAME: staging
 ```
 
-The `KSAIL_CLUSTER_NAME` environment variable tells KSail which cluster configuration to load when you have multiple clusters defined.
+With several cluster configurations in one repository, choose one with the global `--config` flag, for example `ksail --config ksail.staging.yaml workload push …`. KSail's [multi-environment guide](https://ksail.devantler.tech/guides/multi-environment/) shows the full setup.
 
 For cloud clusters (e.g., Hetzner) where there's no local Docker daemon, an external registry is required. Use the `--local-registry` flag with `project init` to configure it:
 
