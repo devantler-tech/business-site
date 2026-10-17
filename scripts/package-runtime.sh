@@ -58,8 +58,7 @@ digest="$(cd server && go run ./cmd/business-site --check-public --public "../$p
     [[ "$count" -gt 0 ]] || { printf '%s\n' 'A linked module lacks packaged upstream license text; investigate before distribution.' >&2; exit 1; }
   done
 )
-cp "$(go env GOROOT)/LICENSE" "$package/notices/Go-LICENSE"
-cp "$(go env GOROOT)/PATENTS" "$package/notices/Go-PATENTS"
+bash scripts/package-go-notices.sh "$package/notices"
 cp server/DEPENDENCIES.md "$package/notices/DEPENDENCIES.md"
 cp server/README.md "$package/README.md"
 cp server/MIGRATIONS.md "$package/MIGRATIONS.md"
