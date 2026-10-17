@@ -1,8 +1,6 @@
 <!doctype html>
-<html lang="{{.Lang}}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
-<body><a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
-<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{.LanguageURL}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+{{template "portal-head" .}}
+{{template "portal-header" .}}
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
@@ -17,6 +15,15 @@
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="/portal/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
 {{if .RequestsEnabled}}<p><a href="/portal/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
 {{if .TriageEnabled}}<p><a href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section><a class="back" href="/">{{.Back}}</a></main><footer>Devantler Tech</footer>
+</section><a class="back" href="/">{{.Back}}</a></main>{{template "portal-footer" .}}
+
+{{define "portal-head"}}<html lang="{{.Lang}}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
+<body>{{end}}
+
+{{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
+<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{if eq .Kind `contact`}}?lang={{if eq .Lang `da`}}en{{else}}da{{end}}{{else}}{{.LanguageURL}}{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>{{end}}
+
+{{define "portal-footer"}}<footer>Devantler Tech</footer>
 <script src="/portal/assets/portal.js" defer></script>
-</body></html>
+</body></html>{{end}}
