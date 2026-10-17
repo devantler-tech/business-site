@@ -10,7 +10,8 @@ This is a migration candidate, not the published site.
 
 ## Try it locally
 
-Use Node 24, npm 11 and Bash. From the repository root, install the root and candidate's pinned
+Use the Node line declared in the root `.node-version` (24), npm 11 and Bash. The candidate's
+engine range and Node type definitions follow that same line. From the repository root, install the root and candidate's pinned
 dependencies, then build its explicitly enabled output. Root dependencies resolve the shared
 content's TypeScript configuration; neither install publishes anything:
 

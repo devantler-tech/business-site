@@ -44,7 +44,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 ## Maintenance
 
-Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
+Use the Node line in `.node-version` (24), npm 11 and `LC_ALL=C`. Both package engines and the
+candidate's Node type definitions must match that line; all workflows read the same file.
+From this repository's root:
 
 ```sh
 npm ci

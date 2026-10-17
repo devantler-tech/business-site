@@ -21,7 +21,9 @@ npm run dev -- --host 127.0.0.1  # stop with Ctrl+C
 LC_ALL=C npm run build          # production build and visitor checks
 ```
 
-Use Node 24 and npm 11. CI clean-installs with npm 11.4.2 before repeating the install
+Use the Node line declared in `.node-version` (24) and npm 11. Workflows and the runtime packager
+read that declaration; package engine ranges and candidate Node types are checked against it.
+CI clean-installs with npm 11.4.2 before repeating the install
 with the runner's current npm 11. This also checks older supported versions: they
 require a nested optional Markdown peer that newer npm releases can omit when
 generating a lockfile. For intentional dependency changes, regenerate rather than
