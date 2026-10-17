@@ -104,6 +104,9 @@ source-owned publisher explicitly enables the footer, email route and required d
 Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
 plus 299/month for a focused first app version, and 4,995 plus 199/month for a service.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
+The VAT-inclusive guides decided in #154 (3,750 + 125, 10,000 + 375 and 6,250 + 250 DKK) are
+preview-only under default-off `FEATURE_VAT_PRICES`; keep the prices above published until the VAT
+registration's effective date is confirmed and that switch is reviewed. Never add VAT to them again.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects

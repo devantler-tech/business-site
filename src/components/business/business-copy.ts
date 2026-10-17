@@ -10,13 +10,53 @@ export const offers = [
   { id: 'service', setup: 4995, monthly: 199 },
 ] as const;
 
+/** Danish VAT rate, in percent, included in the VAT-inclusive guide prices. */
+export const vatRatePercent = 25;
+
+// VAT-inclusive guide totals decided for an ordinarily VAT-registered business
+// (#154). Each total's net amount stays at or above the matching `offers`
+// amount, so adding VAT never lowers what the business keeps.
+export const vatInclusiveOffers = [
+  { id: 'website', setup: 3750, monthly: 125 },
+  { id: 'app', setup: 10000, monthly: 375 },
+  { id: 'service', setup: 6250, monthly: 250 },
+] as const;
+
+/** The whole-krone net amount inside a VAT-inclusive total; throws when it is not exact. */
+export function netOf(total: number): number {
+  const net = (total * 100) / (100 + vatRatePercent);
+  if (!Number.isInteger(net)) throw new Error(`VAT-inclusive total ${total} has no whole-krone net amount`);
+  return net;
+}
+
+/** The guide prices visitors see under the explicit VAT release decision. */
+export function guideOffers(vatPricesEnabled: boolean) {
+  return vatPricesEnabled ? vatInclusiveOffers : offers;
+}
+
+/** The marker shown beside each VAT-inclusive price; null while the release is off. */
+export function vatPriceMarker(locale: Locale, vatPricesEnabled: boolean): string | null {
+  if (!vatPricesEnabled) return null;
+  return locale === 'da' ? 'inkl. moms' : 'incl. VAT';
+}
+
+// The published and revised price notes both state the PMV position; the VAT
+// release replaces exactly that sentence and nothing else.
+const vatNotes = {
+  en: ['No VAT is charged under the current PMV setup.', `Prices include ${vatRatePercent}% Danish VAT.`],
+  da: ['Der opkræves ikke moms under den nuværende PMV-ordning.', `Priserne er inkl. ${vatRatePercent} % moms.`],
+} as const;
+
+/** Replace the PMV VAT sentence; fail the build if the note no longer carries it. */
+export function vatPriceNote(locale: Locale, priceNote: string): string {
+  const [pmv, vat] = vatNotes[locale];
+  if (!priceNote.includes(pmv)) throw new Error(`The ${locale} price note no longer states the PMV VAT position; review the VAT wording`);
+  return priceNote.replace(pmv, vat);
+}
+
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
-/**
- * Build shared bilingual homepage copy from the caller's explicit release decisions.
- * Identity, revised offers and customer scope are separate release decisions.
- * No framework environment or private company input is read here.
- */
-export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false) {
+/** Homepage copy for the identity, offer and customer-scope decisions, before VAT pricing. */
+function createScopedCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled: boolean) {
 const previewCopy = {
   en: {
     title: 'Websites & software for businesses | Devantler Tech',
@@ -180,3 +220,16 @@ return {
 };
 }
 
+/**
+ * Build shared bilingual homepage copy from the caller's explicit release decisions.
+ * Identity, revised offers, customer scope and VAT-inclusive prices are separate
+ * release decisions. No framework environment or private company input is read here.
+ */
+export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false, vatPricesEnabled = false) {
+  const scoped = createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
+  if (!vatPricesEnabled) return scoped;
+  return {
+    en: { ...scoped.en, priceNote: vatPriceNote('en', scoped.en.priceNote) },
+    da: { ...scoped.da, priceNote: vatPriceNote('da', scoped.da.priceNote) },
+  };
+}

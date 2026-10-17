@@ -133,6 +133,11 @@ jobs:
         env:
           FEATURE_CUSTOMER_SCOPE: "true"
         run: npm run build
+      - name: Build VAT-inclusive price preview
+        working-directory: .
+        env:
+          FEATURE_VAT_PRICES: "true"
+        run: npm run build
       - name: Build revised hosting-offer preview
         working-directory: .
         env:
@@ -157,12 +162,13 @@ jobs:
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
           FEATURE_CUSTOMER_SCOPE: "false"
+          FEATURE_VAT_PRICES: "false"
           FEATURE_OFFER_COPY: "false"
           FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build
       - name: Verify the published Journal presentation
         working-directory: .
         run: node scripts/check-journal-presentation.mjs dist

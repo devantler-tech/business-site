@@ -48,6 +48,11 @@ export default defineConfig({
         access: "public",
         default: false,
       }),
+      FEATURE_VAT_PRICES: envField.boolean({
+        context: "server",
+        access: "public",
+        default: false,
+      }),
       FEATURE_FEATURED_PORTFOLIO: envField.boolean({ context: "server", access: "public", default: true }),
       FEATURE_OFFER_COPY: envField.boolean({
         context: "server",

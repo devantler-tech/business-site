@@ -65,6 +65,16 @@ their published English/Danish alternatives until reviewed activation. CI builds
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
 
+`FEATURE_VAT_PRICES=true` previews the VAT-inclusive guide prices decided in #154: DKK 3,750 plus
+125/month for a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web
+service. Each price is marked "incl. VAT" / "inkl. moms", and the price note says prices include
+25% Danish VAT instead of stating the PMV position. The totals live in `vatInclusiveOffers` in
+`business-copy.ts`; `scripts/vat-prices.test.mjs` checks that each total's net amount stays at or
+above the earlier price and that VAT is never added twice. The flag defaults to false and the
+publisher does not set it, so the live site keeps the earlier prices until the registration's
+effective date is confirmed and the switch is reviewed. CI builds enabled, explicit false and
+entirely unset states; the Svelte candidate keeps the published prices.
+
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
 choice before painting, follows system changes in System mode, and shares Starlight's

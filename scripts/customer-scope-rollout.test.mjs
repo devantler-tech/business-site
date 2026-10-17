@@ -5,7 +5,7 @@ import { load } from 'js-yaml';
 
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
 const flag = 'FEATURE_CUSTOMER_SCOPE';
-const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build';
+const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build';
 /** Require all release states to succeed before CI uploads the normal artifact. */
 const valid = ci => {
   const job = ci.jobs?.['build-docs'];
