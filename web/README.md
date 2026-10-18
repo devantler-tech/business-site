@@ -1,4 +1,4 @@
-# Business frontend candidate
+# Business public frontend
 
 The English/Danish Home, About, Projects and gated company-information pages, English Journal and six technical guides in SvelteKit 3 and Svelte 5, using the website's existing
 homepage content, artwork, portrait, visual identity and appearance preference. Public reading uses
@@ -6,7 +6,7 @@ prerendered HTML without application hydration; the existing local theme control
 only script referenced by Home and About. Projects also uses the existing bookmark-disclosure
 controller, while two historical entrypoints use a minimal fragment-preserving redirect.
 Journal uses the shared native-link card controller, with no application hydration.
-This is a migration candidate, not the published site.
+The source-owned publisher and production-profile Go image select this frontend.
 
 ## Try it locally
 
@@ -171,14 +171,17 @@ by selected Svelte publication: requesting them fails rather than silently ignor
 
 The source-owned publisher's manual `mode=preview, frontend=svelte` dispatch on `main` builds
 and uploads the actual selected artifact with its source/run receipt, but cannot deploy it.
-Push/scheduled/production publication still pins Astro. `frontend=svelte, mode=publish` is rejected
-before checkout. Production activation and an executed protected rollback remain under #193.
+Push, scheduled and ordinary production publication select Svelte. Manual dispatch defaults to
+Svelte and artifact-only preview; explicit `frontend=astro` retains the incumbent recovery path.
+Either frontend still requires the source switch and protected main-only environment to deploy.
+See [the cutover and rollback decision](../docs/adr/0013-svelte-public-publication.md).
 
 With Go 1.27.2, `bash scripts/package-runtime.sh --release --default --svelte` builds a clean-source
 candidate in `runtime-svelte-default-dist/`. Exercise it with
 `node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist`; the same checks run against its
 extracted archive in CI. The optional second argument `--production-template` retains the existing
-private-address placeholder contract in `runtime-svelte-production-template-dist/`. Ordinary
+private-address placeholder contract in `runtime-production-dist/`, the existing production
+image/archive chain. CI explicitly selects Svelte for that profile. Ordinary
 package commands pin Astro and ignore ambient frontend settings. Neither command deploys anything.
 The Go/PostgreSQL portal remains the unchanged authority, independently default-off.
 There are no private routes, identity integrations, customer records, payment operations or
@@ -208,8 +211,8 @@ otherwise healthy real output. It also exercises the framework's invalid setting
 diagnostics. Run it with `bash scripts/check-svelte-company.sh`; the complete candidate check
 includes it and still finishes with the candidate off. No production switch changes here.
 
-Full public-route/discovery parity, production cutover and rollback remain under #130. Do not
-use this candidate as a substitute for the currently published company-information pages.
+Issue #193 tracks actual publication and protected rollback/restoration evidence; #130 remains
+open until those outcomes are verified. Company-information boundaries remain unchanged.
 
 [Issue #124](https://github.com/devantler-tech/business-site/issues/124) owns the About foundation and
 [#139](https://github.com/devantler-tech/business-site/issues/139) owns the homepage slice and
@@ -219,8 +222,8 @@ use this candidate as a substitute for the currently published company-informati
 decision and [epic #4222](https://github.com/devantler-tech/monorepo/issues/4222) tracks adoption.
 The [source decision](../docs/adr/0011-isolated-svelte-frontend.md) describes this slice's boundaries.
 [Issue #125](https://github.com/devantler-tech/business-site/issues/125) reviews the temporary gate
-by 15 November 2026. Full public-route parity, portal integration, production cutover and rollback
-must be separately reviewed and proved before replacing the existing site. Existing production
+by 15 November 2026. Public cutover does not retire the reading bridge or enable portal integration.
+Existing production
 portal launch prerequisites are not waived by selecting a frontend.
 
 Follow the repository's [contribution guide](../CONTRIBUTING.md), [security instructions](../AGENTS.md)

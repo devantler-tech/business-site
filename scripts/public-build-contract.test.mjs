@@ -22,17 +22,25 @@ test("actual publisher and runtime consumers install both pinned applications", 
     for (const mutation of [steps.filter(step => step.run !== "npm --prefix web ci"), steps.map(step => step.run === "npm --prefix web ci" ? {...step,if:"false"} : step), steps.map(step => step.run === "npm --prefix web ci" ? {...step,"continue-on-error":true} : step)]) assert.throws(() => installation(mutation,mutation.findIndex(step => ["npm run build","bash scripts/package-runtime.sh --release"].includes(step.run))));
   }
 });
-test("the actual publisher admits Svelte only for an artifact-only main preview", () => {
+test("the actual publisher selects Svelte for production while preserving protected Astro recovery", () => {
   const workflow = load(".github/workflows/publish-site.yaml");
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.frontend.options,["astro","svelte"]);
-  assert.equal(workflow.on.workflow_dispatch.inputs.frontend.default,"astro");
   const admission = workflow.jobs.build.steps[0].run;
   const base = { ...process.env, PUBLICATION_REPOSITORY:"devantler-tech/business-site", PUBLICATION_REF:"refs/heads/main", PUBLICATION_EVENT:"workflow_dispatch", PUBLICATION_ENABLED:"true", SOURCE_REVISION:"a".repeat(40), PUBLIC_FRONTEND:"svelte", PUBLICATION_MODE:"preview" };
   const admit = changes => spawnSync("bash",["-c",admission],{env:{...base,...changes}}).status;
   assert.equal(admit({}),0);
-  for (const changes of [{PUBLICATION_MODE:"publish"},{PUBLICATION_EVENT:"push"},{PUBLICATION_EVENT:"schedule"},{PUBLIC_FRONTEND:"unknown"},{PUBLICATION_REF:"refs/heads/test"}]) assert.notEqual(admit(changes),0);
+  for (const frontend of ["svelte","astro"]) {
+    for (const event of ["push","schedule","workflow_dispatch"]) {
+      assert.equal(admit({PUBLIC_FRONTEND:frontend,PUBLICATION_MODE:"publish",PUBLICATION_EVENT:event}),0);
+      for (const enabled of ["", "false", "TRUE"]) assert.notEqual(admit({PUBLIC_FRONTEND:frontend,PUBLICATION_MODE:"publish",PUBLICATION_EVENT:event,PUBLICATION_ENABLED:enabled}),0);
+    }
+    for (const changes of [{PUBLICATION_REPOSITORY:"devantler-tech/monorepo"},{PUBLICATION_REF:"refs/heads/test"},{PUBLICATION_EVENT:"pull_request"}]) assert.notEqual(admit({PUBLIC_FRONTEND:frontend,...changes}),0);
+  }
+  for (const changes of [{PUBLIC_FRONTEND:"unknown"},{PUBLICATION_REF:"refs/heads/test"},{PUBLICATION_EVENT:"push"}]) assert.notEqual(admit(changes),0);
   const build = workflow.jobs.build.steps.find(step => step.run === "npm run build");
-  assert.equal(build.env.FEATURE_SVELTE_FRONTEND,"${{ inputs.frontend == 'svelte' && inputs.mode == 'preview' && 'true' || 'false' }}");
+  assert.equal(workflow.on.workflow_dispatch.inputs.frontend.default,"svelte");
+  assert.equal(workflow.jobs.build.steps[0].env.PUBLIC_FRONTEND,"${{ inputs.frontend || 'svelte' }}");
+  assert.equal(build.env.FEATURE_SVELTE_FRONTEND,"${{ inputs.frontend != 'astro' && 'true' || 'false' }}");
 });
 test("the reading reference never calls selected publication recursively", () => {
   const reference = readFileSync("scripts/build-journal-reference.sh","utf8");

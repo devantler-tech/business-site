@@ -10,7 +10,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 - The Astro + Starlight application lives at the repository root: `src/`,
   `public/`, `scripts/` and root package/configuration files.
-- `web/` is the isolated SvelteKit migration candidate for #124/#139. Its framework-native
+- `web/` is the SvelteKit public frontend. Its framework-native
   `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
   with the two historical English project redirects, the English Journal's paginated main archive,
   complete unpaginated topic and author archives,
@@ -21,8 +21,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
   Follow `web/README.md`. The normal build selects the verified complete candidate only when
   explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
-  publication remains explicitly Astro; the publisher permits Svelte only for main-only,
-  artifact-only previews. Go packaging admits it only through the explicit `--svelte` option.
+  publication explicitly selects Svelte, with main-only artifact previews and explicit Astro
+  recovery. Production-profile Go packaging also selects Svelte; the ordinary package remains
+  an Astro comparison. Both use the explicit `--svelte` option, not ambient settings.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
   The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings

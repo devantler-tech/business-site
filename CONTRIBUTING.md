@@ -47,7 +47,7 @@ Application paths are relative to the repository root:
   [catalogue procedure](docs/README.md#public-product-catalogue). Its refresh needs `gh` and `jq`
   with read-only GitHub access, unlike ordinary local content work.
 - CV data belongs in `src/data/cv.ts`; keep its documented roster and update date consistent.
-- The isolated SvelteKit candidate lives in `web/`; its [guide](web/README.md) describes
+- The SvelteKit public frontend lives in `web/`; its [guide](web/README.md) describes
   installation, enabled/disabled checks and the current migration boundary.
 - Contributor reference and architecture decisions live in `docs/`. Do not hand-edit generated
   `dist/`, the CV PDF, generated snapshots or dependency lockfiles; follow the documented generator.

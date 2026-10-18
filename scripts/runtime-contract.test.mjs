@@ -91,7 +91,7 @@ test("CI builds and exercises the actual combined package unconditionally", () =
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
   const steps = w.jobs["test-portal-identity"].steps;
-  const build = steps.findIndex((s) => s.run === "bash scripts/package-runtime.sh --release --production-template");
+  const build = steps.findIndex((s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte");
   const smoke = steps.findIndex((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-production-dist");
   const extract = steps.findIndex((s) =>
     s.run?.includes('tar -xzf runtime-production-dist/business-site-runtime.tar.gz -C "$extracted"'),
@@ -119,7 +119,7 @@ test("CI exercises the actual production package and image", () => {
   for (const change of [
     (w) => {
       w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).if = "false";
     },
     (w) => {
@@ -129,7 +129,7 @@ test("CI exercises the actual production package and image", () => {
     },
     (w) => {
       delete w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).env.GH_TOKEN;
     },
     (w) => {

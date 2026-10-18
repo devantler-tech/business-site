@@ -10,7 +10,12 @@ profile=default
 output=runtime-dist
 if [[ "$variant" == --production-template ]]; then profile=production-template; output=runtime-production-dist; fi
 selected=false
-if [[ "$frontend" == --svelte ]]; then selected=true; output="runtime-svelte-${profile}-dist"; fi
+if [[ "$frontend" == --svelte ]]; then
+  selected=true
+  # Production's reviewed Svelte package feeds the existing image/archive chain.
+  # Keep the extra default-profile candidate separate from incumbent comparisons.
+  if [[ "$profile" == default ]]; then output=runtime-svelte-default-dist; fi
+fi
 revision="$(git rev-parse HEAD)"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || exit 1
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then

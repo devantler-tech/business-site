@@ -439,7 +439,7 @@ jobs:
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/package-runtime.sh --release --production-template
+        run: bash scripts/package-runtime.sh --release --production-template --svelte
       - name: Exercise production template with private fictional disclosure
         working-directory: .
         run: node scripts/runtime-smoke.test.mjs runtime-production-dist
