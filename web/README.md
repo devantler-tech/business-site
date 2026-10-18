@@ -20,7 +20,7 @@ npm ci
 npm --prefix web ci
 bash scripts/build-journal-reference.sh
 FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
-npm --prefix web run preview
+npm run preview -- --outDir web/build
 ```
 
 Open the printed loopback address at `/`, `/da/`, `/about/`, `/da/about/`, `/projects/`
@@ -28,6 +28,8 @@ or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal
 The subscription link opens the complete existing `/blog/rss.xml` locally.
 Topic links and the author browse link open the complete corresponding collections locally.
 Technical guides are at `/agentic-engineering/`, `/templates/` and the four existing template paths. Stop the preview with Ctrl+C.
+This serves the final static adapter artifact, including its generated sitemap files;
+the framework's development preview does not serve those post-adapter files.
 Unmigrated navigation links deliberately go to the existing public website. No account, database,
 publishing credential or private customer information is needed. The build generates optimized
 image formats from the original local artwork and photographs; fonts and scripts are also served locally.
