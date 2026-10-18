@@ -49,11 +49,11 @@ Build-time frontmatter parsing, excerpt rendering, author configuration and five
 match the Astro archive; a build-only virtual module keeps filesystem access out of prerendered routes.
 The candidate carries local optimized unique covers, native title links, independent author/topic
 links, the existing recent-post/topic browse choices and previous/next pagination. The complete
-reading routes for all 13 static articles stay local. Topic and author archives
+reading routes for all 15 articles stay local. Topic and author archives
 retain all matching posts on one page, matching Astro rather than truncating to the main archive's
-five-post limit. Author cards keep their separate public profile link. The two Mermaid articles
-remain on the working published destinations until #180 preserves their page-level diagram renderer;
-they are explicit exclusions, never raw diagram source presented as finished reading pages. Technical pages and RSS
+five-post limit. Author cards keep their separate public profile link. The two diagram articles
+render their authored flowcharts and mindmap locally, with named keyboard-scrollable views,
+native text disclosures and clear failure messages. Technical pages and RSS
 deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
 build rather than silently dropping a post. Tests compare every candidate card against the actual
 Astro build, including date labels, excerpts and destinations.
@@ -68,6 +68,17 @@ asset directory. Unreviewed body scripts or interactive content fail rather than
 The reading frame preserves all prose, code, bookmarks, author/topic links, sharing metadata,
 structured data, dates and title-labelled adjacent articles. Native copy controls use the renderer's
 actual payload and provide success or actionable failure feedback, without application hydration.
+Diagram definitions are independently parsed from the authored Markdown and compared with the
+complete Astro placeholder inventory. The reference bundles the already pinned Mermaid dependency
+with the candidate's own Vite toolchain and records every local module and dependency. Missing
+definitions, diagram figures, entrypoints or transitive modules reject the reference. Only diagram
+articles load this renderer; ordinary pages do not. Rendering follows the selected appearance,
+serializes overlapping changes and leaves the text alternative usable if a module or diagram fails.
+Renderer output is explicitly sanitized at the DOM boundary using DOMPurify, now a direct dependency
+at the same version already locked through Mermaid. The existing HTML-label integration is retained;
+page paragraph styles cannot override diagram label colors or spacing.
+The complete emitted renderer graph is about 4.4 MB uncompressed; browsers request only the modules
+needed for the visited diagram types. This is not a performance improvement claim.
 Prose-only articles omit the empty contents disclosure. Native comparison tables retain their
 headers/cells inside named, keyboard-scrollable boundaries; article images and long inline text
 remain contained on narrow layouts. One route dispatches decimal archive pages and exact admitted
