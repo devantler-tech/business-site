@@ -2,23 +2,25 @@
   import Shell from "#lib/Shell.svelte";
   import copyScript from "#lib/journal-copy.js?url";
   import type readings from "virtual:journal-reading";
-  let { data }: { data:NonNullable<typeof readings>[number] } = $props();
+  let { data, technical = false, guides = [] }: { data:NonNullable<typeof readings>[number]; technical?:boolean; guides?:{path:string;title:string}[] } = $props();
 </script>
 
 <svelte:head>
-  <link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="/blog/rss.xml" />
+  {#if !technical}<link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="/blog/rss.xml" />{/if}
   {#each data.metadata as item}<meta name={item.name} property={item.property} content={item.content} />{/each}
   {#each data.structuredData as json}{@html `<script type="application/ld+json">${json}</script>`}{/each}
   <script type="module" src={copyScript}></script>
   {#if data.diagramScript}<script type="module" src={data.diagramScript}></script>{/if}
 </svelte:head>
 
-<Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug={data.path.slice("/blog/".length, -1)} customSocialMetadata>
+<Shell locale="en" title={data.title} description={data.description} page={technical ? "guide" : "journal"} guidePath={data.path} journalSlug={data.path.slice("/blog/".length, -1)} customSocialMetadata>
   <main id="main" class="reader container">
-    <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="/blog/rss.xml">Subscribe via RSS</a></nav>
+    {#if technical}<nav class="wayfinding" aria-label="Guide navigation"><a href="/templates/">Templates</a><a href="/agentic-engineering/">Agentic Engineering</a></nav>{:else}<nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="/blog/rss.xml">Subscribe via RSS</a></nav>{/if}
     <header><h1 id="_top">{data.title}</h1><p>{data.description}</p></header>
     {#if data.headings.length}<details class="contents"><summary>On this page</summary><nav aria-label="On this page"><ol>{#each data.headings as heading}<li class:subheading={heading.level > 2}><a href={`#${heading.id}`}>{heading.title}</a></li>{/each}</ol></nav></details>{/if}
     <article aria-labelledby="_top"><div class="sl-markdown-content">{@html data.html}</div></article>
+    {#if technical && data.adjacent.length}<nav class="wayfinding guide-list" aria-label="More guides">{#each data.adjacent as adjacent}<a rel={adjacent.rel} href={adjacent.href}>{adjacent.rel === "prev" ? "Previous" : "Next"}<br /><span class="link-title">{adjacent.title}</span></a>{/each}</nav>{/if}
+    {#if technical}<nav class="guide-list" aria-label="Technical guides"><ul>{#each guides as guide}<li><a href={guide.path} aria-current={guide.path === data.path ? "page" : undefined}>{guide.title}</a></li>{/each}</ul></nav>{/if}
     <p class="modified">Last updated: <time datetime={data.modified}>{new Intl.DateTimeFormat("en", {year:"numeric",month:"short",day:"numeric",timeZone:"UTC"}).format(new Date(data.modified))}</time></p>
   </main>
 </Shell>
@@ -73,6 +75,15 @@
   article :global(hr) { margin-block:2rem; border:0; border-top:1px solid var(--line); }
   article :global(a) { overflow-wrap:anywhere; }
   .modified { margin-top:2rem; color:var(--muted); font-size:.85rem; }
+  .guide-list { margin-top:3rem; padding-top:1.5rem; border-top:1px solid var(--line); }
+  .guide-list ul { display:flex; flex-wrap:wrap; gap:.75rem 1.5rem; padding:0; list-style:none; }
+  .guide-list a { display:inline-block; padding-block:.5rem; }
+  article :global(.card-grid) { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr)); gap:1.5rem; }
+  article :global(.sl-link-card) { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:1rem; padding:1.5rem; border:1px solid var(--line); border-radius:.5rem; }
+  article :global(.sl-link-card .stack) { display:grid; gap:.75rem; }
+  article :global(.sl-link-card .title) { font-weight:600; }
+  article :global(.sl-link-card .description) { color:var(--muted); line-height:1.7; }
+  article :global(.sl-link-card svg) { width:1.25rem; height:1.25rem; }
   article :global(.sl-blog-tags-list) { display:flex; flex-wrap:wrap; list-style:none; padding:0; gap:.5rem 1rem; }
   article :global(.sl-blog-pagination) { border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem; }
   article :global(.sl-blog-pagination .card-grid) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2rem; }

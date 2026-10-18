@@ -14,7 +14,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
   with the two historical English project redirects, the English Journal's paginated main archive,
   complete unpaginated topic and author archives,
-  and all 15 complete Journal reading routes, including locally rendered diagrams.
+  all 15 complete Journal reading routes, and the six existing English technical guides,
+  including locally rendered diagrams and the complete template collection. The legacy
+  GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
@@ -25,7 +27,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
   using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
   configuration, introductory copy and the native-link card controller. Technical routes
-  remain on the published Astro site. Admitted bodies reuse an
+  reuse their maintained Astro-rendered bodies, bookmarks, native code controls and table semantics;
+  only the original English routes are admitted. Admitted bodies reuse an
   input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
   enabled candidate builds. Normal production builds and publication do not consume that reference.
   The reference also bundles the existing Mermaid dependency with the candidate's Vite toolchain.

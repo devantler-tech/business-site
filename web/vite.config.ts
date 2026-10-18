@@ -12,9 +12,10 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     {
       name: "authored-journal",
-      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:journal-feed"].includes(id)) return `\0${id}`; },
+      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:technical-guides", "virtual:journal-feed"].includes(id)) return `\0${id}`; },
       load(id) {
         const enabled = parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND);
+        if (id === "\0virtual:technical-guides") return `export default ${JSON.stringify(enabled ? readReadingReference().guides : null)};`;
         if (id === "\0virtual:journal-feed") {
           const reference = enabled ? readJournalFeedReference() : null;
           return `export default ${JSON.stringify(reference ? {xml:reference.xml,assets:reference.assets} : null)};`;

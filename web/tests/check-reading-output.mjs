@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { parse } from "parse5";
-import { readingPaths } from "../../src/data/journal-reading.mjs";
+import { runInNewContext } from "node:vm";
+import { parse, serialize } from "parse5";
+import { readingPaths, guidePaths } from "../../src/data/journal-reading.mjs";
 import { journalPaths } from "../../src/data/journal.mjs";
 
-const paths = readingPaths().map(path => `${path.slice(1)}index.html`);
-const admitted = new Set([...readingPaths(), ...journalPaths()]);
+const paths = [...readingPaths(), ...guidePaths()].map(path => `${path.slice(1)}index.html`);
+const admitted = new Set([...readingPaths(), ...guidePaths(), ...journalPaths(), "/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/"]);
 const candidate = new URL("../build/", import.meta.url);
 const published = new URL("../../dist/", import.meta.url);
 /** @typedef {{nodeName:string,tagName?:string,value?:string,attrs?:{name:string,value:string}[],childNodes?:MarkupNode[],parentNode?:MarkupNode|null}} MarkupNode */
@@ -26,6 +27,7 @@ const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const asset = (directory, href) => { assert.ok(href); return readFileSync(new URL(href.slice(1),directory)); };
 /** @param {string} path */
 function checker(path) {
+const technical = !path.startsWith("blog/");
 /** @param {string|undefined} href */
 const absolute = href => { assert.ok(href); return new URL(href, `https://devantler.tech/${path.replace('index.html','')}`).href; };
 const reference = parse(readFileSync(new URL(path, published), "utf8"));
@@ -88,13 +90,18 @@ return function check(html) {
     assert.deepEqual(all(toc).filter(node => node.tagName === "a").map(node => attr(node,"href")), headings(previous).map(item => `#${item[1]}`));
   } else assert.equal(toc, undefined, "prose-only articles have no empty contents control");
   /** @param {MarkupNode[]} ns */
-  const adjacent = ns => ns.filter(node => node.tagName === "a" && ["prev","next"].includes(attr(node,"rel") ?? "")).map(node => [attr(node,"rel"),absolute(attr(node,"href")),normalized(node)]);
-  const navigation = document.find(node => node.tagName === "nav" && attr(node,"aria-label") === "More articles");
-  assert.ok(navigation);
+  const adjacent = ns => ns.filter(node => node.tagName === "a" && ["prev","next"].includes(attr(node,"rel") ?? "")).map(node => [attr(node,"rel"),absolute(attr(node,"href")),normalized(technical ? all(node).find(child => hasClass(child,"link-title")) : node)]);
+  const navigation = document.find(node => node.tagName === "nav" && attr(node,"aria-label") === (technical ? "More guides" : "More articles"));
   const expectedAdjacent = adjacent(all(reference));
-  const actualAdjacent = adjacent(all(navigation));
+  if (expectedAdjacent.length) assert.ok(navigation);
+  const actualAdjacent = navigation ? adjacent(all(navigation)) : [];
   assert.deepEqual(actualAdjacent, expectedAdjacent, "adjacent articles retain real titles and published destinations");
   assert.deepEqual(adjacent(document), expectedAdjacent, "one adjacent navigation, not a second set after the body");
+  if (technical && navigation) for (const link of all(navigation).filter(node => node.tagName === "a")) {
+    const href = attr(link,"href");
+    assert.ok(href);
+    if (admitted.has(new URL(href,"https://devantler.tech").pathname)) assert.ok(href.startsWith("/"), "admitted adjacent guides stay local");
+  }
   /** @param {MarkupNode[]} ns */
   const metadata = ns => ns.filter(node => node.tagName === "meta" && (attr(node,"property") || ["description","author","twitter:card","twitter:image"].includes(attr(node,"name") ?? ""))).map(node => [attr(node,"name") ?? attr(node,"property"),attr(node,"content")]).sort();
   assert.deepEqual(metadata(document), metadata(all(reference)), "article sharing metadata is retained");
@@ -111,6 +118,10 @@ return function check(html) {
   assert.equal(images(nodes).length, images(previous).length);
   for (const [i, image] of images(nodes).entries()) {
     assert.equal(attr(image,"alt"), attr(images(previous)[i],"alt"));
+    if (/^https:\/\//.test(attr(images(previous)[i],"src") ?? "")) {
+      assert.equal(attr(image,"src"), attr(images(previous)[i],"src"), "authored external image destination retained without build-time fetch");
+      continue;
+    }
     assert.equal(digest(asset(candidate,attr(image,"src"))), digest(asset(published,attr(images(previous)[i],"src"))), "actual local image bytes preserved");
     const actualSet = attr(image,"srcset")?.split(",").map(entry => entry.trim().split(/\s+/)) ?? [];
     const expectedSet = attr(images(previous)[i],"srcset")?.split(",").map(entry => entry.trim().split(/\s+/)) ?? [];
@@ -133,6 +144,34 @@ return function check(html) {
 };
 }
 
+const legacyTemplate = new URL("templates/gitops-tenant-template/index.html", candidate);
+if (process.argv[2] === "disabled") {
+  assert.ok(!existsSync(legacyTemplate), "disabled legacy template redirect must be removed");
+} else {
+  assert.ok(existsSync(legacyTemplate), "enabled legacy template redirect required beside healthy guides");
+  const redirectNodes = all(parse(readFileSync(legacyTemplate, "utf8")));
+  assert.equal(attr(redirectNodes.find(node => node.tagName === "link" && attr(node,"rel") === "canonical"), "href"), "https://devantler.tech/templates/platform-tenant-template/");
+  assert.equal(attr(redirectNodes.find(node => node.tagName === "meta" && attr(node,"name") === "robots"), "content"), "noindex");
+  assert.ok(redirectNodes.some(node => node.tagName === "a" && attr(node,"href") === "/templates/platform-tenant-template/#_top"), "legacy redirect retains a native continuation link");
+  const redirect = redirectNodes.filter(node => node.tagName === "script");
+  assert.equal(redirect.length, 1, "redirect needs only its local bookmark controller");
+  assert.equal(attr(redirect[0], "data-destination"), "/templates/platform-tenant-template/");
+  assert.equal(attr(redirect[0], "data-fallback"), "#_top");
+  const href = attr(redirect[0], "src");
+  assert.match(href ?? "", /^\/_app\/immutable\/assets\/project-redirect\.[A-Za-z0-9_-]+\.js$/);
+  const actualScript = asset(candidate, href).toString("utf8");
+  for (const hash of ["", "#getting-started", "#what-the-template-owns-vs-what-you-own"]) {
+    let destination = "";
+    runInNewContext(actualScript, {
+      document:{currentScript:{dataset:{destination:attr(redirect[0], "data-destination"),fallback:attr(redirect[0], "data-fallback")}}},
+      location:{hash,replace:(/** @type {string} */ value) => { destination = value; }},
+    });
+    assert.equal(destination, `/templates/platform-tenant-template/${hash || "#_top"}`, "actual emitted legacy redirect preserves the incoming bookmark");
+  }
+  assert.match(readFileSync(legacyTemplate, "utf8"), /<noscript><meta http-equiv="refresh" content="0;url=\/templates\/platform-tenant-template\/#_top"/);
+  console.log("Svelte guides: actual legacy redirect retains three bookmark cases and a no-script continuation");
+}
+
 for (const path of paths) {
 if (process.argv[2] === "disabled") {
   assert.ok(!existsSync(new URL(path,candidate)), "disabled reading route must be removed after enabled output");
@@ -143,6 +182,34 @@ if (process.argv[2] === "disabled") {
   const html = readFileSync(new URL(path,candidate), "utf8");
   const check = checker(path);
   check(html);
+  if (!path.startsWith("blog/")) {
+    assert.ok(!html.includes("/da/templates/") && !html.includes("/da/agentic-engineering/"));
+    const document = all(parse(html));
+    const navigation = document.find(node => node.tagName === "nav" && attr(node,"aria-label") === "Technical guides");
+    assert.ok(navigation, "guide collection navigation required");
+    assert.deepEqual(all(navigation).filter(node => node.tagName === "a").map(node => attr(node,"href")), guidePaths(), "every guide is reachable locally");
+    if (path === "templates/go/index.html") {
+      /** @param {(node:MarkupNode)=>boolean} predicate @param {(node:MarkupNode)=>void} change */
+      const corrupt = (predicate, change) => {
+        const tree = parse(html);
+        const body = all(tree).find(node => hasClass(node, "sl-markdown-content"));
+        assert.ok(body);
+        const node = all(body).find(predicate);
+        assert.ok(node, "negative control must reach actual guide output");
+        change(node);
+        return serialize(tree);
+      };
+      /** @type {[string,(node:MarkupNode)=>boolean,(node:MarkupNode)=>void,RegExp][]} */
+      const mutations = [
+        ["lost complete body", node => hasClass(node,"sl-markdown-content"), node => { node.attrs = []; }, /complete reading body/],
+        ["missing paragraph", node => node.tagName === "p", node => { node.childNodes = []; }, /complete prose/],
+        ["lost bookmark", node => node.tagName === "h2", node => { node.attrs = (node.attrs ?? []).filter(item => item.name !== "id"); }, /bookmark/],
+        ["wrong copy payload", node => node.tagName === "button", node => { const payload = node.attrs?.find(item => item.name === "data-code"); assert.ok(payload); payload.value = "wrong"; }, /copy payload/],
+      ];
+      for (const [name,predicate,change,failure] of mutations) assert.throws(() => check(corrupt(predicate,change)), failure, `reject ${name} beside healthy guides`);
+      console.log("Svelte guides: four independent actual-output body/bookmark/copy losses rejected");
+    }
+  }
   if (path === "blog/autonomous-oss-with-github-agentic-workflows/index.html") {
     /** @type {[string,(value:string)=>string][]} */
     const disclosureMutations = [
@@ -184,4 +251,4 @@ if (process.argv[2] === "disabled") {
   console.log(`Svelte reading: ${mutations.length} independent output-rejection controls verified`);
 }
 }
-console.log(`Svelte reading: all ${paths.length} authored articles ${process.argv[2] === "enabled" ? "match actual Astro bodies, dates, metadata, assets, bookmarks, copy controls and destinations" : "and dependent assets absent"}`);
+console.log(`Svelte reading: all ${readingPaths().length} articles and ${guidePaths().length} technical guides ${process.argv[2] === "enabled" ? "match actual Astro bodies, dates, metadata, assets, bookmarks, copy controls and destinations" : "and dependent assets absent"}`);

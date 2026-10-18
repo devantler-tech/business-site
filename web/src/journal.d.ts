@@ -22,3 +22,7 @@ declare module "virtual:journal-reading" {
   }[] | null;
   export default reading;
 }
+declare module "virtual:technical-guides" {
+  const guides: typeof import("virtual:journal-reading").default;
+  export default guides;
+}

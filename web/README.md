@@ -1,6 +1,6 @@
 # Business frontend candidate
 
-The English/Danish Home, About and Projects pages and English Journal main archive in SvelteKit 3 and Svelte 5, using the website's existing
+The English/Danish Home, About and Projects pages, English Journal and six technical guides in SvelteKit 3 and Svelte 5, using the website's existing
 homepage content, artwork, portrait, visual identity and appearance preference. Public reading uses
 prerendered HTML without application hydration; the existing local theme controller is the
 only script referenced by Home and About. Projects also uses the existing bookmark-disclosure
@@ -26,7 +26,8 @@ npm --prefix web run preview
 Open the printed loopback address at `/`, `/da/`, `/about/`, `/da/about/`, `/projects/`
 or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal archive.
 The subscription link opens the complete existing `/blog/rss.xml` locally.
-Topic links and the author browse link open the complete corresponding collections locally. Stop the preview with Ctrl+C.
+Topic links and the author browse link open the complete corresponding collections locally.
+Technical guides are at `/agentic-engineering/`, `/templates/` and the four existing template paths. Stop the preview with Ctrl+C.
 Unmigrated navigation links deliberately go to the existing public website. No account, database,
 publishing credential or private customer information is needed. The build generates optimized
 image formats from the original local artwork and photographs; fonts and scripts are also served locally.
@@ -54,8 +55,8 @@ reading routes for all 15 articles stay local. Topic and author archives
 retain all matching posts on one page, matching Astro rather than truncating to the main archive's
 five-post limit. Author cards keep their separate public profile link. The two diagram articles
 render their authored flowcharts and mindmap locally, with named keyboard-scrollable views,
-native text disclosures and clear failure messages. Technical pages
-deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
+native text disclosures and clear failure messages. Technical-page links
+stay local on their original English routes. Missing or unsupported metadata fails the
 build rather than silently dropping a post. Tests compare every candidate card against the actual
 Astro build, including date labels, excerpts and destinations.
 
@@ -67,6 +68,23 @@ endpoints preserve those existing canonical asset URLs; missing or unsupported d
 the build. Feed discovery and visible subscription links stay local. The current complete feed
 contains all 15 posts; a future partial/archive feed fails closed until archive support is explicitly
 migrated. No Danish feed, subscription service, customer data or portal route is introduced.
+
+Technical guides reuse the same input-bound Astro reference rather than maintaining another
+Markdown copy or renderer. The complete Agentic Engineering guide and template overview, Go,
+.NET, platform and platform-tenant guides retain their original titles, descriptions, canonical
+URLs, committed modification dates, body text, bookmarks, code-copy payloads, native tables,
+template cards and authored diagram. A quiet reading frame shares the site's palette, typography,
+theme control and keyboard behavior. Collection navigation and previous/next destinations stay
+local when already migrated; deliberate external destinations, including the authored sponsor
+badge, remain unchanged. The badge is not fetched during the build. There are no invented Danish
+guide routes: DA returns explicitly to the Danish business homepage. Unsupported nested template
+sources or body interactions fail closed. All six actual outputs are compared independently with
+Astro, including negative controls for lost content/bookmarks/copy, missing inventory and a missing
+guide stylesheet beside healthy assets. The legacy `/templates/gitops-tenant-template/` entrypoint
+redirects to the current platform-tenant guide, retaining incoming heading bookmarks through the
+existing local redirect controller and a native no-script continuation. It is absent when the
+candidate is disabled. The Agentic Engineering diagram uses the same sanitized
+local renderer and accessible text disclosure as Journal diagrams.
 
 The reading routes reuse the actual Astro-rendered bodies and Expressive Code assets.
 `build-journal-reference.sh` runs the normal production build between input-fingerprint checks,
@@ -111,7 +129,7 @@ LC_ALL=C bash scripts/check-svelte-frontend.sh
 It audits all candidate dependencies, runs release-policy tests and strict Svelte/TypeScript
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
 must remove all six business pages, both redirects, every Journal archive (including topics and
-authors), every reading route and its dependent assets, and the feed XML and its image dependencies,
+authors), every reading route and technical guide with their dependent assets, and the feed XML and its image dependencies,
 even after an enabled build.
 The enabled artifact must contain both locales, metadata and only the declared local scripts.
 Every archive retains exactly one social-sharing description; reading pages supply their own article metadata.
