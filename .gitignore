@@ -4,6 +4,8 @@ dist/
 .astro/
 /runtime-dist/
 /runtime-production-dist/
+/runtime-svelte-default-dist/
+/runtime-svelte-production-template-dist/
 /server/coverage.out
 .playwright-mcp/
 /megalinter-reports/

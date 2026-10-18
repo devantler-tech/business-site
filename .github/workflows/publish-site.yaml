@@ -10,6 +10,11 @@ on:
         type: choice
         options: [preview, publish]
         default: preview
+      frontend:
+        description: Svelte is admitted for artifact-only previews, never production
+        type: choice
+        options: [astro, svelte]
+        default: astro
   schedule:
     - cron: "17 6 * * *"
 
@@ -37,6 +42,7 @@ jobs:
           PUBLICATION_EVENT: ${{ github.event_name }}
           PUBLICATION_ENABLED: ${{ vars.SITE_PUBLICATION_ENABLED }}
           PUBLICATION_MODE: ${{ inputs.mode || 'publish' }}
+          PUBLIC_FRONTEND: ${{ inputs.frontend || 'astro' }}
           SOURCE_REVISION: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -47,6 +53,11 @@ jobs:
           case "$PUBLICATION_MODE" in
             preview) [[ "$PUBLICATION_EVENT" == workflow_dispatch ]] || exit 1 ;;
             publish) [[ "$PUBLICATION_ENABLED" == true ]] || exit 1 ;;
+            *) exit 1 ;;
+          esac
+          case "$PUBLIC_FRONTEND" in
+            astro) ;;
+            svelte) [[ "$PUBLICATION_EVENT" == workflow_dispatch && "$PUBLICATION_MODE" == preview ]] || exit 1 ;;
             *) exit 1 ;;
           esac
       - name: Checkout exact own source
@@ -63,6 +74,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Install candidate frontend dependencies
+        run: npm --prefix web ci
       - name: Refresh complete public project ranking
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,6 +83,7 @@ jobs:
       - name: Build production site
         env:
           PUBLIC_CONTENT_PROFILE: "default"
+          FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend == 'svelte' && inputs.mode == 'preview' && 'true' || 'false' }}
           FEATURE_COMPANY_IDENTITY: "true"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}
         run: npm run build

@@ -13,8 +13,9 @@ intake or payments. You do not need a database, cloud account or publishing cred
 work on the static site.
 
 The separate [SvelteKit frontend candidate](web/README.md) currently implements English/Danish
-Home, About and Projects pages plus the English Journal's main archive for migration evaluation.
-It is default-off, built separately and not published.
+Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
+It is default-off and can be selected for local builds, artifact-only publication previews and
+verified Go packages. It is not the live public frontend.
 The existing Astro application remains the live public source.
 
 ## Run the site locally
@@ -36,6 +37,7 @@ development server; it does not publish the website or enable the private portal
 From the repository root, build and inspect the static output with:
 
 ```sh
+npm --prefix web ci
 LC_ALL=C npm run build
 npm run preview -- --host 127.0.0.1
 ```

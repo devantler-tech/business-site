@@ -32,7 +32,8 @@ for (const locale of ["en", "da"]) {
   assert.ok(html.includes('href="/pdfs/thesis.pdf"'));
   assert.ok(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>[\s\S]*?id="-data-product-"/.test(html), "research remains in a native disclosure");
   assert.ok(!/Family project|family member|Familieprojekt|familieprojekter|Wedding App|github\.com\/[^"]+\/blob\//.test(html));
-  assert.ok(!/mailto:|CVR|46830385|sveltekit.start|type="module"/.test(html));
+  assert.equal(/mailto:|CVR|46830385/.test(html),process.env.FEATURE_COMPANY_IDENTITY === "true");
+  assert.ok(!/sveltekit.start|type="module"/.test(html));
   const scripts = [...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(([, src]) => src);
   assert.equal(scripts.length, 2, "theme plus the existing bookmark disclosure controller only");
   for (const src of scripts) {

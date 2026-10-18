@@ -340,6 +340,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: .
         run: npm ci
+      - name: Install candidate frontend dependencies
+        working-directory: .
+        run: npm --prefix web ci
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
@@ -404,6 +407,23 @@ jobs:
           package="$(find runtime-dist -maxdepth 1 -type d -name 'package.*')"
           test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
           docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$package"
+      - name: Build actual Svelte public runtime candidate
+        working-directory: .
+        run: bash scripts/package-runtime.sh --release --default --svelte
+      - name: Exercise Svelte package and its extracted archive with private routes off
+        working-directory: .
+        run: |
+          node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist
+          extracted="$(mktemp -d)"
+          tar -xzf runtime-svelte-default-dist/business-site-runtime.tar.gz -C "$extracted"
+          node scripts/runtime-smoke.test.mjs "$extracted"
+      - name: Upload verified Svelte public runtime candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: business-site-svelte-runtime
+          path: runtime-svelte-default-dist/business-site-runtime.tar.gz
+          if-no-files-found: error
+          retention-days: 7
       - name: Exercise actual restricted container
         working-directory: .
         env:

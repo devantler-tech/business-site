@@ -3,5 +3,5 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 node scripts/journal-reading-reference.mjs prepare
-npm run build
+bash scripts/build-astro-site.sh
 node scripts/journal-reading-reference.mjs capture

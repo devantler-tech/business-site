@@ -26,6 +26,7 @@ cd business-site
 git worktree add -b docs/my-first-change ../business-site-first-change HEAD
 cd ../business-site-first-change
 npm ci
+npm --prefix web ci
 ```
 
 Read [AGENTS.md](AGENTS.md), the canonical contract, before editing. Always make changes in your
@@ -59,7 +60,7 @@ permission. Do not introduce confidential examples or use real residential addre
 
 ## Validate from the repository root
 
-After `npm ci`, run the shared baseline exactly as follows:
+After both pinned installs above, run the shared baseline exactly as follows:
 
 ```sh
 export LC_ALL=C

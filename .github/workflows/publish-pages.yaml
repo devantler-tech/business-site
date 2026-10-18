@@ -54,6 +54,8 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: npm ci
+      - name: Install candidate frontend dependencies
+        run: npm --prefix web ci
       - name: Refresh complete public project ranking
         working-directory: .
         env:

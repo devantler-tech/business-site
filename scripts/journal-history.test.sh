@@ -126,13 +126,13 @@ grep -q 'source history: FAIL' "$scratch/rejection" || fail 'partial traversal f
 # Exercise the actual build wrapper on shallow history. It must stop before any
 # renderer runs; a missing, ignored, skipped or late preflight is not protection.
 mkdir -p "$scratch/shallow/scripts" "$scratch/build-bin"
-cp "$root/scripts/build-business-site.sh" "$scratch/shallow/scripts/build-business-site.sh"
+cp "$root/scripts/build-astro-site.sh" "$scratch/shallow/scripts/build-astro-site.sh"
 cp "$guard" "$scratch/shallow/scripts/check-source-history.sh"
 real_bash="$(command -v bash)"
 cat > "$scratch/build-bin/bash" <<'SH'
 #!/bin/bash
 case "$1" in
-  scripts/check-source-history.sh|*/scripts/build-business-site.sh) exec "$REAL_HISTORY_BASH" "$@" ;;
+  scripts/check-source-history.sh|*/scripts/build-astro-site.sh) exec "$REAL_HISTORY_BASH" "$@" ;;
   *) exit 0 ;;
 esac
 SH
@@ -170,26 +170,34 @@ build_rejected() {
   local output="$scratch/build-output" receipt="$scratch/renderer-started"
   rm -f "$receipt"
   if PATH="$scratch/build-bin:$PATH" HISTORY_RENDER_RECEIPT="$receipt" REAL_HISTORY_BASH="$real_bash" \
-      "$real_bash" "$scratch/shallow/scripts/build-business-site.sh" > "$output" 2>&1; then return 1; fi
+      "$real_bash" "$scratch/shallow/scripts/build-astro-site.sh" > "$output" 2>&1; then return 1; fi
   [[ ! -e "$receipt" ]] && grep -q 'source history: FAIL' "$output"
 }
 build_rejected || fail 'actual build renders with incomplete history'
+# The common entrypoint must reject shallow history before even resolving a
+# frontend (including before loading framework modules or a dotenv file).
+cp "$root/scripts/build-business-site.sh" "$scratch/shallow/scripts/build-business-site.sh"
+if PATH="$scratch/build-bin:$PATH" REAL_HISTORY_BASH="$real_bash" \
+    "$real_bash" "$scratch/shallow/scripts/build-business-site.sh" > "$scratch/selection-output" 2>&1; then
+  fail 'common entrypoint accepted shallow history'
+fi
+grep -q 'source history: FAIL' "$scratch/selection-output" || fail 'common entrypoint failed outside history admission'
 for mutation in missing ignored skipped late; do
   case "$mutation" in
-    missing) sed '/^bash scripts\/check-source-history.sh$/d' "$root/scripts/build-business-site.sh" ;;
-    ignored) sed 's|^bash scripts/check-source-history.sh$|bash scripts/check-source-history.sh \|\| true|' "$root/scripts/build-business-site.sh" ;;
-    skipped) sed 's|^bash scripts/check-source-history.sh$|if false; then bash scripts/check-source-history.sh; fi|' "$root/scripts/build-business-site.sh" ;;
+    missing) sed '/^bash scripts\/check-source-history.sh$/d' "$root/scripts/build-astro-site.sh" ;;
+    ignored) sed 's|^bash scripts/check-source-history.sh$|bash scripts/check-source-history.sh \|\| true|' "$root/scripts/build-astro-site.sh" ;;
+    skipped) sed 's|^bash scripts/check-source-history.sh$|if false; then bash scripts/check-source-history.sh; fi|' "$root/scripts/build-astro-site.sh" ;;
     late) sed '/^bash scripts\/check-source-history.sh$/d; /^astro build$/a\
 bash scripts/check-source-history.sh
-' "$root/scripts/build-business-site.sh" ;;
-  esac > "$scratch/shallow/scripts/build-business-site.sh"
+' "$root/scripts/build-astro-site.sh" ;;
+  esac > "$scratch/shallow/scripts/build-astro-site.sh"
   if build_rejected; then fail "$mutation preflight regression escaped the build control"; fi
 done
 
 # Drive the real wrapper and actual Starlight collector with conflicting inherited
 # Git settings. A safe preflight alone cannot protect an unsanitized renderer.
 mkdir -p "$fixture/scripts"
-cp "$root/scripts/build-business-site.sh" "$fixture/scripts/build-business-site.sh"
+cp "$root/scripts/build-astro-site.sh" "$fixture/scripts/build-astro-site.sh"
 cp "$guard" "$fixture/scripts/check-source-history.sh"
 real_node="$(command -v node)"
 receipt="$scratch/context-rendered"
@@ -197,7 +205,7 @@ if ! PATH="$scratch/build-bin:$PATH" REAL_HISTORY_BASH="$real_bash" REAL_HISTORY
     HISTORY_CHECK_RENDER_ENV=true HISTORY_MODULE_ROOT="$root" HISTORY_SOURCE_ROOT="$fixture" \
     HISTORY_RENDER_RECEIPT="$receipt" GIT_DIR="$scratch/shallow/.git" GIT_WORK_TREE="$scratch/shallow" \
     GIT_NO_REPLACE_OBJECTS=0 GIT_NO_LAZY_FETCH=0 \
-    "$real_bash" "$fixture/scripts/build-business-site.sh" > "$scratch/context-output" 2>&1; then
+    "$real_bash" "$fixture/scripts/build-astro-site.sh" > "$scratch/context-output" 2>&1; then
   cat "$scratch/context-output" >&2
   fail 'build preflight and renderer use different Git history'
 fi

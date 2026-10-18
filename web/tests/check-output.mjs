@@ -33,7 +33,7 @@ for (const [path, locale, title] of pages) {
       assert.ok(html.includes(`id="${section}"`), `missing homepage destination ${section}`);
     }
     assert.ok(html.indexOf('id="quality-title"') < html.indexOf('id="services"'), "quality precedes prices");
-    for (const [id, setup, monthly] of [["website", 2995, 99], ["app", 7995, 299], ["service", 4995, 199]]) {
+    for (const [id, setup, monthly] of (process.env.FEATURE_VAT_PRICES === "true" ? [["website",3750,125],["app",10000,375],["service",6250,250]] : [["website", 2995, 99], ["app", 7995, 299], ["service", 4995, 199]])) {
       assert.match(html, new RegExp(`data-offer="${id}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     }
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
@@ -41,7 +41,7 @@ for (const [path, locale, title] of pages) {
     assert.ok(html.includes(`href="/${locale === "da" ? "da/" : ""}about/"`));
     assert.ok(html.includes('href="/" lang="en"') && html.includes('href="/da/" lang="da"'));
     assert.ok(!/Family project|family member|Familieprojekt|familiemedlem|Wedding App|github\.com/.test(html));
-    assert.ok(!/mailto:|CVR|46830385/.test(html), "candidate must not activate company disclosure");
+    assert.equal(/mailto:|CVR|46830385/.test(html),process.env.FEATURE_COMPANY_IDENTITY === "true", "company disclosure follows the declared build profile");
     assert.ok(html.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'));
     assert.ok(html.includes("<picture") && html.includes('type="image/avif"') && html.includes('type="image/webp"'));
   }

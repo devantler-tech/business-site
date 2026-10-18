@@ -156,8 +156,25 @@ installs used by CI (npm 11.4.2 and the current supported npm 11).
 
 ## Migration boundary
 
-The Astro/Starlight application, source-owned publisher and Go/PostgreSQL portal remain
-unchanged owners. The candidate is not included in Pages, the runtime package or the container.
+The common `FEATURE_SVELTE_FRONTEND=true npm run build` path prepares the input-bound reference,
+builds the complete candidate, validates actual route/asset/content parity and replaces `dist/`
+without retaining stale incumbent assets. False/unset selects Astro. Install both lockfiles first.
+`bash scripts/build-astro-site.sh` is the explicit nonrecursive incumbent/reference builder.
+The older preview-banner and legacy non-featured/non-client portfolio variants are not supported
+by selected Svelte publication: requesting them fails rather than silently ignoring the setting.
+
+The source-owned publisher's manual `mode=preview, frontend=svelte` dispatch on `main` builds
+and uploads the actual selected artifact with its source/run receipt, but cannot deploy it.
+Push/scheduled/production publication still pins Astro. `frontend=svelte, mode=publish` is rejected
+before checkout. Production activation and an executed protected rollback remain under #193.
+
+With Go 1.27.2, `bash scripts/package-runtime.sh --release --default --svelte` builds a clean-source
+candidate in `runtime-svelte-default-dist/`. Exercise it with
+`node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist`; the same checks run against its
+extracted archive in CI. The optional second argument `--production-template` retains the existing
+private-address placeholder contract in `runtime-svelte-production-template-dist/`. Ordinary
+package commands pin Astro and ignore ambient frontend settings. Neither command deploys anything.
+The Go/PostgreSQL portal remains the unchanged authority, independently default-off.
 There are no private routes, identity integrations, customer records, payment operations or
 new hosted services here. Do not put secrets or private environment values into public output.
 
@@ -177,7 +194,7 @@ no address even when the company setting is enabled.
 
 `PUBLIC_CONTENT_PROFILE=production-template` preserves the existing two address placeholders
 for the Go runtime's escaped substitution, without consuming the configured private address.
-This is compatibility proof only: the Go package still consumes Astro, not this candidate.
+The explicitly selected Go package consumes this same template without changing private authority.
 The company/contact matrix compares actual Astro and Svelte artifacts for unset, explicit-false,
 published, revised/VAT, independently selected and template configurations in both languages.
 Independent missing-locale, incomplete-disclosure and unrelated-script leak controls must reject

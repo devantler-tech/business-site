@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Build, never deploy: public Astro output + its exact Go runtime and notices.
+# Build, never deploy: selected public output + its exact Go runtime and notices.
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 mode="${1:---release}"
 variant="${2:---default}"
-[[ "$#" -le 2 && ( "$mode" == --release || "$mode" == --development ) && ( "$variant" == --default || "$variant" == --production-template ) ]] || { printf '%s\n' 'Use --release or --development, optionally followed by --production-template.' >&2; exit 1; }
+frontend="${3:---astro}"
+[[ "$#" -le 3 && ( "$mode" == --release || "$mode" == --development ) && ( "$variant" == --default || "$variant" == --production-template ) && ( "$frontend" == --astro || "$frontend" == --svelte ) ]] || { printf '%s\n' 'Use --release or --development, --default or --production-template, then optionally --svelte.' >&2; exit 1; }
 profile=default
 output=runtime-dist
 if [[ "$variant" == --production-template ]]; then profile=production-template; output=runtime-production-dist; fi
+selected=false
+if [[ "$frontend" == --svelte ]]; then selected=true; output="runtime-svelte-${profile}-dist"; fi
 revision="$(git rev-parse HEAD)"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || exit 1
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
@@ -23,7 +26,8 @@ cleanup_inputs() {
   if [[ -n "$inputs" ]]; then rm -f -- "$inputs/stars.json"; rmdir -- "$inputs"; fi
 }
 trap cleanup_inputs EXIT
-build_env=(env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
+build_env=(env -u FEATURE_SVELTE_FRONTEND -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
+build_env+=("FEATURE_SVELTE_FRONTEND=$selected")
 build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CUSTOMER_SCOPE=false" "FEATURE_VAT_PRICES=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
 if [[ "$profile" == production-template ]]; then
   inputs="$(mktemp -d "$output/public-inputs.XXXXXX")"

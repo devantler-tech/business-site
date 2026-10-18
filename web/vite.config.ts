@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import adapter from "@sveltejs/adapter-static";
 import { enhancedImages } from "@sveltejs/enhanced-img";
+import { readFileSync, writeFileSync } from "node:fs";
 import { frontendEntries, checkUnseenRoutes, parseFrontendRelease } from "./src/release-gate.ts";
 import { readJournal, journalArchives } from "../src/data/journal.mjs";
 import { readingPaths, readReadingReference } from "../src/data/journal-reading.mjs";
@@ -50,7 +51,10 @@ export default defineConfig(({ mode }) => ({
         ...adapter(),
         async adapt(builder) {
           await adapter().adapt(builder);
-          if (parseFrontendRelease(loadEnv(mode,process.cwd(),"FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND)) writeDiscovery("build");
+          if (parseFrontendRelease(loadEnv(mode,process.cwd(),"FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND)) {
+            writeDiscovery("build");
+            writeFileSync("build/404.html",readFileSync(new URL("./not-found.html",import.meta.url)));
+          }
         },
       },
       prerender: {
