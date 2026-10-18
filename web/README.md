@@ -80,7 +80,10 @@ badge, remain unchanged. The badge is not fetched during the build. There are no
 guide routes: DA returns explicitly to the Danish business homepage. Unsupported nested template
 sources or body interactions fail closed. All six actual outputs are compared independently with
 Astro, including negative controls for lost content/bookmarks/copy, missing inventory and a missing
-guide stylesheet beside healthy assets. The Agentic Engineering diagram uses the same sanitized
+guide stylesheet beside healthy assets. The legacy `/templates/gitops-tenant-template/` entrypoint
+redirects to the current platform-tenant guide, retaining incoming heading bookmarks through the
+existing local redirect controller and a native no-script continuation. It is absent when the
+candidate is disabled. The Agentic Engineering diagram uses the same sanitized
 local renderer and accessible text disclosure as Journal diagrams.
 
 The reading routes reuse the actual Astro-rendered bodies and Expressive Code assets.

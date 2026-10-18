@@ -10,13 +10,13 @@ export function parseFrontendRelease(value: string | undefined): boolean {
 
 /** Enumerate only the reviewed public candidate routes. */
 export function frontendEntries(value: string | undefined): `/${string}`[] {
-  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", "/blog/rss.xml", ...journalPaths() as `/${string}`[], ...readingPaths() as `/${string}`[], ...guidePaths() as `/${string}`[]] : [];
+  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", "/templates/gitops-tenant-template/", "/blog/rss.xml", ...journalPaths() as `/${string}`[], ...readingPaths() as `/${string}`[], ...guidePaths() as `/${string}`[]] : [];
 }
 
 /** Fail for missing enabled/new routes; allow only the deliberately disabled candidate. */
 export function checkUnseenRoutes(value: string | undefined, routes: string[]): void {
   const enabled = parseFrontendRelease(value);
-  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", "/blog/[kind]/[slug]", "/blog/rss.xml", "/_astro/[image]", "/agentic-engineering", "/templates/[[guide]]"];
+  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", "/blog/[kind]/[slug]", "/blog/rss.xml", "/_astro/[image]", "/agentic-engineering", "/templates/[[guide]]", "/templates/gitops-tenant-template"];
   if (enabled || routes.some((route) => !disabled.includes(route))) {
     throw new Error(`Unexpected unrendered Svelte routes: ${routes.join(", ")}`);
   }

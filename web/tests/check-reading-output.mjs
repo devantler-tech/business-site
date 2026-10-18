@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { runInNewContext } from "node:vm";
 import { parse, serialize } from "parse5";
 import { readingPaths, guidePaths } from "../../src/data/journal-reading.mjs";
 import { journalPaths } from "../../src/data/journal.mjs";
@@ -141,6 +142,34 @@ return function check(html) {
   assert.ok(!document.some(node => hasClass(node,"sl-blog-preview")), "reading prose is not an archive card");
   assert.ok(!html.includes("/da/blog/") && !html.includes("sveltekit.start") && !html.includes("PORTAL_"));
 };
+}
+
+const legacyTemplate = new URL("templates/gitops-tenant-template/index.html", candidate);
+if (process.argv[2] === "disabled") {
+  assert.ok(!existsSync(legacyTemplate), "disabled legacy template redirect must be removed");
+} else {
+  assert.ok(existsSync(legacyTemplate), "enabled legacy template redirect required beside healthy guides");
+  const redirectNodes = all(parse(readFileSync(legacyTemplate, "utf8")));
+  assert.equal(attr(redirectNodes.find(node => node.tagName === "link" && attr(node,"rel") === "canonical"), "href"), "https://devantler.tech/templates/platform-tenant-template/");
+  assert.equal(attr(redirectNodes.find(node => node.tagName === "meta" && attr(node,"name") === "robots"), "content"), "noindex");
+  assert.ok(redirectNodes.some(node => node.tagName === "a" && attr(node,"href") === "/templates/platform-tenant-template/#_top"), "legacy redirect retains a native continuation link");
+  const redirect = redirectNodes.filter(node => node.tagName === "script");
+  assert.equal(redirect.length, 1, "redirect needs only its local bookmark controller");
+  assert.equal(attr(redirect[0], "data-destination"), "/templates/platform-tenant-template/");
+  assert.equal(attr(redirect[0], "data-fallback"), "#_top");
+  const href = attr(redirect[0], "src");
+  assert.match(href ?? "", /^\/_app\/immutable\/assets\/project-redirect\.[A-Za-z0-9_-]+\.js$/);
+  const actualScript = asset(candidate, href).toString("utf8");
+  for (const hash of ["", "#getting-started", "#what-the-template-owns-vs-what-you-own"]) {
+    let destination = "";
+    runInNewContext(actualScript, {
+      document:{currentScript:{dataset:{destination:attr(redirect[0], "data-destination"),fallback:attr(redirect[0], "data-fallback")}}},
+      location:{hash,replace:(/** @type {string} */ value) => { destination = value; }},
+    });
+    assert.equal(destination, `/templates/platform-tenant-template/${hash || "#_top"}`, "actual emitted legacy redirect preserves the incoming bookmark");
+  }
+  assert.match(readFileSync(legacyTemplate, "utf8"), /<noscript><meta http-equiv="refresh" content="0;url=\/templates\/platform-tenant-template\/#_top"/);
+  console.log("Svelte guides: actual legacy redirect retains three bookmark cases and a no-script continuation");
 }
 
 for (const path of paths) {

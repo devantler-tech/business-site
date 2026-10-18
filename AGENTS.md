@@ -15,7 +15,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   with the two historical English project redirects, the English Journal's paginated main archive,
   complete unpaginated topic and author archives,
   all 15 complete Journal reading routes, and the six existing English technical guides,
-  including locally rendered diagrams and the complete template collection.
+  including locally rendered diagrams and the complete template collection. The legacy
+  GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.

@@ -11,6 +11,12 @@ test("enabled visitors can finish every existing technical guide locally", () =>
   assert.ok(!entries.some(path => path.startsWith("/da/templates/") || path === "/da/agentic-engineering/"), "do not invent translated guides");
 });
 
+test("the old GitOps tenant bookmark remains reachable only in enabled output", () => {
+  assert.ok(frontendEntries("true").includes("/templates/gitops-tenant-template/"), "missing legacy template redirect");
+  assert.ok(!frontendEntries("false").includes("/templates/gitops-tenant-template/"));
+  assert.ok(!frontendEntries(undefined).includes("/templates/gitops-tenant-template/"));
+});
+
 test("technical bodies preserve their committed date without inventing Journal metadata", async () => {
   const { extractReading } = await import("../../src/data/journal-reading.mjs");
   const html = '<title>Guide | Devantler Tech</title><meta name="description" content="Instructions"><link rel="canonical" href="https://devantler.tech/templates/go/"><div class="sl-markdown-content"><p>Complete instructions.</p><h2 id="start">Start</h2><a href="../dotnet/">Other guide</a></div><time datetime="2026-10-08T22:15:01.000Z"></time>';
