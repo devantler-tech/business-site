@@ -17,6 +17,9 @@ cover:
 
 [Talos Linux](https://www.talos.dev/) is a minimal, immutable operating system designed specifically for Kubernetes. While it's often used in production environments, you can also run Talos locally in Docker for development. Combined with [KSail](https://github.com/devantler-tech/ksail), you get a security-focused local development experience. This post shows you how.
 
+> [!NOTE]
+> The commands in this guide match KSail v7.203 (checked on 17 October 2026).
+
 ## Why Talos + KSail?
 
 **Talos Linux** takes a radically different approach to running Kubernetes. There's no SSH, no shell, no package manager — just the Talos API and Kubernetes. The entire OS is immutable and managed declaratively via configuration files.
@@ -48,10 +51,10 @@ KSail is distributed as a single binary. Install via Homebrew:
 brew install --cask devantler-tech/tap/ksail
 ```
 
-Or with Go:
+Or with the install script:
 
 ```bash
-go install github.com/devantler-tech/ksail/v5@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 Verify the installation:
@@ -62,21 +65,21 @@ ksail --version
 
 ## Step 2: Scaffold Your Cluster Project
 
-KSail's `init` command scaffolds a complete project structure. For a Talos cluster with Cilium CNI:
+KSail's `project init` command scaffolds a complete project structure. For a Talos cluster with Cilium CNI:
 
 ```bash
 mkdir my-cluster && cd my-cluster
-ksail cluster init --distribution Talos --cni Cilium
+ksail project init --distribution Talos --cni Cilium
 ```
 
-This creates `ksail.yaml` (cluster configuration), `talos/` (Talos configs), and `k8s/` (your Kubernetes manifests).
+This creates `ksail.yaml` (cluster configuration), `talos/` (Talos configs), `k8s/` (your Kubernetes manifests) and `.devcontainer/` (an optional dev container setup; skip it with `--no-devcontainer`).
 
 > [!NOTE]
 > Talos doesn't include a default CNI, so you should specify one. Cilium is recommended for its eBPF-based networking and observability features.
 
 For all available flags and configuration options, see the [KSail documentation](https://ksail.devantler.tech):
 
-- [CLI flags reference](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-init) — All `cluster init` options
+- [CLI flags reference](https://ksail.devantler.tech/cli-flags/project/project-init/) — All `project init` options
 - [ksail.yaml reference](https://ksail.devantler.tech/configuration/declarative-configuration) — Configuration file schema
 - [Features overview](https://ksail.devantler.tech/features) — CNI, CSI, GitOps, and more
 

@@ -17,6 +17,9 @@ cover:
 
 Getting started with Kubernetes development shouldn't require cloud infrastructure or complex setup procedures. With [Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) and [KSail](https://github.com/devantler-tech/ksail), you can have a local cluster running in under a minute. This post shows you how.
 
+> [!NOTE]
+> The commands in this guide match KSail v7.203 (checked on 17 October 2026).
+
 ## Why Kind + KSail?
 
 **Kind** (Kubernetes in Docker) runs Kubernetes clusters using Docker containers as nodes. It's fast, lightweight, and provides a vanilla Kubernetes experience that closely matches production environments.
@@ -48,10 +51,10 @@ KSail is distributed as a single binary. Install via Homebrew:
 brew install --cask devantler-tech/tap/ksail
 ```
 
-Or with Go:
+Or with the install script:
 
 ```bash
-go install github.com/devantler-tech/ksail/v5@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 Verify the installation:
@@ -62,18 +65,18 @@ ksail --version
 
 ## Step 2: Scaffold Your Cluster Project
 
-KSail's `init` command scaffolds a complete project structure:
+KSail's `project init` command scaffolds a complete project structure:
 
 ```bash
 mkdir my-cluster && cd my-cluster
-ksail cluster init --distribution Vanilla
+ksail project init --distribution Vanilla
 ```
 
-This creates `ksail.yaml` (cluster configuration), `kind.yaml` (Kind config), and `k8s/` (your Kubernetes manifests).
+This creates `ksail.yaml` (cluster configuration), `kind.yaml` (Kind config), `kind/` (registry mirror settings for the nodes), `k8s/` (your Kubernetes manifests) and `.devcontainer/` (an optional dev container setup; skip it with `--no-devcontainer`).
 
 For all available flags and configuration options, see the [KSail documentation](https://ksail.devantler.tech):
 
-- [CLI flags reference](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-init) — All `cluster init` options
+- [CLI flags reference](https://ksail.devantler.tech/cli-flags/project/project-init/) — All `project init` options
 - [ksail.yaml reference](https://ksail.devantler.tech/configuration/declarative-configuration) — Configuration file schema
 - [Features overview](https://ksail.devantler.tech/features) — CNI, CSI, GitOps, and more
 

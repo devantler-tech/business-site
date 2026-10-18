@@ -18,6 +18,9 @@ cover:
 
 The standard advice for running Flux locally is to point it at a Git repository. In practice that means either pushing to a remote repo and waiting for Flux to poll it, maintaining a local Git server, or wrestling with Flux's lack of support for local file paths. None of these are great for a tight development loop.
 
+> [!NOTE]
+> The commands in this guide match KSail v7.203 (checked on 17 October 2026).
+
 Flux has supported OCI repositories as sources since v2.0.0, and this is a much cleaner approach for local development. Instead of a Git repo, Flux watches an OCI artifact in a container registry. You push your manifests as a versioned artifact, Flux pulls and applies it. KSail takes care of the registry for you — when you create a local cluster with a GitOps engine, KSail automatically provisions a local Docker-based OCI registry alongside the cluster. No external accounts, no tokens, no network dependency. The workflow after editing manifests comes down to two commands.
 
 Here's a complete walkthrough.
@@ -42,18 +45,24 @@ That's it for local development. No registry accounts or tokens needed — KSail
 
 ```bash
 mkdir my-cluster && cd my-cluster
-ksail cluster init \
+ksail project init \
   --name dev \
   --distribution Vanilla \
-  --gitops-engine Flux
+  --gitops-engine Flux \
+  --local-registry localhost:5050
 ```
+
+`--local-registry` names the registry Flux will watch; `ksail workload push` sends your manifests there.
 
 This scaffolds:
 
 - `ksail.yaml` — KSail configuration
 - `kind.yaml` — Kind cluster config (usable directly with `kind` if you ever want to bypass KSail)
 - `k8s/kustomization.yaml` — root Kustomization manifest
-- Flux HelmRelease and OCI source configs
+- `kind/` — registry mirror settings for the Kind nodes
+- `.devcontainer/devcontainer.json` — an optional dev container setup (skip it with `--no-devcontainer`)
+
+Flux needs no scaffolded files: `ksail.yaml` names Flux as the GitOps engine, and `ksail cluster create` installs it.
 
 Create the cluster:
 
@@ -152,16 +161,14 @@ A minimal GitHub Actions workflow step:
       docker login ghcr.io -u ${{ github.actor }} --password-stdin
     ksail workload push \
       oci://ghcr.io/${{ github.repository_owner }}/my-cluster-manifests:${{ github.sha }}
-  env:
-    KSAIL_CLUSTER_NAME: staging
 ```
 
-The `KSAIL_CLUSTER_NAME` environment variable tells KSail which cluster configuration to load when you have multiple clusters defined.
+With several cluster configurations in one repository, choose one with the global `--config` flag, for example `ksail --config ksail.staging.yaml workload push …`. KSail's [multi-environment guide](https://ksail.devantler.tech/guides/multi-environment/) shows the full setup.
 
-For cloud clusters (e.g., Hetzner) where there's no local Docker daemon, an external registry is required. Use the `--local-registry` flag during `cluster init` to configure it:
+For cloud clusters (e.g., Hetzner) where there's no local Docker daemon, an external registry is required. Use the `--local-registry` flag with `project init` to configure it:
 
 ```bash
-ksail cluster init \
+ksail project init \
   --distribution Talos \
   --provider Hetzner \
   --gitops-engine Flux \
@@ -196,7 +203,7 @@ Both workflows coexist without conflict. It's a per-session choice.
 
 ## A Note on Secret Management
 
-Regardless of whether you use a local registry or GHCR, secrets shouldn't be in your manifests in plain text. KSail has built-in SOPS integration (`ksail cipher encrypt`) for secret management — encrypt secrets before they land in `k8s/`.
+Regardless of whether you use a local registry or GHCR, secrets shouldn't be in your manifests in plain text. KSail has built-in SOPS integration (`ksail workload cipher encrypt`) for secret management — encrypt secrets before they land in `k8s/`.
 
 If you use GHCR, packages inherit from your repository's visibility by default. For anything sensitive, set the package visibility explicitly in GitHub's package settings, or use a private repository.
 
