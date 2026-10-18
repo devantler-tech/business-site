@@ -49,6 +49,29 @@ test("every native table gets its own named keyboard-scrollable boundary without
   assert.equal((reading.html.match(new RegExp(table, "g")) ?? []).length, 2, "native table/header/cell semantics and content are retained");
 });
 
+const diagrams = ['flowchart LR\n A["First"] --> B["Second"]', 'mindmap\n root((Work))\n  Review\n  Deliver'];
+const withDiagrams = fixture.replace("<p>Complete", `<pre class="mermaid">${diagrams[0]}</pre><pre class="mermaid">${diagrams[1]}</pre><p>Complete`);
+
+test("real diagrams are bound to authored definitions independently of ordinary copy controls", async () => {
+  const { extractReading } = await adapter();
+  const reading = extractReading(withDiagrams, post, diagrams);
+  assert.deepEqual(reading.diagrams.map((diagram:{source:string}) => diagram.source), diagrams);
+  assert.equal(new Set(reading.diagrams.map((diagram:{id:string}) => diagram.id)).size, 2);
+  assert.equal((reading.html.match(/class="reading-diagram"/g) ?? []).length, 2);
+  assert.equal((reading.html.match(/<summary>Diagram text<\/summary>/g) ?? []).length, 2);
+  assert.equal((reading.html.match(/data-code=/g) ?? []).length, 1, "ordinary code keeps its actual copy payload");
+});
+
+for (const [name, html, authored] of [
+  ["missing second diagram", withDiagrams.replace(`<pre class="mermaid">${diagrams[1]}</pre>`, ""), diagrams],
+  ["changed diagram", withDiagrams.replace('B["Second"]', 'B["Wrong"]'), diagrams],
+  ["unrecorded diagram", withDiagrams, []],
+  ["unexpected interactive diagram child", withDiagrams.replace('A["First"]', '<button data-code="hello">First</button>'), diagrams],
+] as const) test(`diagram projection rejects ${name}`, async () => {
+  const { extractReading } = await adapter();
+  assert.throws(() => extractReading(html, post, authored), /Journal diagram/);
+});
+
 for (const [name, mutate] of [
   ["missing body", (v:string) => v.replace("sl-markdown-content", "missing-body")],
   ["wrong article", (v:string) => v.replace("A real article |", "Another article |")],

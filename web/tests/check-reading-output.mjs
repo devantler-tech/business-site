@@ -17,7 +17,7 @@ const attr = (node, name) => node?.attrs?.find(item => item.name === name)?.valu
 /** @param {MarkupNode} node @param {string} name */
 const hasClass = (node, name) => (attr(node, "class") ?? "").split(/\s+/).includes(name);
 /** @param {MarkupNode} node @returns {string} */
-const text = node => ["script","style"].includes(node.tagName ?? "") ? "" : node.nodeName === "#text" ? node.value ?? "" : (node.childNodes ?? []).map(text).join("");
+const text = node => ["script","style"].includes(node.tagName ?? "") || hasClass(node,"reading-diagram") || (node.tagName === "pre" && hasClass(node,"mermaid")) ? "" : node.nodeName === "#text" ? node.value ?? "" : (node.childNodes ?? []).map(text).join("");
 /** @param {MarkupNode|undefined} node */
 const normalized = node => { assert.ok(node); return text(node).replace(/\s+/g, " ").trim(); };
 /** @param {Buffer} bytes */
@@ -41,6 +41,14 @@ return function check(html) {
   assert.ok(original);
   const previous = all(original);
   assert.equal(normalized(body), normalized(original), "complete prose/code/metadata/tag text must match Astro");
+  const diagrams = nodes.filter(node => hasClass(node,"reading-diagram"));
+  const expectedDiagrams = previous.filter(node => node.tagName === "pre" && hasClass(node,"mermaid"));
+  /** @param {MarkupNode|undefined} node */
+  const definition = node => { assert.ok(node, "diagram source is missing"); return (node.childNodes ?? []).map(child => child.value ?? "").join(""); };
+  assert.deepEqual(diagrams.map(figure => definition(all(figure).find(node => node.tagName === "pre"))), expectedDiagrams.map(definition), "complete authored diagram definitions survive independently of prose and code");
+  const renderers = document.filter(node => node.tagName === "script" && /reading-diagrams\//.test(attr(node,"src") ?? ""));
+  assert.equal(renderers.length, diagrams.length ? 1 : 0, "only diagram articles load the local renderer");
+  for (const renderer of renderers) asset(candidate, attr(renderer,"src"));
   /** @param {MarkupNode[]} ns */
   const headings = ns => ns.filter(node => /^h[2-6]$/.test(node.tagName ?? "")).map(node => [node.tagName, attr(node,"id"), normalized(node)]);
   assert.deepEqual(headings(nodes), headings(previous), "every actual heading and bookmark is retained");

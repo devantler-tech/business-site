@@ -6,6 +6,9 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, parseFragment, serialize } from "parse5";
 import { readJournal, journalPaths } from "./journal.mjs";
+import { parseFrontmatter } from "@astrojs/internal-helpers/frontmatter";
+import { markdownToMdast, mdxToMdast } from "satteri";
+import { bundleJournalDiagrams } from "./journal-diagrams.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const generated = join(root, ".astro", "journal-reading.json");
@@ -21,12 +24,6 @@ const text = node => { assert.ok(node, "Journal expected text node missing"); re
 const hasClass = (node, name) => (attr(node, "class") ?? "").split(/\s+/).includes(name);
 /** @param {string|Buffer} value */
 const digest = value => createHash("sha256").update(value).digest("hex");
-// These actual Mermaid articles require their page-level renderer; #180 owns parity.
-export const deferredReadingPaths = [
-  "/blog/autonomous-oss-with-github-agentic-workflows/",
-  "/blog/ai-powered-github-issues-with-copilot-and-claude-opus/",
-];
-
 /** Admit every eligible article; nested routes need explicit router support before adoption. */
 export function readingPaths() {
   const paths = readJournal().map(post => {
@@ -34,8 +31,25 @@ export function readingPaths() {
     assert.match(path, /^\/blog\/[a-z0-9-]+\/$/, "Journal nested reading route needs explicit support");
     return path;
   });
-  assert.ok(deferredReadingPaths.every(path => paths.includes(path)), "Journal deferred route must remain authored");
-  return paths.filter(path => !deferredReadingPaths.includes(path));
+  return paths;
+}
+
+/** @param {string} path */
+function articleSource(path) {
+  const stem = `src/content/docs${path.slice(0, -1)}`;
+  const file = [stem + ".md", stem + ".mdx"].find(file => existsSync(join(root, file)));
+  assert.ok(file, "Journal reading source required");
+  return file;
+}
+
+/** Read diagram definitions through the maintained Markdown parser, not a fence regex. @param {string} path */
+export function authoredDiagrams(path) {
+  const file = articleSource(path);
+  const source = parseFrontmatter(readFileSync(join(root, file), "utf8")).content;
+  const tree = file.endsWith(".mdx") ? mdxToMdast(source) : markdownToMdast(source);
+  /** @param {any} node @returns {string[]} */
+  const visit = node => node.type === "code" && node.lang === "mermaid" ? [node.value] : (node.children ?? []).flatMap(visit);
+  return visit(tree);
 }
 
 /**
@@ -43,8 +57,9 @@ export function readingPaths() {
  * Unsupported interactive content is rejected rather than silently omitted.
  * @param {string} html Actual Astro artifact.
  * @param {{title:string,description:string,date:string,href:string}} post Authored metadata.
+ * @param {readonly string[]} expectedDiagrams Independently parsed authored definitions.
  */
-export function extractReading(html, post) {
+export function extractReading(html, post, expectedDiagrams = []) {
   const document = all(parse(html));
   assert.equal(text(document.find(node => node.tagName === "title")), `${post.title} | Devantler Tech`, "Journal reference title mismatch");
   assert.equal(attr(document.find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"), post.description, "Journal reference description mismatch");
@@ -53,10 +68,27 @@ export function extractReading(html, post) {
   assert.equal(bodies.length, 1, "Journal requires one complete reading body");
   const body = bodies[0];
   const nodes = all(body);
+  const diagrams = nodes.filter(node => node.tagName === "pre" && hasClass(node, "mermaid"));
+  assert.ok(diagrams.every(node => node.childNodes?.every(child => child.nodeName === "#text")), "Journal diagram must contain only authored text");
+  assert.deepEqual(diagrams.map(text), expectedDiagrams, "Journal diagram definitions must match the complete authored inventory");
+  const diagramData = diagrams.map((node, index) => {
+    const source = text(node);
+    const id = digest(post.href + "\0" + index + "\0" + source).slice(0, 16);
+    const figure = /** @type {MarkupNode} */ (parseFragment(`<figure class="reading-diagram" data-diagram-id="${id}"><figcaption id="diagram-caption-${id}">Diagram ${index + 1}</figcaption><div class="diagram-canvas" tabindex="0" role="region" aria-labelledby="diagram-caption-${id}" aria-busy="true"><p>Diagram rendering needs JavaScript. Its text is available below.</p></div><p class="diagram-status" role="status"></p><details><summary>Diagram text</summary></details></figure>`).childNodes[0]);
+    const details = all(figure).find(node => node.tagName === "details");
+    const parent = node.parentNode;
+    assert.ok(parent?.childNodes && details?.childNodes, "Journal diagram parent required");
+    parent.childNodes = parent.childNodes.map(child => child === node ? figure : child);
+    figure.parentNode = parent;
+    node.attrs = [];
+    details.childNodes.push(node);
+    node.parentNode = details;
+    return {id,source};
+  });
   const headings = nodes.filter(node => /^h[2-6]$/.test(node.tagName ?? "")).map(node => ({id:attr(node, "id"),title:text(node),level:Number(node.tagName?.slice(1))}));
   assert.ok(headings.every(item => item.id), "Journal heading bookmarks required");
   assert.equal(new Set(headings.map(item => item.id)).size, headings.length, "Journal duplicate bookmark");
-  const blocks = nodes.filter(node => node.tagName === "pre");
+  const blocks = nodes.filter(node => node.tagName === "pre" && !diagrams.includes(node));
   const buttons = nodes.filter(node => node.tagName === "button");
   assert.equal(blocks.length, buttons.length, "Journal each code block requires its actual copy control");
   for (const button of buttons) {
@@ -115,7 +147,7 @@ export function extractReading(html, post) {
     .map(node => ({name:attr(node,"name"),property:attr(node,"property"),content:attr(node,"content")}));
   const structuredData = document.filter(node => node.tagName === "script" && attr(node,"type") === "application/ld+json")
     .map(node => JSON.stringify(JSON.parse(text(node))).replace(/</g, "\\u003c"));
-  return {html:serialize(/** @type {import('parse5').DefaultTreeAdapterMap['parentNode']} */ (body)),headings,modified:times[1],adjacent,metadata,structuredData};
+  return {html:serialize(/** @type {import('parse5').DefaultTreeAdapterMap['parentNode']} */ (body)),diagrams:diagramData,headings,modified:times[1],adjacent,metadata,structuredData};
 }
 
 /** Bind the artifact to actual renderer inputs and the article's committed history. */
@@ -142,13 +174,11 @@ export function readingFingerprint() {
       } else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(descriptor)); }
     } finally { closeSync(descriptor); }
   }
-  for (const path of ["src", "public", "astro.config.mjs", "package.json", "package-lock.json"]) visit(path);
+  for (const path of ["src", "public", "astro.config.mjs", "package.json", "package-lock.json", "web/package.json", "web/package-lock.json", "web/src/lib/journal-diagrams.js"]) visit(path);
   const env = {...process.env};
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX", "GIT_NAMESPACE"]) delete env[key];
   for (const path of readingPaths()) {
-    const stem = `src/content/docs${path.slice(0, -1)}`;
-    const sourcePath = [stem + ".md", stem + ".mdx"].find(file => existsSync(join(root, file)));
-    assert.ok(sourcePath, "Journal reading source required");
+    const sourcePath = articleSource(path);
     hash.update(sourcePath + "\0");
     hash.update(execFileSync("git", ["--no-replace-objects", "log", "-1", "--format=%cI", "--", sourcePath], {cwd:root,encoding:"utf8",env}));
   }
@@ -162,7 +192,7 @@ export function prepareReadingReference() {
 }
 
 /** Capture only reviewed reading bytes/assets after a successful Astro render. */
-export function captureReadingReference() {
+export async function captureReadingReference() {
   const fingerprint = readingFingerprint();
   assert.equal(readFileSync(input, "utf8"), fingerprint, "Journal source changed during rendering");
   const paths = readingPaths();
@@ -180,7 +210,7 @@ export function captureReadingReference() {
   };
   const readings = readJournal().filter(post => paths.includes(new URL(post.href).pathname)).map(post => {
     const path = new URL(post.href).pathname;
-    const reading = extractReading(readFileSync(join(root, "dist", path, "index.html"), "utf8"), post);
+    const reading = extractReading(readFileSync(join(root, "dist", path, "index.html"), "utf8"), post, authoredDiagrams(path));
     const fragment = parseFragment(reading.html);
     for (const node of all(fragment)) for (const item of node.attrs ?? []) {
       if (node.tagName === "a" && item.name === "href" && !item.value.startsWith("#")) {
@@ -200,14 +230,17 @@ export function captureReadingReference() {
     }
     return {path,...post,...reading,html:serialize(fragment)};
   });
-  const value = {version:2,fingerprint,readings,assets};
+  const bundle = readings.some(reading => reading.diagrams.length) ? await bundleJournalDiagrams() : null;
+  if (bundle) assets.push(...bundle.assets);
+  assert.equal(readingFingerprint(), fingerprint, "Journal source changed during diagram bundling");
+  const value = {version:3,fingerprint,readings:readings.map(reading => ({...reading,diagramScript:reading.diagrams.length ? bundle?.entry : undefined})),assets};
   writeFileSync(generated, JSON.stringify({...value,checksum:digest(JSON.stringify(value))}));
 }
 
 /** Read a complete current reference; a missing/stale build never becomes an empty article. */
 export function readReadingReference() {
   const value = JSON.parse(readFileSync(generated, "utf8"));
-  assert.ok(value.version === 2 && value.fingerprint === readingFingerprint(), "Journal reference is stale; run bash scripts/build-journal-reference.sh");
+  assert.ok(value.version === 3 && value.fingerprint === readingFingerprint(), "Journal reference is stale; run bash scripts/build-journal-reference.sh");
   const {checksum,...content} = value;
   assert.equal(checksum,digest(JSON.stringify(content)), "Journal reference content is incomplete or altered");
   assert.ok(Array.isArray(value.readings), "Journal complete reading inventory required");
@@ -217,10 +250,18 @@ export function readReadingReference() {
   assert.ok(readings.every(reading => typeof reading.html === "string" && reading.html.trim() && Array.isArray(reading.headings)), "Journal complete reading body required");
   assert.ok(value.assets?.length, "Journal asset inventory is missing");
   for (const asset of value.assets) {
-    assert.match(asset.filename, /^_app\/immutable\/assets\/reading-[a-f0-9]{16}-[A-Za-z0-9._-]+$/);
+    assert.match(asset.filename, /^_app\/immutable\/assets\/(?:reading-[a-f0-9]{16}-[A-Za-z0-9._-]+|reading-diagrams\/[A-Za-z0-9_-]+\.js)$/);
     assert.equal(digest(Buffer.from(asset.source, "base64")), asset.digest, "Journal asset digest mismatch");
   }
   const filenames = new Set(value.assets.map((/** @type {{filename:string}} */ asset) => `/${asset.filename}`));
+  for (const asset of value.assets) for (const dependency of asset.dependencies ?? []) assert.ok(filenames.has(`/${dependency}`), "Journal diagram referenced module is missing");
+  for (const reading of value.readings) {
+    assert.deepEqual(reading.diagrams?.map((/** @type {{source:string}} */ diagram) => diagram.source), authoredDiagrams(reading.path), "Journal diagram definitions are incomplete or stale");
+    assert.ok(reading.diagrams.length ? filenames.has(reading.diagramScript) : !reading.diagramScript, "Journal diagram entry is missing or unexpected");
+    if (reading.diagrams.length) assert.match(reading.diagramScript, /^\/_app\/immutable\/assets\/reading-diagrams\/journal-diagrams-[A-Za-z0-9_-]+\.js$/, "Journal diagram entry is missing or unexpected");
+    const figures = all(parseFragment(reading.html)).filter(node => hasClass(node, "reading-diagram"));
+    assert.deepEqual(figures.map(figure => ({id:attr(figure, "data-diagram-id"),source:text(all(figure).find(node => node.tagName === "pre"))})), reading.diagrams, "Journal diagram body is incomplete or altered");
+  }
   for (const reading of readings) for (const node of all(parseFragment(reading.html))) for (const item of node.attrs ?? []) {
     if (["img", "source"].includes(node.tagName ?? "") && item.name === "srcset") {
       for (const entry of item.value.split(",")) assert.ok(filenames.has(entry.trim().split(/\s+/)[0]), "Journal referenced asset is missing");
