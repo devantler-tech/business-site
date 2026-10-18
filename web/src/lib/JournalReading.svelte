@@ -79,7 +79,10 @@
   .guide-list ul { display:flex; flex-wrap:wrap; gap:.75rem 1.5rem; padding:0; list-style:none; }
   .guide-list a { display:inline-block; padding-block:.5rem; }
   article :global(.card-grid) { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr)); gap:1.5rem; }
-  article :global(.sl-link-card) { padding:1.5rem; border:1px solid var(--line); border-radius:.5rem; }
+  article :global(.sl-link-card) { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:1rem; padding:1.5rem; border:1px solid var(--line); border-radius:.5rem; }
+  article :global(.sl-link-card .stack) { display:grid; gap:.75rem; }
+  article :global(.sl-link-card .title) { font-weight:600; }
+  article :global(.sl-link-card .description) { color:var(--muted); line-height:1.7; }
   article :global(.sl-link-card svg) { width:1.25rem; height:1.25rem; }
   article :global(.sl-blog-tags-list) { display:flex; flex-wrap:wrap; list-style:none; padding:0; gap:.5rem 1rem; }
   article :global(.sl-blog-pagination) { border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem; }
