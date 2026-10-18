@@ -31,8 +31,9 @@ async function render() {
           canvas.innerHTML = DOMPurify.sanitize(svg, {ADD_TAGS:["foreignobject"],ADD_ATTR:["dominant-baseline"],HTML_INTEGRATION_POINTS:{foreignobject:true}});
           const image = canvas.querySelector("svg");
           if (!image) throw new Error("Diagram output is missing");
-          const width = Number(image.getAttribute("viewBox")?.trim().split(/\s+/)[2]);
-          if (!Number.isFinite(width) || width <= 0) throw new Error("Diagram dimensions are missing");
+          const dimensions = image.getAttribute("viewBox")?.trim().split(/\s+/).map(Number) ?? [];
+          const [,,width,height] = dimensions;
+          if (dimensions.length !== 4 || !dimensions.every(Number.isFinite) || width <= 0 || height <= 0) throw new Error("Diagram dimensions are missing");
           image.style.width = `${width}px`;
           image.setAttribute("role", "img");
           image.setAttribute("aria-label", figure.querySelector("figcaption")?.textContent ?? "Article diagram");

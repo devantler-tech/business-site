@@ -98,6 +98,16 @@ test("missing SVG and invalid dimensions show failure rather than claim a render
   }
 });
 
+for (const height of ["0", "-1", "NaN", "Infinity"]) test(`invalid SVG height ${height} shows failure`, async () => {
+  const view = page(async () => ({default:{initialize() {},async render() {return {svg:`<svg viewBox="0 0 1200 ${height}"></svg>`};}}}), 1);
+  await tick();
+  const figure = view.figures[0];
+  assert.equal(figure.attributes.get("data-diagram-state"),"error");
+  assert.equal(figure.attributes.get("aria-busy"),"false");
+  assert.equal(figure.canvas.innerHTML,"");
+  assert.match(figure.status.textContent,/Read its text below or reload/);
+});
+
 test("a module loading failure is visible for every diagram, never an endless loading state", async () => {
   const view = page(async () => {throw new Error("missing module");});
   await tick();

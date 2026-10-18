@@ -63,6 +63,8 @@ test("real diagrams are bound to authored definitions independently of ordinary 
 });
 
 for (const [name, html, authored] of [
+  ["empty diagram", withDiagrams.replace(diagrams[0], ""), ["", diagrams[1]]],
+  ["whitespace-only diagram", withDiagrams.replace(diagrams[0], " \n\t"), [" \n\t", diagrams[1]]],
   ["missing second diagram", withDiagrams.replace(`<pre class="mermaid">${diagrams[1]}</pre>`, ""), diagrams],
   ["changed diagram", withDiagrams.replace('B["Second"]', 'B["Wrong"]'), diagrams],
   ["unrecorded diagram", withDiagrams, []],

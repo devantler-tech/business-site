@@ -73,6 +73,7 @@ export function extractReading(html, post, expectedDiagrams = []) {
   assert.deepEqual(diagrams.map(text), expectedDiagrams, "Journal diagram definitions must match the complete authored inventory");
   const diagramData = diagrams.map((node, index) => {
     const source = text(node);
+    assert.ok(source.trim(), "Journal diagram source required");
     const id = digest(post.href + "\0" + index + "\0" + source).slice(0, 16);
     const figure = /** @type {MarkupNode} */ (parseFragment(`<figure class="reading-diagram" data-diagram-id="${id}"><figcaption id="diagram-caption-${id}">Diagram ${index + 1}</figcaption><div class="diagram-canvas" tabindex="0" role="region" aria-labelledby="diagram-caption-${id}" aria-busy="true"><p>Diagram rendering needs JavaScript. Its text is available below.</p></div><p class="diagram-status" role="status"></p><details><summary>Diagram text</summary></details></figure>`).childNodes[0]);
     const details = all(figure).find(node => node.tagName === "details");

@@ -45,7 +45,14 @@ return function check(html) {
   const expectedDiagrams = previous.filter(node => node.tagName === "pre" && hasClass(node,"mermaid"));
   /** @param {MarkupNode|undefined} node */
   const definition = node => { assert.ok(node, "diagram source is missing"); return (node.childNodes ?? []).map(child => child.value ?? "").join(""); };
-  assert.deepEqual(diagrams.map(figure => definition(all(figure).find(node => node.tagName === "pre"))), expectedDiagrams.map(definition), "complete authored diagram definitions survive independently of prose and code");
+  assert.deepEqual(diagrams.map(figure => {
+    const details = all(figure).find(node => node.tagName === "details");
+    assert.ok(details, "diagram text disclosure is missing");
+    const summary = details.childNodes?.find(node => node.tagName === "summary");
+    assert.ok(summary, "diagram text disclosure summary is missing");
+    assert.equal(normalized(summary), "Diagram text", "diagram text disclosure summary must be Diagram text");
+    return definition(all(details).find(node => node.tagName === "pre"));
+  }), expectedDiagrams.map(definition), "complete authored diagram definitions survive independently of prose and code");
   const renderers = document.filter(node => node.tagName === "script" && /reading-diagrams\//.test(attr(node,"src") ?? ""));
   assert.equal(renderers.length, diagrams.length ? 1 : 0, "only diagram articles load the local renderer");
   for (const renderer of renderers) asset(candidate, attr(renderer,"src"));
@@ -136,6 +143,20 @@ if (process.argv[2] === "disabled") {
   const html = readFileSync(new URL(path,candidate), "utf8");
   const check = checker(path);
   check(html);
+  if (path === "blog/autonomous-oss-with-github-agentic-workflows/index.html") {
+    /** @type {[string,(value:string)=>string][]} */
+    const disclosureMutations = [
+      ["missing disclosure", v => v.replace(/<details><summary>Diagram text<\/summary>([\s\S]*?)<\/details>/, "$1")],
+      ["missing disclosure summary", v => v.replace("<summary>Diagram text</summary>", "")],
+      ["wrong disclosure summary", v => v.replace("<summary>Diagram text</summary>", "<summary>Other content</summary>")],
+    ];
+    for (const [name, mutate] of disclosureMutations) {
+      const changed = mutate(html);
+      assert.notEqual(changed, html, `mutation must reach actual output: ${name}`);
+      assert.throws(() => check(changed), /diagram text disclosure/, `reject ${name}`);
+    }
+    console.log("Svelte reading: three actual diagram-disclosure losses rejected");
+  }
   if (path === "blog/why-i-chose-the-polyform-shield-license-for-ksail/index.html") {
     const missingBoundary = html.replace('class="reading-table"', 'class="missing-table-boundary"');
     assert.notEqual(missingBoundary,html);
