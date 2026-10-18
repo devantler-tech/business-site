@@ -18,13 +18,14 @@ case "$frontend" in
     }
     trap cleanup_failed_selection EXIT
     bash scripts/build-journal-reference.sh
-    npm --prefix web run build
+    build_nonce="$(node --input-type=module -e 'import {randomUUID} from "node:crypto"; console.log(randomUUID())')"
+    SVELTE_PUBLIC_BUILD_NONCE="$build_nonce" npm --prefix web run build
     for check in output projects-output journal-output reading-output feed-output discovery-output; do
       node "web/tests/check-$check.mjs" enabled
     done
     node web/tests/check-company-output.mjs
     bash scripts/check-portal-artifacts.sh web/build
-    node scripts/public-build.mjs
+    node scripts/public-build.mjs "$build_nonce"
     bash scripts/check-portal-artifacts.sh dist
     printf '%s\n' 'Selected verified Svelte public artifact: dist'
     ;;
