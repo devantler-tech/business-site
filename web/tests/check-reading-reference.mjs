@@ -6,6 +6,13 @@ import { readReadingReference } from "../../src/data/journal-reading.mjs";
 const file = new URL("../../.astro/journal-reading.json", import.meta.url);
 const original = readFileSync(file, "utf8");
 const valid = JSON.parse(original);
+/** @typedef {NonNullable<typeof import("virtual:journal-reading").default>[number]} Reading */
+/** @param {ReturnType<typeof readReadingReference>} value @returns {Reading} */
+const diagramReading = value => {
+  const reading = value.readings.find((/** @type {Reading} */ reading) => reading.diagrams.length);
+  assert.ok(reading, "the real reference must include a diagram article");
+  return reading;
+};
 assert.ok(valid.assets.length > 1, "partial asset failure needs a healthy asset beside the rejected one");
 /**
  * Recompute the checksum so a mutation reaches the check it is named after,
@@ -34,6 +41,10 @@ try {
     ["missing asset inventory", value => { value.assets = []; }, /asset inventory is missing/, true],
     ["second asset corrupted", value => { value.assets[1].source = "broken"; }, /asset digest mismatch/, true],
     ["missing referenced asset beside healthy assets", value => { value.assets.splice(1, 1); }, /referenced asset is missing/, true],
+    ["missing diagram beside a healthy one", value => { const reading = diagramReading(value); reading.html = reading.html.replace(/<figure class="reading-diagram"[\s\S]*?<\/figure>/, ""); }, /diagram body is incomplete/, true],
+    ["changed diagram source", value => { diagramReading(value).diagrams[1].source = "flowchart LR\nWrong-->Result"; }, /diagram definitions are incomplete/, true],
+    ["missing diagram entry", value => { delete diagramReading(value).diagramScript; }, /diagram entry is missing/, true],
+    ["missing transitive diagram module", value => { const module = value.assets.find((/** @type {{dependencies?:string[]}} */ asset) => asset.dependencies?.length).dependencies[0]; value.assets = value.assets.filter((/** @type {{filename:string}} */ asset) => asset.filename !== module); }, /diagram referenced module is missing/, true],
   ];
   for (const [name, mutate, failure, signed] of mutations) {
     const value = structuredClone(valid);

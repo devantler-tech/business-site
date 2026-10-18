@@ -17,6 +17,8 @@ declare module "virtual:journal-reading" {
     adjacent:{rel:string;href:string;title:string}[];
     metadata:{name?:string;property?:string;content:string}[];
     structuredData:string[];
+    diagrams:{id:string;source:string}[];
+    diagramScript?:string;
   }[] | null;
   export default reading;
 }

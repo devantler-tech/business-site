@@ -10,6 +10,7 @@
   {#each data.metadata as item}<meta name={item.name} property={item.property} content={item.content} />{/each}
   {#each data.structuredData as json}{@html `<script type="application/ld+json">${json}</script>`}{/each}
   <script type="module" src={copyScript}></script>
+  {#if data.diagramScript}<script type="module" src={data.diagramScript}></script>{/if}
 </svelte:head>
 
 <Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug={data.path.slice("/blog/".length, -1)} customSocialMetadata>
@@ -52,6 +53,17 @@
   article :global(.sl-blog-author-title) { font-size:.75rem; }
   article :global(.reading-table) { max-width:100%; overflow-x:auto; margin-block:1.5rem; }
   article :global(.reading-table:focus-visible) { outline:3px solid var(--accent); outline-offset:4px; }
+  article :global(.reading-diagram) { margin:2rem 0; padding:1rem; border:1px solid var(--line); border-radius:.5rem; }
+  article :global(.reading-diagram figcaption) { font-weight:600; }
+  article :global(.diagram-canvas) { max-width:100%; overflow-x:auto; padding-block:1rem; }
+  article :global(.diagram-canvas:focus-visible) { outline:3px solid var(--accent); outline-offset:3px; }
+  article :global(.diagram-canvas svg) { display:block; max-width:none !important; width:auto; min-width:100%; height:auto; }
+  article :global(.diagram-canvas p) { margin:0; line-height:inherit; color:inherit; }
+  article :global(.diagram-canvas .mindmap-node .label-container) { fill:var(--paper) !important; stroke:var(--line); }
+  article :global(.diagram-canvas .mindmap-node .nodeLabel) { color:var(--ink) !important; }
+  article :global(.reading-diagram pre) { max-width:100%; overflow-x:auto; font-size:.8rem; line-height:1.6; }
+  article :global(.reading-diagram summary) { cursor:pointer; }
+  article :global(.diagram-status:empty) { display:none; }
   article :global(table) { border-collapse:collapse; width:100%; }
   article :global(th),article :global(td) { text-align:left; padding:.65rem; border-bottom:1px solid var(--line); }
   article :global(.expressive-code) { margin-block:1.5rem; min-width:0; }
