@@ -50,6 +50,10 @@
   article :global(.sl-blog-author) { display:flex; gap:.75rem; align-items:center; text-decoration:none; }
   article :global(.sl-blog-author-picture) { border-radius:50%; width:40px; height:40px; }
   article :global(.sl-blog-author-title) { font-size:.75rem; }
+  article :global(.reading-table) { max-width:100%; overflow-x:auto; margin-block:1.5rem; }
+  article :global(.reading-table:focus-visible) { outline:3px solid var(--accent); outline-offset:4px; }
+  article :global(table) { border-collapse:collapse; width:100%; }
+  article :global(th),article :global(td) { text-align:left; padding:.65rem; border-bottom:1px solid var(--line); }
   article :global(.expressive-code) { margin-block:1.5rem; min-width:0; }
   article :global(.expressive-code pre) { max-width:100%; overflow-x:auto; }
   article :global(.expressive-code .copy [aria-live]) { position:absolute; right:0; top:100%; padding:.4rem; background:var(--paper); color:var(--ink); font-size:.8rem; max-width:18rem; }

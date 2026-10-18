@@ -68,8 +68,10 @@ asset directory. Unreviewed body scripts or interactive content fail rather than
 The reading frame preserves all prose, code, bookmarks, author/topic links, sharing metadata,
 structured data, dates and title-labelled adjacent articles. Native copy controls use the renderer's
 actual payload and provide success or actionable failure feedback, without application hydration.
-Prose-only articles omit the empty contents disclosure. One route dispatches decimal archive pages
-and exact admitted article slugs; unknown articles return 404. Unsupported nested article slugs
+Prose-only articles omit the empty contents disclosure. Native comparison tables retain their
+headers/cells inside named, keyboard-scrollable boundaries; article images and long inline text
+remain contained on narrow layouts. One route dispatches decimal archive pages and exact admitted
+article slugs; unknown articles return 404. Unsupported nested article slugs
 fail the build explicitly rather than silently omitting a post. Local article, author and topic
 destinations remain local; unmigrated and external links retain their original destinations.
 

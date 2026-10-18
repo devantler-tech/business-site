@@ -9,7 +9,7 @@ const paths = readingPaths().map(path => `${path.slice(1)}index.html`);
 const admitted = new Set([...readingPaths(), ...journalPaths()]);
 const candidate = new URL("../build/", import.meta.url);
 const published = new URL("../../dist/", import.meta.url);
-/** @typedef {{nodeName:string,tagName?:string,value?:string,attrs?:{name:string,value:string}[],childNodes?:MarkupNode[]}} MarkupNode */
+/** @typedef {{nodeName:string,tagName?:string,value?:string,attrs?:{name:string,value:string}[],childNodes?:MarkupNode[],parentNode?:MarkupNode|null}} MarkupNode */
 /** @param {MarkupNode} node @returns {MarkupNode[]} */
 const all = node => [node, ...(node.childNodes ?? []).flatMap(all)];
 /** @param {MarkupNode|undefined} node @param {string} name */
@@ -47,6 +47,13 @@ return function check(html) {
   /** @param {MarkupNode[]} ns */
   const copies = ns => ns.filter(node => node.tagName === "button").map(node => attr(node, "data-code"));
   assert.deepEqual(copies(nodes), copies(previous), "copy payloads follow the actual renderer, including its comment handling");
+  const tables = nodes.filter(node => node.tagName === "table");
+  const oldTables = previous.filter(node => node.tagName === "table");
+  assert.deepEqual(tables.map(table => all(table).filter(node => ["th","td"].includes(node.tagName ?? "")).map(node => [node.tagName,normalized(node)])), oldTables.map(table => all(table).filter(node => ["th","td"].includes(node.tagName ?? "")).map(node => [node.tagName,normalized(node)])), "all native table cells retain their content and semantics");
+  for (const table of tables) {
+    const boundary = table.parentNode;
+    assert.ok(boundary && hasClass(boundary,"reading-table") && attr(boundary,"tabindex") === "0" && attr(boundary,"role") === "region" && attr(boundary,"aria-label") === "Scrollable table", "each table requires a named keyboard-scrollable boundary");
+  }
   /** @param {MarkupNode[]} ns */
   const links = ns => ns.filter(node => node.tagName === "a").map(node => [normalized(node), absolute(attr(node,"href"))]);
   assert.deepEqual(links(nodes), links(previous), "all authored, author and topic destinations survive");
@@ -121,6 +128,12 @@ if (process.argv[2] === "disabled") {
   const html = readFileSync(new URL(path,candidate), "utf8");
   const check = checker(path);
   check(html);
+  if (path === "blog/why-i-chose-the-polyform-shield-license-for-ksail/index.html") {
+    const missingBoundary = html.replace('class="reading-table"', 'class="missing-table-boundary"');
+    assert.notEqual(missingBoundary,html);
+    assert.throws(() => check(missingBoundary), /keyboard-scrollable boundary/);
+    console.log("Svelte reading: actual comparison-table boundary loss rejected");
+  }
   if (path !== "blog/building-ksail-from-shell-to-dotnet-to-go/index.html") continue;
   const reference = parse(readFileSync(new URL(path, published), "utf8"));
   /** @type {[string,(value:string)=>string,RegExp][]} */

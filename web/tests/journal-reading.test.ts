@@ -40,6 +40,15 @@ test("the renderer's comment-only shell instructions retain their deliberately e
   assert.match(extractReading(html, post).html, /data-code=""/);
 });
 
+test("every native table gets its own named keyboard-scrollable boundary without changing cells", async () => {
+  const { extractReading } = await adapter();
+  const table = '<table style="min-width:800px"><thead><tr><th>Comparison</th><th>Details</th></tr></thead><tbody><tr><td>VeryLongUnbrokenValue</td><td>Retained content</td></tr></tbody></table>';
+  const html = fixture.replace('<p>Complete', `${table}${table}<p>Complete`);
+  const reading = extractReading(html, post);
+  assert.equal((reading.html.match(/class="reading-table" tabindex="0" role="region" aria-label="Scrollable table"/g) ?? []).length, 2);
+  assert.equal((reading.html.match(new RegExp(table, "g")) ?? []).length, 2, "native table/header/cell semantics and content are retained");
+});
+
 for (const [name, mutate] of [
   ["missing body", (v:string) => v.replace("sl-markdown-content", "missing-body")],
   ["wrong article", (v:string) => v.replace("A real article |", "Another article |")],

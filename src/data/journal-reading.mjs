@@ -69,6 +69,16 @@ export function extractReading(html, post) {
     assert.ok(typeof payload === "string" && (payload.trim() || commentOnly), "Journal actual copy payload required");
   }
   for (const node of nodes) {
+    if (node.tagName === "table") {
+      const parent = node.parentNode;
+      assert.ok(parent?.childNodes, "Journal table parent missing");
+      // Scroll the comparison independently, without changing native table semantics.
+      const wrapper = /** @type {MarkupNode} */ (parseFragment('<div class="reading-table" tabindex="0" role="region" aria-label="Scrollable table"></div>').childNodes[0]);
+      wrapper.parentNode = parent;
+      wrapper.childNodes = [node];
+      parent.childNodes = parent.childNodes.map(child => child === node ? wrapper : child);
+      node.parentNode = wrapper;
+    }
     if (node.tagName === "a") {
       const href = node.attrs?.find(item => item.name === "href");
       if (href && !href.value.startsWith("#")) href.value = new URL(href.value, post.href).href;
