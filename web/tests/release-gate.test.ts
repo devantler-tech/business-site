@@ -8,7 +8,7 @@ test("the candidate stays off unless explicitly enabled", () => {
     assert.deepEqual(frontendEntries(value), []);
   }
   assert.equal(parseFrontendRelease("true"), true);
-  assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/"]);
+  assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", "/agentic-engineering/", "/templates/dotnet/", "/templates/go/", "/templates/", "/templates/platform-template/", "/templates/platform-tenant-template/"]);
   assert.ok(frontendEntries("true").includes("/blog/"), "enabled artifact must admit the real Journal archive");
   assert.ok(frontendEntries("true").includes("/blog/rss.xml"), "the existing feed path stays local");
   assert.ok(frontendEntries("true").includes("/blog/authors/nikolai-emil-damm/"), "readers can browse the complete author collection locally");
@@ -25,6 +25,7 @@ test("only the deliberately disabled candidate may be absent from the artifact",
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/[[locale]]/projects", "/projects/[legacy]"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/[[page]]"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/[kind]/[slug]"]));
+    assert.doesNotThrow(() => checkUnseenRoutes(value, ["/agentic-engineering", "/templates/[[guide]]"]));
     assert.throws(() => checkUnseenRoutes(value, ["/unreviewed"]), /Unexpected/);
     assert.throws(() => checkUnseenRoutes(value, ["/[[locale]]/about", "/unreviewed"]), /Unexpected/);
   }

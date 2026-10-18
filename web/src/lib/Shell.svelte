@@ -8,9 +8,10 @@
     page = "about",
     journalPage = 1,
     journalSlug = "",
+    guidePath = "",
     customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal"; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
   const words = {
     en: {
       skip: "Skip to content",
@@ -44,7 +45,8 @@
   let t = $derived(words[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
-  let suffix = $derived(page === "home" ? "" : page === "journal" ? `blog/${journalSlug ? `${journalSlug}/` : journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
+  let englishOnly = $derived(page === "journal" || page === "guide");
+  let suffix = $derived(page === "guide" ? guidePath.slice(1) : page === "home" ? "" : page === "journal" ? `blog/${journalSlug ? `${journalSlug}/` : journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
 </script>
 
 <svelte:head>
@@ -52,7 +54,7 @@
   {#if !customSocialMetadata}<meta property="og:description" content={description} />{/if}
   <link rel="canonical" href={`${publishedHome}${suffix}`} />
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
-  {#if page !== "journal"}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}
+  {#if !englishOnly}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}
   <link rel="alternate" hreflang="x-default" href={`https://devantler.tech/${suffix}`} />
   <script src={themeScript}></script>
 </svelte:head>
@@ -82,7 +84,7 @@
       <div class="languages" aria-label={locale === "da" ? "Vælg sprog" : "Choose language"}>
         <a href={`/${suffix}`} lang="en" aria-current={locale === "en" ? "page" : undefined}>EN</a><span aria-hidden="true"
           >/</span
-        ><a href={`/da/${page === "journal" ? "" : suffix}`} lang="da" aria-label={page === "journal" ? "Danish business homepage" : undefined} aria-current={locale === "da" ? "page" : undefined}>DA</a>
+        ><a href={`/da/${englishOnly ? "" : suffix}`} lang="da" aria-label={englishOnly ? "Danish business homepage" : undefined} aria-current={locale === "da" ? "page" : undefined}>DA</a>
       </div>
     </div>
   </div>
