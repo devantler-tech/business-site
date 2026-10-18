@@ -59,7 +59,7 @@ Do not add a Node service merely because SvelteKit supports one. First review th
 typed presentation boundary, runtime cost, origin/cookie/CSRF flow and rollback.
 Any added rendering wait requires bounded buffered output, cancellation/deadline
 handling and fresh authorization/session/flag checks before private bytes leave Go.
-No private response may enter public prerendering or a shared cache.
+No private response may enter public static generation or a shared cache.
 
 Use three independently restarted paired trials on the same host/runtime/database
 conditions, alternate candidate/baseline order, and retain twenty warmups plus one
