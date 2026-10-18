@@ -19,7 +19,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   identity also admits the two English/Danish company-information pages, with the address
   confined to those disclosures and omitted when identity is disabled. The legacy
   GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
-  Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
+  Follow `web/README.md`. The normal build selects the verified complete candidate only when
+  explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
+  publication remains explicitly Astro; the publisher permits Svelte only for main-only,
+  artifact-only previews. Go packaging admits it only through the explicit `--svelte` option.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
   The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings
@@ -34,7 +37,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   reuse their maintained Astro-rendered bodies, bookmarks, native code controls and table semantics;
   only the original English routes are admitted. Admitted bodies reuse an
   input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
-  enabled candidate builds. Normal production builds and publication do not consume that reference.
+  enabled candidate builds. The selected normal build prepares it automatically through the explicit
+  incumbent builder, never recursively through the normal publication entrypoint.
   The reference also bundles the existing Mermaid dependency with the candidate's Vite toolchain.
   Only diagram articles load that local module graph; ordinary code retains its separate copy controls.
   Numeric archives and article slugs share explicit dispatch; unsupported nested article routes
@@ -69,8 +73,9 @@ From this repository's root:
 
 ```sh
 npm ci
-npm run build
 npm --prefix web ci
+npm run build
+node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs
 bash scripts/check-svelte-frontend.sh
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh

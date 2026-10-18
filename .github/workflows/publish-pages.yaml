@@ -54,6 +54,10 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: npm ci
+      - name: Install candidate frontend dependencies
+        # Historical immutable sources predate the candidate. When present, its
+        # clean installation remains required and any error terminates the step.
+        run: if [[ -f web/package-lock.json ]]; then npm --prefix web ci; fi
       - name: Refresh complete public project ranking
         working-directory: .
         env:

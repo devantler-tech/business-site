@@ -17,6 +17,7 @@ the active production publisher. Neither workflow deploys the private portal bac
 ```sh
 # From the repository root
 npm ci
+npm --prefix web ci
 npm run dev -- --host 127.0.0.1  # stop with Ctrl+C
 LC_ALL=C npm run build          # production build and visitor checks
 ```
@@ -393,8 +394,10 @@ web island — explicitly out of scope for the static site today.)
 ### The convention — `astro:env`
 
 The isolated SvelteKit migration candidate in `web/` uses its own framework-native
-`FEATURE_SVELTE_FRONTEND` setting, not the Astro schema. It remains default-off and is not part
-of publication or the Go package. See the [candidate guide](../web/README.md) for its enabled,
+`FEATURE_SVELTE_FRONTEND` setting, not the Astro schema. It remains default-off. The common
+build can select it, the publisher admits it only for an artifact-only preview, and the Go
+packager requires an explicit `--svelte` option. Production publication remains Astro.
+See the [candidate guide](../web/README.md) for its enabled,
 false and entirely unset checks. Restart the preview process after rebuilding a different
 setting: a running preview has already loaded the old compiled server. Gate review is tracked
 by [#125](https://github.com/devantler-tech/business-site/issues/125).

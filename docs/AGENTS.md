@@ -11,7 +11,7 @@ CI runs them (Node 24 with npm 11).
 
 | Check | Command |
 |---|---|
-| Production build — gates every site PR | `npm ci && npm run build` |
+| Production build — gates every site PR | `npm ci && npm --prefix web ci && npm run build` |
 | Project checker fixtures (actual cross-product drift runs in the monorepo) | `bash scripts/check-active-projects-drift.test.sh` |
 | Publisher admission and boundaries | `bash scripts/publishing-contract.test.sh && bash scripts/site-publication.test.sh` |
 | CV drift | `bash scripts/check-cv-drift.test.sh && node --disable-warning=ExperimentalWarning scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts` |
