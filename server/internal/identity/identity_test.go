@@ -65,7 +65,7 @@ func fixtureBroker(t *testing.T) brokerFixture {
 	return brokerFixture{b, key, issuer, ctx}
 }
 
-func (f brokerFixture) token(t *testing.T, subject, nonce string, changes map[string]any) string {
+func (f brokerFixture) token(t testing.TB, subject, nonce string, changes map[string]any) string {
 	t.Helper()
 	claims := map[string]any{"iss": f.issuer, "sub": subject, "aud": "portal-fixture", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": nonce, "email": "same@example.invalid", "groups": []string{"operator"}}
 	for k, v := range changes {
@@ -114,7 +114,7 @@ func TestBrokerRejectsInvalidProofs(t *testing.T) {
 	}
 }
 
-func migrationDB(t *testing.T) *pgxpool.Pool {
+func migrationDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_MIGRATION_DATABASE_URL")
 	if dsn == "" {
@@ -132,7 +132,7 @@ func migrationDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func fixtureDB(t *testing.T) *pgxpool.Pool {
+func fixtureDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -165,7 +165,7 @@ func enabled(t *testing.T, pool *pgxpool.Pool, f brokerFixture) *Foundation {
 	return New(pool, f.broker, flagAPI(t, true).NewClient())
 }
 
-func flagAPI(t *testing.T, value any) *openfeature.EvaluationAPI {
+func flagAPI(t testing.TB, value any) *openfeature.EvaluationAPI {
 	t.Helper()
 	api := isolated.NewAPI()
 	setFlag(t, api, value)
@@ -173,7 +173,7 @@ func flagAPI(t *testing.T, value any) *openfeature.EvaluationAPI {
 	return api
 }
 
-func setFlag(t *testing.T, api *openfeature.EvaluationAPI, value any) {
+func setFlag(t testing.TB, api *openfeature.EvaluationAPI, value any) {
 	t.Helper()
 	flags := map[string]memprovider.InMemoryFlag{}
 	if value != nil {

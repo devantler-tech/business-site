@@ -9,10 +9,12 @@ Issue #142 owns the eventual decision; #197 supplies the reproducible Go baselin
 This protocol is committed before any Svelte private rendering experiment.
 
 The measured task is sequential sign-in, workspace, contact read, native save,
-reload, stale-edit recovery and logout for two fictional clients, followed by a
+reload, stale-edit refusal, recovery reload and logout for two fictional clients, followed by a
 separately invited operator's workspace, operator page, client-route refusal and
 logout. Actors have independent cookie jars over the same disposable database
 and synthetic TLS broker. No fixture runs concurrently with another database test.
+Every measured stale-edit refusal is followed by a real read that must retain the
+saved revision and values, not merely an expected error status.
 Sign-in includes the real synthetic code exchange and signing cost and is reported
 separately from page/form response samples. No customer or real-provider data is used.
 
@@ -29,10 +31,15 @@ GOTOOLCHAIN=local go test ./internal/identity -run '^$' \
 
 Each benchmark invocation resets the fixture, provisions two fictional clients
 and an operator, performs twenty excluded warmup journeys and records exactly
-the requested number of complete journeys. Keep the raw JSON test stream and its
+the requested number of complete journeys using `b.Loop()` (no one-iteration
+calibration report). Require exactly three successful 100-journey reports.
+These repetitions share one test process; they are not independently restarted
+service trials. Keep the raw JSON test stream and its
 exit status; a partial stream or missing/failed terminal package event is not a
 baseline. Record the immutable source SHA, clean-worktree check, UTC interval,
 Go/PostgreSQL versions, OS/architecture and command alongside that private output.
+Concatenate the test stream's `Output` events before reading report lines: one
+large JSON report can span several events. Do not count an event as a whole report.
 Do not publish machine names, connection strings or raw provider/HTTP diagnostics.
 
 The `private-journey/v1` report contains only fixed actor/route labels, statuses,

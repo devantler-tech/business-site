@@ -393,6 +393,12 @@ aggregates this unconditional job into `CI - Required Checks`.
 After testing, stop and remove only the disposable service and data directory you created.
 Keep shared services and databases untouched; do not turn this fixture into a permanent service.
 
+The [private frontend comparison protocol](PRIVATE-FRONTEND-COMPARISON.md) defines
+the opt-in, real Go contact-journey benchmark. It uses these same disposable
+database and synthetic TLS broker fixtures, separately from the correctness suite.
+Its raw measurements are a comparator, not evidence that a Svelte private renderer
+or a production portal is ready.
+
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share
 and reset the disposable records. Its HTTP gateway maps fixture cookies and origin
