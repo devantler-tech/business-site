@@ -25,12 +25,15 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.
 - The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
   using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
-  configuration, introductory copy and the native-link card controller. Technical routes and RSS
+  configuration, introductory copy and the native-link card controller. Technical routes
   and the two explicitly deferred diagram articles remain on the published Astro site. Admitted bodies reuse an
   input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
   enabled candidate builds. Normal production builds and publication do not consume that reference.
   Numeric archives and article slugs share explicit dispatch; unsupported nested article routes
   fail the build. Never invent Danish article routes.
+  The enabled candidate retains the complete English `/blog/rss.xml` and its canonical image
+  dependencies through an input-bound generated reference and native prerendered endpoints.
+  Feed XML, images and discovery stay default-off; do not invent a Danish feed or add a browser parser.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;

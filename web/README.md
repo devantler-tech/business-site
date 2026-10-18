@@ -25,6 +25,7 @@ npm --prefix web run preview
 
 Open the printed loopback address at `/`, `/da/`, `/about/`, `/da/about/`, `/projects/`
 or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal archive.
+The subscription link opens the complete existing `/blog/rss.xml` locally.
 Topic links and the author browse link open the complete corresponding collections locally. Stop the preview with Ctrl+C.
 Unmigrated navigation links deliberately go to the existing public website. No account, database,
 publishing credential or private customer information is needed. The build generates optimized
@@ -53,10 +54,19 @@ reading routes for all 13 static articles stay local. Topic and author archives
 retain all matching posts on one page, matching Astro rather than truncating to the main archive's
 five-post limit. Author cards keep their separate public profile link. The two Mermaid articles
 remain on the working published destinations until #180 preserves their page-level diagram renderer;
-they are explicit exclusions, never raw diagram source presented as finished reading pages. Technical pages and RSS
+they are explicit exclusions, never raw diagram source presented as finished reading pages. Technical pages
 deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
 build rather than silently dropping a post. Tests compare every candidate card against the actual
 Astro build, including date labels, excerpts and destinations.
+
+RSS reuses the complete actual Astro XML, including its English channel identity, item order,
+stable GUIDs, dates, descriptions, categories and full HTML content. A build-only XML parser is
+declared at the version already in the lockfile; no parser reaches the browser. The input-bound
+feed reference captures every local image and responsive variant. Native prerendered image
+endpoints preserve those existing canonical asset URLs; missing or unsupported dependencies fail
+the build. Feed discovery and visible subscription links stay local. The current complete feed
+contains all 15 posts; a future partial/archive feed fails closed until archive support is explicitly
+migrated. No Danish feed, subscription service, customer data or portal route is introduced.
 
 The reading routes reuse the actual Astro-rendered bodies and Expressive Code assets.
 `build-journal-reference.sh` runs the normal production build between input-fingerprint checks,
@@ -90,7 +100,8 @@ LC_ALL=C bash scripts/check-svelte-frontend.sh
 It audits all candidate dependencies, runs release-policy tests and strict Svelte/TypeScript
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
 must remove all six business pages, both redirects, every Journal archive (including topics and
-authors), and every reading route and its dependent assets, even after an enabled build.
+authors), every reading route and its dependent assets, and the feed XML and its image dependencies,
+even after an enabled build.
 The enabled artifact must contain both locales, metadata and only the declared local scripts.
 Every archive retains exactly one social-sharing description; reading pages supply their own article metadata.
 The check exercises the actual build-local ranking path with a deliberately reordered complete

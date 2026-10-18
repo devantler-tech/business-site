@@ -15,21 +15,21 @@
 </script>
 
 <svelte:head>
-  <link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="https://devantler.tech/blog/rss.xml" />
+  <link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="/blog/rss.xml" />
   <script src={navigation}></script>
 </svelte:head>
 
 <Shell locale="en" title={data.title} description={data.description} page="journal" journalPage={data.page} journalSlug={data.slug}>
   <main id="main" class="container journal">
-    <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="https://devantler.tech/blog/rss.xml">Subscribe via RSS</a></nav>
+    <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="/blog/rss.xml">Subscribe via RSS</a></nav>
     <header class="intro"><h1>{data.heading}</h1><p>{data.intro}</p></header>
     <details class="browse"><summary>Browse the Journal</summary><div>
       <a href="/blog/">All posts</a>
       <section class="browse-group" aria-labelledby="recent-posts"><h2 id="recent-posts">Recent posts</h2><ul>{#each data.browse.recent as post}<li><a href={post.href}>{post.title}</a></li>{/each}</ul></section>
       <section class="browse-group" aria-labelledby="journal-tags"><h2 id="journal-tags">Tags</h2><ul>{#each data.browse.tags as tag}<li><a href={tag.href}>{tag.label} ({tag.count})</a></li>{/each}</ul></section>
-      <a href="https://devantler.tech/blog/rss.xml">RSS</a>
+      <a href="/blog/rss.xml">RSS</a>
       {#each data.authors as author}<p><a href={author.path}>Articles by {author.label}</a></p>{/each}
-      <p>Unmigrated articles and RSS open on the published website.</p>
+      <p>Technical guides open on the published website.</p>
     </div></details>
     <section class="posts" aria-label="Journal articles">
       {#each data.posts as post, index}

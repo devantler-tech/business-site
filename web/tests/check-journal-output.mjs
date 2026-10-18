@@ -76,7 +76,7 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
   assert.equal(attr(socialDescriptions[0], "content"), attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"));
   assert.ok(!html.includes("/da/blog/"), "English articles must not acquire invented Danish destinations");
   assert.ok(html.includes('href="/projects/"') && html.includes('href="/about/"') && html.includes('href="/da/"'));
-  assert.ok(html.includes('href="https://devantler.tech/blog/rss.xml"'));
+  assert.ok(html.includes('href="/blog/rss.xml"'));
   assert.ok(html.includes('href="/blog/authors/nikolai-emil-damm/"'));
   for (const tag of all(page).filter(node => hasClass(node, "sl-blog-tag"))) {
     const href = attr(tag, "href");

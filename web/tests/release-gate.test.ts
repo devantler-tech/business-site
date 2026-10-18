@@ -10,6 +10,7 @@ test("the candidate stays off unless explicitly enabled", () => {
   assert.equal(parseFrontendRelease("true"), true);
   assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/"]);
   assert.ok(frontendEntries("true").includes("/blog/"), "enabled artifact must admit the real Journal archive");
+  assert.ok(frontendEntries("true").includes("/blog/rss.xml"), "the existing feed path stays local");
   assert.ok(frontendEntries("true").includes("/blog/authors/nikolai-emil-damm/"), "readers can browse the complete author collection locally");
   assert.ok(frontendEntries("true").includes("/blog/tags/kubernetes/"), "the real topic inventory is admitted");
   assert.ok(frontendEntries("true").includes("/blog/building-ksail-from-shell-to-dotnet-to-go/"), "readers can complete the admitted article locally");
