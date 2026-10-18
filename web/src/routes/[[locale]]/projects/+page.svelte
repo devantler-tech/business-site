@@ -54,7 +54,7 @@
       </section>
       <aside id="engineering-checks" class="quality-bridge"><p>{t.qualityBridge}</p><a href={`${home}#quality`}>{t.qualityAction}<span aria-hidden="true">↗</span></a></aside>
       <section id="research" aria-labelledby="research-title">
-        <div class="research-heading"><div class="section-heading"><p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{data.researchTitle}</h2><p>{t.researchText}</p><a href="https://devantler.tech/pdfs/thesis.pdf">{data.thesis}<span aria-hidden="true">↗</span></a></div><enhanced:img src="../../../../../src/assets/editorial/data-research.webp?w=480;760" alt="" /></div>
+        <div class="research-heading"><div class="section-heading"><p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{data.researchTitle}</h2><p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{data.thesis}<span aria-hidden="true">↗</span></a></div><enhanced:img src="../../../../../src/assets/editorial/data-research.webp?w=480;760" alt="" /></div>
         <details><summary>{t.details}</summary><div class="research-detail" lang="en"><h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p><h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><enhanced:img src="../../../../../src/assets/data-space-as-a-data-mesh.png?w=480;960" alt="Data Space as a Data Mesh" /></div></details>
       </section>
     </div>

@@ -16,8 +16,9 @@ const t = supporting[locale];
 const homeCopy = copy[locale];
 const home = locale === 'da' ? '/da/' : '/';
 const about = section === 'about';
+const description = about ? t.aboutDescription : FEATURE_FEATURED_PORTFOLIO ? portfolioText[locale].pageIntro : FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].projectsIntro : t.projectsDescription;
 ---
-<BusinessLayout locale={locale} section={section} title={`${about ? t.aboutTitle : t.projectsTitle} | Devantler Tech`} description={about ? t.aboutDescription : t.projectsDescription}>
+<BusinessLayout locale={locale} section={section} title={`${about ? t.aboutTitle : t.projectsTitle} | Devantler Tech`} description={description}>
   <main id="main" class="container supporting-page">
     <div class="opening"><h1>{about ? t.aboutTitle : t.projectsTitle}</h1><p>{about ? t.aboutIntro : FEATURE_FEATURED_PORTFOLIO ? portfolioText[locale].pageIntro : FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].projectsIntro : t.projectsIntro}</p></div>
     {about ? <>

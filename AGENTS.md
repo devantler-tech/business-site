@@ -42,6 +42,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   The enabled candidate retains the complete English `/blog/rss.xml` and its canonical image
   dependencies through an input-bound generated reference and native prerendered endpoints.
   Feed XML, images and discovery stay default-off; do not invent a Danish feed or add a browser parser.
+  The same input-bound reference captures the generated CV, maintained thesis PDF, favicon,
+  robots file and sharing portrait through inspected file descriptors. Native prerendered endpoints
+  retain these downloads locally. The final adapter output supplies canonical sitemap membership,
+  excluding redirects and noindex disclosures; never copy publisher CNAME or publication receipts.
+  All discovery assets and endpoints are absent when the candidate is false or unset.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;

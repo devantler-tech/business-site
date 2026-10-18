@@ -6,15 +6,19 @@ import { frontendEntries, checkUnseenRoutes, parseFrontendRelease } from "./src/
 import { readJournal, journalArchives } from "../src/data/journal.mjs";
 import { readingPaths, readReadingReference } from "../src/data/journal-reading.mjs";
 import { readJournalFeedReference } from "../src/data/journal-feed-reference.mjs";
+import { readPublicDiscoveryReference } from "../src/data/public-discovery-reference.mjs";
+import { writeDiscovery } from "./discovery.mjs";
 
 export default defineConfig(({ mode }) => ({
   build: { assetsInlineLimit: 0 },
   plugins: [
     {
       name: "authored-journal",
-      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:technical-guides", "virtual:journal-feed"].includes(id)) return `\0${id}`; },
+      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:technical-guides", "virtual:journal-feed", "virtual:business-sharing", "virtual:public-discovery"].includes(id)) return `\0${id}`; },
       load(id) {
         const enabled = parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND);
+        if (id === "\0virtual:business-sharing") return `export default ${JSON.stringify(enabled ? readPublicDiscoveryReference().sharingImage : null)};`;
+        if (id === "\0virtual:public-discovery") return `export default ${JSON.stringify(enabled ? readPublicDiscoveryReference().assets : null)};`;
         if (id === "\0virtual:technical-guides") return `export default ${JSON.stringify(enabled ? readReadingReference().guides : null)};`;
         if (id === "\0virtual:journal-feed") {
           const reference = enabled ? readJournalFeedReference() : null;
@@ -42,7 +46,13 @@ export default defineConfig(({ mode }) => ({
     },
     enhancedImages(),
     sveltekit({
-      adapter: adapter(),
+      adapter: {
+        ...adapter(),
+        async adapt(builder) {
+          await adapter().adapt(builder);
+          if (parseFrontendRelease(loadEnv(mode,process.cwd(),"FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND)) writeDiscovery("build");
+        },
+      },
       prerender: {
         entries: frontendEntries(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_SVELTE_FRONTEND, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
         crawl: false,

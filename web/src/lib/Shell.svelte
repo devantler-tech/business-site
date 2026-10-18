@@ -3,6 +3,7 @@
   import { getContext } from "svelte";
   import { businessFrameContext, type BusinessFrame } from "./business-frame";
   import themeScript from "../../../src/components/business/theme.js?url";
+  import sharingImage from "virtual:business-sharing";
   let {
     locale,
     title,
@@ -55,11 +56,18 @@
 
 <svelte:head>
   <title>{title} | Devantler Tech</title><meta name="description" content={description} />
-  {#if !customSocialMetadata}<meta property="og:description" content={description} />{/if}
+  {#if !customSocialMetadata}
+    <meta property="og:title" content={`${title} | Devantler Tech`} /><meta property="og:description" content={description} />
+    <meta property="og:type" content="website" /><meta property="og:url" content={`${publishedHome}${suffix}`} />
+    <meta property="og:locale" content={locale === "da" ? "da_DK" : "en_GB"} />
+    <meta property="og:image" content={sharingImage ?? ""} /><meta property="og:image:alt" content="Nikolai Emil Damm" />
+    <meta name="twitter:card" content="summary" />
+  {/if}
   <link rel="canonical" href={`${publishedHome}${suffix}`} />
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
   {#if !englishOnly}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}
   <link rel="alternate" hreflang="x-default" href={`https://devantler.tech/${suffix}`} />
+  <link rel="sitemap" href="/sitemap-index.xml" /><link rel="icon" href="/favicon.png" />
   <script src={themeScript}></script>
 </svelte:head>
 

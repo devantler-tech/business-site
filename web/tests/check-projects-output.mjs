@@ -29,7 +29,7 @@ for (const locale of ["en", "da"]) {
   assert.ok(html.includes('PolyForm Shield'));
   assert.ok(html.includes('href="https://github.com/orgs/devantler-tech/repositories"'));
   assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
-  assert.ok(html.includes('href="https://devantler.tech/pdfs/thesis.pdf"'));
+  assert.ok(html.includes('href="/pdfs/thesis.pdf"'));
   assert.ok(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>[\s\S]*?id="-data-product-"/.test(html), "research remains in a native disclosure");
   assert.ok(!/Family project|family member|Familieprojekt|familieprojekter|Wedding App|github\.com\/[^"]+\/blob\//.test(html));
   assert.ok(!/mailto:|CVR|46830385|sveltekit.start|type="module"/.test(html));
