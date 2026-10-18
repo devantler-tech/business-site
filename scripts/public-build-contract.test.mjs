@@ -36,8 +36,9 @@ test("the actual publisher admits Svelte only for an artifact-only main preview"
 });
 test("the reading reference never calls selected publication recursively", () => {
   const reference = readFileSync("scripts/build-journal-reference.sh","utf8");
-  assert.ok(reference.includes("bash scripts/build-astro-site.sh"));
-  assert.ok(!reference.includes("npm run build") && !reference.includes("build-business-site.sh"));
+  assert.equal(JSON.parse(readFileSync("package.json","utf8")).scripts["build:astro"],"bash scripts/build-astro-site.sh");
+  assert.match(reference,/^npm run build:astro$/m,"Standalone reference builds need npm's local executable path");
+  assert.ok(!/^npm run build$/m.test(reference) && !reference.includes("build-business-site.sh"));
 });
 test("CI executes the real selected Go package and its archive without replacing incumbent container proof", () => {
   const steps = load(".github/workflows/ci.yaml").jobs["test-portal-identity"].steps;

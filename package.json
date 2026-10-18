@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "bash scripts/build-business-site.sh",
+    "build:astro": "bash scripts/build-astro-site.sh",
     "preview": "astro preview",
     "astro": "astro"
   },

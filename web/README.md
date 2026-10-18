@@ -159,7 +159,8 @@ installs used by CI (npm 11.4.2 and the current supported npm 11).
 The common `FEATURE_SVELTE_FRONTEND=true npm run build` path prepares the input-bound reference,
 builds the complete candidate, validates actual route/asset/content parity and replaces `dist/`
 without retaining stale incumbent assets. False/unset selects Astro. Install both lockfiles first.
-`bash scripts/build-astro-site.sh` is the explicit nonrecursive incumbent/reference builder.
+`npm run build:astro` is the explicit nonrecursive incumbent/reference builder, with npm's
+local executable path established for standalone reference builds.
 The older preview-banner and legacy non-featured/non-client portfolio variants are not supported
 by selected Svelte publication: requesting them fails rather than silently ignoring the setting.
 
