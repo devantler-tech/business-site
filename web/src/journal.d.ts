@@ -2,6 +2,14 @@ declare module "virtual:journal" {
   const posts: import("../../src/data/journal.mjs").JournalPost[];
   export default posts;
 }
+declare module "virtual:business-sharing" {
+  const image: string | null;
+  export default image;
+}
+declare module "virtual:public-discovery" {
+  const assets: {filename:string;source:string;digest:string}[] | null;
+  export default assets;
+}
 declare module "virtual:journal-feed" {
   const feed: {xml:string;assets:{filename:string;source:string;digest:string}[]} | null;
   export default feed;

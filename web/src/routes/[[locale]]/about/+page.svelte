@@ -38,7 +38,7 @@
       <h2 id="background-title">{data.about.backgroundTitle}</h2>
       <p>{data.about.backgroundText}</p>
       <div class="links">
-        <a href="https://devantler.tech/pdfs/nikolai-emil-damm-cv.pdf">{data.about.cv}</a><a
+        <a href="/pdfs/nikolai-emil-damm-cv.pdf" download>{data.about.cv}</a><a
           href="/blog/">{data.locale === "da" ? "Læs journalen (engelsk)" : "Read the Journal"}</a
         >
       </div>

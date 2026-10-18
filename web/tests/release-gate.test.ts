@@ -8,7 +8,7 @@ test("the candidate stays off unless explicitly enabled", () => {
     assert.deepEqual(frontendEntries(value), []);
   }
   assert.equal(parseFrontendRelease("true"), true);
-  assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", "/templates/gitops-tenant-template/", "/agentic-engineering/", "/templates/dotnet/", "/templates/go/", "/templates/", "/templates/platform-template/", "/templates/platform-tenant-template/"]);
+  assert.deepEqual(frontendEntries("true").filter(path => !path.startsWith("/blog/")), ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", "/templates/gitops-tenant-template/", "/pdfs/nikolai-emil-damm-cv.pdf", "/pdfs/thesis.pdf", "/favicon.png", "/robots.txt", "/agentic-engineering/", "/templates/dotnet/", "/templates/go/", "/templates/", "/templates/platform-template/", "/templates/platform-tenant-template/"]);
   assert.ok(frontendEntries("true").includes("/blog/"), "enabled artifact must admit the real Journal archive");
   assert.ok(frontendEntries("true").includes("/blog/rss.xml"), "the existing feed path stays local");
   assert.ok(frontendEntries("true").includes("/blog/authors/nikolai-emil-damm/"), "readers can browse the complete author collection locally");

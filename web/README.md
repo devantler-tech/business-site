@@ -20,7 +20,7 @@ npm ci
 npm --prefix web ci
 bash scripts/build-journal-reference.sh
 FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
-npm --prefix web run preview
+npm run preview -- --outDir web/build
 ```
 
 Open the printed loopback address at `/`, `/da/`, `/about/`, `/da/about/`, `/projects/`
@@ -28,6 +28,8 @@ or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal
 The subscription link opens the complete existing `/blog/rss.xml` locally.
 Topic links and the author browse link open the complete corresponding collections locally.
 Technical guides are at `/agentic-engineering/`, `/templates/` and the four existing template paths. Stop the preview with Ctrl+C.
+This serves the final static adapter artifact, including its generated sitemap files;
+the framework's development preview does not serve those post-adapter files.
 Unmigrated navigation links deliberately go to the existing public website. No account, database,
 publishing credential or private customer information is needed. The build generates optimized
 image formats from the original local artwork and photographs; fonts and scripts are also served locally.
@@ -36,7 +38,7 @@ Home includes the introduction, quality/security highlight, three service guides
 public website example, process and contact journey. Home, About and Projects link locally;
 language links retain the current business page. Journal navigation stays local; its Danish language
 link clearly returns to the Danish business homepage rather than implying translated articles.
-CV and unmigrated destinations stay on the published website. Prices and translated copy come from the same framework-neutral sources
+The CV and research PDF download locally; unmigrated destinations stay on the published website. Prices and translated copy come from the same framework-neutral sources
 as Astro, not a second translation catalogue.
 
 Projects preserves the six eligible tools selected by the shared ranking implementation,
@@ -68,6 +70,15 @@ endpoints preserve those existing canonical asset URLs; missing or unsupported d
 the build. Feed discovery and visible subscription links stay local. The current complete feed
 contains all 15 posts; a future partial/archive feed fails closed until archive support is explicitly
 migrated. No Danish feed, subscription service, customer data or portal route is introduced.
+
+Public discovery captures the freshly generated CV, maintained thesis PDF, favicon, robots file
+and optimized sharing portrait from that same input-bound Astro build. These exact dependencies
+are native prerendered endpoints, not a wholesale copy of public or deployment output. Missing,
+corrupted or stale inputs fail before use. Home, About and Projects retain their English/Danish
+canonical, language and social metadata; Journal and guides retain their own article metadata.
+After the static adapter completes, the sitemap is derived from the actual canonical HTML output,
+excluding redirect duplicates and noindex disclosures. There is no second route catalogue.
+The publisher's CNAME and publication receipt are not application-owned assets and are not copied.
 
 Technical guides reuse the same input-bound Astro reference rather than maintaining another
 Markdown copy or renderer. The complete Agentic Engineering guide and template overview, Go,
@@ -129,9 +140,13 @@ LC_ALL=C bash scripts/check-svelte-frontend.sh
 It audits all candidate dependencies, runs release-policy tests and strict Svelte/TypeScript
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
 must remove all six business pages, both redirects, every Journal archive (including topics and
-authors), every reading route and technical guide with their dependent assets, and the feed XML and its image dependencies,
+authors), every reading route and technical guide with their dependent assets, the feed XML and its image dependencies,
+and all public discovery files, PDF downloads, favicon and sharing dependencies,
 even after an enabled build.
 The enabled artifact must contain both locales, metadata and only the declared local scripts.
+Independent artifact controls reject missing downloads, partial asset closures, stale sitemap members,
+lost Danish metadata and publisher-file leaks. Capture controls also reject symlinks and exercise
+a pathname substitution without consuming replacement bytes.
 Every archive retains exactly one social-sharing description; reading pages supply their own article metadata.
 The check exercises the actual build-local ranking path with a deliberately reordered complete
 fixture and eight rejected inputs; it does not make a network request.

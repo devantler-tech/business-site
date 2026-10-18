@@ -25,6 +25,7 @@ for mode in false published preview independent template unset; do
     tail -80 "$scratch/svelte-$mode.log" >&2; exit 1
   fi
   node web/tests/check-company-output.mjs
+  node web/tests/check-discovery-output.mjs enabled
   if [[ "$mode" == published ]]; then node web/tests/company-output-controls.mjs; fi
   node scripts/check-customer-scope.mjs web/build "${FEATURE_CUSTOMER_SCOPE:-false}"
   node scripts/check-offer-rollout.mjs web/build
@@ -56,4 +57,5 @@ grep -q 'PUBLIC_CONTENT_PROFILE must be' "$scratch/rejected.log"
 # Disabled frontend must not require the private disclosure input.
 FEATURE_SVELTE_FRONTEND=false npm --prefix web run build > "$scratch/disabled.log" 2>&1
 node web/tests/check-output.mjs disabled
+node web/tests/check-discovery-output.mjs disabled
 printf 'Native invalid-config, private-diagnostic and frontend-off controls: PASS\n'
