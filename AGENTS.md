@@ -23,7 +23,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
   publication explicitly selects Svelte, with main-only artifact previews and explicit Astro
   recovery. Production-profile Go packaging also selects Svelte; the ordinary package remains
-  an Astro comparison. Both use the explicit `--svelte` option, not ambient settings.
+  an Astro comparison. Only Svelte packages use the explicit `--svelte` option; omit it for the
+  ordinary Astro comparison. Both ignore ambient frontend settings.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
   The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings
