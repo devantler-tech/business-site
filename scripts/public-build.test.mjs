@@ -29,7 +29,7 @@ test("selection rejects an empty or partial artifact rather than reusing the ref
       rmSync(join(candidate,name));
     }
     symlinkSync(join(reference,"theme.js"),join(candidate,"linked.js"));
-    assert.throws(check, /regular/);
+    assert.throws(check, /ELOOP|regular/);
     rmSync(join(candidate,"linked.js"));
     rmSync(join(candidate,"theme.js"));
     assert.throws(check, /dependency/);

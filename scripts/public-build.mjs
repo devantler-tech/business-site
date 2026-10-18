@@ -9,24 +9,20 @@ import { parse } from "parse5";
 function files(root) {
   /** @type {Map<string,Buffer>} */
   const result = new Map();
-  const visit = (/** @type {string} */ dir, prefix = "") => {
-    const descriptor = openSync(dir,constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  const visit = (/** @type {string} */ path, name = "") => {
+    const descriptor = openSync(path,constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const opened = fstatSync(descriptor);
-      assert.ok(opened.isDirectory(),"Public selection requires a regular directory");
-      const sameDirectory = () => { const current=lstatSync(dir); assert.ok(current.isDirectory() && current.dev===opened.dev && current.ino===opened.ino,"Public selection directory changed while reading"); };
-      const entries = readdirSync(dir,{withFileTypes:true});
-      sameDirectory();
-      for (const entry of entries) {
-        const name = prefix + entry.name, path = resolve(dir,entry.name), current=lstatSync(path);
-        assert.ok(!current.isSymbolicLink(),"Public selection requires regular files");
-        if (current.isDirectory()) visit(path,name + "/");
-        else {
-          const file=openSync(path,constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-          try { assert.ok(fstatSync(file).isFile(),"Public selection requires regular files"); result.set(name,readFileSync(file)); }
-          finally { closeSync(file); }
-        }
+      if (opened.isFile()) {
+        assert.ok(name,"Public selection requires a regular directory");
+        result.set(name,readFileSync(descriptor));
+        return;
       }
+      assert.ok(opened.isDirectory(),"Public selection requires regular files or directories");
+      const sameDirectory = () => { const current=lstatSync(path); assert.ok(current.isDirectory() && current.dev===opened.dev && current.ino===opened.ino,"Public selection directory changed while reading"); };
+      const entries = readdirSync(path,{withFileTypes:true});
+      sameDirectory();
+      for (const entry of entries) visit(resolve(path,entry.name),name ? `${name}/${entry.name}` : entry.name);
       sameDirectory();
     } finally { closeSync(descriptor); }
   };
