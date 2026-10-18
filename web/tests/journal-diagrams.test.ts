@@ -2,10 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { compile } from "svelte/compiler";
 
 const script = readFileSync(new URL("../src/lib/journal-diagrams.js", import.meta.url), "utf8");
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const svg = (content:string) => `<svg viewBox="0 0 1200 200">${content}</svg>`;
+
+test("compiled diagram styles keep mindmap labels on the site's theme-safe palette", () => {
+  const {css} = compile(readFileSync(new URL("../src/lib/JournalReading.svelte", import.meta.url), "utf8"), {filename:"JournalReading.svelte"});
+  assert.ok(css);
+  const shapes = css.code.match(/\.diagram-canvas \.mindmap-node \.label-container\s*\{([^}]+)\}/)?.[1];
+  const labels = css.code.match(/\.diagram-canvas \.mindmap-node \.nodeLabel\s*\{([^}]+)\}/)?.[1];
+  assert.ok(shapes && labels, "all mindmap nodes need the contained palette, not only the root");
+  assert.match(shapes,/fill:\s*var\(--paper\)\s*!important/);
+  assert.match(labels,/color:\s*var\(--ink\)\s*!important/);
+});
+
 function page(load:() => Promise<unknown>, count = 2, sanitize = (value:string) => value) {
   let themeChanged = () => {};
   const document = {documentElement:{dataset:{theme:"light"}},querySelectorAll:() => figures};

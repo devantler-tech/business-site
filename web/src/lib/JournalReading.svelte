@@ -59,6 +59,8 @@
   article :global(.diagram-canvas:focus-visible) { outline:3px solid var(--accent); outline-offset:3px; }
   article :global(.diagram-canvas svg) { display:block; max-width:none !important; width:auto; min-width:100%; height:auto; }
   article :global(.diagram-canvas p) { margin:0; line-height:inherit; color:inherit; }
+  article :global(.diagram-canvas .mindmap-node .label-container) { fill:var(--paper) !important; stroke:var(--line); }
+  article :global(.diagram-canvas .mindmap-node .nodeLabel) { color:var(--ink) !important; }
   article :global(.reading-diagram pre) { max-width:100%; overflow-x:auto; font-size:.8rem; line-height:1.6; }
   article :global(.reading-diagram summary) { cursor:pointer; }
   article :global(.diagram-status:empty) { display:none; }
