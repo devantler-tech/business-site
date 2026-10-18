@@ -228,6 +228,8 @@ func TestContactVerificationRejectedDraftNeverClaimsConfirmation(t *testing.T) {
 	}
 }
 
+// TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation requires live
+// authority at the SQL checkpoint, then rejects closure before the write commits.
 func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testing.T) {
 	for _, change := range []string{"unchanged", "identity flag", "verification flag", "expiry", "delayed expiry", "cancel"} {
 		t.Run(change, func(t *testing.T) {
@@ -284,6 +286,8 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 	}
 }
 
+// TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation proves that an
+// SDK wait cannot authorize a write after the original session or gate closes.
 func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.T) {
 	for _, change := range []string{"expiry", "delayed expiry", "identity flag"} {
 		t.Run(change, func(t *testing.T) {
