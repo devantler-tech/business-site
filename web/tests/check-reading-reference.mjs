@@ -25,11 +25,15 @@ try {
   /** @type {[string,(value:ReturnType<typeof readReadingReference>)=>void,RegExp,boolean][]} */
   const mutations = [
     ["stale source", value => { value.fingerprint = "stale"; }, /run bash scripts\/build-journal-reference\.sh/, true],
-    ["altered body without a matching checksum", value => { value.html = "<p>partial output</p>"; }, /content is incomplete or altered/, false],
-    ["empty body", value => { value.html = " "; }, /complete reading body required/, true],
-    ["missing body", value => { delete value.html; }, /complete reading body required/, true],
+    ["altered body without a matching checksum", value => { value.readings[0].html = "<p>partial output</p>"; }, /content is incomplete or altered/, false],
+    ["empty body", value => { value.readings[0].html = " "; }, /complete reading body required/, true],
+    ["missing body", value => { delete value.readings[0].html; }, /complete reading body required/, true],
+    ["missing article beside healthy articles", value => { value.readings.splice(1, 1); }, /complete reading inventory required/, true],
+    ["repeated article", value => { value.readings[1] = value.readings[0]; }, /complete reading inventory required/, true],
+    ["empty later article beside a healthy article", value => { value.readings[1].html = ""; }, /complete reading body required/, true],
     ["missing asset inventory", value => { value.assets = []; }, /asset inventory is missing/, true],
     ["second asset corrupted", value => { value.assets[1].source = "broken"; }, /asset digest mismatch/, true],
+    ["missing referenced asset beside healthy assets", value => { value.assets.splice(1, 1); }, /referenced asset is missing/, true],
   ];
   for (const [name, mutate, failure, signed] of mutations) {
     const value = structuredClone(valid);

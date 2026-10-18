@@ -49,23 +49,29 @@ Build-time frontmatter parsing, excerpt rendering, author configuration and five
 match the Astro archive; a build-only virtual module keeps filesystem access out of prerendered routes.
 The candidate carries local optimized unique covers, native title links, independent author/topic
 links, the existing recent-post/topic browse choices and previous/next pagination. The complete
-`/blog/building-ksail-from-shell-to-dotnet-to-go/` article stays local. Topic and author archives
+reading routes for all 13 static articles stay local. Topic and author archives
 retain all matching posts on one page, matching Astro rather than truncating to the main archive's
-five-post limit. Author cards keep their separate public profile link. Other articles and RSS
+five-post limit. Author cards keep their separate public profile link. The two Mermaid articles
+remain on the working published destinations until #180 preserves their page-level diagram renderer;
+they are explicit exclusions, never raw diagram source presented as finished reading pages. Technical pages and RSS
 deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
 build rather than silently dropping a post. Tests compare every candidate card against the actual
 Astro build, including date labels, excerpts and destinations.
 
-The admitted reading route reuses the actual Astro-rendered body and Expressive Code assets.
+The reading routes reuse the actual Astro-rendered bodies and Expressive Code assets.
 `build-journal-reference.sh` runs the normal production build between input-fingerprint checks,
 then stores a private generated reference under `.astro/`. The candidate rejects missing/stale
 references; public builds and the publisher do not run or distribute this bridge. Renderer inputs,
-the authored collection/assets and the article's committed modification date bind the reference.
+the authored collection/assets and every article's committed modification date bind the reference.
 Only required local image/stylesheet bytes enter the candidate, through SvelteKit's immutable
 asset directory. Unreviewed body scripts or interactive content fail rather than being dropped.
 The reading frame preserves all prose, code, bookmarks, author/topic links, sharing metadata,
 structured data, dates and title-labelled adjacent articles. Native copy controls use the renderer's
 actual payload and provide success or actionable failure feedback, without application hydration.
+Prose-only articles omit the empty contents disclosure. One route dispatches decimal archive pages
+and exact admitted article slugs; unknown articles return 404. Unsupported nested article slugs
+fail the build explicitly rather than silently omitting a post. Local article, author and topic
+destinations remain local; unmigrated and external links retain their original destinations.
 
 The network-free build uses the tracked dated snapshot. For an explicitly refreshed build,
 run `bash scripts/refresh-public-stars.sh /absolute/path/to/snapshot.json` from the repository root,
@@ -82,7 +88,7 @@ LC_ALL=C bash scripts/check-svelte-frontend.sh
 It audits all candidate dependencies, runs release-policy tests and strict Svelte/TypeScript
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
 must remove all six business pages, both redirects, every Journal archive (including topics and
-authors), and the admitted reading route and its dependent assets, even after an enabled build.
+authors), and every reading route and its dependent assets, even after an enabled build.
 The enabled artifact must contain both locales, metadata and only the declared local scripts.
 Every archive retains exactly one social-sharing description; reading pages supply their own article metadata.
 The check exercises the actual build-local ranking path with a deliberately reordered complete

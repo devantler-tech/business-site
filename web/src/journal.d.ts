@@ -13,6 +13,6 @@ declare module "virtual:journal-reading" {
     adjacent:{rel:string;href:string;title:string}[];
     metadata:{name?:string;property?:string;content:string}[];
     structuredData:string[];
-  } | null;
+  }[] | null;
   export default reading;
 }

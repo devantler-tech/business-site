@@ -22,3 +22,14 @@ test("clipboard denial is actionable, resets the control and never reports succe
   assert.equal(status.textContent, "Copy failed. Select the code to copy it.");
   assert.equal(button.disabled, false);
 });
+
+test("an empty renderer payload never clears the clipboard or reports success", async () => {
+  const {copyJournalCode} = await import("../src/lib/journal-copy.js");
+  const status = {textContent:""};
+  const button = {dataset:{code:""},disabled:false,parentElement:{querySelector:() => status}};
+  let writes = 0;
+  await copyJournalCode(button, {writeText:async () => { writes++; }});
+  assert.equal(writes, 0);
+  assert.equal(status.textContent, "Copy failed. Select the code to copy it.");
+  assert.equal(button.disabled, false);
+});

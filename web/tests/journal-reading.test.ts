@@ -6,7 +6,7 @@ async function adapter() {
   await assert.doesNotReject(async () => { module = await import("../../src/data/journal-reading.mjs"); }, "the maintained rendered-body bridge must exist");
   return module!;
 }
-const post = {title:"A real article",description:"A useful description",date:"2026-01-07T00:00:00.000Z"};
+const post = {title:"A real article",description:"A useful description",date:"2026-01-07T00:00:00.000Z",href:"https://devantler.tech/blog/building-ksail-from-shell-to-dotnet-to-go/"};
 const fixture = `<html><head><title>A real article | Devantler Tech</title><meta name="description" content="A useful description"><link rel="canonical" href="https://devantler.tech/blog/building-ksail-from-shell-to-dotnet-to-go/"></head><body><main><h1>A real article</h1><div class="sl-markdown-content"><p>Complete <strong>authored</strong> prose.</p><h2 id="the-problem">The problem</h2><div class="expressive-code"><pre><code><div class="ec-line">echo hello</div><div class="ec-line">echo world</div></code></pre><div class="copy"><button data-code="echo hello&#127;echo world" data-copied="Copied!" title="Copy to clipboard"></button><div aria-live="polite"></div></div></div><script type="module" src="/_astro/ec.fixture.js"></script></div><time datetime="2026-01-07T00:00:00.000Z">Jan 7, 2026</time><time datetime="2026-10-09T00:09:33.000Z">Oct 9, 2026</time><a rel="prev" href="/blog/newer/">A newer article</a><a rel="next" href="/blog/older/">An older article</a></main></body></html>`;
 
 test("the reading bridge preserves actual prose, bookmarks, dates and title-labelled neighbours", async () => {
@@ -17,6 +17,27 @@ test("the reading bridge preserves actual prose, bookmarks, dates and title-labe
   assert.equal(reading.modified, "2026-10-09T00:09:33.000Z");
   assert.deepEqual(reading.adjacent, [{rel:"prev",href:"https://devantler.tech/blog/newer/",title:"A newer article"},{rel:"next",href:"https://devantler.tech/blog/older/",title:"An older article"}]);
   assert.ok(!reading.html.includes("<script"), "the body cannot bring the old framework runtime into the candidate");
+});
+
+test("each authored article uses its own canonical route and relative destinations", async () => {
+  const { extractReading } = await adapter();
+  const html = fixture.replaceAll("building-ksail-from-shell-to-dotnet-to-go", "another-article").replace("<strong>authored</strong>", '<a href="../welcome/">authored</a>');
+  const reading = extractReading(html, {...post,href:"https://devantler.tech/blog/another-article/"});
+  assert.match(reading.html, /href="https:\/\/devantler.tech\/blog\/welcome\/"/);
+});
+
+test("a complete prose-only article needs neither headings nor clipboard controls", async () => {
+  const { extractReading } = await adapter();
+  const html = fixture.replace(/<h2[\s\S]*?<\/script>/, "");
+  const reading = extractReading(html, post);
+  assert.deepEqual(reading.headings, []);
+  assert.match(reading.html, /Complete <strong>authored<\/strong> prose/);
+});
+
+test("the renderer's comment-only shell instructions retain their deliberately empty copy payload", async () => {
+  const { extractReading } = await adapter();
+  const html = fixture.replaceAll("echo hello", "# instructions").replaceAll("echo world", "# continued instructions").replace('data-code="# instructions&#127;# continued instructions"', 'data-code=""');
+  assert.match(extractReading(html, post).html, /data-code=""/);
 });
 
 for (const [name, mutate] of [
