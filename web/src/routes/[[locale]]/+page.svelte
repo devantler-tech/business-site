@@ -1,6 +1,7 @@
 <script lang="ts">
   import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
+  import { linkedInUrl } from "../../../../src/components/business/business-copy";
   import coachingOriginal from "../../../../src/assets/ascoaching-homepage.jpg?url";
   import type { load } from "./+page.server";
   let { data }: { data: ReturnType<typeof load> } = $props();
@@ -43,8 +44,8 @@
       <div class="section-heading"><h2 id="services-title">{t.servicesTitle}</h2><p>{t.servicesIntro}</p></div>
       <div class="offers">{#each t.offers as offer}<article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
-        <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong></div>
-        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}</p>
+        <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong>{#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
+        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
       </article>{/each}</div>
@@ -70,12 +71,13 @@
       <ol>{#each t.steps as step}<li><h3>{step.title}</h3><p>{step.text}</p></li>{/each}</ol>
     </section>
     <section id="contact" class="contact-band" aria-labelledby="contact-title">
-      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={data.locale} heading="h3" /><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><p class="contact-note">{t.contactNote}</p></div>
+      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={data.locale} heading="h3" /><div class="actions"><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>{#if data.companyEnabled}<a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a>{/if}</div><p class="contact-note">{t.contactNote}</p></div>
     </section>
   </main>
 </Shell>
 
 <style>
+  .vat-marker { font-size: .8rem; }
   h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); }
   h3 { font-size: 1.3rem; letter-spacing: -.025em; }
   .hero-scene { position: relative; isolation: isolate; overflow: hidden; background: var(--canvas); }

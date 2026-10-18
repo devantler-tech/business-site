@@ -1,5 +1,6 @@
 // The public disclosure is rendered only on its required company-information page.
 // Keep the residential address out of source and avoid echoing it in diagnostics.
+/** @param {unknown} value @param {boolean} enabled @returns {string[]} */
 export function companyAddress(value, enabled) {
   if (!enabled) return [];
   if (typeof value !== 'string') throw new Error('Company publication requires COMPANY_POSTAL_ADDRESS');
