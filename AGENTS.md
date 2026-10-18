@@ -15,12 +15,16 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   with the two historical English project redirects, the English Journal's paginated main archive,
   complete unpaginated topic and author archives,
   all 15 complete Journal reading routes, and the six existing English technical guides,
-  including locally rendered diagrams and the complete template collection. The legacy
+  including locally rendered diagrams and the complete template collection. Enabled company
+  identity also admits the two English/Danish company-information pages, with the address
+  confined to those disclosures and omitted when identity is disabled. The legacy
   GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
-  The Svelte candidate uses published offer copy and LinkedIn contact, never company/private inputs.
+  The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings
+  through its native server-only configuration. Shared layout/load data never carries the address;
+  the company-page HTML transform retains escaped text and the runtime's template placeholders.
 - Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
   `client-products.ts` and `portfolio-content.ts`; both frontends use the same ranking implementation
   and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.

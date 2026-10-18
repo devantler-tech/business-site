@@ -1,6 +1,6 @@
 # Business frontend candidate
 
-The English/Danish Home, About and Projects pages, English Journal and six technical guides in SvelteKit 3 and Svelte 5, using the website's existing
+The English/Danish Home, About, Projects and gated company-information pages, English Journal and six technical guides in SvelteKit 3 and Svelte 5, using the website's existing
 homepage content, artwork, portrait, visual identity and appearance preference. Public reading uses
 prerendered HTML without application hydration; the existing local theme controller is the
 only script referenced by Home and About. Projects also uses the existing bookmark-disclosure
@@ -146,12 +146,32 @@ unchanged owners. The candidate is not included in Pages, the runtime package or
 There are no private routes, identity integrations, customer records, payment operations or
 new hosted services here. Do not put secrets or private environment values into public output.
 
-This candidate uses the published offer wording and the existing LinkedIn contact alternative.
-It does not read `FEATURE_OFFER_COPY`, `FEATURE_COMPANY_IDENTITY`, `COMPANY_POSTAL_ADDRESS` or portal
-settings. It does not render company disclosures or activate email/ordering; the live website
-retains its separate reviewed configuration. Full production configuration/metadata parity is
-still required before cutover under #130. Do not use this candidate as a substitute for the
-published company-information pages.
+The candidate preserves the existing company, offer, customer-scope and VAT settings through
+SvelteKit's typed, build-time, server-only environment module. All four settings retain their
+false default; ambiguous values fail the build. Shared copy/price factories and company data
+remain authoritative. No portal setting is read and no setting authorizes orders or payments.
+
+`FEATURE_COMPANY_IDENTITY=true` adds the native company footer links, verified email contact
+with LinkedIn as an alternative, and `/company/` plus `/da/company/`. Supply an explicitly
+fictional two-line `COMPANY_POSTAL_ADDRESS` for local evaluation. Missing/malformed enabled
+addresses abort the build without echoing the supplied value. The server's HTML transformation
+fills two escaped text slots only on those required disclosure pages, excluded from search.
+The address never enters load data, page-data JSON, browser code or unrelated output.
+Disabled identity omits the two routes and gated contact details; a disabled frontend requires
+no address even when the company setting is enabled.
+
+`PUBLIC_CONTENT_PROFILE=production-template` preserves the existing two address placeholders
+for the Go runtime's escaped substitution, without consuming the configured private address.
+This is compatibility proof only: the Go package still consumes Astro, not this candidate.
+The company/contact matrix compares actual Astro and Svelte artifacts for unset, explicit-false,
+published, revised/VAT, independently selected and template configurations in both languages.
+Independent missing-locale, incomplete-disclosure and unrelated-script leak controls must reject
+otherwise healthy real output. It also exercises the framework's invalid settings and address
+diagnostics. Run it with `bash scripts/check-svelte-company.sh`; the complete candidate check
+includes it and still finishes with the candidate off. No production switch changes here.
+
+Full public-route/discovery parity, production cutover and rollback remain under #130. Do not
+use this candidate as a substitute for the currently published company-information pages.
 
 [Issue #124](https://github.com/devantler-tech/business-site/issues/124) owns the About foundation and
 [#139](https://github.com/devantler-tech/business-site/issues/139) owns the homepage slice and

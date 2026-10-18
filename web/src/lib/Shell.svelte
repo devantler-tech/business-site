@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { getContext } from "svelte";
+  import { businessFrameContext, type BusinessFrame } from "./business-frame";
   import themeScript from "../../../src/components/business/theme.js?url";
   let {
     locale,
@@ -11,7 +13,9 @@
     guidePath = "",
     customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  const frame = getContext<() => BusinessFrame>(businessFrameContext);
+  let business = $derived(frame());
   const words = {
     en: {
       skip: "Skip to content",
@@ -90,9 +94,12 @@
   </div>
 </header>
 {@render children()}
-<footer class="container">
-  <a class="brand" href={home}>Devantler Tech</a>
-  <p>{t.identity}</p>
+<footer data-business-footer class="container">
+  <div><a class="brand" href={home}>Devantler Tech</a>
+    <p>{business.footer.identity}</p><p>{business.footer.note}</p>
+    {#if business.identity}<p>CVR {business.identity.cvr} · {business.footer.registration}</p><a class="company-email" href={business.inquiryUrl}>{business.identity.email}</a>{/if}
+  </div>
+  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a></div>
 </footer>
 
 <style>
@@ -195,6 +202,10 @@
     top: 1rem;
   }
   footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
     padding-block: 2rem;
     border-top: 1px solid var(--line);
   }
@@ -202,6 +213,8 @@
     font-size: 0.875rem;
     margin-top: 0.5rem;
   }
+  .company-email, .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .8rem; color: var(--ink); text-underline-offset: .2em; overflow-wrap: anywhere; }
+  .footer-links { display: flex; flex-wrap: wrap; gap: 1.25rem; }
   @media (max-width: 1050px) {
     .business-header {
       gap: 0.5rem 1rem;
@@ -220,6 +233,7 @@
     }
   }
   @media (max-width: 760px) {
+    footer { flex-direction: column; gap: .75rem; }
     .brand {
       font-size: 1.1rem;
     }

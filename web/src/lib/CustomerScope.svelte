@@ -1,13 +1,16 @@
 <script lang="ts">
   import { customerScope } from "../../../src/components/business/customer-scope";
+  import { getContext } from "svelte";
+  import { businessFrameContext, type BusinessFrame } from "./business-frame";
+  const frame = getContext<() => BusinessFrame>(businessFrameContext);
   let { locale, href, label, heading = "h2" }: { locale: "en" | "da"; href?: string; label?: string; heading?: "h2" | "h3" } = $props();
   let t = $derived(customerScope[locale]);
 </script>
 
-<div class="customer-scope" data-customer-scope>
+{#if frame().customerScopeEnabled}<div class="customer-scope" data-customer-scope>
   <svelte:element this={heading}>{t.title}</svelte:element><p>{t.audience}</p><p class="boundary">{t.boundary}</p>
   {#if href && label}<a class="contact-link" {href}>{label}</a>{/if}
-</div>
+</div>{:else if href && label}<a class="contact-link" {href}>{label}</a>{/if}
 
 <style>
   .customer-scope { max-width: 700px; margin-block: 2rem; }
