@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 // Mermaid stays local and is loaded only by reading pages with authored diagrams.
 const figures = [...document.querySelectorAll("figure.reading-diagram")];
 let requested = 0;
@@ -25,7 +27,8 @@ async function render() {
           const { svg } = await mermaid.render(`diagram-${figure.getAttribute("data-diagram-id")}-${completed}`, source);
           // Theme changes can arrive while Mermaid is rendering. Never commit stale output.
           if (completed !== requested) break;
-          canvas.innerHTML = svg;
+          // Retain Mermaid's HTML labels, with an explicit sanitizer at our DOM boundary.
+          canvas.innerHTML = DOMPurify.sanitize(svg, {ADD_TAGS:["foreignobject"],ADD_ATTR:["dominant-baseline"],HTML_INTEGRATION_POINTS:{foreignobject:true}});
           const image = canvas.querySelector("svg");
           if (!image) throw new Error("Diagram output is missing");
           const width = Number(image.getAttribute("viewBox")?.trim().split(/\s+/)[2]);

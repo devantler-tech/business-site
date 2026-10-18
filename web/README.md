@@ -74,6 +74,9 @@ with the candidate's own Vite toolchain and records every local module and depen
 definitions, diagram figures, entrypoints or transitive modules reject the reference. Only diagram
 articles load this renderer; ordinary pages do not. Rendering follows the selected appearance,
 serializes overlapping changes and leaves the text alternative usable if a module or diagram fails.
+Renderer output is explicitly sanitized at the DOM boundary using DOMPurify, now a direct dependency
+at the same version already locked through Mermaid. The existing HTML-label integration is retained;
+page paragraph styles cannot override diagram label colors or spacing.
 The complete emitted renderer graph is about 4.4 MB uncompressed; browsers request only the modules
 needed for the visited diagram types. This is not a performance improvement claim.
 Prose-only articles omit the empty contents disclosure. Native comparison tables retain their

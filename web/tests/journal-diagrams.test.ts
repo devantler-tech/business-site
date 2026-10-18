@@ -6,7 +6,7 @@ import { runInNewContext } from "node:vm";
 const script = readFileSync(new URL("../src/lib/journal-diagrams.js", import.meta.url), "utf8");
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const svg = (content:string) => `<svg viewBox="0 0 1200 200">${content}</svg>`;
-function page(load:() => Promise<unknown>, count = 2) {
+function page(load:() => Promise<unknown>, count = 2, sanitize = (value:string) => value) {
   let themeChanged = () => {};
   const document = {documentElement:{dataset:{theme:"light"}},querySelectorAll:() => figures};
   const figures = Array.from({length:count}, (_, index) => {
@@ -16,9 +16,9 @@ function page(load:() => Promise<unknown>, count = 2) {
     const status = {textContent:""};
     return {attributes,canvas,status,image,getAttribute:(name:string) => attributes.get(name),setAttribute:(name:string,value:string) => attributes.set(name,value),querySelector:(selector:string) => selector === ".diagram-canvas" ? canvas : selector === ".diagram-status" ? status : {textContent:selector === "details pre" ? `flowchart LR\n A${index}-->B${index}` : `Diagram ${index + 1}`}};
   });
-  const actual = script.replace('import("mermaid")', "loadMermaid()");
-  assert.notEqual(actual,script, "only the external module load is replaced; the real controller runs");
-  runInNewContext(actual, {document,loadMermaid:load,MutationObserver:class {constructor(callback:() => void) {themeChanged = callback;} observe() {}}});
+  const actual = script.replace('import DOMPurify from "dompurify";', "").replace('import("mermaid")', "loadMermaid()");
+  assert.notEqual(actual,script, "external renderer and sanitizer imports are replaced; the real controller runs");
+  runInNewContext(actual, {document,DOMPurify:{sanitize},loadMermaid:load,MutationObserver:class {constructor(callback:() => void) {themeChanged = callback;} observe() {}}});
   return {figures,theme(value:string) {document.documentElement.dataset.theme = value; themeChanged();}};
 }
 
@@ -31,6 +31,16 @@ test("the actual controller renders every figure and clears busy state", async (
     assert.equal(figure.attributes.get("aria-busy"),"false");
     assert.equal(figure.image.style.width,"1200px", "wide diagrams retain their authored rendering scale rather than becoming unreadable thumbnails");
   }
+});
+
+test("the actual controller sanitizes renderer output before inserting it", async () => {
+  const received:string[] = [];
+  const output = svg("untrusted renderer output");
+  const clean = svg("sanitized renderer output");
+  const view = page(async () => ({default:{initialize() {},async render() {return {svg:output};}}}), 1, value => {received.push(value); return clean;});
+  await tick();
+  assert.deepEqual(received,[output]);
+  assert.equal(view.figures[0].canvas.innerHTML,clean);
 });
 
 test("a theme change during an asynchronous render never commits stale output or overlaps renderer work", async () => {
