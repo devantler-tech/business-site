@@ -36,7 +36,7 @@ calibration report). Require exactly three successful 100-journey reports.
 These repetitions share one test process; they are not independently restarted
 service trials. Keep the raw JSON test stream and its
 exit status; a partial stream or missing/failed terminal package event is not a
-baseline. Record the immutable source SHA, clean-worktree check, UTC interval,
+baseline. Record the immutable source SHA, clean-checkout check, UTC interval,
 Go/PostgreSQL versions, OS/architecture and command alongside that private output.
 Concatenate the test stream's `Output` events before reading report lines: one
 large JSON report can span several events. Do not count an event as a whole report.
