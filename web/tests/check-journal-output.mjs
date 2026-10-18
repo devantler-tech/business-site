@@ -70,6 +70,9 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
   assert.equal(attr(all(page).find(node => node.tagName === "link" && attr(node, "rel") === "canonical"), "href"), canonical);
   assert.equal(text(all(page).find(node => node.tagName === "title")), text(all(reference).find(node => node.tagName === "title")));
   assert.equal(attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"), attr(all(reference).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"));
+  const socialDescriptions = all(page).filter(node => node.tagName === "meta" && attr(node, "property") === "og:description");
+  assert.equal(socialDescriptions.length, 1, `exactly one social-sharing description required: ${path}`);
+  assert.equal(attr(socialDescriptions[0], "content"), attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"));
   assert.ok(!html.includes("/da/blog/"), "English articles must not acquire invented Danish destinations");
   assert.ok(html.includes('href="/projects/"') && html.includes('href="/about/"') && html.includes('href="/da/"'));
   assert.ok(html.includes('href="https://devantler.tech/blog/rss.xml"'));

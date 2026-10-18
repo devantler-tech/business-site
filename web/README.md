@@ -81,9 +81,10 @@ LC_ALL=C bash scripts/check-svelte-frontend.sh
 
 It audits all candidate dependencies, runs release-policy tests and strict Svelte/TypeScript
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
-must remove all six business pages, both redirects, all Journal archive pages and the admitted
-reading route and its dependent assets, including output left by an earlier enabled
-build, including all topic and author archives. The enabled artifact must contain both locales, metadata and only the declared local scripts.
+must remove all six business pages, both redirects, every Journal archive (including topics and
+authors), and the admitted reading route and its dependent assets, even after an enabled build.
+The enabled artifact must contain both locales, metadata and only the declared local scripts.
+Every archive retains exactly one social-sharing description; reading pages supply their own article metadata.
 The check exercises the actual build-local ranking path with a deliberately reordered complete
 fixture and eight rejected inputs; it does not make a network request.
 The check finishes with the candidate off. `web/build/` and `web/.svelte-kit/` are generated;
