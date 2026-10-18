@@ -229,13 +229,10 @@ func TestContactVerificationRejectedDraftNeverClaimsConfirmation(t *testing.T) {
 }
 
 func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testing.T) {
-	for _, change := range []string{"unchanged", "identity flag", "verification flag", "expiry", "cancel"} {
+	for _, change := range []string{"unchanged", "identity flag", "verification flag", "expiry", "delayed expiry", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
-			if change == "expiry" {
-				p.expires = time.Now().Add(150 * time.Millisecond)
-			}
 			a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
 			if err != nil {
 				t.Fatal("confirmation fixture attempt failed", err)
@@ -245,20 +242,31 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 				t.Fatal("confirmation fixture consumption failed", err)
 			}
 			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
+			if change == "delayed expiry" {
+				<-time.After(750 * time.Millisecond)
+			}
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
+			// Start the real expiry window only after all fixture preparation.
+			// The checkpoint must still be reached with live authority.
+			if change == "expiry" || change == "delayed expiry" {
+				p.expires = time.Now().Add(2 * time.Second)
+			}
 			ctx, cancel, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-tracer.blocked:
 			case <-ctx.Done():
 				t.Fatal("confirmation did not reach actual uncommitted write")
 			}
+			if !time.Now().Before(p.expires) {
+				t.Fatal("fixture authority expired before its uncommitted-write checkpoint")
+			}
 			switch change {
 			case "identity flag":
 				setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
 			case "verification flag":
 				contactVerificationFlags(t, b, false)
-			case "expiry":
-				<-time.After(time.Until(p.expires) + time.Millisecond)
+			case "expiry", "delayed expiry":
+				waitForFixtureExpiry(ctx, t, p.expires)
 			case "cancel":
 				cancel()
 			}
@@ -287,13 +295,10 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 }
 
 func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.T) {
-	for _, change := range []string{"expiry", "identity flag"} {
+	for _, change := range []string{"expiry", "delayed expiry", "identity flag"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Minute)}
-			if change == "expiry" {
-				p.expires = time.Now().Add(200 * time.Millisecond)
-			}
 			a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
 			if err != nil {
 				t.Fatal(err)
@@ -303,15 +308,24 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 				t.Fatal(err)
 			}
 			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
+			if change == "delayed expiry" {
+				<-time.After(750 * time.Millisecond)
+			}
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
+			if change == "expiry" || change == "delayed expiry" {
+				p.expires = time.Now().Add(2 * time.Second)
+			}
 			ctx, _, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-provider.blocked:
 			case <-ctx.Done():
 				t.Fatal("final SDK evaluation was not reached")
 			}
-			if change == "expiry" {
-				<-time.After(time.Until(p.expires) + time.Millisecond)
+			if !time.Now().Before(p.expires) {
+				t.Fatal("fixture authority expired before its final SDK checkpoint")
+			}
+			if change == "expiry" || change == "delayed expiry" {
+				waitForFixtureExpiry(ctx, t, p.expires)
 			} else {
 				setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
 			}
