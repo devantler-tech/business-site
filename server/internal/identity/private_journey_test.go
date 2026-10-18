@@ -155,7 +155,7 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 			f.t.Fatal("journey save left its local contact route")
 		}
 		body, _ = request("reload", "GET", "/portal/contact?lang="+a.lang, nil, 200)
-		token, savedRevision := journeyForm(f, body)
+		_, savedRevision := journeyForm(f, body)
 		if savedRevision != revision+1 || !strings.Contains(body, `value="`+a.name+`"`) || !strings.Contains(body, `value="`+a.email+`"`) {
 			f.t.Fatal("journey reload lost the saved contact revision or values")
 		}
