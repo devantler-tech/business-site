@@ -17,12 +17,8 @@ export default defineConfig({
       prerender: { resolve: { noExternal: ["js-yaml"] } },
     },
   },
-  // Kept so a renamed page does not break links that already exist in the wild
-  // (bookmarks, the platform's own docs, search results). A page rename is a URL
-  // change; without an entry here the old URL 404s.
-  redirects: {
-    "/templates/gitops-tenant-template": "/templates/platform-tenant-template",
-  },
+  // The renamed tenant-template URL has an authored redirect page in src/pages/
+  // so incoming heading bookmarks survive the static publication.
   // Build-time feature flags (feature-flag-first delivery, monorepo#2059).
   // The site is a pure static build, so flags are baked at build time: flipping
   // one means a rebuild + redeploy, there is no runtime/per-user evaluation. Use
@@ -184,6 +180,6 @@ export default defineConfig({
       pagination: true,
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
     }),
-    sitemap(),
+    sitemap({ filter: page => new URL(page).pathname !== "/templates/gitops-tenant-template/" }),
   ],
 });

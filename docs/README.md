@@ -187,6 +187,10 @@ research and diagrams are sourced from `src/content/docs/projects/completed.mdx`
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
+The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
+an authored redirect to the sole Platform Tenant Template guide. Its canonical/noindex metadata,
+top-of-guide fallback and no-JavaScript continuation are checked against actual build output.
+Only the canonical destination guide is advertised in the sitemap, not the redirect entry.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
 reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
 a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript
