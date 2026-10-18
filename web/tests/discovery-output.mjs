@@ -91,7 +91,11 @@ export function assertSharing(candidate, baseline) {
     const portrait = new URL(meta(elements,"og:image")[0]);
     assert.equal(portrait.origin,origin,"Public discovery local sharing portrait");
     assert.ok(get(candidate,portrait.pathname.slice(1)).equals(get(baseline,portrait.pathname.slice(1))),"Public discovery sharing image dependency retained");
-    if (path.includes("about")) assert.ok(elements.some(node => node.tagName === "a" && attr(node,"href") === "/pdfs/nikolai-emil-damm-cv.pdf"),"Public discovery CV download stays local");
+    if (path.includes("about")) {
+      const cv = elements.find(node => node.tagName === "a" && attr(node,"href") === "/pdfs/nikolai-emil-damm-cv.pdf");
+      assert.ok(cv,"Public discovery CV download stays local");
+      assert.ok(cv.attrs.some(item => item.name === "download"),"Public discovery CV retains explicit native download behavior");
+    }
     if (path.includes("projects")) assert.ok(elements.some(node => node.tagName === "a" && attr(node,"href") === "/pdfs/thesis.pdf"),"Public discovery thesis download stays local");
   }
 }

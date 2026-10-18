@@ -15,6 +15,8 @@ assert.ok(portrait,"real sharing portrait required for the independent dependenc
 const controls = [
   ["missing CV",files => { files.delete("pdfs/nikolai-emil-damm-cv.pdf"); }],
   ["wrong but valid PDF",files => { files.set("pdfs/nikolai-emil-damm-cv.pdf",/** @type {Buffer} */ (healthy.get("pdfs/thesis.pdf"))); }],
+  ["lost native CV download",files => replace(files,"about/index.html",/ download(?:="")?/,"")],
+  ["lost Danish CV download beside healthy English",files => replace(files,"da/about/index.html",/ download(?:="")?/,"")],
   ["missing thesis beside healthy CV",files => { files.delete("pdfs/thesis.pdf"); }],
   ["missing favicon",files => { files.delete("favicon.png"); }],
   ["missing sharing dependency",files => { files.delete(/** @type {string} */ (portrait)); }],
