@@ -9,6 +9,7 @@ const target = "/templates/platform-tenant-template/";
 const bookmarks = ["#getting-started", "#what-the-template-owns-vs-what-you-own"];
 const page = readFileSync(new URL("templates/gitops-tenant-template/index.html", root), "utf8");
 const guide = readFileSync(new URL("templates/platform-tenant-template/index.html", root), "utf8");
+const sitemap = readFileSync(new URL("sitemap-0.xml", root), "utf8");
 const all = node => [node, ...(node.childNodes ?? []).flatMap(all)];
 const attr = (node, name) => node?.attrs?.find(attribute => attribute.name === name)?.value;
 
@@ -50,6 +51,15 @@ test("actual generated navigation retains real guide bookmarks and ordinary entr
 
 test("actual generated redirect retains canonical, noindex and no-script continuation", () => check(page));
 
+/** Preserve only the canonical guide's discovery entry. */
+function checkSitemap(xml) {
+  const locations = new Set([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]));
+  assert.ok(locations.has(`https://devantler.tech${target}`));
+  assert.ok(![...locations].some(url => new URL(url).pathname.replace(/\/$/, "") === "/templates/gitops-tenant-template"));
+}
+
+test("the sitemap advertises the canonical guide, not the noindex redirect", () => checkSitemap(sitemap));
+
 test("independent broken-output controls fail beside the unchanged real guide", () => {
   check(page);
   assert.throws(() => check(undefined), /must be emitted/);
@@ -57,4 +67,7 @@ test("independent broken-output controls fail beside the unchanged real guide", 
   assert.throws(() => check(page.replace('name="robots"', 'name="missing-robots"')));
   assert.throws(() => check(page.replace("<noscript>", "<div>")));
   assert.throws(() => check(page.replace('rel="canonical"', 'rel="alternate"')));
+  checkSitemap(sitemap);
+  assert.throws(() => checkSitemap(sitemap.replace(`https://devantler.tech${target}`, "https://devantler.tech/missing/")));
+  assert.throws(() => checkSitemap(sitemap.replace("</urlset>", "<url><loc>https://devantler.tech/templates/gitops-tenant-template/</loc></url></urlset>")));
 });

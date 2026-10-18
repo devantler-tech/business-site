@@ -180,6 +180,6 @@ export default defineConfig({
       pagination: true,
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
     }),
-    sitemap(),
+    sitemap({ filter: page => new URL(page).pathname !== "/templates/gitops-tenant-template/" }),
   ],
 });
