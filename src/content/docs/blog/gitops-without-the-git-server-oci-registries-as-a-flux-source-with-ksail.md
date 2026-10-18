@@ -48,8 +48,11 @@ mkdir my-cluster && cd my-cluster
 ksail project init \
   --name dev \
   --distribution Vanilla \
-  --gitops-engine Flux
+  --gitops-engine Flux \
+  --local-registry localhost:5050
 ```
+
+`--local-registry` names the registry Flux will watch; `ksail workload push` sends your manifests there.
 
 This scaffolds:
 
