@@ -43,8 +43,8 @@ The business homepage is rendered by `src/components/business/BusinessSite.astro
 and `/da/` (Danish). Its offer amounts and translated copy live together in
 `src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
 Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
-These framework-neutral sources are also used by the isolated Svelte Home candidate; its published
-offer/LinkedIn-only configuration is documented in `web/README.md`.
+These framework-neutral sources are also used by the isolated Svelte Home candidate; its matching
+server-only company/offer/customer-scope/VAT configuration is documented in `web/README.md`.
 The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
 the existing ranking implementation and complete dated snapshot with Astro. It preserves
 the curated six-tool output, compact public website example, research disclosure and old bookmarks
@@ -75,7 +75,7 @@ service. Each price is marked "incl. VAT" / "inkl. moms", and the price note say
 above the earlier price and that VAT is never added twice. The flag defaults to false and the
 publisher does not set it, so the live site keeps the earlier prices until the registration's
 effective date is confirmed and the switch is reviewed. CI builds enabled, explicit false and
-entirely unset states; the Svelte candidate keeps the published prices.
+entirely unset states; the Svelte candidate preserves the same amounts and release setting.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -221,8 +221,8 @@ cannot currently be served under the PMV setup, and outside-EU work is not open 
 confirmation. `customer-scope.ts` supplies this boundary to Astro and the isolated Svelte
 candidate independently of offer and identity release flags. Astro requires the default-off
 `FEATURE_CUSTOMER_SCOPE=true` release preview; false and entirely unset builds retain the
-published invitation and metadata. The already default-off Svelte candidate explicitly selects
-the corrected copy. Every build checks all six English/Danish Home, About and Projects routes,
+published invitation and metadata. The already default-off Svelte candidate preserves the
+same default-off customer-scope setting. Every build checks all six English/Danish Home, About and Projects routes,
 including emitted metadata and deliberate output mutations in enabled and disabled states.
 Activation and subsequent flag removal require reviewed publication and live proof.
 This copy is not order authorization: tax confirmations remain under #147,

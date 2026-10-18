@@ -44,10 +44,10 @@ export default defineConfig(({ mode }) => ({
     sveltekit({
       adapter: adapter(),
       prerender: {
-        entries: frontendEntries(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND),
+        entries: frontendEntries(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_SVELTE_FRONTEND, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
         crawl: false,
         handleUnseenRoutes: ({ routes }) =>
-          checkUnseenRoutes(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND, routes),
+          checkUnseenRoutes(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_SVELTE_FRONTEND, routes, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
       },
     }),
   ],

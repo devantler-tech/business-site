@@ -3,23 +3,12 @@ import { COMPANY_POSTAL_ADDRESS, PUBLIC_CONTENT_PROFILE } from 'astro:env/server
 import BusinessLayout from './BusinessLayout.astro';
 import { company, companyIdentityEnabled, type Locale } from './content';
 import { companyAddress } from './company-address.mjs';
+import { companyCopy } from './company-copy';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
 const lines = companyAddress(PUBLIC_CONTENT_PROFILE === 'production-template'
   ? '__BUSINESS_ADDRESS_LINE_1__\n__BUSINESS_ADDRESS_LINE_2__' : COMPANY_POSTAL_ADDRESS, companyIdentityEnabled);
-const t = locale === 'da' ? {
-  title: 'Virksomhed og kontakt', description: 'Registrering og kontaktoplysninger for Devantler Tech.',
-  intro: 'Devantler Tech er en personligt ejet mindre virksomhed drevet af Nikolai Emil Damm.',
-  name: 'Virksomhed', registration: 'Virksomhedsform', type: 'Personligt ejet mindre virksomhed (PMV)',
-  owner: 'Indehaver', address: 'Registreret virksomhedsadresse', email: 'E-mail',
-  contact: 'Har du et projekt i tankerne? Skriv til mig, så finder vi sammen det næste skridt.',
-} : {
-  title: 'Company information', description: 'Registration and contact information for Devantler Tech.',
-  intro: 'Devantler Tech is a personally owned small business run by Nikolai Emil Damm.',
-  name: 'Business', registration: 'Business type', type: 'Personally owned small business (PMV)',
-  owner: 'Owner', address: 'Registered business address', email: 'Email',
-  contact: 'Have a project in mind? Email me and we can work out the next step together.',
-};
+const t = companyCopy[locale];
 ---
 <BusinessLayout locale={locale} section="company" title={`${t.title} | Devantler Tech`} description={t.description}>
   <main id="main" class="container company-page">
