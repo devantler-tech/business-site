@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-  <link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="https://devantler.tech/blog/rss.xml" />
+  <link rel="alternate" type="application/rss+xml" title="Devantler Tech Journal" href="/blog/rss.xml" />
   {#each data.metadata as item}<meta name={item.name} property={item.property} content={item.content} />{/each}
   {#each data.structuredData as json}{@html `<script type="application/ld+json">${json}</script>`}{/each}
   <script type="module" src={copyScript}></script>
@@ -15,7 +15,7 @@
 
 <Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug={data.path.slice("/blog/".length, -1)} customSocialMetadata>
   <main id="main" class="reader container">
-    <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="https://devantler.tech/blog/rss.xml">Subscribe via RSS</a></nav>
+    <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="/blog/rss.xml">Subscribe via RSS</a></nav>
     <header><h1 id="_top">{data.title}</h1><p>{data.description}</p></header>
     {#if data.headings.length}<details class="contents"><summary>On this page</summary><nav aria-label="On this page"><ol>{#each data.headings as heading}<li class:subheading={heading.level > 2}><a href={`#${heading.id}`}>{heading.title}</a></li>{/each}</ol></nav></details>{/if}
     <article aria-labelledby="_top"><div class="sl-markdown-content">{@html data.html}</div></article>

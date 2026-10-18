@@ -5,15 +5,20 @@ import { enhancedImages } from "@sveltejs/enhanced-img";
 import { frontendEntries, checkUnseenRoutes, parseFrontendRelease } from "./src/release-gate.ts";
 import { readJournal, journalArchives } from "../src/data/journal.mjs";
 import { readingPaths, readReadingReference } from "../src/data/journal-reading.mjs";
+import { readJournalFeedReference } from "../src/data/journal-feed-reference.mjs";
 
 export default defineConfig(({ mode }) => ({
   build: { assetsInlineLimit: 0 },
   plugins: [
     {
       name: "authored-journal",
-      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading"].includes(id)) return `\0${id}`; },
+      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:journal-feed"].includes(id)) return `\0${id}`; },
       load(id) {
         const enabled = parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND);
+        if (id === "\0virtual:journal-feed") {
+          const reference = enabled ? readJournalFeedReference() : null;
+          return `export default ${JSON.stringify(reference ? {xml:reference.xml,assets:reference.assets} : null)};`;
+        }
         if (id === "\0virtual:journal-reading") {
           if (!enabled) return "export default null;";
           return `export default ${JSON.stringify(readReadingReference().readings)};`;
