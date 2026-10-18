@@ -76,6 +76,7 @@ export function readJournal(directory = defaultDirectory) {
 export { paginateJournal } from "../components/business/journal-pages.js";
 
 /** Group the actual published collection with the renderer's topic/author slug conventions.
+ * A post belongs to each normalized group at most once, even when its labels collide.
  * @template {{tags:{label:string,href:string}[],authors:{name:string}[]}} T
  * @param {T[]} posts
  */
@@ -83,6 +84,7 @@ export function journalArchives(posts) {
   /** @type {Map<string,{kind:'tags'|'authors',path:string,label:string,posts:T[]}>} */
   const archives = new Map();
   for (const kind of /** @type {const} */ (["tags", "authors"])) for (const post of posts) {
+    const memberships = new Set();
     const groups = kind === "tags" ? post.tags.map(tag => ({label:tag.label,id:slug(tag.label)}))
       : post.authors.map(author => ({label:author.name,id:slug(author.name)}));
     for (const group of groups) {
@@ -90,7 +92,8 @@ export function journalArchives(posts) {
       const path = `/blog/${kind}/${group.id}/`;
       const archive = archives.get(path) ?? {kind,path,label:group.label,posts:[]};
       if (kind === "authors" && archive.label !== group.label) throw new Error("Journal conflicting author archive slug");
-      archive.posts.push(post);
+      if (!memberships.has(path)) archive.posts.push(post);
+      memberships.add(path);
       archives.set(path, archive);
     }
   }

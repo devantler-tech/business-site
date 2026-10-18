@@ -34,3 +34,19 @@ test("archive entries include every current topic and author page", () => {
     assert.ok(journal.journalPaths().includes(archive.path), `missing archive entry ${archive.path}`);
   }
 });
+
+test("slug-equivalent memberships never duplicate a post within an archive", () => {
+  const author = {name:"Nikolai Emil Damm"};
+  const posts = [
+    {title:"Both labels", tags:[{label:"Go",href:"/blog/tags/go/"},{label:"go",href:"/blog/tags/go/"}], authors:[author,author]},
+    {title:"Another post", tags:[{label:"go",href:"/blog/tags/go/"}], authors:[author]},
+  ];
+  assert.deepEqual(journal.journalArchives(posts).map(archive => [archive.path, archive.label, archive.posts.map(post => post.title)]), [
+    ["/blog/tags/go/", "Go", ["Both labels", "Another post"]],
+    ["/blog/authors/nikolai-emil-damm/", "Nikolai Emil Damm", ["Both labels", "Another post"]],
+  ]);
+});
+
+test("deduplication cannot hide conflicting author names at the same slug", () => {
+  assert.throws(() => journal.journalArchives([{tags:[],authors:[{name:"Ada"},{name:"ada"}]}]), /conflicting author archive slug/);
+});
