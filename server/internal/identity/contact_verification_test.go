@@ -233,18 +233,7 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
-			a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
-			if err != nil {
-				t.Fatal("confirmation fixture attempt failed", err)
-			}
-			d, nonce, _, err := b.svc.consumeContactVerification(t.Context(), a.State, a.BrowserBinding)
-			if err != nil {
-				t.Fatal("confirmation fixture consumption failed", err)
-			}
-			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
-			if change == "delayed expiry" {
-				<-time.After(750 * time.Millisecond)
-			}
+			d, raw, nonce := prepareContactConfirmation(t, b, p, change == "delayed expiry")
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
 			// Start the real expiry window only after all fixture preparation.
 			// The checkpoint must still be reached with live authority.
@@ -271,6 +260,7 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 				cancel()
 			}
 			close(tracer.release)
+			var err error
 			select {
 			case err = <-done:
 			case <-ctx.Done():
@@ -299,18 +289,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Minute)}
-			a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			d, nonce, _, err := b.svc.consumeContactVerification(t.Context(), a.State, a.BrowserBinding)
-			if err != nil {
-				t.Fatal(err)
-			}
-			raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
-			if change == "delayed expiry" {
-				<-time.After(750 * time.Millisecond)
-			}
+			d, raw, nonce := prepareContactConfirmation(t, b, p, change == "delayed expiry")
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
 			if change == "expiry" || change == "delayed expiry" {
 				p.expires = time.Now().Add(2 * time.Second)
@@ -330,6 +309,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 				setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
 			}
 			close(provider.release)
+			var err error
 			select {
 			case err = <-done:
 			case <-ctx.Done():
@@ -341,6 +321,25 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 			assertContactUnconfirmed(t, b)
 		})
 	}
+}
+
+// prepareContactConfirmation completes the real broker/SQL fixture work before
+// callers arm the short expiry window for their SQL or SDK checkpoint.
+func prepareContactConfirmation(t *testing.T, b *browserFixture, p Principal, delayed bool) (contactVerification, string, string) {
+	t.Helper()
+	a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
+	if err != nil {
+		t.Fatal("confirmation fixture attempt failed", err)
+	}
+	d, nonce, _, err := b.svc.consumeContactVerification(t.Context(), a.State, a.BrowserBinding)
+	if err != nil {
+		t.Fatal("confirmation fixture consumption failed", err)
+	}
+	raw := b.f.token(t, "client-a", nonce, map[string]any{"email": "a@example.invalid", "email_verified": true})
+	if delayed {
+		<-time.After(750 * time.Millisecond)
+	}
+	return d, raw, nonce
 }
 
 // startContactConfirmation owns and joins the same bounded real write worker
