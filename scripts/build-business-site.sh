@@ -32,6 +32,7 @@ node --test scripts/compress-editorial-assets.test.mjs
 node scripts/check-editorial-assets.mjs
 bash scripts/refresh-public-stars.test.sh
 astro build
+node --test scripts/legacy-template-redirect.test.mjs
 bash scripts/journal-history.test.sh dist
 node --test scripts/company-disclosure.test.mjs
 node scripts/check-offer-rollout.mjs dist
