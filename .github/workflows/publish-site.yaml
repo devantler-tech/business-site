@@ -11,10 +11,10 @@ on:
         options: [preview, publish]
         default: preview
       frontend:
-        description: Svelte is admitted for artifact-only previews, never production
+        description: Public frontend; Astro is retained for reviewed recovery
         type: choice
         options: [astro, svelte]
-        default: astro
+        default: svelte
   schedule:
     - cron: "17 6 * * *"
 
@@ -42,7 +42,7 @@ jobs:
           PUBLICATION_EVENT: ${{ github.event_name }}
           PUBLICATION_ENABLED: ${{ vars.SITE_PUBLICATION_ENABLED }}
           PUBLICATION_MODE: ${{ inputs.mode || 'publish' }}
-          PUBLIC_FRONTEND: ${{ inputs.frontend || 'astro' }}
+          PUBLIC_FRONTEND: ${{ inputs.frontend || 'svelte' }}
           SOURCE_REVISION: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -56,8 +56,7 @@ jobs:
             *) exit 1 ;;
           esac
           case "$PUBLIC_FRONTEND" in
-            astro) ;;
-            svelte) [[ "$PUBLICATION_EVENT" == workflow_dispatch && "$PUBLICATION_MODE" == preview ]] || exit 1 ;;
+            astro|svelte) ;;
             *) exit 1 ;;
           esac
       - name: Checkout exact own source
@@ -83,7 +82,7 @@ jobs:
       - name: Build production site
         env:
           PUBLIC_CONTENT_PROFILE: "default"
-          FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend == 'svelte' && inputs.mode == 'preview' && 'true' || 'false' }}
+          FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend != 'astro' && 'true' || 'false' }}
           FEATURE_COMPANY_IDENTITY: "true"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}
         run: npm run build

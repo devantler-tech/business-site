@@ -1,6 +1,6 @@
 # Portal identity and browser sign-in
 
-This module supplies a Go executable composing the public Astro output with the
+This module supplies a Go executable composing the selected public output with the
 **default-off HTTP identity handlers**, not a deployed portal. It discovers one configured HTTPS
 OIDC broker through maintained go-oidc, verifies signed ID tokens and the attempt
 nonce, and uses PostgreSQL for browser-bound login attempts, bound invitations
@@ -241,7 +241,7 @@ proofs. See [the staging decision](../docs/adr/0009-bounded-identity-staging.md)
 
 ### Production public-content template
 
-Use `bash scripts/package-runtime.sh --release --production-template` to build
+Use `bash scripts/package-runtime.sh --release --production-template --svelte` to build
 `runtime-production-dist`. This explicit profile refreshes the complete public
 portfolio into build-local scratch and includes EN/DA company information, but
 **never embeds the registered address**. Missing or invalid ranking data fails;

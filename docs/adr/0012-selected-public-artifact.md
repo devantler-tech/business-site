@@ -2,6 +2,7 @@
 
 Status: integration prerequisite #194 for the separately reviewed cutover #193.
 Extends [0011](0011-isolated-svelte-frontend.md); does not activate its candidate.
+Production selection is subsequently changed by [0013](0013-svelte-public-publication.md).
 
 ## Decision
 
