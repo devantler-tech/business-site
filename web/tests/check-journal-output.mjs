@@ -31,10 +31,19 @@ const absolute = href => { assert.ok(href); return new URL(href, "https://devant
 const paths = ["blog/index.html", ...(await readdir(new URL("blog/", published), { withFileTypes: true }))
   .filter(entry => entry.isDirectory() && /^[1-9]\d*$/.test(entry.name))
   .sort((a, b) => Number(a.name) - Number(b.name)).map(entry => `blog/${entry.name}/index.html`)];
+const archivePaths = [];
+for (const kind of ["tags", "authors"]) {
+  for (const entry of await readdir(new URL(`blog/${kind}/`, published), {withFileTypes:true})) {
+    assert.ok(entry.isDirectory(), "published archives must have a complete route directory");
+    archivePaths.push(`blog/${kind}/${entry.name}/index.html`);
+  }
+}
+assert.ok(archivePaths.length > 1, "the actual topic and author inventory must be read");
 const seen = new Set();
 const covers = new Set();
 let count = 0;
-for (const [index, path] of paths.entries()) {
+for (const [index, path] of [...paths, ...archivePaths].entries()) {
+  const mainArchive = index < paths.length;
   if (!enabled) {
     await assert.rejects(readFile(new URL(path, candidate)), { code: "ENOENT" });
     continue;
@@ -64,7 +73,13 @@ for (const [index, path] of paths.entries()) {
   assert.ok(!html.includes("/da/blog/"), "English articles must not acquire invented Danish destinations");
   assert.ok(html.includes('href="/projects/"') && html.includes('href="/about/"') && html.includes('href="/da/"'));
   assert.ok(html.includes('href="https://devantler.tech/blog/rss.xml"'));
-  assert.ok(html.includes('href="https://devantler.tech/blog/authors/nikolai-emil-damm/"'));
+  assert.ok(html.includes('href="/blog/authors/nikolai-emil-damm/"'));
+  for (const tag of all(page).filter(node => hasClass(node, "sl-blog-tag"))) {
+    const href = attr(tag, "href");
+    assert.ok(href);
+    assert.ok(href.startsWith("/blog/tags/"), "topic choices stay inside the candidate");
+    await readFile(new URL(`${href.slice(1)}index.html`, candidate));
+  }
   const publishedBrowse = find(reference, "journal-browser");
   assert.ok(publishedBrowse);
   const persister = all(publishedBrowse).find(node => node.tagName === "sl-sidebar-state-persist");
@@ -80,24 +95,33 @@ for (const [index, path] of paths.entries()) {
   }
   assert.equal(all(page).filter(node => hasClass(node, "browse-group")).length, 2);
   const pagination = find(page, "journal-pagination");
-  assert.ok(pagination, "native local pagination required, including first and last boundaries");
-  const pageLinks = all(pagination).filter(node => node.tagName === "a").map(node => attr(node, "href"));
-  if (index > 0) assert.ok(pageLinks.includes(index === 1 ? "/blog/" : `/blog/${index}/`));
-  if (index < paths.length - 1) assert.ok(pageLinks.includes(`/blog/${index + 2}/`));
-  assert.ok(pageLinks.every(href => href && /^\/blog\/(?:(?:[2-9]|[1-9]\d+)\/)?$/.test(href)));
+  if (mainArchive) {
+    assert.ok(pagination, "native local pagination required, including first and last boundaries");
+    const pageLinks = all(pagination).filter(node => node.tagName === "a").map(node => attr(node, "href"));
+    if (index > 0) assert.ok(pageLinks.includes(index === 1 ? "/blog/" : `/blog/${index}/`));
+    if (index < paths.length - 1) assert.ok(pageLinks.includes(`/blog/${index + 2}/`));
+    assert.ok(pageLinks.every(href => href && /^\/blog\/(?:(?:[2-9]|[1-9]\d+)\/)?$/.test(href)));
+  } else {
+    assert.equal(pagination, undefined, "topic and author archives retain every matching post without truncation");
+    assert.equal(text(all(page).find(node => node.tagName === "h1")), text(all(reference).find(node => node.tagName === "h1")));
+  }
   for (const [cardIndex, card] of cards.entries()) {
     assert.equal(attr(card, "role"), undefined);
     assert.equal(attr(card, "tabindex"), undefined);
     const destination = attr(find(card, "sl-blog-preview-link"), "href");
-    assert.ok(!seen.has(destination), "post omitted/duplicated across page boundaries");
-    seen.add(destination);
+    if (mainArchive) {
+      assert.ok(!seen.has(destination), "post omitted/duplicated across page boundaries");
+      seen.add(destination);
+    }
     const image = all(card).find(node => node.tagName === "img");
     const src = attr(image, "src");
     assert.ok(src);
     assertSameJournalCover(src, attr(all(referenceCards[cardIndex]).find(node => node.tagName === "img"), "src"));
     assert.match(src, /^\/_app\/immutable\/assets\//);
-    assert.ok(!covers.has(src), "each post retains a distinct optimized cover");
-    covers.add(src);
+    if (mainArchive) {
+      assert.ok(!covers.has(src), "each post retains a distinct optimized cover");
+      covers.add(src);
+    }
     await readFile(new URL(src.slice(1), candidate));
     assert.ok(all(card).some(node => node.tagName === "source" && attr(node, "type") === "image/avif"));
     for (const source of all(card).filter(node => node.tagName === "source")) {
@@ -114,7 +138,7 @@ for (const [index, path] of paths.entries()) {
     for (let parent = titleLink.parentNode; parent; parent = parent.parentNode) {
       assert.ok(attr(parent, "tabindex") === undefined && attr(parent, "role") !== "link", "native link cannot gain a duplicate focus/link ancestor");
     }
-    count++;
+    if (mainArchive) count++;
   }
   const scripts = all(page).filter(node => node.tagName === "script");
   assert.equal(scripts.length, 2, "theme plus shared card controller only; no application hydration");
@@ -128,7 +152,11 @@ for (const [index, path] of paths.entries()) {
 }
 if (enabled) {
   const dirs = await readdir(new URL("blog/", candidate), { withFileTypes: true });
-  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), [...paths.slice(1).map(path => path.split("/")[1]), "building-ksail-from-shell-to-dotnet-to-go"].sort(), "only main archives and the one admitted reading route enter the candidate");
+  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), [...paths.slice(1).map(path => path.split("/")[1]), "tags", "authors", "building-ksail-from-shell-to-dotnet-to-go"].sort(), "only reviewed archives and the admitted reading route enter the candidate");
+  for (const kind of ["tags", "authors"]) {
+    const actual = await readdir(new URL(`blog/${kind}/`, candidate));
+    assert.deepEqual(actual.sort(), archivePaths.filter(path => path.startsWith(`blog/${kind}/`)).map(path => path.split("/")[2]).sort(), "the candidate may neither omit nor invent a filtered archive");
+  }
   assert.ok(count > 0);
 }
-console.log(`Svelte Journal: ${enabled ? `${count} actual posts across ${paths.length} Astro-matched archives` : `${paths.length} archives absent`} verified`);
+console.log(`Svelte Journal: ${enabled ? `${count} actual posts across ${paths.length} main and ${archivePaths.length} topic/author Astro-matched archives` : `${paths.length + archivePaths.length} archives absent`} verified`);

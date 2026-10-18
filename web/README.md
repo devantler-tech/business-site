@@ -24,7 +24,8 @@ npm --prefix web run preview
 ```
 
 Open the printed loopback address at `/`, `/da/`, `/about/`, `/da/about/`, `/projects/`
-or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal archive. Stop the preview with Ctrl+C.
+or `/da/projects/`, and `/blog/`, `/blog/2/`, `/blog/3/` for the current Journal archive.
+Topic links and the author browse link open the complete corresponding collections locally. Stop the preview with Ctrl+C.
 Unmigrated navigation links deliberately go to the existing public website. No account, database,
 publishing credential or private customer information is needed. The build generates optimized
 image formats from the original local artwork and photographs; fonts and scripts are also served locally.
@@ -48,8 +49,10 @@ Build-time frontmatter parsing, excerpt rendering, author configuration and five
 match the Astro archive; a build-only virtual module keeps filesystem access out of prerendered routes.
 The candidate carries local optimized unique covers, native title links, independent author/topic
 links, the existing recent-post/topic browse choices and previous/next pagination. The complete
-`/blog/building-ksail-from-shell-to-dotnet-to-go/` article stays local; other articles, topics,
-author archives and RSS deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
+`/blog/building-ksail-from-shell-to-dotnet-to-go/` article stays local. Topic and author archives
+retain all matching posts on one page, matching Astro rather than truncating to the main archive's
+five-post limit. Author cards keep their separate public profile link. Other articles and RSS
+deliberately link to their existing published English destinations. Missing or unsupported metadata fails the
 build rather than silently dropping a post. Tests compare every candidate card against the actual
 Astro build, including date labels, excerpts and destinations.
 
@@ -80,7 +83,7 @@ It audits all candidate dependencies, runs release-policy tests and strict Svelt
 checks, then builds the production Astro reference and enabled, explicitly false and entirely unset candidate settings. Both disabled builds
 must remove all six business pages, both redirects, all Journal archive pages and the admitted
 reading route and its dependent assets, including output left by an earlier enabled
-build. The enabled artifact must contain both locales, metadata and only the declared local scripts.
+build, including all topic and author archives. The enabled artifact must contain both locales, metadata and only the declared local scripts.
 The check exercises the actual build-local ranking path with a deliberately reordered complete
 fixture and eight rejected inputs; it does not make a network request.
 The check finishes with the candidate off. `web/build/` and `web/.svelte-kit/` are generated;

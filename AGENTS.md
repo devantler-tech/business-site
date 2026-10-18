@@ -12,7 +12,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `public/`, `scripts/` and root package/configuration files.
 - `web/` is the isolated SvelteKit migration candidate for #124/#139. Its framework-native
   `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
-  with the two historical English project redirects, the English Journal's paginated main archive
+  with the two historical English project redirects, the English Journal's paginated main archive,
+  complete unpaginated topic and author archives,
   and one complete reading route, `/blog/building-ksail-from-shell-to-dotnet-to-go/`.
   Follow `web/README.md`; do not point the publisher or Go package at it in this slice.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`

@@ -16,7 +16,7 @@ export function frontendEntries(value: string | undefined): `/${string}`[] {
 /** Fail for missing enabled/new routes; allow only the deliberately disabled candidate. */
 export function checkUnseenRoutes(value: string | undefined, routes: string[]): void {
   const enabled = parseFrontendRelease(value);
-  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", readingPath.slice(0, -1)];
+  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", "/blog/[kind]/[slug]", readingPath.slice(0, -1)];
   if (enabled || routes.some((route) => !disabled.includes(route))) {
     throw new Error(`Unexpected unrendered Svelte routes: ${routes.join(", ")}`);
   }

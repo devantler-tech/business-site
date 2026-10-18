@@ -2,6 +2,10 @@ declare module "virtual:journal" {
   const posts: import("../../src/data/journal.mjs").JournalPost[];
   export default posts;
 }
+declare module "virtual:journal-archives" {
+  const archives: {kind:'tags'|'authors',path:string,label:string,posts:import("../../src/data/journal.mjs").JournalPost[]}[];
+  export default archives;
+}
 declare module "virtual:journal-reading" {
   const reading: {
     path:string; title:string; description:string; html:string; modified:string;
