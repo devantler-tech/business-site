@@ -75,8 +75,35 @@ export function readJournal(directory = defaultDirectory) {
 
 export { paginateJournal } from "../components/business/journal-pages.js";
 
-/** Admit exactly the main archive pages required by the authored production inventory. */
+/** Group the actual published collection with the renderer's topic/author slug conventions.
+ * A post belongs to each normalized group at most once, even when its labels collide.
+ * @template {{tags:{label:string,href:string}[],authors:{name:string}[]}} T
+ * @param {T[]} posts
+ */
+export function journalArchives(posts) {
+  /** @type {Map<string,{kind:'tags'|'authors',path:string,label:string,posts:T[]}>} */
+  const archives = new Map();
+  for (const kind of /** @type {const} */ (["tags", "authors"])) for (const post of posts) {
+    const memberships = new Set();
+    const groups = kind === "tags" ? post.tags.map(tag => ({label:tag.label,id:slug(tag.label)}))
+      : post.authors.map(author => ({label:author.name,id:slug(author.name)}));
+    for (const group of groups) {
+      if (!group.id || group.id.includes("/")) throw new Error("Journal archive slug is unsupported");
+      const path = `/blog/${kind}/${group.id}/`;
+      const archive = archives.get(path) ?? {kind,path,label:group.label,posts:[]};
+      if (kind === "authors" && archive.label !== group.label) throw new Error("Journal conflicting author archive slug");
+      if (!memberships.has(path)) archive.posts.push(post);
+      memberships.add(path);
+      archives.set(path, archive);
+    }
+  }
+  return [...archives.values()];
+}
+
+/** Admit exactly the main, topic and author archives required by the authored inventory. */
 export function journalPaths() {
-  const count = Math.ceil(readJournal().length / journalConfig.postCount);
-  return Array.from({ length:count }, (_, index) => index === 0 ? "/blog/" : `/blog/${index + 1}/`);
+  const posts = readJournal();
+  const count = Math.ceil(posts.length / journalConfig.postCount);
+  return [...Array.from({ length:count }, (_, index) => index === 0 ? "/blog/" : `/blog/${index + 1}/`),
+    ...journalArchives(posts).map(archive => archive.path)];
 }

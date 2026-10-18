@@ -8,8 +8,9 @@
     page = "about",
     journalPage = 1,
     journalSlug = "",
+    customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal"; journalPage?:number; journalSlug?:string; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "journal"; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
   const words = {
     en: {
       skip: "Skip to content",
@@ -48,7 +49,7 @@
 
 <svelte:head>
   <title>{title} | Devantler Tech</title><meta name="description" content={description} />
-  {#if !journalSlug}<meta property="og:description" content={description} />{/if}
+  {#if !customSocialMetadata}<meta property="og:description" content={description} />{/if}
   <link rel="canonical" href={`${publishedHome}${suffix}`} />
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
   {#if page !== "journal"}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}

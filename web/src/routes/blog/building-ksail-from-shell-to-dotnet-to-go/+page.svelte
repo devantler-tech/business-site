@@ -12,7 +12,7 @@
   <script type="module" src={copyScript}></script>
 </svelte:head>
 
-<Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug="building-ksail-from-shell-to-dotnet-to-go">
+<Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug="building-ksail-from-shell-to-dotnet-to-go" customSocialMetadata>
   <main id="main" class="reader container">
     <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="https://devantler.tech/blog/rss.xml">Subscribe via RSS</a></nav>
     <header><h1 id="_top">{data.title}</h1><p>{data.description}</p></header>
