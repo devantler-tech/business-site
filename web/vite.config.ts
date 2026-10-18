@@ -4,7 +4,7 @@ import adapter from "@sveltejs/adapter-static";
 import { enhancedImages } from "@sveltejs/enhanced-img";
 import { frontendEntries, checkUnseenRoutes, parseFrontendRelease } from "./src/release-gate.ts";
 import { readJournal, journalArchives } from "../src/data/journal.mjs";
-import { readingPath, readReadingReference } from "../src/data/journal-reading.mjs";
+import { readingPaths, readReadingReference } from "../src/data/journal-reading.mjs";
 
 export default defineConfig(({ mode }) => ({
   build: { assetsInlineLimit: 0 },
@@ -16,12 +16,12 @@ export default defineConfig(({ mode }) => ({
         const enabled = parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND);
         if (id === "\0virtual:journal-reading") {
           if (!enabled) return "export default null;";
-          const { assets, ...reading } = readReadingReference();
-          return `export default ${JSON.stringify(reading)};`;
+          return `export default ${JSON.stringify(readReadingReference().readings)};`;
         }
         if (["\0virtual:journal", "\0virtual:journal-archives"].includes(id)) {
+          const admitted = enabled ? new Set(readingPaths()) : new Set();
           const posts = enabled ? readJournal().map(post => ({...post,
-            href:post.href === `https://devantler.tech${readingPath}` ? readingPath : post.href,
+            href:admitted.has(new URL(post.href).pathname) ? new URL(post.href).pathname : post.href,
             tags:post.tags.map(tag => ({...tag,href:new URL(tag.href).pathname})),
           })) : [];
           return `export default ${JSON.stringify(id === "\0virtual:journal" ? posts : journalArchives(posts))};`;

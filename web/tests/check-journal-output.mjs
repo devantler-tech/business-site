@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { parse } from "parse5";
 import { assertSameJournalCover } from "./journal-cover.mjs";
+import { readingPaths } from "../../src/data/journal-reading.mjs";
 
 const enabled = process.argv[2] === "enabled";
 assert.ok(enabled || process.argv[2] === "disabled");
@@ -112,6 +113,9 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     assert.equal(attr(card, "role"), undefined);
     assert.equal(attr(card, "tabindex"), undefined);
     const destination = attr(find(card, "sl-blog-preview-link"), "href");
+    assert.ok(destination);
+    const articlePath = new URL(destination, "https://devantler.tech").pathname;
+    assert.equal(destination, readingPaths().includes(articlePath) ? articlePath : `https://devantler.tech${articlePath}`, "every admitted article stays local and each deferred article keeps its working published destination");
     if (mainArchive) {
       assert.ok(!seen.has(destination), "post omitted/duplicated across page boundaries");
       seen.add(destination);
@@ -155,7 +159,7 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
 }
 if (enabled) {
   const dirs = await readdir(new URL("blog/", candidate), { withFileTypes: true });
-  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), [...paths.slice(1).map(path => path.split("/")[1]), "tags", "authors", "building-ksail-from-shell-to-dotnet-to-go"].sort(), "only reviewed archives and the admitted reading route enter the candidate");
+  assert.deepEqual(dirs.filter(entry => entry.isDirectory()).map(entry => entry.name).sort(), [...paths.slice(1).map(path => path.split("/")[1]), "tags", "authors", ...readingPaths().map(path => path.split("/")[2])].sort(), "only reviewed archives and every authored reading route enter the candidate");
   for (const kind of ["tags", "authors"]) {
     const actual = await readdir(new URL(`blog/${kind}/`, candidate));
     assert.deepEqual(actual.sort(), archivePaths.filter(path => path.startsWith(`blog/${kind}/`)).map(path => path.split("/")[2]).sort(), "the candidate may neither omit nor invent a filtered archive");

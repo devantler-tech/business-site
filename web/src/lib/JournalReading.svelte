@@ -1,8 +1,8 @@
 <script lang="ts">
   import Shell from "#lib/Shell.svelte";
   import copyScript from "#lib/journal-copy.js?url";
-  import type { load } from "./+page.server";
-  let { data }: { data:ReturnType<typeof load> } = $props();
+  import type readings from "virtual:journal-reading";
+  let { data }: { data:NonNullable<typeof readings>[number] } = $props();
 </script>
 
 <svelte:head>
@@ -12,11 +12,11 @@
   <script type="module" src={copyScript}></script>
 </svelte:head>
 
-<Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug="building-ksail-from-shell-to-dotnet-to-go" customSocialMetadata>
+<Shell locale="en" title={data.title} description={data.description} page="journal" journalSlug={data.path.slice("/blog/".length, -1)} customSocialMetadata>
   <main id="main" class="reader container">
     <nav class="wayfinding" aria-label="Journal navigation"><a href="/blog/">All articles</a><a href="https://devantler.tech/blog/rss.xml">Subscribe via RSS</a></nav>
     <header><h1 id="_top">{data.title}</h1><p>{data.description}</p></header>
-    <details class="contents"><summary>On this page</summary><nav aria-label="On this page"><ol>{#each data.headings as heading}<li class:subheading={heading.level > 2}><a href={`#${heading.id}`}>{heading.title}</a></li>{/each}</ol></nav></details>
+    {#if data.headings.length}<details class="contents"><summary>On this page</summary><nav aria-label="On this page"><ol>{#each data.headings as heading}<li class:subheading={heading.level > 2}><a href={`#${heading.id}`}>{heading.title}</a></li>{/each}</ol></nav></details>{/if}
     <article aria-labelledby="_top"><div class="sl-markdown-content">{@html data.html}</div></article>
     <p class="modified">Last updated: <time datetime={data.modified}>{new Intl.DateTimeFormat("en", {year:"numeric",month:"short",day:"numeric",timeZone:"UTC"}).format(new Date(data.modified))}</time></p>
   </main>
@@ -32,7 +32,7 @@
   summary { cursor:pointer; font-weight:600; }
   .contents ol { list-style:none; padding:1rem 0 0; display:grid; gap:.7rem; }
   .contents .subheading { padding-left:1.5rem; font-size:.9rem; }
-  article { min-width:0; max-width:76ch; margin-inline:auto; }
+  article { min-width:0; max-width:76ch; margin-inline:auto; overflow-wrap:anywhere; }
   summary:focus-visible { outline:3px solid var(--accent); outline-offset:5px; }
   article :global(p),article :global(ul),article :global(ol) { margin-block:1.25rem; line-height:1.8; }
   article :global(ul),article :global(ol) { padding-left:1.5rem; }
@@ -44,11 +44,16 @@
   article :global(.sl-anchor-link svg) { width:1rem; height:1rem; }
   article :global(.sr-only) { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
   article :global(.sl-blog-cover) { margin:0 0 1.5rem; }
+  article :global(img) { max-width:100%; height:auto; }
   article :global(.sl-blog-cover img) { display:block; width:100%; height:auto; border-radius:.5rem; }
   article :global(.sl-blog-metadata) { display:flex; flex-wrap:wrap; gap:1rem 2rem; align-items:center; margin-bottom:2rem; font-size:.85rem; color:var(--muted); }
   article :global(.sl-blog-author) { display:flex; gap:.75rem; align-items:center; text-decoration:none; }
   article :global(.sl-blog-author-picture) { border-radius:50%; width:40px; height:40px; }
   article :global(.sl-blog-author-title) { font-size:.75rem; }
+  article :global(.reading-table) { max-width:100%; overflow-x:auto; margin-block:1.5rem; }
+  article :global(.reading-table:focus-visible) { outline:3px solid var(--accent); outline-offset:4px; }
+  article :global(table) { border-collapse:collapse; width:100%; }
+  article :global(th),article :global(td) { text-align:left; padding:.65rem; border-bottom:1px solid var(--line); }
   article :global(.expressive-code) { margin-block:1.5rem; min-width:0; }
   article :global(.expressive-code pre) { max-width:100%; overflow-x:auto; }
   article :global(.expressive-code .copy [aria-live]) { position:absolute; right:0; top:100%; padding:.4rem; background:var(--paper); color:var(--ink); font-size:.8rem; max-width:18rem; }

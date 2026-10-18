@@ -1,5 +1,5 @@
 import { journalPaths } from "../../src/data/journal.mjs";
-import { readingPath } from "../../src/data/journal-reading.mjs";
+import { readingPaths } from "../../src/data/journal-reading.mjs";
 
 /** Validate the framework-native build-time release setting. */
 export function parseFrontendRelease(value: string | undefined): boolean {
@@ -10,13 +10,13 @@ export function parseFrontendRelease(value: string | undefined): boolean {
 
 /** Enumerate only the reviewed public candidate routes. */
 export function frontendEntries(value: string | undefined): `/${string}`[] {
-  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", ...journalPaths() as `/${string}`[], readingPath] : [];
+  return parseFrontendRelease(value) ? ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/projects/active/", "/projects/completed/", ...journalPaths() as `/${string}`[], ...readingPaths() as `/${string}`[]] : [];
 }
 
 /** Fail for missing enabled/new routes; allow only the deliberately disabled candidate. */
 export function checkUnseenRoutes(value: string | undefined, routes: string[]): void {
   const enabled = parseFrontendRelease(value);
-  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", "/blog/[kind]/[slug]", readingPath.slice(0, -1)];
+  const disabled = ["/[[locale]]", "/[[locale]]/about", "/[[locale]]/projects", "/projects/[legacy]", "/blog/[[page]]", "/blog/[kind]/[slug]"];
   if (enabled || routes.some((route) => !disabled.includes(route))) {
     throw new Error(`Unexpected unrendered Svelte routes: ${routes.join(", ")}`);
   }

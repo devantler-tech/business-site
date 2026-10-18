@@ -13,6 +13,7 @@ test("the candidate stays off unless explicitly enabled", () => {
   assert.ok(frontendEntries("true").includes("/blog/authors/nikolai-emil-damm/"), "readers can browse the complete author collection locally");
   assert.ok(frontendEntries("true").includes("/blog/tags/kubernetes/"), "the real topic inventory is admitted");
   assert.ok(frontendEntries("true").includes("/blog/building-ksail-from-shell-to-dotnet-to-go/"), "readers can complete the admitted article locally");
+  assert.ok(frontendEntries("true").includes("/blog/welcome/"), "the oldest prose-only article stays local too");
 });
 
 test("only the deliberately disabled candidate may be absent from the artifact", () => {
@@ -23,7 +24,6 @@ test("only the deliberately disabled candidate may be absent from the artifact",
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/[[locale]]/projects", "/projects/[legacy]"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/[[page]]"]));
     assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/[kind]/[slug]"]));
-    assert.doesNotThrow(() => checkUnseenRoutes(value, ["/blog/building-ksail-from-shell-to-dotnet-to-go"]));
     assert.throws(() => checkUnseenRoutes(value, ["/unreviewed"]), /Unexpected/);
     assert.throws(() => checkUnseenRoutes(value, ["/[[locale]]/about", "/unreviewed"]), /Unexpected/);
   }

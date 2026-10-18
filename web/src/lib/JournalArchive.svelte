@@ -4,7 +4,7 @@
   import avatar from "../../../public/author-avatar.png?url";
   import type { Picture } from "vite-imagetools";
   import type { load } from "../routes/blog/[[page]]/+page.server";
-  let { data }: { data:ReturnType<typeof load> } = $props();
+  let { data }: { data:Omit<Extract<ReturnType<typeof load>, {kind:"archive"}>, "kind"> } = $props();
   const covers = import.meta.glob<Picture>("../../../src/assets/editorial/journal-*.webp", { eager:true, import:"default", query:"?enhanced&w=480;800;1200" });
   /** Resolve an authored cover to its build-optimized local asset, never a fallback for another post. */
   function cover(name:string) {
