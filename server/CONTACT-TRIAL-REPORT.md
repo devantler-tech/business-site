@@ -51,13 +51,13 @@ rejected before output is created. Numeric observations are integers, never
 floating-point durations. Do not include bodies, cookies, headers, identifiers,
 URLs, connection strings or provider diagnostics.
 
-| Object | Required fields |
-| --- | --- |
-| Root | `schema`, `plan_revision`, `amendment_revision`, `authority_revision`, `baseline_revision`, `candidate_revision`, `dependency_hashes`, `trials` |
-| Trial | `number`, `order`, `runs` |
-| Run | `side`, `generation`, `artifact_sha256`, `exit_code`, `warmups`, `journeys` |
-| Journey | `ordinal`, `sign_in_ns`, `responses` |
-| Response | `actor`, `phase`, `status`, `bytes`, `elapsed_ns` |
+| Object   | Required fields                                                                                                                                 |
+|----------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| Root     | `schema`, `plan_revision`, `amendment_revision`, `authority_revision`, `baseline_revision`, `candidate_revision`, `dependency_hashes`, `trials` |
+| Trial    | `number`, `order`, `runs`                                                                                                                       |
+| Run      | `side`, `generation`, `artifact_sha256`, `exit_code`, `warmups`, `journeys`                                                                     |
+| Journey  | `ordinal`, `sign_in_ns`, `responses`                                                                                                            |
+| Response | `actor`, `phase`, `status`, `bytes`, `elapsed_ns`                                                                                               |
 
 The frozen plan revision is `868d7acdeb4f822d0f15758e15b1539c245f5b53`,
 the shared-authority amendment is `a4ee85c7b8e7a776a43dcc37071d39bbf0b956df`,
@@ -74,10 +74,10 @@ from 0–255, exactly 20 warmups and exactly 100 measured journeys. Ordinals are
 Each journey has three `sign_in_ns` observations, in client-a, client-b, operator
 order. Its 21 responses appear in the following fixed actor/phase order:
 
-| Actor | Phases | Expected statuses |
-| --- | --- | --- |
+| Actor                   | Phases                                                                    | Expected statuses                      |
+|-------------------------|---------------------------------------------------------------------------|----------------------------------------|
 | client-a, then client-b | workspace, contact, save, reload, stale-edit, recover, logout, signed-out | 200, 200, 303, 200, 409, 200, 303, 401 |
-| operator | workspace, operator, contact-denied, logout, signed-out | 200, 200, 403, 303, 403 |
+| operator                | workspace, operator, contact-denied, logout, signed-out                   | 200, 200, 403, 303, 403                |
 
 Status is an integer from 0–599; bytes and elapsed nanoseconds are nonnegative
 signed 64-bit integers. Negative or missing observations are malformed. Zero
