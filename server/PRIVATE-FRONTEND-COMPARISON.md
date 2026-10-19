@@ -20,6 +20,10 @@ separately from page/form response samples. No customer or real-provider data is
 
 ## Collection and interpretation
 
+For the separate paired-trial timing format and fixed offline estimator, read
+[Analyze private contact timings](CONTACT-TRIAL-REPORT.md). It cannot convert the
+in-process benchmark below into independent service trials or an adoption verdict.
+
 Use the exact Go version in `go.mod` and the disposable PostgreSQL 17 fixture in
 `README.md`. Run normal correctness/race tests separately. From `server/`, run:
 
