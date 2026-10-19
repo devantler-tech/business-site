@@ -2,8 +2,8 @@
 
 `internal/contactrenderer` is the developer-only process boundary for
 [ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md), delivered by
-#206. It does not change an HTTP handler, durable data, native Go writes, the
-public site or the production runtime package. It does not establish adoption,
+issue #206. It does not change an HTTP handler, durable data, native Go writes,
+the public site or the production runtime package. It does not establish adoption,
 performance, maintenance improvement or portal launch readiness.
 
 ## Ownership and bounds
@@ -13,9 +13,9 @@ regular files and the maintained OpenFeature client. Construction is passive.
 There is no shell, PATH lookup, listener or request-selected executable.
 Only a healthy SDK evaluation of `portal-contact-renderer`, with default false,
 can start work. Absent, wrong-type, error, stale or nil SDK states admit no child.
-The gate is checked again before releasing a complete result. Lifecycle issue
-#207 requires removal or an explicit reviewed decision by 2026-10-26; this does
-not extend the experiment's evidence window.
+The gate is checked again before releasing a complete result. The lifecycle task,
+issue #207, requires removal or an explicit reviewed decision by 2026-10-26.
+This does not extend the experiment's evidence window.
 
 - At most one owned child exists, including during failure and restart/reaping.
 - Eight operations include gate waits, pending messages and queued writes; a
@@ -57,7 +57,7 @@ still needs an actual packaged Node executable and fixed compiler artifact,
 independent two-client/operator HTTP holdouts, the unchanged preregistered paired
 measurement harness, the frozen maintenance task and an actual rollback.
 The normal Go container and static publisher are deliberately unchanged.
-#199, #142 and #131 remain open until their own outcomes are proved.
+Issues #199, #142 and #131 remain open until their own outcomes are proved.
 
 ## Exercise
 

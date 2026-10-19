@@ -115,12 +115,17 @@ func projection() renderwire.Contact {
 
 func flags(t *testing.T, value any) *openfeature.EvaluationAPI {
 	t.Helper()
-	api := isolated.NewAPI()
 	values := map[string]memprovider.InMemoryFlag{}
 	if value != nil {
 		values["portal-contact-renderer"] = memprovider.InMemoryFlag{Key: "portal-contact-renderer", State: memprovider.Enabled, DefaultVariant: "value", Variants: map[string]any{"value": value}}
 	}
-	if err := api.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(values)); err != nil {
+	return providerAPI(t, memprovider.NewInMemoryProvider(values))
+}
+
+func providerAPI(t *testing.T, provider openfeature.FeatureProvider) *openfeature.EvaluationAPI {
+	t.Helper()
+	api := isolated.NewAPI()
+	if err := api.SetProviderAndWait(t.Context(), provider); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = api.Shutdown(context.Background()) })
@@ -253,12 +258,7 @@ func blocking(t *testing.T, s *Supervisor, blockAt int32, offAfter bool) *blocki
 		}),
 		blockAt: blockAt, reached: make(chan int32, 8), release: make(chan struct{}), offAfter: offAfter,
 	}
-	api := isolated.NewAPI()
-	if err := api.SetProviderAndWait(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = api.Shutdown(context.Background()) })
-	s.flags = api.NewClient()
+	s.flags = providerAPI(t, p).NewClient()
 	return p
 }
 
@@ -449,12 +449,7 @@ func TestSDKErrorAndStaleStatesNeverStartAChildEvenWithTrueValues(t *testing.T) 
 				}),
 				events: make(chan openfeature.Event, 1),
 			}
-			api := isolated.NewAPI()
-			if err := api.SetProviderAndWait(t.Context(), p); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = api.Shutdown(context.Background()) })
-			s.flags = api.NewClient()
+			s.flags = providerAPI(t, p).NewClient()
 			settled := make(chan struct{})
 			handler := func(openfeature.EventDetails) { close(settled) }
 			s.flags.AddHandler(event, &handler)
