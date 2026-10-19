@@ -7,7 +7,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildContactRenderer } from "../private-contact/build.mjs";
 
+/** @typedef {import("../src/lib/private-contact/projection.js").ContactProjection} ContactProjection */
+/** @type {Awaited<ReturnType<typeof buildContactRenderer>>} */
 let artifact;
+/** @type {(contact: ContactProjection) => string} */
 let renderContact;
 
 before(async () => {
@@ -18,6 +21,7 @@ after(() => {
   if (artifact) rmSync(artifact.directory, { recursive: true });
 });
 
+/** @param {"en" | "da"} locale @returns {ContactProjection} */
 function contact(locale = "en") {
   return {
     locale,
@@ -73,7 +77,7 @@ test("Danish output keeps native localized limits, destinations and labels", () 
   assert.match(body, /href="\/portal\/\?lang=da"/u);
 });
 
-for (const state of ["invalid", "stale", "verification"]) {
+for (const state of /** @type {const} */ (["invalid", "stale", "verification"])) {
   test(`${state} recovery preserves unsaved values and shows the supplied alert`, () => {
     const data = contact();
     data.state = state;
@@ -90,7 +94,7 @@ for (const state of ["invalid", "stale", "verification"]) {
 test("confirmation requires an ordinary saved confirmable projection", () => {
   assert.match(renderContact(contact()), /action="\/portal\/contact\/verify"/u);
   assert.match(renderContact(contact()), /aria-describedby="contact-verification-help"/u);
-  for (const verification of ["unverified", "verified"]) {
+  for (const verification of /** @type {const} */ (["unverified", "verified"])) {
     const data = contact();
     data.verification = verification;
     assert.doesNotMatch(renderContact(data), /action="\/portal\/contact\/verify"/u);
@@ -125,7 +129,8 @@ test("independent repeated calls do not reuse another profile's values", () => {
   first.csrf = "first-fictional-nonce";
   second.name = "Second Example";
   second.csrf = "second-fictional-nonce";
-  for (const [data, expected, forbidden] of [[first, "First Example", "Second Example"], [second, "Second Example", "First Example"], [first, "First Example", "Second Example"]]) {
+  const visits = /** @type {[ContactProjection, string, string][]} */ ([[first, "First Example", "Second Example"], [second, "Second Example", "First Example"], [first, "First Example", "Second Example"]]);
+  for (const [data, expected, forbidden] of visits) {
     const body = renderContact(data);
     assert.ok(body.includes(`value="${expected}"`));
     assert.ok(!body.includes(forbidden));
@@ -138,9 +143,10 @@ test("an actual render failure exposes only the generic error", () => {
   const data = contact();
   Object.defineProperty(data, "text", { get() { throw new Error("fictional-private-diagnostic"); } });
   assert.throws(() => renderContact(data), (error) => {
+    assert.ok(error instanceof Error);
     assert.equal(error.message, "contact rendering unavailable");
     assert.equal(error.cause, undefined);
-    assert.doesNotMatch(error.stack, /fictional-private-diagnostic/u);
+    assert.doesNotMatch(error.stack ?? "", /fictional-private-diagnostic/u);
     return true;
   });
 });
