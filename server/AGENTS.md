@@ -1,6 +1,11 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The explicit developer-only `cmd/contact-trial-host` uses an inherited retained
+loopback TLS listener and bounded private setup pipe. Read `CONTACT-TRIAL-HOST.md`.
+Keep migration, invitations, synthetic broker and collection outside this child;
+preserve the maintained authority and production runtime graph. Its real-process
+correctness controls are not comparative measurements or portal activation.
 The explicit offline `cmd/contact-trial-report` tool analyzes only the frozen
 paired timing format. Read `CONTACT-TRIAL-REPORT.md` before changing it. Preserve
 whole-journey pairing, failure retention, closed bounded input and private output.

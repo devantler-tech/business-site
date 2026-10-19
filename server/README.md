@@ -404,6 +404,11 @@ database and synthetic TLS broker fixtures, separately from the correctness suit
 Its raw measurements are a comparator, not evidence that a Svelte private renderer
 or a production portal is ready.
 
+The explicit [trial host](CONTACT-TRIAL-HOST.md) launches that maintained authority
+as a separate developer-only process over a retained loopback TLS listener and a
+restricted disposable database. It is not the complete paired comparison runner;
+its process restart controls do not decide the private frontend or activate it.
+
 The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
 freezes the next candidate's presentation boundary, process limits, comparison
 method and same-record recovery check. Its
