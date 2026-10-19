@@ -51,6 +51,7 @@ test("the Go supervisor renders the actual compiled component in a separate proc
     "go",
     [
       "test",
+      "-v",
       "-race",
       "-tags=rendererintegration",
       "./internal/contactrenderer",
@@ -74,5 +75,5 @@ test("the Go supervisor renders the actual compiled component in a separate proc
     },
   );
   assert.equal(child.status, 0, child.stdout + child.stderr);
-  assert.match(child.stdout, /ok\s+github.com\/devantler-tech\/business-site\/server\/internal\/contactrenderer/u);
+  assert.match(child.stdout, /^--- PASS: TestCompiledComponent \([\d.]+s\)$/mu);
 });
