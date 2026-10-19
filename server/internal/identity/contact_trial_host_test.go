@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +29,11 @@ import (
 // broker, control-plane invitations and HTTP clients stay in the test process;
 // none of its timings is comparative service evidence.
 func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
+	contactTrialHostProcess(t, "", "")
+}
+
+func contactTrialHostProcess(t *testing.T, node, worker string) {
+	t.Helper()
 	ctx := context.Background()
 	pool, migrator := contactHostDatabase(t)
 	f := newBrowserFixtureOnPool(t, pool)
@@ -66,44 +73,62 @@ func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
 		"trust":       string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.broker.TLS.Certificates[0].Certificate[0]})),
 		"node":        "", "worker": "",
 	}
-	start := func(mode string, ready bool) func() {
+	passedFile := file
+	var inputOverride *os.File
+	start := func(mode, expectedError string) func() {
 		t.Helper()
+		ready := expectedError == ""
 		config["mode"] = mode
+		config["node"], config["worker"] = "", ""
+		if mode == "svelte" {
+			config["node"], config["worker"] = node, worker
+		}
 		data, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal(err)
 		}
 		command := exec.Command(binary, "--private-contact-trial")
-		command.ExtraFiles = []*os.File{file}
+		command.ExtraFiles = []*os.File{passedFile}
 		// A real os.Pipe is the setup transport even for this tiny fixture.
 		command.Stdin = bytes.NewReader(data)
+		if inputOverride != nil {
+			command.Stdin = inputOverride
+		}
+		command.WaitDelay = time.Second
 		var diagnostics bytes.Buffer
 		command.Stderr = &diagnostics
 		out, err := command.StdoutPipe()
 		if err != nil || command.Start() != nil {
 			t.Fatal("start developer host")
 		}
+		done := make(chan error, 1)
+		go func() { done <- command.Wait() }()
 		stopped := false
+		wait := func(wantSuccess bool) {
+			t.Helper()
+			stopped = true
+			select {
+			case err := <-done:
+				if (err == nil) != wantSuccess {
+					t.Error("trial host exited with an unexpected status")
+				}
+			case <-time.After(15 * time.Second):
+				_ = command.Process.Kill() // only the child this test owns
+				<-done
+				t.Error("trial host did not meet its exit bound")
+			}
+		}
 		stop := func() {
 			t.Helper()
 			if stopped {
 				return
 			}
-			stopped = true
 			if err := command.Process.Signal(syscall.SIGTERM); err != nil {
 				t.Error("signal owned trial host")
 			}
-			done := make(chan error, 1)
-			go func() { done <- command.Wait() }()
-			select {
-			case err := <-done:
-				if err != nil || diagnostics.Len() != 0 {
-					t.Error("trial host did not shut down cleanly")
-				}
-			case <-time.After(15 * time.Second):
-				_ = command.Process.Kill() // only the child this test owns
-				<-done
-				t.Error("trial host did not meet its shutdown bound")
+			wait(true)
+			if diagnostics.Len() != 0 {
+				t.Error("trial host did not shut down cleanly")
 			}
 		}
 		t.Cleanup(stop)
@@ -119,30 +144,99 @@ func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
 		select {
 		case got := <-line:
 			if ready && got != "contact-trial-host ready" {
-				_ = command.Wait() // EOF precedes reading the completed diagnostic copy.
-				stopped = true
+				wait(false)
 				t.Fatalf("trial host failed before readiness: %s", diagnostics.String())
 			}
 			if !ready {
 				if got != "" {
 					t.Error("unsafe database reached readiness")
+					stop()
+					return stop
 				}
-				if err := command.Wait(); err == nil || strings.TrimSpace(diagnostics.String()) != "trial database refused" {
-					t.Error("unsafe database was not refused with a safe diagnostic")
+				wait(false)
+				if strings.TrimSpace(diagnostics.String()) != expectedError {
+					t.Error("unsafe setup was not refused with a safe diagnostic")
 				}
-				stopped = true
 			}
 		case <-time.After(20 * time.Second):
 			t.Fatal("trial host startup exceeded its bound")
 		}
 		return stop
 	}
-	stop := start("closed", true)
+	invalidSetup := "invalid trial setup; use the documented private pipe and disposable loopback fixture"
+	// Use the same valid setup as the positive control, varying only its actual
+	// transport/listener/trust boundary. No database or broker response is faked.
+	regular, err := os.CreateTemp(t.TempDir(), "setup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeContactHostFile(t, regular)
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := regular.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := regular.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	inputOverride = regular
+	start("go", invalidSetup)
+	inputOverride = nil
+	passedFile = regular
+	start("go", invalidSetup)
+	passedFile = file
+	callback := config["callback"]
+	config["callback"] = "https://127.0.0.1:1/portal/callback"
+	start("go", invalidSetup)
+	config["callback"] = callback
+	stalled, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeContactHostFile(t, stalled)
+	defer closeContactHostFile(t, writer)
+	inputOverride = stalled
+	start("go", invalidSetup) // writer deliberately remains open until the five-second deadline
+	inputOverride = nil
+	wildcard, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := wildcard.Close(); err != nil {
+			t.Error("wildcard refusal fixture cleanup failed")
+		}
+	}()
+	wildcardFile, err := wildcard.File()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeContactHostFile(t, wildcardFile)
+	passedFile = wildcardFile
+	config["callback"] = fmt.Sprintf("https://127.0.0.1:%d/portal/callback", wildcard.Addr().(*net.TCPAddr).Port)
+	start("go", invalidSetup)
+	passedFile, config["callback"] = file, callback
+	wrongCA := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	der, err := x509.CreateCertificate(rand.Reader, wrongCA, wrongCA, &f.f.key.PublicKey, f.f.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trust := config["trust"]
+	config["trust"] = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	start("go", "trial broker refused")
+	config["trust"] = trust
+	stop := start("closed", "")
 	if status, _, h := f.request("GET", "/portal/sign-in", nil, ""); status != 404 || h.Get("Cache-Control") != "no-store" {
 		t.Fatal("closed mode activated identity")
 	}
 	stop()
-	stop = start("go", true)
+	mode := "go"
+	if node != "" {
+		mode = "svelte"
+	}
+	stop = start(mode, "")
 	actors := journeyActors(f)
 	assertIndependentJourneyActors(f, actors)
 	if run := privateContactJourney(f, actors); len(run.Responses) != 21 {
@@ -157,7 +251,7 @@ func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
 	_, before, _ := f.request("GET", "/portal/contact", nil, "")
 	_, revision := journeyForm(f, before)
 	stop()
-	stop = start("go", true)
+	stop = start("go", "")
 	status, after, _ := f.request("GET", "/portal/contact", nil, "")
 	if status != 200 || !strings.Contains(after, `value="Alice Fictional"`) {
 		t.Fatal("same-origin restart lost the original authenticated record")
@@ -171,7 +265,7 @@ func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
 	if _, err := migrator.Exec(ctx, "GRANT TRUNCATE ON portal_requests TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
-	start("go", false)
+	start("go", "trial database refused")
 }
 
 func closeContactHostFile(t *testing.T, file *os.File) {
@@ -186,8 +280,8 @@ func closeContactHostFile(t *testing.T, file *os.File) {
 func contactHostDatabase(t *testing.T) (*pgxpool.Pool, *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
-	base, err := pgxpool.ParseConfig(os.Getenv("PORTAL_TEST_DATABASE_URL"))
-	if err != nil || base.ConnConfig.User != "portal_runtime" || base.ConnConfig.Database != "portal_identity_test" || base.ConnConfig.Host != "127.0.0.1" && base.ConnConfig.Host != "localhost" || base.ConnConfig.Port != 5432 && base.ConnConfig.Port != 55444 {
+	base, err := contactHostFixtureConfig(os.Getenv("PORTAL_TEST_DATABASE_URL"))
+	if err != nil {
 		t.Fatal("explicit disposable loopback database fixture is required")
 	}
 	base.ConnConfig.Host = "127.0.0.1"
@@ -238,4 +332,33 @@ func contactHostDatabase(t *testing.T) (*pgxpool.Pool, *pgxpool.Pool) {
 		t.Fatal(fmt.Errorf("restricted trial runtime: %w", err))
 	}
 	return pool, migrator
+}
+
+// Validate the complete fixture before deriving any privileged connection. In
+// particular, pgx's first Host is not proof that every fallback stays local.
+func contactHostFixtureConfig(raw string) (*pgxpool.Config, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u == nil || u.Scheme != "postgres" || u.User == nil || u.User.Username() != "portal_runtime" || (u.Host != "localhost:5432" && u.Host != "127.0.0.1:5432" && u.Host != "127.0.0.1:55444") || u.Path != "/portal_identity_test" || u.RawPath != "" || u.RawQuery != "sslmode=disable" || u.Fragment != "" {
+		return nil, ErrDenied
+	}
+	if password, ok := u.User.Password(); !ok || password != "fixture-only" {
+		return nil, ErrDenied
+	}
+	cfg, err := pgxpool.ParseConfig(raw)
+	if err != nil || len(cfg.ConnConfig.Fallbacks) != 0 || len(cfg.ConnConfig.RuntimeParams) != 0 || cfg.ConnConfig.TLSConfig != nil {
+		return nil, ErrDenied
+	}
+	return cfg, nil
+}
+
+func TestContactTrialHostRefusesAlternateFixtureDestinations(t *testing.T) {
+	for _, raw := range []string{
+		"postgres://portal_runtime:fixture-only@127.0.0.1:55444,remote.example.invalid:5432/portal_identity_test?sslmode=disable",
+		"host=127.0.0.1,remote.example.invalid port=55444,5432 user=portal_runtime password=fixture-only dbname=portal_identity_test sslmode=disable",
+		"postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_identity_test?sslmode=disable&options=-c+role=portal_runtime",
+	} {
+		if _, err := contactHostFixtureConfig(raw); err == nil {
+			t.Error("alternate fixture destination or authority accepted")
+		}
+	}
 }

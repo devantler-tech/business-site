@@ -61,10 +61,13 @@ The ordinary database suite builds and starts the actual command using a separat
 restricted disposable database. It checks closed behavior, the maintained complete
 three-actor native-form journey, independent logout, saved session/record/revision
 through a same-origin process restart and a genuine forbidden-grant refusal.
-Its broker/controller stay outside the child. These are correctness controls,
-not paired timing or service-RSS observations. The ordinary suite does not require
-Node; actual compiled Svelte behavior remains separately covered by the explicit
-renderer controls in [CONTACT-RENDERER.md](CONTACT-RENDERER.md).
+Its broker/controller stay outside the child. Actual-command refusal controls
+cover regular-file/stalled setup, invalid/wildcard/mismatched listeners and
+incorrect broker trust. These are correctness controls, not paired timing or
+service-RSS observations. The ordinary suite does not require Node. The separately
+selected renderer controls in [CONTACT-RENDERER.md](CONTACT-RENDERER.md) also run
+the compiled host with the actual Svelte worker, then restart Go presentation at
+the same origin with the original session, saved values and revision.
 
 Issue #213 still owns immutable source/harness receipts, packaged Node provenance,
 the identical maintenance task on both sides, three ordered paired runs, all raw
