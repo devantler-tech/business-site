@@ -113,6 +113,8 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: web
         run: npm ci
+      - name: Verify the private compiled contact component
+        run: node --test scripts/private-contact-renderer.test.mjs
       - name: Verify the isolated Svelte frontend in both release states
         run: bash scripts/check-svelte-frontend.sh
       - name: Verify the retained frontend decision samples
