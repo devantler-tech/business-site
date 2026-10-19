@@ -48,6 +48,19 @@ func TestContactProfilePersistsWithoutGrantingAuthority(t *testing.T) {
 	}
 }
 
+// independentContactClient creates another maintained session with a separate jar.
+func independentContactClient(t *testing.T, b *browserFixture, subject string) http.Client {
+	t.Helper()
+	client := *b.client
+	client.Jar, _ = cookiejar.New(nil)
+	b.client = &client
+	b.mu.Lock()
+	b.subject = subject
+	b.mu.Unlock()
+	b.finish(b.start(b.invite(subject, subject, "client")))
+	return client
+}
+
 // TestContactTwoClientsCannotSelectAnotherRecord exercises two real sessions
 // and rejects browser-selected record IDs and roles without changing either record.
 func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
@@ -59,13 +72,7 @@ func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
 	if s != 303 {
 		t.Fatalf("save A=%d", s)
 	}
-	other := *a
-	other.Jar, _ = cookiejar.New(nil)
-	b.client = &other
-	b.mu.Lock()
-	b.subject = "client-b"
-	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-b", "client-b", "client")))
+	other := independentContactClient(t, b, "client-b")
 	token = b.csrf("/portal/contact")
 	s, _, _ = b.request("POST", "/portal/contact", contactForm(token, "0", "Bob Fictional", "b@example.invalid", ""), b.site.URL)
 	if s != 303 {

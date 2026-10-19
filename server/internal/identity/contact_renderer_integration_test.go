@@ -116,13 +116,7 @@ func TestCompiledContactHTTP(t *testing.T) {
 		t.Fatal("precise revision could not save")
 	}
 	a := b.client
-	other := *a
-	other.Jar, _ = cookiejar.New(nil)
-	b.client = &other
-	b.mu.Lock()
-	b.subject = "client-b"
-	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-b", "client-b", "client")))
+	other := independentContactClient(t, b, "client-b")
 	if s, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Bob Fictional", "b@example.invalid", ""), b.site.URL); s != 303 {
 		t.Fatal("second client save failed")
 	}
@@ -208,26 +202,25 @@ func TestCompiledContactHTTP(t *testing.T) {
 // contactWaitProvider holds an actual post-render SDK evaluation; it does not
 // replace the compiled renderer, HTTP handler, session store or database result.
 type contactWaitProvider struct {
-	openfeature.FeatureProvider
-	key              string
-	blockAt          int32
-	reads            atomic.Int32
-	denied           atomic.Pointer[string]
-	blocked, release chan struct{}
+	finalRequestProvider
+	deniedKey atomic.Pointer[string]
 }
 
 func (p *contactWaitProvider) BooleanEvaluation(ctx context.Context, key string, fallback bool, values openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
-	if key == p.key && p.reads.Add(1) == p.blockAt {
-		close(p.blocked)
-		select {
-		case <-p.release:
-		case <-ctx.Done():
-		}
-	}
-	if denied := p.denied.Load(); denied != nil && *denied == key {
+	p.wait(ctx, key)
+	if denied := p.deniedKey.Load(); denied != nil && *denied == key {
 		return openfeature.BoolResolutionDetail{Value: false}
 	}
 	return p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, values)
+}
+
+func installContactWait(t *testing.T, b *browserFixture, value bool, checkpoint int32) *contactWaitProvider {
+	t.Helper()
+	p := &contactWaitProvider{finalRequestProvider: finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(contactRendererFlags(value)), key: "portal-contact-renderer", blockAt: checkpoint, blocked: make(chan struct{}), release: make(chan struct{})}}
+	if err := b.flags.SetProviderAndWait(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
 
 func TestCompiledContactAuthority(t *testing.T) {
@@ -239,10 +232,7 @@ func TestCompiledContactAuthority(t *testing.T) {
 					t.Fatal("fixture save failed")
 				}
 				logoutCSRF := b.csrf("/portal/contact")
-				p := &contactWaitProvider{FeatureProvider: memprovider.NewInMemoryProvider(contactRendererFlags(true)), key: "portal-contact-renderer", blockAt: checkpoint, blocked: make(chan struct{}), release: make(chan struct{})}
-				if err := b.flags.SetProviderAndWait(t.Context(), p); err != nil {
-					t.Fatal(err)
-				}
+				p := installContactWait(t, b, true, checkpoint)
 				release := onceRelease(p.release)
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
@@ -253,26 +243,7 @@ func TestCompiledContactAuthority(t *testing.T) {
 					b.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r.WithContext(ctx)) })
 					b.mu.Unlock()
 				}
-				type response struct {
-					status int
-					body   string
-				}
-				result := make(chan response, 1)
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					s, body, _ := b.request("GET", "/portal/contact", nil, "")
-					result <- response{s, body}
-				}()
-				defer func() {
-					release()
-					cancel()
-					select {
-					case <-done:
-					case <-time.After(5 * time.Second):
-						t.Error("rendering request did not finish")
-					}
-				}()
+				result := startContactRead(t, b, release)
 				select {
 				case <-p.blocked:
 				case <-time.After(5 * time.Second):
@@ -296,13 +267,13 @@ func TestCompiledContactAuthority(t *testing.T) {
 					query = `UPDATE portal_memberships SET client_id='client-b' WHERE subject='client-a'`
 				case "identity closed":
 					key := "portal-identity"
-					p.denied.Store(&key)
+					p.deniedKey.Store(&key)
 				case "renderer closed":
 					key := "portal-contact-renderer"
-					p.denied.Store(&key)
+					p.deniedKey.Store(&key)
 				case "verification closed":
 					key := "portal-contact-verification"
-					p.denied.Store(&key)
+					p.deniedKey.Store(&key)
 				case "cancelled":
 					cancel()
 				}
@@ -334,30 +305,9 @@ func TestCompiledContactAuthority(t *testing.T) {
 func TestCompiledContactOptOutAuthority(t *testing.T) {
 	for _, change := range []bool{false, true} {
 		b, _ := renderedContactFixture(t, true)
-		p := &contactWaitProvider{FeatureProvider: memprovider.NewInMemoryProvider(contactRendererFlags(false)), key: "portal-contact-renderer", blockAt: 1, blocked: make(chan struct{}), release: make(chan struct{})}
-		if err := b.flags.SetProviderAndWait(t.Context(), p); err != nil {
-			t.Fatal(err)
-		}
+		p := installContactWait(t, b, false, 1)
 		release := onceRelease(p.release)
-		type response struct {
-			status int
-			body   string
-		}
-		result := make(chan response, 1)
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			s, body, _ := b.request("GET", "/portal/contact", nil, "")
-			result <- response{s, body}
-		}()
-		defer func() {
-			release()
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				t.Error("opt-out request did not finish")
-			}
-		}()
+		result := startContactRead(t, b, release)
 		select {
 		case <-p.blocked:
 		case <-time.After(5 * time.Second):

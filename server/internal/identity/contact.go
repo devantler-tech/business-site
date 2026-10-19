@@ -161,9 +161,8 @@ func (b *browser) requireContactClient(w http.ResponseWriter, r *http.Request) b
 }
 
 func (b *browser) contactClient(w http.ResponseWriter, r *http.Request) (string, bool) {
-	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
+	client, role, allowed := b.browserMember(w, r)
+	if !allowed {
 		return "", false
 	}
 	if role != "client" {

@@ -340,9 +340,8 @@ func (b *browser) principal(ctx context.Context) Principal {
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
+	client, role, allowed := b.browserMember(w, r)
+	if !allowed {
 		return
 	}
 	kind := "home"
@@ -360,6 +359,16 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+}
+
+// browserMember preserves the common unauthenticated response before role checks.
+func (b *browser) browserMember(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		b.render(w, r, 401, "error", "", "")
+		return "", "", false
+	}
+	return client, role, true
 }
 
 // logout durably destroys the session before redirecting to the local sign-in.

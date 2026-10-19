@@ -53,9 +53,10 @@ The package returns a buffered body, never permission to send it. The developer
 HTTP composition retains the original token, principal/deadline and query client
 in Go, never in the projection. It buffers the entire Go-owned private frame,
 rechecks displayed confirmation and identity/release gates, then reloads the
-original durable session on a clean SCS context preserving cancellation/deadlines.
-It rejects absent, expired or replaced identity/deadline data and scopes final
-membership/session SQL to the original client and maintained SCS hashed key.
+original durable session through SCS's context-aware store and codec, preserving
+cancellation/deadlines without using the request cache. It rejects absent, expired
+or replaced identity/deadline data and scopes final membership/session SQL to the
+original client, maintained SCS hashed key and exact decoded byte snapshot.
 Read-only revalidation never commits, refreshes or resurrects a session.
 Initial renderer opt-out retains Go only after the same fresh authority check;
 enabled errors discard all buffered bytes and return generic unavailable.

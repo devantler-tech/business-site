@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 	"github.com/devantler-tech/business-site/server/internal/renderwire"
 	"github.com/open-feature/go-sdk/openfeature"
@@ -27,9 +28,9 @@ func (b *browser) contactAuthority(ctx context.Context, client string) contactAu
 	return contactAuthority{b.sessions.Token(ctx), b.principal(ctx), client, b.sessions.Deadline(ctx)}
 }
 
-// contactResponseAllowed deliberately drops request values for SCS Load: Load
-// on the request context would return its cached session without reading storage.
-// Cancellation and deadline are retained; this read never commits or extends it.
+// contactResponseAllowed uses the maintained context-aware store and codec,
+// never SessionManager.Load's request cache. Final SQL binds the decoded bytes
+// to current durable authority; this read never commits or extends a session.
 func (b *browser) contactResponseAllowed(ctx context.Context, original contactAuthority, verification, rendered bool) bool {
 	if original.token == "" || original.client == "" || ctx.Err() != nil || !time.Now().Before(original.deadline) || !b.foundation.ready(ctx) {
 		return false
@@ -49,23 +50,29 @@ func (b *browser) contactResponseAllowed(ctx context.Context, original contactAu
 	} else if !b.foundation.ready(ctx) {
 		return false
 	}
-	fresh, cancel := context.WithDeadline(context.Background(), original.deadline)
+	fresh, cancel := context.WithDeadline(ctx, original.deadline)
 	defer cancel()
-	stop := context.AfterFunc(ctx, cancel)
-	defer stop()
-	if deadline, ok := ctx.Deadline(); ok {
-		var cancelDeadline context.CancelFunc
-		fresh, cancelDeadline = context.WithDeadline(fresh, deadline)
-		defer cancelDeadline()
+	store, ok := b.sessions.Store.(scs.CtxStore)
+	if !ok {
+		return false
 	}
-	fresh, err := b.sessions.Load(fresh, original.token)
-	if err != nil || b.sessions.Token(fresh) != original.token || b.principal(fresh) != original.principal || !b.sessions.Deadline(fresh).Equal(original.deadline) {
+	key := base64.RawURLEncoding.EncodeToString(digest(original.token))
+	data, found, err := store.FindCtx(fresh, key)
+	if err != nil || !found {
+		return false
+	}
+	deadline, values, err := b.sessions.Codec.Decode(data)
+	issuer, issuerOK := values["issuer"].(string)
+	subject, subjectOK := values["subject"].(string)
+	expires, expiresOK := values["expires"].(int64)
+	principal := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expires, 0)}
+	if err != nil || !issuerOK || !subjectOK || !expiresOK || principal != original.principal || !deadline.Equal(original.deadline) {
 		return false
 	}
 	// The SDK wait precedes fresh durable reads. This SQL is scoped to the
 	// original client, not whichever client a replacement membership might own.
 	var allowed bool
-	err = b.foundation.pool.QueryRow(fresh, `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>now() WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked)`, original.principal.issuer, original.principal.subject, original.client, base64.RawURLEncoding.EncodeToString(digest(original.token))).Scan(&allowed)
+	err = b.foundation.pool.QueryRow(fresh, `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>now() AND s.data=$5 WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked)`, original.principal.issuer, original.principal.subject, original.client, key, data).Scan(&allowed)
 	return err == nil && allowed && ctx.Err() == nil && fresh.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState && time.Now().Before(original.deadline) && time.Now().Before(original.principal.expires)
 }
 

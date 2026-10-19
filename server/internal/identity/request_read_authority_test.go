@@ -23,6 +23,15 @@ type finalRequestProvider struct {
 
 // BooleanEvaluation keeps the ordinary provider behavior around one bounded pause.
 func (p *finalRequestProvider) BooleanEvaluation(ctx context.Context, key string, fallback bool, evaluation openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
+	p.wait(ctx, key)
+	if key == p.key && p.denied.Load() {
+		return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{ResolutionError: p.resolutionError}}
+	}
+	return p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, evaluation)
+}
+
+// wait pauses only the chosen real SDK evaluation and retains cancellation.
+func (p *finalRequestProvider) wait(ctx context.Context, key string) {
 	if key == p.key && p.reads.Add(1) == p.blockAt {
 		close(p.blocked)
 		select {
@@ -30,10 +39,6 @@ func (p *finalRequestProvider) BooleanEvaluation(ctx context.Context, key string
 		case <-ctx.Done():
 		}
 	}
-	if key == p.key && p.denied.Load() {
-		return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{ResolutionError: p.resolutionError}}
-	}
-	return p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, evaluation)
 }
 
 // TestRequestReadRechecksAuthorityAfterFinalEvaluation catches stale private reads,
