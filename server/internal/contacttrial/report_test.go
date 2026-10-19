@@ -153,6 +153,7 @@ func TestInvalidEvidenceCannotProduceReport(t *testing.T) {
 		{name: "negative timing", mutate: func(e map[string]any) { firstResponse(e)["elapsed_ns"] = int64(-1) }},
 		{name: "missing timing", mutate: func(e map[string]any) { delete(firstResponse(e), "elapsed_ns") }},
 		{name: "missing status", mutate: func(e map[string]any) { delete(firstResponse(e), "status") }},
+		{name: "null sign-in", mutate: func(e map[string]any) { firstJourney(e)["sign_in_ns"] = []any{nil, 1, 1} }},
 		{name: "wrong actor", mutate: func(e map[string]any) { firstResponse(e)["actor"] = "operator" }},
 	}
 	for _, tc := range cases {

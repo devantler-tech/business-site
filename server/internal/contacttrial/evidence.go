@@ -109,6 +109,9 @@ func uniqueValue(decoder *json.Decoder, depth int) error {
 	if err != nil {
 		return err
 	}
+	if token == nil {
+		return errInvalidEvidence
+	}
 	delim, isDelim := token.(json.Delim)
 	if !isDelim {
 		return nil
