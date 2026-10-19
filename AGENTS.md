@@ -57,6 +57,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
+- `web/private-contact/` builds a developer-only compiled contact component for
+  the bounded private presentation experiment. It has no production consumer,
+  process supervisor or activation switch. Read its `CONTRACT.md`; public builds
+  and the Go contact handler remain unchanged.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
@@ -79,6 +83,7 @@ npm --prefix web ci
 npm run build
 node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs
 bash scripts/check-svelte-frontend.sh
+node --test web/tests/private-contact-renderer.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
