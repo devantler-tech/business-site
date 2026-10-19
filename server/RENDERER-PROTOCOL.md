@@ -53,8 +53,8 @@ component must still escape it in its actual HTML context.
 `text` contains `title`, `intro`, `nameLabel`, `emailLabel`, `companyLabel`,
 `saveLabel`, `pendingText`, `workspaceLabel`, `verifyLabel`, `verificationHelp`,
 `errorText` and `reloadLabel`. The ordinary labels and introductory/pending text
-are nonblank. `errorText` is empty for `normal` and nonblank for recovery states.
-The verification label/help must be nonblank for `confirmable`. Other optional
+are not blank. `errorText` is empty for `normal` and not blank for recovery states.
+The verification label/help must not be blank for `confirmable`. Other optional
 strings may be empty but remain bounded and validated.
 
 There are no dynamic destinations, template selectors, issuer/subject, client
@@ -66,7 +66,7 @@ required independently of any displayed control.
 ## Response and caller obligations
 
 A response has exactly `version` (number `1`), `id` and `body`, all required and
-nonnull. The ID has the same format as a request ID. The body is a nonblank UTF-8
+not null. The ID has the same format as a request ID. The body is a non-blank UTF-8
 JSON string. Unknown/duplicate members, case aliases, invalid Unicode, unsupported
 versions, null/missing/type-mismatched values and extra JSON values fail closed.
 
