@@ -38,7 +38,7 @@ belongs to the future supervisor, not this codec.
 `contact` has these fields only:
 
 | Field                      | Display contract                                                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
 | `locale`                   | `en` or `da`                                                                                                                        |
 | `name`, `email`, `company` | At most 120, 254 and 160 Unicode code points respectively; empty values remain usable for an initial profile or validation recovery |
 | `revision`                 | Canonical nonnegative signed-64-bit decimal **string**, including the exact maximum; never a JavaScript number                      |
