@@ -112,6 +112,7 @@ func RequestFrame(r Request) ([]byte, error) {
 	return append(frame, payload...), nil
 }
 
+// validID admits only the fixed opaque correlation format, not authority.
 func validID(id string) bool {
 	if len(id) != 32 {
 		return false
@@ -124,6 +125,7 @@ func validID(id string) bool {
 	return true
 }
 
+// validContact validates the closed display projection before encoding.
 func validContact(c Contact) bool {
 	if c.Locale != "en" && c.Locale != "da" {
 		return false
@@ -165,6 +167,7 @@ func validContact(c Contact) bool {
 	return true
 }
 
+// validText bounds display text without changing its content or write policy.
 func validText(text string, limit int, required bool) bool {
 	if len(text) > utf8.UTFMax*limit || !utf8.ValidString(text) || utf8.RuneCountInString(text) > limit || (required && strings.TrimSpace(text) == "") {
 		return false

@@ -10,6 +10,7 @@ import (
 
 const fixtureID = "0123456789abcdef0123456789abcdef"
 
+// fixtureRequest supplies fictional display values with an exact large revision.
 func fixtureRequest() Request {
 	return Request{ID: fixtureID, Contact: Contact{
 		Locale: "en", Name: "Fictional Client <&>", Email: "client@example.com", Company: "Example",
