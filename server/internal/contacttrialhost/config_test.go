@@ -5,7 +5,9 @@ import (
 	"testing"
 )
 
-const setupJSON = `{"mode":"go","database":"postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_trial_0123456789abcdef0123456789abcdef?sslmode=disable","issuer":"https://127.0.0.1:43111","callback":"https://127.0.0.1:43112/portal/callback","certificate":"certificate","key":"key","trust":"trust","node":"","worker":""}`
+const setupJSON = `{"mode":"go",
+"database":"postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_trial_0123456789abcdef0123456789abcdef?sslmode=disable",
+"issuer":"https://127.0.0.1:43111","callback":"https://127.0.0.1:43112/portal/callback","certificate":"certificate","key":"key","trust":"trust","node":"","worker":""}`
 
 func TestSetupIsClosedAndDisposable(t *testing.T) {
 	for _, mode := range []string{"go", "closed", "svelte"} {

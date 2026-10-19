@@ -9,6 +9,8 @@
     "renderwire",
     "contactrenderer",
     "contacttrial",
+    "contacttrialhost",
+    "pollable",
     "rendererintegration",
     "autofocus",
     "udfff",
