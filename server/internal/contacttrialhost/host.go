@@ -121,9 +121,11 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 	}
 	poolConfig.MaxConns, poolConfig.MinConns = 4, 0
 	poolConfig.ConnConfig.ConnectTimeout = 5 * time.Second
-	poolConfig.ConnConfig.RuntimeParams["search_path"] = "public"
-	poolConfig.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
-	poolConfig.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
+	// ParseConfig also reads ambient PostgreSQL startup settings. The private
+	// setup, not PGOPTIONS or a service file, defines this confined connection.
+	poolConfig.ConnConfig.RuntimeParams = map[string]string{
+		"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000",
+	}
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	pool, err := pgxpool.NewWithConfig(startup, poolConfig)

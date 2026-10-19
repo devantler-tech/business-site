@@ -88,6 +88,9 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 			t.Fatal(err)
 		}
 		command := exec.Command(binary, "--private-contact-trial")
+		// Ambient PostgreSQL options must not alter the pipe-defined trial.
+		// Readiness SELECTs alone miss this option; the real journey must write.
+		command.Env = append(os.Environ(), "PGOPTIONS=-c default_transaction_read_only=on")
 		command.ExtraFiles = []*os.File{passedFile}
 		// A real os.Pipe is the setup transport even for this tiny fixture.
 		command.Stdin = bytes.NewReader(data)
