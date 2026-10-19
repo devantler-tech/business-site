@@ -374,6 +374,9 @@ jobs:
         env:
           PGPASSWORD: fixture-only
         run: psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql
+      - name: Verify real Go trial host with its own unchanged test budget
+        working-directory: server
+        run: go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
       - name: Verify compiled contact HTTP with the actual broker, database and bounded renderer
         working-directory: .
         run: node --test web/tests/private-contact-runtime.test.mjs

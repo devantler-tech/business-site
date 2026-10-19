@@ -57,14 +57,19 @@ not import this host or acquire a Node dependency.
 
 ## Correctness proof versus comparison evidence
 
-The ordinary database suite builds and starts the actual command using a separate
+The explicit Go integration suite builds and starts the actual command using a separate
 restricted disposable database. It checks closed behavior, the maintained complete
 three-actor native-form journey, independent logout, saved session/record/revision
 through a same-origin process restart and a genuine forbidden-grant refusal.
 Its broker/controller stay outside the child. Actual-command refusal controls
 cover regular-file/stalled setup, invalid/wildcard/mismatched listeners and
 incorrect broker trust. These are correctness controls, not paired timing or
-service-RSS observations. The ordinary suite does not require Node. The separately
+service-RSS observations. From `server/`, with the documented disposable fixture,
+run `go test -race -tags=contacttrialintegration ./internal/identity -run
+'^TestContactTrialHost' -count=1 -timeout=90s`. Source CI requires this dedicated
+step after provisioning, keeping its expensive process startup outside the ordinary
+package's unchanged 90-second budget without omitting any controls. Neither this
+Go integration nor the ordinary suite requires Node. The separately
 selected renderer controls in [CONTACT-RENDERER.md](CONTACT-RENDERER.md) also run
 the compiled host with the actual Svelte worker, then restart Go presentation at
 the same origin with the original session, saved values and revision.

@@ -21,6 +21,11 @@ extend a session on a read, pass identity/client
 selectors to the child, or treat framed output as authority or arbitrary safe HTML.
 The selected Node-24 renderer integration needs BOTH disposable PostgreSQL fixture
 URLs and real compiled artifacts; ordinary Go/database tests do not need Node.
+Run the real Go trial host separately with `go test -race -tags=contacttrialintegration
+./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s`. Source CI
+requires this step after database provision, alongside the complete ordinary suite
+and compiled renderer integration. Preserve each package's existing 90-second bound;
+never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,

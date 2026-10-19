@@ -10,6 +10,7 @@
     "contactrenderer",
     "contacttrial",
     "contacttrialhost",
+    "contacttrialintegration",
     "pollable",
     "rendererintegration",
     "autofocus",

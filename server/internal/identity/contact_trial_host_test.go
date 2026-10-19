@@ -1,3 +1,5 @@
+//go:build contacttrialintegration || rendererintegration
+
 package identity
 
 import (
