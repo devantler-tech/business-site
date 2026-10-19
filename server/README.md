@@ -399,6 +399,11 @@ database and synthetic TLS broker fixtures, separately from the correctness suit
 Its raw measurements are a comparator, not evidence that a Svelte private renderer
 or a production portal is ready.
 
+The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
+freezes the next candidate's presentation boundary, process limits, comparison
+method and same-record recovery check. It is a preregistered design, not an
+implemented renderer or permission to activate the portal.
+
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share
 and reset the disposable records. Its HTTP gateway maps fixture cookies and origin
