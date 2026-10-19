@@ -4,6 +4,7 @@ package identity
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -230,99 +231,101 @@ func (p *contactWaitProvider) BooleanEvaluation(ctx context.Context, key string,
 }
 
 func TestCompiledContactAuthority(t *testing.T) {
-	for _, change := range []string{"unchanged", "durable logout", "deleted session", "expired session", "revoked membership", "operator role", "client rebind", "identity closed", "renderer closed", "verification closed", "cancelled"} {
-		t.Run(change, func(t *testing.T) {
-			b, _ := renderedContactFixture(t, true)
-			if s, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Private Fictional Owner", "owner@example.invalid", ""), b.site.URL); s != 303 {
-				t.Fatal("fixture save failed")
-			}
-			logoutCSRF := b.csrf("/portal/contact")
-			p := &contactWaitProvider{FeatureProvider: memprovider.NewInMemoryProvider(contactRendererFlags(true)), key: "portal-contact-renderer", blockAt: 2, blocked: make(chan struct{}), release: make(chan struct{})}
-			if err := b.flags.SetProviderAndWait(t.Context(), p); err != nil {
-				t.Fatal(err)
-			}
-			release := onceRelease(p.release)
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			// A fixture-only request wrapper cancels the actual server context.
-			if change == "cancelled" {
-				b.mu.Lock()
-				h := b.handler
-				b.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r.WithContext(ctx)) })
-				b.mu.Unlock()
-			}
-			type response struct {
-				status int
-				body   string
-			}
-			result := make(chan response, 1)
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				s, body, _ := b.request("GET", "/portal/contact", nil, "")
-				result <- response{s, body}
-			}()
-			defer func() {
-				release()
-				cancel()
-				select {
-				case <-done:
-				case <-time.After(5 * time.Second):
-					t.Error("rendering request did not finish")
+	for _, checkpoint := range []int32{2, 3} {
+		for _, change := range []string{"unchanged", "durable logout", "deleted session", "expired session", "revoked membership", "operator role", "client rebind", "identity closed", "renderer closed", "verification closed", "cancelled"} {
+			t.Run(fmt.Sprintf("checkpoint-%d/%s", checkpoint, change), func(t *testing.T) {
+				b, _ := renderedContactFixture(t, true)
+				if s, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Private Fictional Owner", "owner@example.invalid", ""), b.site.URL); s != 303 {
+					t.Fatal("fixture save failed")
 				}
-			}()
-			select {
-			case <-p.blocked:
-			case <-time.After(5 * time.Second):
-				t.Fatal("actual post-render SDK checkpoint missing")
-			}
-			query := ""
-			switch change {
-			case "durable logout":
-				if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {logoutCSRF}}, b.site.URL); status != 303 {
-					t.Fatal("actual durable logout failed", status)
+				logoutCSRF := b.csrf("/portal/contact")
+				p := &contactWaitProvider{FeatureProvider: memprovider.NewInMemoryProvider(contactRendererFlags(true)), key: "portal-contact-renderer", blockAt: checkpoint, blocked: make(chan struct{}), release: make(chan struct{})}
+				if err := b.flags.SetProviderAndWait(t.Context(), p); err != nil {
+					t.Fatal(err)
 				}
-			case "deleted session":
-				query = `DELETE FROM portal_sessions`
-			case "expired session":
-				query = `UPDATE portal_sessions SET expiry=now()-interval '1 minute'`
-			case "revoked membership":
-				query = `UPDATE portal_memberships SET revoked=true WHERE subject='client-a'`
-			case "operator role":
-				query = `UPDATE portal_memberships SET role='operator' WHERE subject='client-a'`
-			case "client rebind":
-				query = `UPDATE portal_memberships SET client_id='client-b' WHERE subject='client-a'`
-			case "identity closed":
-				key := "portal-identity"
-				p.denied.Store(&key)
-			case "renderer closed":
-				key := "portal-contact-renderer"
-				p.denied.Store(&key)
-			case "verification closed":
-				key := "portal-contact-verification"
-				p.denied.Store(&key)
-			case "cancelled":
-				cancel()
-			}
-			if query != "" {
-				if _, err := b.pool.Exec(t.Context(), query); err != nil {
-					t.Fatal("fixture change failed", err)
+				release := onceRelease(p.release)
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				// A fixture-only request wrapper cancels the actual server context.
+				if change == "cancelled" {
+					b.mu.Lock()
+					h := b.handler
+					b.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r.WithContext(ctx)) })
+					b.mu.Unlock()
 				}
-			}
-			release()
-			select {
-			case got := <-result:
-				if change == "unchanged" {
-					if got.status != 200 || !strings.Contains(got.body, "Private Fictional Owner") {
-						t.Fatal("unchanged actual render failed")
+				type response struct {
+					status int
+					body   string
+				}
+				result := make(chan response, 1)
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					s, body, _ := b.request("GET", "/portal/contact", nil, "")
+					result <- response{s, body}
+				}()
+				defer func() {
+					release()
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(5 * time.Second):
+						t.Error("rendering request did not finish")
 					}
-				} else if got.status != 503 || strings.Contains(got.body, "Private Fictional Owner") || strings.Contains(got.body, "owner@example.invalid") {
-					t.Fatalf("%s released private output or wrong failure: %d", change, got.status)
+				}()
+				select {
+				case <-p.blocked:
+				case <-time.After(5 * time.Second):
+					t.Fatal("actual post-render SDK checkpoint missing")
 				}
-			case <-time.After(5 * time.Second):
-				t.Fatal("rendered HTTP response missing")
-			}
-		})
+				query := ""
+				switch change {
+				case "durable logout":
+					if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {logoutCSRF}}, b.site.URL); status != 303 {
+						t.Fatal("actual durable logout failed", status)
+					}
+				case "deleted session":
+					query = `DELETE FROM portal_sessions`
+				case "expired session":
+					query = `UPDATE portal_sessions SET expiry=now()-interval '1 minute'`
+				case "revoked membership":
+					query = `UPDATE portal_memberships SET revoked=true WHERE subject='client-a'`
+				case "operator role":
+					query = `UPDATE portal_memberships SET role='operator' WHERE subject='client-a'`
+				case "client rebind":
+					query = `UPDATE portal_memberships SET client_id='client-b' WHERE subject='client-a'`
+				case "identity closed":
+					key := "portal-identity"
+					p.denied.Store(&key)
+				case "renderer closed":
+					key := "portal-contact-renderer"
+					p.denied.Store(&key)
+				case "verification closed":
+					key := "portal-contact-verification"
+					p.denied.Store(&key)
+				case "cancelled":
+					cancel()
+				}
+				if query != "" {
+					if _, err := b.pool.Exec(t.Context(), query); err != nil {
+						t.Fatal("fixture change failed", err)
+					}
+				}
+				release()
+				select {
+				case got := <-result:
+					if change == "unchanged" {
+						if got.status != 200 || !strings.Contains(got.body, "Private Fictional Owner") {
+							t.Fatal("unchanged actual render failed")
+						}
+					} else if got.status != 503 || strings.Contains(got.body, "Private Fictional Owner") || strings.Contains(got.body, "owner@example.invalid") {
+						t.Fatalf("%s released private output or wrong failure: %d", change, got.status)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("rendered HTTP response missing")
+				}
+			})
+		}
 	}
 }
 

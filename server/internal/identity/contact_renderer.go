@@ -34,14 +34,20 @@ func (b *browser) contactResponseAllowed(ctx context.Context, original contactAu
 	if original.token == "" || original.client == "" || ctx.Err() != nil || !time.Now().Before(original.deadline) || !b.foundation.ready(ctx) {
 		return false
 	}
-	if verification && !b.foundation.contactVerificationReady(ctx) {
-		return false
-	}
 	if b.renderer != nil {
 		err := b.renderer.Check(ctx)
 		if (rendered && err != nil) || (!rendered && !errors.Is(err, contactrenderer.ErrDisabled)) {
 			return false
 		}
+	}
+	// The release checkpoint itself may wait. Recheck identity and any displayed
+	// confirmation eligibility after it, before loading original durable authority.
+	if verification {
+		if !b.foundation.contactVerificationReady(ctx) {
+			return false
+		}
+	} else if !b.foundation.ready(ctx) {
+		return false
 	}
 	fresh, cancel := context.WithDeadline(context.Background(), original.deadline)
 	defer cancel()
