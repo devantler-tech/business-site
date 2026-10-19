@@ -55,6 +55,7 @@ type startupDiagnostic struct {
 	overflow bool
 }
 
+// Write retains bounded private bytes without blocking the child's stderr copier.
 func (d *startupDiagnostic) Write(data []byte) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -64,6 +65,7 @@ func (d *startupDiagnostic) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
+// label releases only a closed category, never captured child diagnostics.
 func (d *startupDiagnostic) label() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -115,7 +117,9 @@ type actualReadiness struct {
 // launchActualCommand lets the actual child bind once; it never reserves a port.
 func launchActualCommand(t *testing.T, binary, public, listen string, environment []string) *actualCommandProcess {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	// testing cancels its context before Cleanup; the owner still needs its
+	// bounded opportunity to interrupt and reap the child normally.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 45*time.Second)
 	p := &actualCommandProcess{ctx: ctx, cancel: cancel, ready: make(chan actualReadiness, 1), exited: make(chan struct{})}
 	p.command = exec.CommandContext(ctx, binary, "--public", public, "--listen", listen)
 	for _, value := range os.Environ() {
@@ -157,6 +161,7 @@ func launchActualCommand(t *testing.T, binary, public, listen string, environmen
 	return p
 }
 
+// awaitReady observes the complete owned endpoint or a bounded safe refusal.
 func (p *actualCommandProcess) awaitReady() (string, error) {
 	select {
 	case readiness := <-p.ready:
@@ -211,7 +216,8 @@ func (p *actualCommandProcess) stop() error {
 
 func TestActualExecutableListenerOwnership(t *testing.T) {
 	binary, public := buildActualCommand(t)
-	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	var listen net.ListenConfig
+	occupied, err := listen.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal("fixture owned listener failed")
 	}
@@ -237,6 +243,26 @@ func TestActualExecutableListenerOwnership(t *testing.T) {
 	if err := child.stop(); err != nil {
 		t.Fatal("repeated cleanup did not retain the joined result")
 	}
+}
+
+func TestActualExecutableCleanupOwnsChild(t *testing.T) {
+	binary, public := buildActualCommand(t)
+	t.Run("ordinary return drains the still-live child", func(t *testing.T) {
+		child := launchActualCommand(t, binary, public, "127.0.0.1:0", nil)
+		address, err := child.awaitReady()
+		if err != nil {
+			t.Fatal(err)
+		}
+		commandStatus(t, address, "/", 200)
+		// Cleanup is LIFO and testing cancels its own context first. The
+		// process owner must still have its independent drain/reap window.
+		t.Cleanup(func() {
+			if child.ctx.Err() != nil {
+				t.Error("child lifetime ended before owned cleanup")
+			}
+		})
+		// Deliberately return without an explicit stop: registered cleanup owns it.
+	})
 }
 
 func TestActualCommandReadinessAndDiagnostics(t *testing.T) {
