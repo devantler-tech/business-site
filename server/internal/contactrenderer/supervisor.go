@@ -19,7 +19,7 @@ import (
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
-// ErrDisabled selects the retained Go presentation before any response is sent.
+// ErrDisabled selects the retained Go presentation only before work is admitted.
 var ErrDisabled = errors.New("contact renderer disabled")
 
 // ErrUnavailable is the only enabled-failure diagnostic; it contains no input.
@@ -181,12 +181,10 @@ func (s *Supervisor) render(ctx context.Context, id string, frame []byte) (strin
 	}
 	if !s.enabled(ctx) {
 		// A late provider result belongs only to this generation. It must not
-		// kill a replacement started after this request's deadline/reaping.
+		// kill a replacement started after this request's deadline/reaping or
+		// select a success fallback after rendering was already admitted.
 		s.fail(g)
-		if ctx.Err() != nil {
-			return "", ErrUnavailable
-		}
-		return "", ErrDisabled
+		return "", ErrUnavailable
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

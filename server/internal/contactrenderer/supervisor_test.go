@@ -331,13 +331,13 @@ func TestDuplicateReplyInvalidatesACompletedButNotReleasedRender(t *testing.T) {
 	}
 }
 
-func TestPostRenderGateRevocationDiscardsBody(t *testing.T) {
+func TestPostRenderGateRevocationCannotSelectFallback(t *testing.T) {
 	s := fixture(t, "normal", true)
 	p := blocking(t, s, -1, true)
 	defer close(p.release)
 	body, err := s.Render(t.Context(), projection())
-	if body != "" || err != ErrDisabled {
-		t.Fatal("post-render revocation returned a body", err)
+	if body != "" || err != ErrUnavailable {
+		t.Fatal("post-render revocation returned a body or selected fallback", err)
 	}
 	s.Close()
 }

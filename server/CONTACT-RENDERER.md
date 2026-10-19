@@ -40,7 +40,9 @@ The child receives only `LC_ALL=C` and `LANG=C`, not host secrets, Node options,
 credentials or access tokens. Child stderr is discarded; every enabled failure
 returns only `ErrUnavailable`, with no body or private cause. A closed gate
 returns `ErrDisabled` for the retained Go presentation, not an enabled-failure
-success fallback. This is resource/lifecycle supervision, **not an OS sandbox**.
+success fallback. `ErrDisabled` applies only before work is admitted; a gate that
+closes or becomes unhealthy during rendering discards the body and returns
+`ErrUnavailable`. This is resource/lifecycle supervision, **not an OS sandbox**.
 Only the fixed reviewed bundle may be configured here.
 
 ## Remaining HTTP and deployment obligations
