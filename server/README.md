@@ -406,7 +406,9 @@ or a production portal is ready.
 
 The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
 freezes the next candidate's presentation boundary, process limits, comparison
-method and same-record recovery check. The developer renderer and actual HTTP
+method and same-record recovery check. Its
+[comparator amendment](../docs/adr/0015-private-contact-comparator-amendment.md)
+makes both sides run the current shared Go contact authority. The developer renderer and actual HTTP
 composition are available through [their explicit test entrypoint](CONTACT-RENDERER.md#exercise);
 the complete packaged paired measurements and recovery drill remain prerequisites,
 not delivered results or permission to activate the portal.
