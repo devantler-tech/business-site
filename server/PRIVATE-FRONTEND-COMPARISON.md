@@ -29,8 +29,11 @@ GOTOOLCHAIN=local go test ./internal/identity -run '^$' \
   -timeout=180s -json > private-journey.jsonl
 ```
 
-Each benchmark invocation resets the fixture, provisions two fictional clients
-and an operator, performs twenty excluded warmup journeys and records exactly
+Each benchmark invocation resets the fixture and provisions two fictional clients
+and an operator. Before warmups, it must prove that all three retain their own
+simultaneously signed-in workspace and that one client's logout preserves the
+other actors' sessions. This separate isolation preflight is not a measured cycle.
+The benchmark then performs twenty excluded warmup journeys and records exactly
 the requested number of complete journeys using `b.Loop()` (no one-iteration
 calibration report). Require exactly three successful 100-journey reports.
 These repetitions share one test process; they are not independently restarted

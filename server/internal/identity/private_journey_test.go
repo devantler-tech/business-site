@@ -79,7 +79,8 @@ func journeyActors(f *browserFixture) []journeyActor {
 	actors := []journeyActor{{id: "client-a", lang: "en", name: "Alice Fictional", email: "alice@example.invalid"}, {id: "client-b", lang: "da", name: "Bob Fictional", email: "bob@example.invalid"}, {id: "operator", lang: "da"}}
 	for i := range actors {
 		a := &actors[i]
-		a.client = f.site.Client()
+		client := *f.site.Client()
+		a.client = &client
 		a.client.Jar, _ = cookiejar.New(nil)
 		a.client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		role := "client"
@@ -190,6 +191,65 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 	return run
 }
 
+// assertIndependentJourneyActors keeps every actor signed in at once and proves
+// that one client's logout leaves the other sessions intact before measurement.
+func assertIndependentJourneyActors(f *browserFixture, actors []journeyActor) {
+	t := f.t
+	t.Helper()
+	for i := range actors {
+		a := &actors[i]
+		f.client = a.client
+		f.mu.Lock()
+		f.subject = a.id
+		f.mu.Unlock()
+		f.finish(f.start(a.invitation))
+		a.invitation = ""
+	}
+	workspace := func(a journeyActor) string {
+		t.Helper()
+		f.client = a.client
+		status, body, _ := f.request("GET", "/portal/?lang="+a.lang, nil, "")
+		if status != 200 || !strings.Contains(body, a.id) || !strings.Contains(body, `lang="`+a.lang+`"`) {
+			t.Fatal("fictional actor lost its independent signed-in workspace")
+		}
+		return body
+	}
+	logout := func(a journeyActor, body string) {
+		t.Helper()
+		f.client = a.client
+		token := csrfInput.FindStringSubmatch(body)
+		if len(token) != 2 {
+			t.Fatal("independent actor logout token missing")
+		}
+		status, _, _ := f.request("POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, f.site.URL)
+		if status != 303 {
+			t.Fatal("independent actor logout failed")
+		}
+	}
+	for _, a := range actors {
+		workspace(a)
+	}
+	logout(actors[0], workspace(actors[0]))
+	f.client = actors[0].client
+	if status, _, _ := f.request("GET", "/portal/contact", nil, ""); status != 401 {
+		t.Fatal("signed-out client retained contact access")
+	}
+	for _, a := range actors[1:] {
+		logout(a, workspace(a))
+	}
+	var authenticated int
+	if err := f.pool.QueryRow(f.f.ctx, "SELECT count(*) FROM portal_sessions").Scan(&authenticated); err != nil || authenticated != 0 {
+		t.Fatal("independent actor logout left a durable session")
+	}
+}
+
+// TestPrivateJourneyActorsRetainIndependentSessions guards the same real-session
+// isolation preflight that every benchmark invocation must pass.
+func TestPrivateJourneyActorsRetainIndependentSessions(t *testing.T) {
+	f := newBrowserFixture(t)
+	assertIndependentJourneyActors(f, journeyActors(f))
+}
+
 // A benchmark that omits the actual write/reload or logout must not earn a
 // complete measurement merely because its HTTP requests were fast.
 func TestPrivateJourneyPersistsEachClientAndLogsOut(t *testing.T) {
@@ -269,6 +329,7 @@ func TestPrivateJourneyReportRejectsIncompleteEvidence(t *testing.T) {
 func BenchmarkPrivateContactJourney(b *testing.B) {
 	f := newBrowserFixture(b)
 	actors := journeyActors(f)
+	assertIndependentJourneyActors(f, actors)
 	for range 20 {
 		privateContactJourney(f, actors)
 	}
