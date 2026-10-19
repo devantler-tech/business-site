@@ -35,15 +35,15 @@ belongs to the future supervisor, not this codec.
 
 `contact` has these fields only:
 
-| Field | Display contract |
-| --- | --- |
-| `locale` | `en` or `da` |
+| Field                      | Display contract                                                                                                                    |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `locale`                   | `en` or `da`                                                                                                                        |
 | `name`, `email`, `company` | At most 120, 254 and 160 Unicode code points respectively; empty values remain usable for an initial profile or validation recovery |
-| `revision` | Canonical nonnegative signed-64-bit decimal **string**, including the exact maximum; never a JavaScript number |
-| `state` | `normal`, `invalid`, `stale` or `verification` |
-| `verification` | `unverified`, `confirmable` or `verified`; presentation only, never proof or write authority |
-| `csrf` | Nonempty public rendered form nonce, at most 512 code points; never the CSRF cookie or server-side secret |
-| `text` | The closed localized plain-text fields below, each at most 512 code points |
+| `revision`                 | Canonical nonnegative signed-64-bit decimal **string**, including the exact maximum; never a JavaScript number                      |
+| `state`                    | `normal`, `invalid`, `stale` or `verification`                                                                                      |
+| `verification`             | `unverified`, `confirmable` or `verified`; presentation only, never proof or write authority                                        |
+| `csrf`                     | Nonempty public rendered form nonce, at most 512 code points; never the CSRF cookie or server-side secret                           |
+| `text`                     | The closed localized plain-text fields below, each at most 512 code points                                                          |
 
 Display strings must be valid UTF-8 without control characters. The codec does
 not reapply email/write validation to recovery text: actual writes remain Go's
