@@ -385,15 +385,19 @@ func syntheticEvidence() map[string]any {
 
 func syntheticJourney(ordinal int, elapsed int64) map[string]any {
 	samples := []any{}
+	type step struct {
+		phase  string
+		status int
+	}
 	for _, actor := range []string{"client-a", "client-b", "operator"} {
-		phases := []string{"workspace", "contact", "save", "reload", "stale-edit", "recover", "logout", "signed-out"}
-		statuses := []int{200, 200, 303, 200, 409, 200, 303, 401}
+		// Keep each independently specified expected status beside its phase,
+		// rather than copying the baseline validator's parallel arrays.
+		steps := []step{{"workspace", 200}, {"contact", 200}, {"save", 303}, {"reload", 200}, {"stale-edit", 409}, {"recover", 200}, {"logout", 303}, {"signed-out", 401}}
 		if actor == "operator" {
-			phases = []string{"workspace", "operator", "contact-denied", "logout", "signed-out"}
-			statuses = []int{200, 200, 403, 303, 403}
+			steps = []step{{"workspace", 200}, {"operator", 200}, {"contact-denied", 403}, {"logout", 303}, {"signed-out", 403}}
 		}
-		for i, phase := range phases {
-			samples = append(samples, map[string]any{"actor": actor, "phase": phase, "status": statuses[i], "bytes": 100, "elapsed_ns": elapsed + int64(i)*1000})
+		for i, observation := range steps {
+			samples = append(samples, map[string]any{"actor": actor, "phase": observation.phase, "status": observation.status, "bytes": 100, "elapsed_ns": elapsed + int64(i)*1000})
 		}
 	}
 	return map[string]any{"ordinal": ordinal, "sign_in_ns": []int64{elapsed + 10000000, elapsed + 20000000, elapsed + 30000000}, "responses": samples}
