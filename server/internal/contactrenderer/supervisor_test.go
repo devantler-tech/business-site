@@ -184,6 +184,46 @@ func TestDisabledAndWrongTypeStartNoChild(t *testing.T) {
 	}
 }
 
+func TestReleaseCheckpointNeverStartsAChild(t *testing.T) {
+	for _, value := range []any{nil, false, "true", true} {
+		s := fixture(t, "normal", value)
+		err := s.Check(t.Context())
+		if (value == true && err != nil) || (value != true && !errors.Is(err, ErrDisabled)) {
+			t.Fatal("release checkpoint returned an incorrect gate result", err)
+		}
+		s.mu.Lock()
+		started := !s.lastStart.IsZero() || s.g != nil
+		s.mu.Unlock()
+		if started {
+			t.Fatal("release checkpoint started a child")
+		}
+	}
+}
+
+func TestReleaseCheckpointSharesIgnoringProviderCapacity(t *testing.T) {
+	s := fixture(t, "normal", true)
+	p := blocking(t, s, 0, false)
+	defer close(p.release)
+	finished := make(chan error, 8)
+	for range 8 {
+		go func() { finished <- s.Check(t.Context()) }()
+	}
+	for range 8 {
+		awaitSignal(t, p.reached)
+	}
+	if _, err := s.Render(t.Context(), projection()); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("gate checks escaped the shared render capacity")
+	}
+	for range 8 {
+		if err := awaitSignal(t, finished); !errors.Is(err, ErrUnavailable) {
+			t.Fatal("gate check ignored its deadline", err)
+		}
+	}
+	if err := s.Check(t.Context()); !errors.Is(err, ErrUnavailable) || p.calls.Load() != 8 {
+		t.Fatal("timed-out evaluations released retained capacity")
+	}
+}
+
 func TestRealProtocolFailuresReturnNoBodyAndReap(t *testing.T) {
 	for _, mode := range []string{"foreign", "malformed", "oversize", "truncated", "exit"} {
 		t.Run(mode, func(t *testing.T) {
@@ -457,6 +497,9 @@ func TestSDKErrorAndStaleStatesNeverStartAChildEvenWithTrueValues(t *testing.T) 
 			awaitSignal(t, settled)
 			if body, err := s.Render(t.Context(), projection()); body != "" || err != ErrDisabled {
 				t.Fatal("unhealthy SDK admitted rendering", err)
+			}
+			if err := s.Check(t.Context()); !errors.Is(err, ErrDisabled) {
+				t.Fatal("unhealthy SDK passed the release checkpoint", err)
 			}
 			s.mu.Lock()
 			started := !s.lastStart.IsZero()

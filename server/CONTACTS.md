@@ -51,7 +51,10 @@ revocation or the ability to retract a response already received.
 Any contact-profile edit clears confirmation and its timestamp. A recovered
 unsaved draft cannot inherit confirmation from a different saved value.
 The optional control is evaluated before the private read's final authorization
-checkpoint; rendering introduces no later provider wait over private data.
+checkpoint. The explicit developer contact renderer additionally buffers the
+complete response and revalidates original durable session/client authority and
+displayed confirmation eligibility after rendering/SDK waits; normal Go responses
+also require that fresh durable session check before private output.
 Confirmed email never changes sign-in identity, assigns operator access, approves
 an agreement/payment or grants worker execution authority.
 

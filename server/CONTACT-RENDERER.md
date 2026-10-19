@@ -1,9 +1,11 @@
 # Bounded private contact renderer
 
 `internal/contactrenderer` is the developer-only process boundary for
-[ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md), delivered by
-issue #206. It does not change an HTTP handler, durable data, native Go writes,
-the public site or the production runtime package. It does not establish adoption,
+[ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md). The explicit
+`Foundation.DeveloperContactBrowser` composes it with the real contact handler;
+the caller owns and closes the supervisor. Ordinary `Foundation.Browser`, the
+executable, public site and production runtime package retain Go presentation.
+Native Go writes and durable schemas are unchanged. It does not establish adoption,
 performance, maintenance improvement or portal launch readiness.
 
 ## Ownership and bounds
@@ -47,14 +49,23 @@ Only the fixed reviewed bundle may be configured here.
 
 ## Remaining HTTP and deployment obligations
 
-The package returns a buffered body, never permission to send it. Its future
-HTTP caller must revalidate the **original** durable session, original client and
-record scope, identity expiry, membership, and healthy identity/release gates
-after waiting. A newly valid replacement identity cannot authorize an older
-render. Go continues to own redirects, status, origin, CSRF, no-store, form
-destinations, sessions and all writes. Renderer output is not an authority token.
+The package returns a buffered body, never permission to send it. The developer
+HTTP composition retains the original token, principal/deadline and query client
+in Go, never in the projection. It buffers the entire Go-owned private frame,
+rechecks displayed confirmation and identity/release gates, then reloads the
+original durable session on a clean SCS context preserving cancellation/deadlines.
+It rejects absent, expired or replaced identity/deadline data and scopes final
+membership/session SQL to the original client and maintained SCS hashed key.
+Read-only revalidation never commits, refreshes or resurrects a session.
+Initial renderer opt-out retains Go only after the same fresh authority check;
+enabled errors discard all buffered bytes and return generic unavailable.
+These are final checkpoints, not atomic wire-time revocation. Go retains redirects,
+status, origin, CSRF, no-store, form destinations, sessions and all writes.
+Renderer output is not an authority token or a general safe-HTML contract.
 
-There is no environment activation map or production caller. The comparison
+There is no environment activation map or production caller. `Check` re-evaluates
+release state without starting a child and shares the same eight-operation/
+250 ms SDK bound. The comparison
 still needs an actual packaged Node executable and fixed compiler artifact,
 independent two-client/operator HTTP holdouts, the unchanged preregistered paired
 measurement harness, the frozen maintenance task and an actual rollback.
@@ -75,7 +86,8 @@ post-wait revocation, capacity with an ignoring provider, and environment
 isolation. They do not need Node or a database.
 
 From the repository root with Node 24, npm 11, both existing dependency locks
-installed, and the exact Go compiler:
+installed, the exact Go compiler, and BOTH [disposable database fixture
+URLs](README.md#actual-database-tests) already provisioned:
 
 ```sh
 LC_ALL=C node --test web/tests/private-contact-runtime.test.mjs
@@ -83,7 +95,10 @@ LC_ALL=C node --test web/tests/private-contact-runtime.test.mjs
 
 That test builds the actual Svelte artifact in an owned temporary directory,
 exercises its real pipe rejection, and explicitly selects the Go
-`rendererintegration` test with that exact Node executable and worker. Missing
+`rendererintegration` supervisor and authenticated HTTP tests with that exact Node
+executable and worker, restricted PostgreSQL and synthetic TLS broker. Missing
 artifacts fail rather than skip. Ordinary Go/database tests are not coupled to
-ambient Node. Source CI runs the selected integration unconditionally in its
-existing Node-24/Go job. No private output is uploaded as a public artifact.
+ambient Node. Source CI runs the selected integration unconditionally after
+database provisioning in its existing Node-24/Go job. No private output is uploaded
+as a public artifact. Synthetic client/operator proof is not live federation,
+production ingress or authorization to collect customer data.

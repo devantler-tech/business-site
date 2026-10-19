@@ -74,22 +74,29 @@ func parseContact(r *http.Request) (contactData, error) {
 // readContact scopes its actual data query by current server-owned membership.
 // Operators have no client-profile override; no URL/form client ID is accepted.
 func (s *Foundation) readContact(ctx context.Context, p Principal) (contactData, error) {
+	d, _, err := s.readContactScoped(ctx, p)
+	return d, err
+}
+
+// readContactScoped retains the client used by the actual private query, not
+// a replacement membership discovered after a presentation wait.
+func (s *Foundation) readContactScoped(ctx context.Context, p Principal) (contactData, string, error) {
 	client, role, err := s.membership(ctx, p)
 	if err != nil || role != "client" {
-		return contactData{}, ErrDenied
+		return contactData{}, "", ErrDenied
 	}
 	var d contactData
 	err = s.pool.QueryRow(ctx, `SELECT coalesce(c.name,''),coalesce(c.email,''),coalesce(c.company,''),coalesce(c.revision,0),coalesce(c.email_verified,false)
  FROM portal_memberships m LEFT JOIN portal_contacts c ON c.client_id=m.client_id
  WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked`, p.issuer, p.subject, client).Scan(&d.Name, &d.Email, &d.Company, &d.Revision, &d.EmailVerified)
 	if err != nil {
-		return contactData{}, ErrDenied
+		return contactData{}, "", ErrDenied
 	}
 	current, currentRole, check := s.membership(ctx, p)
 	if check != nil || currentRole != "client" || current != client {
-		return contactData{}, ErrDenied
+		return contactData{}, "", ErrDenied
 	}
-	return d, nil
+	return d, client, nil
 }
 
 // saveContact locks current membership against concurrent revocation and uses
@@ -131,32 +138,39 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 
 // contact renders only the current client's stored contact profile.
 func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
-	if !b.requireContactClient(w, r) {
+	client, allowed := b.contactClient(w, r)
+	if !allowed {
 		return
 	}
-	// Optional controls are evaluated before the scoped read's final authority
-	// checkpoint. Rendering cannot introduce a new provider wait after that read.
+	authority := b.contactAuthority(r.Context(), client)
+	// Optional display evaluation precedes the read; the final response also
+	// rechecks original durable authority after any renderer/SDK wait.
 	verification := b.foundation.contactVerificationReady(r.Context())
-	d, err := b.foundation.readContact(r.Context(), b.principal(r.Context()))
-	if err != nil {
+	d, scopedClient, err := b.foundation.readContactScoped(r.Context(), authority.principal)
+	if err != nil || scopedClient != client {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
-	b.renderContact(w, r, 200, d, "", verification)
+	b.renderContact(w, r, 200, d, "", verification, authority)
 }
 
 // requireContactClient preserves the authentication and role-denial responses.
 func (b *browser) requireContactClient(w http.ResponseWriter, r *http.Request) bool {
-	_, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	_, allowed := b.contactClient(w, r)
+	return allowed
+}
+
+func (b *browser) contactClient(w http.ResponseWriter, r *http.Request) (string, bool) {
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
 		b.render(w, r, 401, "error", "", "")
-		return false
+		return "", false
 	}
 	if role != "client" {
 		b.render(w, r, 403, "error", "", "")
-		return false
+		return "", false
 	}
-	return true
+	return client, true
 }
 
 // recoverContact retains safe draft text only when its expected revision still
@@ -188,27 +202,29 @@ func recoverContact(r *http.Request, current contactData) (contactData, bool) {
 // updateContact validates client-only form writes and renders a recoverable
 // rejected edit without resetting its revision or exposing unsafe submitted text.
 func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
-	if !b.requireContactClient(w, r) {
+	client, allowed := b.contactClient(w, r)
+	if !allowed {
 		return
 	}
+	authority := b.contactAuthority(r.Context(), client)
 	d, err := parseContact(r)
 	if err != nil {
-		current, readErr := b.foundation.readContact(r.Context(), b.principal(r.Context()))
-		if readErr != nil {
+		current, scopedClient, readErr := b.foundation.readContactScoped(r.Context(), authority.principal)
+		if readErr != nil || scopedClient != client {
 			b.render(w, r, 503, "unavailable", "", "")
 			return
 		}
 		recovered, conflict := recoverContact(r, current)
 		if conflict {
-			b.renderContact(w, r, 409, recovered, "conflict", false)
+			b.renderContact(w, r, 409, recovered, "conflict", false, authority)
 		} else {
-			b.renderContact(w, r, 400, recovered, "invalid", false)
+			b.renderContact(w, r, 400, recovered, "invalid", false, authority)
 		}
 		return
 	}
 	err = b.foundation.saveContact(r.Context(), b.principal(r.Context()), d)
 	if errors.Is(err, errContactConflict) {
-		b.renderContact(w, r, 409, d, "conflict", false)
+		b.renderContact(w, r, 409, d, "conflict", false, authority)
 		return
 	}
 	if err != nil {
@@ -226,14 +242,7 @@ type contactPageData struct {
 	Verify, VerificationHelp                                                 string
 }
 
-// renderContact escapes bounded profile data using the shared private layout,
-// with localized validation/conflict messages and an honest unverified state.
-func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string, verification bool) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "contact.html", b.contactPage(r, d, problem, verification))
-}
-
+// contactPage constructs localized display data without introducing a wait.
 func (b *browser) contactPage(r *http.Request, d contactData, problem string, verification bool) contactPageData {
 	page := contactPageData{pageData: b.data(r, "contact", "", nosurf.Token(r)), Contact: d, NameLabel: "Your name", EmailLabel: "Contact email", CompanyLabel: "Company (optional)", Save: "Save contact details", Pending: "This contact email is not verified. Saving it does not change your sign-in or authorize an order.", Workspace: "Back to your workspace"}
 	page.Title = "Your contact details"

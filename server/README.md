@@ -55,7 +55,12 @@ responsive layout and System/Light/Dark appearance. Only public CSS/JS are expos
 The five private page templates share their document metadata, header and footer
 through ordinary Go `html/template` definitions in `portal.html`. Each page keeps
 its existing native forms, content and navigation targets. This presentation
-sharing adds no renderer process or new authentication boundary.
+sharing adds no renderer process. The explicit [developer contact
+composition](CONTACT-RENDERER.md) can use the bounded compiled Svelte body; ordinary
+`Browser` and the production executable retain Go with no Node activation mapping.
+Both buffer contact responses and revalidate the original durable session/client
+after waits. A replacement identity, client or extended deadline cannot authorize
+the original response, and a read never refreshes or resurrects a deleted session.
 
 `Invite` and `Revoke` remain **trusted control-plane operations**, not public
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
@@ -401,8 +406,10 @@ or a production portal is ready.
 
 The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
 freezes the next candidate's presentation boundary, process limits, comparison
-method and same-record recovery check. It is a preregistered design, not an
-implemented renderer or permission to activate the portal.
+method and same-record recovery check. The developer renderer and actual HTTP
+composition are available through [their explicit test entrypoint](CONTACT-RENDERER.md#exercise);
+the complete packaged paired measurements and recovery drill remain prerequisites,
+not delivered results or permission to activate the portal.
 
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share
