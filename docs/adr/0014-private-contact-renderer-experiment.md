@@ -99,8 +99,10 @@ trusted child, not a claim of an operating-system security sandbox.
 
 Freeze these transport bounds before implementation:
 
-- One in-flight render, no internal waiting queue; excess requests receive a
-  generic 503. At most one renderer process exists, including during restart.
+- At most eight in-flight renders, including the child's pending work; no
+  unbounded waiting queue. Excess requests receive a generic 503. One pipe reader
+  dispatches bounded responses to the matching request; no request reads another
+  request's output. At most one renderer process exists, including during restart.
 - Versioned, length-prefixed UTF-8 JSON over anonymous stdin/stdout pipes; maximum
   request 8 KiB and output envelope 64 KiB, checked before allocation/read growth.
   Require exactly one response with the fresh opaque correlation ID, correct
@@ -108,8 +110,9 @@ Freeze these transport bounds before implementation:
   malformed/trailing data, missing/empty body and mismatched IDs.
 - A render has at most 250 ms, including cold start, and honors earlier request
   cancellation/deadlines. A timeout, cancellation, protocol error, output overflow
-  or child exit discards the whole buffer, kills and reaps the child, and releases
-  no candidate bytes. Restart only on a later eligible request, at most once per
+  or child exit discards all affected pending buffers, kills and reaps the child,
+  and releases no candidate bytes. Invalidate the whole process generation so a
+  late response cannot be delivered to a replacement request. Restart only on a later eligible request, at most once per
   second, not an automatic retry loop. There is no silent success fallback after
   an enabled renderer fails.
 - Buffer the complete private document in Go before committing headers. Render
@@ -157,6 +160,8 @@ or enlarge the task after seeing results. No source-count improvement means this
 candidate cannot justify adoption under the existing protocol, even if fast.
 
 Keep independent adversarial holdouts separate from the normal tuning workload:
+two clients opening their contact pages concurrently while the operator reads
+their workspace (all successful, without cross-delivery or a new 503);
 cross-client access; revocation/rebinding during render; forged identity/state;
 foreign/missing/duplicate CSRF; int64 boundary and stale revisions; expiry/logout;
 closed/error/stale flags; cancellation, malformed/oversized/late/foreign responses;
