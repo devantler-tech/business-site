@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { once } from "node:events";
+import { PassThrough } from "node:stream";
 import { disclosureFixture, privateDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
 
 const root = process.argv[2];
@@ -29,7 +30,7 @@ test("packaged migration job refuses missing private input without serving", () 
   assert.equal(result.stderr, "portal schema migration failed\n");
 });
 
-test("packaged source identity, EN/DA public paths and reserved private routes", async () => {
+test("packaged source identity, fragmented readiness, EN/DA paths and private routes", async () => {
   const identity = JSON.parse(execFileSync(binary, ["--version"], { encoding: "utf8" }));
   const receipt = JSON.parse(readFileSync(path.join(directory, "build-receipt.json")));
   assert.deepEqual(identity, receipt);
@@ -59,8 +60,25 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
-    let logs = "";
+    // Force real process output across two consumer events. Resolving on the
+    // prefix alone must fail before the address and newline have arrived.
+    const stdout = new PassThrough();
+    let startup = "";
+    let split = false;
     child.stdout.on("data", (b) => {
+      if (split) {
+        stdout.write(b);
+        return;
+      }
+      startup += b;
+      if (!startup.includes("\n")) return;
+      split = true;
+      const prefix = "runtime ready;".length;
+      stdout.write(startup.slice(0, prefix));
+      queueMicrotask(() => stdout.write(startup.slice(prefix)));
+    });
+    let logs = "";
+    stdout.on("data", (b) => {
       logs += b;
     });
     child.stderr.on("data", (b) => {
@@ -74,8 +92,8 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
           clearTimeout(timeout);
           reject(e);
         });
-        child.stdout.on("data", () => {
-          if (logs.includes("runtime ready;")) {
+        stdout.on("data", () => {
+          if (/^runtime ready;[^\n]*\n/u.test(logs)) {
             clearTimeout(timeout);
             resolve();
           }
