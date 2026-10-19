@@ -24,7 +24,7 @@ Render failures expose a generic error without the original exception or cause.
 
 ## Building and testing
 
-Use Node 24, npm 11 and `LC_ALL=C`, after installing both existing lockfiles:
+Use Node 24, npm 11 and `LC_ALL=C`, after installing both existing dependency lock files:
 
 ```sh
 npm ci
