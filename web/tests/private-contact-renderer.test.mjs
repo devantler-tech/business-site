@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildContactRenderer } from "../web/private-contact/build.mjs";
+import { buildContactRenderer } from "../private-contact/build.mjs";
 
 let artifact;
 let renderContact;
@@ -146,7 +146,7 @@ test("an actual render failure exposes only the generic error", () => {
 });
 
 test("the private artifact retains the upstream runtime license texts", () => {
-  const web = fileURLToPath(new URL("../web/", import.meta.url));
+  const web = fileURLToPath(new URL("../", import.meta.url));
   for (const [name, license] of [["svelte", "LICENSE.md"], ["clsx", "license"], ["esm-env", "LICENSE"]]) {
     assert.equal(readFileSync(join(artifact.directory, "notices", name, license), "utf8"), readFileSync(join(web, "node_modules", name, license), "utf8"));
   }
@@ -157,8 +157,8 @@ test("an actual compiler failure removes only the builder's temporary artifact",
   const temporary = join(workspace, "temporary");
   try {
     mkdirSync(temporary);
-    cpSync(fileURLToPath(new URL("../web/private-contact/build.mjs", import.meta.url)), join(workspace, "build.mjs"));
-    symlinkSync(fileURLToPath(new URL("../web/node_modules", import.meta.url)), join(workspace, "node_modules"), "dir");
+    cpSync(fileURLToPath(new URL("../private-contact/build.mjs", import.meta.url)), join(workspace, "build.mjs"));
+    symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(workspace, "node_modules"), "dir");
     writeFileSync(join(workspace, "entry.mjs"), "export function invalid( {\n");
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
       import { buildContactRenderer } from "./build.mjs";

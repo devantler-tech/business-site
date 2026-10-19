@@ -29,7 +29,7 @@ Use Node 24, npm 11 and `LC_ALL=C`, after installing both existing dependency lo
 ```sh
 npm ci
 npm --prefix web ci
-node --test scripts/private-contact-renderer.test.mjs
+node --test web/tests/private-contact-renderer.test.mjs
 ```
 
 `buildContactRenderer()` in `build.mjs` invokes the pinned Vite/Svelte server

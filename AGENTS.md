@@ -83,7 +83,7 @@ npm --prefix web ci
 npm run build
 node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs
 bash scripts/check-svelte-frontend.sh
-node --test scripts/private-contact-renderer.test.mjs
+node --test web/tests/private-contact-renderer.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
