@@ -32,6 +32,8 @@ type journeyReport struct {
 	Runs                 []journeyRun
 }
 
+// completeJourneyReport admits only complete, ordered observations with fixed
+// public labels; incomplete runs cannot earn a baseline or leak response data.
 func completeJourneyReport(runs []journeyRun, expected int) (journeyReport, error) {
 	if expected <= 0 || len(runs) != expected {
 		return journeyReport{}, errors.New("incomplete journey count")
@@ -70,6 +72,8 @@ type journeyActor struct {
 	client                            *http.Client
 }
 
+// journeyActors gives each fictional identity its own invitation and cookie jar
+// while retaining one shared application and disposable database.
 func journeyActors(f *browserFixture) []journeyActor {
 	f.t.Helper()
 	actors := []journeyActor{{id: "client-a", lang: "en", name: "Alice Fictional", email: "alice@example.invalid"}, {id: "client-b", lang: "da", name: "Bob Fictional", email: "bob@example.invalid"}, {id: "operator", lang: "da"}}
@@ -89,6 +93,8 @@ func journeyActors(f *browserFixture) []journeyActor {
 
 var contactRevisionInput = regexp.MustCompile(`name="revision" value="([0-9]+)"`)
 
+// journeyForm reads the actual native form's CSRF token and durable revision;
+// the measured journey must not manufacture either value.
 func journeyForm(f *browserFixture, body string) (string, int64) {
 	f.t.Helper()
 	token := csrfInput.FindStringSubmatch(body)
@@ -103,6 +109,8 @@ func journeyForm(f *browserFixture, body string) (string, int64) {
 	return html.UnescapeString(token[1]), n
 }
 
+// privateContactJourney exercises real sign-in, authorized persistence, stale-edit
+// recovery and logout, retaining only bounded metadata for each response phase.
 func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun {
 	f.t.Helper()
 	run := journeyRun{}

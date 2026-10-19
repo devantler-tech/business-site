@@ -65,6 +65,8 @@ func fixtureBroker(t *testing.T) brokerFixture {
 	return brokerFixture{b, key, issuer, ctx}
 }
 
+// token signs synthetic broker claims, allowing deliberate claim overrides for
+// adversarial tests without contacting a real identity provider.
 func (f brokerFixture) token(t testing.TB, subject, nonce string, changes map[string]any) string {
 	t.Helper()
 	claims := map[string]any{"iss": f.issuer, "sub": subject, "aud": "portal-fixture", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": nonce, "email": "same@example.invalid", "groups": []string{"operator"}}
@@ -114,6 +116,8 @@ func TestBrokerRejectsInvalidProofs(t *testing.T) {
 	}
 }
 
+// migrationDB requires the explicit disposable database and migration role,
+// rejecting an absent or differently scoped connection before schema changes.
 func migrationDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_MIGRATION_DATABASE_URL")
@@ -132,6 +136,8 @@ func migrationDB(t testing.TB) *pgxpool.Pool {
 	return pool
 }
 
+// fixtureDB migrates and resets only the named disposable database, then returns
+// its restricted runtime pool. Callers must not run database fixtures in parallel.
 func fixtureDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_DATABASE_URL")
@@ -165,6 +171,8 @@ func enabled(t *testing.T, pool *pgxpool.Pool, f brokerFixture) *Foundation {
 	return New(pool, f.broker, flagAPI(t, true).NewClient())
 }
 
+// flagAPI owns an isolated provider and its cleanup so feature states cannot
+// escape this fixture into another test or benchmark.
 func flagAPI(t testing.TB, value any) *openfeature.EvaluationAPI {
 	t.Helper()
 	api := isolated.NewAPI()
@@ -173,6 +181,8 @@ func flagAPI(t testing.TB, value any) *openfeature.EvaluationAPI {
 	return api
 }
 
+// setFlag waits for the fixture provider to expose the requested identity gate;
+// nil deliberately omits the flag instead of treating absence as enabled.
 func setFlag(t testing.TB, api *openfeature.EvaluationAPI, value any) {
 	t.Helper()
 	flags := map[string]memprovider.InMemoryFlag{}
