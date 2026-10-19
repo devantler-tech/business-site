@@ -145,12 +145,16 @@ current Go checks independently of rendered controls.
 ## Frozen maintenance task and protected holdouts
 
 Before candidate code, use this concrete bilingual presentation task: change the
-shared private appearance label to “Appearance” / “Udseende”, and add an accessible
-contact-field hint explaining that saved details can be revised later. Inventory
+shared private appearance label from “Appearance” / “Udseende” to “Colour theme” /
+“Farvetema”. Add a name-field hint, “You can update these details later.” /
+“Du kan ændre oplysningerne senere.”, linked through that input's
+`aria-describedby`, preserving its limits and the email's existing help. Inventory
 the actual rendered page families `portal.html`, `contact.html`, `requests.html`,
 `triage.html`, `credits.html`, both locales and each relevant error state.
-Count independently edited presentation sources and declarations, not generated
-files, lines removed or framework popularity. Apply the identical requested change
+The objective counts authored presentation files that independently need edits
+for this change; report individual changed declarations separately, not as an
+alternative winning metric. Do not count generated files, lines removed or
+framework popularity. Apply the identical requested change
 to separate baseline/candidate trial branches and prove every affected page.
 
 The baseline already has one common frame. Retaining that frame plus a Svelte
