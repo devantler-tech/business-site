@@ -110,7 +110,7 @@ test(
       },
     );
     assert.equal(child.status, 0, child.stdout + child.stderr);
-    for (const name of ["HTTP", "Authority", "OptOutAuthority", "FallbackAndFailure"]) {
+    for (const name of ["HTTP", "Authority", "OptOutAuthority", "FallbackAndFailure", "Host"]) {
       assert.match(child.stdout, new RegExp(`^--- PASS: TestCompiledContact${name} \\([\\d.]+s\\)$`, "mu"));
     }
   },

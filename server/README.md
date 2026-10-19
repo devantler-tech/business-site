@@ -373,10 +373,15 @@ GOTOOLCHAIN=local go mod verify
 GOTOOLCHAIN=local go vet ./...
 bash ../scripts/check-portal-quality.sh
 GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
+GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
-The Go database suite does not require Node. Separately, use Node 24 from the
+The Go database suite and explicit trial-host integration do not require Node.
+The real-process integration is selected separately so it retains its complete
+refusal/journey controls without charging startup to the ordinary package's
+existing 90-second budget. Source CI requires both, with no conditional or error-tolerant
+step. Separately, use Node 24 from the
 repository root to run `node --test scripts/portal-request-limits.test.mjs` against
 the actual served browser asset. The required source CI job explicitly sets up
 Node 24 and runs all six controls unconditionally; its runtime contract rejects
@@ -414,6 +419,11 @@ the opt-in, real Go contact-journey benchmark. It uses these same disposable
 database and synthetic TLS broker fixtures, separately from the correctness suite.
 Its raw measurements are a comparator, not evidence that a Svelte private renderer
 or a production portal is ready.
+
+The explicit [trial host](CONTACT-TRIAL-HOST.md) launches that maintained authority
+as a separate developer-only process over a retained loopback TLS listener and a
+restricted disposable database. It is not the complete paired comparison runner;
+its process restart controls do not decide the private frontend or activate it.
 
 The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
 freezes the next candidate's presentation boundary, process limits, comparison

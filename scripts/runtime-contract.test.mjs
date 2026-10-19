@@ -54,6 +54,15 @@ function assertRuntime(workflow) {
     (s) =>
       s.run === "psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql",
   );
+  const host = steps.findIndex(
+    (s) =>
+      s.run ===
+        "go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s" &&
+      s["working-directory"] === "server",
+  );
+  const ordinary = steps.findIndex(
+    (s) => s.run === "go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s",
+  );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
   );
@@ -85,6 +94,14 @@ function assertRuntime(workflow) {
       renderer < build,
     "run the actual compiled renderer with the exact Go and Node compilers before packaging",
   );
+  assert.ok(
+    host > database && host < renderer,
+    "run the complete real Go host controls separately after database provision",
+  );
+  assert.ok(
+    ordinary > renderer && ordinary < build,
+    "retain the complete ordinary Go suite and its original timeout",
+  );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
     browser > install && browser < build,
@@ -98,6 +115,8 @@ function assertRuntime(workflow) {
     install,
     compilerInstall,
     database,
+    host,
+    ordinary,
     renderer,
     browser,
     inventory,
@@ -192,6 +211,71 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "missing complete ordinary Go suite",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("go test -race -coverprofile="),
+      );
+    },
+  ],
+  [
+    "narrowed ordinary Go suite",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("./...", "./internal/contacttrialhost");
+    },
+  ],
+  [
+    "conditional ordinary Go suite",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile=")).if = "false";
+    },
+  ],
+  [
+    "ignored ordinary Go suite failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))[
+        "continue-on-error"
+      ] = true;
+    },
+  ],
+  [
+    "missing real Go host controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      );
+    },
+  ],
+  [
+    "conditional real Go host controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      ).if = "false";
+    },
+  ],
+  [
+    "ignored real Go host failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      )["continue-on-error"] = true;
+    },
+  ],
+  [
+    "Go host controls before database provision",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      steps.unshift(
+        ...steps.splice(
+          steps.findIndex((s) => s.run?.startsWith("go test -race -tags=contacttrialintegration")),
+          1,
+        ),
+      );
+    },
+  ],
   [
     "missing renderer database provision",
     (w) => {

@@ -56,7 +56,7 @@ test('the pinned checker examines the complete tracked server source', () => {
 });
 
 test('valid Danish copy and project API names pass the real checker', () => {
-  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contactrenderer contacttrial rendererintegration autofocus.');
+  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contactrenderer contacttrial contacttrialintegration rendererintegration autofocus.');
   assert.equal(result.status, 0, result.output);
 });
 

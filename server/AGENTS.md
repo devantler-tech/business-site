@@ -1,6 +1,11 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The explicit developer-only `cmd/contact-trial-host` uses an inherited retained
+loopback TLS listener and bounded private setup pipe. Read `CONTACT-TRIAL-HOST.md`.
+Keep migration, invitations, synthetic broker and collection outside this child;
+preserve the maintained authority and production runtime graph. Its real-process
+correctness controls are not comparative measurements or portal activation.
 The explicit offline `cmd/contact-trial-report` tool analyzes only the frozen
 paired timing format. Read `CONTACT-TRIAL-REPORT.md` before changing it. Preserve
 whole-journey pairing, failure retention, closed bounded input and private output.
@@ -16,6 +21,11 @@ extend a session on a read, pass identity/client
 selectors to the child, or treat framed output as authority or arbitrary safe HTML.
 The selected Node-24 renderer integration needs BOTH disposable PostgreSQL fixture
 URLs and real compiled artifacts; ordinary Go/database tests do not need Node.
+Run the real Go trial host separately with `go test -race -tags=contacttrialintegration
+./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s`. Source CI
+requires this step after database provision, alongside the complete ordinary suite
+and compiled renderer integration. Preserve each package's existing 90-second bound;
+never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,
@@ -67,7 +77,7 @@ The CSpell glossary records audited current Danish UI copy and technical names;
 it is not a complete Danish dictionary. Keep default checking enabled and reject
 English/Danish typos. Three exact encoded paths are scoped only to their actual
 refusal fixture, never admitted as ordinary words or whole-file exclusions.
-The credential scanner retains its complete recommended preset. Only five fully
+The credential scanner retains its complete recommended preset. Only nine fully
 anchored fictional database strings are recognized; altered host, password, role
 or database still fails. Preserve the independent private-key control and never
 print source content or detected credential values in test diagnostics. The

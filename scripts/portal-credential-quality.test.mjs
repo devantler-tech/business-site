@@ -17,6 +17,10 @@ const examples = [
   ["postgres://portal_runtime:fixture-only@localhost:5432/portal_identity_test?sslmode=disable'", 'server/README.md'],
   ['postgres://runtime:private@db.example.invalid/app?sslmode=verify-full",', 'server/internal/runtimeapp/config_test.go'],
   ['postgres://runtime:private@db.example.invalid/app?sslmode=disable",', 'server/internal/runtimeapp/config_test.go'],
+  ['postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_trial_0123456789abcdef0123456789abcdef?sslmode=disable",', 'server/internal/contacttrialhost/config_test.go'],
+  ['postgres://portal_runtime:fixture-only@127.0.0.1:%d/%s?sslmode=disable",', 'server/internal/identity/contact_trial_host_test.go'],
+  ['postgres://portal_runtime:fixture-only@127.0.0.1:55444,remote.example.invalid:5432/portal_identity_test?sslmode=disable",', 'server/internal/identity/contact_trial_host_test.go'],
+  ['postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_identity_test?sslmode=disable&options=-c+role=portal_runtime",', 'server/internal/identity/contact_trial_host_test.go'],
 ];
 const exactPattern = value => `/^${value.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$/u`;
 const expected = {
@@ -32,11 +36,11 @@ function scan(files, candidate = config) {
     const configFile = join(directory, '.secretlintrc.json');
     writeFileSync(configFile, JSON.stringify(candidate), 'utf8');
     const result = spawnSync('secretlint', ['--secretlintrc', configFile, '--format', 'json', ...files], {
-      cwd: root, encoding: 'utf8', timeout: 30000,
+      cwd: root, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024,
     });
     assert.ifError(result.error);
     assert.equal(result.signal, null);
-    assert.ok(result.status === 0 || result.status === 1, result.stdout + result.stderr);
+    assert.ok(result.status === 0 || result.status === 1, 'credential scanner failed; private diagnostics withheld');
     // Preserve every finding and file identity without printing complete source
     // or the detected credential itself into a public CI failure diagnostic.
     const results = JSON.parse(result.stdout).map(entry => ({
@@ -60,7 +64,7 @@ function fixture(content, callback) {
   }
 }
 
-test('only five complete fictional strings are recognized; the full preset is retained', () => {
+test('only nine complete fictional strings are recognized; the full preset is retained', () => {
   assert.deepEqual(config, expected);
   for (const [value, file] of examples) assert.ok(readFileSync(join(root, file), 'utf8').includes(value));
 });
@@ -79,6 +83,25 @@ test('the actual pinned scanner examines the complete tracked server', () => {
   assert.equal(result.status, 0, JSON.stringify(result.results.filter(entry => entry.messages.length)));
 });
 
+test('scanner retains complete findings beyond the default subprocess buffer', () => {
+  fixture('ordinary public documentation\n'.repeat(50000), file => {
+    const result = scan([file]);
+    assert.equal(result.status, 0);
+    assert.equal(result.results.length, 1);
+    assert.deepEqual(result.results[0].messages, []);
+  });
+});
+
+test('scanner failures stay closed without echoing private diagnostics', () => {
+  const marker = 'fictional-private-diagnostic';
+  fixture(marker, file => {
+    assert.throws(() => scan([file], { rules: [{ id: marker }] }), error => {
+      assert.ok(!error.message.includes(marker), 'scanner failure echoed private data');
+      return true;
+    });
+  });
+});
+
 for (const [index, [value]] of examples.entries()) {
   test(`fictional example ${index + 1} passes but fails without its exact recognition`, () => fixture(value, file => {
     assert.equal(scan([file]).status, 0);
@@ -88,14 +111,17 @@ for (const [index, [value]] of examples.entries()) {
   }));
   for (const part of ['host', 'password', 'role', 'database']) {
     test(`changed ${part} beside fictional example ${index + 1} still fails`, () => {
-      const suffix = value.endsWith("'") ? "'" : '",';
-      const uri = new URL(value.slice(0, -suffix.length));
-      assert.equal(uri.href + suffix, value, 'serialization must not change the unmutated control');
-      if (part === 'host') uri.hostname = 'changed.example.invalid';
-      else if (part === 'password') uri.password = 'DistinctFixture83';
-      else if (part === 'role') uri.username = 'changed_runtime';
-      else uri.pathname = '/changed_database';
-      fixture(uri.href + suffix, file => {
+      // Preserve literal format placeholders and intentionally invalid multi-host
+      // refusal inputs too; URL serialization cannot represent those fixtures.
+      const fields = /^(postgres:\/\/)([^:]+):([^@]+)@([^/]+)\/([^?]+)(\?.*)$/u.exec(value);
+      assert.ok(fields);
+      const [, scheme, role, password, host, database, query] = fields;
+      const changed = scheme + (part === 'role' ? 'changed_runtime' : role) + ':'
+        + (part === 'password' ? 'DistinctFixture83' : password) + '@'
+        + (part === 'host' ? 'changed.example.invalid' : host) + '/'
+        + (part === 'database' ? 'changed_database' : database) + query;
+      assert.notEqual(changed, value);
+      fixture(changed, file => {
         const result = scan([file]);
         assert.equal(result.status, 1);
         assert.ok(result.results.some(entry => entry.messages.some(message => message.ruleId === '@secretlint/secretlint-rule-database-connection-string')));
