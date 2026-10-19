@@ -1,6 +1,11 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The explicit offline `cmd/contact-trial-report` tool analyzes only the frozen
+paired timing format. Read `CONTACT-TRIAL-REPORT.md` before changing it. Preserve
+whole-journey pairing, failure retention, closed bounded input and private output.
+Its overall decision remains inconclusive; it neither collects trial evidence nor
+activates portal behavior. ADR 0014/0015 and the full #213 runner remain separate.
 The explicit `DeveloperContactBrowser` composes only the private contact experiment
 with a caller-owned fixed `contactrenderer.Supervisor`; `Browser` and the executable
 retain Go presentation. Read `CONTACT-RENDERER.md`. Buffer the complete frame before
