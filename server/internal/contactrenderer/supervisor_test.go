@@ -98,10 +98,16 @@ func peerResponse(request map[string]any, mode string) {
 	var prefix [4]byte
 	binary.BigEndian.PutUint32(prefix[:], uint32(len(payload)))
 	frame := append(prefix[:], payload...)
-	if mode == "duplicate" {
-		frame = append(frame, frame...)
-	}
 	_, _ = os.Stdout.Write(frame)
+	if mode == "controlled-duplicate" {
+		// Let the parent retain the actual generation at the post-render gate
+		// before the second response can invalidate and reap that generation.
+		var release [1]byte
+		if _, err := io.ReadFull(os.Stdin, release[:]); err != nil || release[0] != 1 {
+			return
+		}
+		_, _ = os.Stdout.Write(frame)
+	}
 }
 
 func projection() renderwire.Contact {
@@ -266,7 +272,7 @@ type blockingProvider struct {
 	openfeature.FeatureProvider
 	calls    atomic.Int32
 	blockAt  int32
-	reached  chan int32
+	reached  chan context.Context
 	release  chan struct{}
 	offAfter bool
 }
@@ -274,7 +280,7 @@ type blockingProvider struct {
 func (p *blockingProvider) BooleanEvaluation(ctx context.Context, key string, fallback bool, evaluation openfeature.FlattenedContext) openfeature.BoolResolutionDetail {
 	n := p.calls.Add(1)
 	if p.blockAt == 0 || n == p.blockAt {
-		p.reached <- n
+		p.reached <- ctx
 		<-p.release
 	}
 	if p.offAfter && n >= 2 {
@@ -289,7 +295,7 @@ func blocking(t *testing.T, s *Supervisor, blockAt int32, offAfter bool) *blocki
 		FeatureProvider: memprovider.NewInMemoryProvider(map[string]memprovider.InMemoryFlag{
 			"portal-contact-renderer": {State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}},
 		}),
-		blockAt: blockAt, reached: make(chan int32, 8), release: make(chan struct{}), offAfter: offAfter,
+		blockAt: blockAt, reached: make(chan context.Context, 8), release: make(chan struct{}), offAfter: offAfter,
 	}
 	s.flags = providerAPI(t, p).NewClient()
 	return p
@@ -354,19 +360,54 @@ func retainEightEvaluations(t *testing.T, s *Supervisor, call func() error) (*bl
 }
 
 func TestDuplicateReplyInvalidatesACompletedButNotReleasedRender(t *testing.T) {
-	s := fixture(t, "duplicate", true)
+	for _, mode := range []string{"normal", "controlled-duplicate"} {
+		t.Run(mode, func(t *testing.T) {
+			s := fixture(t, mode, true)
+			p := blocking(t, s, 2, false)
+			var release sync.Once
+			defer release.Do(func() { close(p.release) })
+			finished := make(chan result, 1)
+			go func() { body, err := s.Render(t.Context(), projection()); finished <- result{body: body, err: err} }()
+			ctx := awaitSignal(t, p.reached)
+			s.mu.Lock()
+			g := s.g
+			s.mu.Unlock()
+			if g == nil {
+				t.Fatal("held post-render evaluation has no live generation")
+			}
+			if mode == "controlled-duplicate" {
+				select {
+				case g.writes <- []byte{1}: // Test-only peer handshake, not an application frame.
+				case <-g.done:
+					t.Fatal("generation ended before duplicate was released")
+				case <-ctx.Done():
+					t.Fatal("duplicate release exceeded the original render deadline")
+				}
+				awaitSignal(t, g.done)
+				if ctx.Err() != nil {
+					t.Fatal("render deadline concealed missing duplicate invalidation")
+				}
+			}
+			release.Do(func() { close(p.release) })
+			value := awaitSignal(t, finished)
+			if mode == "normal" {
+				if value.body != "<main>Example Client</main>" || value.err != nil {
+					t.Fatal("healthy completed render did not survive the held gate")
+				}
+			} else if value.body != "" || value.err != ErrUnavailable {
+				t.Fatal("duplicate response escaped")
+			}
+		})
+	}
+}
+
+func TestPostRenderProviderCannotHoldCallerPastDeadline(t *testing.T) {
+	s := fixture(t, "normal", true)
 	p := blocking(t, s, 2, false)
 	defer close(p.release)
 	finished := make(chan result, 1)
 	go func() { body, err := s.Render(t.Context(), projection()); finished <- result{body: body, err: err} }()
 	awaitSignal(t, p.reached)
-	s.mu.Lock()
-	g := s.g
-	s.mu.Unlock()
-	if g == nil {
-		t.Fatal("no real generation")
-	}
-	awaitSignal(t, g.done)
 	// The API must finish at its deadline even if the post-render SDK is stuck.
 	value := awaitSignal(t, finished)
 	if value.body != "" || value.err != ErrUnavailable {

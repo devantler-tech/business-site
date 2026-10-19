@@ -2,10 +2,10 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
-import { createServer } from "node:net";
 import path from "node:path";
 import test from "node:test";
 import { once } from "node:events";
+import { PassThrough } from "node:stream";
 import { disclosureFixture, privateDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
 
 const root = process.argv[2];
@@ -30,7 +30,7 @@ test("packaged migration job refuses missing private input without serving", () 
   assert.equal(result.stderr, "portal schema migration failed\n");
 });
 
-test("packaged source identity, EN/DA public paths and reserved private routes", async () => {
+test("packaged source identity, fragmented readiness, EN/DA paths and private routes", async () => {
   const identity = JSON.parse(execFileSync(binary, ["--version"], { encoding: "utf8" }));
   const receipt = JSON.parse(readFileSync(path.join(directory, "build-receipt.json")));
   assert.deepEqual(identity, receipt);
@@ -50,23 +50,35 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
     assert.equal(served.PublicDigest, identity.PublicDigest);
     assert.match(served.EffectivePublicDigest, /^[0-9a-f]{64}$/);
     assert.equal(served.EffectivePublicDigest === identity.PublicDigest, !projection);
-    const address = createServer();
-    address.listen(0, "127.0.0.1");
-    await once(address, "listening");
-    const port = address.address().port;
-    await new Promise((resolve) => address.close(resolve));
     const env = { ...process.env };
     for (const name of Object.keys(env)) if (name.startsWith("PORTAL_")) delete env[name];
     const child = spawn(
       binary,
-      ["--public", path.join(directory, "public"), ...disclosureArgs, "--listen", `127.0.0.1:${port}`],
+      ["--public", path.join(directory, "public"), ...disclosureArgs, "--listen", "127.0.0.1:0"],
       {
         env,
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
-    let logs = "";
+    // Force real process output across two consumer events. Resolving on the
+    // prefix alone must fail before the address and newline have arrived.
+    const stdout = new PassThrough();
+    let startup = "";
+    let split = false;
     child.stdout.on("data", (b) => {
+      if (split) {
+        stdout.write(b);
+        return;
+      }
+      startup += b;
+      if (!startup.includes("\n")) return;
+      split = true;
+      const prefix = "runtime ready;".length;
+      stdout.write(startup.slice(0, prefix));
+      queueMicrotask(() => stdout.write(startup.slice(prefix)));
+    });
+    let logs = "";
+    stdout.on("data", (b) => {
       logs += b;
     });
     child.stderr.on("data", (b) => {
@@ -80,8 +92,8 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
           clearTimeout(timeout);
           reject(e);
         });
-        child.stdout.on("data", () => {
-          if (logs.includes("runtime ready;")) {
+        stdout.on("data", () => {
+          if (/^runtime ready;[^\n]*\n/u.test(logs)) {
             clearTimeout(timeout);
             resolve();
           }
@@ -91,6 +103,10 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
           reject(new Error("Actual package exited before readiness."));
         });
       });
+      const readiness = /^runtime ready; listen=127\.0\.0\.1:([1-9][0-9]{0,4}); private routes remain independently gated\n$/.exec(logs);
+      assert.ok(readiness, "Actual package must identify its owned loopback listener.");
+      const port = Number(readiness[1]);
+      assert.ok(port <= 65535, "Actual package listener port must be valid.");
       const origin = `http://127.0.0.1:${port}`;
       for (const route of ["/", "/da/", "/projects/", "/blog/"]) {
         const response = await fetch(origin + route, { redirect: "manual" });
@@ -134,7 +150,7 @@ test("packaged source identity, EN/DA public paths and reserved private routes",
       }
       assert.equal((await fetch(origin, { method: "POST" })).status, 405);
       assert.equal(await (await fetch(origin + "/healthz")).text(), "ok\n");
-      assert.equal(logs.trim(), "runtime ready; private routes remain independently gated");
+      assert.equal(logs.trim(), `runtime ready; listen=127.0.0.1:${port}; private routes remain independently gated`);
     } finally {
       child.kill("SIGTERM");
       const timer = setTimeout(() => child.kill("SIGKILL"), 12000);
