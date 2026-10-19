@@ -345,6 +345,9 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: .
         run: npm --prefix web ci
+      - name: Verify the bounded Go renderer with the actual compiled Svelte child
+        working-directory: .
+        run: node --test web/tests/private-contact-runtime.test.mjs
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs

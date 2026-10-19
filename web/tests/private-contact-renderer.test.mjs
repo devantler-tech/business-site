@@ -164,6 +164,7 @@ test("an actual compiler failure removes only the builder's temporary artifact",
   try {
     mkdirSync(temporary);
     cpSync(fileURLToPath(new URL("../private-contact/build.mjs", import.meta.url)), join(workspace, "build.mjs"));
+    cpSync(fileURLToPath(new URL("../private-contact/worker.mjs", import.meta.url)), join(workspace, "worker.mjs"));
     symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(workspace, "node_modules"), "dir");
     writeFileSync(join(workspace, "entry.mjs"), "export function invalid( {\n");
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", `

@@ -3,8 +3,10 @@
 This developer-only artifact implements the contact presentation selected by
 [ADR 0014](../../docs/adr/0014-private-contact-renderer-experiment.md).
 It is not connected to an HTTP handler or a production package. The existing
-Go contact page remains the only runtime path. The complete supervised-process
-experiment and its measurements remain in business-site issue #199.
+Go contact page remains the only HTTP path. The
+[Go supervisor](../../server/CONTACT-RENDERER.md) can consume the compiled pipe
+worker in developer tests. HTTP integration and the complete experiment's
+measurements remain in business-site issue #199.
 
 ## Input and rendering boundary
 
@@ -30,10 +32,14 @@ Use Node 24, npm 11 and `LC_ALL=C`, after installing both existing dependency lo
 npm ci
 npm --prefix web ci
 node --test web/tests/private-contact-renderer.test.mjs
+# With the exact Go compiler from server/go.mod as well:
+node --test web/tests/private-contact-runtime.test.mjs
 ```
 
 `buildContactRenderer()` in `build.mjs` invokes the pinned Vite/Svelte server
-compiler and returns `{ directory, entry }`. It creates a new owned temporary
+compiler and returns `{ directory, entry, worker }`. The passive `entry`
+exports the component; the separate `worker` entry serves anonymous stdin/stdout
+pipes. Both are compiled in one ordinary Vite build. It creates a new owned temporary
 directory outside the website outputs, bundles the server dependencies, and
 copies the upstream Svelte, clsx and esm-env license texts into `notices/`.
 The caller must remove that returned directory after use. A failed build removes
@@ -44,9 +50,19 @@ projections and failure states, execute a copied bundle outside the checkout,
 and exercise actual compiler-failure cleanup. They do not claim authenticated
 customer journeys, concurrent HTTP isolation or an operating-system sandbox.
 
-The artifact requires an existing Node 24 executable; it does not distribute
-Node, provide a worker transport, own a process or enable a portal feature.
-Those packaging, supervision, fail-closed activation, post-wait authorization,
+The worker accepts only projections constructed by Go's `RequestFrame`, with
+versioned four-byte big-endian framing and the complete 8 KiB request / 64 KiB
+response bounds. It is not a general untrusted JSON request parser: Go validates
+the closed display projection before serialization and strictly validates each
+response. A malformed, truncated or oversized input exits without private output
+or diagnostics. Importing the passive component never starts the worker.
+
+The runtime tests exercise actual pipe failures and the Go supervisor with the
+real compiled child, including cold start and eight concurrent localized renders.
+This proves neither authenticated HTTP isolation nor operating-system sandboxing.
+The artifact still requires an existing Node 24 executable; it does not distribute
+Node, expose a listener or activate a production portal feature.
+Packaged-runtime delivery, HTTP integration, post-wait authorization,
 two-client trials and rollback requirements remain prerequisites of #199.
 No adoption, performance or maintenance improvement has been established by
 this component alone. The frozen maintenance task is deliberately not included.

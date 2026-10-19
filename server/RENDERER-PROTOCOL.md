@@ -3,8 +3,10 @@
 `internal/renderwire` is the passive Go message codec for the bounded contact
 experiment in [ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md).
 No executable or browser handler consumes it. It starts no process, adds no wait,
-changes no route and enables no portal operation. The complete renderer, release
-gate, authority checkpoints, process supervision and comparison remain #199.
+changes no route and enables no portal operation.
+[`internal/contactrenderer`](CONTACT-RENDERER.md) now consumes the codec in a
+bounded developer-only process supervisor. HTTP authority checkpoints, packaged
+runtime, comparison and rollback remain #199.
 
 ## Framing and bounds
 
@@ -36,7 +38,7 @@ belongs to the future supervisor, not this codec.
 `contact` has these fields only:
 
 | Field                      | Display contract                                                                                                                    |
-|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `locale`                   | `en` or `da`                                                                                                                        |
 | `name`, `email`, `company` | At most 120, 254 and 160 Unicode code points respectively; empty values remain usable for an initial profile or validation recovery |
 | `revision`                 | Canonical nonnegative signed-64-bit decimal **string**, including the exact maximum; never a JavaScript number                      |
@@ -83,10 +85,10 @@ permission to write an HTTP response. The future caller still has to:
 - Preserve the native Go routes, status, redirect, origin, CSRF, no-store and
   escaping semantics. No private data may enter public build output or caches.
 
-Protocol validation is unconditional; a release flag must never weaken it. No
-renderer gate is introduced or mapped here. Its future runtime integration must
-remain false-default through the maintained OpenFeature mechanism, with its
-lifecycle task, both-state controls and separate activation decision.
+Protocol validation is unconditional; a release flag must never weaken it. The
+supervisor's `portal-contact-renderer` OpenFeature gate is false-default, with
+lifecycle issue #207 and both-state controls. There is no environment activation
+mapping or production HTTP consumer; activation remains a separate decision.
 
 ## Exercise the codec
 
