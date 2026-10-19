@@ -89,7 +89,15 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 	}
 	callback, _ := url.Parse(c.callback) // validated by readSetup
 	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
-	if err != nil || leaf.VerifyHostname(callback.Hostname()) != nil {
+	if err != nil {
+		return errSetup
+	}
+	// The controller pins this local application certificate. Verify its current
+	// validity, server-auth purpose and hostname without consulting system roots
+	// or mistaking the separate broker trust roots for application trust.
+	applicationRoots := x509.NewCertPool()
+	applicationRoots.AddCert(leaf)
+	if _, err := leaf.Verify(x509.VerifyOptions{Roots: applicationRoots, DNSName: callback.Hostname(), KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err != nil {
 		return errSetup
 	}
 	roots := x509.NewCertPool()

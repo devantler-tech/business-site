@@ -77,7 +77,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	}
 	passedFile := file
 	var inputOverride *os.File
-	start := func(mode, expectedError string) func() {
+	start := func(t *testing.T, mode, expectedError string) func() {
 		t.Helper()
 		ready := expectedError == ""
 		config["mode"] = mode
@@ -169,25 +169,44 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		return stop
 	}
 	invalidSetup := "invalid trial setup; use the documented private pipe and disposable loopback fixture"
-	// A parseable matching key pair is insufficient: the served certificate
-	// must identify the callback host before any readiness can be announced.
-	wrongHost := &x509.Certificate{
-		SerialNumber: big.NewInt(2), DNSNames: []string{"unrelated.example.invalid"},
-		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	wrongHostDER, err := x509.CreateCertificate(rand.Reader, wrongHost, wrongHost, &f.f.key.PublicKey, f.f.key)
-	if err != nil {
-		t.Fatal("create fictional mismatched-host certificate")
-	}
+	// Each parseable matching key pair must be refused before readiness. Removing
+	// hostname, validity or server-auth validation must fail its own real process.
+	now := time.Now()
 	wrongHostKey, err := x509.MarshalPKCS8PrivateKey(f.f.key)
 	if err != nil {
 		t.Fatal("marshal fictional mismatched-host key")
 	}
 	validCertificate, validKey := config["certificate"], config["key"]
-	config["certificate"] = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: wrongHostDER}))
-	config["key"] = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: wrongHostKey}))
-	start("go", invalidSetup)
+	for _, test := range []struct {
+		name                string
+		host                net.IP
+		dns                 []string
+		notBefore, notAfter time.Time
+		usage               x509.ExtKeyUsage
+	}{
+		{"wrong-host", nil, []string{"unrelated.example.invalid"}, now.Add(-time.Hour), now.Add(time.Hour), x509.ExtKeyUsageServerAuth},
+		{"expired", net.ParseIP("127.0.0.1"), nil, now.Add(-2 * time.Hour), now.Add(-time.Hour), x509.ExtKeyUsageServerAuth},
+		{"not-yet-valid", net.ParseIP("127.0.0.1"), nil, now.Add(time.Hour), now.Add(2 * time.Hour), x509.ExtKeyUsageServerAuth},
+		{"client-auth-only", net.ParseIP("127.0.0.1"), nil, now.Add(-time.Hour), now.Add(time.Hour), x509.ExtKeyUsageClientAuth},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			leaf := &x509.Certificate{
+				SerialNumber: big.NewInt(2), DNSNames: test.dns,
+				NotBefore: test.notBefore, NotAfter: test.notAfter,
+				KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{test.usage},
+			}
+			if test.host != nil {
+				leaf.IPAddresses = []net.IP{test.host}
+			}
+			der, err := x509.CreateCertificate(rand.Reader, leaf, leaf, &f.f.key.PublicKey, f.f.key)
+			if err != nil {
+				t.Fatal("create fictional refusal certificate")
+			}
+			config["certificate"] = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+			config["key"] = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: wrongHostKey}))
+			start(t, "go", invalidSetup)
+		})
+	}
 	config["certificate"], config["key"] = validCertificate, validKey
 	// Use the same valid setup as the positive control, varying only its actual
 	// transport/listener/trust boundary. No database or broker response is faked.
@@ -207,14 +226,14 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		t.Fatal(err)
 	}
 	inputOverride = regular
-	start("go", invalidSetup)
+	start(t, "go", invalidSetup)
 	inputOverride = nil
 	passedFile = regular
-	start("go", invalidSetup)
+	start(t, "go", invalidSetup)
 	passedFile = file
 	callback := config["callback"]
 	config["callback"] = "https://127.0.0.1:1/portal/callback"
-	start("go", invalidSetup)
+	start(t, "go", invalidSetup)
 	config["callback"] = callback
 	stalled, writer, err := os.Pipe()
 	if err != nil {
@@ -223,7 +242,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	defer closeContactHostFile(t, stalled)
 	defer closeContactHostFile(t, writer)
 	inputOverride = stalled
-	start("go", invalidSetup) // writer deliberately remains open until the five-second deadline
+	start(t, "go", invalidSetup) // writer deliberately remains open until the five-second deadline
 	inputOverride = nil
 	wildcard, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
 	if err != nil {
@@ -241,7 +260,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	defer closeContactHostFile(t, wildcardFile)
 	passedFile = wildcardFile
 	config["callback"] = fmt.Sprintf("https://127.0.0.1:%d/portal/callback", wildcard.Addr().(*net.TCPAddr).Port)
-	start("go", invalidSetup)
+	start(t, "go", invalidSetup)
 	passedFile, config["callback"] = file, callback
 	wrongCA := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
 	der, err := x509.CreateCertificate(rand.Reader, wrongCA, wrongCA, &f.f.key.PublicKey, f.f.key)
@@ -250,9 +269,9 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	}
 	trust := config["trust"]
 	config["trust"] = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	start("go", "trial broker refused")
+	start(t, "go", "trial broker refused")
 	config["trust"] = trust
-	stop := start("closed", "")
+	stop := start(t, "closed", "")
 	if status, _, h := f.request("GET", "/portal/sign-in", nil, ""); status != 404 || h.Get("Cache-Control") != "no-store" {
 		t.Fatal("closed mode activated identity")
 	}
@@ -261,7 +280,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	if node != "" {
 		mode = "svelte"
 	}
-	stop = start(mode, "")
+	stop = start(t, mode, "")
 	actors := journeyActors(f)
 	assertIndependentJourneyActors(f, actors)
 	if run := privateContactJourney(f, actors); len(run.Responses) != 21 {
@@ -276,7 +295,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	_, before, _ := f.request("GET", "/portal/contact", nil, "")
 	_, revision := journeyForm(f, before)
 	stop()
-	stop = start("go", "")
+	stop = start(t, "go", "")
 	status, after, _ := f.request("GET", "/portal/contact", nil, "")
 	if status != 200 || !strings.Contains(after, `value="Alice Fictional"`) {
 		t.Fatal("same-origin restart lost the original authenticated record")
@@ -290,7 +309,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 	if _, err := migrator.Exec(ctx, "GRANT TRUNCATE ON portal_requests TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
-	start("go", "trial database refused")
+	start(t, "go", "trial database refused")
 }
 
 func closeContactHostFile(t *testing.T, file *os.File) {
