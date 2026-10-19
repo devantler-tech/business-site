@@ -4,6 +4,7 @@
   "words": [
     "GOROOT",
     "GOVERSION",
+    "benchtime",
     "libexec",
     "maxlength",
     "noindex",

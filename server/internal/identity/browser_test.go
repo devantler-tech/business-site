@@ -13,7 +13,7 @@ import (
 )
 
 // browserHandler requires a fully configured, fixed-callback application surface.
-func browserHandler(t *testing.T, foundation *Foundation, callback string) http.Handler {
+func browserHandler(t testing.TB, foundation *Foundation, callback string) http.Handler {
 	t.Helper()
 	h, err := foundation.Browser(callback, "synthetic-client-secret")
 	if err != nil {
