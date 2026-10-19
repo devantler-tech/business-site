@@ -310,7 +310,7 @@ test("actual image receipt, restricted runtime, visitor bytes and private/traver
     assert.equal((await get(port, "/", "POST")).status, 405);
     assert.deepEqual(await get(port, "/healthz", "HEAD").then((r) => [r.status, r.body]), [200, ""]);
     assert.equal((await get(port, "/healthz")).body, "ok\n");
-    assert.equal(logs(id), "runtime ready; private routes remain independently gated");
+    assert.match(logs(id), /^runtime ready; listen=(?:0\.0\.0\.0|\[::\]):8080; private routes remain independently gated$/);
     const started = Date.now();
     docker("stop", "--time=12", id);
     assert.ok(Date.now() - started < 13000, "SIGTERM must drain within the bound.");
@@ -330,7 +330,7 @@ test("actual container starts without network or portal dependencies", async () 
   try {
     id = docker("run", "--detach", "--network=none", ...bounded, ...fixture.mount, image, ...runtimeArguments(fixture));
     await ready(id);
-    assert.equal(logs(id), "runtime ready; private routes remain independently gated");
+    assert.match(logs(id), /^runtime ready; listen=(?:0\.0\.0\.0|\[::\]):8080; private routes remain independently gated$/);
   } finally {
     try {
       if (id) docker("stop", "--time=12", id);

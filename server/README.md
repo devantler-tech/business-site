@@ -152,6 +152,17 @@ The version command prints the source/public-digest receipt. Visit
 `http://127.0.0.1:8080/` for the public snapshot; stop the local server with Ctrl+C.
 The subshell leaves your original shell at the repository root.
 
+The readiness line retains its `runtime ready;` prefix and reports the bound
+listener as `listen=<address>`. For disposable process tests, use
+`--listen 127.0.0.1:0` and read that actual endpoint instead of releasing a reserved
+port before startup. This endpoint is operational readiness, not a portal or
+production-deployment receipt. The compiled staging fixture bounds startup at
+45 seconds, accepts only a numeric loopback address with a nonzero port, and
+reports closed diagnostic categories rather than child output. Its private
+512-byte error capture is concurrency-safe; unknown or oversized output never
+appears in test diagnostics. One reaper owns child shutdown, including refusals
+that happen before readiness.
+
 Use a fresh output directory for smoke tests. `--release` requires clean source;
 `--development` permits a labelled local build. Each directory contains the actual
 Go executable, its digest-bound public snapshot, upstream Go notices and a build
