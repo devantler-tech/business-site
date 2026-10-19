@@ -154,7 +154,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 			}
 			if !ready {
 				if got != "" {
-					t.Error("unsafe database reached readiness")
+					t.Error("unsafe setup reached readiness")
 					stop()
 					return stop
 				}
@@ -169,6 +169,26 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		return stop
 	}
 	invalidSetup := "invalid trial setup; use the documented private pipe and disposable loopback fixture"
+	// A parseable matching key pair is insufficient: the served certificate
+	// must identify the callback host before any readiness can be announced.
+	wrongHost := &x509.Certificate{
+		SerialNumber: big.NewInt(2), DNSNames: []string{"unrelated.example.invalid"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	wrongHostDER, err := x509.CreateCertificate(rand.Reader, wrongHost, wrongHost, &f.f.key.PublicKey, f.f.key)
+	if err != nil {
+		t.Fatal("create fictional mismatched-host certificate")
+	}
+	wrongHostKey, err := x509.MarshalPKCS8PrivateKey(f.f.key)
+	if err != nil {
+		t.Fatal("marshal fictional mismatched-host key")
+	}
+	validCertificate, validKey := config["certificate"], config["key"]
+	config["certificate"] = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: wrongHostDER}))
+	config["key"] = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: wrongHostKey}))
+	start("go", invalidSetup)
+	config["certificate"], config["key"] = validCertificate, validKey
 	// Use the same valid setup as the positive control, varying only its actual
 	// transport/listener/trust boundary. No database or broker response is faked.
 	regular, err := os.CreateTemp(t.TempDir(), "setup")

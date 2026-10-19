@@ -15,6 +15,8 @@ JSON object through a pipe on standard input, and passes its retained TCP listen
 as descriptor 3. The command refuses implicit activation, ordinary files as setup,
 unknown/duplicate/missing fields, trailing input and setup over 64 KiB. Input must
 finish within five seconds. No setup values or raw dependency errors are printed.
+The matching TLS key pair must identify the callback hostname before startup
+can announce readiness; broker trust is validated separately.
 After successful assembly, standard output contains only `contact-trial-host ready`.
 SIGTERM/interrupt drains the owned server; a ten-minute process lease also bounds
 the host. Lease expiry fails rather than becoming a successful trial.
@@ -63,8 +65,11 @@ three-actor native-form journey, independent logout, saved session/record/revisi
 through a same-origin process restart and a genuine forbidden-grant refusal.
 Its broker/controller stay outside the child. Actual-command refusal controls
 cover regular-file/stalled setup, invalid/wildcard/mismatched listeners and
-incorrect broker trust. These are correctness controls, not paired timing or
-service-RSS observations. From `server/`, with the documented disposable fixture,
+incorrect broker trust. A parseable application certificate for an unrelated
+hostname must be refused before readiness; the valid certificate remains the
+positive control for the complete authenticated journey. These are correctness
+controls, not paired timing or service-RSS observations. From `server/`, with the
+documented disposable fixture,
 run `go test -race -tags=contacttrialintegration ./internal/identity -run
 '^TestContactTrialHost' -count=1 -timeout=90s`. Source CI requires this dedicated
 step after provisioning, keeping its expensive process startup outside the ordinary

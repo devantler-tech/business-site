@@ -87,6 +87,11 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 	if err != nil {
 		return errSetup
 	}
+	callback, _ := url.Parse(c.callback) // validated by readSetup
+	leaf, err := x509.ParseCertificate(certificate.Certificate[0])
+	if err != nil || leaf.VerifyHostname(callback.Hostname()) != nil {
+		return errSetup
+	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM([]byte(c.trust)) {
 		return errSetup
@@ -102,7 +107,6 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 	}
 	defer func() { _ = listener.Close() }() // Serve owns its duplicate; the controller retains its own.
 	address, ok := listener.Addr().(*net.TCPAddr)
-	callback, _ := url.Parse(c.callback) // validated by readSetup
 	if closeErr != nil || !ok || !address.IP.Equal(net.ParseIP("127.0.0.1")) || listener.Addr().String() != callback.Host {
 		return errSetup
 	}
