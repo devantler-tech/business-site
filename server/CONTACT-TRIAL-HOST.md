@@ -23,15 +23,15 @@ the host. Lease expiry fails rather than becoming a successful trial.
 
 The closed object has nine string fields:
 
-| Field | Required value |
-| --- | --- |
-| `mode` | `closed`, `go` or `svelte` |
-| `database` | Synthetic `portal_runtime` login with the documented fixture password; numeric loopback port 5432 or 55444; a fresh `portal_trial_` database followed by 32 lowercase hexadecimal digits; only `sslmode=disable` |
-| `issuer` | Fixed HTTPS numeric-loopback origin with an explicit port and no path/query |
-| `callback` | HTTPS numeric-loopback origin matching the inherited listener, with path `/portal/callback` only |
-| `certificate`, `key` | PEM certificate and matching private key for that local application origin |
-| `trust` | PEM trust roots for the synthetic TLS broker |
-| `node`, `worker` | Empty for `go`/`closed`; fixed absolute packaged executable/worker paths for `svelte` |
+| Field                | Required value                                                                                                                                                                                                   |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `mode`               | `closed`, `go` or `svelte`                                                                                                                                                                                       |
+| `database`           | Synthetic `portal_runtime` login with the documented fixture password; numeric loopback port 5432 or 55444; a fresh `portal_trial_` database followed by 32 lowercase hexadecimal digits; only `sslmode=disable` |
+| `issuer`             | Fixed HTTPS numeric-loopback origin with an explicit port and no path/query                                                                                                                                      |
+| `callback`           | HTTPS numeric-loopback origin matching the inherited listener, with path `/portal/callback` only                                                                                                                 |
+| `certificate`, `key` | PEM certificate and matching private key for that local application origin                                                                                                                                       |
+| `trust`              | PEM trust roots for the synthetic TLS broker                                                                                                                                                                     |
+| `node`, `worker`     | Empty for `go`/`closed`; fixed absolute packaged executable/worker paths for `svelte`                                                                                                                            |
 
 Only the controller prepares/migrates the disposable database, issues invitations
 and operates the synthetic broker. Runtime startup checks both effective and
