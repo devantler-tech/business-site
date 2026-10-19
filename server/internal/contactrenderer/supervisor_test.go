@@ -184,6 +184,39 @@ func TestDisabledAndWrongTypeStartNoChild(t *testing.T) {
 	}
 }
 
+func TestReleaseCheckpointNeverStartsAChild(t *testing.T) {
+	for _, value := range []any{nil, false, "true", true} {
+		s := fixture(t, "normal", value)
+		err := s.Check(t.Context())
+		if (value == true && err != nil) || (value != true && !errors.Is(err, ErrDisabled)) {
+			t.Fatal("release checkpoint returned an incorrect gate result", err)
+		}
+		s.mu.Lock()
+		started := !s.lastStart.IsZero() || s.g != nil
+		s.mu.Unlock()
+		if started {
+			t.Fatal("release checkpoint started a child")
+		}
+	}
+}
+
+func TestReleaseCheckpointSharesIgnoringProviderCapacity(t *testing.T) {
+	s := fixture(t, "normal", true)
+	p, finished := retainEightEvaluations(t, s, func() error { return s.Check(t.Context()) })
+	defer close(p.release)
+	if _, err := s.Render(t.Context(), projection()); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("gate checks escaped the shared render capacity")
+	}
+	for range 8 {
+		if err := awaitSignal(t, finished); !errors.Is(err, ErrUnavailable) {
+			t.Fatal("gate check ignored its deadline", err)
+		}
+	}
+	if err := s.Check(t.Context()); !errors.Is(err, ErrUnavailable) || p.calls.Load() != 8 {
+		t.Fatal("timed-out evaluations released retained capacity")
+	}
+}
+
 func TestRealProtocolFailuresReturnNoBodyAndReap(t *testing.T) {
 	for _, mode := range []string{"foreign", "malformed", "oversize", "truncated", "exit"} {
 		t.Run(mode, func(t *testing.T) {
@@ -276,15 +309,11 @@ func awaitSignal[T any](t *testing.T, ch <-chan T) T {
 
 func TestCapacityAlsoBoundsAnSDKProviderThatIgnoresContext(t *testing.T) {
 	s := fixture(t, "normal", true)
-	p := blocking(t, s, 0, false)
+	p, finished := retainEightEvaluations(t, s, func() error {
+		_, err := s.Render(t.Context(), projection())
+		return err
+	})
 	defer close(p.release)
-	finished := make(chan error, 8)
-	for range 8 {
-		go func() { _, err := s.Render(t.Context(), projection()); finished <- err }()
-	}
-	for range 8 {
-		awaitSignal(t, p.reached)
-	}
 	start := time.Now()
 	if body, err := s.Render(t.Context(), projection()); body != "" || err != ErrUnavailable {
 		t.Fatal("ninth render queued")
@@ -308,6 +337,20 @@ func TestCapacityAlsoBoundsAnSDKProviderThatIgnoresContext(t *testing.T) {
 	if started {
 		t.Fatal("expired provider evaluation started a child")
 	}
+}
+
+// retainEightEvaluations saturates actual SDK waits for either public operation.
+func retainEightEvaluations(t *testing.T, s *Supervisor, call func() error) (*blockingProvider, <-chan error) {
+	t.Helper()
+	p := blocking(t, s, 0, false)
+	finished := make(chan error, 8)
+	for range 8 {
+		go func() { finished <- call() }()
+	}
+	for range 8 {
+		awaitSignal(t, p.reached)
+	}
+	return p, finished
 }
 
 func TestDuplicateReplyInvalidatesACompletedButNotReleasedRender(t *testing.T) {
@@ -457,6 +500,9 @@ func TestSDKErrorAndStaleStatesNeverStartAChildEvenWithTrueValues(t *testing.T) 
 			awaitSignal(t, settled)
 			if body, err := s.Render(t.Context(), projection()); body != "" || err != ErrDisabled {
 				t.Fatal("unhealthy SDK admitted rendering", err)
+			}
+			if err := s.Check(t.Context()); !errors.Is(err, ErrDisabled) {
+				t.Fatal("unhealthy SDK passed the release checkpoint", err)
 			}
 			s.mu.Lock()
 			started := !s.lastStart.IsZero()

@@ -77,3 +77,41 @@ test("the Go supervisor renders the actual compiled component in a separate proc
   assert.equal(child.status, 0, child.stdout + child.stderr);
   assert.match(child.stdout, /^--- PASS: TestCompiledComponent \([\d.]+s\)$/mu);
 });
+
+test(
+  "the compiled component serves native contact flows through the actual TLS broker, restricted database and Go authority",
+  { timeout: 120000 },
+  () => {
+    const child = spawnSync(
+      "go",
+      [
+        "test",
+        "-v",
+        "-race",
+        "-tags=rendererintegration",
+        "./internal/identity",
+        "-run",
+        "^TestCompiledContact",
+        "-count=1",
+        "-timeout=90s",
+      ],
+      {
+        cwd: fileURLToPath(new URL("../../server/", import.meta.url)),
+        env: {
+          ...process.env,
+          GOTOOLCHAIN: "local",
+          LC_ALL: "C",
+          RENDERER_TEST_NODE: process.execPath,
+          RENDERER_TEST_ARTIFACT: artifact.worker,
+        },
+        encoding: "utf8",
+        timeout: 120000,
+        maxBuffer: 256 * 1024,
+      },
+    );
+    assert.equal(child.status, 0, child.stdout + child.stderr);
+    for (const name of ["HTTP", "Authority", "OptOutAuthority", "FallbackAndFailure"]) {
+      assert.match(child.stdout, new RegExp(`^--- PASS: TestCompiledContact${name} \\([\\d.]+s\\)$`, "mu"));
+    }
+  },
+);

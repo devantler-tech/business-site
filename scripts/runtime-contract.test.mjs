@@ -50,6 +50,10 @@ function assertRuntime(workflow) {
   const renderer = steps.findIndex(
     (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs" && s["working-directory"] === ".",
   );
+  const database = steps.findIndex(
+    (s) =>
+      s.run === "psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql",
+  );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
   );
@@ -72,7 +76,13 @@ function assertRuntime(workflow) {
   assert.equal(steps[node]?.with?.["node-version"], undefined);
   assert.ok(node >= 0 && install > node && build > install && smoke > build);
   assert.ok(
-    go >= 0 && compilerInstall > install && renderer > compilerInstall && renderer > go && renderer < build,
+    go >= 0 &&
+      database >= 0 &&
+      compilerInstall > install &&
+      renderer > compilerInstall &&
+      renderer > go &&
+      renderer > database &&
+      renderer < build,
     "run the actual compiled renderer with the exact Go and Node compilers before packaging",
   );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
@@ -87,6 +97,7 @@ function assertRuntime(workflow) {
     go,
     install,
     compilerInstall,
+    database,
     renderer,
     browser,
     inventory,
@@ -181,6 +192,39 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "missing renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("psql -h localhost"),
+      );
+    },
+  ],
+  [
+    "conditional renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost")).if = "false";
+    },
+  ],
+  [
+    "ignored renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost"))["continue-on-error"] =
+        true;
+    },
+  ],
+  [
+    "renderer before database provision",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      steps.push(
+        ...steps.splice(
+          steps.findIndex((s) => s.run?.startsWith("psql -h localhost")),
+          1,
+        ),
+      );
+    },
+  ],
   [
     "missing real compiled renderer controls",
     (w) => {

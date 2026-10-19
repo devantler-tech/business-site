@@ -11,6 +11,7 @@ import (
 
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 	"github.com/justinas/nosurf"
 	"golang.org/x/oauth2"
 )
@@ -25,12 +26,27 @@ type browser struct {
 	sessions   *scs.SessionManager
 	oauth      oauth2.Config
 	origin     string
+	renderer   *contactrenderer.Supervisor
 }
 
 // Browser constructs the application HTTP surface, without starting a listener,
 // migrating a database or enabling a flag. Only one fixed HTTPS callback is used.
 // Private routes disappear when portal-identity is missing, false or erroneous.
 func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, error) {
+	return s.browser(callbackURL, clientSecret, nil)
+}
+
+// DeveloperContactBrowser explicitly composes the private presentation trial.
+// The caller owns and closes the fixed reviewed renderer; normal Browser and
+// the executable have no activation mapping or Node dependency.
+func (s *Foundation) DeveloperContactBrowser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
+	if renderer == nil {
+		return nil, ErrDenied
+	}
+	return s.browser(callbackURL, clientSecret, renderer)
+}
+
+func (s *Foundation) browser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
 	u, err := url.Parse(callbackURL)
 	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "/portal/callback" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
 		return nil, ErrDenied
@@ -63,6 +79,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Persist = false
 	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
+	b.renderer = renderer
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, _ error) {
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")
@@ -323,9 +340,8 @@ func (b *browser) principal(ctx context.Context) Principal {
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
+	client, role, allowed := b.browserMember(w, r)
+	if !allowed {
 		return
 	}
 	kind := "home"
@@ -343,6 +359,16 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+}
+
+// browserMember preserves the common unauthenticated response before role checks.
+func (b *browser) browserMember(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		b.render(w, r, 401, "error", "", "")
+		return "", "", false
+	}
+	return client, role, true
 }
 
 // logout durably destroys the session before redirecting to the local sign-in.

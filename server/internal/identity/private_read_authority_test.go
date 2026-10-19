@@ -18,6 +18,8 @@ import (
 type completedReadTracer struct {
 	query            string
 	started          atomic.Bool
+	reads            atomic.Int32
+	blockAt          int32
 	blocked, release chan struct{}
 }
 
@@ -31,7 +33,7 @@ func (p *completedReadTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, 
 
 // TraceQueryEnd exposes a bounded checkpoint after real result materialization.
 func (p *completedReadTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryEndData) {
-	if ctx.Value(p) != true || !p.started.CompareAndSwap(false, true) {
+	if ctx.Value(p) != true || (p.blockAt > 0 && p.reads.Add(1) != p.blockAt) || !p.started.CompareAndSwap(false, true) {
 		return
 	}
 	close(p.blocked)

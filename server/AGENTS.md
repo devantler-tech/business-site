@@ -1,6 +1,16 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The explicit `DeveloperContactBrowser` composes only the private contact experiment
+with a caller-owned fixed `contactrenderer.Supervisor`; `Browser` and the executable
+retain Go presentation. Read `CONTACT-RENDERER.md`. Buffer the complete frame before
+headers and revalidate the original durable session, expiry and query client after
+renderer/SDK waits, including initial opt-out. Use the maintained context store and
+codec and bind its decoded bytes in final SQL, not SCS's request cache. Never
+extend a session on a read, pass identity/client
+selectors to the child, or treat framed output as authority or arbitrary safe HTML.
+The selected Node-24 renderer integration needs BOTH disposable PostgreSQL fixture
+URLs and real compiled artifacts; ordinary Go/database tests do not need Node.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers and separately default-off free project-request intake; no order,

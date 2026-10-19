@@ -345,9 +345,6 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: .
         run: npm --prefix web ci
-      - name: Verify the bounded Go renderer with the actual compiled Svelte child
-        working-directory: .
-        run: node --test web/tests/private-contact-runtime.test.mjs
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
@@ -377,6 +374,9 @@ jobs:
         env:
           PGPASSWORD: fixture-only
         run: psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql
+      - name: Verify compiled contact HTTP with the actual broker, database and bounded renderer
+        working-directory: .
+        run: node --test web/tests/private-contact-runtime.test.mjs
       - name: Verify dependencies and formatting
         run: |
           go mod verify

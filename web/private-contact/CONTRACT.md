@@ -2,11 +2,11 @@
 
 This developer-only artifact implements the contact presentation selected by
 [ADR 0014](../../docs/adr/0014-private-contact-renderer-experiment.md).
-It is not connected to an HTTP handler or a production package. The existing
-Go contact page remains the only HTTP path. The
-[Go supervisor](../../server/CONTACT-RENDERER.md) can consume the compiled pipe
-worker in developer tests. HTTP integration and the complete experiment's
-measurements remain in business-site issue #199.
+The explicit developer browser composition connects the compiled pipe worker
+through the [Go supervisor](../../server/CONTACT-RENDERER.md) to the real private
+contact handler. Ordinary Go construction and production packages retain Go
+presentation. The complete experiment's packaging, measurements and adoption
+decision remain in business-site issue #199.
 
 ## Input and rendering boundary
 
@@ -32,7 +32,8 @@ Use Node 24, npm 11 and `LC_ALL=C`, after installing both existing dependency lo
 npm ci
 npm --prefix web ci
 node --test web/tests/private-contact-renderer.test.mjs
-# With the exact Go compiler from server/go.mod as well:
+# With the exact Go compiler and BOTH provisioned disposable database fixture
+# URLs from server/README.md as well:
 node --test web/tests/private-contact-runtime.test.mjs
 ```
 
@@ -59,10 +60,12 @@ or diagnostics. Importing the passive component never starts the worker.
 
 The runtime tests exercise actual pipe failures and the Go supervisor with the
 real compiled child, including cold start and eight concurrent localized renders.
-This proves neither authenticated HTTP isolation nor operating-system sandboxing.
+The separately selected HTTP controls exercise actual native forms, original
+durable-session/client revalidation and independent client/operator isolation.
+This does not prove production federation/ingress or operating-system sandboxing.
 The artifact still requires an existing Node 24 executable; it does not distribute
 Node, expose a listener or activate a production portal feature.
-Packaged-runtime delivery, HTTP integration, post-wait authorization,
-two-client trials and rollback requirements remain prerequisites of #199.
+Packaged-runtime delivery, measured paired two-client trials and actual rollback
+remain prerequisites of #199.
 No adoption, performance or maintenance improvement has been established by
 this component alone. The frozen maintenance task is deliberately not included.

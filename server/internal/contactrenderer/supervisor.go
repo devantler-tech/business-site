@@ -132,6 +132,48 @@ func (s *Supervisor) enabled(ctx context.Context) bool {
 	return err == nil && on && ctx.Err() == nil && s.flags.State() == openfeature.ReadyState
 }
 
+// Check re-evaluates the release gate without starting a child. Like Render it
+// bounds SDK waits and retained evaluations; callers still own durable authority.
+func (s *Supervisor) Check(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	select {
+	case <-s.done:
+		return ErrUnavailable
+	default:
+	}
+	select {
+	case s.slots <- struct{}{}:
+	default:
+		return ErrUnavailable
+	}
+	result := make(chan bool, 1)
+	go func() {
+		defer func() { <-s.slots }()
+		result <- s.enabled(ctx)
+	}()
+	select {
+	case enabled := <-result:
+		select {
+		case <-s.done:
+			return ErrUnavailable
+		default:
+		}
+		if ctx.Err() != nil {
+			return ErrUnavailable
+		}
+		if !enabled {
+			s.stop()
+			return ErrDisabled
+		}
+		return nil
+	case <-ctx.Done():
+		return ErrUnavailable
+	case <-s.done:
+		return ErrUnavailable
+	}
+}
+
 func (s *Supervisor) render(ctx context.Context, id string, frame []byte) (string, error) {
 	if !s.enabled(ctx) {
 		if ctx.Err() != nil {
