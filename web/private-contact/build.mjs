@@ -18,21 +18,28 @@ export async function buildContactRenderer() {
       plugins: [svelte({ configFile: false })],
       ssr: { noExternal: true },
       build: {
-        ssr: join(source, "entry.mjs"),
+        ssr: true,
         outDir: directory,
         emptyOutDir: false,
         minify: false,
-        rollupOptions: { output: { entryFileNames: "contact.mjs" } },
+        rollupOptions: {
+          input: { contact: join(source, "entry.mjs"), worker: join(source, "worker.mjs") },
+          output: { entryFileNames: "[name].mjs" },
+        },
       },
     });
     // Preserve upstream notices with the copied server bundle. esm-env's
     // constants can be folded away, but its notice remains with its consumer.
-    for (const [name, license] of [["svelte", "LICENSE.md"], ["clsx", "license"], ["esm-env", "LICENSE"]]) {
+    for (const [name, license] of [
+      ["svelte", "LICENSE.md"],
+      ["clsx", "license"],
+      ["esm-env", "LICENSE"],
+    ]) {
       const notices = join(directory, "notices", name);
       mkdirSync(notices, { recursive: true });
       copyFileSync(join(source, "..", "node_modules", name, license), join(notices, license));
     }
-    return { directory, entry: join(directory, "contact.mjs") };
+    return { directory, entry: join(directory, "contact.mjs"), worker: join(directory, "worker.mjs") };
   } catch (error) {
     rmSync(directory, { recursive: true });
     throw error;

@@ -45,6 +45,11 @@ function assertRuntime(workflow) {
   const steps = job.steps;
   const node = steps.findIndex((s) => s.uses?.startsWith("actions/setup-node@"));
   const install = steps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
+  const go = steps.findIndex((s) => s.uses?.startsWith("actions/setup-go@"));
+  const compilerInstall = steps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
+  const renderer = steps.findIndex(
+    (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs" && s["working-directory"] === ".",
+  );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
   );
@@ -66,6 +71,10 @@ function assertRuntime(workflow) {
   assert.equal(steps[node]?.with?.["node-version-file"], ".node-version");
   assert.equal(steps[node]?.with?.["node-version"], undefined);
   assert.ok(node >= 0 && install > node && build > install && smoke > build);
+  assert.ok(
+    go >= 0 && compilerInstall > install && renderer > compilerInstall && renderer > go && renderer < build,
+    "run the actual compiled renderer with the exact Go and Node compilers before packaging",
+  );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
     browser > install && browser < build,
@@ -73,7 +82,19 @@ function assertRuntime(workflow) {
   );
   assert.ok(extract > smoke && uploadIndex > extract, "test the extracted archive before upload");
   assert.match(steps[extract]?.run ?? "", /node scripts\/runtime-smoke\.test\.mjs "\$extracted"/);
-  for (const index of [node, install, browser, inventory, build, smoke, extract, uploadIndex]) {
+  for (const index of [
+    node,
+    go,
+    install,
+    compilerInstall,
+    renderer,
+    browser,
+    inventory,
+    build,
+    smoke,
+    extract,
+    uploadIndex,
+  ]) {
     assert.equal(steps[index].if, undefined, "required runtime steps cannot be conditional");
     assert.ok(
       steps[index]["continue-on-error"] == null || steps[index]["continue-on-error"] === false,
@@ -91,7 +112,9 @@ test("CI builds and exercises the actual combined package unconditionally", () =
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
   const steps = w.jobs["test-portal-identity"].steps;
-  const build = steps.findIndex((s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte");
+  const build = steps.findIndex(
+    (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
+  );
   const smoke = steps.findIndex((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-production-dist");
   const extract = steps.findIndex((s) =>
     s.run?.includes('tar -xzf runtime-production-dist/business-site-runtime.tar.gz -C "$extracted"'),
@@ -158,6 +181,44 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "missing real compiled renderer controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => s.run !== "node --test web/tests/private-contact-runtime.test.mjs",
+      );
+    },
+  ],
+  [
+    "conditional real compiled renderer controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+      ).if = "false";
+    },
+  ],
+  [
+    "ignored real compiled renderer failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+      )["continue-on-error"] = true;
+    },
+  ],
+  [
+    "conditional renderer compiler install",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "npm --prefix web ci").if = "false";
+    },
+  ],
+  [
+    "renderer check before compiler install",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      const i = steps.findIndex((s) => s.run === "npm --prefix web ci");
+      steps.push(...steps.splice(i, 1));
+    },
+  ],
   [
     "missing compiled inventory checks",
     (w) => {
