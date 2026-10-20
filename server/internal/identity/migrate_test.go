@@ -37,8 +37,17 @@ func rewindAcceptanceFixture(t *testing.T, pool *pgxpool.Pool) {
 // rewindCreditsFixture removes only the disposable v11 fixture before historical controls.
 func rewindCreditsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindInvoiceTaxFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_credit_revisions,portal_credit_transfers; ALTER TABLE portal_invoices DROP CONSTRAINT portal_invoice_credit_binding; DELETE FROM portal_schema_version WHERE version=11`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-credit schema", err)
+	}
+}
+
+// rewindInvoiceTaxFixture reconstructs only the disposable pre-v12 columns.
+func rewindInvoiceTaxFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_invoices DROP COLUMN net_minor, DROP COLUMN vat_minor; DELETE FROM portal_schema_version WHERE version=12`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-tax-breakdown schema", err)
 	}
 }
 

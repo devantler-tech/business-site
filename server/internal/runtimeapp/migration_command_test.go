@@ -150,7 +150,7 @@ func TestActualExecutableMigration(t *testing.T) {
 		t.Fatal("actual command did not migrate the empty disposable database")
 	}
 	var count int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 11 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 12 {
 		t.Fatal("actual command did not apply every embedded schema version")
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)"); err != nil {
@@ -406,7 +406,7 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
 				var versions int
-				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 11 {
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 12 {
 					t.Fatal("explicit migration did not apply every embedded schema version")
 				}
 			} else {
@@ -529,7 +529,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual job refused trusted confined projected inputs")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 11 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 12 {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
@@ -583,7 +583,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Error("actual job reported success without owning the managed schema")
 			}
 			var preserved bool
-			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=11 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=12 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})

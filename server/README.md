@@ -104,7 +104,9 @@ version/content-bound receipt after explicit review; it never approves payments 
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
 Private [external invoice records](INVOICES.md) let the operator associate an
-explicit invoiced amount and purpose with exact current client acceptance.
+explicit net, VAT, payable total and purpose with exact current client acceptance.
+Historical records without a breakdown remain unknown; no tax rate or eligibility
+is inferred. Credit reconciliation continues to use the unchanged payable total.
 They do not generate invoices, confirm funds or authorize work, and remain
 independently default-off with no environment activation mapping.
 
@@ -117,9 +119,10 @@ or work-start authority; no bank connection or activation mapping is added.
 
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
-v10 (external invoice records) and v11 (bank-credit evidence)
+v10 (external invoice records), v11 (bank-credit evidence) and v12 (explicit invoice tax components)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. The credit migration preserves the original v1–v10 bytes.
+ledger. The tax-component migration preserves the original v1–v11 bytes and old
+receipts, while refusing incomplete new invoice rows.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does

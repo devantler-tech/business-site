@@ -12,16 +12,19 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/open-feature/go-sdk/openfeature"
 )
 
 var invoiceReference = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._/-]{0,63}$`)
 var invoiceAmount = regexp.MustCompile(`^(0|[1-9][0-9]{0,7})([.,][0-9]{1,2})?$`)
+var errInvoiceComponents = errors.New("invoice components are required")
 
 type projectInvoice struct {
 	Sequence, Expected, Version, Event        int
 	Key, Acceptance, Hash, Reference, Purpose string
 	AmountMinor                               int64
+	NetMinor, VATMinor                        pgtype.Int8
 	Recorded                                  time.Time
 	Current                                   bool
 }
@@ -33,6 +36,21 @@ func (d projectInvoice) AmountDKK(lang string) string {
 		separator = ","
 	}
 	return fmt.Sprintf("%d%s%02d", d.AmountMinor/100, separator, d.AmountMinor%100)
+}
+
+type invoiceTaxView struct {
+	Lang, Net, VAT string
+	Recorded       bool
+}
+
+// TaxBreakdown formats recorded facts only; unknown historical tax stays unknown.
+func (d projectInvoice) TaxBreakdown(lang string) invoiceTaxView {
+	view := invoiceTaxView{Lang: lang, Recorded: d.NetMinor.Valid && d.VATMinor.Valid}
+	if view.Recorded {
+		view.Net = (projectInvoice{AmountMinor: d.NetMinor.Int64}).AmountDKK(lang)
+		view.VAT = (projectInvoice{AmountMinor: d.VATMinor.Int64}).AmountDKK(lang)
+	}
+	return view
 }
 
 type invoiceHistory struct {
@@ -61,6 +79,12 @@ func (s *Foundation) invoiceOperator(ctx context.Context, p Principal) error {
 // invoiceMinorUnits parses the operator's decimal DKK without floating point or
 // inferring invoice timing, tax treatment or an amount from proposal prices.
 func invoiceMinorUnits(raw string) (int64, bool) {
+	minor, valid := invoiceComponentMinorUnits(raw)
+	return minor, valid && minor > 0
+}
+
+// invoiceComponentMinorUnits admits explicit zero without estimating a VAT rate.
+func invoiceComponentMinorUnits(raw string) (int64, bool) {
 	if !invoiceAmount.MatchString(raw) {
 		return 0, false
 	}
@@ -77,7 +101,7 @@ func invoiceMinorUnits(raw string) (int64, bool) {
 		}
 		minor += fraction
 	}
-	return minor, minor > 0 && minor <= 1000000000
+	return minor, minor <= 1000000000
 }
 
 // parseInvoice accepts one bounded native form without caller-supplied client or payment state.
@@ -90,7 +114,7 @@ func parseInvoice(r *http.Request) (projectInvoice, bool) {
 			return projectInvoice{}, false
 		}
 		switch name {
-		case "csrf_token", "lang", "invoice_key", "invoice_acceptance", "invoice_expected", "reference", "purpose", "amount_dkk":
+		case "csrf_token", "lang", "invoice_key", "invoice_acceptance", "invoice_expected", "reference", "purpose", "amount_dkk", "net_dkk", "vat_dkk":
 		default:
 			return projectInvoice{}, false
 		}
@@ -98,15 +122,25 @@ func parseInvoice(r *http.Request) (projectInvoice, bool) {
 	expected, valid := proposalNumber(r.PostForm.Get("invoice_expected"), 49)
 	minor, amountOK := invoiceMinorUnits(r.PostForm.Get("amount_dkk"))
 	d := projectInvoice{Expected: expected, AmountMinor: minor, Key: r.PostForm.Get("invoice_key"), Acceptance: r.PostForm.Get("invoice_acceptance"), Reference: strings.ToUpper(strings.TrimSpace(r.PostForm.Get("reference"))), Purpose: strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(r.PostForm.Get("purpose"), "\r\n", "\n"), "\r", "\n"))}
-	return d, valid && amountOK && opaqueRequestID.MatchString(d.Key) && opaqueRequestID.MatchString(d.Acceptance) && invoiceReference.MatchString(d.Reference) && validRequestText(d.Purpose, 300, true)
+	_, netPresent := r.PostForm["net_dkk"]
+	_, vatPresent := r.PostForm["vat_dkk"]
+	componentsOK := !netPresent && !vatPresent // Only an exact stored legacy retry may omit both.
+	if netPresent && vatPresent {
+		net, netOK := invoiceComponentMinorUnits(r.PostForm.Get("net_dkk"))
+		vat, vatOK := invoiceComponentMinorUnits(r.PostForm.Get("vat_dkk"))
+		componentsOK = netOK && vatOK && net+vat == minor
+		d.NetMinor = pgtype.Int8{Int64: net, Valid: true}
+		d.VATMinor = pgtype.Int8{Int64: vat, Valid: true}
+	}
+	return d, valid && amountOK && componentsOK && opaqueRequestID.MatchString(d.Key) && opaqueRequestID.MatchString(d.Acceptance) && invoiceReference.MatchString(d.Reference) && validRequestText(d.Purpose, 300, true)
 }
 
-const invoiceColumns = `i.sequence,i.expected_sequence,i.submission_key,i.acceptance_id,i.proposal_version,i.visibility_event,i.content_hash,i.reference,i.purpose,i.amount_minor,i.recorded_at`
+const invoiceColumns = `i.sequence,i.expected_sequence,i.submission_key,i.acceptance_id,i.proposal_version,i.visibility_event,i.content_hash,i.reference,i.purpose,i.amount_minor,i.recorded_at,i.net_minor,i.vat_minor`
 
 // scanInvoice materializes the explicit private invoice columns, preserving storage errors.
 func scanInvoice(row pgx.Row) (projectInvoice, error) {
 	var d projectInvoice
-	err := row.Scan(&d.Sequence, &d.Expected, &d.Key, &d.Acceptance, &d.Version, &d.Event, &d.Hash, &d.Reference, &d.Purpose, &d.AmountMinor, &d.Recorded)
+	err := row.Scan(&d.Sequence, &d.Expected, &d.Key, &d.Acceptance, &d.Version, &d.Event, &d.Hash, &d.Reference, &d.Purpose, &d.AmountMinor, &d.Recorded, &d.NetMinor, &d.VATMinor)
 	return d, err
 }
 
@@ -148,12 +182,15 @@ func (s *Foundation) persistInvoice(ctx context.Context, p Principal, id string,
 		if readErr != nil {
 			return errTriageStorage
 		}
-		if issuer != p.issuer || subject != p.subject || saved.Expected != d.Expected || saved.Acceptance != d.Acceptance || saved.Reference != d.Reference || saved.Purpose != d.Purpose || saved.AmountMinor != d.AmountMinor {
+		if issuer != p.issuer || subject != p.subject || saved.Expected != d.Expected || saved.Acceptance != d.Acceptance || saved.Reference != d.Reference || saved.Purpose != d.Purpose || saved.AmountMinor != d.AmountMinor || saved.NetMinor != d.NetMinor || saved.VATMinor != d.VATMinor {
 			return errProposalConflict
 		}
 	} else {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return errTriageStorage
+		}
+		if !d.NetMinor.Valid || !d.VATMinor.Valid {
+			return errInvoiceComponents
 		}
 		var sequence int
 		if err = tx.QueryRow(ctx, `SELECT COALESCE(max(sequence),0) FROM portal_invoices WHERE request_id=$1 AND client_id=$2`, id, client).Scan(&sequence); err != nil {
@@ -169,7 +206,7 @@ func (s *Foundation) persistInvoice(ctx context.Context, p Principal, id string,
 		if acceptance != d.Acceptance {
 			return errProposalConflict
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO portal_invoices(request_id,client_id,sequence,expected_sequence,submission_key,acceptance_id,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,reference,purpose,currency,amount_minor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'DKK',$14)`, id, client, sequence+1, d.Expected, d.Key, acceptance, review.Proposal.Version, review.Event, review.Hash, p.issuer, p.subject, d.Reference, d.Purpose, d.AmountMinor)
+		_, err = tx.Exec(ctx, `INSERT INTO portal_invoices(request_id,client_id,sequence,expected_sequence,submission_key,acceptance_id,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,reference,purpose,currency,amount_minor,net_minor,vat_minor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'DKK',$14,$15,$16)`, id, client, sequence+1, d.Expected, d.Key, acceptance, review.Proposal.Version, review.Event, review.Hash, p.issuer, p.subject, d.Reference, d.Purpose, d.AmountMinor, d.NetMinor, d.VATMinor)
 		if err != nil {
 			var conflict *pgconn.PgError
 			if errors.As(err, &conflict) && conflict.Code == "23505" {
@@ -235,5 +272,9 @@ func (b *browser) submitInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := b.foundation.persistInvoice(r.Context(), b.principal(r.Context()), r.PathValue("id"), d)
+	if errors.Is(err, errInvoiceComponents) {
+		b.render(w, r, http.StatusBadRequest, "invoice-error", "", "")
+		return
+	}
 	b.proposalMutationResult(w, r, err, "invoice-error")
 }

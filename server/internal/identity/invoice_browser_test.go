@@ -72,6 +72,8 @@ func TestInvoiceExactDecimalAmounts(t *testing.T) {
 			f := invoiceForm(t, b)
 			f.Set("reference", "AMOUNT-"+strings.ReplaceAll(strings.ReplaceAll(tc.raw, ".", "-"), ",", "-"))
 			f.Set("amount_dkk", tc.raw)
+			f.Set("net_dkk", tc.raw)
+			f.Set("vat_dkk", "0")
 			if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/invoices", f, b.site.URL); status != 303 {
 				t.Fatalf("valid decimal amount rejected: %d", status)
 			}
@@ -311,7 +313,7 @@ func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 		t.Fatal("invoice migration changed prior schema ledger", err)
 	}
 	var retained bool
-	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=11 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
+	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=12 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
 		t.Fatal("invoice migration changed consent or omitted its own version", err)
 	}
 }
@@ -353,7 +355,7 @@ func TestInvoiceCompleteBoundedImmutableHistory(t *testing.T) {
 func invoiceForm(t *testing.T, b *browserFixture) url.Values {
 	t.Helper()
 	status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID, nil, "")
-	f := url.Values{"reference": {"TEST-2026-01"}, "purpose": {"Fictional agreed iteration installment"}, "amount_dkk": {"1234.56"}, "lang": {"en"}}
+	f := url.Values{"reference": {"TEST-2026-01"}, "purpose": {"Fictional agreed iteration installment"}, "amount_dkk": {"1234.56"}, "net_dkk": {"1000"}, "vat_dkk": {"234.56"}, "lang": {"en"}}
 	for _, name := range []string{"csrf_token", "invoice_key", "invoice_acceptance", "invoice_expected"} {
 		match := regexp.MustCompile(`name="` + name + `" value="([^"]+)"`).FindStringSubmatch(body)
 		if status != 200 || len(match) != 2 {
