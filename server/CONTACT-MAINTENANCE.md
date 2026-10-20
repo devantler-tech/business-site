@@ -28,12 +28,12 @@ body change is part of the task.
 The frozen fixture is `portal_links_test.go` blob
 `056f8203b2ebd224e1f9f2caed2eb411f9189f0d`. Its four template blobs are:
 
-| Template | Git blob |
-| --- | --- |
-| `portal.html` | `b2edf7e0cd15385c1d7f15a44bd2253f46ecc84d` |
+| Template        | Git blob                                   |
+|-----------------|--------------------------------------------|
+| `portal.html`   | `b2edf7e0cd15385c1d7f15a44bd2253f46ecc84d` |
 | `requests.html` | `f491986e1d19ebbfd7c838f6777fd638fe09d5a9` |
-| `triage.html` | `fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9` |
-| `credits.html` | `dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3` |
+| `triage.html`   | `fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9` |
+| `credits.html`  | `dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3` |
 
 `maintenanceCases` records the explicit state order, with all English cases
 followed by all Danish cases. URI alone is not an identity: several states use
