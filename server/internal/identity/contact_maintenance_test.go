@@ -141,19 +141,20 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 		}
 		form := markup[start : start+end+len(`</form>`)]
 		for name, replacement := range map[string]string{
-			"textarea":          strings.Replace(form, `</form>`, `<textarea name="extra"></textarea></form>`, 1),
-			"select":            strings.Replace(form, `</form>`, `<select name="extra"><option>extra</option></select></form>`, 1),
-			"output":            strings.Replace(form, `</form>`, `<output name="extra"></output></form>`, 1),
-			"object":            strings.Replace(form, `</form>`, `<object name="extra"></object></form>`, 1),
-			"disabled fieldset": strings.Replace(strings.Replace(form, `>`, `><fieldset disabled>`, 1), `</form>`, `</fieldset></form>`, 1),
-			"disabled ancestor": `<fieldset disabled>` + form + `</fieldset>`,
-			"fieldset owner":    strings.Replace(form, `</form>`, `<fieldset form="foreign"></fieldset></form>`, 1),
-			"submit encoding":   strings.Replace(form, `<button `, `<button formenctype="text/plain" `, 1),
-			"submit target":     strings.Replace(form, `<button `, `<button formtarget="_blank" `, 1),
-			"submit validation": strings.Replace(form, `<button `, `<button formnovalidate `, 1),
-			"form encoding":     strings.Replace(form, `<form `, `<form enctype="text/plain" `, 1),
-			"form target":       strings.Replace(form, `<form `, `<form target="_blank" `, 1),
-			"form validation":   strings.Replace(form, `<form `, `<form novalidate `, 1),
+			"textarea":            strings.Replace(form, `</form>`, `<textarea name="extra"></textarea></form>`, 1),
+			"select":              strings.Replace(form, `</form>`, `<select name="extra"><option>extra</option></select></form>`, 1),
+			"output":              strings.Replace(form, `</form>`, `<output name="extra"></output></form>`, 1),
+			"object":              strings.Replace(form, `</form>`, `<object name="extra"></object></form>`, 1),
+			"disabled fieldset":   strings.Replace(strings.Replace(form, `>`, `><fieldset disabled>`, 1), `</form>`, `</fieldset></form>`, 1),
+			"disabled ancestor":   `<fieldset disabled>` + form + `</fieldset>`,
+			"fieldset owner":      strings.Replace(form, `</form>`, `<fieldset form="foreign"></fieldset></form>`, 1),
+			"submit encoding":     strings.Replace(form, `<button `, `<button formenctype="text/plain" `, 1),
+			"submit target":       strings.Replace(form, `<button `, `<button formtarget="_blank" `, 1),
+			"submit validation":   strings.Replace(form, `<button `, `<button formnovalidate `, 1),
+			"form encoding":       strings.Replace(form, `<form `, `<form enctype="text/plain" `, 1),
+			"form target":         strings.Replace(form, `<form `, `<form target="_blank" `, 1),
+			"form validation":     strings.Replace(form, `<form `, `<form novalidate `, 1),
+			"outside association": strings.Replace(form, `<form `, `<form id="fixture-owner" `, 1) + `<input form="fixture-owner" name="revision" value="0">`,
 		} {
 			t.Run(strconv.Itoa(view.index)+"/"+name, func(t *testing.T) {
 				if replacement == form {
@@ -245,7 +246,9 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	}
 	for _, attr := range form.Attr {
 		switch attr.Key {
-		case "enctype", "target", "novalidate":
+		// Neither frozen form has an ID: adding one would permit outside
+		// controls to join its submission without appearing below this node.
+		case "id", "enctype", "target", "novalidate":
 			return errors.New("native form submission behavior changed")
 		}
 	}
