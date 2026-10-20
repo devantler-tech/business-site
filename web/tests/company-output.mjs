@@ -34,6 +34,10 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
       assert.ok(footer && originalFooter, "real shared business footer is required");
       assert.equal(text(footer),text(originalFooter), "complete localized company/footer copy matches Astro");
       assert.deepEqual(links(footer),links(originalFooter), "footer destinations and labels match Astro");
+      if (identity && vat) {
+        assert.ok(text(footer).includes(locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship'), 'current ordinary registration is independently required');
+        assert.doesNotMatch(text(footer), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current footer cannot retain PMV wording');
+      }
       assert.equal(walk(footer).some(node => attr(node,"href") === `/${prefix}company/`),identity);
       assert.equal(actual.some(node => attr(node,"href") === "mailto:ned@devantler.tech"),identity);
       assert.equal(!!find(actual,"data-customer-scope"),scope);
@@ -57,7 +61,13 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
     const disclosure = find(actual,"data-company-disclosure"), oldDisclosure = find(original,"data-company-disclosure");
     assert.ok(disclosure && oldDisclosure,"complete company disclosure is required");
     assert.ok(text(disclosure) === text(oldDisclosure),"all registered facts and escaped address match Astro");
-    for (const fact of ["Devantler Tech","46830385","PMV","Nikolai Emil Damm","ned@devantler.tech"]) assert.ok(text(disclosure).includes(fact),"registered company fact is missing");
+    const registration = vat ? (locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship') : 'PMV';
+    for (const fact of ["Devantler Tech","46830385",registration,"Nikolai Emil Damm","ned@devantler.tech"]) assert.ok(text(disclosure).includes(fact),"registered company fact is missing");
+    if (vat) {
+      const document = actual.find(node => node.tagName === 'html');
+      assert.ok(document, 'current disclosure has a document element');
+      assert.doesNotMatch(text(document), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current disclosure and serialized facts cannot retain PMV wording');
+    }
     const addressNode = find(actual,"data-company-address");
     assert.ok(addressNode && attr(addressNode,"data-pagefind-ignore") !== undefined,"required address stays out of search");
     assert.ok(JSON.stringify((addressNode.childNodes ?? []).filter(node => node.tagName).map(node => text(node))) === JSON.stringify(expectedAddress),"both address lines render as escaped text");
@@ -70,6 +80,10 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);
+    if (identity && vat) {
+      assert.ok(text(footer).includes('Sole proprietorship'), 'supporting footer independently identifies the ordinary business');
+      assert.doesNotMatch(text(footer), /\bPMV\b/i);
+    }
   }
   for (const file of files(candidate)) {
     const bytes = readFileSync(file);

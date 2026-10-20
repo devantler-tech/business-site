@@ -12,10 +12,12 @@ let controls = 0;
 const unreleasedFragments = [
   'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
   'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
+  'I cannot currently take on projects for businesses in other EU countries while the requirements are being confirmed.',
   'Work outside the EU is not open while its requirements are being confirmed.',
   'Who I work with',
   'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
   'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
+  'Jeg kan foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande, mens kravene afklares.',
   'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
   'Hvem jeg samarbejder med',
 ];

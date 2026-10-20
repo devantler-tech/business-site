@@ -133,20 +133,27 @@ post during a project-description sync.
 
 Describe an honest one-person business. Do not invent company/contact/customer facts, reveal a
 private address, claim statutory compliance, or add purchases/subscriptions. Confirmed company
-identity lives in `src/data/company.json`: Devantler Tech, CVR 46830385, PMV, Nikolai Emil Damm
-and `ned@devantler.tech`. Registration/contact follow-up
+identity lives in `src/data/company.json`: Devantler Tech, CVR 46830385, an ordinarily
+VAT-registered sole proprietorship, Nikolai Emil Damm and `ned@devantler.tech`. The maintainer
+confirmed the VAT effective date as 20 October 2026; this is owner confirmation, not an agent's
+independent registry inspection. Registration/contact follow-up
 [monorepo#3917](https://github.com/devantler-tech/monorepo/issues/3917) remains open for the public
 required address disclosure and deployed English/Danish proof. The maintainer has confirmed
 mail receipt and allows the registered address on the website only where legally required;
 keep the street address out of public backlog evidence. The default-off
 `FEATURE_COMPANY_IDENTITY` source default keeps ordinary local builds closed; the reviewed
 source-owned publisher explicitly enables the footer, email route and required disclosure.
-Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
-plus 299/month for a focused first app version, and 4,995 plus 199/month for a service.
+Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optional hosting
+125/month for a website, 10,000 plus 375/month for a focused first app version, and 6,250
+plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
+net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
-The VAT-inclusive guides decided in #154 (3,750 + 125, 10,000 + 375 and 6,250 + 250 DKK) are
-preview-only under default-off `FEATURE_VAT_PRICES`; keep the prices above published until the VAT
-registration's effective date is confirmed and that switch is reviewed. Never add VAT to them again.
+The source-owned publisher and production-template packager pin `FEATURE_VAT_PRICES=true`,
+company identity enabled, and revised-offer/customer-scope releases disabled. Both the selected
+Svelte frontend and explicit Astro recovery must retain those current facts. VAT=false/unset
+selects explicitly historical PMV comparison inputs, not a valid current-production rollback.
+Retire the temporary VAT gate only after reviewed publication and actual bilingual live proof.
+This does not activate portal orders or expand eligible customer countries.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects

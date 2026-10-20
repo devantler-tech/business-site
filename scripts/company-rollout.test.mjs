@@ -19,7 +19,7 @@ const valid = (ci) => {
   const unset = steps.flatMap((step, i) => step.run === unsetCommand ? [i] : []);
   const artifact = steps.flatMap((step, i) => step.with?.name === 'business-site-preview' && step.with.path === 'dist' ? [i] : []);
   return [enabled, disabled, unset, artifact].every((group) => group.length === 1) &&
-    enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
+    disabled[0] < unset[0] && unset[0] < enabled[0] && enabled[0] < artifact[0] &&
     [...enabled, ...disabled, ...unset].every((i) => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };

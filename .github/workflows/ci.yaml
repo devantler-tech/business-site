@@ -129,21 +129,10 @@ jobs:
         env:
           FEATURE_CLIENT_PORTFOLIO: "true"
         run: npm run build
-      - name: Build company identity preview
-        working-directory: .
-        env:
-          FEATURE_COMPANY_IDENTITY: "true"
-          COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
-        run: npm run build
       - name: Build customer-scope preview
         working-directory: .
         env:
           FEATURE_CUSTOMER_SCOPE: "true"
-        run: npm run build
-      - name: Build VAT-inclusive price preview
-        working-directory: .
-        env:
-          FEATURE_VAT_PRICES: "true"
         run: npm run build
       - name: Build revised hosting-offer preview
         working-directory: .
@@ -183,6 +172,16 @@ jobs:
         run: node scripts/check-offering-copy.test.mjs dist
       - name: Verify public portal boundary controls
         run: bash scripts/check-portal-artifacts.test.sh
+      - name: Build current VAT production presentation
+        working-directory: .
+        env:
+          FEATURE_VAT_PRICES: "true"
+          FEATURE_COMPANY_IDENTITY: "true"
+          FEATURE_SVELTE_FRONTEND: "true"
+          FEATURE_OFFER_COPY: "false"
+          FEATURE_CUSTOMER_SCOPE: "false"
+          COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
+        run: npm run build
       - name: Verify the actual public artifact excludes portal identity
         run: bash scripts/check-portal-artifacts.sh dist
       - name: Upload reviewable production preview

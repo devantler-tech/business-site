@@ -68,15 +68,20 @@ their published English/Danish alternatives until reviewed activation. CI builds
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
 
-`FEATURE_VAT_PRICES=true` previews the VAT-inclusive guide prices decided in #154: DKK 3,750 plus
+`FEATURE_VAT_PRICES=true` selects the VAT-inclusive guide prices decided in #154: DKK 3,750 plus
 125/month for a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web
 service. Each price is marked "incl. VAT" / "inkl. moms", and the price note says prices include
 25% Danish VAT instead of stating the PMV position. The totals live in `vatInclusiveOffers` in
 `business-copy.ts`; `scripts/vat-prices.test.mjs` checks that each total's net amount stays at or
-above the earlier price and that VAT is never added twice. The flag defaults to false and the
-publisher does not set it, so the live site keeps the earlier prices until the registration's
-effective date is confirmed and the switch is reviewed. CI builds enabled, explicit false and
-entirely unset states; the Svelte candidate preserves the same amounts and release setting.
+above the earlier price and that VAT is never added twice. The maintainer confirmed ordinary
+VAT registration effective 20 October 2026. The same selection supplies ordinary localized
+company facts in the footer and company-information pages; it cannot leave contradictory PMV
+wording beside the current prices. The source-owned publisher and production-template packager
+explicitly enable VAT and company identity while retaining revised-offer/customer-scope settings
+at false. Svelte and explicit Astro recovery use that same production tuple. False/unset VAT
+states are historical comparison inputs only, not current-production recovery. CI retains them
+alongside an exact production probe. Protected merge, source/run receipt and actual bilingual
+visitor proof remain necessary; remove this temporary gate only after that proof.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -222,7 +227,7 @@ or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
 
 The public customer invitation covers private customers in Denmark and the rest of the EU
 and businesses in Denmark. The contact section explains that businesses in other EU countries
-cannot currently be served under the PMV setup, and outside-EU work is not open pending
+are not currently served while the applicable requirements are being confirmed, and outside-EU work is not open pending
 confirmation. `customer-scope.ts` supplies this boundary to Astro and the isolated Svelte
 candidate independently of offer and identity release flags. Astro requires the default-off
 `FEATURE_CUSTOMER_SCOPE=true` release preview; false and entirely unset builds retain the
@@ -233,8 +238,9 @@ Activation and subsequent flag removal require reviewed publication and live pro
 This copy is not order authorization: tax confirmations remain under #147,
 server-side eligibility under #146, and the separate hosted-offer assessment under #18.
 
-`src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
-and business email. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
+`src/data/company.json` holds the maintainer-confirmed registered name, CVR, ordinary sole-proprietor
+type, VAT effective date, owner and business email. The shared VAT selection retains separately
+named historical PMV facts solely for comparison. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
 the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a direct email
 link to `ned@devantler.tech` with LinkedIn as an alternative. False and entirely unset builds
 retain the existing LinkedIn contact and footer until reviewed activation and live proof.

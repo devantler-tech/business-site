@@ -1,7 +1,8 @@
 import type { Locale } from './business-copy';
+import company from '../../data/company.json' with { type: 'json' };
 
 // The published disclosure and the migration candidate share one translation source.
-export const companyCopy = {
+const historicalCompanyCopy = {
   da: {
     title: 'Virksomhed og kontakt', description: 'Registrering og kontaktoplysninger for Devantler Tech.',
     intro: 'Devantler Tech er en personligt ejet mindre virksomhed drevet af Nikolai Emil Damm.',
@@ -17,3 +18,15 @@ export const companyCopy = {
     contact: 'Have a project in mind? Email me and we can work out the next step together.',
   },
 } satisfies Record<Locale, Record<string, string>>;
+
+// Current maintainer-confirmed identity; false is an explicit historical input.
+export const companyCopy = {
+  en: { ...historicalCompanyCopy.en, intro: 'Devantler Tech is a sole proprietorship run by Nikolai Emil Damm.', type: 'Sole proprietorship' },
+  da: { ...historicalCompanyCopy.da, intro: 'Devantler Tech er en enkeltmandsvirksomhed drevet af Nikolai Emil Damm.', type: 'Enkeltmandsvirksomhed' },
+};
+
+export const companyCopyFor = (vatPricesEnabled: boolean) => vatPricesEnabled ? companyCopy : historicalCompanyCopy;
+
+export const companyFacts = (vatPricesEnabled: boolean) => vatPricesEnabled ? company : {
+  name: company.name, cvr: company.cvr, businessType: 'PMV', owner: company.owner, email: company.email,
+};

@@ -24,6 +24,7 @@ node --test scripts/company-rollout.test.mjs
 node --test scripts/customer-scope-rollout.test.mjs
 node --test scripts/vat-prices-rollout.test.mjs
 node --test scripts/vat-prices.test.mjs
+node --test scripts/vat-activation.test.mjs
 node --test scripts/customer-copy.test.mjs
 node --test scripts/company-address.test.mjs
 node --test scripts/journal-rollout.test.mjs

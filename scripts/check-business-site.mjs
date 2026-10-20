@@ -27,9 +27,12 @@ for (const path of readdirSync(root, { recursive: true })) {
     assertVisitorPrivacy(page, path);
     const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
     if (footer && companyEnabled) {
-      for (const fact of [company.name, company.cvr, company.businessType, company.owner, company.email]) {
+      const locale = parse(page).childNodes.find(node => node.tagName === 'html')?.attrs.find(attr => attr.name === 'lang')?.value;
+      const businessType = vatPrices ? (locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship') : 'PMV';
+      for (const fact of [company.name, company.cvr, businessType, company.owner, company.email]) {
         assert.ok(footer.includes(fact), `${path}: shared footer identifies the registered business`);
       }
+      if (vatPrices) assert.doesNotMatch(footer, /\bPMV\b/i, `${path}: current identity never calls the registered business a PMV`);
       assert.ok(footer.includes(`href="${companyContact}"`), `${path}: registered email is usable without a form backend`);
     } else if (footer) {
       assert.ok(!footer.includes(company.cvr) && !footer.includes(company.email), `${path}: unreleased registration remains absent`);

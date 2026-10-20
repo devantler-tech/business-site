@@ -1,8 +1,10 @@
 import { FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE, FEATURE_VAT_PRICES } from "$app/env/private";
-import company from "../../../src/data/company.json";
+import { companyFacts } from "../../../src/components/business/company-copy";
 import { createBusinessCopy, guideOffers, linkedInUrl, vatPriceMarker } from "../../../src/components/business/business-copy";
 import { createClientCopy } from "../../../src/components/business/client-copy";
 import { createSupportingCopy } from "../../../src/components/business/supporting-copy";
+
+const company = companyFacts(FEATURE_VAT_PRICES);
 
 export const business = {
   companyEnabled: FEATURE_COMPANY_IDENTITY,

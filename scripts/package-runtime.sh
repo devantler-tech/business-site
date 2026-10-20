@@ -37,7 +37,7 @@ build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "
 if [[ "$profile" == production-template ]]; then
   inputs="$(mktemp -d "$output/public-inputs.XXXXXX")"
   bash scripts/refresh-public-stars.sh "$inputs/stars.json"
-  build_env+=("PUBLIC_CONTENT_PROFILE=production-template" "FEATURE_COMPANY_IDENTITY=true" "PUBLIC_STARS_SNAPSHOT=$PWD/$inputs/stars.json")
+  build_env+=("PUBLIC_CONTENT_PROFILE=production-template" "FEATURE_COMPANY_IDENTITY=true" "FEATURE_VAT_PRICES=true" "PUBLIC_STARS_SNAPSHOT=$PWD/$inputs/stars.json")
 fi
 "${build_env[@]}" npm run build
 bash scripts/check-portal-artifacts.sh dist

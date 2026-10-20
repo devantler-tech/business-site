@@ -1,5 +1,6 @@
 import { publishedOffer } from './published-offer.ts';
 import { customerScopeCopy } from './customer-scope.ts';
+import { companyCopy } from './company-copy.ts';
 export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
@@ -229,7 +230,7 @@ export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer
   const scoped = createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
   if (!vatPricesEnabled) return scoped;
   return {
-    en: { ...scoped.en, priceNote: vatPriceNote('en', scoped.en.priceNote) },
-    da: { ...scoped.da, priceNote: vatPriceNote('da', scoped.da.priceNote) },
+    en: { ...scoped.en, priceNote: vatPriceNote('en', scoped.en.priceNote), registrationType: companyCopy.en.type },
+    da: { ...scoped.da, priceNote: vatPriceNote('da', scoped.da.priceNote), registrationType: companyCopy.da.type },
   };
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { companyCopyFor, companyFacts } from '../src/components/business/company-copy.ts';
 import {
   createBusinessCopy, guideOffers, netOf, offers, vatInclusiveOffers, vatPriceMarker, vatPriceNote, vatRatePercent,
 } from '../src/components/business/business-copy.ts';
@@ -11,6 +12,14 @@ const decided = {
   app: { setup: 10000, monthly: 375 },
   service: { setup: 6250, monthly: 250 },
 };
+
+test('current identity has the confirmed effective date and no serialized PMV facts', () => {
+  assert.equal(companyFacts(true).businessType, 'Enkeltmandsvirksomhed');
+  assert.equal(companyFacts(true).vatEffectiveDate, '2026-10-20');
+  assert.doesNotMatch(JSON.stringify([companyFacts(true), companyCopyFor(true)]), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
+  assert.equal(companyFacts(false).businessType, 'PMV', 'false selects only the historical comparison');
+  assert.equal(companyFacts(false).vatEffectiveDate, undefined);
+});
 
 test('VAT-inclusive totals are exactly the decided prices', () => {
   assert.equal(vatRatePercent, 25);
@@ -39,6 +48,17 @@ test('VAT is never added to an already VAT-inclusive total', () => {
   }
 });
 
+test('all six gross totals contain the exact approved net amount and VAT', () => {
+  const expected = [[375000, 300000, 75000], [12500, 10000, 2500],
+    [1000000, 800000, 200000], [37500, 30000, 7500],
+    [625000, 500000, 125000], [25000, 20000, 5000]];
+  const actual = vatInclusiveOffers.flatMap(offer => ['setup', 'monthly'].map(field => {
+    const gross = offer[field] * 100, net = netOf(offer[field]) * 100;
+    return [gross, net, gross - net];
+  }));
+  assert.deepEqual(actual, expected, 'integer minor-unit gross = net + VAT for every price');
+});
+
 test('net amounts must be exact whole kroner', () => {
   assert.equal(netOf(3750), 3000);
   assert.throws(() => netOf(3749), /no whole-krone net amount/);
@@ -54,7 +74,7 @@ test('the release decision selects the guide prices and the marker', () => {
 });
 
 for (const identity of [false, true]) for (const offer of [false, true]) for (const scope of [false, true]) {
-  test(`VAT prices change only the price note's VAT sentence (identity=${identity}, offer=${offer}, scope=${scope})`, () => {
+  test(`VAT release selects consistent price and ordinary registration (identity=${identity}, offer=${offer}, scope=${scope})`, () => {
     const off = createBusinessCopy(identity, offer, scope);
     assert.deepEqual(createBusinessCopy(identity, offer, scope, false), off, 'off is the default');
     const on = createBusinessCopy(identity, offer, scope, true);
@@ -66,7 +86,8 @@ for (const identity of [false, true]) for (const offer of [false, true]) for (co
       assert.ok(!on[locale].priceNote.includes(pmv));
       assert.ok(on[locale].priceNote.includes(vat));
       assert.equal(on[locale].priceNote, off[locale].priceNote.replace(pmv, vat));
-      assert.deepEqual({ ...on[locale], priceNote: off[locale].priceNote }, off[locale], 'nothing else changes');
+      assert.equal(on[locale].registrationType, locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship');
+      assert.deepEqual({ ...on[locale], priceNote: off[locale].priceNote, registrationType: off[locale].registrationType }, off[locale], 'unrelated offer and audience decisions stay unchanged');
     }
   });
 }
