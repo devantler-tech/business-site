@@ -25,6 +25,9 @@ does not need Node for its template inventory.
 
 ## Frozen task exercise
 
+ADR 0016 permits this bounded early rejection only after its reviewed merge.
+Its negative decision cannot establish adoption or clear an unmeasured budget.
+
 Freeze the reviewed merge and individual test-file hashes before exercising the
 task. Reuse these exact two files as the separately identified shared harness:
 
