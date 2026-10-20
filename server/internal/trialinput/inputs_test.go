@@ -23,6 +23,7 @@ func fixture(t *testing.T) (string, policy, Inputs) {
 	files := map[string]string{
 		"plan.md": "frozen plan\n", "amendment.md": "frozen amendment\n",
 		"lock": "fixed dependencies\n", "authority.go": "unchanged authority\n",
+		"server/internal/identity/browser.go":        "Theme: \"Appearance\"\nd.Theme = \"Udseende\"\nunchanged authority\n",
 		"server/internal/identity/web/portal.html":   "Appearance\n",
 		"server/internal/identity/web/contact.html":  "Name\n",
 		"web/src/lib/private-contact/Contact.svelte": "Name\n",
@@ -37,6 +38,30 @@ func fixture(t *testing.T) (string, policy, Inputs) {
 		pins:      map[string]string{"lock": digest([]byte("fixed dependencies\n"))},
 		documents: []document{{shared, "plan.md", digest([]byte("frozen plan\n"))}, {shared, "amendment.md", digest([]byte("frozen amendment\n"))}}}
 	return dir, p, Inputs{Plan: shared, Baseline: shared, Candidate: shared}
+}
+
+func TestFrozenSharedAppearanceCopy(t *testing.T) {
+	for _, extra := range []bool{false, true} {
+		t.Run(map[bool]string{false: "exact-copy", true: "copy-with-authority-change"}[extra], func(t *testing.T) {
+			dir, p, input := fixture(t)
+			value := "Theme: \"Colour theme\"\nd.Theme = \"Farvetema\"\nunchanged authority\n"
+			if extra {
+				value += "changed authority\n"
+			}
+			writeFixture(t, dir, "server/internal/identity/browser.go", value)
+			commitFixture(t, dir)
+			input.Baseline = gitFixture(t, dir, "rev-parse", "HEAD")
+			input.Candidate = input.Baseline
+			receipt, err := check(t.Context(), dir, input, p)
+			if extra {
+				if err == nil {
+					t.Fatal("copy change concealed an authority edit")
+				}
+			} else if err != nil || strings.Join(receipt.Baseline.Changed, ",") != "server/internal/identity/browser.go" {
+				t.Fatal("the frozen native shared appearance-copy change was refused")
+			}
+		})
+	}
 }
 
 func TestPartialReadAndOverflowAreRefused(t *testing.T) {

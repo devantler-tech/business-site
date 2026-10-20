@@ -149,6 +149,9 @@ func source(ctx context.Context, repository, id string, p policy, candidate bool
 	}
 	for _, path := range paths {
 		allowed := path == "server/internal/identity/web/portal.html" || path == "server/internal/identity/web/contact.html" || (candidate && path == "web/src/lib/private-contact/Contact.svelte")
+		if path == "server/internal/identity/browser.go" {
+			allowed = sharedAppearance(ctx, repository, p.shared, id)
+		}
 		if !allowed {
 			return Source{}, errRefused
 		}
@@ -163,6 +166,20 @@ func source(ctx context.Context, repository, id string, p policy, candidate bool
 		return Source{}, errRefused
 	}
 	return Source{Commit: id, Tree: value, Changed: paths}, nil
+}
+
+// The shared frame's copy lives beside authority code. Permit only the two
+// preregistered literal substitutions, never arbitrary changes to that file.
+func sharedAppearance(ctx context.Context, repository, shared, id string) bool {
+	const path = "server/internal/identity/browser.go"
+	original, err := git(ctx, repository, "show", shared+":"+path)
+	if err != nil || bytes.Count(original, []byte(`Theme: "Appearance"`)) != 1 || bytes.Count(original, []byte(`d.Theme = "Udseende"`)) != 1 {
+		return false
+	}
+	expected := bytes.Replace(original, []byte(`Theme: "Appearance"`), []byte(`Theme: "Colour theme"`), 1)
+	expected = bytes.Replace(expected, []byte(`d.Theme = "Udseende"`), []byte(`d.Theme = "Farvetema"`), 1)
+	actual, err := git(ctx, repository, "show", id+":"+path)
+	return err == nil && bytes.Equal(actual, expected)
 }
 
 func hasDigest(ctx context.Context, repository, id, path, want string) bool {

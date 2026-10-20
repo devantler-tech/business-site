@@ -14,6 +14,9 @@ GOTOOLCHAIN=local go build -o /private/output/contact-trial-inputs ./cmd/contact
 Use a clean local source checkout containing the full frozen history and an
 existing owner-only (`0700`) absolute output directory:
 
+The checkout must be trusted own-source history. This tool is not a sandbox for
+arbitrary repositories or permission to execute an untrusted author's branch.
+
 ```sh
 /private/output/contact-trial-inputs \
   --repository /private/clean-source \
@@ -35,6 +38,10 @@ changed dependencies and changes outside the following paths are refused:
 
 - Both sides: `server/internal/identity/web/portal.html` and `contact.html`.
 - Candidate only: `web/src/lib/private-contact/Contact.svelte`.
+- Both sides: `server/internal/identity/browser.go` only when its entire blob
+  equals the frozen shared source with exactly the preregistered `Appearance`
+  and `Udseende` literals changed to `Colour theme` and `Farvetema`. Any other
+  byte change in this authority-bearing file is refused.
 
 The repository argument must name its root, not a subdirectory that can narrow
 an observation. Checkouts with configured clean/process filters are refused
