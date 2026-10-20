@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"io"
 	"net/http/httptest"
 	"slices"
 	"strconv"
@@ -105,6 +106,10 @@ func TestContactMaintenanceCompiledEnvelope(t *testing.T) {
 			}
 			for name, bad := range map[string]string{
 				"full document": page.markup,
+				"empty shell":   `<html><head></head><body>` + body + `</body></html>`,
+				"body shell":    `<body>` + body + `</body>`,
+				"doctype":       `<!doctype html>` + body,
+				"unclosed main": strings.TrimSuffix(body, `</main>`),
 				"script":        body + `<script src="/unexpected.js"></script>`,
 				"stylesheet":    body + `<link rel="stylesheet" href="/unexpected.css">`,
 				"wrapper":       `<aside>` + body + `</aside>`,
@@ -118,6 +123,84 @@ func TestContactMaintenanceCompiledEnvelope(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The fragment grammar is closed before any parser can repair its raw envelope.
+func TestContactMaintenanceFragmentGrammar(t *testing.T) {
+	for _, good := range []string{"<main></main>", "<!--[-->\n<main><p>Text</p><input></main>\t<!--]-->", "<main><br/><input /></main>"} {
+		if err := checkMaintenanceFragment(good); err != nil {
+			t.Fatalf("valid explicit fragment: %v", err)
+		}
+	}
+	for _, bad := range []string{
+		"", " \t\n", "<!--alone-->", "<body><main></main></body>",
+		"<main><body></body></main>", "<!doctype html><main></main>",
+		"<main><!doctype html></main>", "<main/>", "<main><p></main>",
+		"<main></main><main></main>", "<main></main></body>",
+		"<main></main><!--unterminated", "<main></main><?bogus>",
+		"&#32;<main></main>", "\u00a0<main></main>", "<main></main>prose",
+		"<main><input></input></main>", "<main><p/></main>",
+	} {
+		if checkMaintenanceFragment(bad) == nil {
+			t.Errorf("invalid raw fragment accepted: %q", bad)
+		}
+	}
+}
+
+// Synthetic task expectations are validator controls, not frozen task samples.
+func TestContactMaintenanceExplicitTaskBody(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for index, page := range pages {
+		lang := "en"
+		if index >= len(maintenanceContactViews) {
+			lang = "da"
+		}
+		markup := page.markup
+		if !*maintenanceTask {
+			markup = maintenanceHintFixture(t, markup, lang)
+		}
+		data := maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)])
+		if err := checkMaintenanceState(markup, data, true); err != nil {
+			t.Fatalf("literal task fixture: %v", err)
+		}
+		for label, child := range map[string]string{
+			"empty span":      `<span></span>`,
+			"class span":      `<span class="unexpected"></span>`,
+			"event span":      `<span onclick="unexpected()"></span>`,
+			"empty paragraph": `<p></p>`,
+		} {
+			t.Run(strconv.Itoa(index)+"/"+label, func(t *testing.T) {
+				bad := strings.Replace(markup, `<p id="contact-name-help">`, `<p id="contact-name-help">`+child, 1)
+				if bad == markup {
+					t.Fatal("control failed to alter the hint")
+				}
+				if checkMaintenanceState(bad, data, true) == nil {
+					t.Fatal("extra task hint subtree was accepted")
+				}
+			})
+		}
+	}
+}
+
+// maintenanceHintFixture applies only the literal registered hint to validator
+// input. It never renders or changes either separately frozen task source.
+func maintenanceHintFixture(t *testing.T, markup, lang string) string {
+	t.Helper()
+	return maintenanceAlter(t, markup, func(n *html.Node) bool {
+		return n.Data == "input" && linkAttribute(n, "id") == "contact-name"
+	}, func(n *html.Node) {
+		n.Attr = append(n.Attr, html.Attribute{Key: "aria-describedby", Val: "contact-name-help"})
+		hint := "You can update these details later."
+		if lang == "da" {
+			hint = "Du kan ændre oplysningerne senere."
+		}
+		paragraph := &html.Node{Type: html.ElementNode, Data: "p", Attr: []html.Attribute{{Key: "id", Val: "contact-name-help"}}}
+		paragraph.AppendChild(&html.Node{Type: html.TextNode, Data: hint})
+		n.Parent.InsertBefore(paragraph, n.NextSibling)
+	})
 }
 
 func TestContactMaintenanceCompleteBodyRejections(t *testing.T) {
@@ -335,7 +418,8 @@ func maintenanceFrameDigest(markup, lang string, task bool) (string, error) {
 
 // The whole contact main is compared with immutable ordinary Go output. Only
 // compiler comments, formatting whitespace and attribute order are immaterial.
-// The task's validated name hint is projected away, never removed from evidence.
+// Ordinary and task bodies have separate complete expected trees. Neither the
+// task hint nor its association is removed from the fingerprint.
 func maintenanceContactDigest(markup, lang string, task bool) (string, error) {
 	if err := checkMaintenanceContact(markup, lang, task); err != nil {
 		return "", err
@@ -344,7 +428,7 @@ func maintenanceContactDigest(markup, lang string, task bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var main, name, hint *html.Node
+	var main *html.Node
 	for n := range doc.Descendants() {
 		if n.Type != html.ElementNode {
 			continue
@@ -355,30 +439,16 @@ func maintenanceContactDigest(markup, lang string, task bool) (string, error) {
 			}
 			main = n
 		}
-		if linkAttribute(n, "id") == "contact-name" {
-			name = n
-		}
-		if linkAttribute(n, "id") == "contact-name-help" {
-			hint = n
-		}
 	}
 	if main == nil {
 		return "", errors.New("complete contact main is required")
 	}
-	if task && (hint == nil || hint.Data != "p" || hint.Parent != name.Parent || hint.Parent.Data != "form" || len(hint.Attr) != 1) {
-		return "", errors.New("task hint projection is outside its native form")
-	}
 	var project func(*html.Node) (maintenanceDOM, bool)
 	project = func(n *html.Node) (maintenanceDOM, bool) {
-		if n.Type == html.CommentNode || maintenanceFormattingSpace(n) || (task && n == hint) {
+		if n.Type == html.CommentNode || maintenanceFormattingSpace(n) {
 			return maintenanceDOM{}, false
 		}
 		d := maintenanceDOM{Type: n.Type, Data: n.Data, Namespace: n.Namespace, Attr: slices.Clone(n.Attr)}
-		if task && n == name {
-			d.Attr = slices.DeleteFunc(d.Attr, func(a html.Attribute) bool {
-				return a.Namespace == "" && a.Key == "aria-describedby" && a.Val == "contact-name-help"
-			})
-		}
 		slices.SortFunc(d.Attr, func(a, b html.Attribute) int {
 			if order := strings.Compare(a.Namespace, b.Namespace); order != 0 {
 				return order
@@ -406,40 +476,62 @@ func maintenanceContactDigest(markup, lang string, task bool) (string, error) {
 // The worker returns a body fragment, not a full Go document. Its complete main
 // cannot excuse extra content that would be inserted into the surrounding frame.
 func checkMaintenanceCompiledState(markup string, page contactPageData, task bool) error {
-	if err := checkMaintenanceState(markup, page, task); err != nil {
+	if err := checkMaintenanceFragment(markup); err != nil {
 		return err
 	}
-	doc, err := html.Parse(strings.NewReader(markup))
-	if err != nil {
-		return err
-	}
-	var main *html.Node
-	for n := range doc.Descendants() {
-		if n.Type == html.ElementNode && n.Data == "main" {
-			main = n
+	return checkMaintenanceState(markup, page, task)
+}
+
+// checkMaintenanceFragment admits one explicit, balanced main element with
+// comments/ASCII whitespace around it. Parsing must not synthesize its envelope.
+func checkMaintenanceFragment(markup string) error {
+	tokens := html.NewTokenizer(strings.NewReader(markup))
+	var stack []string
+	seen := false
+	for {
+		switch kind := tokens.Next(); kind {
+		case html.ErrorToken:
+			if tokens.Err() == io.EOF && seen && len(stack) == 0 {
+				return nil
+			}
+			return errors.New("compiled fragment is incomplete")
+		case html.CommentToken:
+			raw := string(tokens.Raw())
+			if !strings.HasPrefix(raw, "<!--") || !strings.HasSuffix(raw, "-->") {
+				return errors.New("compiled fragment has an incomplete comment")
+			}
+		case html.TextToken:
+			if len(stack) == 0 && strings.Trim(string(tokens.Raw()), " \t\n\r\f") != "" {
+				return errors.New("compiled fragment has outside text")
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			token := tokens.Token()
+			if slices.Contains([]string{"html", "head", "body"}, token.Data) {
+				return errors.New("compiled fragment has an explicit document shell")
+			}
+			if len(stack) == 0 {
+				if seen || token.Data != "main" || kind != html.StartTagToken {
+					return errors.New("compiled fragment requires one main root")
+				}
+				seen = true
+			}
+			void := slices.Contains([]string{"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}, token.Data)
+			if kind == html.SelfClosingTagToken && !void {
+				return errors.New("compiled fragment self-closes a non-void element")
+			}
+			if !void {
+				stack = append(stack, token.Data)
+			}
+		case html.EndTagToken:
+			token := tokens.Token()
+			if len(stack) == 0 || stack[len(stack)-1] != token.Data {
+				return errors.New("compiled fragment has an unmatched closing tag")
+			}
+			stack = stack[:len(stack)-1]
+		default:
+			return errors.New("compiled fragment contains a document declaration")
 		}
 	}
-	counts := map[string]int{}
-	for n := range doc.Descendants() {
-		inside := false
-		for parent := n; parent != nil; parent = parent.Parent {
-			inside = inside || parent == main
-		}
-		if inside || n.Type == html.CommentNode || (n.Type == html.TextNode && strings.Trim(n.Data, " \t\n\r\f") == "") {
-			continue
-		}
-		if n.Type != html.ElementNode || n.Namespace != "" || len(n.Attr) != 0 || !slices.Contains([]string{"html", "head", "body"}, n.Data) {
-			return errors.New("compiled body contains content outside its complete main")
-		}
-		if (n.Data == "html" && n.Parent != doc) || (n.Data != "html" && (n.Parent == nil || n.Parent.Data != "html")) {
-			return errors.New("compiled body has a changed document envelope")
-		}
-		counts[n.Data]++
-	}
-	if counts["html"] != 1 || counts["head"] != 1 || counts["body"] != 1 || main == nil || main.Parent == nil || main.Parent.Data != "body" {
-		return errors.New("compiled body has an incomplete document envelope")
-	}
-	return nil
 }
 
 // Discard indentation only between block-level structure. Text in labels,
@@ -606,6 +698,23 @@ var maintenanceContactReferences = []string{
 	"60fb257b249912911cb7bb1735e6e0b8ff462dc68065c406e4b1af224ad43496",
 	"37607be5da132ea95d5ccea26ba5fd3f10242cc872174cb97848aa089c384381",
 	"5acac781124124a87c6723a49b50d31e080b20642c22ddd0c72b1c550c2b2582",
+}
+
+// Literal task expectations come from the ordinary immutable source plus only
+// the registered name association and text-only paragraph, not a task renderer.
+var maintenanceTaskContactReferences = []string{
+	"7c6559469054c5c109b171800f4ae4fb6a54f19291b77801fa2e291b5af66832",
+	"548853e3558f2b83a7beefca519da79f4f2af7645ec776f6fadc806272fd501b",
+	"b8993ab4a48ebadf5b385c1f122d0dd59a7b152bea21ac97e7e2293355ba5731",
+	"b811a0468ca4a989b5508282cf3dacfe9df2eb618e03cc2006cfbb16833736a8",
+	"023a649fbe0d99e94bebe1fe710e15acb0868b64098a09d85918300705b1d994",
+	"c236137ae30e6ba75f2e20d9ec3f237e24876f1a8dc274f27e3d88246ecdf946",
+	"4787093281cc27e5013312c1ce28603f1e97204e8329d6e5dfaf08c4c9369016",
+	"eb4e86e2f4528b10c1a51ec67e4b7e6caa5d259e11bb1cb085a6310a27264e89",
+	"6aae3d9906f34cffe4fd66d72b13c24a6aa7ced66611780667897f9688900b51",
+	"2f0010fbcb3bd59b16d2814cc2eacf0b367ed7db1b78043feedd05458f0fa58f",
+	"6edc76e88121dd3b5f71bd615dd1c82b0cd37c4d79bc6bbe67076287cd4b651d",
+	"2d3aeddf0f3b61ec643a7c4e69fd7aa441c7b4b4b7f1e7bae767bbcf651fc777",
 }
 
 // maintenanceMainDigest fingerprints the complete parsed main tree, including
@@ -1321,11 +1430,15 @@ func checkMaintenanceState(markup string, page contactPageData, task bool) error
 	if page.Lang == "da" && index >= 0 {
 		index += len(maintenanceContactViews)
 	}
-	if index < 0 || len(maintenanceContactReferences) != 12 {
+	expected := maintenanceContactReferences
+	if task {
+		expected = maintenanceTaskContactReferences
+	}
+	if index < 0 || len(expected) != 12 {
 		return errors.New("unknown frozen contact state")
 	}
 	got, err := maintenanceContactDigest(markup, page.Lang, task)
-	if err != nil || got != maintenanceContactReferences[index] {
+	if err != nil || got != expected[index] {
 		return errors.New("complete contact body differs from frozen reference")
 	}
 	return nil

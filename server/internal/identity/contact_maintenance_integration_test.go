@@ -36,6 +36,18 @@ func TestCompiledContactMaintenance(t *testing.T) {
 			if err := checkMaintenanceCompiledState(body, page, *maintenanceTask); err != nil {
 				t.Fatalf("compiled view=%s language=%s: %v", view, lang, err)
 			}
+			for name, bad := range map[string]string{
+				"empty document shell": "<html><head></head><body>" + body + "</body></html>",
+				"body shell":           "<body>" + body + "</body>",
+				"doctype":              "<!doctype html>" + body,
+				"unclosed comment":     body + "<!--unterminated",
+			} {
+				t.Run(lang+"/"+view+"/"+name, func(t *testing.T) {
+					if checkMaintenanceCompiledState(bad, page, *maintenanceTask) == nil {
+						t.Fatal("raw compiled envelope was repaired into an accepted fragment")
+					}
+				})
+			}
 			for _, target := range []string{"main", "intro", "heading", "section", "reload", "workspace"} {
 				t.Run(lang+"/"+view+"/"+target, func(t *testing.T) {
 					bad := maintenanceAlterBody(t, body, lang, target)

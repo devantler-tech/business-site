@@ -30,23 +30,31 @@ immutable `a1be78797e7886e3eb57605792027af6d4811add` source. This covers the
 main, title, introduction, enclosing section, forms, state messages and both
 reload/workspace links, not only input controls. The actual compiled Svelte
 worker must match that same complete contact tree in every state.
-Its outer fragment must contain only that main and the parser's empty implicit
-document shell, apart from inert comments and ASCII formatting whitespace.
-Extra elements, attributes or prose outside the main are refused, including
-scripts, styles and stylesheet links that would otherwise enter the Go frame.
+Its raw fragment must contain exactly one explicitly balanced main, apart from
+complete compiler comments and literal ASCII formatting whitespace. A tokenizer
+checks this closed grammar before DOM parsing: explicit document wrappers,
+declarations, incomplete comments, unmatched tags and additional roots are not
+repaired into acceptable fragments. The complete DOM oracle then checks every
+element and attribute inside the main. Extra outside scripts, styles, links and
+prose cannot enter the Go frame.
 
 The contact projection ignores compiler comments, attribute order and ASCII
 indentation directly between block containers (`main`, `div`, `section`, `form`).
 Adjacent text split by compiler comments is joined. All remaining text is exact,
-including label/prose boundary spaces and non-breaking characters. The task's
-already validated name hint and its exact input association are projected away
-only in this separate oracle representation. The hint must remain a uniquely
-identified paragraph inside the name input's native form. Raw rendered evidence
-and parsed input trees are never rewritten.
+including label/prose boundary spaces and non-breaking characters. Ordinary and
+task bodies use separate explicit expected digests. The complete task hint,
+all descendants/attributes and its input association remain in the fingerprint;
+no task subtree is projected away. Raw rendered evidence and parsed input trees
+are never rewritten.
 
-Both new oracle tables were recorded twice from the ordinary immutable source
-with the shared fictional fixtures, Go 1.27.2 and `LC_ALL=C`; the recordings
-agree. No maintenance-task fixture supplied an expected value. Refusal controls
+The frame and ordinary body tables were recorded twice from the ordinary immutable
+source with the shared fictional fixtures, Go 1.27.2 and `LC_ALL=C`; the recordings
+agree. The explicit task-body table starts from that same ordinary output and
+adds only the registered literal name association and text-only paragraph
+immediately after the name input. Two recordings agree and reproduce all 12
+unchanged ordinary digests. This is expectation construction, not execution of
+either separately frozen task source. No task renderer supplies an expected
+value. Refusal controls
 damage each complete frame and remove each structural contact element while
 retaining the forms. The compiled controls alter actual worker output. Those
 altered validator inputs are never comparative task samples.
