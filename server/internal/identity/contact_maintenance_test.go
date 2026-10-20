@@ -30,6 +30,167 @@ func maintenanceProblem(view string) string {
 	return view
 }
 
+// These mutations retain the actual main body, unlike a partial-document probe.
+func TestContactMaintenanceFullFrameRejections(t *testing.T) {
+	for name := range maintenanceCases {
+		pages, err := renderedMaintenancePages(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for index, page := range pages {
+			for _, target := range []string{"brand", "skip", "language", "stylesheet", "script", "theme-label-hidden", "theme-label-inert", "theme-select-hidden", "theme-select-inert"} {
+				t.Run(name+"/"+strconv.Itoa(index)+"/"+target, func(t *testing.T) {
+					bad := maintenanceAlter(t, page.markup, func(n *html.Node) bool {
+						switch target {
+						case "brand", "skip":
+							return n.Data == "a" && linkAttribute(n, "class") == target
+						case "language":
+							return n.Data == "a" && linkAttribute(n, "lang") != ""
+						case "stylesheet":
+							return n.Data == "link" && linkAttribute(n, "rel") == "stylesheet"
+						case "script":
+							return n.Data == "script"
+						case "theme-label-hidden", "theme-label-inert":
+							return n.Data == "label" && n.LastChild != nil && n.LastChild.Data == "select" && linkAttribute(n.LastChild, "id") == "theme"
+						default:
+							return n.Data == "select" && linkAttribute(n, "id") == "theme"
+						}
+					}, func(n *html.Node) {
+						if strings.HasSuffix(target, "-hidden") {
+							n.Attr = append(n.Attr, html.Attribute{Key: "hidden"})
+						} else if strings.HasSuffix(target, "-inert") {
+							n.Attr = append(n.Attr, html.Attribute{Key: "inert"})
+						} else {
+							n.Parent.RemoveChild(n)
+						}
+					})
+					if checkMaintenanceInventoryPage(name, index, bad, *maintenanceTask) == nil {
+						t.Fatal("damaged complete private frame was accepted")
+					}
+				})
+			}
+		}
+	}
+}
+
+// Normal-suite controls exercise the envelope without claiming compiler proof.
+func TestContactMaintenanceCompiledEnvelope(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for index, page := range pages {
+		t.Run(strconv.Itoa(index), func(t *testing.T) {
+			lang := "en"
+			if index >= len(maintenanceContactViews) {
+				lang = "da"
+			}
+			data := maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)])
+			doc, err := html.Parse(strings.NewReader(page.markup))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fragment strings.Builder
+			for n := range doc.Descendants() {
+				if n.Type == html.ElementNode && n.Data == "main" {
+					if err := html.Render(&fragment, n); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			body := fragment.String()
+			if err := checkMaintenanceCompiledState(body, data, *maintenanceTask); err != nil {
+				t.Fatal(err)
+			}
+			for name, bad := range map[string]string{
+				"full document": page.markup,
+				"script":        body + `<script src="/unexpected.js"></script>`,
+				"stylesheet":    body + `<link rel="stylesheet" href="/unexpected.css">`,
+				"wrapper":       `<aside>` + body + `</aside>`,
+				"text":          body + `Unexpected trailing content`,
+			} {
+				t.Run(name, func(t *testing.T) {
+					if checkMaintenanceCompiledState(bad, data, *maintenanceTask) == nil {
+						t.Fatal("content outside the body fragment was accepted")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestContactMaintenanceCompleteBodyRejections(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for index, page := range pages {
+		lang := "en"
+		if index >= 6 {
+			lang = "da"
+		}
+		for _, target := range []string{"main", "intro", "heading", "section", "reload", "workspace"} {
+			t.Run(strconv.Itoa(index)+"/"+target, func(t *testing.T) {
+				bad := maintenanceAlterBody(t, page.markup, lang, target)
+				if checkMaintenanceState(bad, maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)]), *maintenanceTask) == nil {
+					t.Fatal("incomplete contact body was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Altered validator inputs are refusal controls, never comparative samples.
+func maintenanceAlterBody(t *testing.T, markup, lang, target string) string {
+	t.Helper()
+	return maintenanceAlter(t, markup, func(n *html.Node) bool {
+		switch target {
+		case "main", "section":
+			return n.Data == target
+		case "intro":
+			return n.Data == "div" && linkAttribute(n, "class") == "intro"
+		case "heading":
+			return n.Data == "h1"
+		case "reload":
+			return n.Data == "a" && linkAttribute(n, "href") == "/portal/contact?lang="+lang
+		default:
+			return n.Data == "a" && linkAttribute(n, "href") == "/portal/?lang="+lang
+		}
+	}, func(n *html.Node) {
+		if target == "main" || target == "section" {
+			for n.FirstChild != nil {
+				child := n.FirstChild
+				n.RemoveChild(child)
+				n.Parent.InsertBefore(child, n)
+			}
+		}
+		n.Parent.RemoveChild(n)
+	})
+}
+
+func maintenanceAlter(t *testing.T, markup string, match func(*html.Node) bool, alter func(*html.Node)) string {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var matches []*html.Node
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && match(n) {
+			matches = append(matches, n)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("mutation requires one actual target, got %d", len(matches))
+	}
+	alter(matches[0])
+	var result strings.Builder
+	if err := html.Render(&result, doc); err != nil {
+		t.Fatal(err)
+	}
+	return result.String()
+}
+
 // TestContactMaintenanceInventory requires the real frame in every maintained view.
 func TestContactMaintenanceInventory(t *testing.T) {
 	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
@@ -67,9 +228,13 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if err := checkMaintenanceDocument(markup, lang, name == "contact.html", task); err != nil {
 		return err
 	}
+	frame, err := maintenanceFrameDigest(markup, lang, task)
+	if err != nil || len(maintenanceFrameReferences[name]) != count || frame != maintenanceFrameReferences[name][index] {
+		return errors.New("complete private frame differs from frozen reference")
+	}
 	if name == "contact.html" {
 		view := maintenanceContactViews[index%len(maintenanceContactViews)]
-		return checkMaintenanceState(markup, maintenancePage(lang, view))
+		return checkMaintenanceState(markup, maintenancePage(lang, view), task)
 	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
 	if err != nil {
@@ -108,6 +273,338 @@ type maintenanceDOM struct {
 	Namespace string
 	Attr      []html.Attribute
 	Children  []maintenanceDOM
+}
+
+// Frame projection retains the whole document except the independently checked
+// main contents. Only the validated task label is projected to its original text.
+func maintenanceFrameDigest(markup, lang string, task bool) (string, error) {
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		return "", err
+	}
+	var main, theme *html.Node
+	for n := range doc.Descendants() {
+		if n.Type != html.ElementNode {
+			continue
+		}
+		if n.Data == "main" {
+			if main != nil || !maintenanceRendered(n) {
+				return "", errors.New("missing or inactive unique main")
+			}
+			main = n
+		}
+		if n.Data == "select" && linkAttribute(n, "id") == "theme" {
+			if theme != nil || !maintenanceRendered(n) || n.Parent == nil || n.Parent.Data != "label" {
+				return "", errors.New("missing or inactive unique theme control")
+			}
+			theme = n
+		}
+	}
+	if main == nil || theme == nil {
+		return "", errors.New("incomplete private frame")
+	}
+	original, current := "Appearance", "Colour theme"
+	if lang == "da" {
+		original, current = "Udseende", "Farvetema"
+	}
+	if !task {
+		current = original
+	}
+	labels := 0
+	var project func(*html.Node) maintenanceDOM
+	project = func(n *html.Node) maintenanceDOM {
+		d := maintenanceDOM{Type: n.Type, Data: n.Data, Namespace: n.Namespace, Attr: slices.Clone(n.Attr)}
+		if n.Type == html.TextNode && n.Parent == theme.Parent && n.Data == current {
+			d.Data = original
+			labels++
+		}
+		if n != main {
+			for child := n.FirstChild; child != nil; child = child.NextSibling {
+				d.Children = append(d.Children, project(child))
+			}
+		}
+		return d
+	}
+	projection := project(doc)
+	if labels != 1 {
+		return "", errors.New("theme label projection is incomplete")
+	}
+	return maintenanceDigest(projection)
+}
+
+// The whole contact main is compared with immutable ordinary Go output. Only
+// compiler comments, formatting whitespace and attribute order are immaterial.
+// The task's validated name hint is projected away, never removed from evidence.
+func maintenanceContactDigest(markup, lang string, task bool) (string, error) {
+	if err := checkMaintenanceContact(markup, lang, task); err != nil {
+		return "", err
+	}
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		return "", err
+	}
+	var main, name, hint *html.Node
+	for n := range doc.Descendants() {
+		if n.Type != html.ElementNode {
+			continue
+		}
+		if n.Data == "main" {
+			if main != nil || !maintenanceRendered(n) || linkAttribute(n, "id") != "main" {
+				return "", errors.New("contact main is missing, duplicated or inactive")
+			}
+			main = n
+		}
+		if linkAttribute(n, "id") == "contact-name" {
+			name = n
+		}
+		if linkAttribute(n, "id") == "contact-name-help" {
+			hint = n
+		}
+	}
+	if main == nil {
+		return "", errors.New("complete contact main is required")
+	}
+	if task && (hint == nil || hint.Data != "p" || hint.Parent != name.Parent || hint.Parent.Data != "form" || len(hint.Attr) != 1) {
+		return "", errors.New("task hint projection is outside its native form")
+	}
+	var project func(*html.Node) (maintenanceDOM, bool)
+	project = func(n *html.Node) (maintenanceDOM, bool) {
+		if n.Type == html.CommentNode || maintenanceFormattingSpace(n) || (task && n == hint) {
+			return maintenanceDOM{}, false
+		}
+		d := maintenanceDOM{Type: n.Type, Data: n.Data, Namespace: n.Namespace, Attr: slices.Clone(n.Attr)}
+		if task && n == name {
+			d.Attr = slices.DeleteFunc(d.Attr, func(a html.Attribute) bool {
+				return a.Namespace == "" && a.Key == "aria-describedby" && a.Val == "contact-name-help"
+			})
+		}
+		slices.SortFunc(d.Attr, func(a, b html.Attribute) int {
+			if order := strings.Compare(a.Namespace, b.Namespace); order != 0 {
+				return order
+			}
+			if order := strings.Compare(a.Key, b.Key); order != 0 {
+				return order
+			}
+			return strings.Compare(a.Val, b.Val)
+		})
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			if value, keep := project(child); keep {
+				if value.Type == html.TextNode && len(d.Children) > 0 && d.Children[len(d.Children)-1].Type == html.TextNode {
+					d.Children[len(d.Children)-1].Data += value.Data
+				} else {
+					d.Children = append(d.Children, value)
+				}
+			}
+		}
+		return d, true
+	}
+	projection, _ := project(main)
+	return maintenanceDigest(projection)
+}
+
+// The worker returns a body fragment, not a full Go document. Its complete main
+// cannot excuse extra content that would be inserted into the surrounding frame.
+func checkMaintenanceCompiledState(markup string, page contactPageData, task bool) error {
+	if err := checkMaintenanceState(markup, page, task); err != nil {
+		return err
+	}
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		return err
+	}
+	var main *html.Node
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && n.Data == "main" {
+			main = n
+		}
+	}
+	counts := map[string]int{}
+	for n := range doc.Descendants() {
+		inside := false
+		for parent := n; parent != nil; parent = parent.Parent {
+			inside = inside || parent == main
+		}
+		if inside || n.Type == html.CommentNode || (n.Type == html.TextNode && strings.Trim(n.Data, " \t\n\r\f") == "") {
+			continue
+		}
+		if n.Type != html.ElementNode || n.Namespace != "" || len(n.Attr) != 0 || !slices.Contains([]string{"html", "head", "body"}, n.Data) {
+			return errors.New("compiled body contains content outside its complete main")
+		}
+		if (n.Data == "html" && n.Parent != doc) || (n.Data != "html" && (n.Parent == nil || n.Parent.Data != "html")) {
+			return errors.New("compiled body has a changed document envelope")
+		}
+		counts[n.Data]++
+	}
+	if counts["html"] != 1 || counts["head"] != 1 || counts["body"] != 1 || main == nil || main.Parent == nil || main.Parent.Data != "body" {
+		return errors.New("compiled body has an incomplete document envelope")
+	}
+	return nil
+}
+
+// Discard indentation only between block-level structure. Text in labels,
+// links, headings, buttons and prose remains exact, including boundary spaces.
+func maintenanceFormattingSpace(n *html.Node) bool {
+	if n.Type != html.TextNode || n.Parent == nil || !slices.Contains([]string{"main", "div", "section", "form"}, n.Parent.Data) {
+		return false
+	}
+	return strings.Trim(n.Data, " \t\n\r\f") == ""
+}
+
+func maintenanceDigest(projection maintenanceDOM) (string, error) {
+	encoded, err := json.Marshal(projection)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+// Recorded from ordinary a1be787 source, independently of either source task.
+var maintenanceFrameReferences = map[string][]string{
+	"contact.html": {
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"a5d89b8a16c31f9fc15b086e6e68fdeeca5f0ea42bd121a5515bef53cdcd70fc",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
+	},
+	"credits.html": {
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
+	},
+	"portal.html": {
+		"9aa418e549b64fc3a3f2b6df896107d9f334a3f195059cbb75373cbfd9f79df1",
+		"03bcdc9ac3d0970bfc526ebd1202968625798f14e783929a4b15a3d684ecd533",
+		"ee6daf32d5a6e1d2bce2aa2b29e9c32961490a422db816d2cd63ee619d8de511",
+		"9aa418e549b64fc3a3f2b6df896107d9f334a3f195059cbb75373cbfd9f79df1",
+		"9aa418e549b64fc3a3f2b6df896107d9f334a3f195059cbb75373cbfd9f79df1",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"03bcdc9ac3d0970bfc526ebd1202968625798f14e783929a4b15a3d684ecd533",
+		"ee6daf32d5a6e1d2bce2aa2b29e9c32961490a422db816d2cd63ee619d8de511",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
+		"26bb2cdffc500ba751af8e9aba076c92f62c3cb865ee9d7b7b503222af48bb43",
+		"99ba466be152ba1746c90df5a2b77a309de4b966ca7afdc94ae68c45c164ba93",
+		"9d0a89caa7f160527ade13df6ceb2af5dff34cad1f695af4824a260675b94aad",
+		"26bb2cdffc500ba751af8e9aba076c92f62c3cb865ee9d7b7b503222af48bb43",
+		"26bb2cdffc500ba751af8e9aba076c92f62c3cb865ee9d7b7b503222af48bb43",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"99ba466be152ba1746c90df5a2b77a309de4b966ca7afdc94ae68c45c164ba93",
+		"9d0a89caa7f160527ade13df6ceb2af5dff34cad1f695af4824a260675b94aad",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
+	},
+	"requests.html": {
+		"35f031a4707023d06d4cc6d3418129068d248fe3165b73e9dfd69ace1977bba5",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"35f031a4707023d06d4cc6d3418129068d248fe3165b73e9dfd69ace1977bba5",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"35f031a4707023d06d4cc6d3418129068d248fe3165b73e9dfd69ace1977bba5",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"988ac7dbf5b39939830271d43e6fc4c10ae88b04cb42f39d1f5f4a3bfe16f314",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"4b26fbdc2a10f952d5552487de2cbe61926b438ce90c44fa36990ece94d97854",
+		"2c94a511f54cce381980f3017311dc9e564bb480d1bd7beb0a11148e11e63178",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"2c94a511f54cce381980f3017311dc9e564bb480d1bd7beb0a11148e11e63178",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"2c94a511f54cce381980f3017311dc9e564bb480d1bd7beb0a11148e11e63178",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"0635b968b6c3f570806eba02f09d6d89260e9f2413660fe4b6b7d5c988f88413",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+		"51f222e2b6867bdc99645ab91dcd6fbc661c98d42eb409afe20310047337effd",
+	},
+	"triage.html": {
+		"bef031f3c27c40b9bc917595ae59b00fd7593eae3459c7de9e73e8ce6a39269e",
+		"bef031f3c27c40b9bc917595ae59b00fd7593eae3459c7de9e73e8ce6a39269e",
+		"bef031f3c27c40b9bc917595ae59b00fd7593eae3459c7de9e73e8ce6a39269e",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
+		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
+		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
+		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
+	},
+}
+var maintenanceContactReferences = []string{
+	"f8d6306c79871812f4b11d9277bdbe0c6d0505d44e89793f0a6eef586f4352f1",
+	"1fa2b9ddc9c05daaf9ef030818ff07e3f61d78690fec672b885e8198329414eb",
+	"a3f96b85467de66d4a7118068781661bd70557c31d32be115dcc65ba54886367",
+	"40d887eb0511b4ad17dce08f98b9f11234137b3575aa918a4da9f074ba147c4c",
+	"1ea661668f25a7e1ebb5d92b9e8babe5f0da6edcf12f649e8da26df73536a1af",
+	"63d4ce9c1b0432e99ee852fdb98cb44b1af1ea1a2d0e069ab9e39725926c66c3",
+	"247acdb93c5175d0d4790c4a8ab630a2d642beb174e51cd1b96259b2598fc127",
+	"61c412a85c7c88d645f4d40e3d5ffdf66f18c83b34bbf15cc178062f138200fb",
+	"56e14e455f7955179181cc33e94afb9389dde4a9c6db5750c7054672bb856e00",
+	"60fb257b249912911cb7bb1735e6e0b8ff462dc68065c406e4b1af224ad43496",
+	"37607be5da132ea95d5ccea26ba5fd3f10242cc872174cb97848aa089c384381",
+	"5acac781124124a87c6723a49b50d31e080b20642c22ddd0c72b1c550c2b2582",
 }
 
 // maintenanceMainDigest fingerprints the complete parsed main tree, including
@@ -470,7 +967,7 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 	}
 	for _, view := range maintenanceContactViews[1:] {
 		t.Run(view, func(t *testing.T) {
-			if checkMaintenanceState(pages[0].markup, maintenancePage("en", view)) == nil {
+			if checkMaintenanceState(pages[0].markup, maintenancePage("en", view), *maintenanceTask) == nil {
 				t.Fatal("normal body passed as a different state")
 			}
 		})
@@ -483,7 +980,7 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 		"submit override":      strings.Replace(pages[0].markup, `<button type="submit">`, `<button type="submit" formaction="/portal/elsewhere">`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if checkMaintenanceState(bad, maintenancePage("en", "")) == nil {
+			if checkMaintenanceState(bad, maintenancePage("en", ""), *maintenanceTask) == nil {
 				t.Fatal("incomplete native form was accepted")
 			}
 		})
@@ -540,7 +1037,7 @@ func TestContactMaintenanceFrozenViews(t *testing.T) {
 				if page.FormError != original.FormError || page.VerificationEnabled != view.confirm || page.Contact.EmailVerified != view.verified {
 					t.Fatal("frozen contact state mapping changed")
 				}
-				if err := checkMaintenanceState(pages[language*len(want)+index].markup, page); err != nil {
+				if err := checkMaintenanceState(pages[language*len(want)+index].markup, page, *maintenanceTask); err != nil {
 					t.Fatalf("frozen contact order changed: %v", err)
 				}
 			})
@@ -614,7 +1111,7 @@ func TestContactMaintenanceSavedValueRejections(t *testing.T) {
 				if bad == page.markup {
 					t.Fatal("refusal control did not alter its fixture")
 				}
-				if checkMaintenanceState(bad, expected) == nil {
+				if checkMaintenanceState(bad, expected, *maintenanceTask) == nil {
 					t.Fatal("lost saved value or form nonce was accepted")
 				}
 			})
@@ -651,7 +1148,7 @@ func TestContactMaintenanceConfirmationRejections(t *testing.T) {
 		"missing submitter":   strings.Replace(form, `type="submit"`, `type="button"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", "confirm")) == nil {
+			if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", "confirm"), *maintenanceTask) == nil {
 				t.Fatal("incomplete confirmation form was accepted")
 			}
 		})
@@ -720,7 +1217,7 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 				if replacement == form {
 					t.Fatal("refusal control did not alter its fixture")
 				}
-				if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", view.problem)) == nil {
+				if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", view.problem), *maintenanceTask) == nil {
 					t.Fatal("changed native form envelope was accepted")
 				}
 			})
@@ -738,7 +1235,7 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 			if bad == markup {
 				t.Fatal("refusal control did not alter its fixture")
 			}
-			if checkMaintenanceState(bad, maintenancePage("en", "")) == nil {
+			if checkMaintenanceState(bad, maintenancePage("en", ""), *maintenanceTask) == nil {
 				t.Fatal("changed visible input behavior was accepted")
 			}
 		})
@@ -746,7 +1243,7 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 }
 
 // checkMaintenanceState compares actual output with the expected native operations.
-func checkMaintenanceState(markup string, page contactPageData) error {
+func checkMaintenanceState(markup string, page contactPageData, task bool) error {
 	doc, err := html.Parse(strings.NewReader(markup))
 	if err != nil {
 		return errors.New("cannot parse contact state")
@@ -811,6 +1308,24 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 		if help != 1 {
 			return errors.New("confirmation help missing or duplicated")
 		}
+	}
+	index := -1
+	for i, view := range maintenanceContactViews {
+		expected := maintenancePage(page.Lang, view)
+		if page.FormError == expected.FormError && page.VerificationEnabled == expected.VerificationEnabled && page.Contact.EmailVerified == expected.Contact.EmailVerified {
+			index = i
+			break
+		}
+	}
+	if page.Lang == "da" && index >= 0 {
+		index += len(maintenanceContactViews)
+	}
+	if index < 0 || len(maintenanceContactReferences) != 12 {
+		return errors.New("unknown frozen contact state")
+	}
+	got, err := maintenanceContactDigest(markup, page.Lang, task)
+	if err != nil || got != maintenanceContactReferences[index] {
+		return errors.New("complete contact body differs from frozen reference")
 	}
 	return nil
 }
@@ -915,7 +1430,7 @@ func TestContactMaintenanceHelpPlacementRejections(t *testing.T) {
 		markup = strings.Replace(markup, `<label for="contact-email">`, `<p id="contact-name-help">You can update these details later.</p><label for="contact-email">`, 1)
 	}
 	page := maintenancePage("en", "confirm")
-	if checkMaintenanceContact(markup, "en", true) != nil || checkMaintenanceState(markup, page) != nil {
+	if checkMaintenanceContact(markup, "en", true) != nil || checkMaintenanceState(markup, page, true) != nil {
 		t.Fatal("complete help-placement control was rejected")
 	}
 	for _, id := range []string{"contact-name-help", "contact-pending", "contact-verification-help"} {
@@ -938,7 +1453,7 @@ func TestContactMaintenanceHelpPlacementRejections(t *testing.T) {
 				if bad == markup {
 					t.Fatal("refusal control did not alter its fixture")
 				}
-				if checkMaintenanceContact(bad, "en", true) == nil && checkMaintenanceState(bad, page) == nil {
+				if checkMaintenanceContact(bad, "en", true) == nil && checkMaintenanceState(bad, page, true) == nil {
 					t.Fatal("inert or foreign help target was accepted")
 				}
 			})
@@ -1038,7 +1553,7 @@ func checkMaintenanceDocument(markup, lang string, contact, task bool) error {
 			counts["private"]++
 		}
 		if n.Data == "select" && linkAttribute(n, "id") == "theme" {
-			if n.Parent == nil || n.Parent.Data != "label" || maintenanceText(n.Parent) != theme {
+			if !maintenanceRendered(n) || n.Parent == nil || n.Parent.Data != "label" || maintenanceText(n.Parent) != theme {
 				return errors.New("appearance label is not associated with its control")
 			}
 			counts["theme"]++

@@ -15,6 +15,42 @@ targeted native label with its unchanged bilingual text and limit. Refusal
 controls cover lost saved values, nonce values and label associations.
 Hidden or inert ancestors cannot supply counted native forms, messages or help.
 
+## Complete frame and contact-body oracles
+
+Every one of the 120 documents also matches a frozen parsed-document frame,
+including its brand, skip link, language navigation, metadata, stylesheet and
+script. The frame projection excludes only the independently checked main's
+children; main attributes remain exact. The one uniquely located theme label is
+projected from the validated task wording back to its original wording. The
+control and its label must be active HTML, not hidden or inert. No other frame
+change is canonicalized.
+
+All 12 contact mains have an additional whole-tree oracle from the ordinary
+immutable `a1be78797e7886e3eb57605792027af6d4811add` source. This covers the
+main, title, introduction, enclosing section, forms, state messages and both
+reload/workspace links, not only input controls. The actual compiled Svelte
+worker must match that same complete contact tree in every state.
+Its outer fragment must contain only that main and the parser's empty implicit
+document shell, apart from inert comments and ASCII formatting whitespace.
+Extra elements, attributes or prose outside the main are refused, including
+scripts, styles and stylesheet links that would otherwise enter the Go frame.
+
+The contact projection ignores compiler comments, attribute order and ASCII
+indentation directly between block containers (`main`, `div`, `section`, `form`).
+Adjacent text split by compiler comments is joined. All remaining text is exact,
+including label/prose boundary spaces and non-breaking characters. The task's
+already validated name hint and its exact input association are projected away
+only in this separate oracle representation. The hint must remain a uniquely
+identified paragraph inside the name input's native form. Raw rendered evidence
+and parsed input trees are never rewritten.
+
+Both new oracle tables were recorded twice from the ordinary immutable source
+with the shared fictional fixtures, Go 1.27.2 and `LC_ALL=C`; the recordings
+agree. No maintenance-task fixture supplied an expected value. Refusal controls
+damage each complete frame and remove each structural contact element while
+retaining the forms. The compiled controls alter actual worker output. Those
+altered validator inputs are never comparative task samples.
+
 ## Frozen non-contact state oracle
 
 The other 108 documents must preserve their entire parsed `main` tree, not only

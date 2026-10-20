@@ -33,8 +33,29 @@ func TestCompiledContactMaintenance(t *testing.T) {
 			if err := checkMaintenanceContact(body, lang, *maintenanceTask); err != nil {
 				t.Fatalf("compiled view=%s language=%s: %v", view, lang, err)
 			}
-			if err := checkMaintenanceState(body, page); err != nil {
+			if err := checkMaintenanceCompiledState(body, page, *maintenanceTask); err != nil {
 				t.Fatalf("compiled view=%s language=%s: %v", view, lang, err)
+			}
+			for _, target := range []string{"main", "intro", "heading", "section", "reload", "workspace"} {
+				t.Run(lang+"/"+view+"/"+target, func(t *testing.T) {
+					bad := maintenanceAlterBody(t, body, lang, target)
+					if checkMaintenanceCompiledState(bad, page, *maintenanceTask) == nil {
+						t.Fatal("incomplete actual compiled contact body was accepted")
+					}
+				})
+			}
+			for name, extra := range map[string]string{
+				"outside section":    `<aside>Unexpected content</aside>`,
+				"outside script":     `<script src="/unexpected.js"></script>`,
+				"outside style":      `<style>main{display:none}</style>`,
+				"outside stylesheet": `<link rel="stylesheet" href="/unexpected.css">`,
+				"outside text":       `Unexpected trailing content`,
+			} {
+				t.Run(lang+"/"+view+"/"+name, func(t *testing.T) {
+					if checkMaintenanceCompiledState(body+extra, page, *maintenanceTask) == nil {
+						t.Fatal("active content outside the compiled main was accepted")
+					}
+				})
 			}
 			count++
 		}
