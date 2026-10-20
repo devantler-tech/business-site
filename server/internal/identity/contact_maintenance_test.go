@@ -320,12 +320,119 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if err != nil {
 		return err
 	}
-	want := maintenanceReferenceDigests[name]
+	want := maintenanceBodyReferences(name, task)
 	if len(want) != count || got != want[index] {
 		return errors.New("maintained page state differs from frozen reference")
 	}
 	return nil
 }
+
+// Ordinary billing screens evolve independently of the rejected experiment.
+// Task-mode consumers always retain the original immutable body oracle.
+func maintenanceBodyReferences(name string, task bool) []string {
+	if !task && (name == "triage.html" || name == "credits.html") {
+		return maintenanceOrdinaryBillingDigests[name]
+	}
+	return maintenanceReferenceDigests[name]
+}
+
+// The ordinary reference cannot replace the historical experiment's oracle or
+// silently fall back to it when its own complete reference is unavailable.
+func TestContactMaintenanceBillingReferenceBoundary(t *testing.T) {
+	for _, name := range []string{"triage.html", "credits.html"} {
+		original := maintenanceOrdinaryBillingDigests[name]
+		if len(original) != 2*len(maintenanceCases[name]) || slices.Equal(original, maintenanceReferenceDigests[name]) {
+			t.Fatal("independent complete ordinary billing references required")
+		}
+		pages, err := renderedMaintenancePages(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, invalid := range [][]string{nil, original[:len(original)-1], slices.Repeat([]string{"malformed"}, len(original))} {
+			maintenanceOrdinaryBillingDigests[name] = invalid
+			if !slices.Equal(maintenanceBodyReferences(name, true), maintenanceReferenceDigests[name]) {
+				t.Fatal("ordinary override changed the frozen task oracle")
+			}
+			if !*maintenanceTask && checkMaintenanceInventoryPage(name, 0, pages[0].markup, false) == nil {
+				t.Fatal("missing or malformed ordinary billing oracle was accepted")
+			}
+		}
+		maintenanceOrdinaryBillingDigests[name] = original
+		if *maintenanceTask {
+			continue // Frozen-task bodies are checked against their original table above and by the inventory.
+		}
+		for i, page := range pages {
+			if err := checkMaintenanceInventoryPage(name, i, page.markup, false); err != nil {
+				t.Fatal("current ordinary billing body refused", err)
+			}
+			if original[i] == maintenanceReferenceDigests[name][i] {
+				continue
+			}
+			// Adapt only the registered frame label, not the billing body. The
+			// historical task must still reject this ordinary invoice change.
+			markup := strings.Replace(page.markup, "Appearance", "Colour theme", 1)
+			markup = strings.Replace(markup, "Udseende", "Farvetema", 1)
+			err := checkMaintenanceInventoryPage(name, i, markup, true)
+			if err == nil || err.Error() != "maintained page state differs from frozen reference" {
+				t.Fatal("current invoice body entered the frozen task oracle", err)
+			}
+		}
+	}
+}
+
+// BEGIN GENERATED ORDINARY BILLING REFERENCES
+// Generated twice from signed ordinary source 90ade40aa63a54b62012e89a820277dc56eddb5c.
+// Never used for a frozen comparison task; see CONTACT-MAINTENANCE.md.
+var maintenanceOrdinaryBillingDigests = map[string][]string{
+	"credits.html": {
+		"fcd1d5be809439848150d542ee4885ddc19022ac262d15a90d25440cdd6a9ad7",
+		"c54e8695eaa0454718b9748b9a49b188ac9185e816183b54ec77dc7810a5010a",
+		"4b81f3fc738e7d579a05086cc900cb7ea9b1590feed4470eff0dd257b49ca900",
+		"65a06f561b096c26266647730280bbeaa73a24a198af9b1d84ed25c5f6cf3805",
+		"dac5ff838d4ede085be4ec474e20cb2e39c74d0b97d2fb202a453da619cf793e",
+		"e935ee84312720fc291680bee78bbd1dc4fbaed1acea5e9f845fe5ecdc240ed0",
+		"e2dbd653e16287422ca2228347fb015ff74e027c03434fce7c26e05e9e707d2d",
+		"3e2c603bf39c6ac48bd2fe1bcabb3772ba7853592108db5537546381b4bc6306",
+		"f71adc9def1809f7a15f22e8acf94faa47fd4ee5bca3a0856bc0ed445f7c63be",
+		"c7c19cf42b2f70ab4deef4036da19812950917d4f822632bdb8b4bf6131894a6",
+		"da62e97dd76617a6de50d4b2c7759a229348014685f2e860eece89a3aba4d9c8",
+		"093ea8e521b452ea8fbe760ad8f5dfc2b8af1b9d52907203b4e61d99fc056205",
+	},
+	"triage.html": {
+		"8dabbc55a29a43559fe6b5ba27cd759a31eaff7119ae162664ea7b3238569673",
+		"c6d297689afbba79eef47ee712b15e91f7d6bafee1e5592e05dbab74f098db52",
+		"33a6af2890cb399106b54aa43cf453606427debc9aea08a8ab15b594ced7296d",
+		"0622fd91f7e9af9c42d5759481cecd2da84936acc21b173d1c813b1ed20246b6",
+		"030c63d05649fd0c3d2346f3afe0fb38317fce26ce0f2f2524bf02cbcf80eb1e",
+		"68f119a129ce9acfff0d66c62ff3e324a75c2a95a8cd18dd428a31928bb2b493",
+		"a726b3568e13bf1917827063416c27232f52adfbc0aafb4b0f44c67ac1074856",
+		"bfe30b905bcafac1f589c55bf9b63011dd9b475f29cf99248eb0ffd7510dedbb",
+		"bdd64bfca46461e50cdcd7ba6397c6c11a62e9b913f5fdce1d4505fbf1904980",
+		"1d00ea15686a90add4cafe5853358005b958a0621acfb2b01f1a2ebb92eb1e9b",
+		"41d46d9f603d4f9e601adda2af056bf1ebcdcd83ea965fcbc653bf423465fb76",
+		"e9e34df25350c9ad10d12af63b036fbfaf6ec932ac3abb34ea1cb447673aee37",
+		"e580e185f0f62fc3dba6af7ffffdd1fd3de4ef8c46fbaad15c4610e43c307282",
+		"7d52f017e0af84a64bd453a1837750b67b607846b2a8066441b97d637146dac1",
+		"e233dba1c675610a6d37ea69c6cff978a2cf20fa55bf70679978fe71b975cb14",
+		"c191a924fb08fbc09a245df740a42be494534cf11352aa234ac399e848c67153",
+		"3344f0e632cefa65f526aaf4c12a3920d7b2c21d07dcdd2d3ffec0b363a24a5b",
+		"bd37eb7b628dc67ad07df539b3ef8edfc738e6cbeaaa9024a3b957e00d834c91",
+		"78d71798b3c918af41eac556fb85b1f0c1397e22a3c36c962603ebe63ca87946",
+		"4e9d71c15a412a76ddadbfd48179ebe5bb31a471e859aedb0a1b611feb4a2cce",
+		"6558f914752c4eee555256063c58fb963fb779165dc6b228b989c81cb9cfb742",
+		"54dca502a052cdba07370df7aea51254ce4357ae0742900606a389a1514f47d6",
+		"606ee1722e70aae976ab60a2d08148f7d3f663998f0f49b4030e0338d962bfb5",
+		"a2f1ae5f008547cb7133b85e3ac8609a0f13bb6003870d2d524d480f6118b5ba",
+		"1d507c49c44f968e5ae5eeef185dce5b32d205918259f95ce342f35f4ae34b28",
+		"c554a70b28a6cd51e33a4008182868ec1558e4e603ec07a3ad162761f997006b",
+		"c97472f834d21ab72e25aa2a593d877c890ce921093a33a8e4030b05b96e789f",
+		"51df3015f0d625692e9e87d20600468c9ae5782b2088131b6d2336f53afad96e",
+		"e5aea9cc768183489c9fd99b013f927bd10c561963277ffc7bf837233a41a307",
+		"6e28b37a70689eb95ca2d6ec9be9e60e8b3edbf9f6d979a2c78d764ff23a1e41",
+	},
+}
+
+// END GENERATED ORDINARY BILLING REFERENCES
 
 // The case order is frozen with portal_links_test.go at a1be787. Repeated URIs
 // are different states, not duplicate evidence. Contact has explicit assertions.
@@ -941,8 +1048,12 @@ func TestContactMaintenanceNonContactRejections(t *testing.T) {
 			// Preserve this frame/language, replacing only the state with a
 			// genuinely different frozen main. Identical reference aliases
 			// are not claimed to be distinguishable states.
+			refs := maintenanceBodyReferences(name, *maintenanceTask)
+			if len(refs) != len(pages) {
+				t.Fatal("complete selected body references required")
+			}
 			for j, other := range pages {
-				if i/len(maintenanceCases[name]) == j/len(maintenanceCases[name]) && maintenanceDraftKey(name, i) == maintenanceDraftKey(name, j) && maintenanceReferenceDigests[name][i] != maintenanceReferenceDigests[name][j] {
+				if i/len(maintenanceCases[name]) == j/len(maintenanceCases[name]) && maintenanceDraftKey(name, i) == maintenanceDraftKey(name, j) && refs[i] != refs[j] {
 					a, b := maintenanceMainRange(t, other.markup)
 					variants["collapsed"] = other.markup[a:b]
 					break

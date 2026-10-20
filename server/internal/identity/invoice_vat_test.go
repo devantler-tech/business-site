@@ -151,8 +151,8 @@ func TestInvoiceTaxDatabaseConstraints(t *testing.T) {
 		{int64(9223372036854775807), int64(1)},
 	} {
 		_, err := b.pool.Exec(t.Context(), `INSERT INTO portal_invoices(request_id,client_id,sequence,expected_sequence,submission_key,acceptance_id,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,reference,purpose,currency,amount_minor,net_minor,vat_minor) SELECT request_id,client_id,2,1,$1,acceptance_id,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,$2,purpose,currency,amount_minor,$3,$4 FROM portal_invoices WHERE sequence=1`, secret(), fmt.Sprintf("TAX-INVALID-%d", i), tc.net, tc.vat)
-		var pgerr *pgconn.PgError
-		if !errors.As(err, &pgerr) || pgerr.Code != "23514" {
+		var databaseError *pgconn.PgError
+		if !errors.As(err, &databaseError) || databaseError.Code != "23514" {
 			t.Fatal("database accepted invalid components or failed for another reason", err)
 		}
 	}

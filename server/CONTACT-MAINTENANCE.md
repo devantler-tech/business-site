@@ -117,7 +117,33 @@ substitute a genuinely different same-language state while retaining the frame.
 They also challenge the random-key boundary. These are validator controls, not
 rendered task samples, browser tests or permission to revise comparison budgets.
 
-Ordinary source validation checks the unchanged presentation:
+## Ordinary billing evolution after the decision
+
+Issue #240 adds explicit invoice net and VAT display to the current Go screens.
+The frozen `maintenanceReferenceDigests` table above remains byte-for-byte
+unchanged and is always selected by `-contact-maintenance-task`. No failed trial
+is accepted, rerun or relabelled by updating the ordinary application.
+
+Ordinary validation selects a separate, complete 30-triage/12-credit body table,
+generated twice from the signed ordinary invoice snapshot
+`90ade40aa63a54b62012e89a820277dc56eddb5c`. Both independent `server/` exports used
+Go 1.27.2 and `LC_ALL=C`. A one-shot recording test called
+`renderedMaintenancePages` and `maintenanceMainDigest` in the existing case order;
+the identical JSON recordings have SHA-256
+`4b63e182146ca253ce135d26c49f2b21f706755b0b21fc5a2d7335c56a1b1cb3`.
+Only triage cases 12–14/27–29 and all 12 credit bodies differ from the historical
+table. The frame, contact, portal, request, random-key and compiled-body oracles
+are unchanged. Validation never generates its own expected values.
+
+The separate ordinary table stays in the same test file, preserving the two-file
+overlay's dependency closure. Missing, incomplete or malformed ordinary
+references fail closed without falling back to the historical table. Refusal
+controls use the selected complete table for state-collapse probes and prove
+that task mode still rejects the new invoice bodies. The original archived
+harness, input identities and comparison receipts remain historical evidence,
+not claims about a new comparison run.
+
+Ordinary source validation checks the current presentation:
 
 ```sh
 cd server
