@@ -372,12 +372,16 @@ export PORTAL_TEST_DATABASE_URL='postgres://portal_runtime:fixture-only@localhos
 GOTOOLCHAIN=local go mod verify
 GOTOOLCHAIN=local go vet ./...
 bash ../scripts/check-portal-quality.sh
-GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
+GOTOOLCHAIN=local go test -race -cover -p=1 ./... -count=1 -timeout=90s
 GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
 The Go database suite and explicit trial-host integration do not require Node.
+The complete ordinary suite runs package binaries one at a time with `-p=1`,
+so executable-building packages do not compete with identity's real expiry and
+database checks. This does not limit concurrency within a test or change race
+detection, coverage, test selection or the 90-second per-package deadline.
 The real-process integration is selected separately so it retains its complete
 refusal/journey controls without charging startup to the ordinary package's
 existing 90-second budget. Source CI requires both, with no conditional or error-tolerant

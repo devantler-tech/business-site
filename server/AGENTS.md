@@ -48,7 +48,7 @@ tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
 Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
-`go mod verify`, `go vet ./...`, `go test -race ./... -count=1 -timeout=90s` and
+`go mod verify`, `go vet ./...`, `go test -race -p=1 ./... -count=1 -timeout=90s` and
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
@@ -152,8 +152,7 @@ not a dispatched offer, agreement, payment or work authorization. Keep credited
 funds, worker claims and API/MCP execution separate from draft preparation.
 
 Explicit sharing/withdrawal additionally requires false-default
-`portal-proposal-sharing`; review retirement under business-site#78 by 13 November
-2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only
+`portal-proposal-sharing`; review retirement under business-site#78 by 13 November 2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only
 the latest explicitly shared version of their own request, never draft history
 or retry/actor metadata. Withdrawal hides future reads without restoring an older
 version. Keep the same per-request writer lock, current membership rechecks,
