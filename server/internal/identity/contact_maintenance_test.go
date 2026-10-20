@@ -31,6 +31,25 @@ func maintenanceProblem(view string) string {
 	return view
 }
 
+// maintenanceContactCase keeps the bilingual state index identical in controls.
+func maintenanceContactCase(index int) contactPageData {
+	lang := "en"
+	if index >= len(maintenanceContactViews) {
+		lang = "da"
+	}
+	return maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)])
+}
+
+// maintenanceContactPages requires the actual complete bilingual source output.
+func maintenanceContactPages(t *testing.T) []linkPage {
+	t.Helper()
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 2*len(maintenanceContactViews) {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	return pages
+}
+
 // These mutations retain the actual main body, unlike a partial-document probe.
 func TestContactMaintenanceFullFrameRejections(t *testing.T) {
 	for name := range maintenanceCases {
@@ -77,17 +96,9 @@ func TestContactMaintenanceFullFrameRejections(t *testing.T) {
 
 // Normal-suite controls exercise the envelope without claiming compiler proof.
 func TestContactMaintenanceCompiledEnvelope(t *testing.T) {
-	pages, err := renderedMaintenancePages("contact.html")
-	if err != nil || len(pages) != 12 {
-		t.Fatal("actual contact inventory unavailable")
-	}
-	for index, page := range pages {
+	for index, page := range maintenanceContactPages(t) {
 		t.Run(strconv.Itoa(index), func(t *testing.T) {
-			lang := "en"
-			if index >= len(maintenanceContactViews) {
-				lang = "da"
-			}
-			data := maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)])
+			data := maintenanceContactCase(index)
 			doc, err := html.Parse(strings.NewReader(page.markup))
 			if err != nil {
 				t.Fatal(err)
@@ -149,20 +160,12 @@ func TestContactMaintenanceFragmentGrammar(t *testing.T) {
 
 // Synthetic task expectations are validator controls, not frozen task samples.
 func TestContactMaintenanceExplicitTaskBody(t *testing.T) {
-	pages, err := renderedMaintenancePages("contact.html")
-	if err != nil || len(pages) != 12 {
-		t.Fatal("actual contact inventory unavailable")
-	}
-	for index, page := range pages {
-		lang := "en"
-		if index >= len(maintenanceContactViews) {
-			lang = "da"
-		}
+	for index, page := range maintenanceContactPages(t) {
+		data := maintenanceContactCase(index)
 		markup := page.markup
 		if !*maintenanceTask {
-			markup = maintenanceHintFixture(t, markup, lang)
+			markup = maintenanceHintFixture(t, markup, data.Lang)
 		}
-		data := maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)])
 		if err := checkMaintenanceState(markup, data, true); err != nil {
 			t.Fatalf("literal task fixture: %v", err)
 		}
@@ -204,19 +207,12 @@ func maintenanceHintFixture(t *testing.T, markup, lang string) string {
 }
 
 func TestContactMaintenanceCompleteBodyRejections(t *testing.T) {
-	pages, err := renderedMaintenancePages("contact.html")
-	if err != nil || len(pages) != 12 {
-		t.Fatal("actual contact inventory unavailable")
-	}
-	for index, page := range pages {
-		lang := "en"
-		if index >= 6 {
-			lang = "da"
-		}
+	for index, page := range maintenanceContactPages(t) {
+		data := maintenanceContactCase(index)
 		for _, target := range []string{"main", "intro", "heading", "section", "reload", "workspace"} {
 			t.Run(strconv.Itoa(index)+"/"+target, func(t *testing.T) {
-				bad := maintenanceAlterBody(t, page.markup, lang, target)
-				if checkMaintenanceState(bad, maintenancePage(lang, maintenanceContactViews[index%len(maintenanceContactViews)]), *maintenanceTask) == nil {
+				bad := maintenanceAlterBody(t, page.markup, data.Lang, target)
+				if checkMaintenanceState(bad, data, *maintenanceTask) == nil {
 					t.Fatal("incomplete contact body was accepted")
 				}
 			})
