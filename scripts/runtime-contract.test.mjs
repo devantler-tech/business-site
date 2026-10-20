@@ -61,7 +61,7 @@ function assertRuntime(workflow) {
       s["working-directory"] === "server",
   );
   const ordinary = steps.findIndex(
-    (s) => s.run === "go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s",
+    (s) => s.run === "go test -race -coverprofile=coverage.out -p=1 ./... -count=1 -timeout=90s",
   );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
@@ -100,7 +100,7 @@ function assertRuntime(workflow) {
   );
   assert.ok(
     ordinary > renderer && ordinary < build,
-    "retain the complete ordinary Go suite and its original timeout",
+    "retain the complete ordinary Go suite, serialized packages and its original timeout",
   );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
@@ -212,6 +212,27 @@ test("CI exercises the actual production package and image", () => {
 });
 for (const [name, mutate] of [
   [
+    "concurrent ordinary package execution",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace(" -p=1", "");
+    },
+  ],
+  [
+    "widened ordinary package execution",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("-p=1", "-p=2");
+    },
+  ],
+  [
+    "extended ordinary package deadline",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("-timeout=90s", "-timeout=120s");
+    },
+  ],
+  [
     "missing complete ordinary Go suite",
     (w) => {
       w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
@@ -251,16 +272,16 @@ for (const [name, mutate] of [
   [
     "conditional real Go host controls",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      w.jobs["test-portal-identity"].steps.find((s) =>
+        s.run?.startsWith("go test -race -tags=contacttrialintegration"),
       ).if = "false";
     },
   ],
   [
     "ignored real Go host failures",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      w.jobs["test-portal-identity"].steps.find((s) =>
+        s.run?.startsWith("go test -race -tags=contacttrialintegration"),
       )["continue-on-error"] = true;
     },
   ],

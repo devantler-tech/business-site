@@ -385,7 +385,7 @@ jobs:
           test -z "$(gofmt -l .)"
           go vet ./...
       - name: Test broker and durable access boundary
-        run: go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s
+        run: go test -race -coverprofile=coverage.out -p=1 ./... -count=1 -timeout=90s
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: Verify combined-runtime CI contract
