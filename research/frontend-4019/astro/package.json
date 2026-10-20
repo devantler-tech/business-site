@@ -1,0 +1,14 @@
+{
+  "name": "frontend-astro-sample",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev --host 127.0.0.1",
+    "start": "node dist/server/entry.mjs"
+  },
+  "dependencies": {
+    "astro": "7.3.6",
+    "@astrojs/node": "11.1.8"
+  }
+}

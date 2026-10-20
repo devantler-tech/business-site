@@ -4,13 +4,12 @@ import ProfessionalWork from './ProfessionalWork.astro';
 import { copy, type Locale } from './content';
 import { supporting } from './supporting';
 import { clientCopy } from './client-facing';
+import { portfolioText } from './portfolio-content';
 interface Props { locale: Locale; featured: boolean }
 const { locale, featured } = Astro.props;
 const t = clientCopy[locale];
 const s = supporting[locale];
-const text = locale === 'da'
-  ? { work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.' }
-  : { work: 'Selected work', intro: 'A public website you can visit and explore.' };
+const text = portfolioText[locale];
 ---
 <section aria-labelledby="family-title">
   <span class="legacy-anchor" id="-self-hosted-personal-apps" aria-hidden="true"></span>

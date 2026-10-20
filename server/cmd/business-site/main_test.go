@@ -51,7 +51,7 @@ func configuredPublicArtifact(t *testing.T) string {
 func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	// Private migration configuration cannot turn ordinary web startup into DDL.
 	t.Setenv("PORTAL_MIGRATION_DATABASE_FILE", "/missing/private-migration-file")
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE"} {
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
 		t.Setenv(name, "")
 	}
 	dir := configuredPublicArtifact(t)
@@ -68,8 +68,9 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	}
 	ready := make(chan struct{})
 	var once sync.Once
+	var readiness string
 	output := writeFunc(func(data []byte) (int, error) {
-		once.Do(func() { close(ready) })
+		once.Do(func() { readiness = string(data); close(ready) })
 		return len(data), nil
 	})
 	done := make(chan error, 1)
@@ -89,6 +90,9 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		t.Fatal("runtime stopped before public serving")
 	case <-time.After(5 * time.Second):
 		t.Fatal("runtime did not begin startup")
+	}
+	if !strings.HasPrefix(readiness, "runtime ready; listen="+listen+"; ") {
+		t.Fatal("runtime readiness did not identify its owned listener")
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
 	res, err := client.Get("http://" + listen + "/")

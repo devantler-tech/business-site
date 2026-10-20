@@ -29,7 +29,7 @@ func projectionBytes(filename string) ([]byte, error) {
 		return nil, ErrCompanyProjection
 	}
 	owner, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || owner.Uid != 0 && uint64(owner.Uid) != uint64(os.Geteuid()) || info.Mode().Perm()&0040 != 0 && uint64(owner.Gid) != uint64(os.Getegid()) {
+	if !ok || !projectionOwnerAllowed(owner, info.Mode()) {
 		return nil, ErrCompanyProjection
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 16385))
@@ -39,8 +39,14 @@ func projectionBytes(filename string) ([]byte, error) {
 	return data, nil
 }
 
+// projectionOwnerAllowed checks metadata from the opened descriptor against this process.
+func projectionOwnerAllowed(owner *syscall.Stat_t, mode os.FileMode) bool {
+	return owner != nil && (owner.Uid == 0 || uint64(owner.Uid) == uint64(os.Geteuid())) &&
+		(mode.Perm()&0040 == 0 || uint64(owner.Gid) == uint64(os.Getegid()))
+}
+
 // ReadProjectedCompanyDisclosure snapshots only this public-content input in memory.
-// The ordinary owner-only reader is unchanged; identity secrets do not use this transport.
+// The ordinary owner-only reader remains a separate, strict transport.
 func ReadProjectedCompanyDisclosure(filename string) (string, error) {
 	if !filepath.IsAbs(filename) || os.Geteuid() <= 0 || os.Getegid() <= 0 {
 		return "", ErrCompanyProjection

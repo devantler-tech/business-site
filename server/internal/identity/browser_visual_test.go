@@ -4,6 +4,7 @@ package identity
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification"}, []any{true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation"}, []any{true, true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -33,6 +34,26 @@ func TestBrowserVisualFixture(t *testing.T) {
 		if status, _, _ := b.request("POST", "/portal/requests", form, b.site.URL); status != 303 {
 			t.Fatal("synthetic client request failed")
 		}
+	}
+	var requestID string
+	if err := b.pool.QueryRow(t.Context(), `SELECT id FROM portal_requests WHERE client_id='client-a'`).Scan(&requestID); err != nil {
+		t.Fatal(err)
+	}
+	operator := enroll(t, b.svc, b.f, "visual-preparation", "fictional-operator", "operator")
+	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
+	if err := b.svc.persistProposal(t.Context(), operator, requestID, proposal); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.persistVisibility(t.Context(), operator, requestID, visibilityDecision{Key: secret(), ExpectedProposal: 1, Proposal: 1, Action: "share"}); err != nil {
+		t.Fatal(err)
+	}
+	client := enroll(t, b.svc, b.f, "visual-consent", "client-a", "client")
+	review, err := b.svc.prepareProposalReview(t.Context(), client, requestID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key); err != nil {
+		t.Fatal(err)
 	}
 	b.mu.Lock()
 	b.subject = "operator"
@@ -61,6 +82,9 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 			b.mu.Lock()
 			b.subject = subject
+			// Both fixed actors are already provisioned once the visual gateway
+			// starts. Subsequent sign-in uses current membership, not re-invitation.
+			inv = ""
 			b.mu.Unlock()
 			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
 			return
@@ -100,7 +124,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		}
 		defer res.Body.Close()
 		for key, values := range res.Header {
-			if key == "Set-Cookie" {
+			if key == "Set-Cookie" || key == "Content-Length" {
 				continue
 			}
 			for _, value := range values {
@@ -120,11 +144,24 @@ func TestBrowserVisualFixture(t *testing.T) {
 			w.Header().Set("Location", origin+strings.TrimPrefix(location, b.site.URL))
 		}
 		w.WriteHeader(res.StatusCode)
+		if r.Method == http.MethodGet && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
+			// Fictional, disposable gateway only: preload its synthetic invitation
+			// so UI evaluation does not expose any token in terminal diagnostics.
+			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
+			if readErr != nil || len(body) > 64*1024 {
+				return
+			}
+			b.mu.RLock()
+			invitation := inv
+			b.mu.RUnlock()
+			_, _ = io.WriteString(w, strings.Replace(string(body), `id="invitation"`, `id="invitation" value="`+html.EscapeString(invitation)+`"`, 1))
+			return
+		}
 		_, _ = io.Copy(w, res.Body)
 	})}
 	t.Cleanup(func() { _ = server.Close() })
 	go func() { _ = server.Serve(listener) }()
-	fmt.Printf("SYNTHETIC_VISUAL_URL=%s/portal/sign-in?lang=da\nSYNTHETIC_INVITATION=%s\n", origin, inv)
+	fmt.Printf("SYNTHETIC_VISUAL_URL=%s/portal/sign-in?lang=da\n", origin)
 	// Bounded interactive proof, never an unattended production service.
 	select {
 	case <-t.Context().Done():

@@ -1,0 +1,7 @@
+**/.astro/
+**/.svelte-kit/
+**/.vite/
+**/dist/
+**/build/
+**/build-*.log
+**/time-*.txt

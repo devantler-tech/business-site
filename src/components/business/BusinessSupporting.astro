@@ -2,22 +2,25 @@
 import { Image } from 'astro:assets';
 import portrait from '../../assets/profile.jpg';
 import BusinessLayout from './BusinessLayout.astro';
+import CustomerScope from './CustomerScope.astro';
 import BusinessProjects from './BusinessProjects.astro';
 import ClientPortfolio from './ClientPortfolio.astro';
 import { FEATURE_CLIENT_PORTFOLIO, FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
 import { clientCopy } from './client-facing';
 import { copy, type Locale } from './content';
 import { supporting } from './supporting';
+import { portfolioText } from './portfolio-content';
 interface Props { locale: Locale; section: 'about' | 'projects' }
 const { locale, section } = Astro.props;
 const t = supporting[locale];
 const homeCopy = copy[locale];
 const home = locale === 'da' ? '/da/' : '/';
 const about = section === 'about';
+const description = about ? t.aboutDescription : FEATURE_FEATURED_PORTFOLIO ? portfolioText[locale].pageIntro : FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].projectsIntro : t.projectsDescription;
 ---
-<BusinessLayout locale={locale} section={section} title={`${about ? t.aboutTitle : t.projectsTitle} | Devantler Tech`} description={about ? t.aboutDescription : t.projectsDescription}>
+<BusinessLayout locale={locale} section={section} title={`${about ? t.aboutTitle : t.projectsTitle} | Devantler Tech`} description={description}>
   <main id="main" class="container supporting-page">
-    <div class="opening"><h1>{about ? t.aboutTitle : t.projectsTitle}</h1><p>{about ? t.aboutIntro : FEATURE_FEATURED_PORTFOLIO ? (locale === 'da' ? 'Udvalgt arbejde — fra en offentlig hjemmeside til værktøjer, der løser konkrete problemer.' : 'Selected work — from a public website to tools that solve practical problems.') : FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].projectsIntro : t.projectsIntro}</p></div>
+    <div class="opening"><h1>{about ? t.aboutTitle : t.projectsTitle}</h1><p>{about ? t.aboutIntro : FEATURE_FEATURED_PORTFOLIO ? portfolioText[locale].pageIntro : FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].projectsIntro : t.projectsIntro}</p></div>
     {about ? <>
       <section class="founder" aria-labelledby="founder-title">
         <Image src={portrait} alt="Nikolai Emil Damm" width={600} widths={[320, 600]} sizes="(max-width: 760px) 100vw, 320px" format="webp" loading="eager" />
@@ -28,7 +31,7 @@ const about = section === 'about';
     </> : <>
       {FEATURE_CLIENT_PORTFOLIO || FEATURE_FEATURED_PORTFOLIO ? <ClientPortfolio locale={locale} /> : <BusinessProjects locale={locale} />}
     </>}
-    <a class="contact-link" href={`${home}#contact`}>{t.contact}</a>
+    <CustomerScope locale={locale}><a class="contact-link" href={`${home}#contact`}>{t.contact}</a></CustomerScope>
   </main>
 </BusinessLayout>
 <style>

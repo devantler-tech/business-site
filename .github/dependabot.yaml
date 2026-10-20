@@ -1,5 +1,15 @@
 version: 2
 updates:
+  - package-ecosystem: npm
+    directory: /web
+    ignore:
+      # Node types follow .node-version; a runtime-major move is reviewed together.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
   - package-ecosystem: gomod
     directory: /server
     schedule:

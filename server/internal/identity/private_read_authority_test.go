@@ -18,6 +18,8 @@ import (
 type completedReadTracer struct {
 	query            string
 	started          atomic.Bool
+	reads            atomic.Int32
+	blockAt          int32
 	blocked, release chan struct{}
 }
 
@@ -31,7 +33,7 @@ func (p *completedReadTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, 
 
 // TraceQueryEnd exposes a bounded checkpoint after real result materialization.
 func (p *completedReadTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, _ pgx.TraceQueryEndData) {
-	if ctx.Value(p) != true || !p.started.CompareAndSwap(false, true) {
+	if ctx.Value(p) != true || (p.blockAt > 0 && p.reads.Add(1) != p.blockAt) || !p.started.CompareAndSwap(false, true) {
 		return
 	}
 	close(p.blocked)
@@ -76,7 +78,7 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if change == "expiry" {
-		p.expires = time.Now().Add(time.Second)
+		p.expires = time.Now().Add(2 * time.Second)
 	}
 	type result struct {
 		data bool
@@ -101,6 +103,9 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 	case <-blocked:
 	case <-ctx.Done():
 		t.Fatal("private reader did not reach selected completion checkpoint")
+	}
+	if change == "expiry" && !time.Now().Before(p.expires) {
+		t.Fatal("fixture authority expired before its private-read checkpoint")
 	}
 	if change == "role" && operator {
 		tag, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE issuer=$1 AND subject=$2`, p.issuer, p.subject)
@@ -136,7 +141,7 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 // plus the operator's deliberately cross-client visibility history.
 func TestSharingReadFinalGateRechecksAuthority(t *testing.T) {
 	for _, selector := range []string{"shared", "empty", "visibility"} {
-		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry", "flag", "cancel", "storage"} {
+		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "flag", "cancel", "storage"} {
 			t.Run(selector+"/"+change, func(t *testing.T) {
 				b := sharingFixture(t)
 				if selector != "empty" {
@@ -166,7 +171,7 @@ func TestSharingReadFinalGateRechecksAuthority(t *testing.T) {
 // never returns stale display fields when client access closes during the read.
 func TestContactReadRechecksMaterializedAuthority(t *testing.T) {
 	for _, saved := range []bool{false, true} {
-		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "expiry", "flag", "cancel", "storage"} {
+		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "flag", "cancel", "storage"} {
 			name := "empty/" + change
 			if saved {
 				name = "saved/" + change
@@ -194,7 +199,7 @@ func TestContactReadRechecksMaterializedAuthority(t *testing.T) {
 // TestMembershipCompletionRechecksExpiry proves that valid SQL results do not
 // survive expiry or cancellation during the real client's completion callback.
 func TestMembershipCompletionRechecksExpiry(t *testing.T) {
-	for _, change := range []string{"unchanged", "expiry", "cancel"} {
+	for _, change := range []string{"unchanged", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b := newBrowserFixture(t)
 			p := enroll(t, b.svc, b.f, "checkpoint-membership", "checkpoint-owner", "client")
@@ -207,4 +212,25 @@ func TestMembershipCompletionRechecksExpiry(t *testing.T) {
 			checkChangedRead(t, b, p, provider, tracer.blocked, tracer.release, change, false, true, read)
 		})
 	}
+}
+
+// TestPrivateReadExpiryAllowsCheckpointSetup retains real expiry after a bounded
+// scheduling delay, rather than spending the fixture's authority before its read.
+func TestPrivateReadExpiryAllowsCheckpointSetup(t *testing.T) {
+	b := newBrowserFixture(t)
+	p := enroll(t, b.svc, b.f, "delayed-checkpoint", "checkpoint-owner", "client")
+	provider := installReadProvider(t, b, "portal-identity", 0)
+	tracer := installCompletedRead(t, b, "SELECT client_id,role FROM portal_memberships")
+	read := func(ctx context.Context, principal Principal) (bool, error) {
+		timer := time.NewTimer(750 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+		client, role, err := b.svc.membership(ctx, principal)
+		return client != "" || role != "", err
+	}
+	checkChangedRead(t, b, p, provider, tracer.blocked, tracer.release, "expiry", false, true, read)
 }

@@ -10,7 +10,7 @@ require (
 	github.com/justinas/nosurf v1.2.0
 	github.com/open-feature/go-sdk v1.19.0
 	github.com/open-feature/go-sdk-contrib/providers/from-env v0.1.6
-	golang.org/x/net v0.60.0
+	golang.org/x/net v0.61.0
 	golang.org/x/oauth2 v0.37.0
 )
 
@@ -20,6 +20,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	go.uber.org/mock v0.6.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )

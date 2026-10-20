@@ -22,7 +22,7 @@ What if managing Kubernetes clusters was as simple as having a conversation?
 
 The chat feature is the next step: **removing cognitive overhead**. Instead of memorizing that `ksail cluster init --distribution Talos --provider Hetzner --cni Cilium --gitops-engine Flux --local-registry '${GITHUB_USER}:${GITHUB_TOKEN}@ghcr.io/devantler-tech/ksail/system-test-manifests' --control-planes 3 --workers 2` is the syntax to create a Talos cluster on Hetzner with three control plane nodes, two worker nodes, Cilium as a CNI, and Flux as your GitOps engine set up to sync with an OCI image in GHCR, you can just say: "Create a HA Talos cluster on Hetzner with Cilium and Flux set up to sync with ghcr.io/devantler-tech/ksail/system-test-manifests." (pheeew).
 
-This post covers the technical journey of building `ksail chat` using the [GitHub Copilot SDK for Go](https://github.com/github/copilot-sdk-go), [Bubbletea](https://github.com/charmbracelet/bubbletea) TUI framework, and [glamour](https://github.com/charmbracelet/glamour) for markdown rendering.
+This post covers the technical journey of building `ksail chat` using the [GitHub Copilot SDK for Go](https://github.com/github/copilot-sdk/tree/main/go), [Bubbletea](https://github.com/charmbracelet/bubbletea) TUI framework, and [glamour](https://github.com/charmbracelet/glamour) for markdown rendering.
 
 ## See It in Action
 
@@ -60,7 +60,7 @@ Each requirement above pointed to a specific technical choice: an AI backend for
 
 ### GitHub Copilot SDK for Go
 
-The [Copilot SDK for Go](https://github.com/github/copilot-sdk-go) provides the AI backbone. At time of writing, I used v0.1.18. It handles:
+The [Copilot SDK for Go](https://github.com/github/copilot-sdk/tree/main/go) provides the AI backbone. At time of writing, I used v0.1.18. It handles:
 
 - **Streaming responses** — tokens arrive as they're generated
 - **Tool calling** — the model can invoke functions you define

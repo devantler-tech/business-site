@@ -10,10 +10,60 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 - The Astro + Starlight application lives at the repository root: `src/`,
   `public/`, `scripts/` and root package/configuration files.
+- `web/` is the SvelteKit public frontend. Its framework-native
+  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
+  with the two historical English project redirects, the English Journal's paginated main archive,
+  complete unpaginated topic and author archives,
+  all 15 complete Journal reading routes, and the six existing English technical guides,
+  including locally rendered diagrams and the complete template collection. Enabled company
+  identity also admits the two English/Danish company-information pages, with the address
+  confined to those disclosures and omitted when identity is disabled. The legacy
+  GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
+  Follow `web/README.md`. The normal build selects the verified complete candidate only when
+  explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
+  publication explicitly selects Svelte, with main-only artifact previews and explicit Astro
+  recovery. Production-profile Go packaging also selects Svelte; the ordinary package remains
+  an Astro comparison. Only Svelte packages use the explicit `--svelte` option; omit it for the
+  ordinary Astro comparison. Both ignore ambient frontend settings.
+- Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
+  under `src/components/business/`; the existing Astro adapters retain its release configuration.
+  The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings
+  through its native server-only configuration. Shared layout/load data never carries the address;
+  the company-page HTML transform retains escaped text and the runtime's template placeholders.
+- Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
+  `client-products.ts` and `portfolio-content.ts`; both frontends use the same ranking implementation
+  and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.
+- The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
+  using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
+  configuration, introductory copy and the native-link card controller. Technical routes
+  reuse their maintained Astro-rendered bodies, bookmarks, native code controls and table semantics;
+  only the original English routes are admitted. Admitted bodies reuse an
+  input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
+  enabled candidate builds. The selected normal build prepares it automatically through the explicit
+  incumbent builder, never recursively through the normal publication entrypoint.
+  The reference also bundles the existing Mermaid dependency with the candidate's Vite toolchain.
+  Only diagram articles load that local module graph; ordinary code retains its separate copy controls.
+  Numeric archives and article slugs share explicit dispatch; unsupported nested article routes
+  fail the build. Never invent Danish article routes.
+  The enabled candidate retains the complete English `/blog/rss.xml` and its canonical image
+  dependencies through an input-bound generated reference and native prerendered endpoints.
+  Feed XML, images and discovery stay default-off; do not invent a Danish feed or add a browser parser.
+  The same input-bound reference captures the generated CV, maintained thesis PDF, favicon,
+  robots file and sharing portrait through inspected file descriptors. Native prerendered endpoints
+  retain these downloads locally. The final adapter output supplies canonical sitemap membership,
+  excluding redirects and noindex disclosures; never copy publisher CNAME or publication receipts.
+  All discovery assets and endpoints are absent when the candidate is false or unset.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
+- `web/private-contact/` builds a developer-only compiled contact component for
+  the bounded private presentation experiment. `server/internal/contactrenderer`
+  supervises its pipe worker behind a false-default OpenFeature gate. The explicit
+  developer browser composition buffers the full private frame and revalidates the
+  original durable session/client after renderer and SDK waits. Normal runtime
+  construction has no renderer or activation mapping. Read its `CONTRACT.md` and
+  `server/CONTACT-RENDERER.md`; public builds and production packaging remain unchanged.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
@@ -26,16 +76,26 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 ## Maintenance
 
-Use Node 24, npm 11 and `LC_ALL=C`. From this repository's root:
+Use the Node line in `.node-version` (24), npm 11 and `LC_ALL=C`. Both package engines and the
+candidate's Node type definitions must match that line; all workflows read the same file.
+From this repository's root:
 
 ```sh
 npm ci
+npm --prefix web ci
 npm run build
+node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs
+bash scripts/check-svelte-frontend.sh
+node --test web/tests/private-contact-renderer.test.mjs
+# Also requires the exact Go compiler and BOTH disposable database fixture URLs
+# from server/README.md; missing database proof fails, never skips:
+node --test web/tests/private-contact-runtime.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
+bash scripts/package-go-notices.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
@@ -84,6 +144,9 @@ source-owned publisher explicitly enables the footer, email route and required d
 Keep the introductory guides at DKK 2,995 plus optional hosting 99/month for a website, 7,995
 plus 299/month for a focused first app version, and 4,995 plus 199/month for a service.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
+The VAT-inclusive guides decided in #154 (3,750 + 125, 10,000 + 375 and 6,250 + 250 DKK) are
+preview-only under default-off `FEATURE_VAT_PRICES`; keep the prices above published until the VAT
+registration's effective date is confirmed and that switch is reviewed. Never add VAT to them again.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects

@@ -6,11 +6,17 @@ explore the work; use this repository to improve its content or presentation. Ho
 Projects are available in English and Danish. The Journal, CV and detailed technical guides
 are in English.
 
-The public site is an Astro + Starlight static application. A separate, default-off Go portal
+The public site uses SvelteKit's prerendered static output. A separate, default-off Go portal
 foundation is implemented under [`server/`](server/README.md), but is not deployed by GitHub
 Pages. Its local browser sign-in tests do not establish production authentication, customer
 intake or payments. You do not need a database, cloud account or publishing credentials to
 work on the static site.
+
+The [SvelteKit frontend](web/README.md) implements English/Danish
+Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
+The source-owned publisher and production Go image explicitly select it. Local builds remain
+default-off for comparison; Astro + Starlight still supplies the maintained content and an
+input-bound reading reference. Astro is also retained for reviewed recovery.
 
 ## Run the site locally
 
@@ -31,7 +37,8 @@ development server; it does not publish the website or enable the private portal
 From the repository root, build and inspect the static output with:
 
 ```sh
-LC_ALL=C npm run build
+npm --prefix web ci
+LC_ALL=C FEATURE_SVELTE_FRONTEND=true npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
@@ -62,7 +69,8 @@ The old reusable publisher is retained for its legacy immutable callers, not as 
 A source merge or preview artifact is not publication evidence. Operators check the successful
 deployment and the live [`publication-source.json`](https://devantler.tech/publication-source.json)
 receipt against its source revision and workflow run, then check the visitor paths. See the
-[publication and rollback decision](docs/adr/0003-source-owned-publication.md). The static
+[source ownership](docs/adr/0003-source-owned-publication.md) and
+[frontend cutover and rollback](docs/adr/0013-svelte-public-publication.md) decisions. The static
 publisher does not deploy the portal backend, authentication or payments.
 
 ## Source, assets and reuse

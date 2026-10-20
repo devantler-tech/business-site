@@ -26,6 +26,7 @@ cd business-site
 git worktree add -b docs/my-first-change ../business-site-first-change HEAD
 cd ../business-site-first-change
 npm ci
+npm --prefix web ci
 ```
 
 Read [AGENTS.md](AGENTS.md), the canonical contract, before editing. Always make changes in your
@@ -46,6 +47,8 @@ Application paths are relative to the repository root:
   [catalogue procedure](docs/README.md#public-product-catalogue). Its refresh needs `gh` and `jq`
   with read-only GitHub access, unlike ordinary local content work.
 - CV data belongs in `src/data/cv.ts`; keep its documented roster and update date consistent.
+- The SvelteKit public frontend lives in `web/`; its [guide](web/README.md) describes
+  installation, enabled/disabled checks and the current migration boundary.
 - Contributor reference and architecture decisions live in `docs/`. Do not hand-edit generated
   `dist/`, the CV PDF, generated snapshots or dependency lockfiles; follow the documented generator.
 
@@ -57,7 +60,7 @@ permission. Do not introduce confidential examples or use real residential addre
 
 ## Validate from the repository root
 
-After `npm ci`, run the shared baseline exactly as follows:
+After both pinned installs above, run the shared baseline exactly as follows:
 
 ```sh
 export LC_ALL=C

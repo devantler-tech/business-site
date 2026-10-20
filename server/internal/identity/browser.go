@@ -11,6 +11,7 @@ import (
 
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 	"github.com/justinas/nosurf"
 	"golang.org/x/oauth2"
 )
@@ -18,19 +19,34 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/credits.html"))
 
 type browser struct {
 	foundation *Foundation
 	sessions   *scs.SessionManager
 	oauth      oauth2.Config
 	origin     string
+	renderer   *contactrenderer.Supervisor
 }
 
 // Browser constructs the application HTTP surface, without starting a listener,
 // migrating a database or enabling a flag. Only one fixed HTTPS callback is used.
 // Private routes disappear when portal-identity is missing, false or erroneous.
 func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, error) {
+	return s.browser(callbackURL, clientSecret, nil)
+}
+
+// DeveloperContactBrowser explicitly composes the private presentation trial.
+// The caller owns and closes the fixed reviewed renderer; normal Browser and
+// the executable have no activation mapping or Node dependency.
+func (s *Foundation) DeveloperContactBrowser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
+	if renderer == nil {
+		return nil, ErrDenied
+	}
+	return s.browser(callbackURL, clientSecret, renderer)
+}
+
+func (s *Foundation) browser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
 	u, err := url.Parse(callbackURL)
 	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "/portal/callback" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
 		return nil, ErrDenied
@@ -63,6 +79,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Persist = false
 	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
+	b.renderer = renderer
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, _ error) {
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")
@@ -106,6 +123,14 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/invoices") && !s.invoicesReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/credits") && !s.creditsReady(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		// Do not trust caller-controlled Host or forwarded-origin headers.
 		if r.Host != u.Host {
 			http.Error(w, "Portal unavailable", 421)
@@ -146,12 +171,17 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposal-visibility", b.submitVisibility)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices", b.submitInvoice)
+	mux.HandleFunc("GET /portal/operator/requests/{id}/invoices/{invoice}/credits", b.showCredits)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices/{invoice}/credits", b.submitCredit)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)
 	mux.HandleFunc("GET /portal/requests", b.requests)
 	mux.HandleFunc("GET /portal/requests/new", b.newRequest)
 	mux.HandleFunc("GET /portal/requests/{id}", b.requestReceipt)
+	mux.HandleFunc("POST /portal/requests/{id}/proposal-review", b.reviewProposal)
+	mux.HandleFunc("POST /portal/requests/{id}/proposal-acceptance", b.confirmProposal)
 	mux.HandleFunc("POST /portal/requests", b.submitRequest)
 	mux.HandleFunc("POST /portal/logout", b.logout)
 	// Only the two public presentation assets are served, never template source.
@@ -310,9 +340,8 @@ func (b *browser) principal(ctx context.Context) Principal {
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
-	if err != nil {
-		b.render(w, r, 401, "error", "", "")
+	client, role, allowed := b.browserMember(w, r)
+	if !allowed {
 		return
 	}
 	kind := "home"
@@ -330,6 +359,16 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+}
+
+// browserMember preserves the common unauthenticated response before role checks.
+func (b *browser) browserMember(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		b.render(w, r, 401, "error", "", "")
+		return "", "", false
+	}
+	return client, role, true
 }
 
 // logout durably destroys the session before redirecting to the local sign-in.
@@ -367,7 +406,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
 	}
-	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
+	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" || kind == "invoice-error" || kind == "credit-error" {
 		path = "/portal/operator/requests"
 	}
 	d.LanguageURL = path + "?lang=" + other

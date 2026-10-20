@@ -18,6 +18,9 @@ cover:
 
 Setting up Kubernetes environments doesn't have to be expensive or complicated. With [Hetzner Cloud](https://www.hetzner.com/cloud/)'s affordable pricing, [Talos Linux](https://www.talos.dev/)'s security-focused immutable OS, and [KSail](https://github.com/devantler-tech/ksail)'s unified tooling, you can have a cluster running in minutes. This post walks through the complete setup.
 
+> [!NOTE]
+> The commands in this guide match KSail v7.203 (checked on 17 October 2026).
+
 ## Why Hetzner + Talos + KSail?
 
 **Hetzner Cloud** offers some of the most affordable cloud VPS servers in the industry. A capable `cx23` server (2 vCPU, 4GB RAM) costs around €3.74/month — significantly cheaper than equivalent offerings from AWS, GCP, or Azure.
@@ -85,10 +88,10 @@ KSail is distributed as a single binary. The easiest installation method is via 
 brew install --cask devantler-tech/tap/ksail
 ```
 
-Alternatively, if you have Go installed:
+Alternatively, with the install script:
 
 ```bash
-go install github.com/devantler-tech/ksail/v5@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 Verify the installation:
@@ -99,19 +102,19 @@ ksail --version
 
 ## Step 6: Scaffold Your Cluster Project
 
-KSail's `init` command scaffolds a complete project structure. For a basic Talos cluster on Hetzner with Cilium CNI:
+KSail's `project init` command scaffolds a complete project structure. For a basic Talos cluster on Hetzner with Cilium CNI:
 
 ```bash
 mkdir my-cluster && cd my-cluster
-ksail cluster init --distribution Talos --provider Hetzner --cni Cilium
+ksail project init --distribution Talos --provider Hetzner --cni Cilium
 ```
 
-This creates `ksail.yaml` (cluster configuration), `talos/` (Talos configs), and `k8s/` (your Kubernetes manifests).
+This creates `ksail.yaml` (cluster configuration), `talos/` (Talos configs), `k8s/` (your Kubernetes manifests) and `.devcontainer/` (an optional dev container setup; skip it with `--no-devcontainer`).
 
 **For GitOps workflows**, add a GitOps engine and external registry:
 
 ```bash
-ksail cluster init \
+ksail project init \
   --distribution Talos \
   --provider Hetzner \
   --cni Cilium \
@@ -123,7 +126,7 @@ This configures Flux to sync manifests from GitHub Container Registry. See [Step
 
 For all available flags and configuration options, see the [KSail documentation](https://ksail.devantler.tech):
 
-- [CLI flags reference](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-init) — All `cluster init` options
+- [CLI flags reference](https://ksail.devantler.tech/cli-flags/project/project-init/) — All `project init` options
 - [ksail.yaml reference](https://ksail.devantler.tech/configuration/declarative-configuration) — Configuration file schema
 - [Features overview](https://ksail.devantler.tech/features) — CNI, CSI, GitOps, and more
 
@@ -163,7 +166,7 @@ ksail cluster start     # Start a stopped cluster
 
 Your kubeconfig is automatically configured, so standard `kubectl` commands work too.
 
-For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/configuration/cli-flags/cluster/cluster-root).
+For the full command reference, see [Cluster Commands](https://ksail.devantler.tech/cli-flags/cluster/cluster-root/).
 
 ## Step 9: Deploying Workloads
 
@@ -201,7 +204,7 @@ export GITHUB_TOKEN="ghp_your-token-here"
 When scaffolding your cluster, specify the GitOps engine and external registry:
 
 ```bash
-ksail cluster init \
+ksail project init \
   --distribution Talos \
   --provider Hetzner \
   --cni Cilium \
@@ -234,7 +237,7 @@ The `push` command packages your `k8s/` directory as an OCI artifact and pushes 
 > [!TIP]
 > You can also set the registry via environment variable: `KSAIL_REGISTRY='ghcr.io/org/repo' ksail workload push`
 
-For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/configuration/cli-flags/workload/workload-root).
+For the full workload command reference, see [Workload Commands](https://ksail.devantler.tech/cli-flags/workload/workload-root/).
 
 ## Cleaning Up
 

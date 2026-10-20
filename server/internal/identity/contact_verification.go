@@ -156,10 +156,11 @@ func (b *browser) beginContactVerification(w http.ResponseWriter, r *http.Reques
 // contactVerificationFailure offers recovery only through current client access.
 // A wrong broker account cannot change the original session or choose its record.
 func (b *browser) contactVerificationFailure(w http.ResponseWriter, r *http.Request) {
-	d, err := b.foundation.readContact(r.Context(), b.principal(r.Context()))
+	p := b.principal(r.Context())
+	d, client, err := b.foundation.readContactScoped(r.Context(), p)
 	if err != nil {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	b.renderContact(w, r, 400, d, "verification", false)
+	b.renderContact(w, r, 400, d, "verification", false, b.contactAuthority(r.Context(), client))
 }

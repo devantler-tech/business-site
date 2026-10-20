@@ -175,7 +175,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		// Serve owns and closes the listener; this fallback may find it closed.
 		_ = listener.Close()
 	}()
-	_, _ = fmt.Fprintln(output, "runtime ready; private routes remain independently gated")
+	_, _ = fmt.Fprintf(output, "runtime ready; listen=%s; private routes remain independently gated\n", listener.Addr())
 	return runtimeapp.Serve(ctx, listener, artifact.Handler(portal))
 }
 

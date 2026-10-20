@@ -1,5 +1,6 @@
 ---
 import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { journalIntro } from './journal-config.js';
 
 const path = Astro.url.pathname.replace(/\/$/, '');
 const journal = /^\/blog(?:\/|$)/.test(path);
@@ -10,7 +11,7 @@ const mainArchive = /^\/blog(?:\/\d+)?$/.test(path);
   journal && !reading ? (
     <div class="journal-intro">
       <h1 id="_top">{mainArchive ? 'Journal' : Astro.locals.starlightRoute.entry.data.title}</h1>
-      <p>Notes from building useful software. Ideas, decisions and practical lessons from the work behind Devantler Tech.</p>
+      <p>{journalIntro}</p>
     </div>
   ) : <Default />
 }

@@ -2,8 +2,6 @@ package identity
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -26,7 +24,7 @@ import (
 )
 
 type browserFixture struct {
-	t                   *testing.T
+	t                   testing.TB
 	f                   brokerFixture
 	svc                 *Foundation
 	pool                *pgxpool.Pool
@@ -81,10 +79,17 @@ func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values)
 
 // newBrowserFixture creates isolated TLS application/broker servers and resets
 // only the explicitly named, disposable identity database.
-func newBrowserFixture(t *testing.T) *browserFixture {
+func newBrowserFixture(t testing.TB) *browserFixture {
 	t.Helper()
-	b := &browserFixture{t: t, pool: fixtureDB(t), flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	return newBrowserFixtureOnPool(t, fixtureDB(t))
+}
+
+// newBrowserFixtureOnPool keeps independent TLS brokers, sessions and SDKs while
+// a parent-owned expiry cohort shares its already-reset disposable database.
+func newBrowserFixtureOnPool(t testing.TB, pool *pgxpool.Pool) *browserFixture {
+	t.Helper()
+	b := &browserFixture{t: t, pool: pool, flags: flagAPI(t, true), subject: "client-a", codes: map[string]url.Values{}, handler: http.NotFoundHandler()}
+	key, err := fixtureSigningKey()
 	if err != nil {
 		t.Fatal(err)
 	}

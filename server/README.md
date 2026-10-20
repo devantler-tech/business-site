@@ -1,6 +1,6 @@
 # Portal identity and browser sign-in
 
-This module supplies a Go executable composing the public Astro output with the
+This module supplies a Go executable composing the selected public output with the
 **default-off HTTP identity handlers**, not a deployed portal. It discovers one configured HTTPS
 OIDC broker through maintained go-oidc, verifies signed ID tokens and the attempt
 nonce, and uses PostgreSQL for browser-bound login attempts, bound invitations
@@ -52,6 +52,16 @@ protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
 responsive layout and System/Light/Dark appearance. Only public CSS/JS are exposed.
 
+The five private page templates share their document metadata, header and footer
+through ordinary Go `html/template` definitions in `portal.html`. Each page keeps
+its existing native forms, content and navigation targets. This presentation
+sharing adds no renderer process. The explicit [developer contact
+composition](CONTACT-RENDERER.md) can use the bounded compiled Svelte body; ordinary
+`Browser` and the production executable retain Go with no Node activation mapping.
+Both buffer contact responses and revalidate the original durable session/client
+after waits. A replacement identity, client or extended deadline cannot authorize
+the original response, and a read never refreshes or resurrects a deleted session.
+
 `Invite` and `Revoke` remain **trusted control-plane operations**, not public
 HTTP endpoints. An operator workspace does not expose these operations. Likewise,
 `Complete` accepts only a server-obtained token, never a browser authentication claim.
@@ -88,11 +98,28 @@ over those same immutable records, with current operator authorization and bound
 oldest-first pagination. It neither joins contact profiles nor approves work.
 The independently gated [draft proposal history](PROPOSALS.md) lets the operator
 prepare bounded immutable scope and price versions; it does not dispatch an offer,
-obtain acceptance or authorize work.
+obtain acceptance or authorize work. Independently default-off exact client
+acceptance records an audited
+version/content-bound receipt after explicit review; it never approves payments or
+worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
-Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index) and v6 (draft proposals)
+Private [external invoice records](INVOICES.md) let the operator associate an
+explicit invoiced amount and purpose with exact current client acceptance.
+They do not generate invoices, confirm funds or authorize work, and remain
+independently default-off with no environment activation mapping.
+
+Separately default-off [bank-credit evidence](CREDITS.md) records operator
+observations and append-only corrections against those invoices. Exact confirmed
+totals distinguish partial/full/excess credit; disputes and unverified evidence
+prevent a fully-credited result. A globally reserved transfer identity cannot
+belong to two invoices or clients. This is manual evidence, not payment processing
+or work-start authority; no bank connection or activation mapping is added.
+
+Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
+v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
+v10 (external invoice records) and v11 (bank-credit evidence)
 are embedded and transactionally serialized with a contiguous version/checksum
-ledger. Original v1–v5 bytes remain unchanged by the proposal migration.
+ledger. The credit migration preserves the original v1–v10 bytes.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does
@@ -125,6 +152,17 @@ The version command prints the source/public-digest receipt. Visit
 `http://127.0.0.1:8080/` for the public snapshot; stop the local server with Ctrl+C.
 The subshell leaves your original shell at the repository root.
 
+The readiness line retains its `runtime ready;` prefix and reports the bound
+listener as `listen=<address>`. For disposable process tests, use
+`--listen 127.0.0.1:0` and read that actual endpoint instead of releasing a reserved
+port before startup. This endpoint is operational readiness, not a portal or
+production-deployment receipt. The compiled staging fixture bounds startup at
+45 seconds, accepts only a numeric loopback address with a nonzero port, and
+reports closed diagnostic categories rather than child output. Its private
+512-byte error capture is concurrency-safe; unknown or oversized output never
+appears in test diagnostics. One reaper owns child shutdown, including refusals
+that happen before readiness.
+
 Use a fresh output directory for smoke tests. `--release` requires clean source;
 `--development` permits a labelled local build. Each directory contains the actual
 Go executable, its digest-bound public snapshot, upstream Go notices and a build
@@ -136,12 +174,27 @@ archive as the review artifact, not a production backend. After downloading the
 artifact, extract the tar archive before running the executable; no manual `chmod`
 is required. Pages publication is unchanged and uploads only `dist`.
 
+Packaging copies the selected Go distribution's license and patent notice. Official
+distributions keep both under `GOROOT`; Homebrew keeps `LICENSE` at the same-version
+formula prefix and `PATENTS` under `libexec`. The resolver checks the compiler against
+the distribution's `VERSION` and confines that fallback to its matching formula, not
+another installed Go. Missing or empty notices still stop packaging. Run
+`bash scripts/package-go-notices.test.sh` for the supported layouts and refusal controls.
+
 With no `PORTAL_*` dependencies, startup serves public pages without broker/store
 connections and reserves private routes as non-cacheable 404s. For later private
 wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),
 `PORTAL_OIDC_ISSUER`, `PORTAL_OIDC_CLIENT_ID`, fixed HTTPS `PORTAL_CALLBACK_URL`
-ending `/portal/callback`, and absolute `PORTAL_CLIENT_SECRET_FILE`. Store the secret
-as a regular, private file or a confined projected secret; never put it in arguments,
+ending `/portal/callback`, and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
+`PORTAL_CLIENT_SECRET_PROJECTION_FILE`. The ordinary file input requires owner-only
+permissions. The explicit projection input supports a non-root Unix process and
+a root/current-user-owned regular file with read access for its primary group only;
+writable groups, other-user access, execution/special bits and escaping links are
+refused. Both readers bound the same-descriptor read to 16 KiB, remove only one
+terminal LF/CRLF, and create no scratch copy. Mixed inputs fail before connections.
+For the restricted image, project mode `0440` with group 65532 and searchable
+directories. Configuration is snapshotted at startup; restart to rotate it.
+Store the secret privately; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
 The Unix service runtime requires an already migrated least-privilege store. Its
 configured database login must match both the session and effective role before
@@ -149,6 +202,7 @@ the existing permission check and broker discovery; switching a broader login
 into a restricted role is refused. It fixes its SQL schema, caps its pool/timeouts
 and performs no DDL. Dependency configuration alone does not
 turn on the OpenFeature gate; real federation/ingress/activation remain parent work.
+This sign-in transport does not change the separate migration credential reader.
 `/healthz` is public-runtime liveness only. SIGTERM drains requests for up to ten
 seconds; request/header/idle limits are explicit. Serve behind an eventual verified
 TLS gateway before any production identity activation. No forwarded-header trust
@@ -203,7 +257,7 @@ proofs. See [the staging decision](../docs/adr/0009-bounded-identity-staging.md)
 
 ### Production public-content template
 
-Use `bash scripts/package-runtime.sh --release --production-template` to build
+Use `bash scripts/package-runtime.sh --release --production-template --svelte` to build
 `runtime-production-dist`. This explicit profile refreshes the complete public
 portfolio into build-local scratch and includes EN/DA company information, but
 **never embeds the registered address**. Missing or invalid ranking data fails;
@@ -319,10 +373,15 @@ GOTOOLCHAIN=local go mod verify
 GOTOOLCHAIN=local go vet ./...
 bash ../scripts/check-portal-quality.sh
 GOTOOLCHAIN=local go test -race -cover ./... -count=1 -timeout=90s
+GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
-The Go database suite does not require Node. Separately, use Node 24 from the
+The Go database suite and explicit trial-host integration do not require Node.
+The real-process integration is selected separately so it retains its complete
+refusal/journey controls without charging startup to the ordinary package's
+existing 90-second budget. Source CI requires both, with no conditional or error-tolerant
+step. Separately, use Node 24 from the
 repository root to run `node --test scripts/portal-request-limits.test.mjs` against
 the actual served browser asset. The required source CI job explicitly sets up
 Node 24 and runs all six controls unconditionally; its runtime contract rejects
@@ -348,12 +407,32 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the eight fixture identity/session/contact/request/proposal/visibility tables between tests. Never reuse a database
+truncate the thirteen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 
 After testing, stop and remove only the disposable service and data directory you created.
 Keep shared services and databases untouched; do not turn this fixture into a permanent service.
+
+The [private frontend comparison protocol](PRIVATE-FRONTEND-COMPARISON.md) defines
+the opt-in, real Go contact-journey benchmark. It uses these same disposable
+database and synthetic TLS broker fixtures, separately from the correctness suite.
+Its raw measurements are a comparator, not evidence that a Svelte private renderer
+or a production portal is ready.
+
+The explicit [trial host](CONTACT-TRIAL-HOST.md) launches that maintained authority
+as a separate developer-only process over a retained loopback TLS listener and a
+restricted disposable database. It is not the complete paired comparison runner;
+its process restart controls do not decide the private frontend or activate it.
+
+The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
+freezes the next candidate's presentation boundary, process limits, comparison
+method and same-record recovery check. Its
+[comparator amendment](../docs/adr/0015-private-contact-comparator-amendment.md)
+makes both sides run the current shared Go contact authority. The developer renderer and actual HTTP
+composition are available through [their explicit test entrypoint](CONTACT-RENDERER.md#exercise);
+the complete packaged paired measurements and recovery drill remain prerequisites,
+not delivered results or permission to activate the portal.
 
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share

@@ -330,6 +330,14 @@ func waitForTriageRead(ctx context.Context, t *testing.T, pool *pgxpool.Pool, re
 
 func triageSignIn(t *testing.T, b *browserFixture, subject, client, role string) *http.Client {
 	t.Helper()
+	b.finish(beginTriageSignIn(t, b, subject, client, role))
+	return b.client
+}
+
+// beginTriageSignIn completes invitation/PKCE preparation before a cohort
+// chooses the real signed JWT deadline and exchanges each prepared callback.
+func beginTriageSignIn(t *testing.T, b *browserFixture, subject, client, role string) string {
+	t.Helper()
 	clientCopy := *b.site.Client()
 	var err error
 	clientCopy.Jar, err = cookiejar.New(nil)
@@ -341,8 +349,7 @@ func triageSignIn(t *testing.T, b *browserFixture, subject, client, role string)
 	b.mu.Lock()
 	b.subject = subject
 	b.mu.Unlock()
-	b.finish(b.start(b.invite(subject, client, role)))
-	return &clientCopy
+	return b.start(b.invite(subject, client, role))
 }
 
 // A missing operator route, a client-scoped aggregate query or raw brief HTML

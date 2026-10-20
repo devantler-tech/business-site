@@ -35,7 +35,7 @@ type brokerFixture struct {
 
 func fixtureBroker(t *testing.T) brokerFixture {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := fixtureSigningKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,9 @@ func fixtureBroker(t *testing.T) brokerFixture {
 	return brokerFixture{b, key, issuer, ctx}
 }
 
-func (f brokerFixture) token(t *testing.T, subject, nonce string, changes map[string]any) string {
+// token signs synthetic broker claims, allowing deliberate claim overrides for
+// adversarial tests without contacting a real identity provider.
+func (f brokerFixture) token(t testing.TB, subject, nonce string, changes map[string]any) string {
 	t.Helper()
 	claims := map[string]any{"iss": f.issuer, "sub": subject, "aud": "portal-fixture", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": nonce, "email": "same@example.invalid", "groups": []string{"operator"}}
 	for k, v := range changes {
@@ -114,7 +116,9 @@ func TestBrokerRejectsInvalidProofs(t *testing.T) {
 	}
 }
 
-func migrationDB(t *testing.T) *pgxpool.Pool {
+// migrationDB requires the explicit disposable database and migration role,
+// rejecting an absent or differently scoped connection before schema changes.
+func migrationDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_MIGRATION_DATABASE_URL")
 	if dsn == "" {
@@ -132,7 +136,9 @@ func migrationDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func fixtureDB(t *testing.T) *pgxpool.Pool {
+// fixtureDB migrates and resets only the named disposable database, then returns
+// its restricted runtime pool. Callers must not run database fixtures in parallel.
+func fixtureDB(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("PORTAL_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -151,10 +157,10 @@ func fixtureDB(t *testing.T) *pgxpool.Pool {
 	if err = Migrate(context.Background(), migrator); err != nil {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
-	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime; GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility TO portal_runtime"); err != nil {
+	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime; GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE,TRUNCATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility"); err != nil {
+	if _, err = pool.Exec(context.Background(), "TRUNCATE portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions"); err != nil {
 		t.Fatal(err)
 	}
 	return pool
@@ -165,7 +171,9 @@ func enabled(t *testing.T, pool *pgxpool.Pool, f brokerFixture) *Foundation {
 	return New(pool, f.broker, flagAPI(t, true).NewClient())
 }
 
-func flagAPI(t *testing.T, value any) *openfeature.EvaluationAPI {
+// flagAPI owns an isolated provider and its cleanup so feature states cannot
+// escape this fixture into another test or benchmark.
+func flagAPI(t testing.TB, value any) *openfeature.EvaluationAPI {
 	t.Helper()
 	api := isolated.NewAPI()
 	setFlag(t, api, value)
@@ -173,7 +181,9 @@ func flagAPI(t *testing.T, value any) *openfeature.EvaluationAPI {
 	return api
 }
 
-func setFlag(t *testing.T, api *openfeature.EvaluationAPI, value any) {
+// setFlag waits for the fixture provider to expose the requested identity gate;
+// nil deliberately omits the flag instead of treating absence as enabled.
+func setFlag(t testing.TB, api *openfeature.EvaluationAPI, value any) {
 	t.Helper()
 	flags := map[string]memprovider.InMemoryFlag{}
 	if value != nil {

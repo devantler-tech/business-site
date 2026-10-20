@@ -56,7 +56,7 @@ test('the pinned checker examines the complete tracked server source', () => {
 });
 
 test('valid Danish copy and project API names pass the real checker', () => {
-  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE.');
+  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contactrenderer contacttrial contacttrialintegration rendererintegration autofocus.');
   assert.equal(result.status, 0, result.output);
 });
 
@@ -68,6 +68,9 @@ test('only the three exact encoded paths pass in their actual refusal fixture', 
 for (const [name, text, file] of [
   ['English typo beside the URL fixture', 'authentciation', scopedFile],
   ['Danish typo beside the URL fixture', 'forespøgrsler', scopedFile],
+  ['renderer package typo', 'contactrenderre', scopedFile],
+  ['timing package typo', 'contaccttrial', scopedFile],
+  ['renderer build-tag typo', 'rendererintegraton', scopedFile],
   ['unrelated bare fragments', 'fportal fsign ortal', scopedFile],
   ['same URL outside the one scoped fixture', '"/%2fportal"', join(root, 'server/internal/runtimeapp/config_test.go')],
 ]) {

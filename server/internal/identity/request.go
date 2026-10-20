@@ -156,6 +156,11 @@ func (b *browser) requestReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string) {
+	// Optional display evaluations may wait even when they return false/error.
+	// Perform them before private reads, whose own gates and final membership
+	// checkpoints still authorize every request independently.
+	sharing := id != "" && b.foundation.sharingReady(r.Context())
+	acceptance := id != "" && b.foundation.acceptanceReady(r.Context())
 	rows, err := b.foundation.readRequests(r.Context(), b.principal(r.Context()), id)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -172,8 +177,16 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 		receipt = rows[0]
 	}
 	page := b.requestPage(r, kind, receipt, rows, "")
-	if id != "" && b.foundation.sharingReady(r.Context()) {
+	if sharing {
 		page.SharedProposal, err = b.foundation.readSharedProposal(r.Context(), b.principal(r.Context()), id)
+		if err != nil {
+			b.triageError(w, r, err)
+			return
+		}
+	}
+	if acceptance {
+		page.AcceptanceEnabled = true
+		page.Acceptances, page.CanAccept, err = b.foundation.readProposalAcceptances(r.Context(), b.principal(r.Context()), id)
 		if err != nil {
 			b.triageError(w, r, err)
 			return
@@ -218,10 +231,14 @@ func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
 
 type requestPageData struct {
 	pageData
-	View, FormError string
-	Request         projectRequest
-	Requests        []projectRequest
-	SharedProposal  *projectProposal
+	View, FormError   string
+	Request           projectRequest
+	Requests          []projectRequest
+	SharedProposal    *projectProposal
+	Review            *proposalReview
+	Acceptances       []proposalAcceptance
+	CanAccept         bool
+	AcceptanceEnabled bool
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
@@ -232,6 +249,17 @@ func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status 
 
 func (b *browser) requestPage(r *http.Request, view string, d projectRequest, rows []projectRequest, problem string) requestPageData {
 	page := requestPageData{pageData: b.data(r, "requests", "", nosurf.Token(r)), View: view, FormError: problem, Request: d, Requests: rows}
+	if view == "review" || view == "acceptance-conflict" {
+		other := "da"
+		if page.Lang == "da" {
+			other = "en"
+		}
+		path := "/portal/requests"
+		if opaqueRequestID.MatchString(d.ID) {
+			path += "/" + d.ID
+		}
+		page.LanguageURL = path + "?lang=" + other
+	}
 	page.Title = "Your project requests"
 	page.Intro = "Tell us what you would like to build. Sending a request is free and does not start paid work."
 	if page.Lang == "da" {

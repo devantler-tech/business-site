@@ -150,7 +150,7 @@ func TestActualExecutableMigration(t *testing.T) {
 		t.Fatal("actual command did not migrate the empty disposable database")
 	}
 	var count int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 8 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 11 {
 		t.Fatal("actual command did not apply every embedded schema version")
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)"); err != nil {
@@ -406,7 +406,7 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
 				var versions int
-				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 8 {
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 11 {
 					t.Fatal("explicit migration did not apply every embedded schema version")
 				}
 			} else {
@@ -529,7 +529,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual job refused trusted confined projected inputs")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 8 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 11 {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
@@ -537,7 +537,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 // A current ledger is not permission to report success with a non-owning role.
 // Each control changes only its uniquely named, fully migrated disposable store.
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
-	for _, relation := range []string{"wrong credential", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility"} {
+	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash"} {
 		t.Run(relation, func(t *testing.T) {
 			file, pool, database := migrationCommandFixture(t)
 			binary := buildMigrationCommand(t)
@@ -549,7 +549,8 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 			}
 			admin := migrationFixtureAdministrator(t, database)
 			connection := database.String()
-			if relation == "wrong credential" {
+			switch relation {
+			case "wrong credential":
 				role := fmt.Sprintf("portal_migration_reader_%d_%d", os.Getpid(), time.Now().UnixNano())
 				quoted := pgx.Identifier{role}.Sanitize()
 				if _, err := admin.Exec(t.Context(), "CREATE ROLE "+quoted+" LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT; GRANT USAGE,CREATE ON SCHEMA public TO "+quoted+"; GRANT SELECT ON ALL TABLES IN SCHEMA public TO "+quoted); err != nil {
@@ -557,9 +558,21 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				}
 				cleanupMigrationFixtureRole(t, admin, role)
 				connection = migrationFixtureRole(database, role)
-			} else {
+			case "missing invoices":
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_credit_revisions,portal_credit_transfers,portal_invoices`); err != nil {
+					t.Fatal("owned missing-table fixture failed", err)
+				}
+			case "missing credits":
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_credit_revisions`); err != nil {
+					t.Fatal("owned missing-credit-table fixture failed", err)
+				}
+			default:
 				quoted := pgx.Identifier{"public", relation}.Sanitize()
-				if _, err := admin.Exec(t.Context(), "ALTER TABLE "+quoted+" OWNER TO portal_fixture_owner; GRANT SELECT ON ALL TABLES IN SCHEMA public TO portal_migrator"); err != nil {
+				kind := "TABLE"
+				if strings.HasPrefix(relation, "portal_consent_") {
+					kind = "DOMAIN"
+				}
+				if _, err := admin.Exec(t.Context(), "ALTER "+kind+" "+quoted+" OWNER TO portal_fixture_owner; GRANT SELECT ON ALL TABLES IN SCHEMA public TO portal_migrator"); err != nil {
 					t.Fatal("owned partial-ownership fixture failed")
 				}
 			}
@@ -570,7 +583,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Error("actual job reported success without owning the managed schema")
 			}
 			var preserved bool
-			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=8 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=11 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})

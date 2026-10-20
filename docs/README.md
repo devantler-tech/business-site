@@ -17,11 +17,14 @@ the active production publisher. Neither workflow deploys the private portal bac
 ```sh
 # From the repository root
 npm ci
+npm --prefix web ci
 npm run dev -- --host 127.0.0.1  # stop with Ctrl+C
 LC_ALL=C npm run build          # production build and visitor checks
 ```
 
-Use Node 24 and npm 11. CI clean-installs with npm 11.4.2 before repeating the install
+Use the Node line declared in `.node-version` (24) and npm 11. Workflows and the runtime packager
+read that declaration; package engine ranges and candidate Node types are checked against it.
+CI clean-installs with npm 11.4.2 before repeating the install
 with the runner's current npm 11. This also checks older supported versions: they
 require a nested optional Markdown peer that newer npm releases can omit when
 generating a lockfile. For intentional dependency changes, regenerate rather than
@@ -39,7 +42,16 @@ clean-install checks. These commands change local dependencies/lockfile, not the
 
 The business homepage is rendered by `src/components/business/BusinessSite.astro` at `/` (English)
 and `/da/` (Danish). Its offer amounts and translated copy live together in
-`src/components/business/content.ts`. Prices are introductory guides, not an automatic checkout:
+`src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
+Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
+These framework-neutral sources are also used by the isolated Svelte Home candidate; its matching
+server-only company/offer/customer-scope/VAT configuration is documented in `web/README.md`.
+The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
+the existing ranking implementation and complete dated snapshot with Astro. It preserves
+the curated six-tool output, compact public website example, research disclosure and old bookmarks
+without changing the source-owned publisher. Its enabled/false/unset and actual snapshot-path
+checks are included in `scripts/check-svelte-frontend.sh`.
+Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds
 use separately agreed iterations with their own scope, schedule and price. Monthly quotes are
@@ -55,6 +67,16 @@ incident or 24/7 personal availability. This flag defaults to false: Home, About
 their published English/Danish alternatives until reviewed activation. CI builds enabled, explicit
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
+
+`FEATURE_VAT_PRICES=true` previews the VAT-inclusive guide prices decided in #154: DKK 3,750 plus
+125/month for a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web
+service. Each price is marked "incl. VAT" / "inkl. moms", and the price note says prices include
+25% Danish VAT instead of stating the PMV position. The totals live in `vatInclusiveOffers` in
+`business-copy.ts`; `scripts/vat-prices.test.mjs` checks that each total's net amount stays at or
+above the earlier price and that VAT is never added twice. The flag defaults to false and the
+publisher does not set it, so the live site keeps the earlier prices until the registration's
+effective date is confirmed and the switch is reviewed. CI builds enabled, explicit false and
+entirely unset states; the Svelte candidate preserves the same amounts and release setting.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -135,6 +157,16 @@ provides the single keyboard destination without making its article a second foc
 form controls, disclosure toggles and editable descendants retain their own interaction; individual
 journal and technical articles remain reading surfaces. `scripts/journal-navigation.test.mjs`
 executes the actual head script as part of every build.
+The isolated Svelte candidate shares that controller, archive configuration and introductory copy.
+Its main English archive reads the authored Astro collection at build time, with exact generated-card
+comparisons across all main, topic and author archive pages. Topic and author archives retain every
+matching post on one page, while the main archive retains its five-post pagination. One full reading route, `/blog/building-ksail-from-shell-to-dotnet-to-go/`,
+uses an input-bound build-only reference from the maintained Astro renderer. The candidate retains
+its complete prose, bookmarks, code/copy controls, metadata, dates and actual local assets, without
+a second Markdown renderer. `scripts/build-journal-reference.sh` builds that private generated input;
+the normal production publisher neither runs nor consumes it. Topic and author browsing stays local;
+author cards retain their separate external profile links. Other reading routes and RSS stay on their
+published destinations; Danish business navigation does not invent translated Journal articles.
 There is one appearance picker, including on mobile; the documentation header measures its height
 so the reading tools do not overlap the business navigation.
 
@@ -156,6 +188,10 @@ research and diagrams are sourced from `src/content/docs/projects/completed.mdx`
 active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
+The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
+an authored redirect to the sole Platform Tenant Template guide. Its canonical/noindex metadata,
+top-of-guide fallback and no-JavaScript continuation are checked against actual build output.
+Only the canonical destination guide is advertised in the sitemap, not the redirect entry.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
 reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
 a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript
@@ -183,6 +219,19 @@ and rollback presentations. The official PMV registration terminology and histor
 writing remain accurate. The generated Home, About and Projects checks cover both languages and
 sharing metadata. The offer-release check distinguishes actual maintenance terms, not app labels
 or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
+
+The public customer invitation covers private customers in Denmark and the rest of the EU
+and businesses in Denmark. The contact section explains that businesses in other EU countries
+cannot currently be served under the PMV setup, and outside-EU work is not open pending
+confirmation. `customer-scope.ts` supplies this boundary to Astro and the isolated Svelte
+candidate independently of offer and identity release flags. Astro requires the default-off
+`FEATURE_CUSTOMER_SCOPE=true` release preview; false and entirely unset builds retain the
+published invitation and metadata. The already default-off Svelte candidate preserves the
+same default-off customer-scope setting. Every build checks all six English/Danish Home, About and Projects routes,
+including emitted metadata and deliberate output mutations in enabled and disabled states.
+Activation and subsequent flag removal require reviewed publication and live proof.
+This copy is not order authorization: tax confirmations remain under #147,
+server-side eligibility under #146, and the separate hosted-offer assessment under #18.
 
 `src/data/company.json` holds the maintainer-confirmed registered name, CVR, PMV type, owner
 and business email. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
@@ -343,6 +392,15 @@ rollout would require an SSR/hybrid adapter or a client-side [OpenFeature](https
 web island — explicitly out of scope for the static site today.)
 
 ### The convention — `astro:env`
+
+The isolated SvelteKit migration candidate in `web/` uses its own framework-native
+`FEATURE_SVELTE_FRONTEND` setting, not the Astro schema. It remains default-off. The common
+build can select it, the publisher admits it only for an artifact-only preview, and the Go
+packager requires an explicit `--svelte` option. Production publication remains Astro.
+See the [candidate guide](../web/README.md) for its enabled,
+false and entirely unset checks. Restart the preview process after rebuilding a different
+setting: a running preview has already loaded the old compiled server. Gate review is tracked
+by [#125](https://github.com/devantler-tech/business-site/issues/125).
 
 Flags are declared in the Zod-validated [`astro:env`](https://docs.astro.build/en/guides/environment-variables/)
 `env.schema` in [`astro.config.mjs`](../astro.config.mjs) — type-safe over raw `import.meta.env`:

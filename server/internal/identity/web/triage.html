@@ -1,8 +1,6 @@
 <!doctype html>
-<html lang="{{.Lang}}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
-<body><a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
-<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{.LanguageURL}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+{{template "portal-head" .}}
+{{template "portal-header" .}}
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}"><p>{{.Boundary}}</p>
@@ -11,7 +9,31 @@
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Type{{else}}Offering{{end}}</dt><dd>{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</dd><dt>{{if eq $.Lang `da`}}Modtaget (UTC){{else}}Received (UTC){{end}}</dt><dd><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></dd><dt>{{if eq $.Lang `da`}}Forespørgsel{{else}}Brief{{end}}</dt><dd class="request-brief">{{.Brief}}</dd></dl>{{end}}
 {{if .ProposalsEnabled}}
 <h2>{{if eq .Lang `da`}}Udkast til tilbud{{else}}Draft proposals{{end}}</h2>
-<p>{{if eq .Lang `da`}}Ikke accepteret eller godkendt til arbejde. Priser og endelige vilkår kræver særskilt aftale.{{else}}Not accepted or approved for work. Prices and final terms require a separate agreement.{{end}}</p>
+<p>{{if eq .Lang `da`}}At gemme et udkast indhenter ikke kundens accept og godkender ikke arbejde.{{else}}Saving a draft does not obtain client acceptance or approve work.{{end}}</p>
+{{if .AcceptanceEnabled}}
+<aside aria-labelledby="acceptance-heading"><h3 id="acceptance-heading">{{if eq .Lang `da`}}Kundens accept{{else}}Client acceptance{{end}}</h3>
+<p>{{if eq .Lang `da`}}Betaling og tilladelse til at starte arbejdet er fortsat uafklaret. En historisk accept gælder ikke et nyt eller tilbagetrukket tilbud.{{else}}Payment and permission to start work remain unverified. A historical acceptance does not apply to a revised or withdrawn proposal.{{end}}</p>
+{{range .Acceptances}}
+<details class="acceptance-receipt"><summary>{{if .Current}}{{if eq $.Lang `da`}}Aktuel accept{{else}}Current acceptance{{end}}{{else}}{{if eq $.Lang `da`}}Historisk accept{{else}}Historical acceptance{{end}}{{end}} — version {{.Proposal.Version}} · <time datetime="{{.Recorded.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Recorded.UTC.Format `2006-01-02 15:04`}} UTC</time></summary>
+<p>{{if eq $.Lang `da`}}Kvittering{{else}}Receipt{{end}} <code>{{.ID}}</code> · {{if eq $.Lang `da`}}Deling{{else}}Share event{{end}} {{.Event}}</p>
+<dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Accepteret omfang{{else}}Accepted scope{{end}}</dt><dd class="request-brief">{{.Proposal.Scope}}</dd><dt>{{if eq $.Lang `da`}}Accepterede leverancer{{else}}Accepted deliverables{{end}}</dt><dd class="request-brief">{{.Proposal.Deliverables}}</dd><dt>{{if eq $.Lang `da`}}Engangsbeløb og vilkår{{else}}One-time amount and terms{{end}}</dt><dd>{{.Proposal.OneTimeDKK}} DKK</dd><dd class="request-brief">{{.Proposal.OneTimeTerms}}</dd><dt>{{if eq $.Lang `da`}}Månedsbeløb og vilkår{{else}}Monthly amount and terms{{end}}</dt><dd>{{.Proposal.MonthlyDKK}} DKK</dd><dd class="request-brief">{{.Proposal.MonthlyTerms}}</dd></dl>
+</details>
+{{else}}<p>{{if eq .Lang `da`}}Ingen registreret kundeaccept.{{else}}No recorded client acceptance.{{end}}</p>{{end}}</aside>
+{{end}}
+{{if .InvoicesEnabled}}
+<aside aria-labelledby="invoice-heading"><h3 id="invoice-heading">{{if eq .Lang `da`}}Eksterne fakturaer{{else}}External invoices{{end}}</h3>
+<p>{{if eq .Lang `da`}}Registrer en faktura, der allerede er udstedt uden for portalen. Registreringen bekræfter ikke betaling og godkender ikke arbejde. Beløbet beregnes ikke fra tilbuddet.{{else}}Record an invoice already issued outside the portal. This does not confirm payment or approve work. The amount is not calculated from the proposal.{{end}}</p>
+{{range .Invoices.Records}}<details class="invoice-record"><summary>{{.Reference}} — {{.AmountDKK $.Lang}} DKK</summary><p class="request-brief">{{.Purpose}}</p><p>{{if eq $.Lang `da`}}Tilbudsversion{{else}}Proposal version{{end}} {{.Version}} · {{if .Current}}{{if eq $.Lang `da`}}Aktuel accept{{else}}Current acceptance{{end}}{{else}}{{if eq $.Lang `da`}}Historisk accept{{else}}Historical acceptance{{end}}{{end}}</p><p>{{if eq $.Lang `da`}}Kvittering{{else}}Receipt{{end}} <code>{{.Acceptance}}</code></p><time datetime="{{.Recorded.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Recorded.UTC.Format `2006-01-02 15:04`}} UTC</time>{{if $.CreditsEnabled}}<p><a href="/portal/operator/requests/{{(index $.Requests 0).ID}}/invoices/{{.Sequence}}/credits?lang={{$.Lang}}">{{if eq $.Lang `da`}}Gennemgå bankkrediteringer{{else}}Review bank-credit evidence{{end}}</a></p>{{end}}</details>
+{{else}}<p>{{if eq .Lang `da`}}Ingen registrerede fakturaer.{{else}}No recorded invoices.{{end}}</p>{{end}}
+{{if and .Invoices.Acceptance (lt .Invoices.Expected 50)}}
+<form class="request-form" method="post" action="/portal/operator/requests/{{(index .Requests 0).ID}}/invoices">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="invoice_key" value="{{.InvoiceKey}}"><input type="hidden" name="invoice_expected" value="{{.Invoices.Expected}}"><input type="hidden" name="invoice_acceptance" value="{{.Invoices.Acceptance}}">
+<label for="invoice-reference">{{if eq .Lang `da`}}Eksternt fakturanummer{{else}}External invoice reference{{end}}</label><input id="invoice-reference" name="reference" type="text" required aria-describedby="invoice-reference-help"><p id="invoice-reference-help" class="field-limit">{{if eq .Lang `da`}}Bogstaver, tal, punktum, skråstreg, bindestreg eller understregning. Hvert fakturanummer kan kun registreres én gang.{{else}}Letters, digits, dots, slashes, hyphens or underscores. Each invoice reference can be recorded only once.{{end}}</p>
+<label for="invoice-purpose">{{if eq .Lang `da`}}Faktureret formål eller periode{{else}}Invoiced purpose or period{{end}}</label><textarea id="invoice-purpose" name="purpose" rows="3" maxlength="600" data-character-limit="300" required></textarea>
+<label for="invoice-amount">{{if eq .Lang `da`}}Beløb på fakturaen (DKK){{else}}Invoice amount (DKK){{end}}</label><input id="invoice-amount" name="amount_dkk" type="text" inputmode="decimal" maxlength="11" required aria-describedby="invoice-amount-help"><p id="invoice-amount-help" class="field-limit">{{if eq .Lang `da`}}Brug fakturaens beløb med højst to decimaler, uden tusindtalsseparator. Registreringen ændrer ikke aftalte priser eller vilkår.{{else}}Use the invoiced amount with up to two decimal places and no thousands separators. This record does not change agreed prices or terms.{{end}}</p>
+<button type="submit">{{if eq .Lang `da`}}Registrer ekstern faktura{{else}}Record external invoice{{end}}</button></form>
+{{else}}<p>{{if eq .Lang `da`}}En ny registrering kræver aktuel kundeaccept og plads i historikken på 50 fakturaer. Tidligere registreringer ændres ikke.{{else}}A new record requires current client acceptance and room in the 50-invoice history. Earlier records are unchanged.{{end}}</p>{{end}}</aside>
+{{end}}
 {{if lt .ExpectedVersion 50}}
 <form class="request-form" method="post" action="/portal/operator/requests/{{(index .Requests 0).ID}}/proposals">
 <input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="submission_key" value="{{.ProposalKey}}"><input type="hidden" name="expected_version" value="{{.ExpectedVersion}}"><input type="hidden" name="currency" value="DKK">
@@ -39,6 +61,4 @@
 {{if .Requests}}<ul class="request-list">{{range .Requests}}<li><div><a href="/portal/operator/requests/{{.ID}}?lang={{$.Lang}}">{{.Title}}</a><p class="field-limit">{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</p></div><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></li>{{end}}</ul>{{else}}<p>{{if eq .Lang `da`}}Ingen projektforespørgsler endnu. Nye forespørgsler vises her, når en inviteret kunde sender dem.{{else}}No project requests yet. New requests appear here when an invited client submits one.{{end}}</p>{{end}}
 {{if .Next}}<a class="button" href="{{.Next}}" rel="next">{{if eq .Lang `da`}}Næste forespørgsler{{else}}Next requests{{end}}</a>{{end}}
 {{end}}
-</section>{{if .Detail}}<a class="back" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a><br>{{end}}<a class="back" href="/portal/operator?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dit arbejdsområde{{else}}Back to your workspace{{end}}</a></main><footer>Devantler Tech</footer>
-<script src="/portal/assets/portal.js" defer></script>
-</body></html>
+</section>{{if .Detail}}<a class="back" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a><br>{{end}}<a class="back" href="/portal/operator?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dit arbejdsområde{{else}}Back to your workspace{{end}}</a></main>{{template "portal-footer" .}}

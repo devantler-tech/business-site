@@ -39,6 +39,15 @@ func proposalForm(t *testing.T, b *browserFixture) url.Values {
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "submission_key": {key[1]}, "expected_version": {version[1]}, "scope": {"A fictional first iteration"}, "deliverables": {"A website and accessible contact page"}, "currency": {"DKK"}, "one_time_dkk": {"2995"}, "monthly_dkk": {"99"}, "one_time_terms": {"One agreed iteration"}, "monthly_terms": {"Hosting and routine maintenance"}, "lang": {"en"}}
 }
 
+// concurrentPortalPosts starts two genuine requests and returns both unordered outcomes.
+func concurrentPortalPosts(b *browserFixture, path string, first, second url.Values) (int, int) {
+	statuses := make(chan int, 2)
+	for _, form := range []url.Values{first, second} {
+		go func() { status, _, _ := b.request("POST", path, form, b.site.URL); statuses <- status }()
+	}
+	return <-statuses, <-statuses
+}
+
 func TestProposalImmutableRevisionsAndDurableRetries(t *testing.T) {
 	b := proposalFixture(t)
 	f := proposalForm(t, b)
@@ -65,7 +74,7 @@ func TestProposalImmutableRevisionsAndDurableRetries(t *testing.T) {
 		t.Fatal("content-changing retry overwrote history")
 	}
 	status, body, h := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=da", nil, "")
-	for _, want := range []string{"&lt;script&gt;fictional-private-scope&lt;/script&gt;", "A separately priced next iteration", "2995", "7995", "99", "Ikke accepteret"} {
+	for _, want := range []string{"&lt;script&gt;fictional-private-scope&lt;/script&gt;", "A separately priced next iteration", "2995", "7995", "99", "godkender ikke arbejde"} {
 		if status != 200 || !strings.Contains(body, want) {
 			t.Fatalf("durable Danish proposal history missing %q", want)
 		}
@@ -152,19 +161,12 @@ func TestProposalConcurrentVersionsAndRetries(t *testing.T) {
 	first, second := proposalForm(t, b), proposalForm(t, b)
 	second.Set("scope", "Concurrent alternative")
 	path := "/portal/operator/requests/" + proposalRequestID + "/proposals"
-	statuses := make(chan int, 2)
-	for _, form := range []url.Values{first, second} {
-		go func() { status, _, _ := b.request("POST", path, form, b.site.URL); statuses <- status }()
-	}
-	a, c := <-statuses, <-statuses
+	a, c := concurrentPortalPosts(b, path, first, second)
 	if (a != 303 || c != 409) && (a != 409 || c != 303) {
 		t.Fatalf("concurrent expected version did not arbitrate: %d/%d", a, c)
 	}
 	retry := proposalForm(t, b)
-	for range 2 {
-		go func() { status, _, _ := b.request("POST", path, retry, b.site.URL); statuses <- status }()
-	}
-	if a, c = <-statuses, <-statuses; a != 303 || c != 303 {
+	if a, c = concurrentPortalPosts(b, path, retry, retry); a != 303 || c != 303 {
 		t.Fatalf("concurrent identical retry: %d/%d", a, c)
 	}
 	var versions int

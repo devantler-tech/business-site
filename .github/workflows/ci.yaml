@@ -36,6 +36,9 @@ jobs:
         with:
           filters: |
             docs:
+              - '.node-version'
+              - 'research/**'
+              - 'web/**'
               - 'src/**'
               - 'public/**'
               - 'scripts/**'
@@ -57,6 +60,10 @@ jobs:
               - '.github/workflows/audit-docs.yaml'
               - '.github/workflows/ci.yaml'
             docs-npm-toolchain:
+              - '.node-version'
+              - 'web/package.json'
+              - 'web/package-lock.json'
+              - '.github/dependabot.yaml'
               - 'package.json'
               - 'scripts/npm-toolchain.test.sh'
               - 'scripts/dependency-overrides.test.sh'
@@ -91,7 +98,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Verify lockfile with older supported npm
@@ -100,6 +107,18 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: npm ci
+      - name: Verify candidate frontend lockfile with older supported npm
+        working-directory: web
+        run: npx --yes --package=npm@11.4.2 npm ci --ignore-scripts
+      - name: Install candidate frontend dependencies
+        working-directory: web
+        run: npm ci
+      - name: Verify the private compiled contact component
+        run: node --test web/tests/private-contact-renderer.test.mjs
+      - name: Verify the isolated Svelte frontend in both release states
+        run: bash scripts/check-svelte-frontend.sh
+      - name: Verify the retained frontend decision samples
+        run: bash scripts/check-frontend-research.sh
       - name: Build enabled preview
         working-directory: .
         env:
@@ -115,6 +134,16 @@ jobs:
         env:
           FEATURE_COMPANY_IDENTITY: "true"
           COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
+        run: npm run build
+      - name: Build customer-scope preview
+        working-directory: .
+        env:
+          FEATURE_CUSTOMER_SCOPE: "true"
+        run: npm run build
+      - name: Build VAT-inclusive price preview
+        working-directory: .
+        env:
+          FEATURE_VAT_PRICES: "true"
         run: npm run build
       - name: Build revised hosting-offer preview
         working-directory: .
@@ -139,12 +168,14 @@ jobs:
           FEATURE_PREVIEW_BANNER: "false"
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
+          FEATURE_CUSTOMER_SCOPE: "false"
+          FEATURE_VAT_PRICES: "false"
           FEATURE_OFFER_COPY: "false"
           FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build
       - name: Verify the published Journal presentation
         working-directory: .
         run: node scripts/check-journal-presentation.mjs dist
@@ -178,7 +209,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
       - name: Test audit wrapper
         working-directory: .
         run: ./scripts/audit-dependencies.test.sh
@@ -200,7 +231,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
       - name: Test audit wrapper
         working-directory: .
         run: ./scripts/audit-dependencies.test.sh
@@ -235,7 +266,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install MDX parser dependencies
@@ -305,12 +336,15 @@ jobs:
       - name: Setup Node.js for combined package
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install frontend dependencies
         working-directory: .
         run: npm ci
+      - name: Install candidate frontend dependencies
+        working-directory: .
+        run: npm --prefix web ci
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
@@ -340,6 +374,12 @@ jobs:
         env:
           PGPASSWORD: fixture-only
         run: psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql
+      - name: Verify real Go trial host with its own unchanged test budget
+        working-directory: server
+        run: go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
+      - name: Verify compiled contact HTTP with the actual broker, database and bounded renderer
+        working-directory: .
+        run: node --test web/tests/private-contact-runtime.test.mjs
       - name: Verify dependencies and formatting
         run: |
           go mod verify
@@ -354,6 +394,9 @@ jobs:
         run: |
           node --test scripts/runtime-contract.test.mjs
           node --test scripts/container-contract.test.mjs
+      - name: Verify compiled dependency inventory and failed-read refusals
+        working-directory: .
+        run: bash scripts/runtime-dependencies.test.sh
       - name: Build actual combined package
         working-directory: .
         run: bash scripts/package-runtime.sh --release
@@ -372,6 +415,23 @@ jobs:
           package="$(find runtime-dist -maxdepth 1 -type d -name 'package.*')"
           test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
           docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$package"
+      - name: Build actual Svelte public runtime candidate
+        working-directory: .
+        run: bash scripts/package-runtime.sh --release --default --svelte
+      - name: Exercise Svelte package and its extracted archive with private routes off
+        working-directory: .
+        run: |
+          node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist
+          extracted="$(mktemp -d)"
+          tar -xzf runtime-svelte-default-dist/business-site-runtime.tar.gz -C "$extracted"
+          node scripts/runtime-smoke.test.mjs "$extracted"
+      - name: Upload verified Svelte public runtime candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: business-site-svelte-runtime
+          path: runtime-svelte-default-dist/business-site-runtime.tar.gz
+          if-no-files-found: error
+          retention-days: 7
       - name: Exercise actual restricted container
         working-directory: .
         env:
@@ -387,7 +447,7 @@ jobs:
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/package-runtime.sh --release --production-template
+        run: bash scripts/package-runtime.sh --release --production-template --svelte
       - name: Exercise production template with private fictional disclosure
         working-directory: .
         run: node scripts/runtime-smoke.test.mjs runtime-production-dist
@@ -446,7 +506,7 @@ jobs:
       - test-portal-identity
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@8ed2071ebe18864b8b86efe0f6b1df8d73d2a6ab
+        uses: devantler-tech/.github/actions/aggregate-job-checks@68927b3801d388baf8243583def438d87d5cbece
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -476,7 +536,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@8ed2071ebe18864b8b86efe0f6b1df8d73d2a6ab
+        uses: devantler-tech/.github/actions/aggregate-job-checks@68927b3801d388baf8243583def438d87d5cbece
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -531,7 +591,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "24"
+          node-version-file: .node-version
       - name: Download only this successful CI run's tested image
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

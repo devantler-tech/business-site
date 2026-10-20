@@ -1,63 +1,36 @@
 package runtimeapp
 
 import (
-	"bufio"
-	"context"
 	"encoding/json"
 	"encoding/pem"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/devantler-tech/business-site/server/internal/webapp"
 )
 
 // Exercise the compiled command rather than replacing its OpenFeature client.
 // All federation/store traffic stays inside disposable, synthetic TLS fixtures.
 func TestActualExecutableStagingIdentity(t *testing.T) {
 	dir := t.TempDir()
-	public := filepath.Join(dir, "public")
-	for _, route := range []string{"", "da", "projects", "blog"} {
-		target := filepath.Join(public, route)
-		if err := os.MkdirAll(target, 0700); err != nil {
-			t.Fatal("public fixture creation failed")
-		}
-		if err := os.WriteFile(filepath.Join(target, "index.html"), []byte("<html>public fixture</html>"), 0600); err != nil {
-			t.Fatal("public fixture write failed")
-		}
-	}
-	artifact, err := webapp.Load(os.DirFS(public))
-	if err != nil {
-		t.Fatal("public fixture validation failed")
-	}
-	binary := filepath.Join(dir, "business-site")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "-ldflags",
-		"-X main.revision="+strings.Repeat("a", 40)+" -X main.publicDigest="+artifact.Digest()+" -X main.buildMode=development", "./cmd/business-site")
-	build.Dir = "../.."
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("actual command compilation failed: %s", output)
-	}
+	binary, public := buildActualCommand(t)
 	var issuer string
-	var delayDiscovery atomic.Bool
-	delayDiscovery.Store(true)
+	var discoveryDelay atomic.Int64
+	discoveryDelay.Store(int64(5 * time.Second))
 	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
 			http.NotFound(w, r)
 			return
 		}
 		// Slow but valid broker startup must leave time for the enabled assertion.
-		if delayDiscovery.CompareAndSwap(true, false) {
+		if delay := time.Duration(discoveryDelay.Swap(0)); delay > 0 {
 			select {
-			case <-time.After(5 * time.Second):
+			case <-time.After(delay):
 			case <-r.Context().Done():
 				return
 			}
@@ -78,6 +51,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("synthetic-constructor-secret"), 0600); err != nil {
 		t.Fatal("synthetic client configuration write failed")
 	}
+	projection := projectedIdentityFixture(t, []byte("synthetic-constructor-secret"), 0440)
 	query := database.Query()
 	query.Set("sslmode", "verify-full")
 	query.Set("sslrootcert", ca)
@@ -89,18 +63,37 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 	for _, tc := range []struct {
 		name, flag string
 		want       int
+		projected  bool
 	}{
-		{"explicit identity after slow startup", on, 200},
-		{"missing flag", "", 404},
-		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404},
-		{"malformed", "{invalid", 404},
-		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404},
+		{"explicit identity after slow startup", on, 200, false},
+		{"missing flag", "", 404, false},
+		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404, false},
+		{"malformed", "{invalid", 404, false},
+		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404, false},
+		{"explicit projected identity", on, 200, true},
+		{"projected identity remains off", "", 404, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
+			if tc.projected {
+				if tc.want == 200 {
+					// Projection startup must also tolerate a slow but valid discovery.
+					discoveryDelay.Store(int64(7 * time.Second))
+				}
+				// Leave margin beyond the executable's 45-second startup deadline.
+				until = time.Now().Add(time.Minute)
+				env = nil
+				for _, value := range environment {
+					if !strings.HasPrefix(value, "PORTAL_CLIENT_SECRET_FILE=") {
+						env = append(env, value)
+					}
+				}
+				env = append(env, "PORTAL_CLIENT_SECRET_PROJECTION_FILE="+projection)
+			}
 			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
-				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on)
+				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on,
+				"portal-proposal-sharing="+on, "portal-proposal-acceptance="+on)
 			address, stop := startActualCommand(t, binary, public, env)
 			defer stop()
 			commandStatus(t, address, "/portal/sign-in", tc.want)
@@ -108,8 +101,11 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 				commandStatus(t, address, route, 200)
 			}
 			commandStatus(t, address, "/portal/requests", 404)
+			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-review", 404)
+			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-acceptance", 404)
 			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
-			if tc.want == 200 {
+			// The ordinary transport retains the actual shared-provider expiry proof.
+			if tc.want == 200 && !tc.projected {
 				<-time.After(time.Until(until) + time.Millisecond)
 				commandStatus(t, address, "/portal/sign-in", 404)
 				commandStatus(t, address, "/", 200)
@@ -143,66 +139,15 @@ func commandStatus(t *testing.T, address, route string, want int) {
 // startActualCommand owns the executable through readiness, lease expiry and clean shutdown.
 func startActualCommand(t *testing.T, binary, public string, environment []string) (string, func()) {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment)
+	address, err := process.awaitReady()
 	if err != nil {
-		t.Fatal("fixture port allocation failed")
+		t.Fatal(err)
 	}
-	address := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		t.Fatal("fixture port release failed")
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
-	command := exec.CommandContext(ctx, binary, "--public", public, "--listen", address)
-	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "PORTAL_") && !strings.HasPrefix(value, "portal-") && !strings.HasPrefix(value, "SSL_CERT_FILE=") {
-			command.Env = append(command.Env, value)
-		}
-	}
-	command.Env = append(command.Env, environment...)
-	output, err := command.StdoutPipe()
-	if err != nil {
-		cancel()
-		t.Fatal("fixture output channel failed")
-	}
-	command.Stderr = io.Discard // Private startup errors are asserted separately.
-	if err := command.Start(); err != nil {
-		cancel()
-		t.Fatal("actual command did not start")
-	}
-	done := make(chan error, 1)
-	ready := make(chan bool, 1)
-	go func() {
-		scanner := bufio.NewScanner(output)
-		found := scanner.Scan() && strings.HasPrefix(scanner.Text(), "runtime ready;")
-		ready <- found
-		_, _ = io.Copy(io.Discard, output)
-		done <- command.Wait()
-	}()
-	var once sync.Once
 	stop := func() {
-		once.Do(func() {
-			if err := command.Process.Signal(os.Interrupt); err != nil {
-				t.Error("actual command shutdown signal failed")
-			}
-			select {
-			case err := <-done:
-				if err != nil {
-					t.Error("actual command did not shut down cleanly")
-				}
-			case <-ctx.Done():
-				t.Error("actual command shutdown exceeded its deadline")
-			}
-			cancel()
-		})
-	}
-	t.Cleanup(stop)
-	select {
-	case ok := <-ready:
-		if !ok {
-			t.Fatal("actual command exited before readiness")
+		if err := process.stop(); err != nil {
+			t.Error(err)
 		}
-	case <-ctx.Done():
-		t.Fatal("actual command readiness exceeded its deadline")
 	}
 	return address, stop
 }

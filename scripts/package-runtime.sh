@@ -1,19 +1,28 @@
 #!/usr/bin/env bash
-# Build, never deploy: public Astro output + its exact Go runtime and notices.
+# Build, never deploy: selected public output + its exact Go runtime and notices.
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 mode="${1:---release}"
 variant="${2:---default}"
-[[ "$#" -le 2 && ( "$mode" == --release || "$mode" == --development ) && ( "$variant" == --default || "$variant" == --production-template ) ]] || { printf '%s\n' 'Use --release or --development, optionally followed by --production-template.' >&2; exit 1; }
+frontend="${3:---astro}"
+[[ "$#" -le 3 && ( "$mode" == --release || "$mode" == --development ) && ( "$variant" == --default || "$variant" == --production-template ) && ( "$frontend" == --astro || "$frontend" == --svelte ) ]] || { printf '%s\n' 'Use --release or --development, --default or --production-template, then optionally --svelte.' >&2; exit 1; }
 profile=default
 output=runtime-dist
 if [[ "$variant" == --production-template ]]; then profile=production-template; output=runtime-production-dist; fi
+selected=false
+if [[ "$frontend" == --svelte ]]; then
+  selected=true
+  # Production's reviewed Svelte package feeds the existing image/archive chain.
+  # Keep the extra default-profile candidate separate from incumbent comparisons.
+  if [[ "$profile" == default ]]; then output=runtime-svelte-default-dist; fi
+fi
 revision="$(git rev-parse HEAD)"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || exit 1
 if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=normal)" ]]; then
   printf '%s\n' 'Release packages require a clean checkout; commit the source or use --development.' >&2; exit 1
 fi
-[[ "$(node --version)" == v24.* && "$(npm --version)" == 11.* ]] || { printf '%s\n' 'Use Node 24 and npm 11 before packaging.' >&2; exit 1; }
+node_line="$(cat .node-version)"
+[[ "$node_line" =~ ^[1-9][0-9]*$ && "$(node --version)" == "v${node_line}."* && "$(npm --version)" == 11.* ]] || { printf 'Use Node %s and npm 11 before packaging.\n' "$node_line" >&2; exit 1; }
 [[ "$(go version)" == "go version go1.27.2 "* ]] || { printf '%s\n' 'Use the exact Go 1.27.2 toolchain before packaging.' >&2; exit 1; }
 export GOTOOLCHAIN=local LC_ALL=C
 mkdir -p "$output"
@@ -22,8 +31,9 @@ cleanup_inputs() {
   if [[ -n "$inputs" ]]; then rm -f -- "$inputs/stars.json"; rmdir -- "$inputs"; fi
 }
 trap cleanup_inputs EXIT
-build_env=(env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
-build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
+build_env=(env -u FEATURE_SVELTE_FRONTEND -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
+build_env+=("FEATURE_SVELTE_FRONTEND=$selected")
+build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CUSTOMER_SCOPE=false" "FEATURE_VAT_PRICES=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
 if [[ "$profile" == production-template ]]; then
   inputs="$(mktemp -d "$output/public-inputs.XXXXXX")"
   bash scripts/refresh-public-stars.sh "$inputs/stars.json"
@@ -42,6 +52,7 @@ digest="$(cd server && go run ./cmd/business-site --check-public --public "../$p
 (
   cd server
   CGO_ENABLED=0 go build -trimpath -ldflags "-X main.revision=$revision -X main.publicDigest=$digest -X main.buildMode=${mode#--} -X main.publicProfile=$profile" -o "../$package/business-site" ./cmd/business-site
+  bash ../scripts/check-runtime-dependencies.sh "../$package/business-site" DEPENDENCIES.md
   # Every actually linked third-party module, not test-only dependencies.
   go list -deps -f '{{if and .Module (not .Module.Main)}}{{.Module.Path}}{{"\t"}}{{.Module.Version}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/business-site | sort -u | while IFS=$'\t' read -r module version directory; do
     [[ -n "$module" ]] || continue
@@ -57,8 +68,7 @@ digest="$(cd server && go run ./cmd/business-site --check-public --public "../$p
     [[ "$count" -gt 0 ]] || { printf '%s\n' 'A linked module lacks packaged upstream license text; investigate before distribution.' >&2; exit 1; }
   done
 )
-cp "$(go env GOROOT)/LICENSE" "$package/notices/Go-LICENSE"
-cp "$(go env GOROOT)/PATENTS" "$package/notices/Go-PATENTS"
+bash scripts/package-go-notices.sh "$package/notices"
 cp server/DEPENDENCIES.md "$package/notices/DEPENDENCIES.md"
 cp server/README.md "$package/README.md"
 cp server/MIGRATIONS.md "$package/MIGRATIONS.md"

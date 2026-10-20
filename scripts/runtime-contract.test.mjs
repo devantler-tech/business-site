@@ -45,11 +45,32 @@ function assertRuntime(workflow) {
   const steps = job.steps;
   const node = steps.findIndex((s) => s.uses?.startsWith("actions/setup-node@"));
   const install = steps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
+  const go = steps.findIndex((s) => s.uses?.startsWith("actions/setup-go@"));
+  const compilerInstall = steps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
+  const renderer = steps.findIndex(
+    (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs" && s["working-directory"] === ".",
+  );
+  const database = steps.findIndex(
+    (s) =>
+      s.run === "psql -h localhost -U portal_fixture_owner -d postgres -v ON_ERROR_STOP=1 -f testdata/provision.sql",
+  );
+  const host = steps.findIndex(
+    (s) =>
+      s.run ===
+        "go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s" &&
+      s["working-directory"] === "server",
+  );
+  const ordinary = steps.findIndex(
+    (s) => s.run === "go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s",
+  );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
   );
   const build = steps.findIndex(
     (s) => s.run === "bash scripts/package-runtime.sh --release" && s["working-directory"] === ".",
+  );
+  const inventory = steps.findIndex(
+    (s) => s.run === "bash scripts/runtime-dependencies.test.sh" && s["working-directory"] === ".",
   );
   const smoke = steps.findIndex(
     (s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-dist" && s["working-directory"] === ".",
@@ -60,15 +81,50 @@ function assertRuntime(workflow) {
       s["working-directory"] === ".",
   );
   const uploadIndex = steps.findIndex((s) => s.with?.name === "business-site-runtime");
-  assert.equal(steps[node]?.with?.["node-version"], "24");
+  assert.equal(steps[node]?.with?.["node-version-file"], ".node-version");
+  assert.equal(steps[node]?.with?.["node-version"], undefined);
   assert.ok(node >= 0 && install > node && build > install && smoke > build);
+  assert.ok(
+    go >= 0 &&
+      database >= 0 &&
+      compilerInstall > install &&
+      renderer > compilerInstall &&
+      renderer > go &&
+      renderer > database &&
+      renderer < build,
+    "run the actual compiled renderer with the exact Go and Node compilers before packaging",
+  );
+  assert.ok(
+    host > database && host < renderer,
+    "run the complete real Go host controls separately after database provision",
+  );
+  assert.ok(
+    ordinary > renderer && ordinary < build,
+    "retain the complete ordinary Go suite and its original timeout",
+  );
+  assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
     browser > install && browser < build,
     "run the actual served browser controls with explicitly configured Node before packaging",
   );
   assert.ok(extract > smoke && uploadIndex > extract, "test the extracted archive before upload");
   assert.match(steps[extract]?.run ?? "", /node scripts\/runtime-smoke\.test\.mjs "\$extracted"/);
-  for (const index of [node, install, browser, build, smoke, extract, uploadIndex]) {
+  for (const index of [
+    node,
+    go,
+    install,
+    compilerInstall,
+    database,
+    host,
+    ordinary,
+    renderer,
+    browser,
+    inventory,
+    build,
+    smoke,
+    extract,
+    uploadIndex,
+  ]) {
     assert.equal(steps[index].if, undefined, "required runtime steps cannot be conditional");
     assert.ok(
       steps[index]["continue-on-error"] == null || steps[index]["continue-on-error"] === false,
@@ -86,7 +142,9 @@ test("CI builds and exercises the actual combined package unconditionally", () =
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
   const steps = w.jobs["test-portal-identity"].steps;
-  const build = steps.findIndex((s) => s.run === "bash scripts/package-runtime.sh --release --production-template");
+  const build = steps.findIndex(
+    (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
+  );
   const smoke = steps.findIndex((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-production-dist");
   const extract = steps.findIndex((s) =>
     s.run?.includes('tar -xzf runtime-production-dist/business-site-runtime.tar.gz -C "$extracted"'),
@@ -114,7 +172,7 @@ test("CI exercises the actual production package and image", () => {
   for (const change of [
     (w) => {
       w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).if = "false";
     },
     (w) => {
@@ -124,7 +182,7 @@ test("CI exercises the actual production package and image", () => {
     },
     (w) => {
       delete w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).env.GH_TOKEN;
     },
     (w) => {
@@ -153,6 +211,165 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "missing complete ordinary Go suite",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("go test -race -coverprofile="),
+      );
+    },
+  ],
+  [
+    "narrowed ordinary Go suite",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("./...", "./internal/contacttrialhost");
+    },
+  ],
+  [
+    "conditional ordinary Go suite",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile=")).if = "false";
+    },
+  ],
+  [
+    "ignored ordinary Go suite failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))[
+        "continue-on-error"
+      ] = true;
+    },
+  ],
+  [
+    "missing real Go host controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      );
+    },
+  ],
+  [
+    "conditional real Go host controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      ).if = "false";
+    },
+  ],
+  [
+    "ignored real Go host failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      )["continue-on-error"] = true;
+    },
+  ],
+  [
+    "Go host controls before database provision",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      steps.unshift(
+        ...steps.splice(
+          steps.findIndex((s) => s.run?.startsWith("go test -race -tags=contacttrialintegration")),
+          1,
+        ),
+      );
+    },
+  ],
+  [
+    "missing renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => !s.run?.startsWith("psql -h localhost"),
+      );
+    },
+  ],
+  [
+    "conditional renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost")).if = "false";
+    },
+  ],
+  [
+    "ignored renderer database provision",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost"))["continue-on-error"] =
+        true;
+    },
+  ],
+  [
+    "renderer before database provision",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      steps.push(
+        ...steps.splice(
+          steps.findIndex((s) => s.run?.startsWith("psql -h localhost")),
+          1,
+        ),
+      );
+    },
+  ],
+  [
+    "missing real compiled renderer controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => s.run !== "node --test web/tests/private-contact-runtime.test.mjs",
+      );
+    },
+  ],
+  [
+    "conditional real compiled renderer controls",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+      ).if = "false";
+    },
+  ],
+  [
+    "ignored real compiled renderer failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find(
+        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+      )["continue-on-error"] = true;
+    },
+  ],
+  [
+    "conditional renderer compiler install",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "npm --prefix web ci").if = "false";
+    },
+  ],
+  [
+    "renderer check before compiler install",
+    (w) => {
+      const steps = w.jobs["test-portal-identity"].steps;
+      const i = steps.findIndex((s) => s.run === "npm --prefix web ci");
+      steps.push(...steps.splice(i, 1));
+    },
+  ],
+  [
+    "missing compiled inventory checks",
+    (w) => {
+      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+        (s) => s.run !== "bash scripts/runtime-dependencies.test.sh",
+      );
+    },
+  ],
+  [
+    "conditional compiled inventory checks",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh").if =
+        "false";
+    },
+  ],
+  [
+    "ignored compiled inventory failures",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh")[
+        "continue-on-error"
+      ] = true;
+    },
+  ],
   [
     "conditional build",
     (w) => {

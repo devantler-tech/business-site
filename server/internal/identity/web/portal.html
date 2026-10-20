@@ -1,8 +1,6 @@
 <!doctype html>
-<html lang="{{.Lang}}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
-<body><a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
-<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{.LanguageURL}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>
+{{template "portal-head" .}}
+{{template "portal-header" .}}
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
@@ -12,9 +10,20 @@
 {{else if eq .Kind `triage-invalid`}}<p role="alert">{{if eq .Lang `da`}}Denne side med forespørgsler kunne ikke åbnes. Gå tilbage til oversigten for at starte igen.{{else}}This inbox page could not be opened. Return to requests to start again.{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else if or (eq .Kind `proposal-invalid`) (eq .Kind `proposal-conflict`)}}<p role="alert">{{if eq .Lang `da`}}{{if eq .Kind `proposal-conflict`}}Udkastet er ændret eller historikken er fuld. Intet er overskrevet. Åbn forespørgslen igen og sammenlign de gemte versioner.{{else}}Udkastet kunne ikke gemmes. Brug de angivne tegngrænser og hele DKK, og prøv igen fra forespørgslen.{{end}}{{else}}{{if eq .Kind `proposal-conflict`}}The draft has changed or its history is full. Nothing was overwritten. Reopen the request and compare saved versions.{{else}}The draft could not be saved. Use the stated character limits and whole DKK, and try again from the request.{{end}}{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else if or (eq .Kind `sharing-invalid`) (eq .Kind `sharing-conflict`)}}<p role="alert">{{if eq .Lang `da`}}Delingen kunne ikke ændres. Intet er overskrevet. Åbn forespørgslen igen og kontrollér versionen og den aktuelle deling.{{else}}Sharing could not be changed. Nothing was overwritten. Reopen the request and check its version and current sharing state.{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
+{{else if eq .Kind `invoice-error`}}<p role="alert">{{if eq .Lang `da`}}Fakturaen kunne ikke registreres. Intet er overskrevet. Åbn forespørgslen igen, kontrollér aktuel accept, fakturanummer, beløb og de angivne grænser, og prøv igen.{{else}}The invoice could not be recorded. Nothing was overwritten. Reopen the request, check current acceptance, invoice reference, amount and the stated limits, then try again.{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
+{{else if eq .Kind `credit-error`}}<p role="alert">{{if eq .Lang `da`}}Krediteringen kunne ikke registreres. Intet er overskrevet. Åbn fakturaens dokumentation igen, og kontrollér identitet, seneste version, beløb og grænser. En overførsel kan kun tilhøre én faktura.{{else}}The credit could not be recorded. Nothing was overwritten. Reopen the invoice evidence and check the identity, latest revision, amount and limits. A transfer can belong to only one invoice.{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="/portal/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
 {{if .RequestsEnabled}}<p><a href="/portal/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
 {{if .TriageEnabled}}<p><a href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section><a class="back" href="/">{{.Back}}</a></main><footer>Devantler Tech</footer>
+</section><a class="back" href="/">{{.Back}}</a></main>{{template "portal-footer" .}}
+
+{{define "portal-head"}}<html lang="{{.Lang}}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
+<body>{{end}}
+
+{{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
+<header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{if eq .Kind `contact`}}?lang={{if eq .Lang `da`}}en{{else}}da{{end}}{{else}}{{.LanguageURL}}{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>{{end}}
+
+{{define "portal-footer"}}<footer>Devantler Tech</footer>
 <script src="/portal/assets/portal.js" defer></script>
-</body></html>
+</body></html>{{end}}

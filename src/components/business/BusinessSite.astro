@@ -3,17 +3,20 @@ import { Image } from 'astro:assets';
 import portrait from '../../assets/profile.jpg';
 import matrix from '../../assets/matrix.png';
 import BusinessLayout from "./BusinessLayout.astro";
-import { copy, offers, inquiryUrl, linkedInUrl, companyIdentityEnabled, type Locale } from './content';
+import { copy, offers, vatMarker, inquiryUrl, linkedInUrl, companyIdentityEnabled, type Locale } from './content';
+import CustomerScope from './CustomerScope.astro';
 import WorkExample from './WorkExample.astro';
 import ProfessionalWork from './ProfessionalWork.astro';
 import PreviewBanner from '../PreviewBanner.astro';
 import { FEATURE_CLIENT_PORTFOLIO, FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
 import QualityHighlight from './QualityHighlight.astro';
 import { clientCopy } from './client-facing';
+import { professionalWork } from './professional-work';
 
 interface Props { locale: Locale }
 const { locale } = Astro.props;
 const t = copy[locale];
+const marker = vatMarker(locale);
 const home = locale === 'da' ? '/da/' : '/';
 const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK' : 'en-GB').format(value);
 ---
@@ -50,8 +53,8 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
             const detail = t.offerCopy[i];
             return <article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
               <h3>{detail.title}</h3><p class="offer-description">{detail.description}</p>
-              <div class="price"><span>{t.starting}</span><strong>{locale === 'en' && `${t.currency} `}{format(offer.setup)}{locale === 'da' && ` ${t.currency}`}</strong></div>
-              <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}</p>
+              <div class="price"><span>{t.starting}</span><strong>{locale === 'en' && `${t.currency} `}{format(offer.setup)}{locale === 'da' && ` ${t.currency}`}</strong>{marker && <small class="vat-marker">{marker}</small>}</div>
+              <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{marker && <span class="vat-marker"> {marker}</span>}</p>
               <ul>{detail.includes.map((item) => <li>{item}</li>)}</ul>
               <p class="boundary">{detail.boundary}</p>
               <a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
@@ -63,7 +66,7 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
       </section>
       <section id="work" class="work-band" aria-labelledby="work-title">
         <div class="container section">
-          <div class="section-heading"><h2 id="work-title">{FEATURE_FEATURED_PORTFOLIO ? (locale === 'da' ? 'Udvalgt arbejde' : 'Selected work') : t.workTitle}</h2><p>{FEATURE_FEATURED_PORTFOLIO ? (locale === 'da' ? 'En offentlig hjemmeside, du kan besøge, og værktøjer, du kan udforske.' : 'A public website you can visit, and tools you can explore.') : t.workIntro}</p></div>
+          <div class="section-heading"><h2 id="work-title">{FEATURE_FEATURED_PORTFOLIO ? professionalWork[locale].heading : t.workTitle}</h2><p>{FEATURE_FEATURED_PORTFOLIO ? professionalWork[locale].intro : t.workIntro}</p></div>
           {FEATURE_FEATURED_PORTFOLIO ? <ProfessionalWork locale={locale} /> : <div class="work-list">{t.workItems.map((item) => <WorkExample item={item} locale={locale} />)}</div>}
           <div id="products" class="portfolio-bridge"><p>{FEATURE_CLIENT_PORTFOLIO ? clientCopy[locale].portfolioBridge : t.portfolioBridge}</p><a class="text-link" href={`${home}projects/${FEATURE_CLIENT_PORTFOLIO ? '' : '#open-title'}`}>{t.portfolioLink}<span aria-hidden="true">↗</span></a></div>
         </div>
@@ -78,7 +81,7 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
         <ol>{t.steps.map((step) => <li><h3>{step.title}</h3><p>{step.text}</p></li>)}</ol>
       </section>
       <section id="contact" class="contact-band" aria-labelledby="contact-title">
-        <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p>{companyIdentityEnabled ? <div class="actions"><a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a></div> : <a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>}<p class="contact-note">{t.contactNote}</p></div>
+        <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={locale} heading="h3" />{companyIdentityEnabled ? <div class="actions"><a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a><a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a></div> : <a class="button" href={inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>}<p class="contact-note">{t.contactNote}</p></div>
       </section>
     </main>
 </BusinessLayout>
@@ -121,6 +124,7 @@ const format = (value: number) => new Intl.NumberFormat(locale === 'da' ? 'da-DK
   .price > span { font-size: .8rem; color: var(--muted); }
   .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
   .hosting-price { font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
+  .price .vat-marker { font-size: .8rem; color: var(--muted); }
   .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
   .offer li { padding-left: .15rem; margin-block: .45rem; }
   .offer li::marker { color: var(--accent); }

@@ -6,6 +6,8 @@ import diagram from '../../assets/data-space-as-a-data-mesh.png';
 import ksailCapture from '../../assets/ksail-cli-dark.png';
 import ksailDesktop from '../../assets/ksail-desktop.png';
 import PortfolioExamples from './PortfolioExamples.astro';
+import { portfolioText, ksailStories, legacyAnchors } from './portfolio-content';
+import projectReveal from './project-reveal.js?raw';
 import { FEATURE_FEATURED_PORTFOLIO } from 'astro:env/server';
 import { type Locale } from './content';
 import { supporting } from './supporting';
@@ -20,40 +22,9 @@ const home = locale === 'da' ? '/da/' : '/';
 const featured = FEATURE_FEATURED_PORTFOLIO;
 const ksailDetail = featured ? await getImage({ src: ksailDesktop, width: 1600, format: 'webp' }) : undefined;
 const visibleProducts = featured ? selectPublicTools(catalogue, snapshot) : publicProducts;
-const text = locale === 'da' ? {
-  work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
-  tools: 'Værktøjer med offentlig kildekode', toolsIntro: 'Seks udvalgte, vedligeholdte værktøjer. Rækkefølgen følger antallet af GitHub-stjerner, ikke en vurdering af kvalitet.',
-  checked: 'Rangering kontrolleret', wider: 'Udforsk resten af mit offentlige arbejde', project: 'Udforsk projektet',
-} : {
-  work: 'Selected work', intro: 'A public website you can visit and explore.',
-  tools: 'Tools with public source', toolsIntro: 'Six selected, maintained tools. Their order follows GitHub stars, not a judgement of quality.',
-  checked: 'Ranking checked', wider: 'Explore the rest of my public work', project: 'Explore the project',
-};
-const ksailStory = locale === 'da' ? {
-  lead: 'Fra den første opsætning til den daglige drift.',
-  steps: [
-    { title: 'Opret', body: 'Skab et ensartet fundament til dine applikationer.' },
-    { title: 'Udgiv', body: 'Flyt ændringer i applikationerne ud i miljøet.' },
-    { title: 'Driv', body: 'Se dine applikationer og administrer miljøet.' },
-  ],
-  detail: 'Se desktopprogrammet', newTab: 'åbner i en ny fane',
-  privacy: 'Klyngeoversigt med private oplysninger skjult.',
-} : {
-  lead: 'From first setup to everyday operation.',
-  steps: [
-    { title: 'Set up', body: 'Create a consistent foundation for your applications.' },
-    { title: 'Deploy', body: 'Move application changes into the environment.' },
-    { title: 'Operate', body: 'Inspect your applications and manage the environment.' },
-  ],
-  detail: 'View the desktop interface', newTab: 'opens in a new tab',
-  privacy: 'Cluster overview with private details masked.',
-};
-const legacyAnchors: Record<string, string[]> = {
-  ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
-  'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
-  'agent-skills': ['-agent-skills--'], 'agent-plugins': ['-agent-plugins---'],
-  'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
-};
+const text = portfolioText[locale];
+const ksailStory = ksailStories[locale];
+
 for (const product of publicProducts) {
   if (!clientProducts[product.repository]?.[locale]) throw new Error(`Missing business description for ${product.repository} (${locale})`);
 }
@@ -70,7 +41,7 @@ for (const product of publicProducts) {
     {featured && publicProducts.filter(product => !visibleProducts.some(item => item.repository === product.repository)).flatMap(product => legacyAnchors[product.repository] ?? []).map(id => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
     <div class="collection">{visibleProducts.map((product, i) => <article class:list={['product', { featured: product.repository === 'ksail' }]} data-public-product={product.repository} data-stars={product.stars} data-ksail-presentation={featured && product.repository === 'ksail' || undefined}>
       {(legacyAnchors[product.repository] ?? []).map((id) => <span class="legacy-anchor" id={id} aria-hidden="true"></span>)}
-      <div class="product-copy"><span class="number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h3>{product.name}</h3><p>{clientProducts[product.repository][locale]}</p>{featured && product.repository === 'ksail' && <p class="terms">{locale === 'da' ? 'Kildekode tilgængelig — se projektets licens.' : 'Source-available — see the project’s licence.'}</p>}{product.terms && <p class="terms">{product.terms[locale]}</p>}
+      <div class="product-copy"><span class="number" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h3>{product.name}</h3><p>{clientProducts[product.repository][locale]}</p>{featured && product.repository === 'ksail' && <p class="terms">{text.sourceAvailable}</p>}{product.terms && <p class="terms">{product.terms[locale]}</p>}
         {product.repository === 'ksail' && <a href="https://ksail.devantler.tech">{t.productVisit} <span aria-hidden="true">↗</span></a>}
         {featured && <a href={`https://github.com/devantler-tech/${product.repository}`}>{text.project}: {product.name} <span aria-hidden="true">↗</span></a>}
       </div>
@@ -81,7 +52,7 @@ for (const product of publicProducts) {
         <p class="interface-note">{ksailStory.privacy}</p>
       </div> : <figure><Image src={ksailCapture} alt="KSail CLI" width={960} format="webp" /><figcaption>{s.realScreenshot}</figcaption></figure>)}
     </article>)}</div>
-    <p class="scope">{featured ? (locale === 'da' ? 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.' : 'Each project has its own licence. Check its terms before reuse.') : t.reuse}</p><a href="/blog/">{t.journal} <span aria-hidden="true">↗</span></a>
+    <p class="scope">{featured ? text.reuse : t.reuse}</p><a href="/blog/">{t.journal} <span aria-hidden="true">↗</span></a>
     {featured && <p><a href="https://github.com/orgs/devantler-tech/repositories">{text.wider} <span aria-hidden="true">↗</span></a></p>}
   </section>
   {featured && <PortfolioExamples locale={locale} featured={featured} />}
@@ -94,19 +65,7 @@ for (const product of publicProducts) {
     </div></details>
   </section>
 </div>
-<script is:inline data-project-reveal>
-  const revealTarget = () => {
-    let id;
-    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
-    if (!id) return;
-    const target = document.getElementById(id);
-    if (!target) return;
-    const details = target.closest('details');
-    if (details) { details.open = true; target.scrollIntoView(); }
-  };
-  revealTarget();
-  window.addEventListener('hashchange', revealTarget);
-</script>
+<script is:inline data-project-reveal set:html={projectReveal}></script>
 <style>
   .project-index { display: flex; flex-wrap: wrap; gap: .5rem 2rem; padding-bottom: 2rem; }
   a { display: inline-flex; align-items: center; min-height: 44px; gap: .7rem; color: var(--accent); text-underline-offset: .2em; }
