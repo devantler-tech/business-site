@@ -18,8 +18,12 @@ trap cleanup EXIT
 gh api --paginate --slurp 'orgs/devantler-tech/repos?type=public&per_page=100' > "$scratch/repos.json"
 jq -e --slurpfile catalogue "$manifest" --arg observedAt "$(date -u +%Y-%m-%d)" --arg fetchedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
   ($catalogue[0] | map(.repository)) as $names |
-  if ($names | length) == 0 or ($names | unique | length) != ($names | length) then error("Invalid public product catalogue") else . end |
-  [ .[][] | select(.name as $name | $names | index($name)) ] as $repos |
+  # A renamed repository keeps its catalogue key; githubRepository names it as GitHub lists it now.
+  ($catalogue[0] | map(.githubRepository // .repository)) as $forgeNames |
+  ($catalogue[0] | map({key: (.githubRepository // .repository), value: .repository}) | from_entries) as $catalogueNames |
+  if ($names | length) == 0 or ($names | unique | length) != ($names | length) or ($forgeNames | unique | length) != ($forgeNames | length)
+  then error("Invalid public product catalogue") else . end |
+  [ .[][] | select(.name as $name | $forgeNames | index($name)) | .name = $catalogueNames[.name] ] as $repos |
   if ($repos | length) != ($names | length) or ($repos | map(.name) | unique | length) != ($names | length) or
     any($repos[]; .private != false or (.archived | type) != "boolean" or (.fork | type) != "boolean" or .owner.login != "devantler-tech" or (.stargazers_count | type) != "number" or .stargazers_count < 0 or (.stargazers_count | floor) != .stargazers_count)
   then error("Incomplete or invalid public GitHub read; existing star snapshot retained")

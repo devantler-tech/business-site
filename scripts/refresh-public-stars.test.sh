@@ -18,9 +18,11 @@ cp "$site_dir/src/data/public-products.json" "$scratch/src/data/"
 cp "$site_dir/scripts/fixtures/github-public-stars.sh" "$scratch/bin/gh"
 chmod +x "$scratch/bin/gh"
 export PATH="$scratch/bin:$PATH" STAR_FIXTURE="$scratch/read.json"
-jq '[map({name: .repository, private: false, archived: false, fork: false, owner: {login: "devantler-tech"}, stargazers_count: 0})]' "$site_dir/src/data/public-products.json" > "$scratch/read.json"
+jq '[map({name: (.githubRepository // .repository), private: false, archived: false, fork: false, owner: {login: "devantler-tech"}, stargazers_count: 0})]' "$site_dir/src/data/public-products.json" > "$scratch/read.json"
 bash "$scratch/scripts/refresh-public-stars.sh" > /dev/null
 jq -e --slurpfile manifest "$site_dir/src/data/public-products.json" '(.repositories | length) == ($manifest[0] | length) and .repositories.ksail == 0 and (.observedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' "$scratch/src/data/github-stars.json" > /dev/null
+# Every count is keyed by its catalogue name, including a repository GitHub now lists under a new name.
+jq -e --slurpfile manifest "$site_dir/src/data/public-products.json" '(.repositories | keys) == ($manifest[0] | map(.repository) | sort) and (.metadata | keys) == ($manifest[0] | map(.repository) | sort)' "$scratch/src/data/github-stars.json" > /dev/null
 cp "$scratch/src/data/github-stars.json" "$scratch/result.json"
 bash "$scratch/scripts/refresh-public-stars.sh" "$scratch/custom.json" > /dev/null
 jq -e '.repositories.ksail == 0' "$scratch/custom.json" > /dev/null
