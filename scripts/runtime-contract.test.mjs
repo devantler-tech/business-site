@@ -61,7 +61,7 @@ function assertRuntime(workflow) {
       s["working-directory"] === "server",
   );
   const ordinary = steps.findIndex(
-    (s) => s.run === "go test -race -coverprofile=coverage.out ./... -count=1 -timeout=90s",
+    (s) => s.run === "go test -race -coverprofile=coverage.out -p=1 ./... -count=1 -timeout=90s",
   );
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
@@ -100,7 +100,12 @@ function assertRuntime(workflow) {
   );
   assert.ok(
     ordinary > renderer && ordinary < build,
-    "retain the complete ordinary Go suite and its original timeout",
+    "retain the complete ordinary Go suite, serialized packages and its original timeout",
+  );
+  assert.equal(
+    steps[ordinary]["working-directory"] ?? job.defaults?.run?.["working-directory"],
+    "server",
+    "run the complete ordinary Go suite from its server module",
   );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
@@ -138,6 +143,13 @@ function assertRuntime(workflow) {
   assert.equal(upload?.with?.path, "runtime-dist/business-site-runtime.tar.gz");
 }
 test("CI builds and exercises the actual combined package unconditionally", () => assertRuntime(workflow));
+test("an explicit server directory overrides the ordinary suite job default", () => {
+  const explicit = structuredClone(workflow);
+  const job = explicit.jobs["test-portal-identity"];
+  job.defaults.run["working-directory"] = ".";
+  job.steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))["working-directory"] = "server";
+  assertRuntime(explicit);
+});
 
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
@@ -212,6 +224,47 @@ test("CI exercises the actual production package and image", () => {
 });
 for (const [name, mutate] of [
   [
+    "ordinary Go suite from repository root",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))[
+        "working-directory"
+      ] = ".";
+    },
+  ],
+  [
+    "ordinary Go suite with wrong job directory",
+    (w) => {
+      w.jobs["test-portal-identity"].defaults.run["working-directory"] = ".";
+    },
+  ],
+  [
+    "ordinary Go suite without module directory",
+    (w) => {
+      delete w.jobs["test-portal-identity"].defaults;
+    },
+  ],
+  [
+    "concurrent ordinary package execution",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace(" -p=1", "");
+    },
+  ],
+  [
+    "widened ordinary package execution",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("-p=1", "-p=2");
+    },
+  ],
+  [
+    "extended ordinary package deadline",
+    (w) => {
+      const step = w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="));
+      step.run = step.run.replace("-timeout=90s", "-timeout=120s");
+    },
+  ],
+  [
     "missing complete ordinary Go suite",
     (w) => {
       w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
@@ -251,16 +304,16 @@ for (const [name, mutate] of [
   [
     "conditional real Go host controls",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      w.jobs["test-portal-identity"].steps.find((s) =>
+        s.run?.startsWith("go test -race -tags=contacttrialintegration"),
       ).if = "false";
     },
   ],
   [
     "ignored real Go host failures",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run?.startsWith("go test -race -tags=contacttrialintegration"),
+      w.jobs["test-portal-identity"].steps.find((s) =>
+        s.run?.startsWith("go test -race -tags=contacttrialintegration"),
       )["continue-on-error"] = true;
     },
   ],

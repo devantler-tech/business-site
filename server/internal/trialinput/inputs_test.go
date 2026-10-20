@@ -4,14 +4,94 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestGitFixtureWaitsForAutomaticMaintenance(t *testing.T) {
+	dir, _, _ := fixture(t)
+	// A repository may explicitly request detached work. Fixture commands must
+	// still own their complete lifetime without disabling maintenance itself.
+	for key, value := range map[string]string{
+		"maintenance.autoDetach":           "true",
+		"gc.autoDetach":                    "true",
+		"maintenance.gc.enabled":           "false",
+		"maintenance.commit-graph.enabled": "true",
+		"maintenance.commit-graph.auto":    "-1",
+	} {
+		gitFixture(t, dir, "config", key, value)
+	}
+	trace := filepath.Join(t.TempDir(), "trace.jsonl")
+	t.Setenv("GIT_TRACE2_EVENT", trace)
+	writeFixture(t, dir, "new-file", "fictional maintenance input\n")
+	commitFixture(t, dir)
+	data, err := os.ReadFile(trace)
+	if err != nil {
+		t.Fatal("cannot read real Git maintenance trace", err)
+	}
+	observed := false
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var event struct {
+			Event string   `json:"event"`
+			Argv  []string `json:"argv"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal("invalid real Git trace event", err)
+		}
+		if event.Event != "child_start" || !strings.Contains(strings.Join(event.Argv, " "), "maintenance run --auto") {
+			continue
+		}
+		observed = true
+		if !foregroundMaintenanceArgs(event.Argv) {
+			t.Fatal("real Git fixture allowed detached automatic maintenance")
+		}
+	}
+	if !observed {
+		t.Fatal("real commit did not exercise automatic maintenance")
+	}
+	// A passing child invocation alone is not proof that maintenance did work.
+	if _, err := os.Stat(filepath.Join(dir, ".git", "objects", "info", "commit-graphs", "commit-graph-chain")); err != nil {
+		t.Fatal("forced real commit-graph maintenance did not finish", err)
+	}
+	gitFixture(t, dir, "commit-graph", "verify")
+	for _, key := range []string{"maintenance.autoDetach", "gc.autoDetach"} {
+		if gitFixture(t, dir, "config", "--bool", "--get", key) != "false" {
+			t.Fatal("fixture did not override repository background-maintenance configuration")
+		}
+	}
+}
+
+func TestForegroundMaintenanceTraceArguments(t *testing.T) {
+	for _, scenario := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"explicit-foreground", []string{"git", "maintenance", "run", "--auto", "--no-detach"}, true},
+		{"legacy-foreground", []string{"git", "maintenance", "run", "--auto", "--quiet"}, true},
+		{"explicit-background", []string{"git", "maintenance", "run", "--auto", "--detach"}, false},
+		{"conflicting-flags", []string{"git", "maintenance", "run", "--auto", "--no-detach", "--detach"}, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			if foregroundMaintenanceArgs(scenario.args) != scenario.want {
+				t.Fatal("incorrect foreground maintenance trace classification")
+			}
+		})
+	}
+}
+
+func foregroundMaintenanceArgs(args []string) bool {
+	// Older Git traces omit both flags. This is only an argv check: the real
+	// fixture must still prove effective settings and completed graph work.
+	return !slices.Contains(args, "--detach")
+}
 
 // These fixtures exercise actual Git history, never a command-success mock.
 func fixture(t *testing.T) (string, policy, Inputs) {
@@ -295,7 +375,10 @@ func commitFixture(t *testing.T, dir string) {
 
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
+	// Wait for maintenance as part of each real command, including commits and
+	// clones. A detached descendant can otherwise race t.TempDir's cleanup.
+	prefix := []string{"-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", "-C", dir}
+	cmd := exec.CommandContext(t.Context(), "git", append(prefix, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
 	data, err := cmd.CombinedOutput()
 	if err != nil {
