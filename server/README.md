@@ -380,7 +380,7 @@ GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 The Go database suite and explicit trial-host integration do not require Node.
 The complete ordinary suite runs package binaries one at a time with `-p=1`,
 so executable-building packages do not compete with identity's real expiry and
-database checks. This does not limit goroutines within a test or change race
+database checks. This does not limit concurrency within a test or change race
 detection, coverage, test selection or the 90-second per-package deadline.
 The real-process integration is selected separately so it retains its complete
 refusal/journey controls without charging startup to the ordinary package's
