@@ -1,6 +1,11 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The shared test-only maintenance inventory checks actual Go documents and compiled
+Svelte contact bodies for ADR 0014. Read `CONTACT-MAINTENANCE.md` before changing it.
+Keep its explicit task option separate from ordinary source checks; preserve
+all five families, both languages, complete counts and negative controls. Markup
+inventory is not authenticated/browser proof or a completed comparison.
 The offline `cmd/contact-trial-inputs` checks frozen source identities for #213;
 read `CONTACT-TRIAL-INPUTS.md` before changing it. Preserve its closed presentation
 path boundary, dependency/document hashes, complete failed-read refusal and
