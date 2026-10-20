@@ -19,6 +19,17 @@ import (
 // This test-only option selects ADR 0014's identical source task, not an app flag.
 var maintenanceTask = flag.Bool("contact-maintenance-task", false, "check the frozen bilingual source task instead of the unchanged presentation")
 
+// maintenanceContactViews is the frozen order shared by inventory consumers.
+var maintenanceContactViews = [...]string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}
+
+// maintenanceProblem separates confirmation views from error presentation.
+func maintenanceProblem(view string) string {
+	if view == "confirm" || view == "confirmed" {
+		return ""
+	}
+	return view
+}
+
 // TestContactMaintenanceInventory requires the real frame in every maintained view.
 func TestContactMaintenanceInventory(t *testing.T) {
 	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
@@ -57,7 +68,7 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		return err
 	}
 	if name == "contact.html" {
-		view := []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}[index%6]
+		view := maintenanceContactViews[index%len(maintenanceContactViews)]
 		return checkMaintenanceState(markup, maintenancePage(lang, view))
 	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
@@ -74,7 +85,7 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 // The case order is frozen with portal_links_test.go at a1be787. Repeated URIs
 // are different states, not duplicate evidence. Contact has explicit assertions.
 var maintenanceCases = map[string][]string{
-	"contact.html":  {"normal", "invalid", "conflict", "verification", "confirm", "confirmed"},
+	"contact.html":  maintenanceContactViews[:],
 	"portal.html":   {"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error", "credit-error"},
 	"requests.html": {"website-new", "website-invalid", "website-receipt", "website-shared", "app-new", "app-invalid", "app-receipt", "app-shared", "service-new", "service-invalid", "service-receipt", "service-shared", "empty-list", "populated-list", "conflict", "review", "acceptance-conflict", "accepted-current", "accepted-historical"},
 	"triage.html":   {"empty-inbox", "populated-inbox", "paginated-inbox", "website-detail", "app-detail", "service-detail", "empty-drafts", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full", "invoice-credits"},
@@ -425,11 +436,7 @@ func TestContactMaintenanceReferenceKeys(t *testing.T) {
 func maintenancePage(lang, view string) contactPageData {
 	r := httptest.NewRequest("GET", "https://portal.example.invalid/portal/contact?lang="+lang, nil)
 	d := contactData{Name: "Fictional client", Email: "fixture@example.invalid", Company: "Fictional company", Revision: 1, EmailVerified: view == "confirmed"}
-	problem := view
-	if view == "confirm" || view == "confirmed" {
-		problem = ""
-	}
-	page := (&browser{}).contactPage(r, d, problem, view == "confirm")
+	page := (&browser{}).contactPage(r, d, maintenanceProblem(view), view == "confirm")
 	// This presentation fixture has no middleware or request authority. Both
 	// real renderers receive the same nonempty, explicitly fictional nonce.
 	page.CSRF = "fictional-form-nonce"
@@ -444,7 +451,7 @@ func renderedMaintenancePages(name string) ([]linkPage, error) {
 	}
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {
-		for _, view := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
+		for _, view := range maintenanceContactViews {
 			var markup bytes.Buffer
 			if err := browserPage.ExecuteTemplate(&markup, name, maintenancePage(lang, view)); err != nil {
 				return nil, err
@@ -461,7 +468,7 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 	if err != nil || len(pages) != 12 {
 		t.Fatal("actual contact inventory unavailable")
 	}
-	for _, view := range []string{"invalid", "conflict", "verification", "confirm", "confirmed"} {
+	for _, view := range maintenanceContactViews[1:] {
 		t.Run(view, func(t *testing.T) {
 			if checkMaintenanceState(pages[0].markup, maintenancePage("en", view)) == nil {
 				t.Fatal("normal body passed as a different state")
@@ -487,7 +494,7 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 // anti-forgery presentation inputs in both languages and every contact state.
 func TestContactMaintenanceFixtureCoverage(t *testing.T) {
 	for _, lang := range []string{"en", "da"} {
-		for _, view := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
+		for _, view := range maintenanceContactViews {
 			page := maintenancePage(lang, view)
 			t.Run(lang+"/"+view+"/company", func(t *testing.T) {
 				if page.Contact.Company == "" {
@@ -497,6 +504,44 @@ func TestContactMaintenanceFixtureCoverage(t *testing.T) {
 			t.Run(lang+"/"+view+"/nonce", func(t *testing.T) {
 				if page.CSRF == "" {
 					t.Fatal("empty form-nonce fixture")
+				}
+			})
+		}
+	}
+}
+
+// TestContactMaintenanceFrozenViews keeps an independent characterization of
+// the frozen order and problem mapping while inventory consumers share a list.
+func TestContactMaintenanceFrozenViews(t *testing.T) {
+	want := [...]struct {
+		view, problem     string
+		confirm, verified bool
+	}{
+		{"", "", false, false},
+		{"invalid", "invalid", false, false},
+		{"conflict", "conflict", false, false},
+		{"verification", "verification", false, false},
+		{"confirm", "", true, false},
+		{"confirmed", "", false, true},
+	}
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for language, lang := range []string{"en", "da"} {
+		for index, view := range want {
+			t.Run(lang+"/"+view.view, func(t *testing.T) {
+				if maintenanceProblem(view.view) != view.problem {
+					t.Fatal("frozen contact problem mapping changed")
+				}
+				page := maintenancePage(lang, view.view)
+				r := httptest.NewRequest("GET", "https://portal.example.invalid/portal/contact?lang="+lang, nil)
+				original := (&browser{}).contactPage(r, contactData{Revision: 1, EmailVerified: view.verified}, view.problem, view.confirm)
+				if page.FormError != original.FormError || page.VerificationEnabled != view.confirm || page.Contact.EmailVerified != view.verified {
+					t.Fatal("frozen contact state mapping changed")
+				}
+				if err := checkMaintenanceState(pages[language*len(want)+index].markup, page); err != nil {
+					t.Fatalf("frozen contact order changed: %v", err)
 				}
 			})
 		}
@@ -552,10 +597,10 @@ func TestContactMaintenanceSavedValueRejections(t *testing.T) {
 	}
 	for i, page := range pages {
 		lang := "en"
-		if i >= 6 {
+		if i >= len(maintenanceContactViews) {
 			lang = "da"
 		}
-		view := []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}[i%6]
+		view := maintenanceContactViews[i%len(maintenanceContactViews)]
 		expected := maintenancePage(lang, view)
 		for name, bad := range map[string]string{
 			"empty company":         strings.ReplaceAll(page.markup, `value="`+expected.Contact.Company+`"`, `value=""`),

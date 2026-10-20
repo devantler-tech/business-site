@@ -24,13 +24,9 @@ func TestCompiledContactMaintenance(t *testing.T) {
 	t.Cleanup(renderer.Close)
 	count := 0
 	for _, lang := range []string{"en", "da"} {
-		for _, view := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
+		for _, view := range maintenanceContactViews {
 			page := maintenancePage(lang, view)
-			problem := view
-			if view == "confirm" || view == "confirmed" {
-				problem = ""
-			}
-			body, err := renderer.Render(t.Context(), contactProjection(page, problem))
+			body, err := renderer.Render(t.Context(), contactProjection(page, maintenanceProblem(view)))
 			if err != nil {
 				t.Fatalf("compiled view=%s language=%s failed: %v", view, lang, err)
 			}
