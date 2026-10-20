@@ -350,7 +350,7 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 		}
 		if linkAttribute(n, "id") == "contact-pending" {
 			pending++
-			if maintenanceText(n) != page.Pending {
+			if !maintenanceRendered(n) || maintenanceText(n) != page.Pending {
 				return errors.New("contact verification display changed")
 			}
 		}
@@ -384,7 +384,7 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 		for n := range doc.Descendants() {
 			if n.Type == html.ElementNode && linkAttribute(n, "id") == "contact-verification-help" {
 				help++
-				if maintenanceText(n) != page.VerificationHelp {
+				if !maintenanceRendered(n) || maintenanceText(n) != page.VerificationHelp {
 					return errors.New("confirmation help changed")
 				}
 			}
@@ -477,6 +477,51 @@ func maintenanceAttributes(n *html.Node, allowed ...string) error {
 		}
 	}
 	return nil
+}
+
+// TestContactMaintenanceHelpPlacementRejections moves real help outside both
+// forms into inert or foreign content; those descendants are not native targets.
+func TestContactMaintenanceHelpPlacementRejections(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	markup := pages[4].markup
+	if !*maintenanceTask {
+		// A validator control only, never rendered task evidence.
+		markup = strings.Replace(markup, `maxlength="120"`, `maxlength="120" aria-describedby="contact-name-help"`, 1)
+		markup = strings.Replace(markup, `<label for="contact-email">`, `<p id="contact-name-help">You can update these details later.</p><label for="contact-email">`, 1)
+	}
+	page := maintenancePage("en", "confirm")
+	if checkMaintenanceContact(markup, "en", true) != nil || checkMaintenanceState(markup, page) != nil {
+		t.Fatal("complete help-placement control was rejected")
+	}
+	for _, id := range []string{"contact-name-help", "contact-pending", "contact-verification-help"} {
+		start := strings.Index(markup, `<p id="`+id+`">`)
+		if start < 0 {
+			t.Fatal("actual help element missing")
+		}
+		end := strings.Index(markup[start:], `</p>`)
+		if end < 0 {
+			t.Fatal("actual help element incomplete")
+		}
+		help := markup[start : start+end+len(`</p>`)]
+		for name, replacement := range map[string]string{
+			"template": `<template>` + help + `</template>`,
+			"svg":      `<svg>` + strings.Replace(strings.Replace(help, `<p `, `<text `, 1), `</p>`, `</text>`, 1) + `</svg>`,
+			"math":     `<math>` + strings.Replace(strings.Replace(help, `<p `, `<mtext `, 1), `</p>`, `</mtext>`, 1) + `</math>`,
+		} {
+			t.Run(id+"/"+name, func(t *testing.T) {
+				bad := strings.Replace(strings.Replace(markup, help, "", 1), `</main>`, replacement+`</main>`, 1)
+				if bad == markup {
+					t.Fatal("refusal control did not alter its fixture")
+				}
+				if checkMaintenanceContact(bad, "en", true) == nil && checkMaintenanceState(bad, page) == nil {
+					t.Fatal("inert or foreign help target was accepted")
+				}
+			})
+		}
+	}
 }
 
 // TestContactMaintenanceRejections tests the validator, never comparative samples.
@@ -691,7 +736,7 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 			return errors.New("contact field requirement changed")
 		}
 	}
-	if linkAttribute(ids["contact-email"][0], "type") != "email" || linkAttribute(ids["contact-email"][0], "aria-describedby") != "contact-pending" || len(ids["contact-pending"]) != 1 || maintenanceText(ids["contact-pending"][0]) == "" {
+	if linkAttribute(ids["contact-email"][0], "type") != "email" || linkAttribute(ids["contact-email"][0], "aria-describedby") != "contact-pending" || len(ids["contact-pending"]) != 1 || !maintenanceRendered(ids["contact-pending"][0]) || maintenanceText(ids["contact-pending"][0]) == "" {
 		return errors.New("email help or semantics changed")
 	}
 	if task {
@@ -699,9 +744,23 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 		if lang == "da" {
 			hint = "Du kan ændre oplysningerne senere."
 		}
-		if linkAttribute(ids["contact-name"][0], "aria-describedby") != "contact-name-help" || len(ids["contact-name-help"]) != 1 || maintenanceText(ids["contact-name-help"][0]) != hint {
+		if linkAttribute(ids["contact-name"][0], "aria-describedby") != "contact-name-help" || len(ids["contact-name-help"]) != 1 || !maintenanceRendered(ids["contact-name-help"][0]) || maintenanceText(ids["contact-name-help"][0]) != hint {
 			return errors.New("name help is missing, ambiguous or disconnected")
 		}
 	}
 	return nil
+}
+
+// maintenanceRendered excludes inert template fragments and foreign namespaces
+// that the HTML parser exposes as descendants but native ID references cannot use.
+func maintenanceRendered(n *html.Node) bool {
+	if n == nil {
+		return false
+	}
+	for p := n; p != nil; p = p.Parent {
+		if p.Type == html.ElementNode && (p.Namespace != "" || p.Data == "template") {
+			return false
+		}
+	}
+	return true
 }
