@@ -1,6 +1,11 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The offline `cmd/contact-trial-inputs` checks frozen source identities for #213;
+read `CONTACT-TRIAL-INPUTS.md` before changing it. Preserve its closed presentation
+path boundary, dependency/document hashes, complete failed-read refusal and
+exclusive private receipt. It neither builds nor executes inspected revisions;
+source admission is not complete trial evidence or deployment authority.
 The explicit developer-only `cmd/contact-trial-host` uses an inherited retained
 loopback TLS listener and bounded private setup pipe. Read `CONTACT-TRIAL-HOST.md`.
 Keep migration, invitations, synthetic broker and collection outside this child;
