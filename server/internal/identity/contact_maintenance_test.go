@@ -240,7 +240,7 @@ func TestContactMaintenanceRejections(t *testing.T) {
 	markup := pages[0].markup
 	if !*maintenanceTask {
 		markup = strings.Replace(markup, "Appearance", "Colour theme", 1)
-		markup = strings.Replace(markup, `id="contact-name"`, `id="contact-name" aria-describedby="contact-name-help"`, 1)
+		markup = strings.Replace(markup, `maxlength="120"`, `maxlength="120" aria-describedby="contact-name-help"`, 1)
 		markup = strings.Replace(markup, `<label for="contact-email">`, `<p id="contact-name-help">You can update these details later.</p><label for="contact-email">`, 1)
 	}
 	if err := checkMaintenanceDocument(markup, "en", true, true); err != nil {
@@ -254,7 +254,7 @@ func TestContactMaintenanceRejections(t *testing.T) {
 		"wrong hint":          strings.Replace(markup, "You can update these details later.", "Different hint", 1),
 		"lost name limit":     strings.Replace(markup, `maxlength="120"`, `maxlength="121"`, 1),
 		"lost email help":     strings.Replace(markup, `aria-describedby="contact-pending"`, "", 1),
-		"lost required":       strings.Replace(markup, `maxlength="120" required`, `maxlength="120"`, 1),
+		"lost required":       strings.Replace(markup, ` required`, "", 1),
 		"wrong native action": strings.Replace(markup, `action="/portal/contact"`, `action="/portal/elsewhere"`, 1),
 		"missing document":    "<p>Partial output</p>",
 		"wrong language":      strings.Replace(markup, `lang="en"`, `lang="da"`, 1),
@@ -263,6 +263,9 @@ func TestContactMaintenanceRejections(t *testing.T) {
 		"lost company limit":  strings.Replace(markup, `maxlength="160"`, `maxlength="161"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
+			if bad == markup {
+				t.Fatal("refusal control did not alter its fixture")
+			}
 			if err := checkMaintenanceDocument(bad, "en", true, true); err == nil {
 				t.Fatal("incomplete or altered maintenance output was accepted")
 			}
