@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"net/http/httptest"
@@ -19,7 +20,7 @@ var maintenanceTask = flag.Bool("contact-maintenance-task", false, "check the fr
 func TestContactMaintenanceInventory(t *testing.T) {
 	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
 		t.Run(name, func(t *testing.T) {
-			pages, err := renderedLinkPages(name)
+			pages, err := renderedMaintenancePages(name)
 			if err != nil || len(pages) != want {
 				t.Fatalf("incomplete maintenance inventory: got=%d want=%d error=%v", len(pages), want, err)
 			}
@@ -49,17 +50,40 @@ func TestContactMaintenanceInventory(t *testing.T) {
 // maintenancePage derives fictional state expectations from the unchanged builder.
 func maintenancePage(lang, view string) contactPageData {
 	r := httptest.NewRequest("GET", "https://portal.example.invalid/portal/contact?lang="+lang, nil)
-	d := contactData{Name: "Fictional client", Email: "fixture@example.invalid", Revision: 1, EmailVerified: view == "confirmed"}
+	d := contactData{Name: "Fictional client", Email: "fixture@example.invalid", Company: "Fictional company", Revision: 1, EmailVerified: view == "confirmed"}
 	problem := view
 	if view == "confirm" || view == "confirmed" {
 		problem = ""
 	}
-	return (&browser{}).contactPage(r, d, problem, view == "confirm")
+	page := (&browser{}).contactPage(r, d, problem, view == "confirm")
+	// This presentation fixture has no middleware or request authority. Both
+	// real renderers receive the same nonempty, explicitly fictional nonce.
+	page.CSRF = "fictional-form-nonce"
+	return page
+}
+
+// renderedMaintenancePages keeps the complete real frame inventory while
+// rendering contact source with the same nonempty values used by the worker.
+func renderedMaintenancePages(name string) ([]linkPage, error) {
+	if name != "contact.html" {
+		return renderedLinkPages(name)
+	}
+	var pages []linkPage
+	for _, lang := range []string{"en", "da"} {
+		for _, view := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
+			var markup bytes.Buffer
+			if err := browserPage.ExecuteTemplate(&markup, name, maintenancePage(lang, view)); err != nil {
+				return nil, err
+			}
+			pages = append(pages, linkPage{"/portal/contact?lang=" + lang, markup.String()})
+		}
+	}
+	return pages, nil
 }
 
 // TestContactMaintenanceStateRejections prevents normal output masking other states.
 func TestContactMaintenanceStateRejections(t *testing.T) {
-	pages, err := renderedLinkPages("contact.html")
+	pages, err := renderedMaintenancePages("contact.html")
 	if err != nil || len(pages) != 12 {
 		t.Fatal("actual contact inventory unavailable")
 	}
@@ -85,9 +109,103 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 	}
 }
 
+// TestContactMaintenanceFixtureCoverage requires meaningful saved-value and
+// anti-forgery presentation inputs in both languages and every contact state.
+func TestContactMaintenanceFixtureCoverage(t *testing.T) {
+	for _, lang := range []string{"en", "da"} {
+		for _, view := range []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"} {
+			page := maintenancePage(lang, view)
+			t.Run(lang+"/"+view+"/company", func(t *testing.T) {
+				if page.Contact.Company == "" {
+					t.Fatal("empty saved-company fixture")
+				}
+			})
+			t.Run(lang+"/"+view+"/nonce", func(t *testing.T) {
+				if page.CSRF == "" {
+					t.Fatal("empty form-nonce fixture")
+				}
+			})
+		}
+	}
+}
+
+// TestContactMaintenanceLabelRejections preserves a unique, named native label
+// for each visible field, rather than treating an input ID as an association.
+func TestContactMaintenanceLabelRejections(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for _, field := range []string{"name", "email", "company"} {
+		markup := pages[0].markup
+		start := strings.Index(markup, `<label for="contact-`+field+`">`)
+		if start < 0 {
+			t.Fatal("actual contact label missing")
+		}
+		end := strings.Index(markup[start:], `</label>`)
+		if end < 0 {
+			t.Fatal("actual contact label incomplete")
+		}
+		label := markup[start : start+end+len(`</label>`)]
+		for name, replacement := range map[string]string{
+			"missing":      "",
+			"disconnected": strings.Replace(label, `for="contact-`+field+`"`, `for="absent"`, 1),
+			"unnamed":      `<label for="contact-` + field + `"></label>`,
+			"duplicate":    label + label,
+			"wrong text":   `<label for="contact-` + field + `">Different field</label>`,
+			"hidden":       strings.Replace(label, `<label `, `<label hidden `, 1),
+			"inert":        `<template>` + label + `</template>`,
+			"foreign":      `<svg>` + label + `</svg>`,
+		} {
+			t.Run(field+"/"+name, func(t *testing.T) {
+				if replacement == label {
+					t.Fatal("refusal control did not alter its fixture")
+				}
+				if checkMaintenanceContact(strings.Replace(markup, label, replacement, 1), "en", false) == nil {
+					t.Fatal("missing or ambiguous contact label was accepted")
+				}
+			})
+		}
+	}
+}
+
+// TestContactMaintenanceSavedValueRejections requires every actual Go view to
+// retain its nonempty company and nonce, including the confirmation operation.
+func TestContactMaintenanceSavedValueRejections(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for i, page := range pages {
+		lang := "en"
+		if i >= 6 {
+			lang = "da"
+		}
+		view := []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}[i%6]
+		expected := maintenancePage(lang, view)
+		for name, bad := range map[string]string{
+			"empty company":         strings.ReplaceAll(page.markup, `value="`+expected.Contact.Company+`"`, `value=""`),
+			"wrong company":         strings.ReplaceAll(page.markup, `value="`+expected.Contact.Company+`"`, `value="Another company"`),
+			"missing company value": strings.ReplaceAll(page.markup, `value="`+expected.Contact.Company+`"`, ""),
+			"empty nonce":           strings.ReplaceAll(page.markup, `value="`+expected.CSRF+`"`, `value=""`),
+			"wrong nonce":           strings.ReplaceAll(page.markup, `value="`+expected.CSRF+`"`, `value="wrong-fixture-nonce"`),
+			"missing nonce value":   strings.ReplaceAll(page.markup, `value="`+expected.CSRF+`"`, ""),
+		} {
+			t.Run(strconv.Itoa(i)+"/"+name, func(t *testing.T) {
+				if bad == page.markup {
+					t.Fatal("refusal control did not alter its fixture")
+				}
+				if checkMaintenanceState(bad, expected) == nil {
+					t.Fatal("lost saved value or form nonce was accepted")
+				}
+			})
+		}
+	}
+}
+
 // TestContactMaintenanceConfirmationRejections preserves the second native operation.
 func TestContactMaintenanceConfirmationRejections(t *testing.T) {
-	pages, err := renderedLinkPages("contact.html")
+	pages, err := renderedMaintenancePages("contact.html")
 	if err != nil || len(pages) != 12 {
 		t.Fatal("actual contact inventory unavailable")
 	}
@@ -102,13 +220,16 @@ func TestContactMaintenanceConfirmationRejections(t *testing.T) {
 	}
 	form := markup[start : start+end+len(`</form>`)]
 	for name, replacement := range map[string]string{
-		"empty form":        `<form action="/portal/contact/verify"></form>`,
-		"wrong method":      strings.Replace(form, `method="post"`, `method="get"`, 1),
-		"missing nonce":     strings.Replace(form, `name="csrf_token"`, `name="missing"`, 1),
-		"wrong revision":    strings.Replace(form, `name="revision" value="1"`, `name="revision" value="2"`, 1),
-		"missing help":      strings.Replace(form, `id="contact-verification-help"`, `id="absent"`, 1),
-		"disconnected help": strings.Replace(form, `aria-describedby="contact-verification-help"`, `aria-describedby="absent"`, 1),
-		"missing submitter": strings.Replace(form, `type="submit"`, `type="button"`, 1),
+		"empty form":          `<form action="/portal/contact/verify"></form>`,
+		"wrong method":        strings.Replace(form, `method="post"`, `method="get"`, 1),
+		"missing nonce":       strings.Replace(form, `name="csrf_token"`, `name="missing"`, 1),
+		"missing nonce value": strings.Replace(form, `value="fictional-form-nonce"`, "", 1),
+		"empty nonce value":   strings.Replace(form, `value="fictional-form-nonce"`, `value=""`, 1),
+		"wrong nonce value":   strings.Replace(form, `value="fictional-form-nonce"`, `value="wrong-fixture-nonce"`, 1),
+		"wrong revision":      strings.Replace(form, `name="revision" value="1"`, `name="revision" value="2"`, 1),
+		"missing help":        strings.Replace(form, `id="contact-verification-help"`, `id="absent"`, 1),
+		"disconnected help":   strings.Replace(form, `aria-describedby="contact-verification-help"`, `aria-describedby="absent"`, 1),
+		"missing submitter":   strings.Replace(form, `type="submit"`, `type="button"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", "confirm")) == nil {
@@ -120,7 +241,7 @@ func TestContactMaintenanceConfirmationRejections(t *testing.T) {
 
 // TestContactMaintenanceFormEnvelopeRejections challenges both forms' submission boundary.
 func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
-	pages, err := renderedLinkPages("contact.html")
+	pages, err := renderedMaintenancePages("contact.html")
 	if err != nil || len(pages) != 12 {
 		t.Fatal("actual contact inventory unavailable")
 	}
@@ -360,7 +481,7 @@ func maintenanceAttributes(n *html.Node, allowed ...string) error {
 
 // TestContactMaintenanceRejections tests the validator, never comparative samples.
 func TestContactMaintenanceRejections(t *testing.T) {
-	pages, err := renderedLinkPages("contact.html")
+	pages, err := renderedMaintenancePages("contact.html")
 	if err != nil || len(pages) != 12 {
 		t.Fatal("actual contact inventory unavailable")
 	}
@@ -488,6 +609,7 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 		return errors.New("cannot parse contact body")
 	}
 	ids := map[string][]*html.Node{}
+	labels := map[string][]*html.Node{}
 	var forms []*html.Node
 	for n := range doc.Descendants() {
 		if n.Type != html.ElementNode {
@@ -496,6 +618,9 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 		if id := linkAttribute(n, "id"); id != "" {
 			ids[id] = append(ids[id], n)
 		}
+		if n.Data == "label" {
+			labels[linkAttribute(n, "for")] = append(labels[linkAttribute(n, "for")], n)
+		}
 		if n.Data == "form" && linkAttribute(n, "class") == "contact-form" {
 			forms = append(forms, n)
 		}
@@ -503,15 +628,47 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 	if len(forms) != 1 || forms[0].Namespace != "" || linkAttribute(forms[0], "method") != "post" || linkAttribute(forms[0], "action") != "/portal/contact" {
 		return errors.New("native contact form changed")
 	}
-	for _, field := range []struct{ id, name, limit, autocomplete string }{
-		{"contact-name", "name", "120", "name"},
-		{"contact-email", "email", "254", "email"},
-		{"contact-company", "company", "160", "organization"},
+	page := maintenancePage(lang, "")
+	for _, field := range []struct{ id, name, limit, autocomplete, label string }{
+		{"contact-name", "name", "120", "name", page.NameLabel},
+		{"contact-email", "email", "254", "email", page.EmailLabel},
+		{"contact-company", "company", "160", "organization", page.CompanyLabel},
 	} {
 		if len(ids[field.id]) != 1 {
 			return errors.New("missing or duplicate contact field")
 		}
 		n := ids[field.id][0]
+		limit := "(up to " + field.limit + " characters)"
+		if lang == "da" {
+			limit = "(højst " + field.limit + " tegn)"
+		}
+		if len(labels[field.id]) != 1 || labels[field.id][0].Namespace != "" || maintenanceText(labels[field.id][0]) != field.label+" "+limit {
+			return errors.New("contact label is missing, unnamed or ambiguous")
+		}
+		if err := maintenanceAttributes(labels[field.id][0], "for"); err != nil {
+			return err
+		}
+		for child := range labels[field.id][0].Descendants() {
+			if child.Type != html.ElementNode {
+				continue
+			}
+			if child.Data != "span" || linkAttribute(child, "class") != "field-limit" {
+				return errors.New("contact label content changed")
+			}
+			if err := maintenanceAttributes(child, "class"); err != nil {
+				return err
+			}
+		}
+		labelParent := labels[field.id][0].Parent
+		for labelParent != nil && labelParent != forms[0] {
+			if labelParent.Namespace != "" || (labelParent.Type == html.ElementNode && !slices.Contains([]string{"label", "span", "p"}, labelParent.Data)) {
+				return errors.New("contact label placement changed")
+			}
+			labelParent = labelParent.Parent
+		}
+		if labelParent == nil {
+			return errors.New("contact label is outside its native form")
+		}
 		if n.Namespace != "" || n.Data != "input" || linkAttribute(n, "name") != field.name || linkAttribute(n, "maxlength") != field.limit || linkAttribute(n, "autocomplete") != field.autocomplete {
 			return errors.New("contact input contract changed")
 		}

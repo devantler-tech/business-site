@@ -8,6 +8,11 @@ The checks also compare each contact body's error, confirmation and saved-value
 display with the unchanged Go page builder. Native save inputs, form association
 and submit behavior must remain intact. Counting several identical normal bodies
 does not establish state coverage.
+Each contact view supplies a nonempty fictional company and form nonce to both
+real renderers. The Go contact inventory uses its own source-rendered fixtures,
+not the link inventory's empty nonce. Each visible input must keep one uniquely
+targeted native label with its unchanged bilingual text and limit. Refusal
+controls cover lost saved values, nonce values and label associations.
 
 Ordinary source validation checks the unchanged presentation:
 

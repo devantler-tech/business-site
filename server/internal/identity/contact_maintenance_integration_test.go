@@ -30,8 +30,6 @@ func TestCompiledContactMaintenance(t *testing.T) {
 			if view == "confirm" || view == "confirmed" {
 				problem = ""
 			}
-			// Presentation inventory has no CSRF middleware or write authority.
-			page.CSRF = "fictional-form-nonce"
 			body, err := renderer.Render(t.Context(), contactProjection(page, problem))
 			if err != nil {
 				t.Fatalf("compiled view=%s language=%s failed: %v", view, lang, err)
