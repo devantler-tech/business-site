@@ -81,13 +81,45 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 	}
 }
 
+func TestContactMaintenanceConfirmationRejections(t *testing.T) {
+	pages, err := renderedLinkPages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	markup := pages[4].markup
+	start := strings.Index(markup, `<form method="post" action="/portal/contact/verify">`)
+	if start < 0 {
+		t.Fatal("actual confirmation form missing")
+	}
+	end := strings.Index(markup[start:], `</form>`)
+	if end < 0 {
+		t.Fatal("actual confirmation form incomplete")
+	}
+	form := markup[start : start+end+len(`</form>`)]
+	for name, replacement := range map[string]string{
+		"empty form":        `<form action="/portal/contact/verify"></form>`,
+		"wrong method":      strings.Replace(form, `method="post"`, `method="get"`, 1),
+		"missing nonce":     strings.Replace(form, `name="csrf_token"`, `name="missing"`, 1),
+		"wrong revision":    strings.Replace(form, `name="revision" value="1"`, `name="revision" value="2"`, 1),
+		"missing help":      strings.Replace(form, `id="contact-verification-help"`, `id="absent"`, 1),
+		"disconnected help": strings.Replace(form, `aria-describedby="contact-verification-help"`, `aria-describedby="absent"`, 1),
+		"missing submitter": strings.Replace(form, `type="submit"`, `type="button"`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", "confirm")) == nil {
+				t.Fatal("incomplete confirmation form was accepted")
+			}
+		})
+	}
+}
+
 func checkMaintenanceState(markup string, page contactPageData) error {
 	doc, err := html.Parse(strings.NewReader(markup))
 	if err != nil {
 		return errors.New("cannot parse contact state")
 	}
 	alerts, confirmations, pending := 0, 0, 0
-	var form *html.Node
+	var form, confirmation *html.Node
 	for n := range doc.Descendants() {
 		if n.Type != html.ElementNode {
 			continue
@@ -100,6 +132,7 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 		}
 		if n.Data == "form" && linkAttribute(n, "action") == "/portal/contact/verify" {
 			confirmations++
+			confirmation = n
 		}
 		if linkAttribute(n, "id") == "contact-pending" {
 			pending++
@@ -124,7 +157,37 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 	if alerts != wantAlerts || confirmations != wantConfirmations || pending != 1 || form == nil {
 		return errors.New("contact state is incomplete or collapsed")
 	}
-	wantInputs := map[string]string{"csrf_token": page.CSRF, "lang": page.Lang, "revision": strconv.FormatInt(page.Contact.Revision, 10), "name": page.Contact.Name, "email": page.Contact.Email, "company": page.Contact.Company}
+	inputs := map[string]string{"csrf_token": page.CSRF, "lang": page.Lang, "revision": strconv.FormatInt(page.Contact.Revision, 10), "name": page.Contact.Name, "email": page.Contact.Email, "company": page.Contact.Company}
+	if err := checkMaintenanceForm(form, "/portal/contact", inputs, page.Save, ""); err != nil {
+		return err
+	}
+	if confirmation != nil {
+		inputs = map[string]string{"csrf_token": page.CSRF, "lang": page.Lang, "revision": strconv.FormatInt(page.Contact.Revision, 10)}
+		if err := checkMaintenanceForm(confirmation, "/portal/contact/verify", inputs, page.Verify, "contact-verification-help"); err != nil {
+			return err
+		}
+		help := 0
+		for n := range doc.Descendants() {
+			if n.Type == html.ElementNode && linkAttribute(n, "id") == "contact-verification-help" {
+				help++
+				if maintenanceText(n) != page.VerificationHelp {
+					return errors.New("confirmation help changed")
+				}
+			}
+		}
+		if help != 1 {
+			return errors.New("confirmation help missing or duplicated")
+		}
+	}
+	return nil
+}
+
+// Both native forms use the same closed input/submit contract; counting a form's
+// action alone cannot establish that it still supports the requested operation.
+func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]string, label, help string) error {
+	if linkAttribute(form, "method") != "post" || linkAttribute(form, "action") != action {
+		return errors.New("native form operation changed")
+	}
 	counts := map[string]int{}
 	submitters := 0
 	for n := range form.Descendants() {
@@ -149,9 +212,9 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 			}
 			counts[name]++
 		}
-		if n.Data == "button" && (linkAttribute(n, "type") == "" || linkAttribute(n, "type") == "submit") {
-			if maintenanceText(n) != page.Save {
-				return errors.New("native submit label changed")
+		if n.Data == "button" {
+			if (linkAttribute(n, "type") != "" && linkAttribute(n, "type") != "submit") || maintenanceText(n) != label || linkAttribute(n, "aria-describedby") != help {
+				return errors.New("native submit behavior, label or help changed")
 			}
 			submitters++
 		}
