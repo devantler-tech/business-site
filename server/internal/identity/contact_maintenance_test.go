@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -140,6 +141,15 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 			t.Fatal("actual native form incomplete")
 		}
 		form := markup[start : start+end+len(`</form>`)]
+		inputStart := strings.Index(form, `<input `)
+		if inputStart < 0 {
+			t.Fatal("actual native input missing")
+		}
+		inputEnd := strings.Index(form[inputStart:], `>`)
+		if inputEnd < 0 {
+			t.Fatal("actual native input incomplete")
+		}
+		input := form[inputStart : inputStart+inputEnd+1]
 		for name, replacement := range map[string]string{
 			"textarea":            strings.Replace(form, `</form>`, `<textarea name="extra"></textarea></form>`, 1),
 			"select":              strings.Replace(form, `</form>`, `<select name="extra"><option>extra</option></select></form>`, 1),
@@ -155,6 +165,16 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 			"form target":         strings.Replace(form, `<form `, `<form target="_blank" `, 1),
 			"form validation":     strings.Replace(form, `<form `, `<form novalidate `, 1),
 			"outside association": strings.Replace(form, `<form `, `<form id="fixture-owner" `, 1) + `<input form="fixture-owner" name="revision" value="0">`,
+			"named submitter":     strings.Replace(form, `<button `, `<button name="revision" value="0" `, 1),
+			"unknown submitter":   strings.Replace(form, `<button `, `<button name="extra" value="0" `, 1),
+			"form event":          strings.Replace(form, `<form `, `<form onsubmit="return false" `, 1),
+			"input direction":     strings.Replace(form, `<input `, `<input dirname="extra" `, 1),
+			"foreign input":       strings.Replace(form, input, `<svg>`+input+`</input></svg>`, 1),
+			"foreign submitter":   strings.Replace(strings.Replace(form, `<button `, `<svg><button `, 1), `</button>`, `</button></svg>`, 1),
+			"template input":      strings.Replace(form, input, `<template>`+input+`</template>`, 1),
+			"datalist input":      strings.Replace(form, input, `<datalist>`+input+`</datalist>`, 1),
+			"template form":       `<template>` + form + `</template>`,
+			"datalist form":       `<datalist>` + form + `</datalist>`,
 		} {
 			t.Run(strconv.Itoa(view.index)+"/"+name, func(t *testing.T) {
 				if replacement == form {
@@ -165,6 +185,23 @@ func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
 				}
 			})
 		}
+	}
+	for name, replacement := range map[string]string{
+		"name pattern":    `name="name" pattern="never-match"`,
+		"name minimum":    `name="name" minlength="120"`,
+		"name event":      `name="name" oninvalid="return false"`,
+		"name visibility": `name="name" hidden`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			markup := pages[0].markup
+			bad := strings.Replace(markup, `name="name"`, replacement, 1)
+			if bad == markup {
+				t.Fatal("refusal control did not alter its fixture")
+			}
+			if checkMaintenanceState(bad, maintenancePage("en", "")) == nil {
+				t.Fatal("changed visible input behavior was accepted")
+			}
+		})
 	}
 }
 
@@ -244,21 +281,17 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	if linkAttribute(form, "method") != "post" || linkAttribute(form, "action") != action {
 		return errors.New("native form operation changed")
 	}
-	for _, attr := range form.Attr {
-		switch attr.Key {
-		// Neither frozen form has an ID: adding one would permit outside
-		// controls to join its submission without appearing below this node.
-		case "id", "enctype", "target", "novalidate":
-			return errors.New("native form submission behavior changed")
-		}
+	// Neither frozen form has an ID, event handler or submission override.
+	// An ID would admit outside controls that never appear below this node.
+	if err := maintenanceAttributes(form, "class", "method", "action"); err != nil {
+		return err
 	}
 	for parent := form.Parent; parent != nil; parent = parent.Parent {
-		if parent.Type == html.ElementNode && parent.Data == "fieldset" {
-			for _, attr := range parent.Attr {
-				if attr.Key == "disabled" {
-					return errors.New("native form inherited a disabled fieldset")
-				}
-			}
+		if parent.Type != html.ElementNode {
+			continue
+		}
+		if parent.Namespace != "" || !slices.Contains([]string{"html", "body", "main", "section"}, parent.Data) {
+			return errors.New("native form placement changed")
 		}
 	}
 	counts := map[string]int{}
@@ -267,25 +300,18 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 		if n.Type != html.ElementNode {
 			continue
 		}
-		switch n.Data {
-		case "textarea", "select", "output", "object":
-			return errors.New("native form gained an unexpected control")
-		case "fieldset":
-			for _, attr := range n.Attr {
-				if attr.Key == "disabled" || attr.Key == "form" {
-					return errors.New("native form control association or behavior changed")
-				}
-			}
+		if n.Namespace != "" {
+			return errors.New("native form gained foreign content")
 		}
-		if n.Data == "input" || n.Data == "button" {
-			for _, attr := range n.Attr {
-				switch attr.Key {
-				case "form", "formaction", "formmethod", "formenctype", "formtarget", "formnovalidate", "disabled", "readonly":
-					return errors.New("native form control association or behavior changed")
-				}
-			}
+		// This frozen layout uses only active HTML controls and their labels
+		// and prose. Inert/excluded containers must never supply counted fields.
+		if !slices.Contains([]string{"input", "label", "span", "p", "button"}, n.Data) {
+			return errors.New("native form content changed")
 		}
 		if n.Data == "input" {
+			if err := maintenanceAttributes(n, "type", "id", "name", "value", "autocomplete", "maxlength", "aria-describedby", "required"); err != nil {
+				return err
+			}
 			name := linkAttribute(n, "name")
 			value, known := wantInputs[name]
 			if !known || linkAttribute(n, "value") != value {
@@ -297,6 +323,10 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 			counts[name]++
 		}
 		if n.Data == "button" {
+			// In particular, a named submitter would add an unexpected POST field.
+			if err := maintenanceAttributes(n, "type", "aria-describedby"); err != nil {
+				return err
+			}
 			if (linkAttribute(n, "type") != "" && linkAttribute(n, "type") != "submit") || maintenanceText(n) != label || linkAttribute(n, "aria-describedby") != help {
 				return errors.New("native submit behavior, label or help changed")
 			}
@@ -310,6 +340,20 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	}
 	if submitters != 1 {
 		return errors.New("native submitter missing or duplicated")
+	}
+	return nil
+}
+
+// maintenanceAttributes closes the frozen native-control boundary, including
+// additional constraint validation and successful named submitter fields.
+func maintenanceAttributes(n *html.Node, allowed ...string) error {
+	if n.Namespace != "" {
+		return errors.New("native control namespace changed")
+	}
+	for _, attr := range n.Attr {
+		if !slices.Contains(allowed, attr.Key) {
+			return errors.New("native control attributes changed")
+		}
 	}
 	return nil
 }
@@ -331,6 +375,15 @@ func TestContactMaintenanceRejections(t *testing.T) {
 	if err := checkMaintenanceDocument(markup, "en", true, true); err != nil {
 		t.Fatal("complete validator fixture was rejected", err)
 	}
+	nameStart := strings.Index(markup, `<input id="contact-name"`)
+	if nameStart < 0 {
+		t.Fatal("actual native name input missing")
+	}
+	nameEnd := strings.Index(markup[nameStart:], `>`)
+	if nameEnd < 0 {
+		t.Fatal("actual native name input incomplete")
+	}
+	nameInput := markup[nameStart : nameStart+nameEnd+1]
 	for name, bad := range map[string]string{
 		"old theme":           strings.Replace(markup, "Colour theme", "Appearance", 1),
 		"missing hint":        strings.Replace(markup, `<p id="contact-name-help">You can update these details later.</p>`, "", 1),
@@ -350,6 +403,7 @@ func TestContactMaintenanceRejections(t *testing.T) {
 		"checkbox name":       strings.Replace(markup, `name="name"`, `name="name" type="checkbox"`, 1),
 		"required company":    strings.Replace(markup, `name="company"`, `name="company" required`, 1),
 		"checkbox company":    strings.Replace(markup, `name="company"`, `name="company" type="checkbox"`, 1),
+		"foreign name":        strings.Replace(markup, nameInput, `<svg>`+nameInput+`</input></svg>`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if bad == markup {
@@ -446,7 +500,7 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 			forms = append(forms, n)
 		}
 	}
-	if len(forms) != 1 || linkAttribute(forms[0], "method") != "post" || linkAttribute(forms[0], "action") != "/portal/contact" {
+	if len(forms) != 1 || forms[0].Namespace != "" || linkAttribute(forms[0], "method") != "post" || linkAttribute(forms[0], "action") != "/portal/contact" {
 		return errors.New("native contact form changed")
 	}
 	for _, field := range []struct{ id, name, limit, autocomplete string }{
@@ -458,7 +512,7 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 			return errors.New("missing or duplicate contact field")
 		}
 		n := ids[field.id][0]
-		if n.Data != "input" || linkAttribute(n, "name") != field.name || linkAttribute(n, "maxlength") != field.limit || linkAttribute(n, "autocomplete") != field.autocomplete {
+		if n.Namespace != "" || n.Data != "input" || linkAttribute(n, "name") != field.name || linkAttribute(n, "maxlength") != field.limit || linkAttribute(n, "autocomplete") != field.autocomplete {
 			return errors.New("contact input contract changed")
 		}
 		kind := linkAttribute(n, "type")
