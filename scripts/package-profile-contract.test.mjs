@@ -41,5 +41,13 @@ exit 42
     const selected = spawnSync('bash',['scripts/package-runtime.sh','--development','--default','--svelte'], {cwd:root,timeout:10000,env:boundaryEnv});
     assert.equal(selected.status,42);
     assert.equal(JSON.parse(readFileSync(capture)).frontend,'true','Only the explicit package option selects Svelte');
+    writeFileSync(path.join(root, 'scripts/refresh-public-stars.sh'), '#!/bin/sh\nprintf "{}" > "$1"\n');
+    const production = spawnSync('bash', ['scripts/package-runtime.sh', '--development', '--production-template', '--svelte'], {
+      cwd: root, timeout: 10000, env: boundaryEnv,
+    });
+    assert.equal(production.status, 42, 'The production boundary double stops at the real build invocation');
+    const released = JSON.parse(readFileSync(capture));
+    assert.deepEqual(released, { profile: 'production-template', company: 'true', address: '', preview: 'false',
+      offer: 'false', customer: 'false', vat: 'true', frontend: 'true' });
   } finally { rmSync(root, { recursive: true }); }
 });

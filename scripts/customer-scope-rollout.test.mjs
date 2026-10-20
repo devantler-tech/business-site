@@ -13,7 +13,9 @@ const valid = ci => {
   const steps = job?.steps ?? [];
   const indices = predicate => steps.flatMap((step, i) => predicate(step) ? [i] : []);
   const enabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'true');
-  const disabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'false');
+  // The separate current-production probe also pins scope=false. Its complete
+  // tuple is guarded by vat-activation.test; retain this independent false case.
+  const disabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'false' && step.env?.FEATURE_VAT_PRICES !== 'true');
   const unset = indices(step => step.run === unsetCommand && step.env == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
   return [enabled, disabled, unset, artifact].every(group => group.length === 1) &&
@@ -31,7 +33,7 @@ for (const mode of ['missing-enabled', 'missing-disabled', 'missing-unset', 'mis
     const ci = structuredClone(workflow), job = ci.jobs['build-docs'], steps = job.steps;
     assert.ok(valid(ci));
     const enabled = steps.find(step => step.env?.[flag] === 'true');
-    const disabled = steps.find(step => step.env?.[flag] === 'false');
+    const disabled = steps.find(step => step.env?.[flag] === 'false' && step.env?.FEATURE_VAT_PRICES !== 'true');
     const unset = steps.find(step => step.run === unsetCommand);
     const artifact = steps.find(step => step.with?.name === 'business-site-preview');
     if (mode === 'missing-enabled') steps.splice(steps.indexOf(enabled), 1);

@@ -191,6 +191,12 @@ The candidate preserves the existing company, offer, customer-scope and VAT sett
 SvelteKit's typed, build-time, server-only environment module. All four settings retain their
 false default; ambiguous values fail the build. Shared copy/price factories and company data
 remain authoritative. No portal setting is read and no setting authorizes orders or payments.
+The source-owned publisher and production-template package explicitly select company=true,
+VAT=true, revised-offer=false and customer-scope=false after the maintainer's 20 October 2026
+effective-date confirmation. That tuple uses the approved gross prices and ordinary company
+identity in every footer and disclosure. False/unset VAT inputs retain historical PMV comparisons
+only; they are not valid current-production recovery. Astro recovery must also retain VAT=true.
+The separate audience and hosted-offer releases remain closed, as do private portal operations.
 
 `FEATURE_COMPANY_IDENTITY=true` adds the native company footer links, verified email contact
 with LinkedIn as an alternative, and `/company/` plus `/da/company/`. Supply an explicitly
@@ -205,7 +211,7 @@ no address even when the company setting is enabled.
 for the Go runtime's escaped substitution, without consuming the configured private address.
 The explicitly selected Go package consumes this same template without changing private authority.
 The company/contact matrix compares actual Astro and Svelte artifacts for unset, explicit-false,
-published, revised/VAT, independently selected and template configurations in both languages.
+current production, historical, revised/VAT, independently selected and template configurations in both languages.
 Independent missing-locale, incomplete-disclosure and unrelated-script leak controls must reject
 otherwise healthy real output. It also exercises the framework's invalid settings and address
 diagnostics. Run it with `bash scripts/check-svelte-company.sh`; the complete candidate check

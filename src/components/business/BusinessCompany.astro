@@ -1,14 +1,14 @@
 ---
 import { COMPANY_POSTAL_ADDRESS, PUBLIC_CONTENT_PROFILE } from 'astro:env/server';
 import BusinessLayout from './BusinessLayout.astro';
-import { company, companyIdentityEnabled, type Locale } from './content';
+import { company, companyIdentityEnabled, vatPricesEnabled, type Locale } from './content';
 import { companyAddress } from './company-address.mjs';
-import { companyCopy } from './company-copy';
+import { companyCopyFor } from './company-copy';
 interface Props { locale: Locale }
 const { locale } = Astro.props;
 const lines = companyAddress(PUBLIC_CONTENT_PROFILE === 'production-template'
   ? '__BUSINESS_ADDRESS_LINE_1__\n__BUSINESS_ADDRESS_LINE_2__' : COMPANY_POSTAL_ADDRESS, companyIdentityEnabled);
-const t = companyCopy[locale];
+const t = companyCopyFor(vatPricesEnabled)[locale];
 ---
 <BusinessLayout locale={locale} section="company" title={`${t.title} | Devantler Tech`} description={t.description}>
   <main id="main" class="container company-page">

@@ -9,15 +9,19 @@ import { readerText } from './reader-text.mjs';
 const expected = {
   en: [
     'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
-    'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
+    'I cannot currently take on projects for businesses in other EU countries while the requirements are being confirmed.',
     'Work outside the EU is not open while its requirements are being confirmed.',
   ],
   da: [
     'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
-    'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
+    'Jeg kan foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande, mens kravene afklares.',
     'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
   ],
 };
+const historicalScope = [
+  'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
+  'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
+];
 const nodes = node => [node, ...(node.childNodes ?? []).flatMap(nodes)];
 const attr = (node, name) => node.attrs?.find(item => item.name === name)?.value;
 const text = node => node.nodeName === '#text' ? node.value :
@@ -68,7 +72,7 @@ export function assertCustomerScopeDisabled(html, locale, home = false) {
   // sentence, heading, audience or release marker.
   const emittedCopy = [readerText(html), ...document.filter(node => node.tagName === 'meta')
     .map(node => attr(node, 'content') ?? '')].join(' ').replace(/\s+/g, ' ').toLowerCase();
-  for (const sentence of Object.values(expected).flat()) {
+  for (const sentence of [...Object.values(expected).flat(), ...historicalScope]) {
     assert.ok(!emittedCopy.includes(sentence.toLowerCase()), `unreleased sentence is absent: ${sentence}`);
   }
   if (home) {

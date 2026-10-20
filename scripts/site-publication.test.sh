@@ -28,6 +28,9 @@ layout_valid() {
     all($steps[]; .if == null and ( .["continue-on-error"] == null or .["continue-on-error"] == false)) and
     $steps[$refresh[0]].env.GH_TOKEN == "\u0024{{ github.token }}" and
     $steps[$build[0]].env.FEATURE_COMPANY_IDENTITY == "true" and
+    $steps[$build[0]].env.FEATURE_VAT_PRICES == "true" and
+    $steps[$build[0]].env.FEATURE_OFFER_COPY == "false" and
+    $steps[$build[0]].env.FEATURE_CUSTOMER_SCOPE == "false" and
     $steps[$build[0]].env.COMPANY_POSTAL_ADDRESS == "\u0024{{ secrets.COMPANY_POSTAL_ADDRESS }}" and
     $steps[$upload[0]].with.path == "dist" and
     .jobs.deploy.needs == "build" and .jobs.deploy.environment.name == "github-pages" and
@@ -45,6 +48,11 @@ for mutation in \
   '.jobs.build.steps |= map(if .run == "npm ci" then .if = "false" else . end)' \
   '.jobs.build.steps |= map(if .run == "npm run build" then del(.env.COMPANY_POSTAL_ADDRESS) else . end)' \
   '.jobs.build.steps |= map(if .run == "npm run build" then .env.FEATURE_COMPANY_IDENTITY = "false" else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then del(.env.FEATURE_VAT_PRICES) else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then .env.FEATURE_VAT_PRICES = "false" else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then .env.FEATURE_VAT_PRICES = true else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then .env.FEATURE_OFFER_COPY = "true" else . end)' \
+  '.jobs.build.steps |= map(if .run == "npm run build" then .env.FEATURE_CUSTOMER_SCOPE = "true" else . end)' \
   '.jobs.build.steps |= map(if .run == "npm run build" then .env.COMPANY_POSTAL_ADDRESS = "\u0024{{ vars.COMPANY_POSTAL_ADDRESS }}" else . end)' \
   '.jobs.build.steps |= reverse' \
   '.jobs.deploy.needs = null' \

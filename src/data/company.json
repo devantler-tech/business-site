@@ -1,7 +1,8 @@
 {
   "name": "Devantler Tech",
   "cvr": "46830385",
-  "businessType": "PMV",
+  "businessType": "Enkeltmandsvirksomhed",
+  "vatEffectiveDate": "2026-10-20",
   "owner": "Nikolai Emil Damm",
   "email": "ned@devantler.tech"
 }
