@@ -14,6 +14,7 @@ import (
 // This test-only option selects ADR 0014's identical source task, not an app flag.
 var maintenanceTask = flag.Bool("contact-maintenance-task", false, "check the frozen bilingual source task instead of the unchanged presentation")
 
+// TestContactMaintenanceInventory requires the real frame in every maintained view.
 func TestContactMaintenanceInventory(t *testing.T) {
 	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
 		t.Run(name, func(t *testing.T) {
@@ -44,6 +45,7 @@ func TestContactMaintenanceInventory(t *testing.T) {
 	}
 }
 
+// maintenancePage derives fictional state expectations from the unchanged builder.
 func maintenancePage(lang, view string) contactPageData {
 	r := httptest.NewRequest("GET", "https://portal.example.invalid/portal/contact?lang="+lang, nil)
 	d := contactData{Name: "Fictional client", Email: "fixture@example.invalid", Revision: 1, EmailVerified: view == "confirmed"}
@@ -54,6 +56,7 @@ func maintenancePage(lang, view string) contactPageData {
 	return (&browser{}).contactPage(r, d, problem, view == "confirm")
 }
 
+// TestContactMaintenanceStateRejections prevents normal output masking other states.
 func TestContactMaintenanceStateRejections(t *testing.T) {
 	pages, err := renderedLinkPages("contact.html")
 	if err != nil || len(pages) != 12 {
@@ -81,6 +84,7 @@ func TestContactMaintenanceStateRejections(t *testing.T) {
 	}
 }
 
+// TestContactMaintenanceConfirmationRejections preserves the second native operation.
 func TestContactMaintenanceConfirmationRejections(t *testing.T) {
 	pages, err := renderedLinkPages("contact.html")
 	if err != nil || len(pages) != 12 {
@@ -113,6 +117,57 @@ func TestContactMaintenanceConfirmationRejections(t *testing.T) {
 	}
 }
 
+// TestContactMaintenanceFormEnvelopeRejections challenges both forms' submission boundary.
+func TestContactMaintenanceFormEnvelopeRejections(t *testing.T) {
+	pages, err := renderedLinkPages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for _, view := range []struct {
+		index          int
+		problem, start string
+	}{
+		{0, "", `<form class="contact-form"`},
+		{4, "confirm", `<form method="post" action="/portal/contact/verify"`},
+	} {
+		markup := pages[view.index].markup
+		start := strings.Index(markup, view.start)
+		if start < 0 {
+			t.Fatal("actual native form missing")
+		}
+		end := strings.Index(markup[start:], `</form>`)
+		if end < 0 {
+			t.Fatal("actual native form incomplete")
+		}
+		form := markup[start : start+end+len(`</form>`)]
+		for name, replacement := range map[string]string{
+			"textarea":          strings.Replace(form, `</form>`, `<textarea name="extra"></textarea></form>`, 1),
+			"select":            strings.Replace(form, `</form>`, `<select name="extra"><option>extra</option></select></form>`, 1),
+			"output":            strings.Replace(form, `</form>`, `<output name="extra"></output></form>`, 1),
+			"object":            strings.Replace(form, `</form>`, `<object name="extra"></object></form>`, 1),
+			"disabled fieldset": strings.Replace(strings.Replace(form, `>`, `><fieldset disabled>`, 1), `</form>`, `</fieldset></form>`, 1),
+			"disabled ancestor": `<fieldset disabled>` + form + `</fieldset>`,
+			"fieldset owner":    strings.Replace(form, `</form>`, `<fieldset form="foreign"></fieldset></form>`, 1),
+			"submit encoding":   strings.Replace(form, `<button `, `<button formenctype="text/plain" `, 1),
+			"submit target":     strings.Replace(form, `<button `, `<button formtarget="_blank" `, 1),
+			"submit validation": strings.Replace(form, `<button `, `<button formnovalidate `, 1),
+			"form encoding":     strings.Replace(form, `<form `, `<form enctype="text/plain" `, 1),
+			"form target":       strings.Replace(form, `<form `, `<form target="_blank" `, 1),
+			"form validation":   strings.Replace(form, `<form `, `<form novalidate `, 1),
+		} {
+			t.Run(strconv.Itoa(view.index)+"/"+name, func(t *testing.T) {
+				if replacement == form {
+					t.Fatal("refusal control did not alter its fixture")
+				}
+				if checkMaintenanceState(strings.Replace(markup, form, replacement, 1), maintenancePage("en", view.problem)) == nil {
+					t.Fatal("changed native form envelope was accepted")
+				}
+			})
+		}
+	}
+}
+
+// checkMaintenanceState compares actual output with the expected native operations.
 func checkMaintenanceState(markup string, page contactPageData) error {
 	doc, err := html.Parse(strings.NewReader(markup))
 	if err != nil {
@@ -188,15 +243,41 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	if linkAttribute(form, "method") != "post" || linkAttribute(form, "action") != action {
 		return errors.New("native form operation changed")
 	}
+	for _, attr := range form.Attr {
+		switch attr.Key {
+		case "enctype", "target", "novalidate":
+			return errors.New("native form submission behavior changed")
+		}
+	}
+	for parent := form.Parent; parent != nil; parent = parent.Parent {
+		if parent.Type == html.ElementNode && parent.Data == "fieldset" {
+			for _, attr := range parent.Attr {
+				if attr.Key == "disabled" {
+					return errors.New("native form inherited a disabled fieldset")
+				}
+			}
+		}
+	}
 	counts := map[string]int{}
 	submitters := 0
 	for n := range form.Descendants() {
 		if n.Type != html.ElementNode {
 			continue
 		}
+		switch n.Data {
+		case "textarea", "select", "output", "object":
+			return errors.New("native form gained an unexpected control")
+		case "fieldset":
+			for _, attr := range n.Attr {
+				if attr.Key == "disabled" || attr.Key == "form" {
+					return errors.New("native form control association or behavior changed")
+				}
+			}
+		}
 		if n.Data == "input" || n.Data == "button" {
 			for _, attr := range n.Attr {
-				if attr.Key == "form" || attr.Key == "formaction" || attr.Key == "formmethod" || attr.Key == "disabled" || attr.Key == "readonly" {
+				switch attr.Key {
+				case "form", "formaction", "formmethod", "formenctype", "formtarget", "formnovalidate", "disabled", "readonly":
 					return errors.New("native form control association or behavior changed")
 				}
 			}
@@ -230,6 +311,7 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	return nil
 }
 
+// TestContactMaintenanceRejections tests the validator, never comparative samples.
 func TestContactMaintenanceRejections(t *testing.T) {
 	pages, err := renderedLinkPages("contact.html")
 	if err != nil || len(pages) != 12 {
@@ -261,6 +343,10 @@ func TestContactMaintenanceRejections(t *testing.T) {
 		"duplicate field":     strings.Replace(markup, `</main>`, `<input id="contact-name"></main>`, 1),
 		"lost email limit":    strings.Replace(markup, `maxlength="254"`, `maxlength="255"`, 1),
 		"lost company limit":  strings.Replace(markup, `maxlength="160"`, `maxlength="161"`, 1),
+		"hidden name":         strings.Replace(markup, `name="name"`, `name="name" type="hidden"`, 1),
+		"checkbox name":       strings.Replace(markup, `name="name"`, `name="name" type="checkbox"`, 1),
+		"required company":    strings.Replace(markup, `name="company"`, `name="company" required`, 1),
+		"checkbox company":    strings.Replace(markup, `name="company"`, `name="company" type="checkbox"`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if bad == markup {
@@ -273,6 +359,7 @@ func TestContactMaintenanceRejections(t *testing.T) {
 	}
 }
 
+// checkMaintenanceDocument checks the real private frame separately from its body.
 func checkMaintenanceDocument(markup, lang string, contact, task bool) error {
 	doc, err := html.Parse(strings.NewReader(markup))
 	if err != nil {
@@ -337,6 +424,7 @@ func maintenanceText(n *html.Node) string {
 	return strings.TrimSpace(text.String())
 }
 
+// checkMaintenanceContact preserves field semantics and the task's accessible hint.
 func checkMaintenanceContact(markup, lang string, task bool) error {
 	doc, err := html.Parse(strings.NewReader(markup))
 	if err != nil {
@@ -370,6 +458,10 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 		if n.Data != "input" || linkAttribute(n, "name") != field.name || linkAttribute(n, "maxlength") != field.limit || linkAttribute(n, "autocomplete") != field.autocomplete {
 			return errors.New("contact input contract changed")
 		}
+		kind := linkAttribute(n, "type")
+		if (field.name == "email" && kind != "email") || (field.name != "email" && kind != "" && kind != "text") {
+			return errors.New("contact field type changed")
+		}
 		parent := n.Parent
 		for parent != nil && parent != forms[0] {
 			parent = parent.Parent
@@ -377,14 +469,12 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 		if parent == nil {
 			return errors.New("contact input is outside its native form")
 		}
-		if field.name != "company" {
-			required := false
-			for _, attr := range n.Attr {
-				required = required || attr.Key == "required"
-			}
-			if !required {
-				return errors.New("required contact input became optional")
-			}
+		required := false
+		for _, attr := range n.Attr {
+			required = required || attr.Key == "required"
+		}
+		if required != (field.name != "company") {
+			return errors.New("contact field requirement changed")
 		}
 	}
 	if linkAttribute(ids["contact-email"][0], "type") != "email" || linkAttribute(ids["contact-email"][0], "aria-describedby") != "contact-pending" || len(ids["contact-pending"]) != 1 || maintenanceText(ids["contact-pending"][0]) == "" {
