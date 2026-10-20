@@ -6,7 +6,7 @@ import { load } from 'js-yaml';
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
 const flag = 'FEATURE_VAT_PRICES';
 const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build';
-/** Require all release states to succeed before CI uploads the normal artifact. */
+/** Exercise historical states first, then upload the enabled current artifact. */
 const valid = ci => {
   const job = ci.jobs?.['build-docs'];
   if (ci.env?.[flag] != null || job?.env?.[flag] != null) return false;
@@ -17,7 +17,7 @@ const valid = ci => {
   const unset = indices(step => step.run === unsetCommand && step.env == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
   return [enabled, disabled, unset, artifact].every(group => group.length === 1) &&
-    enabled[0] < disabled[0] && disabled[0] < unset[0] && unset[0] < artifact[0] &&
+    disabled[0] < unset[0] && unset[0] < enabled[0] && enabled[0] < artifact[0] &&
     [...enabled, ...disabled, ...unset].every(i => steps[i]['working-directory'] === '.' && steps[i].if == null &&
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
