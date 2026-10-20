@@ -69,11 +69,13 @@ checker before measurement. Current main is not an interchangeable comparator.
 Run its real-Git and filesystem controls with:
 
 ```sh
-GOTOOLCHAIN=local go test -race ./internal/trialinput ./cmd/contact-trial-inputs -count=1 -timeout=30s
+GOTOOLCHAIN=local go test -race ./internal/trialinput \
+  ./cmd/contact-trial-inputs -count=1 -timeout=30s
 ```
 
 The declared `scripts/compare-private-contact.sh` entrypoint is still unfinished.
-#213 retains exact tool/runtime versions, disposable database admission, immutable
+Issue #213 retains exact tool/runtime versions, disposable database admission,
+immutable
 artifact packaging, unchanged host/controller identity, paired timing collection,
 RSS/process/build observations, every failure, maintenance/holdout/browser proof
 and same-state rollback. Freeze and review that complete runner before collecting
