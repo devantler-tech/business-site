@@ -49,7 +49,7 @@ func TestGitFixtureWaitsForAutomaticMaintenance(t *testing.T) {
 			continue
 		}
 		observed = true
-		if !slices.Contains(event.Argv, "--no-detach") || slices.Contains(event.Argv, "--detach") {
+		if !foregroundMaintenanceArgs(event.Argv) {
 			t.Fatal("real Git fixture allowed detached automatic maintenance")
 		}
 	}
@@ -66,6 +66,31 @@ func TestGitFixtureWaitsForAutomaticMaintenance(t *testing.T) {
 			t.Fatal("fixture did not override repository background-maintenance configuration")
 		}
 	}
+}
+
+func TestForegroundMaintenanceTraceArguments(t *testing.T) {
+	for _, scenario := range []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"explicit-foreground", []string{"git", "maintenance", "run", "--auto", "--no-detach"}, true},
+		{"legacy-foreground", []string{"git", "maintenance", "run", "--auto", "--quiet"}, true},
+		{"explicit-background", []string{"git", "maintenance", "run", "--auto", "--detach"}, false},
+		{"conflicting-flags", []string{"git", "maintenance", "run", "--auto", "--no-detach", "--detach"}, false},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			if foregroundMaintenanceArgs(scenario.args) != scenario.want {
+				t.Fatal("incorrect foreground maintenance trace classification")
+			}
+		})
+	}
+}
+
+func foregroundMaintenanceArgs(args []string) bool {
+	// Older Git traces omit both flags. This is only an argv check: the real
+	// fixture must still prove effective settings and completed graph work.
+	return !slices.Contains(args, "--detach")
 }
 
 // These fixtures exercise actual Git history, never a command-success mock.
