@@ -102,6 +102,11 @@ function assertRuntime(workflow) {
     ordinary > renderer && ordinary < build,
     "retain the complete ordinary Go suite, serialized packages and its original timeout",
   );
+  assert.equal(
+    steps[ordinary]["working-directory"] ?? job.defaults?.run?.["working-directory"],
+    "server",
+    "run the complete ordinary Go suite from its server module",
+  );
   assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
     browser > install && browser < build,
@@ -138,6 +143,13 @@ function assertRuntime(workflow) {
   assert.equal(upload?.with?.path, "runtime-dist/business-site-runtime.tar.gz");
 }
 test("CI builds and exercises the actual combined package unconditionally", () => assertRuntime(workflow));
+test("an explicit server directory overrides the ordinary suite job default", () => {
+  const explicit = structuredClone(workflow);
+  const job = explicit.jobs["test-portal-identity"];
+  job.defaults.run["working-directory"] = ".";
+  job.steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))["working-directory"] = "server";
+  assertRuntime(explicit);
+});
 
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
@@ -211,6 +223,26 @@ test("CI exercises the actual production package and image", () => {
   }
 });
 for (const [name, mutate] of [
+  [
+    "ordinary Go suite from repository root",
+    (w) => {
+      w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("go test -race -coverprofile="))[
+        "working-directory"
+      ] = ".";
+    },
+  ],
+  [
+    "ordinary Go suite with wrong job directory",
+    (w) => {
+      w.jobs["test-portal-identity"].defaults.run["working-directory"] = ".";
+    },
+  ],
+  [
+    "ordinary Go suite without module directory",
+    (w) => {
+      delete w.jobs["test-portal-identity"].defaults;
+    },
+  ],
   [
     "concurrent ordinary package execution",
     (w) => {
