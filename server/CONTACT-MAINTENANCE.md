@@ -13,6 +13,65 @@ real renderers. The Go contact inventory uses its own source-rendered fixtures,
 not the link inventory's empty nonce. Each visible input must keep one uniquely
 targeted native label with its unchanged bilingual text and limit. Refusal
 controls cover lost saved values, nonce values and label associations.
+Hidden or inert ancestors cannot supply counted native forms, messages or help.
+
+## Frozen non-contact state oracle
+
+The other 108 documents must preserve their entire parsed `main` tree, not only
+their shared frame. Expected SHA-256 digests were generated from an ordinary,
+immutable export of `a1be78797e7886e3eb57605792027af6d4811add`, before executing
+either maintenance-task fixture. All production identity source and the link
+fixture are byte-identical between that reference and this harness's base.
+The registered task changes their common header outside `main`; no non-contact
+body change is part of the task.
+
+The frozen fixture is `portal_links_test.go` blob
+`056f8203b2ebd224e1f9f2caed2eb411f9189f0d`. Its four template blobs are:
+
+| Template | Git blob |
+| --- | --- |
+| `portal.html` | `b2edf7e0cd15385c1d7f15a44bd2253f46ecc84d` |
+| `requests.html` | `f491986e1d19ebbfd7c838f6777fd638fe09d5a9` |
+| `triage.html` | `fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9` |
+| `credits.html` | `dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3` |
+
+`maintenanceCases` records the explicit state order, with all English cases
+followed by all Danish cases. URI alone is not an identity: several states use
+the same URI. The oracle stores 28/38/30/12 digests respectively. There are 106
+distinct reference bodies: `sharing-invalid` and `sharing-conflict` intentionally
+have identical portal mains in each language. This cannot establish a difference
+between those aliases, and refusal controls do not pretend otherwise.
+
+`maintenanceMainDigest` parses exactly one active HTML main. It recursively
+projects node type, text, namespace, ordered attributes and ordered children into
+`maintenanceDOM`, serializes it with Go's JSON encoder and hashes those bytes.
+Unlike the contact label-name helper, it retains select-option text. The raw
+rendered HTML and parsed tree are not modified or substituted as task evidence.
+
+One fixture field varies: `proposalPresentation` calls `crypto/rand.Text` for a
+draft form's hidden `submission_key`. Only the exact native proposal form input
+is projected to `validated-fictional-draft-key`, after requiring one value, the
+Go 1.27 toolchain's 26-character RFC 4648 base32 shape, and exactly one such input
+in each expected draft state. Full history has no draft form. All other keys,
+values and markup remain exact. Missing, duplicate, malformed or misplaced
+inputs fail; independently rendered valid random keys keep the same digest.
+This is fingerprint canonicalization, not a change to the comparative output.
+
+To reproduce the reference, export that exact commit's `server/` tree into a new
+private directory, add this shared test file, and add a temporary recording test.
+For each of the four non-contact families, it calls `renderedLinkPages(name)`,
+requires `2*len(maintenanceCases[name])` entries and records
+`maintenanceMainDigest(page.markup, maintenanceDraftKey(name, index))` in order.
+Run only that recording test with `GOTOOLCHAIN=local`, Go 1.27.2 and `LC_ALL=C`.
+Two independent ordinary-source recordings must agree. Never regenerate the
+expected table from a maintenance-task source or alter it to accept a failed
+trial. Source admission separately binds the actual task inputs to the frozen
+authority. The two-file overlay and original dependency identities are unchanged.
+
+Refusal controls remove every non-contact main body, change its heading and
+substitute a genuinely different same-language state while retaining the frame.
+They also challenge the random-key boundary. These are validator controls, not
+rendered task samples, browser tests or permission to revise comparison budgets.
 
 Ordinary source validation checks the unchanged presentation:
 

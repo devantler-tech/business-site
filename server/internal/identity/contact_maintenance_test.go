@@ -2,6 +2,9 @@ package identity
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"net/http/httptest"
@@ -32,18 +35,389 @@ func TestContactMaintenanceInventory(t *testing.T) {
 				if !strings.HasSuffix(page.uri, "lang="+lang) {
 					t.Fatal("inventory lost a language")
 				}
-				if err := checkMaintenanceDocument(page.markup, lang, name == "contact.html", *maintenanceTask); err != nil {
+				if err := checkMaintenanceInventoryPage(name, i, page.markup, *maintenanceTask); err != nil {
 					t.Fatalf("view=%d language=%s: %v", i, lang, err)
-				}
-				if name == "contact.html" {
-					view := []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}[i%6]
-					if err := checkMaintenanceState(page.markup, maintenancePage(lang, view)); err != nil {
-						t.Fatalf("view=%s language=%s: %v", view, lang, err)
-					}
 				}
 			}
 			t.Logf("actual Go documents=%d", len(pages))
 		})
+	}
+}
+
+func checkMaintenanceInventoryPage(name string, index int, markup string, task bool) error {
+	count := 2 * len(maintenanceCases[name])
+	if count == 0 || index < 0 || index >= count {
+		return errors.New("unknown maintained page state")
+	}
+	lang := "en"
+	if index >= count/2 {
+		lang = "da"
+	}
+	if err := checkMaintenanceDocument(markup, lang, name == "contact.html", task); err != nil {
+		return err
+	}
+	if name == "contact.html" {
+		view := []string{"", "invalid", "conflict", "verification", "confirm", "confirmed"}[index%6]
+		return checkMaintenanceState(markup, maintenancePage(lang, view))
+	}
+	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
+	if err != nil {
+		return err
+	}
+	want := maintenanceReferenceDigests[name]
+	if len(want) != count || got != want[index] {
+		return errors.New("maintained page state differs from frozen reference")
+	}
+	return nil
+}
+
+// The case order is frozen with portal_links_test.go at a1be787. Repeated URIs
+// are different states, not duplicate evidence. Contact has explicit assertions.
+var maintenanceCases = map[string][]string{
+	"contact.html":  {"normal", "invalid", "conflict", "verification", "confirm", "confirmed"},
+	"portal.html":   {"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error", "credit-error"},
+	"requests.html": {"website-new", "website-invalid", "website-receipt", "website-shared", "app-new", "app-invalid", "app-receipt", "app-shared", "service-new", "service-invalid", "service-receipt", "service-shared", "empty-list", "populated-list", "conflict", "review", "acceptance-conflict", "accepted-current", "accepted-historical"},
+	"triage.html":   {"empty-inbox", "populated-inbox", "paginated-inbox", "website-detail", "app-detail", "service-detail", "empty-drafts", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full", "invoice-credits"},
+	"credits.html":  {"empty", "confirmed", "disputed", "invalidated", "full-bound", "historical"},
+}
+
+// Only the proposal-draft form has a random rand.Text key in these fictional
+// fixtures. Its full-history case has no form. Other keys remain exact values.
+func maintenanceDraftKey(name string, index int) bool {
+	if name != "triage.html" {
+		return false
+	}
+	view := index % len(maintenanceCases[name])
+	return view >= 6 && view != 8
+}
+
+type maintenanceDOM struct {
+	Type      html.NodeType
+	Data      string
+	Namespace string
+	Attr      []html.Attribute
+	Children  []maintenanceDOM
+}
+
+// maintenanceMainDigest fingerprints the complete parsed main tree, including
+// text, option labels, namespaces, all attributes and child order. The raw HTML
+// and parsed tree are never rewritten. Only a strictly located, validated draft
+// key is projected to a marker in this separate oracle representation.
+func maintenanceMainDigest(markup string, draftKey bool) (string, error) {
+	doc, err := html.Parse(strings.NewReader(markup))
+	if err != nil {
+		return "", err
+	}
+	var main *html.Node
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && n.Data == "main" {
+			if main != nil || !maintenanceRendered(n) {
+				return "", errors.New("reference main is duplicated, hidden or inert")
+			}
+			main = n
+		}
+	}
+	if main == nil {
+		return "", errors.New("reference main is missing")
+	}
+	keys := 0
+	var project func(*html.Node) (maintenanceDOM, error)
+	project = func(n *html.Node) (maintenanceDOM, error) {
+		d := maintenanceDOM{Type: n.Type, Data: n.Data, Namespace: n.Namespace, Attr: slices.Clone(n.Attr)}
+		if draftKey && n.Type == html.ElementNode && n.Namespace == "" && n.Data == "input" && linkAttribute(n, "name") == "submission_key" && n.Parent != nil && n.Parent.Data == "form" && n.Parent.Namespace == "" && linkAttribute(n.Parent, "method") == "post" && linkAttribute(n.Parent, "action") == "/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/proposals" {
+			key := linkAttribute(n, "value")
+			if linkAttribute(n, "type") != "hidden" || len(key) != 26 || strings.Trim(key, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
+				return d, errors.New("fictional draft key has an unexpected shape")
+			}
+			values := 0
+			for i := range d.Attr {
+				if d.Attr[i].Key == "value" && d.Attr[i].Namespace == "" {
+					values++
+					d.Attr[i].Val = "validated-fictional-draft-key"
+				}
+			}
+			if values != 1 {
+				return d, errors.New("fictional draft key value is missing or duplicated")
+			}
+			keys++
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			c, err := project(child)
+			if err != nil {
+				return d, err
+			}
+			d.Children = append(d.Children, c)
+		}
+		return d, nil
+	}
+	projection, err := project(main)
+	if err != nil {
+		return "", err
+	}
+	if (draftKey && keys != 1) || (!draftKey && keys != 0) {
+		return "", errors.New("fictional draft key coverage changed")
+	}
+	encoded, err := json.Marshal(projection)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+// Generated only from the ordinary immutable a1be787 source, never from the
+// maintenance task under test. See CONTACT-MAINTENANCE.md for its provenance.
+var maintenanceReferenceDigests = map[string][]string{
+	"credits.html": {
+		"3575e88878d4f6e886a60b12c3bd2f8fa3b29ab456237d36b8ed5782b297ae27",
+		"6aee0bfd9320df558563fcd84dfa4ec4c3eafaffda039040b53a5407882e3f63",
+		"9addcd1df510a5fb2af0e0154b399d630dd8a1beb57d5894dd7de34c19f183a7",
+		"179c565da41c3e452d4ef0cbf467106d85d9501de9775b6b2ca2d330960b1c42",
+		"73070a2b426d84c20eef99e0aacdd74da5de7afbc778f93e382e6112697d8aa2",
+		"bed8527c03701f5eb52649f996ef914260a826f2497694abd489998fe84d5a83",
+		"b230236a262bf281f433638395c6c3085514272a8cecc27cca4f8de04f07579d",
+		"e427aaa9bebb2c2627647ebd9ad19abc4238e21c8558d4809ffb6f3aef2abaec",
+		"82dd76552f394d44b50dfcc06c29753efe84f15e4d20bf9df4509b68f71cbf23",
+		"665a646e8224432393f17d8b198782912cbeb2ae159feb8b64c4aab389152d81",
+		"174f46a14bd96f43c869466c2cf522a603477887f532f7b5612d4c7428d0b7e9",
+		"75a27c9abd4c6cfc1a4943804df305324e91a34997333aa2f117be7903a16597",
+	},
+	"portal.html": {
+		"2c3b37fbca59ddb85d649dcb775fc8535a7633e4e9f92cddace170ecd8554512",
+		"37bee4a39a255dec1eae234ecb6dd440a06c29825c104fb10da6f7687e972019",
+		"3df2a16aa47778d274dc3a73ddc32a699f711f5378ec14134997ce1ca7e082ce",
+		"9344d0eeb84f089172dfe23fa97e85910ec6e45b610e3687bb8abc1f6009d11a",
+		"714589569c2a38ec2c4c54580fbaa21c0eb686443820cd4fede0034d0788841d",
+		"866cc312594810a95f015b98576659cea17c9570b85a9350b4638c5e9a42d46a",
+		"8ef29bc10d8443a8aa754175c04f4c3869ecbbffaccbca56c274615107b79621",
+		"66f140387ab99e2350a1bdca72ca6d5f63ff45669d41b65f7651a6e7aeb30cf6",
+		"b18386f821608e1d92891131d5ddbe0e972f1d89aeaf8eb4c7badb54773b50ee",
+		"5d19e77d7c5399566bf5afad843ef5fe357cdfa1bec32a4f7e1c51dc799973ca",
+		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
+		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
+		"2091965848c296695f0e0c86f880f2a26b00e5918fa204e447c6ee9c986908bb",
+		"9bc08d143dfca308344d056026c3ff20f15e9cec8b52acc8b9aed86bf4380cea",
+		"97517c38d4a151f1e2d1e780a7100533f595d8151791caffccdf53f841542e77",
+		"717acfefd67649d54421e4180e227277389a5c2cc1bf43fb392f2537422b49b0",
+		"49ed961f44a9e595bcee42da5dab29fb20fe60efedfd29abbdc4380eedcbd626",
+		"e6164087b70dbc034f1b2358035b4b8dad47f0b0d6b0c012cffacd31356c50c6",
+		"e4a2200b80ddf50af967eb031f73dc5193d2845ee6c438443b4ce5f4eacea0b3",
+		"819650480189de2574b5e7d171bfbd0157b10ff926d50ac712d18e9dca52c966",
+		"4c80b64b7d3137dc2a730d5da6cbf2e4efbf3d429f0185c7299e52448e82f4b1",
+		"5bb159b38db70207fcbf709a36d7180ae068294db323b4f663aa1dc84cefc4dd",
+		"b4bca74b088abfd08c5f9023e7e45ea856c648dfd009fb8d5e432a06baa9b213",
+		"a19d7e30316b1be3b7a461044dd4cbfbb5481a2492528b3afbc90ea0527afde0",
+		"22fe594eabcc1252342ef696d06c04aecbd24f0e348dab247895bdcf103799cb",
+		"22fe594eabcc1252342ef696d06c04aecbd24f0e348dab247895bdcf103799cb",
+		"f8ab8c7327f6cbd16d15edf3fb836c6af086c4181febe22e8375d44a213c4314",
+		"1870d6ec724cc978c369b534c97c38c37ffbd813ca87e7631c75b9b4b96acc34",
+	},
+	"requests.html": {
+		"2c6c8d8098ea574e7df5748556e250fc4b5fe9e5cce2cdb5898b96907a1bb245",
+		"b55cb20b8404da1a9e56cd596579345e0f65398ac388fdaee4045b4793409135",
+		"07e61d5b9220f6d92e19b40b98ec7d8bb5b2a8d087ce09fb87765442d8351013",
+		"cfd468b013a861bfa77042fec75dd08f353af7a30777b13c11aecbda6c4a3c23",
+		"fb85f03d6b1902c049779df1667d60b6413c857cb772547a14a9e6c1ab86c4d6",
+		"57ddfc64f6c8c14ec456c7d3b658c3b9e8cb2ee497b7063be6fb6474e7579236",
+		"a5a22c0149dea17765cde619ef7d3cfd5f168dec767338f20fb4823f2a2ee9c6",
+		"6cec17fe690b73f2f2ea9ab7a28360dd7ff9611f6313a5c66e5826c06e00e652",
+		"24c8dbf7b97e0cae3fecebcbfdfaa5bd9ad21f45ae637ae6f45cc8baa145440e",
+		"6b03e9dead29606199772c98ef12b8214d165e767ea0abb243166a66c49a3545",
+		"a3a0091b4ac5ab614a9f94b32cb9c4cc6c4f411a434e06fae8d58cb8a36cc6c1",
+		"a952dd2a8ec2000e4cd775a2b51fc7f608756cb533d738820e15449aec7da2bf",
+		"b90ff927c0e77d26d28930175f89139d210bb7f002368d2dc4eb1060d076a21f",
+		"1251ef71b4a258508bcd986bcc0866bb8cb5c207570cc0b7e65ac7685cc5bc11",
+		"6916eeae6164262f7d4a3afcafbe2b19942377c7db39d58af5f053457b9a3b74",
+		"69aa37c6716487c0b473544263a695d6325bd59e2716f2b041692ee6999f2236",
+		"e9c5d465df4fd8b9d8af9883a1dd78e594d176d05c1c02ce9496d4276b4c8683",
+		"d6764b0b637474f5756cf6532e18ee82d508bcd33d4214f2e6c50761b8d450d5",
+		"fcf881baac490553d9acd7fccfa5c9e3ce312f375f377fe42d4e7edbe0a3c16b",
+		"613903e021b6db4002cc8c2f2f231e60c0ef98d810d309879e3e7dbc41984e9c",
+		"6d7f2d5816670f8c776e8fb4803d17ec8399530be032ae260f34c8f0bd4447b3",
+		"e530fca557a6d039a51fde4614dfd8785593bbcce31d16430eed96d4448d00e1",
+		"3dce67dfe3ef40d4fd8d62f03c9a6e2a55f94e18c5821e3a6e1171ed64a71821",
+		"c34970671bec16971cb6488b0eaeede1610319747e7c309d3dfcb5324431d75f",
+		"af15e0740ae2466a79328f1b54afea09ea1d538fdec9fc60541bfb77c98433d0",
+		"022c60700547842dc5dd1ea8522ab89cc97a38d5e14b9109e961af7abd9d2324",
+		"3b63d25611eac5d2676acd24c4240e6f8aba7228b0be81dd7180c1ea943640da",
+		"8358faa9c6b159300327d18b7edec820509ce9b312348c282c2cebd82b6b8433",
+		"04d45d2fdf3adfdd7960f3aa5a58ba64f4159999947d2cca6fc31abbad676421",
+		"802cb16f64ddc85931bcf3cdcde156fe922117338873d5fe5efa3056daa3ebfe",
+		"150e268b97c7c9e078bbd4e713053ac96a613f17b66a814fd84fa6c27124f541",
+		"fcec25678a5f5295c52ce5dfa9243a4e17f900b1d65e49267666c42e93c156d6",
+		"64d7079796e89999942ebab21002f366fae538049a39f715f2c935b88ccfce1c",
+		"0766a418166b08aa1a9315069645f6ec4391514e011095b8276c9b3bfd1b2328",
+		"3ae42beb4b2c6e2833bbbd6952ee6f74a5ebda12e4b5962833f9994674ed7d36",
+		"265bb8fbfaa1b85c30be3ee9a5450ba77983ba35cfee1541266e13aaa934cd50",
+		"43bf5374c9ad13393e29f58d017649835045d0f23eb202e39aeffff0dd25191e",
+		"38db284e92e6ac91cd9831103f28f0621449ac77b02dad3e9d5e12eb3c2899a2",
+	},
+	"triage.html": {
+		"8dabbc55a29a43559fe6b5ba27cd759a31eaff7119ae162664ea7b3238569673",
+		"c6d297689afbba79eef47ee712b15e91f7d6bafee1e5592e05dbab74f098db52",
+		"33a6af2890cb399106b54aa43cf453606427debc9aea08a8ab15b594ced7296d",
+		"0622fd91f7e9af9c42d5759481cecd2da84936acc21b173d1c813b1ed20246b6",
+		"030c63d05649fd0c3d2346f3afe0fb38317fce26ce0f2f2524bf02cbcf80eb1e",
+		"68f119a129ce9acfff0d66c62ff3e324a75c2a95a8cd18dd428a31928bb2b493",
+		"a726b3568e13bf1917827063416c27232f52adfbc0aafb4b0f44c67ac1074856",
+		"bfe30b905bcafac1f589c55bf9b63011dd9b475f29cf99248eb0ffd7510dedbb",
+		"bdd64bfca46461e50cdcd7ba6397c6c11a62e9b913f5fdce1d4505fbf1904980",
+		"1d00ea15686a90add4cafe5853358005b958a0621acfb2b01f1a2ebb92eb1e9b",
+		"41d46d9f603d4f9e601adda2af056bf1ebcdcd83ea965fcbc653bf423465fb76",
+		"e9e34df25350c9ad10d12af63b036fbfaf6ec932ac3abb34ea1cb447673aee37",
+		"26da58801f11793648c26f5a0e206e29e2329484d9f84b0e8b60df5d1d1fca76",
+		"685994fee03f603d04edd5c912b2386dc049b23d6e2eed81065ec219c964b9fe",
+		"4c2744e152eeebd6bea425d704042beae2d51e6df3e374026ab30da7506208a9",
+		"c191a924fb08fbc09a245df740a42be494534cf11352aa234ac399e848c67153",
+		"3344f0e632cefa65f526aaf4c12a3920d7b2c21d07dcdd2d3ffec0b363a24a5b",
+		"bd37eb7b628dc67ad07df539b3ef8edfc738e6cbeaaa9024a3b957e00d834c91",
+		"78d71798b3c918af41eac556fb85b1f0c1397e22a3c36c962603ebe63ca87946",
+		"4e9d71c15a412a76ddadbfd48179ebe5bb31a471e859aedb0a1b611feb4a2cce",
+		"6558f914752c4eee555256063c58fb963fb779165dc6b228b989c81cb9cfb742",
+		"54dca502a052cdba07370df7aea51254ce4357ae0742900606a389a1514f47d6",
+		"606ee1722e70aae976ab60a2d08148f7d3f663998f0f49b4030e0338d962bfb5",
+		"a2f1ae5f008547cb7133b85e3ac8609a0f13bb6003870d2d524d480f6118b5ba",
+		"1d507c49c44f968e5ae5eeef185dce5b32d205918259f95ce342f35f4ae34b28",
+		"c554a70b28a6cd51e33a4008182868ec1558e4e603ec07a3ad162761f997006b",
+		"c97472f834d21ab72e25aa2a593d877c890ce921093a33a8e4030b05b96e789f",
+		"fd573225638ed03449ef6f68bd159fcd364c7756fedab7b27791a7a9f9812ff5",
+		"ca0a4b50ea19c05cc48f964aa6156a2bfa86d4c35cbe3398d8900dee84664eb4",
+		"bf30f5144bb203a060bd11030b8c9dbe9e407a42ab6e2be1b064715ea0993a51",
+	},
+}
+
+// TestContactMaintenanceAncestorRejections preserves active forms and their
+// messages even when an existing HTML ancestor retains its allowed tag name.
+func TestContactMaintenanceAncestorRejections(t *testing.T) {
+	pages, err := renderedMaintenancePages("contact.html")
+	if err != nil || len(pages) != 12 {
+		t.Fatal("actual contact inventory unavailable")
+	}
+	for i, page := range pages {
+		for _, tag := range []string{"html", "body", "main", "section"} {
+			for _, attr := range []string{"hidden", "inert"} {
+				t.Run(strconv.Itoa(i)+"/"+tag+"/"+attr, func(t *testing.T) {
+					bad := strings.Replace(page.markup, "<"+tag, "<"+tag+" "+attr, 1)
+					if bad == page.markup {
+						t.Fatal("refusal control did not alter its fixture")
+					}
+					if checkMaintenanceInventoryPage("contact.html", i, bad, *maintenanceTask) == nil {
+						t.Fatal("hidden or inert contact interface was accepted")
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestContactMaintenanceNonContactRejections preserves each case's main content,
+// not merely the number of documents or the shared frame around an empty main.
+func TestContactMaintenanceNonContactRejections(t *testing.T) {
+	for _, name := range []string{"portal.html", "requests.html", "triage.html", "credits.html"} {
+		pages, err := renderedMaintenancePages(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, page := range pages {
+			start, end := maintenanceMainRange(t, page.markup)
+			variants := map[string]string{
+				"removed":         "",
+				"changed heading": strings.Replace(page.markup[start:end], "<h1>", "<h1>Changed ", 1),
+			}
+			// Preserve this frame/language, replacing only the state with a
+			// genuinely different frozen main. Identical reference aliases
+			// are not claimed to be distinguishable states.
+			for j, other := range pages {
+				if i/len(maintenanceCases[name]) == j/len(maintenanceCases[name]) && maintenanceDraftKey(name, i) == maintenanceDraftKey(name, j) && maintenanceReferenceDigests[name][i] != maintenanceReferenceDigests[name][j] {
+					a, b := maintenanceMainRange(t, other.markup)
+					variants["collapsed"] = other.markup[a:b]
+					break
+				}
+			}
+			if len(variants) != 3 {
+				t.Fatal("different-state refusal fixture unavailable")
+			}
+			for variant, content := range variants {
+				t.Run(name+"/"+strconv.Itoa(i)+"/"+variant, func(t *testing.T) {
+					bad := page.markup[:start] + content + page.markup[end:]
+					if bad == page.markup {
+						t.Fatal("refusal control did not alter its fixture")
+					}
+					if checkMaintenanceInventoryPage(name, i, bad, *maintenanceTask) == nil {
+						t.Fatal("missing or collapsed maintained state content was accepted")
+					}
+				})
+			}
+		}
+	}
+}
+
+func maintenanceMainRange(t *testing.T, markup string) (int, int) {
+	t.Helper()
+	start := strings.Index(markup, `<main id="main">`)
+	end := strings.Index(markup, `</main>`)
+	if start < 0 || end <= start+len(`<main id="main">`) {
+		t.Fatal("actual main content unavailable")
+	}
+	return start + len(`<main id="main">`), end
+}
+
+// TestContactMaintenanceReferenceKeys bounds the oracle's only varying field.
+// No missing or malformed input may disappear behind key canonicalization.
+func TestContactMaintenanceReferenceKeys(t *testing.T) {
+	pages, err := renderedMaintenancePages("triage.html")
+	if err != nil || len(pages) != 30 {
+		t.Fatal("actual triage inventory unavailable")
+	}
+	for i, page := range pages {
+		if !maintenanceDraftKey("triage.html", i) {
+			continue
+		}
+		doc, err := html.Parse(strings.NewReader(page.markup))
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := ""
+		for n := range doc.Descendants() {
+			if n.Data == "input" && linkAttribute(n, "name") == "submission_key" && n.Parent != nil && strings.HasSuffix(linkAttribute(n.Parent, "action"), "/proposals") {
+				key = linkAttribute(n, "value")
+			}
+		}
+		if key == "" {
+			t.Fatal("actual fictional draft key unavailable")
+		}
+		variants := map[string]string{}
+		for variant, input := range map[string]string{
+			"empty":    `value=""`,
+			"short":    `value="` + strings.Repeat("A", 25) + `"`,
+			"long":     `value="` + strings.Repeat("A", 27) + `"`,
+			"alphabet": `value="` + strings.Repeat("a", 26) + `"`,
+			"missing":  "",
+		} {
+			variants[variant] = strings.Replace(page.markup, `value="`+key+`"`, input, 1)
+		}
+		input := `<input type="hidden" name="submission_key" value="` + key + `">`
+		variants["duplicate input"] = strings.Replace(page.markup, input, input+input, 1)
+		for variant, bad := range variants {
+			t.Run(strconv.Itoa(i)+"/"+variant, func(t *testing.T) {
+				if bad == page.markup {
+					t.Fatal("refusal control did not alter its fixture")
+				}
+				if checkMaintenanceInventoryPage("triage.html", i, bad, *maintenanceTask) == nil {
+					t.Fatal("missing or malformed draft key was accepted")
+				}
+			})
+		}
+	}
+	// Independently rendered random keys must not make the reference unstable.
+	other, err := renderedMaintenancePages("triage.html")
+	if err != nil || len(other) != len(pages) {
+		t.Fatal("second actual inventory unavailable")
+	}
+	for i, page := range other {
+		if err := checkMaintenanceInventoryPage("triage.html", i, page.markup, *maintenanceTask); err != nil {
+			t.Fatalf("second actual inventory view=%d: %v", i, err)
+		}
 	}
 }
 
@@ -340,7 +714,7 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 		}
 		if linkAttribute(n, "role") == "alert" {
 			alerts++
-			if page.FormError == "" || maintenanceText(n) != page.FormError {
+			if !maintenanceRendered(n) || page.FormError == "" || maintenanceText(n) != page.FormError {
 				return errors.New("contact error state changed")
 			}
 		}
@@ -399,7 +773,7 @@ func checkMaintenanceState(markup string, page contactPageData) error {
 // Both native forms use the same closed input/submit contract; counting a form's
 // action alone cannot establish that it still supports the requested operation.
 func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]string, label, help string) error {
-	if linkAttribute(form, "method") != "post" || linkAttribute(form, "action") != action {
+	if !maintenanceRendered(form) || linkAttribute(form, "method") != "post" || linkAttribute(form, "action") != action {
 		return errors.New("native form operation changed")
 	}
 	// Neither frozen form has an ID, event handler or submission override.
@@ -420,6 +794,9 @@ func checkMaintenanceForm(form *html.Node, action string, wantInputs map[string]
 	for n := range form.Descendants() {
 		if n.Type != html.ElementNode {
 			continue
+		}
+		if !maintenanceRendered(n) {
+			return errors.New("native form content is hidden or inert")
 		}
 		if n.Namespace != "" {
 			return errors.New("native form gained foreign content")
@@ -751,8 +1128,8 @@ func checkMaintenanceContact(markup, lang string, task bool) error {
 	return nil
 }
 
-// maintenanceRendered excludes inert template fragments and foreign namespaces
-// that the HTML parser exposes as descendants but native ID references cannot use.
+// maintenanceRendered excludes template fragments, foreign namespaces and
+// hidden/inert nodes or ancestors. This is not a CSS or browser visibility test.
 func maintenanceRendered(n *html.Node) bool {
 	if n == nil {
 		return false
@@ -760,6 +1137,11 @@ func maintenanceRendered(n *html.Node) bool {
 	for p := n; p != nil; p = p.Parent {
 		if p.Type == html.ElementNode && (p.Namespace != "" || p.Data == "template") {
 			return false
+		}
+		for _, attr := range p.Attr {
+			if attr.Key == "hidden" || attr.Key == "inert" {
+				return false
+			}
 		}
 	}
 	return true
