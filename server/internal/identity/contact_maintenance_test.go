@@ -56,11 +56,12 @@ func TestContactMaintenanceFullFrameRejections(t *testing.T) {
 							return n.Data == "select" && linkAttribute(n, "id") == "theme"
 						}
 					}, func(n *html.Node) {
-						if strings.HasSuffix(target, "-hidden") {
+						switch {
+						case strings.HasSuffix(target, "-hidden"):
 							n.Attr = append(n.Attr, html.Attribute{Key: "hidden"})
-						} else if strings.HasSuffix(target, "-inert") {
+						case strings.HasSuffix(target, "-inert"):
 							n.Attr = append(n.Attr, html.Attribute{Key: "inert"})
-						} else {
+						default:
 							n.Parent.RemoveChild(n)
 						}
 					})
