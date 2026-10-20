@@ -136,7 +136,7 @@ func source(ctx context.Context, repository, id string, p policy, candidate bool
 			return Source{}, errRefused
 		}
 	}
-	changed, err := git(ctx, repository, "diff", "--no-ext-diff", "--no-textconv", "--no-relative", "--no-renames", "--name-only", "-z", p.shared, id, "--")
+	changed, err := git(ctx, repository, "diff", "--no-ext-diff", "--no-textconv", "--no-relative", "--no-renames", "--ignore-submodules=none", "--name-only", "-z", p.shared, id, "--")
 	if err != nil {
 		return Source{}, errRefused
 	}
@@ -193,8 +193,8 @@ func hasDigest(ctx context.Context, repository, id, path, want string) bool {
 
 // A plausible partial read never survives an unsuccessful command or overflow.
 func git(ctx context.Context, repository string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "git", append([]string{"--no-replace-objects", "-c", "core.fsmonitor=false", "-C", repository}, args...)...)
-	command.Env = []string{"PATH=" + os.Getenv("PATH"), "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0"}
+	command := exec.CommandContext(ctx, "git", append([]string{"--no-replace-objects", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-C", repository}, args...)...)
+	command.Env = []string{"PATH=" + os.Getenv("PATH"), "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_OPTIONAL_LOCKS=0", "GIT_NO_LAZY_FETCH=1", "GIT_ALLOW_PROTOCOL="}
 	output := &boundedOutput{}
 	command.Stdout, command.Stderr = output, io.Discard
 	if err := command.Run(); err != nil {

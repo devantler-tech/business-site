@@ -140,6 +140,63 @@ func TestConfiguredCleanFilterIsNeverExecuted(t *testing.T) {
 	}
 }
 
+func TestMissingPromisorObjectsAreNeverFetched(t *testing.T) {
+	for _, missing := range []string{"commit", "blob"} {
+		t.Run(missing, func(t *testing.T) {
+			dir, p, input := fixture(t)
+			remote := t.TempDir()
+			gitFixture(t, dir, "clone", "--quiet", "--no-hardlinks", "--", dir, remote)
+			gitFixture(t, remote, "config", "user.name", "Fictional Trial")
+			gitFixture(t, remote, "config", "user.email", "trial@example.invalid")
+			gitFixture(t, remote, "config", "uploadpack.allowFilter", "true")
+			gitFixture(t, remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+			var absent string
+			if missing == "commit" {
+				writeFixture(t, remote, "server/internal/identity/web/contact.html", "Name with hint\n")
+				commitFixture(t, remote)
+				input.Candidate = gitFixture(t, remote, "rev-parse", "HEAD")
+				absent = input.Candidate
+			} else {
+				absent = gitFixture(t, dir, "rev-parse", "HEAD:plan.md")
+				if err := os.Remove(filepath.Join(dir, ".git", "objects", absent[:2], absent[2:])); err != nil {
+					t.Fatal(err)
+				}
+			}
+			gitFixture(t, dir, "config", "remote.promise.url", remote)
+			gitFixture(t, dir, "config", "remote.promise.promisor", "true")
+			gitFixture(t, dir, "config", "remote.promise.partialclonefilter", "blob:none")
+			gitFixture(t, dir, "config", "extensions.partialClone", "promise")
+			if _, err := check(t.Context(), dir, input, p); err == nil {
+				t.Error("missing promisor input was fetched and admitted")
+			}
+			// Inspect without lazy fetching: refusal alone must not hide a fetch
+			// that has already changed the supposedly read-only object store.
+			probe := exec.CommandContext(t.Context(), "git", "--no-lazy-fetch", "-C", dir, "cat-file", "-e", absent)
+			probe.Env = append(os.Environ(), "GIT_NO_LAZY_FETCH=1")
+			if err := probe.Run(); err == nil {
+				t.Fatal("source admission fetched a missing promisor object")
+			}
+		})
+	}
+}
+
+func TestGitlinkDeltaCannotBeHiddenByLocalConfig(t *testing.T) {
+	dir, p, input := fixture(t)
+	if err := os.Mkdir(filepath.Join(dir, "unexpected"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	gitFixture(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+p.shared+",unexpected")
+	gitFixture(t, dir, "-c", "commit.gpgsign=false", "commit", "-qm", "fictional extra gitlink")
+	input.Candidate = gitFixture(t, dir, "rev-parse", "HEAD")
+	gitFixture(t, dir, "config", "diff.ignoreSubmodules", "all")
+	if status := gitFixture(t, dir, "status", "--porcelain=v1", "--ignore-submodules=none"); status != "" {
+		t.Fatal("gitlink fixture must be clean before source admission")
+	}
+	if _, err := check(t.Context(), dir, input, p); err == nil {
+		t.Fatal("local diff configuration concealed an out-of-scope gitlink")
+	}
+}
+
 func TestCleanImmutableInputs(t *testing.T) {
 	dir, p, input := fixture(t)
 	writeFixture(t, dir, "server/internal/identity/web/portal.html", "Colour theme\n")

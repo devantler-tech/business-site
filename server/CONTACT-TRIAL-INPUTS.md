@@ -53,7 +53,9 @@ task. Those outcomes still need the real rendered inventory, independent review
 and protected holdouts. Ignored dependency/build directories are not inspected or
 executed. Any later build must use immutable Git objects, not those directories.
 Ambient Git control variables, replacement objects and filesystem monitors cannot
-redirect the reads. Every failed, oversized or incomplete read refuses admission.
+redirect the reads. Missing objects in partial clones are refused without lazy
+fetching; all Git transports are disabled. Local diff settings cannot hide
+submodule changes. Every failed, oversized or incomplete read refuses admission.
 
 Success exclusively creates `inputs.json` (`0600`) beneath the opened private
 directory; an existing file or symlink is never replaced. The closed receipt
