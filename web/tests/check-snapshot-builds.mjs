@@ -12,7 +12,7 @@ const fresh = structuredClone(snapshot);
 fresh.fetchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 fresh.observedAt = fresh.fetchedAt.slice(0, 10);
 Object.assign(fresh.repositories, {
-  "provider-upjet-unifi": 900, "kyverno-policies": 800, "data-product-controller": 700,
+  "provider-upjet-unifi": 900, "kyverno-policies": 800, "khoist": 700,
   "agent-plugins": 600, "agent-skills": 500, ksail: 400, ".github": 300,
   "world-at-ruin": 10000, actions: 9000,
 });
@@ -70,7 +70,7 @@ try {
   for (const locale of ["", "da/"]) {
     const html = await readFile(resolve(root, "web/build", locale, "projects/index.html"), "utf8");
     const names = [...html.matchAll(/data-public-product="([^"]+)"/g)].map(([, name]) => name);
-    assert.deepEqual(names, ["provider-upjet-unifi", "kyverno-policies", "data-product-controller", "agent-plugins", "agent-skills", "ksail"]);
+    assert.deepEqual(names, ["provider-upjet-unifi", "kyverno-policies", "khoist", "agent-plugins", "agent-skills", "ksail"]);
     assert.ok(html.includes(`datetime="${fresh.fetchedAt}"`));
   }
   console.log("Fresh complete build-local snapshot changes the real EN/DA six-tool output; high-star ineligible entries remain excluded.");

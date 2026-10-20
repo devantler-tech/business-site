@@ -1,14 +1,14 @@
 {
-  "observedAt": "2026-10-09",
-  "fetchedAt": "2026-10-09T14:27:31Z",
+  "observedAt": "2026-10-20",
+  "fetchedAt": "2026-10-20T13:14:52Z",
   "repositories": {
     ".github": 1,
     "actions": 2,
     "agent-plugins": 2,
     "agent-skills": 3,
-    "data-product-controller": 1,
     "dotnet-template": 1,
     "go-template": 1,
+    "khoist": 1,
     "ksail": 165,
     "kyverno-policies": 1,
     "platform-template": 2,
@@ -37,17 +37,17 @@
       "archived": false,
       "fork": false
     },
-    "data-product-controller": {
-      "private": false,
-      "archived": false,
-      "fork": false
-    },
     "dotnet-template": {
       "private": false,
       "archived": false,
       "fork": false
     },
     "go-template": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "khoist": {
       "private": false,
       "archived": false,
       "fork": false
