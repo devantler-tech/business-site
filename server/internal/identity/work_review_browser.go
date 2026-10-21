@@ -68,6 +68,14 @@ func (b *browser) workPage(r *http.Request, work workReviewData, invoice int) wo
 	return page
 }
 
+// captureWorkResponse shares the bounded original-session capture before either
+// a review or decision acquires transaction locks and its pool connection.
+func (b *browser) captureWorkResponse(r *http.Request) (context.Context, context.CancelFunc, durableResponseSnapshot, bool) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(r.Context(), ""))
+	return ctx, cancel, snapshot, ok
+}
+
 // showWorkReview buffers the entire frame. The final session checkpoint runs
 // after all SDK waits, under the same request/membership locks as its evidence.
 func (b *browser) showWorkReview(w http.ResponseWriter, r *http.Request) {
@@ -77,9 +85,8 @@ func (b *browser) showWorkReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var buffer bytes.Buffer
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel, snapshot, ok := b.captureWorkResponse(r)
 	defer cancel()
-	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(r.Context(), ""))
 	if !ok {
 		b.triageError(w, r, ErrDenied)
 		return
@@ -152,9 +159,8 @@ func (b *browser) submitWork(w http.ResponseWriter, r *http.Request, approval bo
 		return
 	}
 	var err error
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel, snapshot, ok := b.captureWorkResponse(r)
 	defer cancel()
-	snapshot, ok := b.captureDurableResponse(ctx, b.contactAuthority(r.Context(), ""))
 	if !ok {
 		b.triageError(w, r, ErrDenied)
 		return

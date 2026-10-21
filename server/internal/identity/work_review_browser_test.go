@@ -320,19 +320,7 @@ func TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame(t *testing.T) {
 	for _, event := range []openfeature.EventType{openfeature.ProviderError, openfeature.ProviderStale} {
 		t.Run(string(event), func(t *testing.T) {
 			b := workBrowserFixture(t)
-			provider := &unsettledProvider{FeatureProvider: memprovider.NewInMemoryProvider(workApprovalFlags()), events: make(chan openfeature.Event, 1)}
-			if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
-				t.Fatal(err)
-			}
-			settled := make(chan struct{})
-			handler := func(openfeature.EventDetails) { close(settled) }
-			b.svc.flags.AddHandler(event, &handler)
-			provider.events <- openfeature.Event{EventType: event}
-			select {
-			case <-settled:
-			case <-time.After(time.Second):
-				t.Fatal("work SDK state control did not settle")
-			}
+			requireFixtureSDKEvent(t, b.flags, b.svc.flags, workApprovalFlags(), event)
 			for _, suffix := range []string{"work-review", "work-approvals", "work-revocations"} {
 				for _, method := range []string{"GET", "POST"} {
 					status, body, _ := b.request(method, strings.TrimSuffix(workReviewPath, "work-review")+suffix, nil, "")
