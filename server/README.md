@@ -131,7 +131,7 @@ to checking current membership; later handlers must preserve the same boundary.
 
 ## Build and run the combined package
 
-From a clean repository root, with Git, Bash, Node 24/npm 11, exact Go 1.27.2 and a fresh
+From a clean repository root, with Git, Bash, Node 24/npm 11, exact Go 1.27.3 and a fresh
 `runtime-dist` output directory:
 
 ```sh
@@ -355,7 +355,7 @@ See [the distribution decision](../docs/adr/0005-signed-runtime-container.md).
 
 ## Actual database tests
 
-Use Go 1.27.2, the `psql` client and a **fresh disposable** PostgreSQL 17 service matching
+Use Go 1.27.3, the `psql` client and a **fresh disposable** PostgreSQL 17 service matching
 the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_fixture_owner`
 with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
 The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
@@ -400,8 +400,8 @@ uses verified TLS through a synthetic loopback database gateway and discovers a
 synthetic TLS broker; complete dependencies must still leave every private route closed.
 It does not migrate through the runtime role or activate real providers.
 
-The optional complete Go quality launcher verifies Go 1.27.2 and golangci-lint 2.14.0
-built with Go 1.27.2 before running the entire module. It fails if version/build
+The optional complete Go quality launcher verifies Go 1.27.3 and golangci-lint 2.14.0
+built with Go 1.27.3 before running the entire module. It fails if version/build
 metadata is missing or differs, never installs tools, and preserves linter failures.
 `--no-config` prevents ambient machine configuration from suppressing diagnostics.
 The two zero-valued display limits show every diagnostic; they disable no rule.

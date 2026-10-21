@@ -1,6 +1,6 @@
 module github.com/devantler-tech/business-site/server
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de

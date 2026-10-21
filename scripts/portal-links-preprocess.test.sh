@@ -23,11 +23,11 @@ cmp "$root/README.md" "$scratch/root-README.md"
 # The shim checks the selector, then delegates to the actual admitted compiler.
 mkdir "$scratch/bin"
 compiler="$(command -v go)"
-printf "#!/usr/bin/env bash\n[[ \"\$GOTOOLCHAIN\" == go1.27.2 ]] || exit 41\nexec \"%s\" \"\$@\"\n" "$compiler" >"$scratch/bin/go"
+printf "#!/usr/bin/env bash\n[[ \"\$GOTOOLCHAIN\" == go1.27.3 ]] || exit 41\nexec \"%s\" \"\$@\"\n" "$compiler" >"$scratch/bin/go"
 chmod 755 "$scratch/bin/go"
-PATH="$scratch/bin:$PATH" GOTOOLCHAIN=go1.27.2 bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/selected-README.md"
+PATH="$scratch/bin:$PATH" GOTOOLCHAIN=go1.27.3 bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/selected-README.md"
 cmp "$root/server/README.md" "$scratch/selected-README.md"
-for selector in auto go1.27.2+auto go1.26.3; do
+for selector in auto go1.27.3+auto go1.27.2 go1.26.3; do
   if GOTOOLCHAIN="$selector" bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/unsafe-out" 2>"$scratch/unsafe-error"; then
     echo 'portal-links: an unbound compiler selector was accepted' >&2; exit 1
   fi

@@ -23,7 +23,7 @@ if [[ "$mode" == --release && -n "$(git status --porcelain --untracked-files=nor
 fi
 node_line="$(cat .node-version)"
 [[ "$node_line" =~ ^[1-9][0-9]*$ && "$(node --version)" == "v${node_line}."* && "$(npm --version)" == 11.* ]] || { printf 'Use Node %s and npm 11 before packaging.\n' "$node_line" >&2; exit 1; }
-[[ "$(go version)" == "go version go1.27.2 "* ]] || { printf '%s\n' 'Use the exact Go 1.27.2 toolchain before packaging.' >&2; exit 1; }
+[[ "$(go version)" == "go version go1.27.3 "* ]] || { printf '%s\n' 'Use the exact Go 1.27.3 toolchain before packaging.' >&2; exit 1; }
 export GOTOOLCHAIN=local LC_ALL=C
 mkdir -p "$output"
 inputs=""
