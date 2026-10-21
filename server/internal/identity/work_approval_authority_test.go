@@ -83,6 +83,22 @@ func pendingApproval(ctx context.Context, b *browserFixture, op Principal, input
 	return result
 }
 
+// changeApprovalFixture retains the same real revocation and wall-clock wait.
+// Callers keep their deliberately different role/workspace rebinds explicit.
+func changeApprovalFixture(ctx context.Context, t *testing.T, b *browserFixture, op Principal, change string, rebind func()) {
+	t.Helper()
+	switch change {
+	case "revoke":
+		revokeFixtureAccess(ctx, t, b, op.subject)
+	case "rebind":
+		rebind()
+	case "expiry":
+		waitForFixtureExpiry(ctx, t, op.expires)
+	default:
+		t.Fatal("unsupported approval fixture authority change")
+	}
+}
+
 // All three service entrypoints require independent typed feature decisions.
 // No client membership, even in the request's workspace, supplies operator authority.
 func TestWorkApprovalGatesAndClientDenial(t *testing.T) {
@@ -464,16 +480,11 @@ func TestWorkApprovalRechecksAccessAfterRequestLock(t *testing.T) {
 			ctx, migrator, lock := blockApprovalFixture(t, &op, change == "expiry")
 			result := pendingApproval(ctx, b, op, input)
 			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
-			switch change {
-			case "revoke":
-				revokeFixtureAccess(ctx, t, b, op.subject)
-			case "rebind":
+			changeApprovalFixture(ctx, t, b, op, change, func() {
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE issuer=$1 AND subject=$2`, b.f.issuer, op.subject); err != nil {
 					t.Fatal(err)
 				}
-			case "expiry":
-				waitForFixtureExpiry(ctx, t, op.expires)
-			}
+			})
 			releaseFixtureAndRequireDenial(ctx, t, lock, result, change)
 			var count int
 			if err := b.pool.QueryRow(ctx, `SELECT count(*) FROM portal_work_approvals`).Scan(&count); err != nil || count != 0 {

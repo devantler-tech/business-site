@@ -86,16 +86,11 @@ func TestWorkApprovalRevocationRechecksAfterLock(t *testing.T) {
 				result <- b.svc.revokeWorkApproval(ctx, op, proposalRequestID, workRevocationInput{Key: secret(), Approval: d.ID, Expected: 1})
 			}()
 			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
-			switch change {
-			case "revoke":
-				revokeFixtureAccess(ctx, t, b, op.subject)
-			case "rebind":
+			changeApprovalFixture(ctx, t, b, op, change, func() {
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET client_id='rebound-operator-space' WHERE issuer=$1 AND subject=$2`, b.f.issuer, op.subject); err != nil {
 					t.Fatal(err)
 				}
-			case "expiry":
-				waitForFixtureExpiry(ctx, t, op.expires)
-			}
+			})
 			// A workspace rebind remains an authorized operator but changes the review
 			// context. Revocation derives current membership after the wait, so it may
 			// safely close authority. Role revocation and expiry must deny.
