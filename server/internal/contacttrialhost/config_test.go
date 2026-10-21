@@ -7,14 +7,11 @@ import (
 
 const setupJSON = `{"mode":"go",
 "database":"postgres://portal_runtime:fixture-only@127.0.0.1:55444/portal_trial_0123456789abcdef0123456789abcdef?sslmode=disable",
-"issuer":"https://127.0.0.1:43111","callback":"https://127.0.0.1:43112/portal/callback","certificate":"certificate","key":"key","trust":"trust","node":"","worker":""}`
+"issuer":"https://127.0.0.1:43111","callback":"https://127.0.0.1:43112/portal/callback","certificate":"certificate","key":"key","trust":"trust"}`
 
 func TestSetupIsClosedAndDisposable(t *testing.T) {
-	for _, mode := range []string{"go", "closed", "svelte"} {
+	for _, mode := range []string{"go", "closed"} {
 		input := strings.Replace(setupJSON, `"mode":"go"`, `"mode":"`+mode+`"`, 1)
-		if mode == "svelte" {
-			input = strings.Replace(input, `"node":"","worker":""`, `"node":"/fixture/node","worker":"/fixture/worker.mjs"`, 1)
-		}
 		if _, err := readSetup(strings.NewReader(input)); err != nil {
 			t.Errorf("valid explicit %s setup rejected", mode)
 		}
@@ -38,7 +35,7 @@ func TestSetupIsClosedAndDisposable(t *testing.T) {
 		{"callback query", strings.Replace(setupJSON, "/portal/callback", "/portal/callback?extra=1", 1)},
 		{"callback path", strings.Replace(setupJSON, "/portal/callback", "/callback", 1)},
 		{"missing key", strings.Replace(setupJSON, `"key":"key"`, `"key":""`, 1)},
-		{"implicit candidate", strings.Replace(setupJSON, `"node":""`, `"node":"/fixture/node"`, 1)},
+		{"implicit candidate", strings.TrimSuffix(setupJSON, "}") + `,"node":"/fixture/node"}`},
 		{"missing candidate", strings.Replace(setupJSON, `"mode":"go"`, `"mode":"svelte"`, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -46,5 +43,24 @@ func TestSetupIsClosedAndDisposable(t *testing.T) {
 				t.Fatal("unsafe or ambiguous setup accepted")
 			}
 		})
+	}
+}
+
+// Retired candidate inputs must fail, not silently enter a retained Go mode.
+func TestSetupRejectsRetiredCandidateInputs(t *testing.T) {
+	for _, fields := range []string{
+		`,"node":"","worker":""`,
+		`,"node":"/fixture/node","worker":"/fixture/worker.mjs"`,
+		`,"node":"/fixture/node"`,
+		`,"worker":"/fixture/worker.mjs"`,
+	} {
+		for _, mode := range []string{"go", "closed", "svelte"} {
+			t.Run(mode+fields, func(t *testing.T) {
+				input := strings.Replace(setupJSON, `"mode":"go"`, `"mode":"`+mode+`"`, 1)
+				if _, err := readSetup(strings.NewReader(strings.TrimSuffix(input, "}") + fields + "}")); err == nil {
+					t.Fatal("retired candidate setup accepted")
+				}
+			})
+		}
 	}
 }

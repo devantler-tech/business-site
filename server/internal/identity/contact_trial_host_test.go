@@ -1,4 +1,4 @@
-//go:build contacttrialintegration || rendererintegration
+//go:build contacttrialintegration
 
 package identity
 
@@ -31,10 +31,10 @@ import (
 // broker, control-plane invitations and HTTP clients stay in the test process;
 // none of its timings is comparative service evidence.
 func TestContactTrialHostRetainsOriginAndAuthority(t *testing.T) {
-	contactTrialHostProcess(t, "", "")
+	contactTrialHostProcess(t)
 }
 
-func contactTrialHostProcess(t *testing.T, node, worker string) {
+func contactTrialHostProcess(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
 	pool, migrator := contactHostDatabase(t)
@@ -73,7 +73,6 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		"certificate": string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Certificate[0]})),
 		"key":         string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key})),
 		"trust":       string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.broker.TLS.Certificates[0].Certificate[0]})),
-		"node":        "", "worker": "",
 	}
 	passedFile := file
 	var inputOverride *os.File
@@ -81,10 +80,6 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		t.Helper()
 		ready := expectedError == ""
 		config["mode"] = mode
-		config["node"], config["worker"] = "", ""
-		if mode == "svelte" {
-			config["node"], config["worker"] = node, worker
-		}
 		data, err := json.Marshal(config)
 		if err != nil {
 			t.Fatal(err)
@@ -169,6 +164,22 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		return stop
 	}
 	invalidSetup := "invalid trial setup; use the documented private pipe and disposable loopback fixture"
+	// The actual command must reject the retired mode and even empty legacy
+	// executable fields before readiness, rather than silently falling back.
+	start(t, "svelte", invalidSetup)
+	for _, fields := range []map[string]string{
+		{"node": "", "worker": ""},
+		{"node": "/fixture/node", "worker": "/fixture/worker.mjs"},
+		{"node": "/fixture/node"},
+		{"worker": "/fixture/worker.mjs"},
+	} {
+		for key, value := range fields {
+			config[key] = value
+		}
+		start(t, "go", invalidSetup)
+		delete(config, "node")
+		delete(config, "worker")
+	}
 	// Each parseable matching key pair must be refused before readiness. Removing
 	// hostname, validity or server-auth validation must fail its own real process.
 	now := time.Now()
@@ -276,11 +287,7 @@ func contactTrialHostProcess(t *testing.T, node, worker string) {
 		t.Fatal("closed mode activated identity")
 	}
 	stop()
-	mode := "go"
-	if node != "" {
-		mode = "svelte"
-	}
-	stop = start(t, mode, "")
+	stop = start(t, "go", "")
 	actors := journeyActors(f)
 	assertIndependentJourneyActors(f, actors)
 	if run := privateContactJourney(f, actors); len(run.Responses) != 21 {
