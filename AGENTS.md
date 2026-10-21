@@ -57,13 +57,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
-- `web/private-contact/` builds a developer-only compiled contact component for
-  the bounded private presentation experiment. `server/internal/contactrenderer`
-  supervises its pipe worker behind a false-default OpenFeature gate. The explicit
-  developer browser composition buffers the full private frame and revalidates the
-  original durable session/client after renderer and SDK waits. Normal runtime
-  construction has no renderer or activation mapping. Read its `CONTRACT.md` and
-  `server/CONTACT-RENDERER.md`; public builds and production packaging remain unchanged.
+- Private portal presentation uses Go templates and native forms. Contact responses
+  buffer the complete private frame and revalidate the original durable session/client
+  after SDK waits. The separate mandatory `contactintegration` suite exercises the
+  retained HTTP journey and authority checkpoints without a Node worker. ADR 0017
+  records the rejected private-frontend experiment; public Svelte remains selected.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
@@ -86,10 +84,10 @@ npm --prefix web ci
 npm run build
 node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs
 bash scripts/check-svelte-frontend.sh
-node --test web/tests/private-contact-renderer.test.mjs
 # Also requires the exact Go compiler and BOTH disposable database fixture URLs
 # from server/README.md; missing database proof fails, never skips:
-node --test web/tests/private-contact-runtime.test.mjs
+bash scripts/check-go-contact.sh
+node --test scripts/go-contact.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh

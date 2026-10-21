@@ -55,10 +55,9 @@ responsive layout and System/Light/Dark appearance. Only public CSS/JS are expos
 The five private page templates share their document metadata, header and footer
 through ordinary Go `html/template` definitions in `portal.html`. Each page keeps
 its existing native forms, content and navigation targets. This presentation
-sharing adds no renderer process. The explicit [developer contact
-composition](CONTACT-RENDERER.md) can use the bounded compiled Svelte body; ordinary
-`Browser` and the production executable retain Go with no Node activation mapping.
-Both buffer contact responses and revalidate the original durable session/client
+sharing adds no renderer process. `Browser` and the production executable use Go
+presentation without a Node worker or private-renderer activation mapping.
+Contact responses buffer the complete frame and revalidate the original durable session/client
 after waits. A replacement identity, client or extended deadline cannot authorize
 the original response, and a read never refreshes or resurrects a deleted session.
 
@@ -156,7 +155,9 @@ The version command prints the source/public-digest receipt. Visit
 The subshell leaves your original shell at the repository root.
 
 The readiness line retains its `runtime ready;` prefix and reports the bound
-listener as `listen=<address>`. For disposable process tests, use
+listener as `listen=<address>`. HTTP acceptance starts before this single
+announcement, so a slow readiness-output consumer does not block public requests.
+For disposable process tests, use
 `--listen 127.0.0.1:0` and read that actual endpoint instead of releasing a reserved
 port before startup. This endpoint is operational readiness, not a portal or
 production-deployment receipt. The compiled staging fixture bounds startup at
@@ -360,6 +361,8 @@ the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_f
 with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
 The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
 Never use a production service or an existing database containing real data.
+Native fixtures need UTF8 encoding, matching CI; a C-locale `initdb` without
+`--encoding=UTF8` creates SQL_ASCII instead and cannot validate Danish input.
 
 The examples assume your owned disposable service is at `localhost:5432`. Confirm the port
 belongs to that fixture, not another service. Tests accept only `localhost:5432`,
@@ -440,10 +443,18 @@ method and same-record recovery check. Its
 makes both historical sides use the same shared Go contact authority.
 [ADR 0017](../docs/adr/0017-retain-go-private-presentation.md) rejects the private
 candidate on its mandatory maintenance objective; unperformed comparative budgets
-are not passing results. The remaining developer renderer and actual HTTP
-composition retain [their separate test entrypoint](CONTACT-RENDERER.md#exercise)
-pending #207's retirement. They do not use the Go-only process host or grant
-permission to activate the portal.
+are not passing results. The retained Go HTTP journey and post-wait authority
+controls run independently of the process host and ordinary package suite:
+
+```sh
+GOTOOLCHAIN=local go test -race -tags=contactintegration ./internal/identity \
+  -run '^TestGoContact' -count=1 -timeout=90s
+```
+
+Run this from `server/` after provisioning both disposable fixture URLs. Source CI
+requires it unconditionally, including exact decimal revisions, two independent
+clients, an operator and durable session loss at real SDK waits. It needs no Node
+artifact and grants no permission to activate the portal.
 
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share
