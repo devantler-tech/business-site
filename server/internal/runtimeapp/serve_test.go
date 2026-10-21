@@ -12,10 +12,7 @@ import (
 // TestServerServesDuringReadinessNotification keeps slow startup diagnostics off
 // the actual HTTP accept path and joins the real server on fixture teardown.
 func TestServerServesDuringReadinessNotification(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := newServerListener(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	notified, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
@@ -56,10 +53,7 @@ func TestServerServesDuringReadinessNotification(t *testing.T) {
 // TestServerStopsDuringBlockedReadinessNotification keeps advisory startup
 // output outside the server's cancellation and listener-ownership boundary.
 func TestServerStopsDuringBlockedReadinessNotification(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := newServerListener(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	notified, release, notificationDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
@@ -105,21 +99,12 @@ func TestServerStopsDuringBlockedReadinessNotification(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("blocked readiness notification prevented cancellation")
 	}
-	conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
-	if err == nil {
-		if err := conn.Close(); err != nil {
-			t.Error("unexpected fixture connection cleanup failed", err)
-		}
-		t.Fatal("stopped listener still accepts connections")
-	}
+	assertListenerClosed(t, listener)
 }
 
 // TestServerDrainsAnActiveRequestAndStops observes a real request during bounded shutdown.
 func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := newServerListener(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	started := make(chan struct{})
@@ -171,10 +156,26 @@ func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not stop")
 	}
+	assertListenerClosed(t, listener)
+}
+
+// newServerListener gives each real-server test a private loopback listener.
+func newServerListener(t *testing.T) net.Listener {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return listener
+}
+
+// assertListenerClosed checks that server completion released the actual listener.
+func assertListenerClosed(t *testing.T, listener net.Listener) {
+	t.Helper()
 	conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
 	if err == nil {
 		if err := conn.Close(); err != nil {
-			t.Error("unexpected fixture connection cleanup failed")
+			t.Error("unexpected fixture connection cleanup failed", err)
 		}
 		t.Fatal("stopped listener still accepts connections")
 	}
