@@ -9,7 +9,7 @@ values; it does not authenticate a person or prove browser accessibility.
 From `server/`, with the exact compiler in `go.mod`:
 
 ```sh
-GOTOOLCHAIN=local go test -race ./internal/identity \\
+GOTOOLCHAIN=local go test -race ./internal/identity \
   -run '^TestContactMaintenance' -count=1 -timeout=30s -v
 ```
 
