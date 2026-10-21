@@ -4,6 +4,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
 // TestWorkApprovalSchema requires all three durable authority relations, not a
@@ -63,12 +66,36 @@ func TestWorkApprovalRefusesIncompleteTransferHistory(t *testing.T) {
 	}
 }
 
-// approvalFixture enables only fictional operator authority, not a browser or
-// worker route. The invoice, acceptance and credit use their real service paths.
+// approvalFixture uses real service writes and isolated storage, not repeated
+// unrelated browser journeys. Native invoice/credit journeys remain separate.
 func approvalFixture(t *testing.T) (*browserFixture, Principal) {
 	t.Helper()
-	b := creditFixture(t)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"}, []any{true, true, true, true, true, true, true, true, true})
+	b := newBrowserFixture(t)
+	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
+		t.Fatal(err)
+	}
+	seedTriageRequest(t, b, proposalRequestID, "Fictional proposal request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	author := enroll(t, b.svc, b.f, "proposal-operator", "operator-workspace", "operator")
+	proposal := projectProposal{Key: secret(), Scope: "A fictional first iteration", Deliverables: "A website and accessible contact page", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
+	if err := b.svc.persistProposal(t.Context(), author, proposalRequestID, proposal); err != nil {
+		t.Fatal("fixture proposal unavailable", err)
+	}
+	if err := b.svc.persistVisibility(t.Context(), author, proposalRequestID, visibilityDecision{ExpectedProposal: 1, Proposal: 1, Action: "share", Key: secret()}); err != nil {
+		t.Fatal("fixture sharing unavailable", err)
+	}
+	client := enroll(t, b.svc, b.f, "credit-fixture-client", "private-client-key", "client")
+	review, err := b.svc.prepareProposalReview(t.Context(), client, proposalRequestID)
+	if err != nil {
+		t.Fatal("fixture consent review unavailable", err)
+	}
+	acceptance, err := b.svc.acceptProposal(t.Context(), client, proposalRequestID, review.Key)
+	if err != nil {
+		t.Fatal("fixture consent unavailable", err)
+	}
+	invoice := projectInvoice{Key: secret(), Acceptance: acceptance.ID, Reference: "TEST-2026-01", Purpose: "Fictional agreed iteration installment", AmountMinor: 123456, NetMinor: pgtype.Int8{Int64: 100000, Valid: true}, VATMinor: pgtype.Int8{Int64: 23456, Valid: true}}
+	if err := b.svc.persistInvoice(t.Context(), author, proposalRequestID, invoice); err != nil {
+		t.Fatal("fixture invoice unavailable", err)
+	}
 	op := enroll(t, b.svc, b.f, "approval-operator", "operator-workspace", "operator")
 	if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "confirmed", AmountMinor: 123456, Note: "Fictional credited funds"}); err != nil {
 		t.Fatal("fixture funding unavailable", err)
@@ -92,7 +119,10 @@ func TestWorkApprovalExactBindingAndTerminalHistory(t *testing.T) {
 	if err != nil || !valid || current.ID != a.ID {
 		t.Fatal("stored approval was not current", err)
 	}
-	b.reconnect(t.Context())
+	pool := b.reconnect(t.Context())
+	b.pool.Close()
+	b.pool = pool
+	b.svc = New(pool, b.f.broker, b.flags.NewClient())
 	retry, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input)
 	if err != nil || retry.ID != a.ID || !retry.Decided.Equal(a.Decided) || !retry.Expires.Equal(a.Expires) {
 		t.Fatal("retry renewed or lost the original approval", err)

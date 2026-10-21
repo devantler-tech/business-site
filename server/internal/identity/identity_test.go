@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/open-feature/go-sdk/openfeature/isolated"
@@ -157,16 +158,22 @@ func fixtureDB(t testing.TB) *pgxpool.Pool {
 	if err = Migrate(context.Background(), migrator); err != nil {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
-	if _, err = migrator.Exec(context.Background(), "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime; GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE,TRUNCATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = migrator.Exec(context.Background(), `REVOKE TRUNCATE ON portal_memberships FROM portal_runtime; REVOKE ALL ON portal_membership_transitions FROM portal_runtime; GRANT SELECT ON portal_membership_transitions TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = migrator.Exec(context.Background(), `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = migrator.Exec(context.Background(), "TRUNCATE portal_work_current,portal_work_revocations,portal_work_approvals,portal_login_attempts, portal_invitations, portal_memberships, portal_membership_transitions, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions"); err != nil {
+	// Reset the same grants and rows atomically, rather than paying four durable
+	// commits for every fixture or exposing an intermediate privilege state.
+	if err = pgx.BeginFunc(context.Background(), migrator, func(tx pgx.Tx) error {
+		_, resetErr := tx.Exec(context.Background(), `
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime;
+GRANT SELECT,INSERT,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime;
+GRANT SELECT,INSERT,UPDATE,TRUNCATE ON portal_proposal_reviews TO portal_runtime;
+REVOKE TRUNCATE ON portal_memberships FROM portal_runtime;
+REVOKE ALL ON portal_membership_transitions FROM portal_runtime;
+GRANT SELECT ON portal_membership_transitions TO portal_runtime;
+GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime;
+GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime;
+TRUNCATE portal_work_current,portal_work_revocations,portal_work_approvals,portal_login_attempts, portal_invitations, portal_memberships, portal_membership_transitions, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions;
+`)
+		return resetErr
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return pool
