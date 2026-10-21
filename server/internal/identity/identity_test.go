@@ -158,8 +158,9 @@ func fixtureDB(t testing.TB) *pgxpool.Pool {
 	if err = Migrate(context.Background(), migrator); err != nil {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
-	// Reset the same grants and rows atomically, rather than paying four durable
-	// commits for every fixture or exposing an intermediate privilege state.
+	// Reset the same grants and rows in one durable transaction. Ordered row
+	// deletion avoids recreating seventeen table files on every serial fixture;
+	// membership deletion must record its event before history is cleared.
 	if err = pgx.BeginFunc(context.Background(), migrator, func(tx pgx.Tx) error {
 		_, resetErr := tx.Exec(context.Background(), `
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON portal_login_attempts, portal_invitations, portal_memberships, portal_sessions, portal_contacts TO portal_runtime;
@@ -170,7 +171,23 @@ REVOKE ALL ON portal_membership_transitions FROM portal_runtime;
 GRANT SELECT ON portal_membership_transitions TO portal_runtime;
 GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime;
 GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime;
-TRUNCATE portal_work_current,portal_work_revocations,portal_work_approvals,portal_login_attempts, portal_invitations, portal_memberships, portal_membership_transitions, portal_sessions, portal_contacts, portal_requests, portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions;
+DELETE FROM portal_work_current;
+DELETE FROM portal_work_revocations;
+DELETE FROM portal_work_approvals;
+DELETE FROM portal_credit_revisions;
+DELETE FROM portal_credit_transfers;
+DELETE FROM portal_invoices;
+DELETE FROM portal_proposal_reviews;
+DELETE FROM portal_proposal_acceptances;
+DELETE FROM portal_proposal_visibility;
+DELETE FROM portal_proposals;
+DELETE FROM portal_requests;
+DELETE FROM portal_memberships;
+DELETE FROM portal_membership_transitions;
+DELETE FROM portal_login_attempts;
+DELETE FROM portal_invitations;
+DELETE FROM portal_sessions;
+DELETE FROM portal_contacts;
 `)
 		return resetErr
 	}); err != nil {
