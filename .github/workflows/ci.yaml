@@ -504,7 +504,7 @@ jobs:
       - test-portal-identity
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@0c7b6c3509b73adbc7537e030935bb01987e625b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@467f07582436a26b62cf4aa756423512f85ba0c0
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -534,7 +534,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@0c7b6c3509b73adbc7537e030935bb01987e625b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@467f07582436a26b62cf4aa756423512f85ba0c0
         with:
           job-results: >-
             ${{ needs.changes.result }}
