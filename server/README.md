@@ -155,7 +155,9 @@ The version command prints the source/public-digest receipt. Visit
 The subshell leaves your original shell at the repository root.
 
 The readiness line retains its `runtime ready;` prefix and reports the bound
-listener as `listen=<address>`. For disposable process tests, use
+listener as `listen=<address>`. HTTP acceptance starts before this single
+announcement, so a slow readiness-output consumer does not block public requests.
+For disposable process tests, use
 `--listen 127.0.0.1:0` and read that actual endpoint instead of releasing a reserved
 port before startup. This endpoint is operational readiness, not a portal or
 production-deployment receipt. The compiled staging fixture bounds startup at
@@ -359,6 +361,8 @@ the [CI fixture](../.github/workflows/ci.yaml): its synthetic owner is `portal_f
 with the test-only password `fixture-only`, allowed to create the fixture roles and databases.
 The constructor test uses that exact owner too; an arbitrary privileged account is insufficient.
 Never use a production service or an existing database containing real data.
+Native fixtures need UTF8 encoding, matching CI; a C-locale `initdb` without
+`--encoding=UTF8` creates SQL_ASCII instead and cannot validate Danish input.
 
 The examples assume your owned disposable service is at `localhost:5432`. Confirm the port
 belongs to that fixture, not another service. Tests accept only `localhost:5432`,

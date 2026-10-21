@@ -9,6 +9,50 @@ import (
 	"time"
 )
 
+// TestServerServesDuringReadinessNotification keeps slow startup diagnostics off
+// the actual HTTP accept path and joins the real server on fixture teardown.
+func TestServerServesDuringReadinessNotification(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	notified, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- ServeReady(ctx, listener, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, "serving")
+		}), func() { close(notified); <-release })
+	}()
+	defer func() {
+		close(release)
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error("notified server did not stop cleanly", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("notified server did not join")
+		}
+	}()
+	select {
+	case <-notified:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP accept loop did not announce startup")
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	response, err := client.Get("http://" + listener.Addr().String())
+	if err != nil {
+		t.Fatal("readiness consumer blocked the HTTP server", err)
+	}
+	body, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK || string(body) != "serving" {
+		t.Fatal("notified server did not serve its real handler")
+	}
+}
+
 // TestServerDrainsAnActiveRequestAndStops observes a real request during bounded shutdown.
 func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

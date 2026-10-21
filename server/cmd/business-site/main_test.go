@@ -68,14 +68,22 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	}
 	ready := make(chan struct{})
 	var once sync.Once
+	outputReleased := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseOutput := func() { releaseOnce.Do(func() { close(outputReleased) }) }
+	var announcements atomic.Int32
 	var readiness string
 	output := writeFunc(func(data []byte) (int, error) {
+		announcements.Add(1)
 		once.Do(func() { readiness = string(data); close(ready) })
+		// A slow log consumer must not prevent an announced runtime from serving.
+		<-outputReleased
 		return len(data), nil
 	})
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
 	defer func() {
+		releaseOutput()
 		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
 			t.Error("runtime fixture cleanup did not join its worker")
 		}
@@ -97,13 +105,14 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	client := &http.Client{Timeout: 2 * time.Second}
 	res, err := client.Get("http://" + listen + "/")
 	if err != nil {
-		t.Fatal("runtime announced readiness without serving the public page")
+		t.Fatalf("runtime announced readiness without serving the public page: %v", err)
 	}
 	body, readErr := io.ReadAll(res.Body)
 	closeErr := res.Body.Close()
 	if readErr != nil || closeErr != nil || res.StatusCode != http.StatusOK || string(body) != "public page" {
 		t.Fatal("runtime did not serve the verified public snapshot")
 	}
+	releaseOutput()
 	cancel()
 	select {
 	case err := <-done:
@@ -112,6 +121,9 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("runtime did not stop after an actual public request")
+	}
+	if announcements.Load() != 1 {
+		t.Fatal("runtime repeated its readiness announcement")
 	}
 }
 
