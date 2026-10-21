@@ -78,7 +78,7 @@ ordinary-billing controls prove that task mode rejects the newer invoice bodies.
 
 [ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md),
 [ADR 0015](../docs/adr/0015-private-contact-comparator-amendment.md),
-[ADR 0016](../docs/adr/0016-maintenance-first-private-contact-comparison.md) and
+[ADR 0016](../docs/adr/0016-contact-maintenance-early-rejection.md) and
 [ADR 0017](../docs/adr/0017-retain-go-private-presentation.md) retain the immutable
 plans, input identities and narrow candidate rejection. The
 [frozen harness procedure](https://github.com/devantler-tech/business-site/blob/ca957e59b5df5d8e8a32a398bdb1acdd77ce9a4a/server/CONTACT-MAINTENANCE.md)
