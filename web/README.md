@@ -176,7 +176,7 @@ Svelte and artifact-only preview; explicit `frontend=astro` retains the incumben
 Either frontend still requires the source switch and protected main-only environment to deploy.
 See [the cutover and rollback decision](../docs/adr/0013-svelte-public-publication.md).
 
-With Go 1.27.2, `bash scripts/package-runtime.sh --release --default --svelte` builds a clean-source
+With Go 1.27.3, `bash scripts/package-runtime.sh --release --default --svelte` builds a clean-source
 candidate in `runtime-svelte-default-dist/`. Exercise it with
 `node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist`; the same checks run against its
 extracted archive in CI. The optional second argument `--production-template` retains the existing
