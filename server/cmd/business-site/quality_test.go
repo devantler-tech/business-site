@@ -12,8 +12,8 @@ import (
 // Exercise the actual optional launcher with synthetic tool metadata, not a
 // contributor's installed linter or configuration. CI's ordinary Go suite runs it.
 func TestCompleteQualityCheckRequiresPinnedTools(t *testing.T) {
-	const goVersion = "go version go1.27.2 linux/amd64"
-	const lintVersion = "golangci-lint has version 2.14.0 built with go1.27.2 from fixture"
+	const goVersion = "go version go1.27.3 linux/amd64"
+	const lintVersion = "golangci-lint has version 2.14.0 built with go1.27.3 from fixture"
 	for _, tc := range []struct {
 		name, goVersion, lintVersion         string
 		goExit, lintVersionExit, lintRunExit string
@@ -22,8 +22,10 @@ func TestCompleteQualityCheckRequiresPinnedTools(t *testing.T) {
 	}{
 		{name: "pinned", goVersion: goVersion, lintVersion: lintVersion, wantRun: true},
 		{name: "different Go", goVersion: "go version go1.27.1 linux/amd64", lintVersion: lintVersion, wantError: true},
-		{name: "different linter", goVersion: goVersion, lintVersion: "golangci-lint has version 2.13.0 built with go1.27.2 from fixture", wantError: true},
+		{name: "unpatched Go", goVersion: "go version go1.27.2 linux/amd64", lintVersion: lintVersion, wantError: true},
+		{name: "different linter", goVersion: goVersion, lintVersion: "golangci-lint has version 2.13.0 built with go1.27.3 from fixture", wantError: true},
 		{name: "different linter compiler", goVersion: goVersion, lintVersion: "golangci-lint has version 2.14.0 built with go1.27.1 from fixture", wantError: true},
+		{name: "unpatched linter compiler", goVersion: goVersion, lintVersion: "golangci-lint has version 2.14.0 built with go1.27.2 from fixture", wantError: true},
 		{name: "missing Go metadata", lintVersion: lintVersion, wantError: true},
 		{name: "malformed linter metadata", goVersion: goVersion, lintVersion: "2.14.0", wantError: true},
 		{name: "failed Go query", goVersion: goVersion, lintVersion: lintVersion, goExit: "2", wantError: true},

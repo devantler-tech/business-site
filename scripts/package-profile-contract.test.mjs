@@ -13,7 +13,7 @@ test('actual default packager pins safe presentation inputs rather than inheriti
     cpSync('.node-version', path.join(root, '.node-version'));
     writeFileSync(path.join(root, 'bin/git'), '#!/bin/sh\nprintf "%s\\n" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n', { mode: 0o700 });
     writeFileSync(path.join(root, 'bin/node'), '#!/bin/sh\nprintf "v24.19.0\\n"\n', { mode: 0o700 });
-    writeFileSync(path.join(root, 'bin/go'), '#!/bin/sh\nprintf "go version go1.27.2 linux/amd64\\n"\n', { mode: 0o700 });
+    writeFileSync(path.join(root, 'bin/go'), '#!/bin/sh\nprintf "go version go1.27.3 linux/amd64\\n"\n', { mode: 0o700 });
     writeFileSync(path.join(root, 'bin/npm'), `#!/bin/bash
 if [[ "$1" == --version ]]; then printf '11.19.1\\n'; exit 0; fi
 "${process.execPath}" -e 'require("node:fs").writeFileSync(process.env.CAPTURE, JSON.stringify({profile:process.env.PUBLIC_CONTENT_PROFILE,company:process.env.FEATURE_COMPANY_IDENTITY,address:process.env.COMPANY_POSTAL_ADDRESS,preview:process.env.FEATURE_PREVIEW_BANNER,offer:process.env.FEATURE_OFFER_COPY,customer:process.env.FEATURE_CUSTOMER_SCOPE,vat:process.env.FEATURE_VAT_PRICES,frontend:process.env.FEATURE_SVELTE_FRONTEND}))'

@@ -95,8 +95,8 @@ pinned upstream detector itself does not report every placeholder or repeated
 password; the regression is not a claim to overcome that upstream limitation.
 
 From the repository root, the optional full quality check is
-`bash scripts/check-portal-quality.sh`. It requires Go 1.27.2 and golangci-lint
-2.14.0 built with Go 1.27.2 before invoking the entire module's default linter set.
+`bash scripts/check-portal-quality.sh`. It requires Go 1.27.3 and golangci-lint
+2.14.0 built with Go 1.27.3 before invoking the entire module's default linter set.
 `--no-config` ignores ambient configuration so local suppressions cannot hide findings.
 The display limits expose all diagnostics; never use a reduced delta as a full
 clean verdict, deduplicate findings sharing a line or silence a rule. Fixture cleanup
