@@ -2,13 +2,11 @@ package identity
 
 import (
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 )
 
 type contactResponse struct {
@@ -35,43 +33,6 @@ func startContactRead(t *testing.T, b *browserFixture, release func()) <-chan co
 		}
 	})
 	return result
-}
-
-// TestDeveloperContactBrowserPassiveOptOut exercises the ordinary composition
-// without Node: a nil release SDK must retain Go, while identity stays real.
-func TestDeveloperContactBrowserPassiveOptOut(t *testing.T) {
-	b := newBrowserFixture(t)
-	if _, err := b.svc.DeveloperContactBrowser(b.site.URL+"/portal/callback", "synthetic-client-secret", nil); err == nil {
-		t.Fatal("missing caller-owned supervisor accepted")
-	}
-	program, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// An ordinary Go test executable is not a renderer. Any attempted child use
-	// would fail this positive HTTP control rather than silently rendering Go.
-	supervisor, err := contactrenderer.New(program, program, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(supervisor.Close)
-	handler, err := b.svc.DeveloperContactBrowser(b.site.URL+"/portal/callback", "synthetic-client-secret", supervisor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.mu.Lock()
-	b.handler = handler
-	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
-	if status, body, _ := b.request("GET", "/portal/contact", nil, ""); status != 200 || !strings.Contains(body, `class="contact-form"`) {
-		t.Fatal("passive composition lost the retained Go form", status)
-	}
-	if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=true`); err != nil {
-		t.Fatal(err)
-	}
-	if status, _, _ := b.request("GET", "/portal/contact", nil, ""); status != 401 {
-		t.Fatal("passive composition bypassed current identity", status)
-	}
 }
 
 // TestContactResponseRequiresOriginalDurableSession changes the real session

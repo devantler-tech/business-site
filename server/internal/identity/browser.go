@@ -11,7 +11,6 @@ import (
 
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
-	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 	"github.com/justinas/nosurf"
 	"golang.org/x/oauth2"
 )
@@ -26,27 +25,12 @@ type browser struct {
 	sessions   *scs.SessionManager
 	oauth      oauth2.Config
 	origin     string
-	renderer   *contactrenderer.Supervisor
 }
 
 // Browser constructs the application HTTP surface, without starting a listener,
 // migrating a database or enabling a flag. Only one fixed HTTPS callback is used.
 // Private routes disappear when portal-identity is missing, false or erroneous.
 func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, error) {
-	return s.browser(callbackURL, clientSecret, nil)
-}
-
-// DeveloperContactBrowser explicitly composes the private presentation trial.
-// The caller owns and closes the fixed reviewed renderer; normal Browser and
-// the executable have no activation mapping or Node dependency.
-func (s *Foundation) DeveloperContactBrowser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
-	if renderer == nil {
-		return nil, ErrDenied
-	}
-	return s.browser(callbackURL, clientSecret, renderer)
-}
-
-func (s *Foundation) browser(callbackURL, clientSecret string, renderer *contactrenderer.Supervisor) (http.Handler, error) {
 	u, err := url.Parse(callbackURL)
 	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "/portal/callback" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
 		return nil, ErrDenied
@@ -79,7 +63,6 @@ func (s *Foundation) browser(callbackURL, clientSecret string, renderer *contact
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Persist = false
 	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
-	b.renderer = renderer
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, _ error) {
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")

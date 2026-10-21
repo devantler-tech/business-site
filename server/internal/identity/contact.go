@@ -144,7 +144,7 @@ func (b *browser) contact(w http.ResponseWriter, r *http.Request) {
 	}
 	authority := b.contactAuthority(r.Context(), client)
 	// Optional display evaluation precedes the read; the final response also
-	// rechecks original durable authority after any renderer/SDK wait.
+	// rechecks original durable authority after any SDK wait.
 	verification := b.foundation.contactVerificationReady(r.Context())
 	d, scopedClient, err := b.foundation.readContactScoped(r.Context(), authority.principal)
 	if err != nil || scopedClient != client {

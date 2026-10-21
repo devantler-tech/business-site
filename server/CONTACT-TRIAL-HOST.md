@@ -78,14 +78,14 @@ run `go test -race -tags=contacttrialintegration ./internal/identity -run
 step after provisioning, keeping its expensive process startup outside the ordinary
 package's unchanged 90-second budget without omitting any controls. Neither this
 Go integration nor the ordinary suite requires Node. Actual-command refusals also
-cover the retired candidate mode and legacy executable fields. Separate renderer
-HTTP and authority controls remain under [CONTACT-RENDERER.md](CONTACT-RENDERER.md);
-they do not use this Go-only process host.
+cover the retired candidate mode and legacy executable fields. The separate Go
+HTTP/authority controls use `-tags=contactintegration` and `-run '^TestGoContact'`
+with the same 90-second bound; they do not use this process host or need Node.
 
 [ADR 0017](../docs/adr/0017-retain-go-private-presentation.md) records the private
 candidate's rejection on its mandatory maintenance objective. The frozen plans,
 input identities and offline evidence remain historical records; the unperformed
 paired timing, resource and candidate-recovery measurements are not passing results.
 This Go-only regression host neither renews that experiment nor activates production
-identity, customer intake or payments. Issue #207 tracks the remaining
-developer-renderer retirement.
+identity, customer intake or payments. The historical experiment and frozen
+evidence are distinct from these maintained correctness controls.

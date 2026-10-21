@@ -47,8 +47,8 @@ function assertRuntime(workflow) {
   const install = steps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
   const go = steps.findIndex((s) => s.uses?.startsWith("actions/setup-go@"));
   const compilerInstall = steps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
-  const renderer = steps.findIndex(
-    (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs" && s["working-directory"] === ".",
+  const contactIntegration = steps.findIndex(
+    (s) => s.run === "bash scripts/check-go-contact.sh" && s["working-directory"] === ".",
   );
   const database = steps.findIndex(
     (s) =>
@@ -88,18 +88,18 @@ function assertRuntime(workflow) {
     go >= 0 &&
       database >= 0 &&
       compilerInstall > install &&
-      renderer > compilerInstall &&
-      renderer > go &&
-      renderer > database &&
-      renderer < build,
-    "run the actual compiled renderer with the exact Go and Node compilers before packaging",
+      contactIntegration > compilerInstall &&
+      contactIntegration > go &&
+      contactIntegration > database &&
+      contactIntegration < build,
+    "run the actual retained Go contact journey with the exact compiler before packaging",
   );
   assert.ok(
-    host > database && host < renderer,
+    host > database && host < contactIntegration,
     "run the complete real Go host controls separately after database provision",
   );
   assert.ok(
-    ordinary > renderer && ordinary < build,
+    ordinary > contactIntegration && ordinary < build,
     "retain the complete ordinary Go suite, serialized packages and its original timeout",
   );
   assert.equal(
@@ -122,7 +122,7 @@ function assertRuntime(workflow) {
     database,
     host,
     ordinary,
-    renderer,
+    contactIntegration,
     browser,
     inventory,
     build,
@@ -330,7 +330,7 @@ for (const [name, mutate] of [
     },
   ],
   [
-    "missing renderer database provision",
+    "missing contact integration database provision",
     (w) => {
       w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
         (s) => !s.run?.startsWith("psql -h localhost"),
@@ -338,20 +338,20 @@ for (const [name, mutate] of [
     },
   ],
   [
-    "conditional renderer database provision",
+    "conditional contact integration database provision",
     (w) => {
       w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost")).if = "false";
     },
   ],
   [
-    "ignored renderer database provision",
+    "ignored contact integration database provision",
     (w) => {
       w.jobs["test-portal-identity"].steps.find((s) => s.run?.startsWith("psql -h localhost"))["continue-on-error"] =
         true;
     },
   ],
   [
-    "renderer before database provision",
+    "contact integration before database provision",
     (w) => {
       const steps = w.jobs["test-portal-identity"].steps;
       steps.push(
@@ -363,37 +363,37 @@ for (const [name, mutate] of [
     },
   ],
   [
-    "missing real compiled renderer controls",
+    "missing real Go contact controls",
     (w) => {
       w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
-        (s) => s.run !== "node --test web/tests/private-contact-runtime.test.mjs",
+        (s) => s.run !== "bash scripts/check-go-contact.sh",
       );
     },
   ],
   [
-    "conditional real compiled renderer controls",
+    "conditional real Go contact controls",
     (w) => {
       w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+        (s) => s.run === "bash scripts/check-go-contact.sh",
       ).if = "false";
     },
   ],
   [
-    "ignored real compiled renderer failures",
+    "ignored real Go contact failures",
     (w) => {
       w.jobs["test-portal-identity"].steps.find(
-        (s) => s.run === "node --test web/tests/private-contact-runtime.test.mjs",
+        (s) => s.run === "bash scripts/check-go-contact.sh",
       )["continue-on-error"] = true;
     },
   ],
   [
-    "conditional renderer compiler install",
+    "conditional public frontend compiler install",
     (w) => {
       w.jobs["test-portal-identity"].steps.find((s) => s.run === "npm --prefix web ci").if = "false";
     },
   ],
   [
-    "renderer check before compiler install",
+    "contact integration check before compiler install",
     (w) => {
       const steps = w.jobs["test-portal-identity"].steps;
       const i = steps.findIndex((s) => s.run === "npm --prefix web ci");

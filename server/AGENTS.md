@@ -1,8 +1,8 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
-The shared test-only maintenance inventory checks actual Go documents and compiled
-Svelte contact bodies for ADR 0014. Read `CONTACT-MAINTENANCE.md` before changing it.
+The shared test-only maintenance inventory checks all 120 actual Go documents.
+Read `CONTACT-MAINTENANCE.md` before changing it.
 Keep its explicit task option separate from ordinary source checks; preserve
 all five families, both languages, complete counts and negative controls. Markup
 inventory is not authenticated/browser proof or a completed comparison.
@@ -23,20 +23,20 @@ paired timing format. Read `CONTACT-TRIAL-REPORT.md` before changing it. Preserv
 whole-journey pairing, failure retention, closed bounded input and private output.
 Its overall decision remains inconclusive; it neither collects trial evidence nor
 activates portal behavior. ADR 0014/0015 and the full #213 runner remain separate.
-The explicit `DeveloperContactBrowser` composes only the private contact experiment
-with a caller-owned fixed `contactrenderer.Supervisor`; `Browser` and the executable
-retain Go presentation. Read `CONTACT-RENDERER.md`. Buffer the complete frame before
+`Browser` and the executable use Go presentation. Buffer the complete frame before
 headers and revalidate the original durable session, expiry and query client after
-renderer/SDK waits, including initial opt-out. Use the maintained context store and
+SDK waits, including optional confirmation evaluation. Use the maintained context store and
 codec and bind its decoded bytes in final SQL, not SCS's request cache. Never
-extend a session on a read, pass identity/client
-selectors to the child, or treat framed output as authority or arbitrary safe HTML.
-The selected Node-24 renderer integration needs BOTH disposable PostgreSQL fixture
-URLs and real compiled artifacts; ordinary Go/database tests do not need Node.
+extend a session on a read or treat rendered output as authority.
+The dedicated `contactintegration` suite uses the ordinary Go HTTP handlers,
+real TLS broker and BOTH disposable PostgreSQL fixture URLs. It retains the full
+native journey, precise revisions, concurrent actors and 22 post-wait authority
+controls. From the repository root, `bash scripts/check-go-contact.sh` runs it
+separately from the ordinary suite and requires both actual top-level results.
 Run the real Go trial host separately with `go test -race -tags=contacttrialintegration
 ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s`. Source CI
-requires this step after database provision, alongside the complete ordinary suite
-and compiled renderer integration. Preserve each package's existing 90-second bound;
+requires both dedicated steps after database provision, alongside the complete ordinary suite.
+Preserve each package's existing 90-second bound;
 never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact

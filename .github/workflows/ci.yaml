@@ -113,8 +113,6 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: web
         run: npm ci
-      - name: Verify the private compiled contact component
-        run: node --test web/tests/private-contact-renderer.test.mjs
       - name: Verify the isolated Svelte frontend in both release states
         run: bash scripts/check-svelte-frontend.sh
       - name: Verify the retained frontend decision samples
@@ -376,9 +374,9 @@ jobs:
       - name: Verify real Go trial host with its own unchanged test budget
         working-directory: server
         run: go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
-      - name: Verify compiled contact HTTP with the actual broker, database and bounded renderer
+      - name: Verify retained Go contact HTTP and post-wait authority
         working-directory: .
-        run: node --test web/tests/private-contact-runtime.test.mjs
+        run: bash scripts/check-go-contact.sh
       - name: Verify dependencies and formatting
         run: |
           go mod verify
@@ -392,6 +390,7 @@ jobs:
         working-directory: .
         run: |
           node --test scripts/runtime-contract.test.mjs
+          node --test scripts/go-contact.test.mjs
           node --test scripts/container-contract.test.mjs
       - name: Verify compiled dependency inventory and failed-read refusals
         working-directory: .
