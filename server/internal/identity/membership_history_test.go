@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Removing the database-owned recorder must fail this actual-storage control,
-// even when a direct writer restores all of the original membership values.
+// TestMembershipTransitionsSurviveRestoration requires a fresh retained incarnation
+// even when direct writes restore the membership's original authority values.
 func TestMembershipTransitionsSurviveRestoration(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
@@ -50,6 +50,8 @@ func TestMembershipTransitionsSurviveRestoration(t *testing.T) {
 	}
 }
 
+// TestMembershipConflictAndDeletionEvidence distinguishes actual upsert effects
+// from ignored conflicts and retains deletion evidence across new connections.
 func TestMembershipConflictAndDeletionEvidence(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
@@ -95,6 +97,8 @@ func TestMembershipConflictAndDeletionEvidence(t *testing.T) {
 	}
 }
 
+// TestMembershipBulkWritesAndRollback checks real bulk operations and rollback,
+// then refuses restricted-role paths that could bypass or alter the recorder.
 func TestMembershipBulkWritesAndRollback(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx := t.Context()
@@ -139,6 +143,8 @@ func TestMembershipBulkWritesAndRollback(t *testing.T) {
 	}
 }
 
+// membershipEventCount reads the complete fixture ledger independently of the
+// membership operation, failing rather than treating a failed read as zero.
 func membershipEventCount(t *testing.T, pool *pgxpool.Pool) int {
 	t.Helper()
 	var count int
@@ -148,6 +154,8 @@ func membershipEventCount(t *testing.T, pool *pgxpool.Pool) int {
 	return count
 }
 
+// TestMembershipMigrationRecordsOnlyObservedBaseline preserves older migration
+// checksums and records only the existing membership, not invented prior events.
 func TestMembershipMigrationRecordsOnlyObservedBaseline(t *testing.T) {
 	fixtureDB(t)
 	migrator := migrationDB(t)
@@ -173,6 +181,8 @@ func TestMembershipMigrationRecordsOnlyObservedBaseline(t *testing.T) {
 	}
 }
 
+// TestMembershipRecorderRejectsForeignTriggerInvocation verifies that an accidental
+// execute grant cannot let an unrelated table manufacture membership evidence.
 func TestMembershipRecorderRejectsForeignTriggerInvocation(t *testing.T) {
 	pool := fixtureDB(t)
 	migrator := migrationDB(t)
@@ -204,6 +214,8 @@ func TestMembershipRecorderRejectsForeignTriggerInvocation(t *testing.T) {
 	}
 }
 
+// membershipStamp reads the single current fixture membership's stored token;
+// a missing or empty token must fail the control rather than compare equal.
 func membershipStamp(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
 	var incarnation string

@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// TestMembershipReaderRetainsCallerTransaction observes the real writer lock,
+// caller-owned commit and refusal of foreign, revoked or closed-transaction reads.
 func TestMembershipReaderRetainsCallerTransaction(t *testing.T) {
 	pool := fixtureDB(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
