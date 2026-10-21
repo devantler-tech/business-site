@@ -43,6 +43,25 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	}
 	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"membership recorder disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_transition; SET ROLE portal_runtime", false},
+		{"membership incarnation disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_incarnation; SET ROLE portal_runtime", false},
+		{"membership recorder conditional", "DROP TRIGGER portal_membership_transition ON portal_memberships; CREATE TRIGGER portal_membership_transition AFTER INSERT OR UPDATE OR DELETE ON portal_memberships FOR EACH ROW WHEN (false) EXECUTE FUNCTION portal_record_membership_transition(); SET ROLE portal_runtime", false},
+		{"membership recorder incomplete operations", "DROP TRIGGER portal_membership_transition ON portal_memberships; CREATE TRIGGER portal_membership_transition AFTER INSERT ON portal_memberships FOR EACH ROW EXECUTE FUNCTION portal_record_membership_transition(); SET ROLE portal_runtime", false},
+		{"membership recorder search path", "ALTER FUNCTION portal_record_membership_transition() SET search_path=public,pg_temp; SET ROLE portal_runtime", false},
+		{"membership TRUNCATE", "GRANT TRUNCATE ON portal_memberships TO portal_runtime; SET ROLE portal_runtime", false},
+		{"membership TRIGGER", "GRANT TRIGGER ON portal_memberships TO portal_runtime; SET ROLE portal_runtime", false},
+		{"membership MAINTAIN", "GRANT MAINTAIN ON portal_memberships TO portal_runtime; SET ROLE portal_runtime", false},
+		{"trigger bypass", "GRANT SET ON PARAMETER session_replication_role TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence INSERT", "GRANT INSERT ON portal_membership_transitions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence column INSERT", "GRANT INSERT(incarnation) ON portal_membership_transitions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence UPDATE", "GRANT UPDATE ON portal_membership_transitions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence DELETE", "GRANT DELETE ON portal_membership_transitions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence TRUNCATE", "GRANT TRUNCATE ON portal_membership_transitions TO portal_runtime; SET ROLE portal_runtime", false},
+		{"evidence SELECT delegation", "GRANT SELECT ON portal_membership_transitions TO portal_runtime WITH GRANT OPTION; SET ROLE portal_runtime", false},
+		{"recorder EXECUTE", "GRANT EXECUTE ON FUNCTION portal_record_membership_transition() TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable evidence INSERT", "CREATE ROLE portal_fixture_membership_mutator NOLOGIN; GRANT INSERT ON portal_membership_transitions TO portal_fixture_membership_mutator; GRANT portal_fixture_membership_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable trigger bypass", "CREATE ROLE portal_fixture_membership_mutator NOLOGIN; GRANT SET ON PARAMETER session_replication_role TO portal_fixture_membership_mutator; GRANT portal_fixture_membership_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
+		{"assumable recorder EXECUTE", "CREATE ROLE portal_fixture_membership_mutator NOLOGIN; GRANT EXECUTE ON FUNCTION portal_record_membership_transition() TO portal_fixture_membership_mutator; GRANT portal_fixture_membership_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"invoice column UPDATE", "GRANT UPDATE(amount_minor) ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable invoice column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(reference) ON portal_invoices TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"acceptance column UPDATE", "GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
@@ -161,6 +180,9 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			}()
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
+			if _, err := tx.Exec(ctx, "REVOKE TRUNCATE ON portal_memberships FROM portal_runtime; GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
+				t.Fatal(err)
+			}
 			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {
 				t.Fatal(err)
 			}

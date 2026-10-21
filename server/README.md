@@ -118,10 +118,18 @@ or work-start authority; no bank connection or activation mapping is added.
 
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
-v10 (external invoice records), v11 (bank-credit evidence) and v12 (explicit invoice tax components)
+v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
+and v13 (durable membership incarnations)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.
+Membership transitions are recorded atomically by database triggers, including
+direct writes, value restoration and deletion. A new enrollment receives a new
+incarnation even when its current values match an earlier membership. The
+retained baseline describes only the state observed at migration, not earlier
+history or a human actor. Runtime access to the transition ledger is read-only;
+see [ADR 0018](../docs/adr/0018-durable-membership-incarnations.md). No approval,
+consent renewal rule or work execution is implied by a membership incarnation.
 Unknown, missing-prefix or changed versions fail instead of deleting records. Before
 deployment, use a separate migration role and give the runtime only the explicit
 table DML it needs, not ownership/DDL, superuser or BYPASSRLS. This library does

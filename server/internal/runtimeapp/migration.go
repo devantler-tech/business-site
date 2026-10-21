@@ -45,7 +45,7 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	defer pool.Close()
-	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) {
+	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
 		return ErrMigration
 	}
 	return nil
@@ -62,9 +62,10 @@ func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool
  AND NOT EXISTS (SELECT 1 FROM pg_roles other WHERE other.oid<>r.oid AND other.rolname<>'pg_database_owner' AND pg_has_role(current_user,other.oid,'MEMBER'))
  AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND starts_with(c.relname,'portal_') AND c.relowner<>r.oid)
  AND NOT EXISTS (SELECT 1 FROM pg_type t WHERE t.typnamespace='public'::regnamespace AND starts_with(t.typname,'portal_') AND t.typtype='d' AND t.typowner<>r.oid)
+ AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND starts_with(p.proname,'portal_') AND p.proowner<>r.oid)
  AND (NOT $1::boolean OR (
    SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
-   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions']) managed(name)
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_membership_transitions','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions']) managed(name)
    LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
  AND (NOT $1::boolean OR (
    SELECT bool_and(t.oid IS NOT NULL AND t.typtype='d' AND t.typowner=r.oid AND t.typbasetype=managed.base::regtype)

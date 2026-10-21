@@ -370,6 +370,9 @@ func contactHostDatabase(t *testing.T) (*pgxpool.Pool, *pgxpool.Pool) {
 	if err := Migrate(ctx, migrator); err != nil {
 		t.Fatal("migrate unique trial fixture")
 	}
+	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
+		t.Fatal("grant read-only membership evidence")
+	}
 	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
 		t.Fatal("grant restricted trial runtime")
 	}
