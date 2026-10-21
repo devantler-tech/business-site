@@ -150,7 +150,7 @@ func TestActualExecutableMigration(t *testing.T) {
 		t.Fatal("actual command did not migrate the empty disposable database")
 	}
 	var count int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 13 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 14 {
 		t.Fatal("actual command did not apply every embedded schema version")
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)"); err != nil {
@@ -406,7 +406,7 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
 				var versions int
-				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 13 {
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 14 {
 					t.Fatal("explicit migration did not apply every embedded schema version")
 				}
 			} else {
@@ -529,7 +529,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual job refused trusted confined projected inputs")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 13 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 14 {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
@@ -539,7 +539,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 	// The executable is immutable; each control still owns a new database and process.
 	binary := buildMigrationCommand(t)
-	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "missing membership history", "disabled membership recorder", "missing incarnation recorder", "wrong membership recorder owner", "portal_membership_transitions", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash"} {
+	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "missing membership history", "missing work approvals", "disabled membership recorder", "missing incarnation recorder", "wrong membership recorder owner", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_membership_transitions", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash"} {
 		t.Run(relation, func(t *testing.T) {
 			file, pool, database := migrationCommandFixture(t)
 			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err != nil || output != "portal schema migration completed\n" {
@@ -560,7 +560,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				cleanupMigrationFixtureRole(t, admin, role)
 				connection = migrationFixtureRole(database, role)
 			case "missing invoices":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_credit_revisions,portal_credit_transfers,portal_invoices`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals,portal_credit_revisions,portal_credit_transfers,portal_invoices`); err != nil {
 					t.Fatal("owned missing-table fixture failed", err)
 				}
 			case "missing credits":
@@ -568,8 +568,12 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 					t.Fatal("owned missing-credit-table fixture failed", err)
 				}
 			case "missing membership history":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_membership_transitions`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals,portal_membership_transitions`); err != nil {
 					t.Fatal("owned missing-membership-history fixture failed", err)
+				}
+			case "missing work approvals":
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals`); err != nil {
+					t.Fatal("owned missing-work-approval fixture failed", err)
 				}
 			case "disabled membership recorder":
 				if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_transition`); err != nil {
@@ -600,7 +604,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Error("actual job reported success without owning the managed schema")
 			}
 			var preserved bool
-			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=13 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=14 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})

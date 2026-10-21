@@ -43,7 +43,8 @@ not a deployed portal. It provides sign-in/callback/shell/logout and private con
 profile handlers and separately default-off free project-request intake; no order,
 payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
 `INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
-bank-credit evidence. Contact emails remain
+bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
+decisions; this default-off foundation has no route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
 succeeds; they are never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
@@ -54,7 +55,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's fourteen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's seventeen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -208,9 +209,20 @@ SELECT-only; reject membership truncation, trigger/bypass authority, evidence
 mutation and delegated grants, directly or through assumable roles. Preserve
 function ownership, trusted search paths and enabled complete trigger bindings.
 Transaction-local incarnation reads retain the caller's locks and transaction;
-future approval composition takes request locks before deterministically ordered
+approval composition takes request locks before deterministically ordered
 membership locks. Membership changes never scan or lock requests. Bootstrap
 events are current observations, not recovered history or human attribution.
+
+v14 appends immutable work approvals and terminal revocations plus a confined
+current selection after unchanged v1–v13. Read `WORK-APPROVALS.md`. Keep exact
+agreement, complete invoice/funding evidence, both original membership incarnations,
+exclusive database expiry at 168 elapsed hours and actor/content-bound retries.
+Restored membership requires a fresh operator decision, not invented client
+consent. Superseded, revoked or expired decisions never revive. Runtime permission
+is SELECT/INSERT plus UPDATE only on the pointer's selection and generation,
+never its request/client keys or immutable history. The independent false-default
+`portal-work-approvals` flag has no environment mapping; review retirement under
+business-site#260/#138 by 20 November 2026. No HTTP/UI/worker/API/MCP activation.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

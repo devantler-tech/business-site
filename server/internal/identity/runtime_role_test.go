@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -145,6 +146,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"portal_proposal_visibility", "action"}, {"portal_proposal_acceptances", "content_hash"},
 		{"portal_invoices", "amount_minor"},
 		{"portal_credit_transfers", "reference"}, {"portal_credit_revisions", "amount_minor"},
+		{"portal_work_approvals", "evidence"}, {"portal_work_revocations", "reason"},
 	} {
 		for _, grant := range []struct{ privilege, option string }{
 			{"TRIGGER", ""}, {"REFERENCES", ""}, {"REFERENCES(" + history.column + ")", ""}, {"MAINTAIN", ""},
@@ -156,7 +158,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 				privilegeCase{name, fmt.Sprintf("GRANT %s ON %s TO portal_runtime%s; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false},
 				privilegeCase{"assumable/" + name, fmt.Sprintf("CREATE ROLE portal_fixture_history_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_history_guard%s; GRANT portal_fixture_history_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", grant.privilege, history.table, grant.option), false})
 		}
-		if history.table == "portal_credit_transfers" || history.table == "portal_credit_revisions" {
+		if history.table == "portal_credit_transfers" || history.table == "portal_credit_revisions" || history.table == "portal_work_approvals" || history.table == "portal_work_revocations" {
 			for _, privilege := range []string{"SELECT", "INSERT"} {
 				cases = append(cases, privilegeCase{history.table + "/missing " + privilege, fmt.Sprintf("REVOKE %s ON %s FROM portal_runtime; SET ROLE portal_runtime", privilege, history.table), false})
 			}
@@ -166,6 +168,21 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 					privilegeCase{"assumable/" + history.table + "/" + privilege, fmt.Sprintf("CREATE ROLE portal_fixture_credit_guard NOLOGIN; GRANT %s ON %s TO portal_fixture_credit_guard; GRANT portal_fixture_credit_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", privilege, history.table), false})
 			}
 		}
+	}
+	for _, privilege := range []string{"UPDATE", "UPDATE(request_id)", "UPDATE(client_id)", "DELETE", "TRUNCATE", "TRIGGER", "REFERENCES", "MAINTAIN", "SELECT WITH GRANT OPTION", "INSERT WITH GRANT OPTION", "UPDATE(approval_id) WITH GRANT OPTION"} {
+		grant := privilege
+		option := ""
+		const suffix = " WITH GRANT OPTION"
+		if strings.HasSuffix(grant, suffix) {
+			grant = strings.TrimSuffix(grant, suffix)
+			option = suffix
+		}
+		cases = append(cases,
+			privilegeCase{"work pointer/" + privilege, fmt.Sprintf("GRANT %s ON portal_work_current TO portal_runtime%s; SET ROLE portal_runtime", grant, option), false},
+			privilegeCase{"assumable work pointer/" + privilege, fmt.Sprintf("CREATE ROLE portal_fixture_pointer_guard NOLOGIN; GRANT %s ON portal_work_current TO portal_fixture_pointer_guard%s; GRANT portal_fixture_pointer_guard TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", grant, option), false})
+	}
+	for _, privilege := range []string{"SELECT", "INSERT", "UPDATE(approval_id)", "UPDATE(generation)"} {
+		cases = append(cases, privilegeCase{"work pointer/missing " + privilege, fmt.Sprintf("REVOKE %s ON portal_work_current FROM portal_runtime; SET ROLE portal_runtime", privilege), false})
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,6 +198,9 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			// TRUNCATE is fixture reset authority, never deployed runtime authority.
 			// Remove it within this rolled-back production-role control only.
 			if _, err := tx.Exec(ctx, "REVOKE TRUNCATE ON portal_memberships FROM portal_runtime; GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_work_approvals,portal_work_revocations,portal_work_current FROM portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {

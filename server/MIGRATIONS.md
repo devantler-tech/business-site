@@ -115,6 +115,16 @@ DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledg
 Actual
 web startup independently checks this boundary and refuses incomplete grants.
 
+v14 adds `portal_work_approvals`, `portal_work_revocations` and
+`portal_work_current` after unchanged v1–v13. Grant SELECT/INSERT on all three,
+and UPDATE only on the current pointer's `approval_id` and `generation` columns.
+Do not grant request/client key updates, immutable-history mutation, DELETE,
+TRUNCATE, references, triggers, maintenance, delegation or ownership to the
+runtime or an assumable role. The compiled migration job must own these relations
+as well as every earlier managed relation. It does not grant the web permissions.
+See [the approval boundary](WORK-APPROVALS.md); this migration adds no endpoint
+or client-work execution authority.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
