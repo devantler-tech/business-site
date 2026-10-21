@@ -537,10 +537,11 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 // A current ledger is not permission to report success with a non-owning role.
 // Each control changes only its uniquely named, fully migrated disposable store.
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
+	// The executable is immutable; each control still owns a new database and process.
+	binary := buildMigrationCommand(t)
 	for _, relation := range []string{"wrong credential", "missing invoices", "missing credits", "missing membership history", "disabled membership recorder", "missing incarnation recorder", "wrong membership recorder owner", "portal_membership_transitions", "portal_credit_transfers", "portal_credit_revisions", "portal_invoices", "portal_schema_version", "portal_login_attempts", "portal_invitations", "portal_memberships", "portal_sessions", "portal_contacts", "portal_requests", "portal_proposals", "portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_consent_key", "portal_consent_event", "portal_consent_hash"} {
 		t.Run(relation, func(t *testing.T) {
 			file, pool, database := migrationCommandFixture(t)
-			binary := buildMigrationCommand(t)
 			if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", file); err != nil || output != "portal schema migration completed\n" {
 				t.Fatal("owned complete-schema fixture migration failed")
 			}
