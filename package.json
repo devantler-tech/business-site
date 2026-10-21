@@ -35,7 +35,7 @@
     "mermaid": "^11.17.2",
     "pdfkit": "^0.20.2",
     "sharp": "^0.35.5",
-    "starlight-blog": "^0.30.1",
+    "starlight-blog": "^0.30.2",
     "starlight-links-validator": "^0.27.0"
   },
   "devDependencies": {
