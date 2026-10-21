@@ -5,6 +5,7 @@
 <p>{{.Intro}}</p></div>
 <section aria-labelledby="credit-summary"><h2 id="credit-summary">{{.History.Invoice.Reference}}</h2>
 <p>{{.History.Invoice.Purpose}}</p>
+{{template "invoice-tax" (.History.Invoice.TaxBreakdown .Lang)}}
 <dl class="request-receipt"><dt>{{if eq .Lang `da`}}Fakturabeløb{{else}}Invoice amount{{end}}</dt><dd>{{.History.Invoice.AmountDKK .Lang}} DKK</dd><dt>{{if eq .Lang `da`}}Bekræftet kreditering{{else}}Confirmed credit{{end}}</dt><dd>{{.History.TotalDKK .Lang}} DKK</dd><dt>{{if eq .Lang `da`}}Status{{else}}Status{{end}}</dt><dd>{{.History.Status .Lang}}</dd><dt>{{if eq .Lang `da`}}Aftale{{else}}Agreement{{end}}</dt><dd>{{if .History.Invoice.Current}}{{if eq .Lang `da`}}Aktuel accept{{else}}Current acceptance{{end}}{{else}}{{if eq .Lang `da`}}Historisk accept{{else}}Historical acceptance{{end}}{{end}} · version {{.History.Invoice.Version}}</dd></dl>
 <p>{{if eq .Lang `da`}}Dokumentation er ikke tilladelse til at starte arbejde. Kun den seneste version af hver bekræftet overførsel tælles. Uafklaret dokumentation skal afklares særskilt.{{else}}Evidence is not permission to start work. Only the latest revision of each confirmed transfer counts. Unresolved evidence needs separate review.{{end}}</p></section>
 {{if lt (len .History.Transfers) 32}}<section aria-labelledby="new-credit"><h2 id="new-credit">{{if eq .Lang `da`}}Registrer en overførsel{{else}}Record a transfer{{end}}</h2>

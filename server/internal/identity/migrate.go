@@ -44,6 +44,9 @@ var invoicesSchema string
 //go:embed credits.sql
 var creditsSchema string
 
+//go:embed invoice-tax.sql
+var invoiceTaxSchema string
+
 // Migrate serializes ordered schema migrations across processes and records each
 // checksum in the same transaction. Unknown/drifted versions fail, never reset
 // data. Run with a separate migration role before constructing the runtime.
@@ -66,7 +69,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS portal_schema_version (version integer PRIMARY KEY, checksum text NOT NULL)`); err != nil {
 		return fmt.Errorf("migration ledger: %w", err)
 	}
-	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema}
+	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema}
 	rows, err := tx.Query(ctx, `SELECT version,checksum FROM portal_schema_version ORDER BY version`)
 	if err != nil {
 		return fmt.Errorf("read migration: %w", err)

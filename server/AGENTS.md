@@ -182,12 +182,18 @@ No environment activation mapping, credited funds or worker eligibility is added
 External invoice metadata additionally requires independent false-default
 `portal-invoices`; review retirement under business-site#117 by 15 November 2026.
 Read `INVOICES.md`. Record only explicit external references, purpose/period and
-exact positive DKK minor units against current accepted proposal content. Never
+exact DKK net, VAT and positive payable-total minor units against current accepted proposal content. Never
 derive a first-month invoice from proposal prices. v10 follows unchanged v1–v9;
 its composite foreign key preserves the immutable acceptance binding. Retain
 SELECT/INSERT-only runtime privileges, content/actor-bound retries, bounded
 history and the shared request/operator lock. Optional display SDK waits precede
-private reads. Historical invoices grant no payment, monthly or execution
+private reads. v12 appends explicit net/VAT columns after unchanged v1–v11;
+bounded net plus VAT must equal the existing payable amount. Preserve legacy
+NULL/NULL facts as unrecorded, with exact absent-component retries only for
+those old receipts. A NOT VALID non-NULL constraint preserves historical rows
+while refusing incomplete new SQL inserts. Never infer rates or reclassify old
+receipts; bind both components in retry equality. Bank-credit status still uses
+the payable total, not net. Historical invoices grant no payment, monthly or execution
 authority; no environment activation mapping or client/agent invoice route exists.
 
 Migrations run under a separate migration role; the runtime must not own schema

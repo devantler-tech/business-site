@@ -24,6 +24,6 @@
 {{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
 <header><a class="brand" href="/">Devantler Tech</a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{if eq .Kind `contact`}}?lang={{if eq .Lang `da`}}en{{else}}da{{end}}{{else}}{{.LanguageURL}}{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>{{end}}
 
-{{define "portal-footer"}}<footer>Devantler Tech</footer>
+{{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech</footer>
 <script src="/portal/assets/portal.js" defer></script>
 </body></html>{{end}}

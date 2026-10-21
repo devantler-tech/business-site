@@ -335,7 +335,7 @@ func cloneCreditInvoice(t *testing.T) string {
 	if _, err := m.Exec(t.Context(), `INSERT INTO portal_proposal_acceptances SELECT $3,$1,'other-credit-client',client_issuer,client_subject,context_key,proposal_version,visibility_event,content_hash,recorded_at FROM portal_proposal_acceptances WHERE request_id=$2`, id, proposalRequestID, acceptance); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Exec(t.Context(), `INSERT INTO portal_invoices SELECT $1,'other-credit-client',sequence,expected_sequence,submission_key,$3,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,'SECOND-INVOICE',purpose,currency,amount_minor,recorded_at FROM portal_invoices WHERE request_id=$2`, id, proposalRequestID, acceptance); err != nil {
+	if _, err := m.Exec(t.Context(), `INSERT INTO portal_invoices SELECT $1,'other-credit-client',sequence,expected_sequence,submission_key,$3,proposal_version,visibility_event,content_hash,operator_issuer,operator_subject,'SECOND-INVOICE',purpose,currency,amount_minor,recorded_at,net_minor,vat_minor FROM portal_invoices WHERE request_id=$2`, id, proposalRequestID, acceptance); err != nil {
 		t.Fatal(err)
 	}
 	return "/portal/operator/requests/" + id + "/invoices/1/credits"
