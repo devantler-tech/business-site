@@ -30,7 +30,7 @@ The closed object has seven required string fields. Unknown fields, including
 the retired `node` and `worker` fields even when empty, are refused.
 
 | Field                | Required value                                                                                                                                                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mode`               | `closed` or `go`; every other mode is refused                                                                                                                                                                    |
 | `database`           | Synthetic `portal_runtime` login with the documented fixture password; numeric loopback port 5432 or 55444; a fresh `portal_trial_` database followed by 32 lowercase hexadecimal digits; only `sslmode=disable` |
 | `issuer`             | Fixed HTTPS numeric-loopback origin with an explicit port and no path/query                                                                                                                                      |
