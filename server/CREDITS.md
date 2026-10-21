@@ -61,6 +61,13 @@ storage error, never a misleading zero. Current operator membership, SDK decisio
 expiry and cancellation are checked around actual reads and writes. Native POST,
 CSRF/origin checks, non-cacheable responses and escaped EN/DA output remain.
 
+The authenticated reader owns the request transaction and final authority check.
+Its transaction-local `readCreditHistory` reads the exact invoice/current-acceptance
+binding and complete bounded history without taking another request lock or
+committing. An internal caller retaining that lock must also retain responsibility
+for authorization, transaction completion and result release; the read grants no
+approval or work-start authority.
+
 The gate has no production environment mapping. Missing, false, wrong-type or
 erroneous decisions deny. Review retirement in
 [#120](https://github.com/devantler-tech/business-site/issues/120) by 15 November

@@ -230,8 +230,7 @@ func creditWriteError(err error) error {
 	return errTriageStorage
 }
 
-// readCredits folds only the latest revision of each transfer. A bound-plus-one
-// query rejects incomplete history instead of presenting a misleading total.
+// readCredits owns the authenticated request transaction and its final authority check.
 func (s *Foundation) readCredits(ctx context.Context, p Principal, id string, invoice int) (creditHistory, error) {
 	if err := s.creditOperator(ctx, p); err != nil {
 		return creditHistory{}, err
@@ -241,6 +240,20 @@ func (s *Foundation) readCredits(ctx context.Context, p Principal, id string, in
 		return creditHistory{}, err
 	}
 	defer rollbackProposalWrite(ctx, tx)
+	h, err := readCreditHistory(ctx, tx, id, client, invoice)
+	if err != nil {
+		return creditHistory{}, err
+	}
+	if err = commitProposalWrite(ctx, p, tx, s.creditsReady); err != nil {
+		return creditHistory{}, err
+	}
+	return h, nil
+}
+
+// readCreditHistory reads the exact invoice and complete credit evidence within
+// its caller's request-locked transaction. It neither authorizes nor commits;
+// the owner must perform its final authority check before releasing the result.
+func readCreditHistory(ctx context.Context, tx pgx.Tx, id, client string, invoice int) (creditHistory, error) {
 	d, err := boundCreditInvoice(ctx, tx, id, client, invoice)
 	if err != nil {
 		return creditHistory{}, err
@@ -271,9 +284,6 @@ func (s *Foundation) readCredits(ctx context.Context, p Principal, id string, in
 	rows.Close()
 	if rows.Err() != nil || count > 512 || len(h.Transfers) > 32 {
 		return creditHistory{}, errTriageStorage
-	}
-	if err = commitProposalWrite(ctx, p, tx, s.creditsReady); err != nil {
-		return creditHistory{}, err
 	}
 	return h, nil
 }
