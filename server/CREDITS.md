@@ -68,6 +68,12 @@ committing. An internal caller retaining that lock must also retain responsibili
 for authorization, transaction completion and result release; the read grants no
 approval or work-start authority.
 
+The separately default-off [work-approval foundation](WORK-APPROVALS.md) also
+checks the complete reservation census and contiguous revision history before
+binding funding evidence. A reservation without an observation is unavailable,
+not an ignored zero, even if other observations match the invoice total.
+This foundation adds no bank connection, credit endpoint or execution route.
+
 The gate has no production environment mapping. Missing, false, wrong-type or
 erroneous decisions deny. Review retirement in
 [#120](https://github.com/devantler-tech/business-site/issues/120) by 15 November

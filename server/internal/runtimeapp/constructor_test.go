@@ -198,6 +198,9 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // fixtureTLSDatabase requires PostgreSQL TLS negotiation before bridging the validated fixture.

@@ -116,10 +116,16 @@ prevent a fully-credited result. A globally reserved transfer identity cannot
 belong to two invoices or clients. This is manual evidence, not payment processing
 or work-start authority; no bank connection or activation mapping is added.
 
+The separately default-off [work-approval foundation](WORK-APPROVALS.md) persists
+an operator decision against exact agreement, invoice, funding and membership
+evidence for 168 elapsed hours. It retains terminal history and a confined current
+selection; retries cannot renew, restore or resurrect authority. It has no HTTP
+handler, operator UI, worker or API/MCP endpoint and does not activate client work.
+
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
-and v13 (durable membership incarnations)
+v13 (durable membership incarnations), and v14 (expiring work-approval evidence)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.
@@ -425,7 +431,7 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-truncate the thirteen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit tables between tests. Never reuse a database
+truncate the seventeen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables between tests. Never reuse a database
 with real data. CI provisions its own immutable-image PostgreSQL service and
 aggregates this unconditional job into `CI - Required Checks`.
 
