@@ -53,12 +53,12 @@ The original immutable reference is `a1be78797e7886e3eb57605792027af6d4811add`.
 Its fixture is `portal_links_test.go` blob
 `056f8203b2ebd224e1f9f2caed2eb411f9189f0d`; its four non-contact templates are:
 
-| Template | Git blob |
-| --- | --- |
-| portal.html | b2edf7e0cd15385c1d7f15a44bd2253f46ecc84d |
+| Template      | Git blob                                 |
+|---------------|------------------------------------------|
+| portal.html   | b2edf7e0cd15385c1d7f15a44bd2253f46ecc84d |
 | requests.html | f491986e1d19ebbfd7c838f6777fd638fe09d5a9 |
-| triage.html | fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9 |
-| credits.html | dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3 |
+| triage.html   | fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9 |
+| credits.html  | dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3 |
 
 The original tables remain unchanged. Ordinary validation uses the complete separate
 30-triage/12-credit invoice table recorded twice from signed snapshot
