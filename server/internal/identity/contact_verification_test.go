@@ -230,18 +230,14 @@ func TestContactVerificationRejectedDraftNeverClaimsConfirmation(t *testing.T) {
 
 // TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation requires live
 // authority at the SQL checkpoint, then rejects closure before the write commits.
+// Both real-expiry selectors live in TestContactConfirmationRetainsRealExpiry.
 func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testing.T) {
-	for _, change := range []string{"unchanged", "identity flag", "verification flag", "expiry", "delayed expiry", "cancel"} {
+	for _, change := range []string{"unchanged", "identity flag", "verification flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
-			d, raw, nonce := prepareContactConfirmation(t, b, p, change == "delayed expiry")
+			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
-			// Start the real expiry window only after all fixture preparation.
-			// The checkpoint must still be reached with live authority.
-			if change == "expiry" || change == "delayed expiry" {
-				p.expires = time.Now().Add(2 * time.Second)
-			}
 			ctx, cancel, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-tracer.blocked:
@@ -256,8 +252,6 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 				setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
 			case "verification flag":
 				contactVerificationFlags(t, b, false)
-			case "expiry", "delayed expiry":
-				waitForFixtureExpiry(ctx, t, p.expires)
 			case "cancel":
 				cancel()
 			}
@@ -288,16 +282,14 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 
 // TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation proves that an
 // SDK wait cannot authorize a write after the original session or gate closes.
+// Both real-expiry selectors live in TestContactConfirmationRetainsRealExpiry.
 func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.T) {
-	for _, change := range []string{"expiry", "delayed expiry", "identity flag"} {
+	for _, change := range []string{"identity flag"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
 			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Minute)}
-			d, raw, nonce := prepareContactConfirmation(t, b, p, change == "delayed expiry")
+			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
-			if change == "expiry" || change == "delayed expiry" {
-				p.expires = time.Now().Add(2 * time.Second)
-			}
 			ctx, _, done := startContactConfirmation(t, b, p, d, raw, nonce)
 			select {
 			case <-provider.blocked:
@@ -307,11 +299,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 			if !time.Now().Before(p.expires) {
 				t.Fatal("fixture authority expired before its final SDK checkpoint")
 			}
-			if change == "expiry" || change == "delayed expiry" {
-				waitForFixtureExpiry(ctx, t, p.expires)
-			} else {
-				setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
-			}
+			setFixturePortalFlags(t, b, []string{"portal-identity", "portal-contact-verification"}, []any{false, true})
 			close(provider.release)
 			var err error
 			select {

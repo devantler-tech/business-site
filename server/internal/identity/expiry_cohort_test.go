@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// expiryProbe keeps each real reader's checkpoint, authority and result separate.
+// expiryProbe keeps each real operation's checkpoint, authority and result separate.
 type expiryProbe struct {
 	name    string
 	arm     func(time.Time)
@@ -27,12 +27,12 @@ func onceRelease(channel chan struct{}) func() {
 	return func() { once.Do(func() { close(channel) }) }
 }
 
-// runExpiryCohort starts the clock only after fixture preparation. Every reader
+// runExpiryCohort starts the clock only after fixture preparation. Every operation
 // must reach its own real checkpoint before expiry; only then is the shared
 // wall-clock wait allowed. Cancellation/release/join precede all fixture cleanup.
-func runExpiryCohort(t *testing.T, probes []expiryProbe) {
+func runExpiryCohort(t *testing.T, probes []expiryProbe, expires time.Time, timeout time.Duration) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	type pendingRead struct {
 		result chan error
 		done   chan struct{}
@@ -58,8 +58,6 @@ func runExpiryCohort(t *testing.T, probes []expiryProbe) {
 		}
 	}()
 
-	// JWT seconds are intentionally real and rounded exactly as the broker uses.
-	expires := time.Now().Add(5 * time.Second).Truncate(time.Second)
 	for _, probe := range probes {
 		probe.arm(expires)
 	}
@@ -84,6 +82,9 @@ func runExpiryCohort(t *testing.T, probes []expiryProbe) {
 		}
 	}
 	waitForFixtureExpiry(ctx, t, expires)
+	if ctx.Err() != nil {
+		t.Fatal("expiry cohort lost its operation deadline before checkpoint release")
+	}
 	for _, probe := range probes {
 		probe.release()
 	}
@@ -91,8 +92,11 @@ func runExpiryCohort(t *testing.T, probes []expiryProbe) {
 		t.Run(probe.name, func(t *testing.T) {
 			select {
 			case err := <-pending[index].result:
+				if ctx.Err() != nil {
+					t.Fatal("expiry rejection is not proven after operation cancellation")
+				}
 				if !errors.Is(err, ErrDenied) {
-					t.Fatalf("expired authority did not deny private data: %v", err)
+					t.Fatalf("expired authority did not deny the operation: %v", err)
 				}
 			case <-ctx.Done():
 				t.Fatal("expired reader did not return a bounded result")
@@ -127,7 +131,8 @@ func TestPrivateReadersRetainRealExpiry(t *testing.T) {
 	if len(probes) != 18 {
 		t.Fatal("expiry cohort lost an original selector")
 	}
-	runExpiryCohort(t, probes)
+	// JWT seconds are intentionally real and rounded exactly as the broker uses.
+	runExpiryCohort(t, probes, time.Now().Add(5*time.Second).Truncate(time.Second), 12*time.Second)
 }
 
 // directExpiryProbe prepares one native service reader without starting expiry.
