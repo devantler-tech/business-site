@@ -60,10 +60,10 @@ for (const [name, value] of [
 test('the actual executable uses the declared compiler and compatible analyzer', () => {
   const compiler = spawnSync('go', ['version'], { encoding: 'utf8', timeout: 30000 });
   assert.equal(compiler.status, 0);
-  assert.match(compiler.stdout, /^go version go1\.27\.2 /);
+  assert.match(compiler.stdout, /^go version go1\.27\.3 /);
   const result = execute(['version'], join(root, 'server'));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /golangci-lint has version 2\.14\.0 built with go1\.27\.2 /);
+  assert.match(result.output, /golangci-lint has version 2\.14\.0 built with go1\.27\.3 /);
 });
 
 test('all actual module packages pass the unchanged native rule set', () => {
@@ -84,7 +84,7 @@ test('a genuine format defect still fails the actual native govet rule', () => {
   try {
     const config = join(directory, '.golangci.yml');
     writeFileSync(config, dump(nativeRules), 'utf8');
-    writeFileSync(join(directory, 'go.mod'), 'module fixture.invalid/analyzer\n\ngo 1.27.2\n', 'utf8');
+    writeFileSync(join(directory, 'go.mod'), 'module fixture.invalid/analyzer\n\ngo 1.27.3\n', 'utf8');
     writeFileSync(join(directory, 'fixture.go'), '// Package analyzer tests a real format diagnostic.\npackage analyzer\n\nimport "fmt"\n\nfunc Render() string { return fmt.Sprintf("%d", "not-a-number") }\n', 'utf8');
     const result = execute(['run', '-c', config, './...'], directory);
     assert.equal(result.status, 1, result.output);
