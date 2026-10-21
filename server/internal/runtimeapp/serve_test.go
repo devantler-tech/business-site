@@ -53,6 +53,67 @@ func TestServerServesDuringReadinessNotification(t *testing.T) {
 	}
 }
 
+// TestServerStopsDuringBlockedReadinessNotification keeps advisory startup
+// output outside the server's cancellation and listener-ownership boundary.
+func TestServerStopsDuringBlockedReadinessNotification(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	notified, release, notificationDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	stopped := false
+	go func() {
+		done <- ServeReady(ctx, listener, http.NotFoundHandler(), func() {
+			defer close(notificationDone)
+			close(notified)
+			<-release
+		})
+	}()
+	t.Cleanup(func() {
+		close(release)
+		cancel()
+		if !stopped {
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Error("notified server cleanup failed", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("notified server cleanup did not join")
+			}
+		}
+		select {
+		case <-notificationDone:
+		case <-time.After(5 * time.Second):
+			t.Error("released notification did not finish")
+		}
+	})
+	select {
+	case <-notified:
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP accept loop did not announce startup")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		stopped = true
+		if err != nil {
+			t.Fatal("notified server did not stop cleanly", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("blocked readiness notification prevented cancellation")
+	}
+	conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
+	if err == nil {
+		if err := conn.Close(); err != nil {
+			t.Error("unexpected fixture connection cleanup failed", err)
+		}
+		t.Fatal("stopped listener still accepts connections")
+	}
+}
+
 // TestServerDrainsAnActiveRequestAndStops observes a real request during bounded shutdown.
 func TestServerDrainsAnActiveRequestAndStops(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

@@ -19,7 +19,8 @@ func Serve(ctx context.Context, listener net.Listener, handler http.Handler) err
 
 // ServeReady starts the HTTP accept loop before notifying its caller. A slow
 // notification consumer cannot prevent the already announced server from serving.
-// The callback runs once on the calling goroutine and must eventually return.
+// The callback runs once in its own goroutine. Its caller owns notification
+// completion; server shutdown never waits for a blocked advisory output consumer.
 func ServeReady(ctx context.Context, listener net.Listener, handler http.Handler, ready func()) error {
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, ErrorLog: log.New(io.Discard, "", 0)}
 	var accepting <-chan struct{}
@@ -34,7 +35,7 @@ func ServeReady(ctx context.Context, listener net.Listener, handler http.Handler
 		case <-accepting:
 			accepting = nil
 			if ctx.Err() == nil {
-				ready()
+				go ready()
 			}
 		case err := <-done:
 			if errors.Is(err, http.ErrServerClosed) {
