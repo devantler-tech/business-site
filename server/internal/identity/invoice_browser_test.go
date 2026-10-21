@@ -313,7 +313,7 @@ func TestInvoiceMigrationPreservesConsent(t *testing.T) {
 		t.Fatal("invoice migration changed prior schema ledger", err)
 	}
 	var retained bool
-	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=12 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
+	if err := migrator.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_proposal_acceptances WHERE id=$1) AND (SELECT count(*)=13 FROM portal_schema_version)`, acceptance).Scan(&retained); err != nil || !retained {
 		t.Fatal("invoice migration changed consent or omitted its own version", err)
 	}
 }

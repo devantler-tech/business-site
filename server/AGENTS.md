@@ -54,7 +54,7 @@ Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
 the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's thirteen identity/session/contact/request/proposal/visibility/consent/invoice/credit tables. Provision a fresh disposable PostgreSQL
+only the fixture's fourteen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -201,6 +201,16 @@ authority; no environment activation mapping or client/agent invoice route exist
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
 here uses explicit current membership, NOT a claim of database row-level security.
+v13 appends database-owned membership incarnations and transition evidence after
+unchanged v1–v12. Keep the BEFORE assignment and AFTER actual-row recording
+separate so conflict-ignore and upsert cannot invent events. Runtime history is
+SELECT-only; reject membership truncation, trigger/bypass authority, evidence
+mutation and delegated grants, directly or through assumable roles. Preserve
+function ownership, trusted search paths and enabled complete trigger bindings.
+Transaction-local incarnation reads retain the caller's locks and transaction;
+future approval composition takes request locks before deterministically ordered
+membership locks. Membership changes never scan or lock requests. Bootstrap
+events are current observations, not recovered history or human attribution.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

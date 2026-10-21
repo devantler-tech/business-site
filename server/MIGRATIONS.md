@@ -25,6 +25,9 @@ assume another role. The database-scoped implicit `pg_database_owner` membership
 is the sole membership exception. The effective and session identities must
 match. Existing `portal_` relations in `public` must belong to the current role
 before migration; the same ownership requirement covers `portal_` domains.
+Managed `portal_` functions also belong to the migration role. Completion checks
+the owned membership transition table and the two installed trigger functions,
+their fixed trusted search paths and complete enabled row-trigger bindings.
 Success additionally requires the complete managed table set
 to exist and belong to that role. A current readable ledger or table grants alone
 cannot produce a successful job. Keep this table set aligned with the embedded
@@ -111,6 +114,17 @@ request/proposal/visibility/acceptance/invoice/credit history belongs to that ro
 DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledger.
 Actual
 web startup independently checks this boundary and refuses incomplete grants.
+
+Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
+migration-owned triggers; never grant direct event writes, delegated event
+privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
+trigger-bypass parameter authority to the runtime or an assumable role. These
+grants are unnecessary for ordinary sign-in and trusted provisioning. The v13
+baseline and subsequent immutable events stay with the database across process
+restarts and deletion/re-enrollment. Do not prune them or reset incarnations as
+routine maintenance. Future retention design must preserve approval invalidation.
+There is no application history cap; physical database/storage failures still
+refuse a transaction rather than claim unrecorded success.
 
 Before staging or publication, demonstrate the restricted-role
 startup, persistence/restart, backup/restore, resource bounds and rollback through

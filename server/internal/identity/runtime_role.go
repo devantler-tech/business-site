@@ -19,6 +19,13 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	err := pool.QueryRow(ctx, `SELECT NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
  AND NOT has_schema_privilege(current_user,'public','CREATE')
  AND NOT has_database_privilege(current_user,current_database(),'CREATE')
+ AND NOT has_parameter_privilege(current_user,'session_replication_role','SET')
+ AND NOT has_table_privilege(current_user,'portal_memberships','TRUNCATE,TRIGGER,MAINTAIN')
+ AND has_table_privilege(current_user,'portal_membership_transitions','SELECT')
+ AND NOT has_any_column_privilege(current_user,'portal_membership_transitions','INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION')
+ AND NOT has_table_privilege(current_user,'portal_membership_transitions','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+ AND NOT has_function_privilege(current_user,'public.portal_record_membership_transition()','EXECUTE')
+ AND NOT has_function_privilege(current_user,'public.portal_assign_membership_incarnation()','EXECUTE')
  AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=r.oid AND c.relnamespace='public'::regnamespace)
  AND NOT EXISTS (SELECT 1 FROM pg_type t WHERE t.typowner=r.oid AND t.typnamespace='public'::regnamespace AND t.typtype='d')
  AND NOT EXISTS (SELECT 1 FROM pg_database d WHERE d.datname=current_database() AND d.datdba=r.oid)
@@ -28,6 +35,12 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
    WHERE privileged.rolname <> current_user
      AND pg_has_role(current_user,privileged.oid,'MEMBER')
      AND (privileged.rolsuper OR privileged.rolbypassrls OR privileged.rolcreatedb OR privileged.rolcreaterole OR privileged.rolreplication
+       OR has_parameter_privilege(privileged.oid,'session_replication_role','SET')
+       OR has_table_privilege(privileged.oid,'portal_memberships','TRUNCATE,TRIGGER,MAINTAIN')
+       OR has_any_column_privilege(privileged.oid,'portal_membership_transitions','INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION')
+       OR has_table_privilege(privileged.oid,'portal_membership_transitions','DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+       OR has_function_privilege(privileged.oid,'public.portal_record_membership_transition()','EXECUTE')
+       OR has_function_privilege(privileged.oid,'public.portal_assign_membership_incarnation()','EXECUTE')
        OR has_schema_privilege(privileged.oid,'public','CREATE')
        OR has_database_privilege(privileged.oid,current_database(),'CREATE')
        OR EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=privileged.oid AND c.relnamespace='public'::regnamespace)
@@ -69,5 +82,5 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	if err != nil || !allowed {
 		return ErrDenied
 	}
-	return nil
+	return CheckMembershipRecorder(ctx, pool)
 }
