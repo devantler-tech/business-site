@@ -12,7 +12,7 @@ import (
 // independent document/header/footer when the common frame changes. It renders
 // the real page inventory with changed partials, not a mocked page or source grep.
 func TestPrivateFrameChangeReachesEveryPage(t *testing.T) {
-	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "credits.html"} {
+	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "credits.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := template.ParseFS(browserFiles, "web/*.html")
 			if err != nil {
@@ -43,7 +43,7 @@ func TestPrivateFrameChangeReachesEveryPage(t *testing.T) {
 // documents: private metadata, skip target, native forms and public-only assets
 // must survive moving their frame into shared templates.
 func TestPrivateFramePreservesDocumentControls(t *testing.T) {
-	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "credits.html"} {
+	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "credits.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) == 0 {

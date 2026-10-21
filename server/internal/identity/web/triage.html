@@ -5,7 +5,7 @@
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}"><p>{{.Boundary}}</p>
 {{if .Detail}}
-{{range .Requests}}<h2>{{.Title}}</h2>
+{{if .WorkReviewEnabled}}<p><a href="/portal/operator/requests/{{(index .Requests 0).ID}}/work-review?lang={{.Lang}}">{{if eq .Lang `da`}}Gennemgå arbejdsbeslutninger{{else}}Review work decisions{{end}}</a></p>{{end}}{{range .Requests}}<h2>{{.Title}}</h2>
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Type{{else}}Offering{{end}}</dt><dd>{{if eq .Product `website`}}{{if eq $.Lang `da`}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product `app`}}{{if eq $.Lang `da`}}Webapp{{else}}Web app{{end}}{{else}}{{if eq $.Lang `da`}}Service eller integration{{else}}Service or integration{{end}}{{end}}</dd><dt>{{if eq $.Lang `da`}}Modtaget (UTC){{else}}Received (UTC){{end}}</dt><dd><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05.999999Z`}}">{{.Submitted.UTC.Format `2006-01-02 15:04`}} UTC</time></dd><dt>{{if eq $.Lang `da`}}Forespørgsel{{else}}Brief{{end}}</dt><dd class="request-brief">{{.Brief}}</dd></dl>{{end}}
 {{if .ProposalsEnabled}}
 <h2>{{if eq .Lang `da`}}Udkast til tilbud{{else}}Draft proposals{{end}}</h2>

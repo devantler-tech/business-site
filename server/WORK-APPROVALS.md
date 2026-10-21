@@ -1,10 +1,12 @@
-# Private work-approval foundation
+# Private work decisions
 
 This internal service records an operator's explicit decision against an exact
-current agreement and fully credited external invoice. It has no HTTP handler,
-client form, worker, queue, API or MCP adapter. It does not activate the portal,
-start work, collect money or create a monthly entitlement. Operator screens and
-their native EN/DA review remain [#138](https://github.com/devantler-tech/business-site/issues/138);
+current agreement and fully credited external invoice. Its default-off operator
+screen uses the retained Go frame and native forms; it has no client decision
+form, worker, queue, API or MCP adapter. It does not activate the portal,
+start work, collect money or create a monthly entitlement. Operator review is
+tracked in [#267](https://github.com/devantler-tech/business-site/issues/267)
+under [#138](https://github.com/devantler-tech/business-site/issues/138);
 the portal-owned work queue remains under #20, not a client-orders repository.
 
 ## Exact evidence and lifetime
@@ -63,6 +65,39 @@ but not valid old funds, sharing or client access. A stale revocation cannot
 clear a newer decision. No reader falls back to a superseded approval.
 An empty current selection means no selected approval, not no historical work.
 
+## Native operator review
+
+`GET /portal/operator/requests/{id}/work-review` shows the domain's current,
+paused, expired or absent selection and descending history, with at most twenty
+decisions per page. The cursor binds original database time and receipt ID at
+microsecond precision, including equal-time ties. Read/scan failures are unavailable,
+never successful empty history. Historical terminal receipts are never a fallback.
+
+Selecting an explicit `invoice` opens a fresh candidate review, not an assertion
+that an earlier selected approval is still valid. It shows the exact accepted
+scope, deliverables, one-time/monthly amounts and terms, selected invoice's
+net/VAT/payable facts, and every transfer observation/revision. The candidate
+and comparison identity are captured under the same request lock. Its native
+`POST .../work-approvals` reconstructs the evidence and checks generation before
+recording a decision. A separate `POST .../work-revocations` clears only the
+expected selected decision. GET/HEAD never write authority or review contexts.
+
+Both actions use existing domain operations and actor/content-bound retries.
+Revocation does not need positive old funding, current client consent, the former
+approver's membership or an unexpired old deadline. No migration or grant changes
+are needed. The UI does not calculate eligibility from localized labels or totals.
+
+The whole frame is buffered. A real maintained SCS store/codec snapshot is captured
+before acquiring a work transaction; it is only comparison material. After the last
+SDK wait, final SQL on that transaction binds the exact original durable session
+bytes/token, database expiry and current original operator workspace/role. It
+does not replace the request's original principal or deadline with a new identity.
+Changed/deleted durable data fails that check. Request/membership locks protect
+evidence until commit; final expiry, cancellation and SDK-state checks still apply.
+No second pool connection is acquired while a work transaction is held, including
+when the configured pool permits only one connection. Contact retains its existing
+post-SDK maintained-store capture and final SQL check.
+
 Grant SELECT/INSERT on all three new relations, and UPDATE only on
 `portal_work_current.approval_id` and `generation`. Do not grant pointer-key
 updates, DELETE, TRUNCATE, trigger/maintenance/reference privileges, delegation
@@ -74,7 +109,7 @@ requires ownership of all managed relations, including these three.
 
 The independent false-default `portal-work-approvals` decision has no environment
 activation mapping. Review retirement under
-[#260](https://github.com/devantler-tech/business-site/issues/260) and #138 by
+[#268](https://github.com/devantler-tech/business-site/issues/268) by
 20 November 2026. Approval reads/writes also require the existing identity,
 request, triage, proposal, sharing, acceptance, invoice and credit gates.
 Revocation deliberately requires only identity, request, triage and approval
@@ -85,4 +120,7 @@ controls, default Go quality checks and normal package validation in
 [README.md](README.md#build-and-run-the-combined-package). Fixtures are fictional,
 disposable and use no real payment, customer or bank connection. Passing source
 tests and a merged foundation are not deployed identity, recovery, legal
-clearance, operator review UI or permission for an agent to execute client work.
+clearance or permission for an agent to execute client work. The eighteen new
+EN/DA work documents have explicit state/form/fact expectations and common-frame
+and method-aware link controls. The original 120 document/body references remain
+unchanged; they are not regenerated from the new renderer.

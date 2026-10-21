@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
+	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12, "work-review.html": 18} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -219,6 +219,9 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 // renderedLinkPagesUsing applies the complete fictional view inventory to one
 // compiled template set without replacing the process-wide production renderer.
 func renderedLinkPagesUsing(name string, templates *template.Template) ([]linkPage, error) {
+	if name == "work-review.html" {
+		return renderedWorkLinkPages(templates)
+	}
 	b := &browser{}
 	request := projectRequest{ID: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Key: "fictional-submission", Product: "website", Title: "Fictional request", Brief: "Synthetic link-validation content", Submitted: time.Date(2026, 10, 1, 12, 0, 0, 123000, time.UTC)}
 	var pages []linkPage
@@ -617,8 +620,13 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 			}
 		case "cursor":
 			_, valid := parseTriageCursor(values[0])
-			if !valid || pattern != "GET /portal/operator/requests" {
+			if !valid || (pattern != "GET /portal/operator/requests" && pattern != "GET /portal/operator/requests/{id}/work-review") {
 				return errors.New("invalid target cursor")
+			}
+		case "invoice":
+			sequence, valid := proposalNumber(values[0], 50)
+			if !valid || sequence < 1 || pattern != "GET /portal/operator/requests/{id}/work-review" {
+				return errors.New("invalid target review invoice")
 			}
 		default:
 			return errors.New("unexpected target query")

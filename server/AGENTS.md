@@ -1,7 +1,9 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
-The shared test-only maintenance inventory checks all 120 actual Go documents.
+The shared test-only maintenance inventory preserves all 120 original Go documents.
+The separate work-review inventory adds 18 actual EN/DA documents with explicit
+state, native-form and evidence expectations; retain both inventories.
 Read `CONTACT-MAINTENANCE.md` before changing it.
 Keep its explicit task option separate from ordinary source checks; preserve
 all five families, both languages, complete counts and negative controls. Markup
@@ -44,7 +46,8 @@ profile handlers and separately default-off free project-request intake; no orde
 payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
 `INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
 bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
-decisions; this default-off foundation has no route, queue or execution adapter. Contact emails remain
+decisions; its independently default-off operator review uses native forms, with
+no client decision route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
 succeeds; they are never identity or order authority. Never present synthetic broker
 tests or the loopback visual gateway as Google/Microsoft login or production
@@ -79,7 +82,7 @@ the declared compiler, preserving its native rules, project scope and fix mode.
 The analyzer regression exercises all actual module packages and a genuine format
 diagnostic against the pinned container's rule snapshot; native container proof is
 still separate. Never replace it with a disabled scanner or ignored failures.
-Lychee's test-only preprocessor renders all five actual private templates in EN/DA.
+Lychee's test-only preprocessor renders all six actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
 public links and documents retain normal Lychee checking; no status is exempted.
@@ -222,7 +225,13 @@ consent. Superseded, revoked or expired decisions never revive. Runtime permissi
 is SELECT/INSERT plus UPDATE only on the pointer's selection and generation,
 never its request/client keys or immutable history. The independent false-default
 `portal-work-approvals` flag has no environment mapping; review retirement under
-business-site#260/#138 by 20 November 2026. No HTTP/UI/worker/API/MCP activation.
+business-site#268 by 20 November 2026. The operator review UI reuses this domain
+policy and keeps revocation available after old funding, consent, membership or
+expiry is invalid. Buffer the frame and bind exact original durable session bytes,
+database expiry and current operator workspace/role after the last SDK wait, under
+the request transaction. Capture the maintained store/codec snapshot before taking
+that transaction, avoiding a second connection while one is held; the snapshot
+alone is never authority. No worker/API/MCP or production activation is added.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

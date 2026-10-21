@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestBrowserVisualFixture is an explicitly synthetic, loopback-only UI runner.
@@ -22,7 +24,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation"}, []any{true, true, true, true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"}, []any{true, true, true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -40,7 +42,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	operator := enroll(t, b.svc, b.f, "visual-preparation", "fictional-operator", "operator")
-	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
+	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 375000, MonthlyMinor: 12500, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
 	if err := b.svc.persistProposal(t.Context(), operator, requestID, proposal); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +54,15 @@ func TestBrowserVisualFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key); err != nil {
+	acceptance, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice := projectInvoice{Key: secret(), Acceptance: acceptance.ID, Reference: "TEST-VISUAL-01", Purpose: "Fictional agreed iteration installment", AmountMinor: 12500, NetMinor: pgtype.Int8{Int64: 10000, Valid: true}, VATMinor: pgtype.Int8{Int64: 2500, Valid: true}}
+	if err := b.svc.persistInvoice(t.Context(), operator, requestID, invoice); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.persistCredit(t.Context(), operator, requestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "visual-transfer", State: "confirmed", AmountMinor: 12500, Note: "Fictional observation; no bank connection"}); err != nil {
 		t.Fatal(err)
 	}
 	b.mu.Lock()
