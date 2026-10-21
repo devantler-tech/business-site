@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/devantler-tech/business-site/server/internal/contactrenderer"
 	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/devantler-tech/business-site/server/internal/runtimeapp"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -121,7 +120,7 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 	api := isolated.NewAPI()
 	defer func() { _ = api.Shutdown(context.Background()) }() // no external provider is retained
 	values := map[string]memprovider.InMemoryFlag{}
-	for name, enabled := range map[string]bool{"portal-identity": c.mode != "closed", "portal-contact-renderer": c.mode == "svelte"} {
+	for name, enabled := range map[string]bool{"portal-identity": c.mode != "closed"} {
 		values[name] = memprovider.InMemoryFlag{Key: name, State: memprovider.Enabled, DefaultVariant: "value", Variants: map[string]any{"value": enabled}}
 	}
 	if err := api.SetProviderAndWait(ctx, memprovider.NewInMemoryProvider(values)); err != nil {
@@ -168,22 +167,9 @@ func run(ctx context.Context, input *os.File, output io.Writer) error {
 		return errors.New("trial broker refused")
 	}
 	foundation := identity.New(pool, broker, api.NewClient())
-	var handler http.Handler
-	if c.mode == "svelte" {
-		renderer, err := contactrenderer.New(c.node, c.worker, api.NewClient())
-		if err != nil {
-			return errors.New("trial renderer refused")
-		}
-		defer renderer.Close()
-		handler, err = foundation.DeveloperContactBrowser(c.callback, "synthetic-client-secret", renderer)
-		if err != nil {
-			return errors.New("trial browser refused")
-		}
-	} else {
-		handler, err = foundation.Browser(c.callback, "synthetic-client-secret")
-		if err != nil {
-			return errors.New("trial browser refused")
-		}
+	handler, err := foundation.Browser(c.callback, "synthetic-client-secret")
+	if err != nil {
+		return errors.New("trial browser refused")
 	}
 	if _, err := fmt.Fprintln(output, "contact-trial-host ready"); err != nil {
 		return errors.New("trial readiness output failed")

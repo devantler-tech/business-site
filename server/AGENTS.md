@@ -12,7 +12,9 @@ path boundary, dependency/document hashes, complete failed-read refusal and
 exclusive private receipt. It neither builds nor executes inspected revisions;
 source admission is not complete trial evidence or deployment authority.
 The explicit developer-only `cmd/contact-trial-host` uses an inherited retained
-loopback TLS listener and bounded private setup pipe. Read `CONTACT-TRIAL-HOST.md`.
+loopback TLS listener and bounded private setup pipe. It admits only Go/closed
+mode and seven required fields, never Node/worker fields or a candidate renderer.
+Read `CONTACT-TRIAL-HOST.md`.
 Keep migration, invitations, synthetic broker and collection outside this child;
 preserve the maintained authority and production runtime graph. Its real-process
 correctness controls are not comparative measurements or portal activation.

@@ -8,14 +8,13 @@ import (
 	"errors"
 	"io"
 	"net/url"
-	"path/filepath"
 	"regexp"
 )
 
 var errSetup = errors.New("invalid trial setup; use the documented private pipe and disposable loopback fixture")
 
 type setup struct {
-	mode, database, issuer, callback, certificate, key, trust, node, worker string
+	mode, database, issuer, callback, certificate, key, trust string
 }
 
 var databaseName = regexp.MustCompile(`^/portal_trial_[0-9a-f]{32}$`)
@@ -31,7 +30,7 @@ func readSetup(input io.Reader) (setup, error) {
 	if token, err := d.Token(); err != nil || token != json.Delim('{') {
 		return c, errSetup
 	}
-	fields := map[string]*string{"mode": &c.mode, "database": &c.database, "issuer": &c.issuer, "callback": &c.callback, "certificate": &c.certificate, "key": &c.key, "trust": &c.trust, "node": &c.node, "worker": &c.worker}
+	fields := map[string]*string{"mode": &c.mode, "database": &c.database, "issuer": &c.issuer, "callback": &c.callback, "certificate": &c.certificate, "key": &c.key, "trust": &c.trust}
 	seen := map[string]bool{}
 	for d.More() {
 		token, err := d.Token()
@@ -62,16 +61,7 @@ func readSetup(input io.Reader) (setup, error) {
 	if !loopbackURL(c.issuer, "") || !loopbackURL(c.callback, "/portal/callback") || c.certificate == "" || c.key == "" || c.trust == "" {
 		return c, errSetup
 	}
-	switch c.mode {
-	case "go", "closed":
-		if c.node != "" || c.worker != "" {
-			return c, errSetup
-		}
-	case "svelte":
-		if !filepath.IsAbs(c.node) || !filepath.IsAbs(c.worker) {
-			return c, errSetup
-		}
-	default:
+	if c.mode != "go" && c.mode != "closed" {
 		return c, errSetup
 	}
 	return c, nil

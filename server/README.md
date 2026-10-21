@@ -427,19 +427,23 @@ database and synthetic TLS broker fixtures, separately from the correctness suit
 Its raw measurements are a comparator, not evidence that a Svelte private renderer
 or a production portal is ready.
 
-The explicit [trial host](CONTACT-TRIAL-HOST.md) launches that maintained authority
+The explicit [Go-only trial host](CONTACT-TRIAL-HOST.md) launches that maintained authority
 as a separate developer-only process over a retained loopback TLS listener and a
-restricted disposable database. It is not the complete paired comparison runner;
-its process restart controls do not decide the private frontend or activate it.
+restricted disposable database. Its closed seven-field setup admits only `go`
+or `closed` mode, with no renderer executable or worker. Its process restart
+controls do not activate a portal or collect comparative measurements.
 
 The [private contact experiment decision](../docs/adr/0014-private-contact-renderer-experiment.md)
 freezes the next candidate's presentation boundary, process limits, comparison
 method and same-record recovery check. Its
 [comparator amendment](../docs/adr/0015-private-contact-comparator-amendment.md)
-makes both sides run the current shared Go contact authority. The developer renderer and actual HTTP
-composition are available through [their explicit test entrypoint](CONTACT-RENDERER.md#exercise);
-the complete packaged paired measurements and recovery drill remain prerequisites,
-not delivered results or permission to activate the portal.
+makes both historical sides use the same shared Go contact authority.
+[ADR 0017](../docs/adr/0017-retain-go-private-presentation.md) rejects the private
+candidate on its mandatory maintenance objective; unperformed comparative budgets
+are not passing results. The remaining developer renderer and actual HTTP
+composition retain [their separate test entrypoint](CONTACT-RENDERER.md#exercise)
+pending #207's retirement. They do not use the Go-only process host or grant
+permission to activate the portal.
 
 For manual visual checks, build tag `portalvisual` exposes a bounded ten-minute
 loopback-only synthetic fixture. Run it separately from database tests: they share

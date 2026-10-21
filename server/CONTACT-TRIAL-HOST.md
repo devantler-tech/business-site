@@ -1,8 +1,9 @@
 # Launch the private contact trial host
 
 `cmd/contact-trial-host` runs the maintained Go identity/contact authority in a
-separate process for the private presentation experiment. It is a developer-only
-building block, not the complete comparison runner or a deployed portal.
+separate disposable process for TLS, isolation and restart regression checks.
+It supports only Go presentation and closed identity. It is not a comparison
+collector or a deployed portal.
 
 From `server/`, build it with the exact compiler from `go.mod`:
 
@@ -25,17 +26,17 @@ the host. Lease expiry fails rather than becoming a successful trial.
 
 ## Controller contract
 
-The closed object has nine string fields:
+The closed object has seven required string fields. Unknown fields, including
+the retired `node` and `worker` fields even when empty, are refused.
 
 | Field                | Required value                                                                                                                                                                                                   |
-|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `mode`               | `closed`, `go` or `svelte`                                                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`               | `closed` or `go`; every other mode is refused                                                                                                                                                                    |
 | `database`           | Synthetic `portal_runtime` login with the documented fixture password; numeric loopback port 5432 or 55444; a fresh `portal_trial_` database followed by 32 lowercase hexadecimal digits; only `sslmode=disable` |
 | `issuer`             | Fixed HTTPS numeric-loopback origin with an explicit port and no path/query                                                                                                                                      |
 | `callback`           | HTTPS numeric-loopback origin matching the inherited listener, with path `/portal/callback` only                                                                                                                 |
 | `certificate`, `key` | PEM certificate and matching private key for that local application origin                                                                                                                                       |
 | `trust`              | PEM trust roots for the synthetic TLS broker                                                                                                                                                                     |
-| `node`, `worker`     | Empty for `go`/`closed`; fixed absolute packaged executable/worker paths for `svelte`                                                                                                                            |
 
 Only the controller prepares/migrates the disposable database, issues invitations
 and operates the synthetic broker. Runtime startup checks both effective and
@@ -47,14 +48,13 @@ The controller retains its original listening descriptor throughout restarts;
 each child owns only a duplicate. It must not accept requests itself. This keeps
 one kernel-bound origin without closing a reservation and hoping to rebind it.
 Retain the TLS certificate, issuer, database and independent actor cookie jars too.
-Changing only `mode` to `go` restores maintained Go presentation over the same
-authority and durable data. The host exposes no invitation, role-selection,
+Restarting `go` retains the same authority and durable data. The host exposes no invitation, role-selection,
 migration, broker or collection HTTP endpoint.
 
-An isolated maintained OpenFeature provider enables only identity in `go`,
-identity/contact presentation in `svelte`, and neither in `closed`. All other
-capabilities remain false-default. Candidate composition owns and closes the
-existing bounded supervisor. Broker HTTP transport admits only the configured
+An isolated maintained OpenFeature provider enables only identity in `go`
+and keeps it false in `closed`. All other capabilities remain false-default.
+This host constructs only the ordinary Go browser; it accepts no renderer
+executable or worker. Broker HTTP transport admits only the configured
 numeric-loopback destination, ignores proxy environment settings and follows no
 redirects. Normal `cmd/business-site`, public builds and production packaging do
 not import this host or acquire a Node dependency.
@@ -77,15 +77,15 @@ run `go test -race -tags=contacttrialintegration ./internal/identity -run
 '^TestContactTrialHost' -count=1 -timeout=90s`. Source CI requires this dedicated
 step after provisioning, keeping its expensive process startup outside the ordinary
 package's unchanged 90-second budget without omitting any controls. Neither this
-Go integration nor the ordinary suite requires Node. The separately
-selected renderer controls in [CONTACT-RENDERER.md](CONTACT-RENDERER.md) also run
-the compiled host with the actual Svelte worker, then restart Go presentation at
-the same origin with the original session, saved values and revision.
+Go integration nor the ordinary suite requires Node. Actual-command refusals also
+cover the retired candidate mode and legacy executable fields. Separate renderer
+HTTP and authority controls remain under [CONTACT-RENDERER.md](CONTACT-RENDERER.md);
+they do not use this Go-only process host.
 
-Issue #213 still owns immutable source/harness receipts, packaged Node provenance,
-the identical maintenance task on both sides, three ordered paired runs, all raw
-failures, 100-ms process-tree RSS, clean/cold build observations, browser/holdout
-proof and candidate-to-Go recovery using the original actors and saved data.
-Freeze/review the complete runner before collecting comparative samples. This
-host does not settle the frontend choice, extend the registered window, claim a
-budget pass or activate production identity, customer intake or payments.
+[ADR 0017](../docs/adr/0017-retain-go-private-presentation.md) records the private
+candidate's rejection on its mandatory maintenance objective. The frozen plans,
+input identities and offline evidence remain historical records; the unperformed
+paired timing, resource and candidate-recovery measurements are not passing results.
+This Go-only regression host neither renews that experiment nor activates production
+identity, customer intake or payments. Issue #207 tracks the remaining
+developer-renderer retirement.
