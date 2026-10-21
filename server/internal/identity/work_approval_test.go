@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
@@ -66,11 +67,13 @@ func TestWorkApprovalRefusesIncompleteTransferHistory(t *testing.T) {
 	}
 }
 
-// approvalFixture uses real service writes and isolated storage, not repeated
-// unrelated browser journeys. Native invoice/credit journeys remain separate.
+// approvalFixture owns real storage, a TLS broker and independent SDK state.
+// Domain controls need no HTTP application or session store; native journeys
+// retain their separate browser fixtures and complete actor coverage.
 func approvalFixture(t *testing.T) (*browserFixture, Principal) {
 	t.Helper()
-	b := newBrowserFixture(t)
+	b := &browserFixture{t: t, pool: fixtureDB(t), f: fixtureBroker(t), flags: flagAPI(t, true)}
+	b.svc = New(b.pool, b.f.broker, b.flags.NewClient())
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +122,11 @@ func TestWorkApprovalExactBindingAndTerminalHistory(t *testing.T) {
 	if err != nil || !valid || current.ID != a.ID {
 		t.Fatal("stored approval was not current", err)
 	}
-	pool := b.reconnect(t.Context())
+	pool, err := pgxpool.New(t.Context(), b.pool.Config().ConnString())
+	if err != nil {
+		t.Fatal("approval reconnect failed", err)
+	}
+	t.Cleanup(pool.Close)
 	b.pool.Close()
 	b.pool = pool
 	b.svc = New(pool, b.f.broker, b.flags.NewClient())
