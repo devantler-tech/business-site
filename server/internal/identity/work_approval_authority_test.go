@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
@@ -19,12 +21,18 @@ func workApprovalFlags() map[string]memprovider.InMemoryFlag {
 	return flags
 }
 
-func savedApproval(t *testing.T, b *browserFixture, op Principal) workApprovalReceipt {
+func preparedApproval(t *testing.T, b *browserFixture, op Principal) workApprovalInput {
 	t.Helper()
 	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
 	if err != nil {
 		t.Fatal("approval fixture review failed", err)
 	}
+	return input
+}
+
+func savedApproval(t *testing.T, b *browserFixture, op Principal) workApprovalReceipt {
+	t.Helper()
+	input := preparedApproval(t, b, op)
 	d, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input)
 	if err != nil {
 		t.Fatal("approval fixture decision failed", err)
@@ -32,30 +40,58 @@ func savedApproval(t *testing.T, b *browserFixture, op Principal) workApprovalRe
 	return d
 }
 
+func setApprovalGate(t *testing.T, b *browserFixture, key string, value any) {
+	t.Helper()
+	flags := workApprovalFlags()
+	if value == nil {
+		delete(flags, key)
+	} else {
+		flags[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "off", Variants: map[string]any{"off": value}}
+	}
+	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func approvalWaitContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	t.Cleanup(cancel)
+	return ctx, cancel
+}
+
+func blockApprovalFixture(t *testing.T, op *Principal, expires bool) (context.Context, *pgxpool.Pool, pgx.Tx) {
+	t.Helper()
+	ctx, cancel := approvalWaitContext(t)
+	migrator := migrationDB(t)
+	lock := blockFixtureProposalWrite(ctx, t, migrator)
+	// Preserve cancellation before transaction cleanup on an assertion abort.
+	// The earlier registration still covers a failure while obtaining the lock.
+	t.Cleanup(cancel)
+	if expires {
+		op.expires = time.Now().Add(time.Second)
+	}
+	return ctx, migrator, lock
+}
+
+func pendingApproval(ctx context.Context, b *browserFixture, op Principal, input workApprovalInput) <-chan error {
+	result := make(chan error, 1)
+	go func() {
+		_, err := b.svc.persistWorkApproval(ctx, op, proposalRequestID, input)
+		result <- err
+	}()
+	return result
+}
+
 // All three service entrypoints require independent typed feature decisions.
 // No client membership, even in the request's workspace, supplies operator authority.
 func TestWorkApprovalGatesAndClientDenial(t *testing.T) {
 	b, op := approvalFixture(t)
-	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	input := preparedApproval(t, b, op)
 	for _, key := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"} {
 		for _, state := range []string{"absent", "false", "wrong type"} {
 			t.Run(key+"/"+state, func(t *testing.T) {
-				flags := workApprovalFlags()
-				if state == "absent" {
-					delete(flags, key)
-				} else {
-					value := any(false)
-					if state == "wrong type" {
-						value = "true"
-					}
-					flags[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "off", Variants: map[string]any{"off": value}}
-				}
-				if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
-					t.Fatal(err)
-				}
+				setApprovalGate(t, b, key, map[string]any{"absent": nil, "false": false, "wrong type": "true"}[state])
 				if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, ErrDenied) {
 					t.Fatal("closed gate admitted review", err)
 				}
@@ -94,15 +130,7 @@ func TestWorkApprovalRevocationGateAndActorBinding(t *testing.T) {
 	input := workRevocationInput{Key: secret(), Approval: d.ID, Expected: 1}
 	for _, key := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-work-approvals"} {
 		for _, value := range []any{nil, false, "true"} {
-			flags := workApprovalFlags()
-			if value == nil {
-				delete(flags, key)
-			} else {
-				flags[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "off", Variants: map[string]any{"off": value}}
-			}
-			if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
-				t.Fatal(err)
-			}
+			setApprovalGate(t, b, key, value)
 			if err := b.svc.revokeWorkApproval(t.Context(), op, proposalRequestID, input); !errors.Is(err, ErrDenied) {
 				t.Fatal("closed gate admitted revocation", err)
 			}
@@ -168,10 +196,7 @@ func TestWorkApprovalSDKStateDenial(t *testing.T) {
 			for _, revocation := range []bool{false, true} {
 				t.Run(string(event)+"/"+map[bool]string{false: "admission", true: "final wait"}[duringWait]+"/"+map[bool]string{false: "approval", true: "revocation"}[revocation], func(t *testing.T) {
 					b, op := approvalFixture(t)
-					input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-					if err != nil {
-						t.Fatal(err)
-					}
+					input := preparedApproval(t, b, op)
 					var d workApprovalReceipt
 					if revocation {
 						d = savedApproval(t, b, op)
@@ -324,12 +349,8 @@ func TestWorkApprovalFundingWatermarkAndRevocation(t *testing.T) {
 func TestWorkApprovalInvoiceWatermark(t *testing.T) {
 	b, op := approvalFixture(t)
 	first := savedApproval(t, b, op)
-	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var d projectInvoice
-	d, err = scanInvoice(b.pool.QueryRow(t.Context(), `SELECT `+invoiceColumns+` FROM portal_invoices i WHERE sequence=1`))
+	input := preparedApproval(t, b, op)
+	d, err := scanInvoice(b.pool.QueryRow(t.Context(), `SELECT `+invoiceColumns+` FROM portal_invoices i WHERE sequence=1`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,25 +460,13 @@ func TestWorkApprovalRechecksAccessAfterRequestLock(t *testing.T) {
 	for _, change := range []string{"revoke", "rebind", "expiry"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
-			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			defer cancel()
-			migrator := migrationDB(t)
-			lock := blockFixtureProposalWrite(ctx, t, migrator)
-			if change == "expiry" {
-				op.expires = time.Now().Add(time.Second)
-			}
-			result := make(chan error, 1)
-			go func() { _, err := b.svc.persistWorkApproval(ctx, op, proposalRequestID, input); result <- err }()
+			input := preparedApproval(t, b, op)
+			ctx, migrator, lock := blockApprovalFixture(t, &op, change == "expiry")
+			result := pendingApproval(ctx, b, op, input)
 			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 			switch change {
 			case "revoke":
-				if err := b.svc.Revoke(ctx, b.f.issuer, op.subject); err != nil {
-					t.Fatal(err)
-				}
+				revokeFixtureAccess(ctx, t, b, op.subject)
 			case "rebind":
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET role='client' WHERE issuer=$1 AND subject=$2`, b.f.issuer, op.subject); err != nil {
 					t.Fatal(err)
@@ -480,19 +489,15 @@ func TestWorkApprovalFinalSDKAndDatabaseDeadline(t *testing.T) {
 	for _, change := range []string{"expiry", "flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
-			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
+			input := preparedApproval(t, b, op)
 			provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(workApprovalFlags()), key: "portal-work-approvals", blockAt: 3, blocked: make(chan struct{}), release: make(chan struct{})}
 			release := installAcceptanceWait(t, b, provider, provider.release)
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			ctx, cancel := approvalWaitContext(t)
 			defer cancel()
 			if change == "expiry" {
 				op.expires = time.Now().Add(time.Second)
 			}
-			result := make(chan error, 1)
-			go func() { _, err := b.svc.persistWorkApproval(ctx, op, proposalRequestID, input); result <- err }()
+			result := pendingApproval(ctx, b, op, input)
 			select {
 			case <-provider.blocked:
 			case <-ctx.Done():

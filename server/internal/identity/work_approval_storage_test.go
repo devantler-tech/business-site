@@ -1,10 +1,8 @@
 package identity
 
 import (
-	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -54,10 +52,7 @@ func TestWorkApprovalFailedReadsUnavailable(t *testing.T) {
 func TestWorkApprovalLateStorageFailureRollsBack(t *testing.T) {
 	b, op := approvalFixture(t)
 	first := savedApproval(t, b, op)
-	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	input := preparedApproval(t, b, op)
 	migrator := migrationDB(t)
 	if _, err := migrator.Exec(t.Context(), `REVOKE UPDATE(approval_id,generation) ON portal_work_current FROM portal_runtime`); err != nil {
 		t.Fatal(err)
@@ -85,13 +80,7 @@ func TestWorkApprovalRevocationRechecksAfterLock(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
 			d := savedApproval(t, b, op)
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			defer cancel()
-			migrator := migrationDB(t)
-			lock := blockFixtureProposalWrite(ctx, t, migrator)
-			if change == "expiry" {
-				op.expires = time.Now().Add(time.Second)
-			}
+			ctx, migrator, lock := blockApprovalFixture(t, &op, change == "expiry")
 			result := make(chan error, 1)
 			go func() {
 				result <- b.svc.revokeWorkApproval(ctx, op, proposalRequestID, workRevocationInput{Key: secret(), Approval: d.ID, Expected: 1})
@@ -99,9 +88,7 @@ func TestWorkApprovalRevocationRechecksAfterLock(t *testing.T) {
 			waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 			switch change {
 			case "revoke":
-				if err := b.svc.Revoke(ctx, b.f.issuer, op.subject); err != nil {
-					t.Fatal(err)
-				}
+				revokeFixtureAccess(ctx, t, b, op.subject)
 			case "rebind":
 				if _, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET client_id='rebound-operator-space' WHERE issuer=$1 AND subject=$2`, b.f.issuer, op.subject); err != nil {
 					t.Fatal(err)

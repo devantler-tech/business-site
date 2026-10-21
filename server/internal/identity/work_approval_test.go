@@ -27,10 +27,7 @@ func TestWorkApprovalRefusesIncompleteTransferHistory(t *testing.T) {
 	for _, gap := range []string{"reservation without revision", "missing middle revision"} {
 		t.Run(gap, func(t *testing.T) {
 			b, op := approvalFixture(t)
-			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
-			if err != nil {
-				t.Fatal(err)
-			}
+			input := preparedApproval(t, b, op)
 			if _, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input); err != nil {
 				t.Fatal(err)
 			}

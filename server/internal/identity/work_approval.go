@@ -98,25 +98,48 @@ func readWorkPointer(ctx context.Context, tx pgx.Tx, id, client string) (workPoi
 	return pointer, nil
 }
 
+// workReview owns the common bounded read transaction and its cleanup order.
+// Authorization and every final release checkpoint remain operation-specific.
+type workReview struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	tx     pgx.Tx
+	client string
+	viewer workMember
+}
+
+func (s *Foundation) beginWorkReview(ctx context.Context, p Principal, id string) (*workReview, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	tx, client, viewer, err := s.beginWorkRequest(ctx, p, id, s.approvalsReady)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	return &workReview{ctx: ctx, cancel: cancel, tx: tx, client: client, viewer: viewer}, nil
+}
+
+func (r *workReview) close() {
+	defer r.cancel()
+	rollbackProposalWrite(r.ctx, r.tx)
+}
+
 // prepareWorkApproval supplies a content-bound comparison, not approval or a
 // mutable review context. It does not write a session, receipt or current pointer.
 func (s *Foundation) prepareWorkApproval(ctx context.Context, p Principal, id string, invoice int) (workApprovalInput, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	tx, client, viewer, err := s.beginWorkRequest(ctx, p, id, s.approvalsReady)
+	r, err := s.beginWorkReview(ctx, p, id)
 	if err != nil {
 		return workApprovalInput{}, err
 	}
-	defer rollbackProposalWrite(ctx, tx)
-	evidence, _, hash, err := collectWorkEvidence(ctx, tx, id, client, invoice, viewer, viewer)
+	defer r.close()
+	evidence, _, hash, err := collectWorkEvidence(r.ctx, r.tx, id, r.client, invoice, r.viewer, r.viewer)
 	if err != nil {
 		return workApprovalInput{}, err
 	}
-	pointer, err := readWorkPointer(ctx, tx, id, client)
+	pointer, err := readWorkPointer(r.ctx, r.tx, id, r.client)
 	if err != nil {
 		return workApprovalInput{}, err
 	}
-	if err := s.commitWork(ctx, p, tx, s.approvalsReady, time.Time{}); err != nil {
+	if err := s.commitWork(r.ctx, p, r.tx, s.approvalsReady, time.Time{}); err != nil {
 		return workApprovalInput{}, err
 	}
 	return workApprovalInput{Key: secret(), Acceptance: evidence.Acceptance, Invoice: invoice, EvidenceHash: hash, Expected: pointer.Generation}, nil
@@ -266,34 +289,33 @@ func (s *Foundation) revokeWorkApproval(ctx context.Context, p Principal, id str
 // currentWorkApproval never falls back to an older receipt. A historical retry
 // cannot revive a revoked, expired or superseded current selection.
 func (s *Foundation) currentWorkApproval(ctx context.Context, p Principal, id string) (workApprovalReceipt, bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	tx, client, viewer, err := s.beginWorkRequest(ctx, p, id, s.approvalsReady)
+	r, err := s.beginWorkReview(ctx, p, id)
 	if err != nil {
 		return workApprovalReceipt{}, false, err
 	}
-	defer rollbackProposalWrite(ctx, tx)
-	pointer, err := readWorkPointer(ctx, tx, id, client)
+	defer r.close()
+	ctx, tx := r.ctx, r.tx
+	pointer, err := readWorkPointer(ctx, tx, id, r.client)
 	if err != nil {
 		return workApprovalReceipt{}, false, err
 	}
 	if pointer.ID == "" {
-		if err := requireWorkViewer(ctx, tx, viewer); err != nil {
+		if err := requireWorkViewer(ctx, tx, r.viewer); err != nil {
 			return workApprovalReceipt{}, false, err
 		}
 		return workApprovalReceipt{}, false, s.commitWork(ctx, p, tx, s.approvalsReady, time.Time{})
 	}
-	d, err := scanWorkApproval(tx.QueryRow(ctx, `SELECT `+workApprovalColumns+` FROM portal_work_approvals WHERE id=$1 AND request_id=$2 AND client_id=$3`, pointer.ID, id, client))
+	d, err := scanWorkApproval(tx.QueryRow(ctx, `SELECT `+workApprovalColumns+` FROM portal_work_approvals WHERE id=$1 AND request_id=$2 AND client_id=$3`, pointer.ID, id, r.client))
 	if err != nil {
 		return workApprovalReceipt{}, false, errTriageStorage
 	}
 	actor := workMember{Issuer: d.OperatorIssuer, Subject: d.OperatorSubject, Client: d.OperatorClient, Role: "operator", Incarnation: d.OperatorIncarnation}
-	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, d.Invoice, actor, viewer)
+	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, r.client, d.Invoice, actor, r.viewer)
 	if evidenceErr != nil && !errors.Is(evidenceErr, errProposalConflict) {
 		return workApprovalReceipt{}, false, evidenceErr
 	}
 	// A scope/funding conflict can precede collectWorkEvidence's membership step.
-	if err := requireWorkViewer(ctx, tx, viewer); err != nil {
+	if err := requireWorkViewer(ctx, tx, r.viewer); err != nil {
 		return workApprovalReceipt{}, false, err
 	}
 	var terminal bool
