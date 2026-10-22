@@ -65,8 +65,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `deploy/` is a dormant public-only Kustomize package using the namespace-bound
   Platform WebApp contract; read `deploy/README.md` before changing it. It has no
-  release caller or registered consumer, uses an inert hostname and grants no
-  portal activation. Keep private dependencies and migration inputs absent.
+  registered consumer, uses an inert hostname and grants no portal activation.
+  The source-owned runtime release/publisher callers are default-off behind the
+  explicit `RUNTIME_PUBLICATION_ENABLED` repository variable. Original main-CI
+  archive admission, the accepted original-image verifier and independent paired
+  publication readback are mandatory. Keep private dependencies and migration inputs absent.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
   protected main-only environment. Manual artifact-only previews can run with the switch off.
@@ -79,7 +82,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 ## Maintenance
 
 Use the Node line in `.node-version` (24), npm 11 and `LC_ALL=C`. Both package engines and the
-candidate's Node type definitions must match that line; all workflows read the same file.
+candidate's Node type definitions must match that line; application workflows read the same file.
+The immutable shared release-only workflow separately uses Node 22 and aligns npm 11 before
+running semantic-release. This is not an application build or a relaxation of its toolchain.
 From this repository's root:
 
 ```sh
@@ -98,6 +103,9 @@ bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
+bash scripts/runtime-release.test.sh
+bash scripts/runtime-verification.test.sh
+bash scripts/runtime-publisher-contract.test.sh
 node --test scripts/tenant-package.test.mjs
 # Actual Docker runtime check; CI supplies its newly built production image:
 node scripts/tenant-runtime-smoke.test.mjs

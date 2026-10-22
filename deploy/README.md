@@ -76,4 +76,50 @@ downloading. Use non-extracting artifact download with digest errors enabled.
 Archive admission does not verify signatures, provenance, current GitHub state,
 release identity or image/manifest publication. The accepted immutable publisher
 verifier and independent paired-artifact readback remain mandatory under #276.
-No publisher workflow, release switch or portal activation is introduced here.
+
+## Source-owned runtime release
+
+The release and runtime-publisher callers remain **off** unless the repository variable
+`RUNTIME_PUBLICATION_ENABLED` is exactly `true`. They do not change Pages, select a platform
+tenant, move the public hostname, enable portal identity or accept customer orders.
+
+`release-runtime.yaml` admits a complete successful original main-push CI attempt whose source
+equals its frozen caller commit. It independently reads current API metadata, downloads only the
+bounded publication ZIP without extraction and executes the source-owned receipt reader. The
+accepted immutable shared verifier then authenticates the original image signature and complete
+provenance against a temporary deployment copy; source manifests are never edited by admission.
+Only then can the shared release tool obtain its existing GitHub App token. The caller forwards
+only `APP_PRIVATE_KEY`, disables issue side effects and uses the main-only GitHub release
+configuration; it does not publish an npm package.
+
+After the source has merged and its main CI has succeeded, the explicit nonpublishing preflight is:
+
+```sh
+gh workflow run release-runtime.yaml --ref main -f mode=dry-run
+```
+
+That path is allowed while publication is off. It uses the real workflow-context App credentials
+and release decision, but creates no tag, release or registry publication. An offline fixture or
+repository-secret inventory is not evidence that effective inherited credentials work. Keep
+publication off until the current-source preflight and review have succeeded.
+
+Enabled successful main CI, or an explicit enabled `mode=release` dispatch on main, can create a
+genuine semantic-version release through the accepted shared release tool. One `release: published`
+caller then rebinds the actual stable tag to its source and current original CI receipt. It calls
+only the consumer-accepted immutable prebuilt-WebApp publisher, with caller pinning and signed
+promotion required, rebuilding and recovery disabled. The release-only tool uses its maintained
+Node 22/npm 11 environment; the application still builds and validates under Node 24/npm 11.
+
+The final read-only job verifies both immutable subjects and both version aliases under the exact
+accepted publisher identity and paired source/version/run/attempt/original-CI/public-digest claims.
+It compares the actual manifest package with the source YAML, allowing only the separately verified
+image pin, and rechecks current CI/publication attempts. Its public
+`business-site-runtime-publication` artifact is emitted only after verification succeeds.
+An accepted dispatch, a GitHub release or a successful reusable job alone is not a verified pair.
+Version tags are published sequentially, not atomically; the queue is not a guarantee that deliberate
+older reruns cannot affect latest. A partial publication remains a failure, never permission to
+enable recovery or bypass an occupied version.
+
+Issue #276 remains open until a genuine signed image/manifest pair is independently verified.
+Issue #102 retains platform registration, rollback, live acceptance and the separate private-portal
+requirements. No deployed portal or new credential scope is implied by this source configuration.

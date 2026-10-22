@@ -1,0 +1,22 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "releaseRules": [
+          { "type": "revert", "release": "patch" },
+          { "breaking": true, "release": "major" }
+        ],
+        "parserOpts": { "breakingHeaderPattern": "^(\\w*)(?:\\((.*)\\))?!: (.*)$" }
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "parserOpts": { "breakingHeaderPattern": "^(\\w*)(?:\\((.*)\\))?!: (.*)$" }
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
