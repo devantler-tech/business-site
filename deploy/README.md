@@ -1,7 +1,8 @@
 # Public runtime package
 
 This directory prepares the public website for the platform's namespace-bound
-WebApp interface. It is not applied or published by any workflow. Pages remains
+WebApp interface. The source-owned runtime publisher can publish this package after
+explicit release admission; no workflow applies it to a cluster. Pages remains
 the public deployment; portal access stays disabled.
 
 From the repository root, with Node 24, installed root dependencies, Kubectl and
@@ -34,14 +35,17 @@ The platform projects it read-only at the fixed mount with mode 0440 and the
 application's primary group. No disclosure value belongs in this repository or
 image. Tests use fictional values in disposable volumes.
 
-The example.invalid hostname is deliberately inert. It is not admitted by the
-current platform's production route policy. Before registration, independently
-review the real hostname, its allowlist, selected input materialization and
-network/controller behavior. Do not apply this directory to an ambient cluster.
+The package proposes exactly `business-site.platform.devantler.tech` for public
+staging. Its validator rejects the former example name, the production address,
+wildcards, lookalikes and other tenants' names. This source decision is not
+Platform approval: the current route policy still denies this unregistered
+tenant. Before registration, separately review that exact hostname's allowlist,
+selected input materialization and network/controller behavior. Do not apply this
+directory to an ambient cluster. No DNS change or production cutover is included.
 
-Issue #102 retains the semantic-version release caller, actual signed manifest
-artifact and separate platform consumption proof. See
-[the source-contract decision](../docs/adr/0019-public-tenant-package.md).
+Issue #102 retains actual platform consumption proof and each adopted signed pair.
+See [the original source-contract decision](../docs/adr/0019-public-tenant-package.md)
+and [the staging-hostname decision](../docs/adr/0020-public-staging-hostname.md).
 
 ## Offline publication receipt admission
 
@@ -115,7 +119,9 @@ Node 22/npm 11 environment; the application still builds and validates under Nod
 The final read-only job verifies both immutable subjects and both version aliases under the exact
 accepted publisher identity and paired source/version/run/attempt/original-CI/public-digest claims.
 It compares the actual manifest package with the source YAML, allowing only the separately verified
-image pin, and rechecks current CI/publication attempts. Before and after those registry reads,
+image pin, and rechecks current CI/publication attempts. The verifier creates an exclusive extraction
+directory for Flux before pulling the authenticated immutable package. A failed or partial pull
+never emits a publication receipt. Before and after those registry reads,
 it also requires the release to remain published and its lightweight or bounded annotated tag to
 resolve to the verified source. Its public
 `business-site-runtime-publication` artifact is emitted only after verification succeeds.
@@ -124,6 +130,9 @@ Version tags are published sequentially, not atomically; the queue is not a guar
 older reruns cannot affect latest. A partial publication remains a failure, never permission to
 enable recovery or bypass an occupied version.
 
-Issue #276 remains open until a genuine signed image/manifest pair is independently verified.
+Issue #276 is complete: release v1.0.1 from source `f7212b4120446d95079b768e78f4194a8597a6f7`
+published an independently verified signed image/manifest pair. That release still contains the
+old inert hostname; the staging-hostname change requires a subsequent verified publication before
+consumption. Its receipt is recorded on #102, not inferred from this source directory.
 Issue #102 retains platform registration, rollback, live acceptance and the separate private-portal
 requirements. No deployed portal or new credential scope is implied by this source configuration.

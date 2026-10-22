@@ -6,7 +6,7 @@ metadata:
 spec:
   name: business-site
   image: ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e
-  host: business-site.example.invalid
+  host: business-site.platform.devantler.tech
   port: 8080
   replicas: 2
   probePath: /healthz
