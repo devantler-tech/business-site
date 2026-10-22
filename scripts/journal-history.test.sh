@@ -55,7 +55,7 @@ import fs from 'node:fs';
 import { load } from 'js-yaml';
 const root = process.argv[2];
 for (const [file, job] of [
-  ['ci.yaml', 'build-docs'], ['ci.yaml', 'test-portal-identity'],
+  ['ci.yaml', 'build-docs'], ['ci.yaml', 'test-combined-runtime'],
   ['publish-site.yaml', 'build'],
 ]) {
   const workflow = load(fs.readFileSync(`${root}/.github/workflows/${file}`, 'utf8'));

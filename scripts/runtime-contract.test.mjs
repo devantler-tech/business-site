@@ -43,10 +43,14 @@ function assertRuntime(workflow) {
   const job = workflow.jobs["test-portal-identity"];
   assert.equal(job.if, undefined);
   const steps = job.steps;
+  const runtime = workflow.jobs["test-combined-runtime"];
+  assert.equal(runtime.if, undefined);
+  assert.deepEqual(runtime.needs, ["test-portal-identity"]);
+  const packageSteps = runtime.steps;
   const node = steps.findIndex((s) => s.uses?.startsWith("actions/setup-node@"));
   const install = steps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
   const go = steps.findIndex((s) => s.uses?.startsWith("actions/setup-go@"));
-  const compilerInstall = steps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
+  const compilerInstall = packageSteps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
   const contactIntegration = steps.findIndex(
     (s) => s.run === "bash scripts/check-go-contact.sh" && s["working-directory"] === ".",
   );
@@ -66,40 +70,42 @@ function assertRuntime(workflow) {
   const browser = steps.findIndex(
     (s) => s.run === "node --test scripts/portal-request-limits.test.mjs" && s["working-directory"] === ".",
   );
-  const build = steps.findIndex(
+  const build = packageSteps.findIndex(
     (s) => s.run === "bash scripts/package-runtime.sh --release" && s["working-directory"] === ".",
   );
-  const inventory = steps.findIndex(
+  const inventory = packageSteps.findIndex(
     (s) => s.run === "bash scripts/runtime-dependencies.test.sh" && s["working-directory"] === ".",
   );
-  const smoke = steps.findIndex(
+  const smoke = packageSteps.findIndex(
     (s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-dist" && s["working-directory"] === ".",
   );
-  const extract = steps.findIndex(
+  const extract = packageSteps.findIndex(
     (s) =>
       s.run?.includes('tar -xzf runtime-dist/business-site-runtime.tar.gz -C "$extracted"') &&
       s["working-directory"] === ".",
   );
-  const uploadIndex = steps.findIndex((s) => s.with?.name === "business-site-runtime");
+  const uploadIndex = packageSteps.findIndex((s) => s.with?.name === "business-site-runtime");
   assert.equal(steps[node]?.with?.["node-version-file"], ".node-version");
   assert.equal(steps[node]?.with?.["node-version"], undefined);
-  assert.ok(node >= 0 && install > node && build > install && smoke > build);
+  const packageInstall = packageSteps.findIndex(s => s.run === "npm ci");
+  const packageGo = packageSteps.findIndex(s => s.uses?.startsWith("actions/setup-go@"));
+  const packageNode = packageSteps.findIndex(s => s.uses?.startsWith("actions/setup-node@"));
+  assert.equal(packageSteps[packageNode]?.with?.["node-version-file"], ".node-version");
+  assert.equal(packageSteps[packageGo]?.with?.["go-version-file"], "server/go.mod");
+  assert.ok(node >= 0 && install > node && packageInstall > packageNode && compilerInstall > packageInstall && build > compilerInstall && smoke > build);
   assert.ok(
     go >= 0 &&
       database >= 0 &&
-      compilerInstall > install &&
-      contactIntegration > compilerInstall &&
       contactIntegration > go &&
-      contactIntegration > database &&
-      contactIntegration < build,
-    "run the actual retained Go contact journey with the exact compiler before packaging",
+      contactIntegration > database,
+    "run the actual retained Go contact journey before dependent packaging",
   );
   assert.ok(
     host > database && host < contactIntegration,
     "run the complete real Go host controls separately after database provision",
   );
   assert.ok(
-    ordinary > contactIntegration && ordinary < build,
+    ordinary > contactIntegration,
     "retain the complete ordinary Go suite, serialized packages and its original timeout",
   );
   assert.equal(
@@ -107,28 +113,22 @@ function assertRuntime(workflow) {
     "server",
     "run the complete ordinary Go suite from its server module",
   );
-  assert.ok(inventory > install && inventory < build, "verify compiled-module inventory before packaging");
+  assert.ok(inventory > packageInstall && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
-    browser > install && browser < build,
+    browser > install,
     "run the actual served browser controls with explicitly configured Node before packaging",
   );
   assert.ok(extract > smoke && uploadIndex > extract, "test the extracted archive before upload");
-  assert.match(steps[extract]?.run ?? "", /node scripts\/runtime-smoke\.test\.mjs "\$extracted"/);
+  assert.match(packageSteps[extract]?.run ?? "", /node scripts\/runtime-smoke\.test\.mjs "\$extracted"/);
   for (const index of [
     node,
     go,
     install,
-    compilerInstall,
     database,
     host,
     ordinary,
     contactIntegration,
     browser,
-    inventory,
-    build,
-    smoke,
-    extract,
-    uploadIndex,
   ]) {
     assert.equal(steps[index].if, undefined, "required runtime steps cannot be conditional");
     assert.ok(
@@ -136,9 +136,15 @@ function assertRuntime(workflow) {
       "required runtime failures cannot be ignored",
     );
   }
+  for (const index of [packageGo, packageNode, packageInstall, compilerInstall, inventory, build, smoke, extract, uploadIndex]) {
+    assert.equal(packageSteps[index].if, undefined, "required package steps cannot be conditional");
+    assert.ok(packageSteps[index]["continue-on-error"] == null || packageSteps[index]["continue-on-error"] === false);
+  }
+  assert.ok(workflow.jobs.status.needs.includes("test-combined-runtime"));
+  assert.match(workflow.jobs.status.steps[0].with["job-results"], /needs\.test-combined-runtime\.result/);
   assert.ok(workflow.jobs.status.needs.includes("test-portal-identity"));
   assert.match(workflow.jobs.status.steps[0].with["job-results"], /needs\.test-portal-identity\.result/);
-  const upload = steps.find((s) => s.with?.name === "business-site-runtime");
+  const upload = packageSteps.find((s) => s.with?.name === "business-site-runtime");
   assert.equal(upload?.with?.["if-no-files-found"], "error");
   assert.equal(upload?.with?.path, "runtime-dist/business-site-runtime.tar.gz");
 }
@@ -153,7 +159,7 @@ test("an explicit server directory overrides the ordinary suite job default", ()
 
 /** The extra production profile must be built and tested, not a metadata promise. */
 function assertProductionProfile(w) {
-  const steps = w.jobs["test-portal-identity"].steps;
+  const steps = w.jobs["test-combined-runtime"].steps;
   const build = steps.findIndex(
     (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
   );
@@ -183,36 +189,36 @@ test("CI exercises the actual production package and image", () => {
   assertProductionProfile(workflow);
   for (const change of [
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
+      w.jobs["test-combined-runtime"].steps.find(
         (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).if = "false";
     },
     (w) => {
-      w.jobs["test-portal-identity"].steps.find(
+      w.jobs["test-combined-runtime"].steps.find(
         (s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-production-dist",
       )["continue-on-error"] = true;
     },
     (w) => {
-      delete w.jobs["test-portal-identity"].steps.find(
+      delete w.jobs["test-combined-runtime"].steps.find(
         (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
       ).env.GH_TOKEN;
     },
     (w) => {
-      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+      w.jobs["test-combined-runtime"].steps = w.jobs["test-combined-runtime"].steps.filter(
         (s) => s.run !== "node scripts/container-smoke.test.mjs business-site:production-test runtime-production-dist",
       );
     },
     (w) => {
-      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+      w.jobs["test-combined-runtime"].steps = w.jobs["test-combined-runtime"].steps.filter(
         (s) => !s.run?.includes("tar -xzf runtime-production-dist/"),
       );
     },
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run?.includes("tar -xzf runtime-production-dist/")).if =
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run?.includes("tar -xzf runtime-production-dist/")).if =
         "false";
     },
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run?.includes("tar -xzf runtime-production-dist/"))[
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run?.includes("tar -xzf runtime-production-dist/"))[
         "continue-on-error"
       ] = true;
     },
@@ -389,13 +395,13 @@ for (const [name, mutate] of [
   [
     "conditional public frontend compiler install",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "npm --prefix web ci").if = "false";
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "npm --prefix web ci").if = "false";
     },
   ],
   [
-    "contact integration check before compiler install",
+    "package build before compiler install",
     (w) => {
-      const steps = w.jobs["test-portal-identity"].steps;
+      const steps = w.jobs["test-combined-runtime"].steps;
       const i = steps.findIndex((s) => s.run === "npm --prefix web ci");
       steps.push(...steps.splice(i, 1));
     },
@@ -403,7 +409,7 @@ for (const [name, mutate] of [
   [
     "missing compiled inventory checks",
     (w) => {
-      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+      w.jobs["test-combined-runtime"].steps = w.jobs["test-combined-runtime"].steps.filter(
         (s) => s.run !== "bash scripts/runtime-dependencies.test.sh",
       );
     },
@@ -411,14 +417,14 @@ for (const [name, mutate] of [
   [
     "conditional compiled inventory checks",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh").if =
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh").if =
         "false";
     },
   ],
   [
     "ignored compiled inventory failures",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh")[
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "bash scripts/runtime-dependencies.test.sh")[
         "continue-on-error"
       ] = true;
     },
@@ -426,14 +432,14 @@ for (const [name, mutate] of [
   [
     "conditional build",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "bash scripts/package-runtime.sh --release").if =
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "bash scripts/package-runtime.sh --release").if =
         "false";
     },
   ],
   [
     "ignored smoke failure",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-dist")[
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-dist")[
         "continue-on-error"
       ] = true;
     },
@@ -441,7 +447,7 @@ for (const [name, mutate] of [
   [
     "skipped dependency install",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run === "npm ci").if = "false";
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run === "npm ci").if = "false";
     },
   ],
   [
@@ -471,7 +477,7 @@ for (const [name, mutate] of [
   [
     "missing build",
     (w) => {
-      w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter(
+      w.jobs["test-combined-runtime"].steps = w.jobs["test-combined-runtime"].steps.filter(
         (s) => s.run !== "bash scripts/package-runtime.sh --release",
       );
     },
@@ -479,26 +485,26 @@ for (const [name, mutate] of [
   [
     "unaggregated runtime",
     (w) => {
-      w.jobs.status.needs = w.jobs.status.needs.filter((n) => n !== "test-portal-identity");
+      w.jobs.status.needs = w.jobs.status.needs.filter((n) => n !== "test-combined-runtime");
     },
   ],
   [
     "unarchived upload",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.with?.name === "business-site-runtime").with.path =
+      w.jobs["test-combined-runtime"].steps.find((s) => s.with?.name === "business-site-runtime").with.path =
         "runtime-dist";
     },
   ],
   [
     "skipped archive extraction",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run?.includes("tar -xzf")).if = "false";
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run?.includes("tar -xzf")).if = "false";
     },
   ],
   [
     "ignored extracted-package failure",
     (w) => {
-      w.jobs["test-portal-identity"].steps.find((s) => s.run?.includes("tar -xzf"))["continue-on-error"] = true;
+      w.jobs["test-combined-runtime"].steps.find((s) => s.run?.includes("tar -xzf"))["continue-on-error"] = true;
     },
   ],
 ]) {
