@@ -2,12 +2,14 @@
 # Validate the privileged consumers of real admission outputs, retaining broken-wiring controls.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# Name the broken workflow boundary rather than treating a parse failure as an accepted mutation.
 fail() {
   printf 'runtime publisher contract: FAIL — %s\n' "$*" >&2
   exit 1
 }
 release="$(yq -o=json '.' "$root/.github/workflows/release-runtime.yaml")" || fail 'source-owned release caller is missing'
 publish="$(yq -o=json '.' "$root/.github/workflows/publish-runtime.yaml")" || fail 'source-owned publisher is missing'
+# Accept only mandatory, read-only admission and original-image verification on the frozen source.
 admission_valid() {
   jq -e '
     .permissions=={} and .jobs.admit.permissions=={"contents":"read","actions":"read","packages":"read"} and
@@ -27,6 +29,7 @@ admission_valid() {
     .jobs.admit.outputs["public-digest"]=="\u0024{{ steps.admit.outputs.public-digest }}"
   ' >/dev/null
 }
+# Admit a main-only manual release with a default dry run and narrowly forwarded App credential.
 release_valid() {
   jq -e '
     (.on|keys)==["workflow_dispatch"] and
@@ -40,6 +43,7 @@ release_valid() {
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
   ' >/dev/null
 }
+# Admit a real enabled release, exact accepted publisher and independent mandatory pair readback.
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
@@ -85,6 +89,7 @@ jq -e '.branches==["main"] and (.plugins|length)==3 and .plugins[0][0]=="@semant
   .plugins[0][1].parserOpts.breakingHeaderPattern=="^(\\w*)(?:\\((.*)\\))?!: (.*)$" and
   .plugins[1][0]=="@semantic-release/release-notes-generator" and .plugins[2]=="@semantic-release/github"' "$root/.releaserc" >/dev/null || fail 'release must be main-only and GitHub-only'
 ci="$(yq -o=json '.' "$root/.github/workflows/ci.yaml")"
+# Require source CI and both always-run aggregates to include all three actual contract suites.
 ci_valid() {
   jq -e '
     . as $workflow | .jobs["test-repository-contracts"] as $job |

@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+# Report a broken admission boundary, retaining fixture cleanup on every exit.
 fail() {
   printf 'runtime release: FAIL — %s\n' "$*" >&2
   exit 1
@@ -66,6 +67,7 @@ case "$4" in
 esac
 FIXTURE
 chmod +x "$scratch/bin/gh"
+# Reset API snapshots, outputs and side-effect probes without rebuilding the actual archive.
 reset_fixture() {
   cp "$scratch/run-good.json" "$scratch/run.json"
   cp "$scratch/artifact-good.json" "$scratch/artifact.json"
@@ -75,6 +77,7 @@ reset_fixture() {
   printf '{}\n' >"$scratch/event.json"
   jq -n '{id:789,tag_name:"v1.2.3",draft:false,prerelease:false,published_at:"2026-10-22T12:00:00Z"}' >"$scratch/release.json"
 }
+# Invoke production admission and the compiled archive reader with fixture-only public API reads.
 admit() {
   env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" RUNNER_TEMP="$scratch/runner" \
     GITHUB_EVENT_PATH="$scratch/event.json" GITHUB_OUTPUT="$scratch/output" \
@@ -83,6 +86,7 @@ admit() {
     RUNTIME_PUBLICATION_ENABLED=true RELEASE_MODE=release EXPECTED_SOURCE="$source" \
     "$@" bash "$root/scripts/admit-runtime-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
 }
+# A rejected context must fail and leave no outputs consumable by a privileged downstream job.
 refused() {
   if admit "$@"; then fail 'forbidden source/CI/artifact context was admitted'; fi
   [[ ! -s "$scratch/output" ]] || fail 'refusal emitted reusable-job outputs'

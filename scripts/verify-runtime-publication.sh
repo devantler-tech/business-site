@@ -6,6 +6,7 @@ readonly repo=devantler-tech/business-site
 readonly image=ghcr.io/devantler-tech/business-site
 readonly artifact=$image/manifests
 readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@467f07582436a26b62cf4aa756423512f85ba0c0
+# Stop before emitting a receipt; errors describe the rejected boundary, not private input.
 fail() {
   printf 'runtime publication: refused %s\n' "$1" >&2
   exit 1
@@ -18,6 +19,7 @@ fail() {
 [[ ! -e "$RUNNER_TEMP/runtime-publication.json" && ! -L "$RUNNER_TEMP/runtime-publication.json" ]] || fail 'receipt path already exists'
 work="$(mktemp -d "$RUNNER_TEMP/runtime-pair.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
+# Read one bounded public API object into a caller-owned file; reject JSON streams.
 read_release_json() {
   (
     ulimit -f 8192
@@ -25,6 +27,7 @@ read_release_json() {
   ) 2>/dev/null || fail 'current release or tag read'
   jq -se 'length==1 and (.[0]|type)=="object"' "$2" >/dev/null || fail 'current release or tag document'
 }
+# Re-read publication status and peel at most five tag objects back to the frozen source.
 check_current_release() {
   local oid kind depth=0
   read_release_json "releases/tags/v$VERSION" "$work/release.json"
@@ -44,6 +47,7 @@ check_current_release() {
   done
   [[ "$kind" == commit && "$oid" == "$SOURCE_SHA" ]] || fail 'release tag source changed'
 }
+# Require the original successful CI attempt and this publication attempt to remain current.
 check_current_runs() {
   check_current_release
   gh api --hostname github.com "repos/$repo/actions/runs/$ORIGINAL_CI_RUN_ID" >"$work/ci.json" || fail 'original CI read'
@@ -71,10 +75,13 @@ claims="$(jq -n --arg source "$SOURCE_SHA" --arg version "$VERSION" --arg run "$
     "devantler.image-producer":"https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main"}')"
 annotations=()
 while IFS= read -r claim; do annotations+=(-a "$claim"); done < <(jq -r 'to_entries[]|.key+"="+.value' <<<"$claims")
+# Authenticate the exact supplied reference with the pinned publisher and complete pair claims.
 verify_signature() {
   cosign verify --certificate-identity "https://github.com/$workflow" \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com "${annotations[@]}" "$1" >"$2" || fail 'signature or publication claims'
 }
+# New-bundle output identifies the requested reference, while its digest independently binds content.
+# Require every returned signature to agree, rather than selecting a convenient matching entry.
 check_signature() {
   jq -se --arg ref "$2" --arg digest "$3" --argjson claims "$claims" '
     length==1 and (.[0]|type=="array" and length>0 and all(.[];
@@ -93,9 +100,9 @@ check_signature "$work/image.json" "$image@$IMAGE_DIGEST" "$IMAGE_DIGEST"
 for target in "$artifact@$manifests_digest" "$image:$VERSION" "$artifact:$VERSION"; do
   verify_signature "$target" "$work/subject.json"
   if [[ "$target" == "$image:$VERSION" ]]; then
-    check_signature "$work/subject.json" "$image@$IMAGE_DIGEST" "$IMAGE_DIGEST"
+    check_signature "$work/subject.json" "$target" "$IMAGE_DIGEST"
   else
-    check_signature "$work/subject.json" "$artifact@$manifests_digest" "$manifests_digest"
+    check_signature "$work/subject.json" "$target" "$manifests_digest"
   fi
 done
 # Extract only the already authenticated immutable manifest package, never the raw CI ZIP.

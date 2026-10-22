@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+# Report the broken verifier boundary; the EXIT trap removes only this fixture's scratch tree.
 fail() {
   printf 'runtime verification: FAIL — %s\n' "$*" >&2
   exit 1
@@ -79,6 +80,7 @@ if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.
 if [[ "${EXTRA_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/extra.txt"; fi
 FIXTURE
 chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
+# Restore independent signed-subject fixtures and clear receipts/read counters between controls.
 reset_fixture() {
   rm -f "$scratch/runner/runtime-publication.json"
   printf '' >"$scratch/calls"
@@ -90,10 +92,13 @@ reset_fixture() {
       "devantler.run-id":"999","devantler.run-attempt":"1","devantler.workflow-ref":$workflow,"devantler.image-digest":$image,"devantler.manifests-digest":$manifests,
       "devantler.public-digest":$public,"devantler.public-profile":"production-template","devantler.ci-run-id":"123","devantler.ci-run-attempt":"2",
       "devantler.image-producer":"https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main"}}]' >"$scratch/image-signature.json"
-  cp "$scratch/image-signature.json" "$scratch/image-tag.json"
+  # Cosign v3.0.6's new-bundle transformOutput uses the exact verified reference,
+  # including the tag; the independently authenticated manifest digest stays fixed.
+  jq '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site:1.2.3"' "$scratch/image-signature.json" >"$scratch/image-tag.json"
   jq --arg digest "$manifests" '.[] .critical |= {identity:{"docker-reference":("ghcr.io/devantler-tech/business-site/manifests@"+$digest)},image:{"docker-manifest-digest":$digest}}' "$scratch/image-signature.json" >"$scratch/manifests-signature.json"
-  cp "$scratch/manifests-signature.json" "$scratch/manifests-tag.json"
+  jq '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site/manifests:1.2.3"' "$scratch/manifests-signature.json" >"$scratch/manifests-tag.json"
 }
+# Run the real final verifier with only external registry/API operations replaced at PATH.
 verify() {
   (cd "$scratch/source" && env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" RUNNER_TEMP="$scratch/runner" \
     GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_SHA="$source" GITHUB_REF=refs/tags/v1.2.3 \
@@ -101,6 +106,7 @@ verify() {
     MANIFESTS_DIGEST="$manifests" PUBLIC_DIGEST="$public" ORIGINAL_CI_RUN_ID=123 ORIGINAL_CI_RUN_ATTEMPT=2 \
     EXPECTED_WORKFLOW="$workflow" "$@" bash "$root/scripts/verify-runtime-publication.sh") >"$scratch/stdout" 2>"$scratch/stderr"
 }
+# Run the real origin adapter against an isolated deployment and an explicit verifier outcome.
 origin() {
   (cd "$scratch/source" && env RUNNER_TEMP="$scratch/runner" SOURCE_SHA="$source" IMAGE_DIGEST="$image" \
     PUBLIC_DIGEST="$public" ORIGINAL_CI_RUN_ID=123 ORIGINAL_CI_RUN_ATTEMPT=2 "$@" \
@@ -133,8 +139,14 @@ if verify TAG_KIND=tag TAG_TARGET_KIND=tag; then fail 'an unbounded annotated-ta
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'recursive tag left a receipt'
 for target in image-signature image-tag manifests-signature manifests-tag; do
   for mutation in '.[0].optional["devantler.source-sha"]="wrong"' \
+    '.[0].critical.identity["docker-reference"]="ghcr.io/foreign/site:1.2.3"' \
+    '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site:1.2.4"' \
+    '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site/manifests:1.2.4"' \
+    '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site"' \
+    '.[0].critical.identity["docker-reference"]="ghcr.io/devantler-tech/business-site/manifests"' \
     '.[0].optional["devantler.ci-run-attempt"]="1"' \
     '.[0].critical.image["docker-manifest-digest"]="sha256:wrong"' \
+    '.[0].critical.image["docker-manifest-digest"]="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"' \
     '.[0].optional["devantler.manifests-digest"]="sha256:wrong"' \
     '.[0].optional["devantler.manifests-digest"]="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"'; do
     reset_fixture

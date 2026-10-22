@@ -3,6 +3,7 @@
 set -euo pipefail
 export LC_ALL=C
 readonly repo=devantler-tech/business-site
+# Refuse admission without writing reusable-job outputs or disclosing untrusted payloads.
 fail() {
   printf 'runtime release: refused %s\n' "$1" >&2
   exit 1
@@ -20,7 +21,7 @@ fi
 work="$(mktemp -d "$RUNNER_TEMP/runtime-admission.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 jq -se 'length==1 and (.[0]|type)=="object"' "$GITHUB_EVENT_PATH" >/dev/null || fail 'event document'
-# The public-only API destinations are fixed here, never selected by an event URL.
+# Read one bounded JSON object from fixed public API destinations, never an event-selected URL.
 read_json() {
   (
     ulimit -f 8192
@@ -28,6 +29,7 @@ read_json() {
   ) 2>/dev/null || fail 'API read'
   jq -se 'length==1 and (.[0]|type)=="object"' "$2" >/dev/null || fail 'API document'
 }
+# Admit bounded, nonzero decimal identifiers before interpolation into API paths.
 positive_id() { [[ "$1" =~ ^[1-9][0-9]{0,14}$ ]]; }
 version=''
 tag=''
@@ -50,6 +52,7 @@ release)
 *) fail 'event is not admitted' ;;
 esac
 
+# Resolve the current tag through at most five annotated objects to the exact caller source.
 check_tag() {
   local destination=$1 oid kind depth=0
   read_json "git/ref/tags/$tag" "$destination"
@@ -78,6 +81,7 @@ positive_id "$run" || fail 'original CI identity'
 read_json "actions/runs/$run" "$work/run-before.json"
 attempt="$(jq -er '.run_attempt|tostring' "$work/run-before.json")"
 [[ "$attempt" =~ ^[1-9][0-9]{0,5}$ ]] || fail 'current CI attempt'
+# Match a complete current/attempt response to the selected successful original main build.
 check_run() {
   jq -e --arg source "$source" --arg repo "$repo" --argjson run "$run" --argjson attempt "$attempt" '
     .id==$run and .run_attempt==$attempt and .repository.full_name==$repo and .head_repository.full_name==$repo and
