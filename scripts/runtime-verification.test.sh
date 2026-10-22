@@ -74,8 +74,11 @@ cat >"$scratch/bin/flux" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$#" == 5 && "$1" == pull && "$2" == artifact && "$3" == "oci://ghcr.io/devantler-tech/business-site/manifests@$MANIFESTS_DIGEST" && "$4" == --output ]] || exit 97
-mkdir -p "$5"; cp "$FIXTURE/source/deploy/"*.yaml "$5/"
+# Flux v2.9.6 requires the caller to create its extraction directory.
+[[ -d "$5" && ! -L "$5" ]] || { printf 'invalid output path: directory must already exist\n' >&2; exit 1; }
+cp "$FIXTURE/source/deploy/"*.yaml "$5/"
 IMAGE="ghcr.io/devantler-tech/business-site@$IMAGE_DIGEST" yq -i '.spec.image=strenv(IMAGE)' "$5/webapp.yaml"
+[[ "${PULL_FAIL:-false}" == false ]] || exit 1
 if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.example.invalid"' "$5/webapp.yaml"; fi
 if [[ "${EXTRA_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/extra.txt"; fi
 FIXTURE
@@ -129,9 +132,9 @@ if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a move
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
 reset_fixture
 verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
-for context in VERIFY_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
+for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
-  if verify "$context"; then fail 'failed signature, stale attempt or substituted manifests were accepted'; fi
+  if verify "$context"; then fail 'failed signature/pull, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'
 done
 reset_fixture
