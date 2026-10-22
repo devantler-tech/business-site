@@ -56,7 +56,7 @@ test('the pinned checker examines the complete tracked server source', () => {
 });
 
 test('valid Danish copy and project API names pass the real checker', () => {
-  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contacttrial contacttrialintegration contactintegration autofocus.');
+  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contacttrial contacttrialintegration contactintegration autofocus. pipefail coverprofile.');
   assert.equal(result.status, 0, result.output);
 });
 
@@ -71,6 +71,8 @@ for (const [name, text, file] of [
   ['host package typo', 'contacttrialhosst', scopedFile],
   ['timing package typo', 'contaccttrial', scopedFile],
   ['contact build-tag typo', 'contactintegraton', scopedFile],
+  ['pipeline option typo', 'pipefial', scopedFile],
+  ['coverage option typo', 'coverprofille', scopedFile],
   ['unrelated bare fragments', 'fportal fsign ortal', scopedFile],
   ['same URL outside the one scoped fixture', '"/%2fportal"', join(root, 'server/internal/runtimeapp/config_test.go')],
 ]) {
