@@ -107,6 +107,7 @@ for target in "$artifact@$manifests_digest" "$image:$VERSION" "$artifact:$VERSIO
 done
 # Extract only the already authenticated immutable manifest package, never the raw CI ZIP.
 # Flux reads the read-only registry credentials established by the workflow's login action.
+mkdir "$work/manifests"
 flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests" || fail 'immutable manifest pull'
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
 while IFS= read -r entry; do
