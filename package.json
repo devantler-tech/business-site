@@ -25,7 +25,7 @@
     "@astrojs/internal-helpers": "0.13.0",
     "github-slugger": "2.0.0",
     "satteri": "0.10.5",
-    "@astrojs/markdown-satteri": "^0.4.3",
+    "@astrojs/markdown-satteri": "^0.4.4",
     "@astrojs/sitemap": "^3.7.4",
     "@astrojs/starlight": "^0.42.6",
     "@expo-google-fonts/inter": "^0.4.2",
