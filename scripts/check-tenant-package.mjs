@@ -35,7 +35,7 @@ export function validateTenantPackage(input) {
   assert.equal(spec.name, "business-site");
   // Only the independently verified baseline is admitted before publisher receipt adoption.
   assert.equal(spec.image, "ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e");
-  assert.equal(spec.host, "business-site.example.invalid");
+  assert.equal(spec.host, "business-site.platform.devantler.tech");
   assert.equal(spec.port, 8080);
   assert.equal(spec.probePath, "/healthz");
   assert.ok(Number.isInteger(spec.replicas) && spec.replicas >= 2 && spec.replicas <= 3);
