@@ -42,3 +42,34 @@ network/controller behavior. Do not apply this directory to an ambient cluster.
 Issue #102 retains the semantic-version release caller, actual signed manifest
 artifact and separate platform consumption proof. See
 [the source-contract decision](../docs/adr/0019-public-tenant-package.md).
+
+## Offline publication receipt admission
+
+With the exact Go compiler from `server/go.mod`, run this from `server/` against
+an unextracted publication ZIP downloaded from a separately verified successful
+main-push CI run. Supply that run's source, current original attempt and artifact
+metadata; do not derive the expected values from the archive itself.
+
+```sh
+go run ./cmd/runtime-receipt --archive /private/tmp/publication.zip \
+  --sha256 "$EXPECTED_ARCHIVE_SHA256" --source "$EXPECTED_SOURCE_SHA" \
+  --run "$EXPECTED_CI_RUN_ID" --attempt "$EXPECTED_CI_ATTEMPT" \
+  --artifact "$EXPECTED_ARTIFACT_ID"
+go test -race ./cmd/runtime-receipt -count=1 -timeout=45s
+```
+
+The explicit command makes no network request or filesystem write. It emits the
+eleven-field receipt only after verifying the archive digest, exact five regular
+JSON members, complete streams and source/run/attempt/profile/signer bindings.
+It reads one descriptor into a bounded snapshot, never extracts paths, and rejects
+symlinks, pipes, ambiguous receipt keys and unsafe numeric IDs. Compressed input
+is limited to 4 MiB, each expanded member to 2 MiB, total expanded content to
+8 MiB and the receipt to 16 KiB. Refusals emit no receipt or inspected values.
+
+Artifact ID syntax is validated, not its ownership: the caller must bind the ID,
+digest and original current successful CI attempt through GitHub's API before
+downloading. Use non-extracting artifact download with digest errors enabled.
+Archive admission does not verify signatures, provenance, current GitHub state,
+release identity or image/manifest publication. The accepted immutable publisher
+verifier and independent paired-artifact readback remain mandatory under #276.
+No publisher workflow, release switch or portal activation is introduced here.
