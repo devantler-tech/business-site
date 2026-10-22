@@ -31,6 +31,15 @@ locked Node dependencies and exact Go toolchain; its download-cache key includes
 both frontend lockfiles. Download caches are an optimization, not evidence of an
 installation or a guarantee of registry availability.
 
+The portal HTML, secret and spelling checkers are exact development dependencies
+in the root lockfile. The existing root clean install provisions them once;
+their unchanged version-qualified `npx` commands resolve the installed packages
+instead of fetching manifests and installing separate ephemeral tool trees during
+validation. A real npm/npx loopback fault control demonstrates that an absent
+checker reaches a deliberately stalled registry, whereas installed exact checkers
+run without registry resolution and propagate nonzero observer exits. This does
+not make cold installs offline or suppress fresh dependency audits.
+
 The runtime job retains every package, extracted-archive and restricted-container
 smoke check. Both stages feed the prepublication and final aggregates. Only a
 successful same-run runtime artifact can reach the unchanged main-only signer.

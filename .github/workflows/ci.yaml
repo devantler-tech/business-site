@@ -339,6 +339,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: .
         run: npm ci
+      - name: Verify locked checker provisioning and stalled-registry failure controls
+        working-directory: .
+        run: node --test scripts/portal-quality-provisioning.test.mjs
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
