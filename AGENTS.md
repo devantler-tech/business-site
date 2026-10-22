@@ -92,6 +92,7 @@ bash scripts/check-svelte-frontend.sh
 # from server/README.md; missing database proof fails, never skips:
 bash scripts/check-go-contact.sh
 node --test scripts/go-contact.test.mjs
+node --test scripts/identity-cohorts.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh

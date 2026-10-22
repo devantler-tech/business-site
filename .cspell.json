@@ -58,6 +58,8 @@
     "GOROOT",
     "GOVERSION",
     "benchtime",
+    "coverprofile",
+    "pipefail",
     "fuzztime",
     "contacttrial",
     "contacttrialhost",

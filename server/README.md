@@ -397,16 +397,29 @@ export PORTAL_TEST_DATABASE_URL='postgres://portal_runtime:fixture-only@localhos
 GOTOOLCHAIN=local go mod verify
 GOTOOLCHAIN=local go vet ./...
 bash ../scripts/check-portal-quality.sh
-GOTOOLCHAIN=local go test -race -cover -p=1 ./... -count=1 -timeout=90s
+GOTOOLCHAIN=local go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
+# Use bash with pipefail so tee cannot hide a failing Go process.
+set -o pipefail
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+node ../scripts/identity-cohorts.mjs
 GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
-The Go database suite and explicit trial-host integration do not require Node.
-The complete ordinary suite runs package binaries one at a time with `-p=1`,
+The Go database tests and explicit trial-host integration do not require Node;
+the complete ordinary-suite evidence check uses the repository's Node 24 line.
+The ordinary suite runs in two complementary module-wide cohorts: all tests
+except `TestWorkApproval`/`TestWorkReview`, then that work-decision family. Both
+retain every source file and helper. The current compiled inventory (including
+examples and fuzz seeds) must match the two successful executions exactly once;
+missing, duplicated, skipped, incomplete or failed results are refused. Each
+cohort retains its separate atomic coverage profile; neither alone represents
+combined coverage. Neither cohort can be conditional or error-tolerant in CI.
+Both run package binaries one at a time with `-p=1`,
 so executable-building packages do not compete with identity's real expiry and
 database checks. This does not limit concurrency within a test or change race
-detection, coverage, test selection or the 90-second per-package deadline.
+detection, combined test selection or the 90-second per-package/per-cohort deadline.
 The real-process integration is selected separately so it retains its complete
 refusal/journey controls without charging startup to the ordinary package's
 existing 90-second budget. Source CI requires both, with no conditional or error-tolerant

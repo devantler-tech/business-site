@@ -54,8 +54,10 @@ tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
 Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
-`go mod verify`, `go vet ./...`, `go test -race -p=1 ./... -count=1 -timeout=90s` and
-the pinned `govulncheck` command in CI. Database tests require BOTH fixture URLs
+`go mod verify`, `go vet ./...`, both complementary ordinary race/coverage cohorts
+and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
+`-skip`/`-run` commands and complete result check; preserve `-p=1`, `-count=1`,
+every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
 only the fixture's seventeen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
