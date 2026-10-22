@@ -29,19 +29,10 @@ read_json() {
   jq -se 'length==1 and (.[0]|type)=="object"' "$2" >/dev/null || fail 'API document'
 }
 positive_id() { [[ "$1" =~ ^[1-9][0-9]{0,14}$ ]]; }
-run=''
-expected_attempt=''
 version=''
 tag=''
 release_id=''
 case "$event" in
-workflow_run)
-  [[ "${GITHUB_REF:-}" == refs/heads/main && "$mode" == release ]] || fail 'main release context'
-  jq -e --arg source "$source" '.action=="completed" and .workflow_run.head_sha==$source' "$GITHUB_EVENT_PATH" >/dev/null || fail 'completed source differs from caller'
-  run="$(jq -er '.workflow_run.id|tostring' "$GITHUB_EVENT_PATH")"
-  expected_attempt="$(jq -er '.workflow_run.run_attempt|tostring' "$GITHUB_EVENT_PATH")"
-  positive_id "$run" && [[ "$expected_attempt" =~ ^[1-9][0-9]{0,5}$ ]] || fail 'triggering CI identity'
-  ;;
 workflow_dispatch)
   [[ "${GITHUB_REF:-}" == refs/heads/main ]] || fail 'manual main context'
   ;;
@@ -76,19 +67,17 @@ check_tag() {
   [[ "$kind" == commit && "$oid" == "$source" ]] || fail 'tag source differs from caller'
 }
 [[ -z "$tag" ]] || check_tag "$work/tag-before.json"
-if [[ -z "$run" ]]; then
-  # A bounded unfiltered window avoids GitHub's inconsistent head_sha filter.
-  # No match or an ambiguous/malformed inventory fails, never vacuously succeeds.
-  read_json 'actions/runs?per_page=100' "$work/runs.json"
-  jq -e '(.workflow_runs|type)=="array" and (.workflow_runs|length)>0 and (.workflow_runs|length)<=100 and
+# A bounded unfiltered window avoids GitHub's inconsistent head_sha filter.
+# No match or an ambiguous/malformed inventory fails, never vacuously succeeds.
+read_json 'actions/runs?per_page=100' "$work/runs.json"
+jq -e '(.workflow_runs|type)=="array" and (.workflow_runs|length)>0 and (.workflow_runs|length)<=100 and
     ([.workflow_runs[].id]|unique|length)==(.workflow_runs|length) and
     ([.workflow_runs[].id]==([.workflow_runs[].id]|sort|reverse))' "$work/runs.json" >/dev/null || fail 'bounded CI inventory'
-  run="$(jq -er --arg source "$source" '[.workflow_runs[]|select(.head_sha==$source and .head_branch=="main" and .event=="push" and .path==".github/workflows/ci.yaml")]|max_by(.id)|.id|select(.!=null)|tostring' "$work/runs.json")" || fail 'no original main CI in window'
-  positive_id "$run" || fail 'original CI identity'
-fi
+run="$(jq -er --arg source "$source" '[.workflow_runs[]|select(.head_sha==$source and .head_branch=="main" and .event=="push" and .path==".github/workflows/ci.yaml")]|max_by(.id)|.id|select(.!=null)|tostring' "$work/runs.json")" || fail 'no original main CI in window'
+positive_id "$run" || fail 'original CI identity'
 read_json "actions/runs/$run" "$work/run-before.json"
 attempt="$(jq -er '.run_attempt|tostring' "$work/run-before.json")"
-[[ "$attempt" =~ ^[1-9][0-9]{0,5}$ && (-z "$expected_attempt" || "$attempt" == "$expected_attempt") ]] || fail 'current CI attempt'
+[[ "$attempt" =~ ^[1-9][0-9]{0,5}$ ]] || fail 'current CI attempt'
 check_run() {
   jq -e --arg source "$source" --arg repo "$repo" --argjson run "$run" --argjson attempt "$attempt" '
     .id==$run and .run_attempt==$attempt and .repository.full_name==$repo and .head_repository.full_name==$repo and

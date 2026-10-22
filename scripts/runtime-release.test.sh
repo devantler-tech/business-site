@@ -38,17 +38,20 @@ set -euo pipefail
 [[ "$#" == 4 && "$1" == api && "$2" == --hostname && "$3" == github.com ]] || exit 97
 printf '%s\n' "$4" >> "$FIXTURE/calls"
 case "$4" in
-  repos/devantler-tech/business-site/actions/runs/123|repos/devantler-tech/business-site/actions/runs/123/attempts/2)
+  repos/devantler-tech/business-site/actions/runs/123)
     if [[ -f "$FIXTURE/downloaded" && -f "$FIXTURE/run-after.json" ]]; then
       cat "$FIXTURE/run-after.json"
     else cat "$FIXTURE/run.json"; fi ;;
+  repos/devantler-tech/business-site/actions/runs/123/attempts/2|repos/devantler-tech/business-site/actions/runs/123/attempts/3)
+    if [[ -f "$FIXTURE/run-attempt.json" ]]; then cat "$FIXTURE/run-attempt.json"; else cat "$FIXTURE/run.json"; fi ;;
   'repos/devantler-tech/business-site/actions/runs?per_page=100')
     jq '{total_count:1,workflow_runs:[.]}' "$FIXTURE/run.json" ;;
   'repos/devantler-tech/business-site/actions/runs/123/artifacts?per_page=100')
     jq --argjson copies "${COPIES:-1}" '. as $a | {total_count:$copies,artifacts:[range($copies)|$a]}' "$FIXTURE/artifact.json" ;;
   repos/devantler-tech/business-site/actions/artifacts/456/zip)
     touch "$FIXTURE/downloaded"; cat "$FIXTURE/publication.zip" ;;
-  repos/devantler-tech/business-site/actions/artifacts/456) cat "$FIXTURE/artifact.json" ;;
+  repos/devantler-tech/business-site/actions/artifacts/456)
+    if [[ -f "$FIXTURE/artifact-after.json" ]]; then cat "$FIXTURE/artifact-after.json"; else cat "$FIXTURE/artifact.json"; fi ;;
   repos/devantler-tech/business-site/git/ref/tags/v1.2.3)
     jq -n --arg sha "${TAG_SOURCE:-$EXPECTED_SOURCE}" '{ref:"refs/tags/v1.2.3",object:{type:"commit",sha:$sha}}' ;;
   repos/devantler-tech/business-site/releases/789) cat "$FIXTURE/release.json" ;;
@@ -59,7 +62,7 @@ chmod +x "$scratch/bin/gh"
 reset_fixture() {
   cp "$scratch/run-good.json" "$scratch/run.json"
   cp "$scratch/artifact-good.json" "$scratch/artifact.json"
-  rm -f "$scratch/run-after.json" "$scratch/downloaded"
+  rm -f "$scratch/run-after.json" "$scratch/run-attempt.json" "$scratch/artifact-after.json" "$scratch/downloaded"
   printf '' >"$scratch/output"
   printf '' >"$scratch/calls"
   jq -n --arg source "$source" '{action:"completed",workflow_run:{id:123,head_sha:$source,run_attempt:2}}' >"$scratch/event.json"
@@ -69,7 +72,7 @@ admit() {
   env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" RUNNER_TEMP="$scratch/runner" \
     GITHUB_EVENT_PATH="$scratch/event.json" GITHUB_OUTPUT="$scratch/output" \
     GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_SHA="$source" \
-    GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_run \
+    GITHUB_REF=refs/heads/main GITHUB_EVENT_NAME=workflow_dispatch \
     RUNTIME_PUBLICATION_ENABLED=true RELEASE_MODE=release EXPECTED_SOURCE="$source" \
     "$@" bash "$root/scripts/admit-runtime-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
 }
@@ -87,32 +90,30 @@ for value in '' false TRUE yes; do
   refused RUNTIME_PUBLICATION_ENABLED="$value"
   [[ ! -s "$scratch/calls" ]] || fail 'off-state made network requests'
 done
-for context in GITHUB_REPOSITORY=foreign/site GITHUB_REF=refs/heads/other GITHUB_EVENT_NAME=pull_request GITHUB_SHA=main; do
+for context in GITHUB_REPOSITORY=foreign/site GITHUB_REF=refs/heads/other GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_NAME=workflow_run GITHUB_SHA=main; do
   reset_fixture
   refused "$context"
   [[ ! -s "$scratch/calls" ]] || fail 'untrusted context made network requests'
 done
-for mutation in '.action="requested"' '.workflow_run.id=0' '.workflow_run.head_sha="bad"'; do
-  reset_fixture
-  jq "$mutation" "$scratch/event.json" >"$scratch/changed"
-  mv "$scratch/changed" "$scratch/event.json"
-  refused
-  [[ ! -f "$scratch/downloaded" ]] || fail 'invalid event downloaded an archive'
-done
-reset_fixture
-jq --arg sha "$other" '.workflow_run.head_sha=$sha' "$scratch/event.json" >"$scratch/changed"
-mv "$scratch/changed" "$scratch/event.json"
-refused
-[[ ! -f "$scratch/downloaded" ]] || fail 'workflow-run source mismatch downloaded an archive'
 for mutation in '.repository.full_name="foreign/site"' '.head_repository.full_name="foreign/site"' \
-  '.event="pull_request"' '.path="other.yaml"' '.head_branch="other"' '.run_attempt=3' \
+  '.event="pull_request"' '.path="other.yaml"' '.head_branch="other"' \
   '.conclusion="failure"' '.status="in_progress"' '.id=0' '.head_sha="bad"'; do
   reset_fixture
   jq "$mutation" "$scratch/run.json" >"$scratch/changed"
   mv "$scratch/changed" "$scratch/run.json"
   refused
   [[ ! -f "$scratch/downloaded" ]] || fail 'invalid original CI downloaded an archive'
+  if grep -q '/attempts/' "$scratch/calls"; then fail 'invalid current CI was forwarded to an attempt request'; fi
 done
+reset_fixture
+jq '.run_attempt=3' "$scratch/run.json" >"$scratch/run-attempt.json"
+refused
+[[ ! -f "$scratch/downloaded" ]] || fail 'mismatched immutable attempt allowed download'
+reset_fixture
+jq '.run_attempt=3' "$scratch/run.json" >"$scratch/changed"
+mv "$scratch/changed" "$scratch/run.json"
+refused
+[[ -f "$scratch/downloaded" ]] || fail 'stale receipt control did not exercise the actual archive reader'
 for mutation in '.expired=true' '.size_in_bytes=4194305' '.size_in_bytes=0' '.digest="bad"' \
   '.workflow_run.repository_id=1' '.workflow_run.head_repository_id=1' '.workflow_run.id=124' \
   '.workflow_run.head_sha="bad"' '.workflow_run.head_branch="other"'; do
@@ -127,6 +128,9 @@ refused COPIES=2
 [[ ! -f "$scratch/downloaded" ]] || fail 'ambiguous archive selection allowed download'
 reset_fixture
 jq '.run_attempt=3' "$scratch/run.json" >"$scratch/run-after.json"
+refused
+reset_fixture
+jq '.digest="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"' "$scratch/artifact.json" >"$scratch/artifact-after.json"
 refused
 reset_fixture
 admit GITHUB_EVENT_NAME=workflow_dispatch RELEASE_MODE=dry-run RUNTIME_PUBLICATION_ENABLED= || fail 'explicit nonpublishing preflight must work while off'

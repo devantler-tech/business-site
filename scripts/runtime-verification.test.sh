@@ -47,7 +47,6 @@ subject=''
 while (( $# > 0 )); do
   if [[ "$1" == -a && "$#" -ge 2 ]]; then shift 2; else subject=$1; shift; fi
 done
-[[ "${VERIFY_FAIL:-false}" == false ]] || exit 1
 printf '%s\n' "$subject" >> "$FIXTURE/calls"
 case "$subject" in
   ghcr.io/devantler-tech/business-site@*) cat "$FIXTURE/image-signature.json" ;;
@@ -56,6 +55,7 @@ case "$subject" in
   ghcr.io/devantler-tech/business-site/manifests:1.2.3) cat "$FIXTURE/manifests-tag.json" ;;
   *) exit 98 ;;
 esac
+[[ "${VERIFY_FAIL:-false}" == false ]] || exit 1
 FIXTURE
 cat >"$scratch/bin/flux" <<'FIXTURE'
 #!/usr/bin/env bash
@@ -112,7 +112,8 @@ for target in image-signature image-tag manifests-signature manifests-tag; do
   for mutation in '.[0].optional["devantler.source-sha"]="wrong"' \
     '.[0].optional["devantler.ci-run-attempt"]="1"' \
     '.[0].critical.image["docker-manifest-digest"]="sha256:wrong"' \
-    '.[0].optional["devantler.manifests-digest"]="sha256:wrong"'; do
+    '.[0].optional["devantler.manifests-digest"]="sha256:wrong"' \
+    '.[0].optional["devantler.manifests-digest"]="sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"'; do
     reset_fixture
     jq "$mutation" "$scratch/$target.json" >"$scratch/changed"
     mv "$scratch/changed" "$scratch/$target.json"

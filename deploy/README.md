@@ -103,8 +103,10 @@ and release decision, but creates no tag, release or registry publication. An of
 repository-secret inventory is not evidence that effective inherited credentials work. Keep
 publication off until the current-source preflight and review have succeeded.
 
-Enabled successful main CI, or an explicit enabled `mode=release` dispatch on main, can create a
-genuine semantic-version release through the accepted shared release tool. One `release: published`
+An explicit enabled `mode=release` dispatch on main can create a genuine semantic-version release
+through the accepted shared release tool. Release initiation is manual: no privileged completion
+trigger or release dispatch is added to source CI. Both admission jobs disable Go-cache reuse.
+One `release: published`
 caller then rebinds the actual stable tag to its source and current original CI receipt. It calls
 only the consumer-accepted immutable prebuilt-WebApp publisher, with caller pinning and signed
 promotion required, rebuilding and recovery disabled. The release-only tool uses its maintained

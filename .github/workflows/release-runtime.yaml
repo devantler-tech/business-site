@@ -1,10 +1,6 @@
 name: Release - Public Runtime
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
@@ -17,7 +13,7 @@ permissions: {}
 
 jobs:
   admit:
-    if: ${{ github.repository == 'devantler-tech/business-site' && github.ref == 'refs/heads/main' && (vars.RUNTIME_PUBLICATION_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run')) }}
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (vars.RUNTIME_PUBLICATION_ENABLED == 'true' || inputs.mode == 'dry-run') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -39,7 +35,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
+          cache: false
       - name: Compile the source-owned archive reader
         env:
           GOTOOLCHAIN: local

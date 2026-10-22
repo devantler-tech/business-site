@@ -16,6 +16,7 @@ admission_valid() {
     ([range(0;$s|length)|select($s[.].run=="bash scripts/admit-runtime-release.sh")]|length)==1 and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/verify-runtime-origin.sh")]|length)==1 and
     all($s[]; .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false)) and
+    all($s[]|select(.uses//""|startswith("actions/setup-go@")); .with.cache==false) and
     all($s[]|select(.uses!=null); .uses|test("@[0-9a-f]{40}$")) and
     $s[-1].run=="bash scripts/verify-runtime-origin.sh" and
     .jobs.admit.outputs["image-digest"]=="\u0024{{ steps.admit.outputs.image-digest }}" and
@@ -26,10 +27,9 @@ admission_valid() {
 }
 release_valid() {
   jq -e '
-    (.on|keys|sort)==["workflow_dispatch","workflow_run"] and
-    .on.workflow_run=={workflows:["CI"],types:["completed"],branches:["main"]} and
+    (.on|keys)==["workflow_dispatch"] and
     .on.workflow_dispatch.inputs.mode.default=="dry-run" and .on.workflow_dispatch.inputs.mode.options==["dry-run","release"] and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.ref == \u0027refs/heads/main\u0027 && (vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 || (github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027)) }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 || inputs.mode == \u0027dry-run\u0027) }}" and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
     .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@cd6530fc05d1148e5ad40ebd02ea3a98e0158296" and
     .jobs.release.permissions=={"contents":"read"} and
@@ -60,7 +60,8 @@ for data in "$release" "$publish"; do
   admission_valid <<<"$data" || fail 'credential-free admission and original signature verification are mandatory'
   for mutation in '.jobs.admit.permissions.contents="write"' '.jobs.admit.steps[-1]["continue-on-error"]=true' \
     '.jobs.admit.steps[-1].if="false"' '.jobs.admit.steps|=.[0:-1]' '.jobs.admit.steps[0].with.ref="main"' \
-    '.jobs.admit.outputs["ci-run-attempt"]="1"'; do
+    '.jobs.admit.outputs["ci-run-attempt"]="1"' \
+    '.jobs.admit.steps |= map(if (.uses//""|startswith("actions/setup-go@")) then .with.cache=true else . end)'; do
     if admission_valid <<<"$(jq "$mutation" <<<"$data")"; then fail 'unsafe admission wiring accepted'; fi
   done
 done
