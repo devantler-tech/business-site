@@ -63,6 +63,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   retained HTTP journey and authority checkpoints without a Node worker. ADR 0017
   records the rejected private-frontend experiment; public Svelte remains selected.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
+- `deploy/` is a dormant public-only Kustomize package using the namespace-bound
+  Platform WebApp contract; read `deploy/README.md` before changing it. It has no
+  release caller or registered consumer, uses an inert hostname and grants no
+  portal activation. Keep private dependencies and migration inputs absent.
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
   protected main-only environment. Manual artifact-only previews can run with the switch off.
@@ -93,6 +97,9 @@ bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
+node --test scripts/tenant-package.test.mjs
+# Actual Docker runtime check; CI supplies its newly built production image:
+node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
