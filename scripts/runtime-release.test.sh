@@ -53,7 +53,14 @@ case "$4" in
   repos/devantler-tech/business-site/actions/artifacts/456)
     if [[ -f "$FIXTURE/artifact-after.json" ]]; then cat "$FIXTURE/artifact-after.json"; else cat "$FIXTURE/artifact.json"; fi ;;
   repos/devantler-tech/business-site/git/ref/tags/v1.2.3)
-    jq -n --arg sha "${TAG_SOURCE:-$EXPECTED_SOURCE}" '{ref:"refs/tags/v1.2.3",object:{type:"commit",sha:$sha}}' ;;
+    target=${TAG_SOURCE:-$EXPECTED_SOURCE}; kind=commit
+    if [[ -f "$FIXTURE/downloaded" && -n "${TAG_SOURCE_AFTER:-}" ]]; then target=$TAG_SOURCE_AFTER; fi
+    if [[ "${ANNOTATED_TAG:-false}" == true ]]; then target=dddddddddddddddddddddddddddddddddddddddd; kind=tag; fi
+    jq -n --arg sha "$target" --arg kind "$kind" '{ref:"refs/tags/v1.2.3",object:{type:$kind,sha:$sha}}' ;;
+  repos/devantler-tech/business-site/git/tags/dddddddddddddddddddddddddddddddddddddddd)
+    target=${TAG_SOURCE:-$EXPECTED_SOURCE}; kind=commit
+    if [[ "${TAG_LOOP:-false}" == true ]]; then target=dddddddddddddddddddddddddddddddddddddddd; kind=tag; fi
+    jq -n --arg sha "$target" --arg kind "$kind" '{sha:"dddddddddddddddddddddddddddddddddddddddd",object:{type:$kind,sha:$sha}}' ;;
   repos/devantler-tech/business-site/releases/789) cat "$FIXTURE/release.json" ;;
   *) exit 98 ;;
 esac
@@ -65,7 +72,7 @@ reset_fixture() {
   rm -f "$scratch/run-after.json" "$scratch/run-attempt.json" "$scratch/artifact-after.json" "$scratch/downloaded"
   printf '' >"$scratch/output"
   printf '' >"$scratch/calls"
-  jq -n --arg source "$source" '{action:"completed",workflow_run:{id:123,head_sha:$source,run_attempt:2}}' >"$scratch/event.json"
+  printf '{}\n' >"$scratch/event.json"
   jq -n '{id:789,tag_name:"v1.2.3",draft:false,prerelease:false,published_at:"2026-10-22T12:00:00Z"}' >"$scratch/release.json"
 }
 admit() {
@@ -89,6 +96,11 @@ for value in '' false TRUE yes; do
   reset_fixture
   refused RUNTIME_PUBLICATION_ENABLED="$value"
   [[ ! -s "$scratch/calls" ]] || fail 'off-state made network requests'
+done
+for mode in '' unknown DRY-RUN; do
+  reset_fixture
+  refused RELEASE_MODE="$mode"
+  [[ ! -s "$scratch/calls" ]] || fail 'invalid explicit release mode made an API request'
 done
 for context in GITHUB_REPOSITORY=foreign/site GITHUB_REF=refs/heads/other GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_NAME=workflow_run GITHUB_SHA=main; do
   reset_fixture
@@ -138,6 +150,17 @@ reset_fixture
 jq -n --slurpfile release "$scratch/release.json" '{action:"published",release:$release[0]}' >"$scratch/event.json"
 admit GITHUB_EVENT_NAME=release GITHUB_REF=refs/tags/v1.2.3 || fail 'published real version bound to original CI must be admitted'
 grep -qx 'version=1.2.3' "$scratch/output" || fail 'release version output is incorrect'
+reset_fixture
+jq -n --slurpfile release "$scratch/release.json" '{action:"published",release:$release[0]}' >"$scratch/event.json"
+admit GITHUB_EVENT_NAME=release GITHUB_REF=refs/tags/v1.2.3 ANNOTATED_TAG=true || fail 'correctly peeled annotated tag was refused'
+reset_fixture
+jq -n --slurpfile release "$scratch/release.json" '{action:"published",release:$release[0]}' >"$scratch/event.json"
+refused GITHUB_EVENT_NAME=release GITHUB_REF=refs/tags/v1.2.3 TAG_SOURCE_AFTER="$other"
+[[ -f "$scratch/downloaded" ]] || fail 'moving-tag control did not reach the post-download readback'
+reset_fixture
+jq -n --slurpfile release "$scratch/release.json" '{action:"published",release:$release[0]}' >"$scratch/event.json"
+refused GITHUB_EVENT_NAME=release GITHUB_REF=refs/tags/v1.2.3 ANNOTATED_TAG=true TAG_LOOP=true
+[[ ! -f "$scratch/downloaded" && "$(wc -l <"$scratch/calls" | tr -d ' ')" -le 7 ]] || fail 'recursive tag lookup was not bounded before download'
 for context in TAG_SOURCE="$other" GITHUB_REF=refs/tags/v01.2.3 RUNTIME_PUBLICATION_ENABLED=false; do
   reset_fixture
   jq -n --slurpfile release "$scratch/release.json" '{action:"published",release:$release[0]}' >"$scratch/event.json"

@@ -15,6 +15,8 @@ admission_valid() {
     $s[0].with.ref=="\u0024{{ github.sha }}" and $s[0].with["persist-credentials"]==false and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/admit-runtime-release.sh")]|length)==1 and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/verify-runtime-origin.sh")]|length)==1 and
+    all($s[]|select(.run=="bash scripts/admit-runtime-release.sh");
+      .env.RUNTIME_PUBLICATION_ENABLED=="\u0024{{ vars.RUNTIME_PUBLICATION_ENABLED }}" and .env.GH_TOKEN=="\u0024{{ github.token }}") and
     all($s[]; .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false)) and
     all($s[]|select(.uses//""|startswith("actions/setup-go@")); .with.cache==false) and
     all($s[]|select(.uses!=null); .uses|test("@[0-9a-f]{40}$")) and
@@ -29,7 +31,8 @@ release_valid() {
   jq -e '
     (.on|keys)==["workflow_dispatch"] and
     .on.workflow_dispatch.inputs.mode.default=="dry-run" and .on.workflow_dispatch.inputs.mode.options==["dry-run","release"] and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 || inputs.mode == \u0027dry-run\u0027) }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || (inputs.mode == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027)) }}" and
+    all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
     .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@cd6530fc05d1148e5ad40ebd02ea3a98e0158296" and
     .jobs.release.permissions=={"contents":"read"} and
@@ -41,6 +44,7 @@ publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease }}" and
+    all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and
     .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@467f07582436a26b62cf4aa756423512f85ba0c0" and
     .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and

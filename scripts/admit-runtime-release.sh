@@ -12,7 +12,7 @@ readonly source=$GITHUB_SHA
 [[ -f "${GITHUB_EVENT_PATH:-}" && -n "${GITHUB_OUTPUT:-}" && -d "${RUNNER_TEMP:-}" ]] || fail 'workflow files'
 [[ -f "$RUNNER_TEMP/runtime-receipt" && -x "$RUNNER_TEMP/runtime-receipt" ]] || fail 'compiled receipt reader'
 event=${GITHUB_EVENT_NAME:-}
-mode=${RELEASE_MODE:-release}
+mode=${RELEASE_MODE:-}
 [[ "$mode" == release || "$mode" == dry-run ]] || fail 'release mode'
 if [[ "$event" != workflow_dispatch || "$mode" != dry-run ]]; then
   [[ "${RUNTIME_PUBLICATION_ENABLED:-}" == true ]] || fail 'publication is off'
