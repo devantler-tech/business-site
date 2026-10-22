@@ -15,7 +15,7 @@ function installation(steps, build) {
 }
 test("actual publisher and runtime consumers install both pinned applications", () => {
   const publisher = load(".github/workflows/publish-site.yaml");
-  const runtime = load(".github/workflows/ci.yaml").jobs["test-portal-identity"];
+  const runtime = load(".github/workflows/ci.yaml").jobs["test-combined-runtime"];
   for (const steps of [publisher.jobs.build.steps,runtime.steps]) {
     const build = steps.findIndex(step => ["npm run build","bash scripts/package-runtime.sh --release"].includes(step.run));
     installation(steps,build);
@@ -49,7 +49,7 @@ test("the reading reference never calls selected publication recursively", () =>
   assert.ok(!/^npm run build$/m.test(reference) && !reference.includes("build-business-site.sh"));
 });
 test("CI executes the real selected Go package and its archive without replacing incumbent container proof", () => {
-  const steps = load(".github/workflows/ci.yaml").jobs["test-portal-identity"].steps;
+  const steps = load(".github/workflows/ci.yaml").jobs["test-combined-runtime"].steps;
   const build = steps.findIndex(step => step.run === "bash scripts/package-runtime.sh --release --default --svelte");
   const smoke = steps.findIndex(step => step.run?.includes("node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist") && step.run?.includes('node scripts/runtime-smoke.test.mjs "$extracted"'));
   const upload = steps.findIndex(step => step.with?.name === "business-site-svelte-runtime");

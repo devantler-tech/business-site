@@ -23,6 +23,22 @@ The expected Cosign certificate identity is the caller's
 `https://github.com/devantler-tech/business-site/.github/workflows/ci.yaml@refs/heads/main`;
 the publisher and its tests belong to that exact source-owned workflow.
 
+## Bounded validation stages
+
+Identity/database and portal-quality checks run before the dependent runtime
+package job. Each retains a ten-minute job deadline. Packaging installs its own
+locked Node dependencies and exact Go toolchain; its download-cache key includes
+both frontend lockfiles. Download caches are an optimization, not evidence of an
+installation or a guarantee of registry availability.
+
+The runtime job retains every package, extracted-archive and restricted-container
+smoke check. Both stages feed the prepublication and final aggregates. Only a
+successful same-run runtime artifact can reach the unchanged main-only signer.
+This separation keeps slow dependency setup from consuming the identity job's
+remaining packaging budget without increasing deadlines or tolerating failures.
+Hosted timings and a verified main-push publication, not a local timing model,
+establish recovery for issue #272.
+
 This reuses pinned Docker/Cosign actions from the established portfolio publisher.
 Its shared `publish-app` interface requires a semantic-version image/manifests
 pair and deployment manifest that this slice intentionally does not create.

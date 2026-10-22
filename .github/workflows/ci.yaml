@@ -330,7 +330,7 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      - name: Setup Node.js for combined package
+      - name: Setup Node.js for portal quality
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
@@ -339,9 +339,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: .
         run: npm ci
-      - name: Install candidate frontend dependencies
-        working-directory: .
-        run: npm --prefix web ci
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
@@ -386,9 +383,46 @@ jobs:
         run: go test -race -coverprofile=coverage.out -p=1 ./... -count=1 -timeout=90s
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  # Separate setup/build budget; identity and quality must finish successfully first.
+  test-combined-runtime:
+    needs: [test-portal-identity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout complete source history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Setup Node.js for combined package
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: .
+        run: npm ci
+      - name: Install candidate frontend dependencies
+        working-directory: .
+        run: npm --prefix web ci
       - name: Verify combined-runtime CI contract
         working-directory: .
         run: |
+          node --test scripts/runtime-stages.test.mjs
           node --test scripts/runtime-contract.test.mjs
           node --test scripts/go-contact.test.mjs
           node --test scripts/container-contract.test.mjs
@@ -502,6 +536,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-combined-runtime
     steps:
       - name: Check job results
         uses: devantler-tech/.github/actions/aggregate-job-checks@467f07582436a26b62cf4aa756423512f85ba0c0
@@ -515,6 +550,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-combined-runtime.result }}
 
   status:
     name: CI - Required Checks
@@ -530,6 +566,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-portal-identity
+      - test-combined-runtime
       - validation
       - publish-container
     steps:
@@ -545,6 +582,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}
       - name: Require actual main-push container publication
@@ -559,11 +597,11 @@ jobs:
   # The same run distributes its tested bytes only after the complete CI gate.
   # No privileged workflow_run crosses from an untrusted PR to registry writes.
   publish-container:
-    needs: [validation, test-portal-identity]
+    needs: [validation, test-combined-runtime]
     if: >-
       !cancelled() &&
       needs.validation.result == 'success' &&
-      needs.test-portal-identity.result == 'success' &&
+      needs.test-combined-runtime.result == 'success' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       github.repository == 'devantler-tech/business-site'

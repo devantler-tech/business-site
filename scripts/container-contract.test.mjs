@@ -30,7 +30,7 @@ const examples = [...readFileSync('server/README.md', 'utf8').matchAll(/```sh\n(
 const packageExample = examples.find(example => example.includes('./business-site --version'));
 const containerExample = examples.find(example => example.includes('docker build --file Dockerfile'));
 const mainPushCondition = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'devantler-tech/business-site'";
-const publicationCondition = "!cancelled() && needs.validation.result == 'success' && needs.test-portal-identity.result == 'success' && " + mainPushCondition;
+const publicationCondition = "!cancelled() && needs.validation.result == 'success' && needs.test-combined-runtime.result == 'success' && " + mainPushCondition;
 
 /** Model the documented implicit status check for this bounded conjunction, not a live Actions runner. */
 function allowsPublication(condition, context) {
@@ -39,7 +39,7 @@ function allowsPublication(condition, context) {
     && (context.cancelled || context.ancestors.some(result => result !== 'success'))) return false;
   return expression.split(' && ').every(term => {
     if (term === '!cancelled()') return !context.cancelled;
-    const match = /^(github\.(event_name|ref|repository)|needs\.(validation|test-portal-identity)\.result) == '([^']+)'$/.exec(term);
+    const match = /^(github\.(event_name|ref|repository)|needs\.(validation|test-combined-runtime)\.result) == '([^']+)'$/.exec(term);
     assert.ok(match, 'Unexpected publication expression; update the bounded evaluator deliberately.');
     const actual = match[2] ? context.github[match[2]] : context.needs[match[3]].result;
     return actual === match[4];
@@ -52,10 +52,10 @@ test('a skipped optional ancestor cannot suppress a fully validated main publica
   const context = {
     cancelled: false, ancestors: ['success', 'skipped', 'success'],
     github: { event_name: 'push', ref: 'refs/heads/main', repository: 'devantler-tech/business-site' },
-    needs: { validation: { result: 'success' }, 'test-portal-identity': { result: 'success' } },
+    needs: { validation: { result: 'success' }, 'test-combined-runtime': { result: 'success' } },
   };
   assert.equal(allowsPublication(w.jobs['publish-container'].if, context), true);
-  for (const prerequisite of ['validation', 'test-portal-identity']) {
+  for (const prerequisite of ['validation', 'test-combined-runtime']) {
     for (const result of ['failure', 'skipped', 'cancelled', '']) {
       const changed = structuredClone(context);
       changed.needs[prerequisite].result = result;
@@ -141,7 +141,9 @@ test('a confined non-root image is supplied for the actual runtime package', () 
 /** Reject skipped image validation, broad artifacts or incomplete success aggregation. */
 function assertCI(w) {
   assert.equal(w.jobs['test-portal-identity'].if, undefined);
-  const steps = w.jobs['test-portal-identity'].steps;
+  assert.equal(w.jobs['test-combined-runtime'].if, undefined);
+  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-identity']);
+  const steps = w.jobs['test-combined-runtime'].steps;
   const build = steps.findIndex(s => s.run?.includes('docker build --file Dockerfile'));
   const smoke = steps.findIndex(s => s.run === 'node scripts/container-smoke.test.mjs business-site:test runtime-dist');
   const archive = steps.findIndex(s => s.run?.includes('docker save business-site:test'));
@@ -155,7 +157,7 @@ function assertCI(w) {
   assert.equal(steps[upload].with['if-no-files-found'], 'error');
   const publish = w.jobs['publish-container'];
   assert.ok(publish, 'Publication must be inside the successful CI chain, not a privileged workflow_run.');
-  assert.deepEqual(publish.needs, ['validation', 'test-portal-identity']);
+  assert.deepEqual(publish.needs, ['validation', 'test-combined-runtime']);
   assert.ok(w.jobs.status.needs.includes('publish-container'), 'Final required checks must include publication.');
   assert.ok(w.jobs.status.needs.includes('validation'), 'Final required checks must include prepublication validation.');
   assert.deepEqual(w.jobs.validation.needs, w.jobs.status.needs.filter(n => !['publish-container', 'validation'].includes(n)));
@@ -178,12 +180,13 @@ test('CI must exercise and retain the actual container before distribution', asy
   assertCI(w);
   for (const mutate of [
     w => { w.jobs['test-portal-identity'].if = 'false'; },
-    w => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },
-    w => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs'))['continue-on-error'] = true; },
-    w => { w.jobs['test-portal-identity'].steps.find(s => s.with?.name === 'business-site-container').with.path = '.'; },
-    w => { w.jobs['publish-container'].needs = ['test-portal-identity']; },
+    w => { w.jobs['test-combined-runtime'].if = 'false'; },
+    w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },
+    w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs'))['continue-on-error'] = true; },
+    w => { w.jobs['test-combined-runtime'].steps.find(s => s.with?.name === 'business-site-container').with.path = '.'; },
+    w => { w.jobs['publish-container'].needs = ['test-combined-runtime']; },
     w => { w.jobs.status.needs = w.jobs.status.needs.filter(n => n !== 'publish-container'); },
-    w => { w.jobs.validation.needs = w.jobs.validation.needs.filter(n => n !== 'test-portal-identity'); },
+    w => { w.jobs.validation.needs = w.jobs.validation.needs.filter(n => n !== 'test-combined-runtime'); },
     w => { w.jobs.validation.steps[0]['continue-on-error'] = true; },
     w => { w.jobs.validation.steps[0].if = 'false'; },
     w => { w.jobs.validation.steps[0].with['job-results'] = 'success'; },
