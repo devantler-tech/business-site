@@ -75,7 +75,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    uses: devantler-tech/.github/.github/workflows/publish-app.yaml@467f07582436a26b62cf4aa756423512f85ba0c0
+    uses: devantler-tech/.github/.github/workflows/publish-app.yaml@8723698de8a2265c7b77db7df030f30aa33a958a
     with:
       app-name: business-site
       deploy-path: ./deploy
