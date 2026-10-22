@@ -1,0 +1,31 @@
+apiVersion: kro.run/v1alpha1
+kind: WebApp
+metadata:
+  name: business-site
+  namespace: business-site
+spec:
+  name: business-site
+  image: ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e
+  host: business-site.example.invalid
+  port: 8080
+  replicas: 2
+  probePath: /healthz
+  cpuRequest: 10m
+  memoryRequest: 64Mi
+  cpuLimit: 500m
+  memoryLimit: 256Mi
+  runAsUser: 65532
+  runAsGroup: 65532
+  readOnlyRootFilesystem: true
+  args:
+    - --public
+    - /app/public
+    - --listen
+    - 0.0.0.0:8080
+    - --company-disclosure-projection
+    - /run/webapp-inputs/disclosure
+  secretProjections:
+    - secretName: business-site-disclosure
+      items:
+        - key: company-disclosure
+          path: disclosure

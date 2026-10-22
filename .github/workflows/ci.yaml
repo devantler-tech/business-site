@@ -46,6 +46,7 @@ jobs:
               - '.npmrc'
               - 'astro.config.mjs'
               - 'docs/**'
+              - 'deploy/**'
               - '.github/workflows/**'
             docs-deps:
               - 'package.json'
@@ -429,6 +430,9 @@ jobs:
           node --test scripts/runtime-contract.test.mjs
           node --test scripts/go-contact.test.mjs
           node --test scripts/container-contract.test.mjs
+      - name: Verify the dormant public tenant package and refusal controls
+        working-directory: .
+        run: node --test scripts/tenant-package.test.mjs
       - name: Verify compiled dependency inventory and failed-read refusals
         working-directory: .
         run: bash scripts/runtime-dependencies.test.sh
@@ -503,6 +507,12 @@ jobs:
         env:
           EXPECTED_SOURCE_SHA: ${{ github.sha }}
         run: node scripts/container-smoke.test.mjs business-site:production-test runtime-production-dist
+      - name: Exercise the rendered tenant arguments in the actual restricted image
+        working-directory: .
+        timeout-minutes: 3
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: node scripts/tenant-runtime-smoke.test.mjs business-site:production-test
       - name: Archive the tested production container and package
         working-directory: .
         run: |
