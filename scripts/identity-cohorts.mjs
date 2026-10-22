@@ -112,6 +112,38 @@ export function readEvidence(path) {
   }
 }
 
+/** Produce a public failure diagnostic without reflecting evidence or file paths. */
+export function failureDiagnostic(error) {
+  // Node appends input diffs even to explicitly supplied AssertionError messages.
+  // Admit only a closed fixed first line; never print the complete message.
+  const candidate = error instanceof assert.AssertionError ? error.message.split("\n", 1)[0] : undefined;
+  const reason = [
+    "bounded nonempty test output required",
+    "invalid test event",
+    "a failed package/test is not evidence",
+    "duplicate or nested inventory name",
+    "listing unexpectedly executed a test",
+    "invalid executed test name",
+    "a skipped test is not examined input",
+    "complete package inventory required",
+    "package must start once",
+    "package must finish once",
+    "only packages without tests may be skipped",
+    "retain both distinct coverage profiles",
+    "complete race/atomic coverage profile required",
+    "every module package must be examined",
+    "test cohort must exactly match compiled inventory",
+    "a package with compiled tests cannot be skipped",
+    "each selected test must run and pass exactly once",
+    "both ordinary families must be nonempty",
+    "safe evidence-open flags required",
+    "bounded regular test evidence required",
+    "test evidence exceeded its byte bound",
+  ].find((fixed) => fixed === candidate);
+  const prefix = "Ordinary Go cohort evidence is incomplete or failed";
+  return reason ? `${prefix}: ${reason}` : `${prefix}.`;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const result = checkCohorts(
@@ -121,8 +153,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(
       `Complete ordinary Go suite: ${result.tests} tests in ${result.packages} packages; core=${result.core}, work=${result.work}; separate atomic coverage profiles retained.`,
     );
-  } catch {
-    console.error("Ordinary Go cohort evidence is incomplete or failed.");
+  } catch (error) {
+    console.error(failureDiagnostic(error));
     process.exitCode = 1;
   }
 }

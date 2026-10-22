@@ -6,8 +6,9 @@ import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { load } from "js-yaml";
-import { checkCohorts, readEvidence } from "./identity-cohorts.mjs";
+import { checkCohorts, readEvidence, failureDiagnostic } from "./identity-cohorts.mjs";
 
 const workflow = load(readFileSync(".github/workflows/ci.yaml", "utf8"));
 const commands = [
@@ -18,6 +19,7 @@ const commands = [
   "node ../scripts/identity-cohorts.mjs",
 ];
 
+/** Require every actual cohort command once, unconditionally and in execution order. */
 function checkWorkflow(w) {
   const job = w.jobs["test-portal-identity"];
   assert.equal(job.if, undefined);
@@ -104,6 +106,7 @@ const names = ["TestBroker", "TestWorkApproval", "TestWorkReview", "ExampleBroke
 const ordinary = names.filter((n) => !n.includes("/"));
 const event = (Action, extra = {}) => ({ Action, Package: pkg, ...extra });
 const inventory = [event("start"), ...ordinary.map((n) => event("output", { Output: `${n}\n` })), event("pass")];
+/** Construct complete synthetic top-level execution events for one selected family. */
 function execution(selected) {
   return [
     event("start"),
@@ -114,6 +117,7 @@ function execution(selected) {
 const core = execution(ordinary.filter((n) => !/^TestWork(Approval|Review)/.test(n)));
 const work = execution(ordinary.filter((n) => /^TestWork(Approval|Review)/.test(n)));
 const coverage = "mode: atomic\nexample.test/identity/broker.go:1.1,2.2 1 1\n";
+/** Serialize independent inventory, execution and coverage fixtures for the real verifier. */
 function check(i = inventory, c = core, w = work, profiles = [coverage, coverage]) {
   return checkCohorts(
     [i, c, w].map((events) => events.map((e) => JSON.stringify(e)).join("\n") + "\n"),
@@ -196,14 +200,93 @@ for (const [fault, change] of [
   ["empty coverage", () => check(inventory, core, work, ["mode: atomic\n", coverage])],
 ])
   test(`result validation refuses ${fault}`, () => assert.throws(change));
+/** Serialize one independent Go event stream, including its final line terminator. */
+function jsonLines(events) {
+  return events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+}
+
+/** Assert malformed evidence refusal without changing the other inputs. */
+function assertMalformed(text) {
+  assert.throws(() => checkCohorts([jsonLines(inventory), text, jsonLines(work)], [coverage, coverage]));
+}
+
 test("malformed or truncated test output is not evidence", () => {
   for (const text of ["{", "{}\n", core.map((e) => JSON.stringify(e)).join("\n") + "\n{"]) {
-    assert.throws(() =>
-      checkCohorts([inventory.map((e) => JSON.stringify(e)).join("\n"), text, ""], [coverage, coverage]),
-    );
+    assertMalformed(text);
+  }
+});
+test("malformed-input refusal control fails if the suspect stream is actually valid", () => {
+  assert.throws(() => assertMalformed(jsonLines(core)), assert.AssertionError);
+});
+
+test("public diagnostics identify a fixed reason but never include assertion input diffs", () => {
+  const reason = "test cohort must exactly match compiled inventory";
+  const error = new assert.AssertionError({
+    actual: ["FICTIONAL_PRIVATE_SENTINEL"],
+    expected: [],
+    operator: "deepStrictEqual",
+    message: reason,
+  });
+  assert.match(error.message, /FICTIONAL_PRIVATE_SENTINEL/);
+  assert.equal(failureDiagnostic(error), "Ordinary Go cohort evidence is incomplete or failed: " + reason);
+});
+test("parser, OS and unknown/generated assertion diagnostics remain generic", () => {
+  const generic = "Ordinary Go cohort evidence is incomplete or failed.";
+  for (const error of [
+    new SyntaxError("FICTIONAL_PRIVATE_SENTINEL"),
+    new Error("FICTIONAL_PRIVATE_SENTINEL"),
+    new assert.AssertionError({ actual: "FICTIONAL_PRIVATE_SENTINEL", expected: "other", operator: "strictEqual" }),
+    new assert.AssertionError({ message: "FICTIONAL_PRIVATE_SENTINEL" }),
+  ])
+    assert.equal(failureDiagnostic(error), generic);
+});
+
+test("actual CLI diagnostics identify refusals without echoing evidence or private paths", (t) => {
+  const dir = join(evidenceFile(t), "..");
+  for (const [name, contents] of Object.entries({
+    "test-inventory.jsonl": jsonLines(inventory),
+    "test-core.jsonl": jsonLines(core),
+    "test-work.jsonl": jsonLines(work),
+    "coverage-core.out": coverage,
+    "coverage-work.out": coverage,
+  }))
+    fs.writeFileSync(join(dir, name), contents);
+  /** Execute the real CLI in an owned private fixture directory. */
+  const run = () => {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./identity-cohorts.mjs", import.meta.url))], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    assert.ifError(result.error);
+    return result;
+  };
+  assert.equal(run().status, 0, "all unrelated inputs must be valid first");
+  fs.writeFileSync(
+    join(dir, "test-core.jsonl"),
+    jsonLines(core.map((e) => ({ ...e, Package: "example.test/FICTIONAL_PRIVATE_SENTINEL" }))),
+  );
+  const assertion = run();
+  assert.equal(assertion.status, 1);
+  assert.equal(
+    assertion.stderr.trim(),
+    "Ordinary Go cohort evidence is incomplete or failed: every module package must be examined",
+  );
+  fs.writeFileSync(join(dir, "test-core.jsonl"), '{"FICTIONAL_PRIVATE_SENTINEL":');
+  const syntax = run();
+  assert.equal(syntax.status, 1);
+  assert.equal(syntax.stderr.trim(), "Ordinary Go cohort evidence is incomplete or failed.");
+  fs.unlinkSync(join(dir, "test-core.jsonl"));
+  const missing = run();
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stderr.trim(), "Ordinary Go cohort evidence is incomplete or failed.");
+  for (const result of [assertion, syntax, missing]) {
+    assert.doesNotMatch(result.stdout + result.stderr, /FICTIONAL_PRIVATE_SENTINEL/);
+    assert.ok(!result.stderr.includes(dir));
   }
 });
 
+/** Own and clean one private temporary file tree for descriptor tests. */
 function evidenceFile(t) {
   const dir = fs.mkdtempSync(join(tmpdir(), "identity-evidence-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -212,8 +295,7 @@ function evidenceFile(t) {
   return path;
 }
 
-// Inject the race after whichever metadata API the actual reader uses. The old
-// pathname check/read switches files; descriptor check/read retains the opened file.
+/** Inject a deterministic race after the actual metadata API, restoring both APIs afterward. */
 function afterMetadata(change, run) {
   const originals = { statSync: fs.statSync, fstatSync: fs.fstatSync };
   const restore = () => {
