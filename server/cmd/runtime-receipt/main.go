@@ -28,6 +28,7 @@ var errRefused = errors.New("runtime-receipt refused")
 var sourcePattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
+// positiveID admits canonical positive decimal IDs that remain exact in JavaScript.
 func positiveID(value string) bool {
 	if value == "" || value[0] < '1' || value[0] > '9' {
 		return false
@@ -41,6 +42,7 @@ func positiveID(value string) bool {
 	return err == nil && n <= 9007199254740991
 }
 
+// arguments requires one nonempty value for each of the six closed caller options.
 func arguments(args []string) (map[string]string, error) {
 	if len(args) != 12 {
 		return nil, errRefused
@@ -180,6 +182,7 @@ func decodeReceipt(data []byte, options map[string]string) (map[string]string, e
 	return receipt, nil
 }
 
+// run emits a receipt only after argument, archive and receipt admission complete.
 func run(ctx context.Context, args []string, output io.Writer) error {
 	if ctx.Err() != nil {
 		return errRefused
@@ -203,6 +206,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	return json.NewEncoder(output).Encode(receipt)
 }
 
+// execute bounds the command lifetime and keeps all failure diagnostics generic.
 func execute() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

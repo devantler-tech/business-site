@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -25,15 +26,18 @@ type member struct {
 	mode fs.FileMode
 }
 
+// members places a chosen receipt in an otherwise valid five-member archive.
 func members(receipt string) []member {
 	return []member{{"receipt.json", receipt, 0644}, {"runtime.json", `{}`, 0644}, {"signature.json", `[]`, 0644}, {"provenance.json", `{}`, 0644}, {"attestation.json", `[]`, 0644}}
 }
 
+// archiveBytes constructs the compressed archive consumed by the real command.
 func archiveBytes(t *testing.T, entries []member) []byte {
 	t.Helper()
 	return archiveMethod(t, entries, zip.Deflate)
 }
 
+// archiveMethod permits stored members to isolate compressed-size admission.
 func archiveMethod(t *testing.T, entries []member, method uint16) []byte {
 	t.Helper()
 	var data bytes.Buffer
@@ -55,6 +59,7 @@ func archiveMethod(t *testing.T, entries []member, method uint16) []byte {
 	return data.Bytes()
 }
 
+// inputs writes a private fixture and binds its actual digest to valid caller options.
 func inputs(t *testing.T, data []byte) []string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "artifact.zip")
@@ -65,6 +70,7 @@ func inputs(t *testing.T, data []byte) []string {
 	return []string{"--archive", path, "--sha256", hex.EncodeToString(digest[:]), "--source", strings.Repeat("a", 40), "--run", "12345", "--attempt", "2", "--artifact", "67890"}
 }
 
+// TestRuntimeReceiptAcceptsCompleteBoundArchive preserves every admitted receipt field.
 func TestRuntimeReceiptAcceptsCompleteBoundArchive(t *testing.T) {
 	args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
 	var output bytes.Buffer
@@ -89,6 +95,7 @@ func TestRuntimeReceiptAcceptsCompleteBoundArchive(t *testing.T) {
 	}
 }
 
+// TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt rejects schema and identity ambiguity.
 func TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt(t *testing.T) {
 	for name, receipt := range map[string]string{
 		"duplicate":                     strings.Replace(fixtureReceipt, `"repository":`, `"ciRunId":"12345","repository":`, 1),
@@ -118,6 +125,7 @@ func TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt(t *testing.T) {
 	}
 }
 
+// refuse asserts the public failure contract without exposing inspected values.
 func refuse(t *testing.T, args []string) {
 	t.Helper()
 	var output bytes.Buffer
@@ -129,6 +137,7 @@ func refuse(t *testing.T, args []string) {
 	}
 }
 
+// TestRuntimeReceiptRejectsInvalidArchives isolates member, stream and size failures.
 func TestRuntimeReceiptRejectsInvalidArchives(t *testing.T) {
 	for _, name := range []string{"extra", "missing", "duplicate", "traversal", "absolute", "directory", "symlink", "fifo", "expanded", "total expanded", "non-receipt JSON", "corrupt", "truncated", "not zip", "compressed"} {
 		t.Run(name, func(t *testing.T) {
@@ -184,10 +193,11 @@ func TestRuntimeReceiptRejectsInvalidArchives(t *testing.T) {
 	}
 }
 
+// TestRuntimeReceiptRejectsInvalidCallerInputs checks generic refusal and cancellation.
 func TestRuntimeReceiptRejectsInvalidCallerInputs(t *testing.T) {
 	for _, index := range []int{3, 5, 7, 9, 11} {
 		for _, invalid := range []string{"", "0", "01", "1e2", "-1", "1suffix", "9007199254740992", "do-not-print"} {
-			t.Run(string(rune('a'+index))+invalid, func(t *testing.T) {
+			t.Run(strconv.Itoa(index)+invalid, func(t *testing.T) {
 				args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
 				args[index] = invalid
 				refuse(t, args)
@@ -197,9 +207,10 @@ func TestRuntimeReceiptRejectsInvalidCallerInputs(t *testing.T) {
 	args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
 	args[3] = strings.Repeat("0", 64)
 	refuse(t, args)
-	refuse(t, args[:10])
-	args[2] = "--archive"
-	refuse(t, args)
+	refuse(t, inputs(t, archiveBytes(t, members(fixtureReceipt)))[:10])
+	duplicate := inputs(t, archiveBytes(t, members(fixtureReceipt)))
+	duplicate[0] = "--sha256"
+	refuse(t, duplicate)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var output bytes.Buffer
@@ -208,6 +219,28 @@ func TestRuntimeReceiptRejectsInvalidCallerInputs(t *testing.T) {
 	}
 }
 
+// TestRuntimeReceiptParserGuards reaches each parser guard before archive admission.
+func TestRuntimeReceiptParserGuards(t *testing.T) {
+	valid := []string{"--archive", "unused.zip", "--sha256", strings.Repeat("b", 64), "--source", strings.Repeat("a", 40), "--run", "12345", "--attempt", "2", "--artifact", "67890"}
+	if _, err := arguments(valid); err != nil {
+		t.Fatal("complete caller options were refused")
+	}
+	t.Run("odd argument count", func(t *testing.T) {
+		if _, err := arguments(valid[:11]); err == nil {
+			t.Fatal("odd argument list was admitted")
+		}
+	})
+	t.Run("duplicate option", func(t *testing.T) {
+		duplicate := append([]string(nil), valid...)
+		// Retain all validated scalar values: only the archive option is displaced.
+		duplicate[0] = "--sha256"
+		if _, err := arguments(duplicate); err == nil {
+			t.Fatal("duplicate option was admitted")
+		}
+	})
+}
+
+// TestRuntimeReceiptRejectsNonRegularPaths exercises descriptor-level path refusal.
 func TestRuntimeReceiptRejectsNonRegularPaths(t *testing.T) {
 	args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
 	link := filepath.Join(t.TempDir(), "link")
@@ -228,6 +261,7 @@ func TestRuntimeReceiptRejectsNonRegularPaths(t *testing.T) {
 	refuse(t, args)
 }
 
+// TestRuntimeReceiptAdmitsLargestSafeArtifactID keeps the numeric ceiling inclusive.
 func TestRuntimeReceiptAdmitsLargestSafeArtifactID(t *testing.T) {
 	args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
 	args[11] = "9007199254740991"
@@ -237,6 +271,7 @@ func TestRuntimeReceiptAdmitsLargestSafeArtifactID(t *testing.T) {
 	}
 }
 
+// TestRuntimeReceiptCompiledCommand observes actual stdout, stderr and exit status.
 func TestRuntimeReceiptCompiledCommand(t *testing.T) {
 	binaryPath := filepath.Join(t.TempDir(), "runtime-receipt")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, ".")
