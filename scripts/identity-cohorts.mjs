@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const workFamily = /^TestWork(Approval|Review)/;
@@ -85,19 +85,38 @@ export function checkCohorts(outputs, coverage) {
   return { packages: inventory.size, tests: counts[0] + counts[1], core: counts[0], work: counts[1] };
 }
 
+/** Read bounded regular-file evidence for the command-line verifier. */
+export function readEvidence(path) {
+  const limit = 16 * 1024 * 1024;
+  assert.ok(
+    Number.isInteger(constants.O_NOFOLLOW) && Number.isInteger(constants.O_NONBLOCK),
+    "safe evidence-open flags required",
+  );
+  // Open first without following a final symlink or waiting on a FIFO. Check and
+  // read this same descriptor; a later pathname replacement cannot change it.
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const info = fstatSync(fd);
+    assert.ok(info.isFile() && info.size > 0 && info.size <= limit, "bounded regular test evidence required");
+    const bytes = Buffer.alloc(limit + 1);
+    let used = 0;
+    while (used < bytes.length) {
+      const count = readSync(fd, bytes, used, bytes.length - used, null);
+      if (count === 0) break;
+      used += count;
+    }
+    assert.ok(used > 0 && used <= limit, "test evidence exceeded its byte bound");
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, used));
+  } finally {
+    closeSync(fd);
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const read = (path) => {
-    const info = statSync(path);
-    assert.ok(
-      info.isFile() && info.size > 0 && info.size <= 16 * 1024 * 1024,
-      "bounded regular test evidence required",
-    );
-    return readFileSync(path, "utf8");
-  };
   try {
     const result = checkCohorts(
-      ["test-inventory.jsonl", "test-core.jsonl", "test-work.jsonl"].map(read),
-      ["coverage-core.out", "coverage-work.out"].map(read),
+      ["test-inventory.jsonl", "test-core.jsonl", "test-work.jsonl"].map(readEvidence),
+      ["coverage-core.out", "coverage-work.out"].map(readEvidence),
     );
     console.log(
       `Complete ordinary Go suite: ${result.tests} tests in ${result.packages} packages; core=${result.core}, work=${result.work}; separate atomic coverage profiles retained.`,

@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { load } from "js-yaml";
-import { checkCohorts } from "./identity-cohorts.mjs";
+import { checkCohorts, readEvidence } from "./identity-cohorts.mjs";
 
 const workflow = load(readFileSync(".github/workflows/ci.yaml", "utf8"));
 const commands = [
@@ -197,4 +202,93 @@ test("malformed or truncated test output is not evidence", () => {
       checkCohorts([inventory.map((e) => JSON.stringify(e)).join("\n"), text, ""], [coverage, coverage]),
     );
   }
+});
+
+function evidenceFile(t) {
+  const dir = fs.mkdtempSync(join(tmpdir(), "identity-evidence-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "evidence");
+  fs.writeFileSync(path, "original evidence");
+  return path;
+}
+
+// Inject the race after whichever metadata API the actual reader uses. The old
+// pathname check/read switches files; descriptor check/read retains the opened file.
+function afterMetadata(change, run) {
+  const originals = { statSync: fs.statSync, fstatSync: fs.fstatSync };
+  const restore = () => {
+    Object.assign(fs, originals);
+    syncBuiltinESMExports();
+  };
+  for (const name of Object.keys(originals))
+    fs[name] = (...args) => {
+      const result = originals[name](...args);
+      restore();
+      change();
+      return result;
+    };
+  syncBuiltinESMExports();
+  try {
+    run();
+  } finally {
+    restore();
+  }
+}
+
+test("evidence reads the opened file, not a replacement swapped after metadata inspection", (t) => {
+  const path = evidenceFile(t);
+  afterMetadata(
+    () => {
+      fs.renameSync(path, path + ".original");
+      fs.writeFileSync(path, "unchecked replacement");
+    },
+    () => assert.equal(readEvidence(path), "original evidence"),
+  );
+});
+test("evidence refuses symlinks instead of checking and following their targets", (t) => {
+  const path = evidenceFile(t);
+  fs.symlinkSync(path, path + ".link");
+  assert.throws(() => readEvidence(path + ".link"));
+});
+test("evidence enforces its byte bound even when a checked file grows before the read", (t) => {
+  const path = evidenceFile(t);
+  afterMetadata(
+    () => fs.truncateSync(path, 16 * 1024 * 1024 + 1),
+    () => assert.throws(() => readEvidence(path)),
+  );
+});
+test("evidence admits an ordinary file and refuses empty, oversized and directory inputs", (t) => {
+  const path = evidenceFile(t);
+  assert.equal(readEvidence(path), "original evidence");
+  fs.truncateSync(path, 0);
+  assert.throws(() => readEvidence(path));
+  fs.truncateSync(path, 16 * 1024 * 1024 + 1);
+  assert.throws(() => readEvidence(path));
+  assert.throws(() => readEvidence(join(path, "..")));
+});
+
+test("evidence refuses a FIFO without blocking on its open", (t) => {
+  const path = evidenceFile(t) + ".fifo";
+  const made = spawnSync("mkfifo", [path], { encoding: "utf8", timeout: 1500 });
+  assert.ifError(made.error);
+  assert.equal(made.status, 0);
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      "const {readEvidence}=await import(process.argv[1]); try {readEvidence(process.argv[2]); process.exit(1);} catch {process.exit(0);}",
+      new URL("./identity-cohorts.mjs", import.meta.url).href,
+      path,
+    ],
+    { encoding: "utf8", timeout: 1500 },
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 0);
+});
+
+test("evidence rejects malformed UTF-8 rather than replacing invalid bytes", (t) => {
+  const path = evidenceFile(t);
+  fs.writeFileSync(path, Buffer.from([0xff]));
+  assert.throws(() => readEvidence(path));
 });
