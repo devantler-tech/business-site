@@ -80,6 +80,8 @@ func (s *Foundation) readWorkReview(ctx context.Context, p Principal, id string,
 	return s.readWorkReviewChecked(ctx, p, id, invoice, cursor, nil)
 }
 
+// readWorkReviewChecked retains one evidence transaction through the caller's
+// final private-response checkpoint, including overview and candidate reads.
 func (s *Foundation) readWorkReviewChecked(ctx context.Context, p Principal, id string, invoice int, cursor triageCursor, checkpoint func(context.Context, pgx.Tx, workReviewData) error) (workReviewData, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

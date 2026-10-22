@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+// TestWorkReviewSingleConnection catches nested pool acquisition in each native
+// review, approval and revocation operation while its transaction is held.
 func TestWorkReviewSingleConnection(t *testing.T) {
 	b := workBrowserFixture(t)
 	config := b.pool.Config()
@@ -183,6 +186,8 @@ func TestWorkReviewOriginalSessionAtFinalWait(t *testing.T) {
 	}
 }
 
+// workNativeForm extracts the rendered form's hidden comparisons and CSRF token
+// for submission rather than inventing browser-side authority inputs.
 func workNativeForm(t *testing.T, body, action string) url.Values {
 	t.Helper()
 	form := regexp.MustCompile(`(?s)<form[^>]+action="[^"]*/` + action + `"[^>]*>(.*?)</form>`).FindStringSubmatch(body)
@@ -250,6 +255,8 @@ func TestWorkReviewNativeDecisionAndRevocation(t *testing.T) {
 	}
 }
 
+// TestWorkReviewForgedFieldsCSRFAndClientDenial preserves the native form's
+// closed field set, same-origin CSRF boundary and current operator-only access.
 func TestWorkReviewForgedFieldsCSRFAndClientDenial(t *testing.T) {
 	b := workBrowserFixture(t)
 	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
@@ -290,6 +297,8 @@ func TestWorkReviewForgedFieldsCSRFAndClientDenial(t *testing.T) {
 	}
 }
 
+// TestWorkReviewGateIsIndependentAndClosedRoutesDoNotLeak checks each false,
+// erroneous or mistyped activation value without exposing private review data.
 func TestWorkReviewGateIsIndependentAndClosedRoutesDoNotLeak(t *testing.T) {
 	b := workBrowserFixture(t)
 	for _, off := range []any{nil, false, "true"} {
@@ -316,6 +325,8 @@ func TestWorkReviewGateIsIndependentAndClosedRoutesDoNotLeak(t *testing.T) {
 	}
 }
 
+// TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame uses real SDK events
+// to deny a true-valued provider that is no longer healthy.
 func TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame(t *testing.T) {
 	for _, event := range []openfeature.EventType{openfeature.ProviderError, openfeature.ProviderStale} {
 		t.Run(string(event), func(t *testing.T) {
@@ -333,6 +344,8 @@ func TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame(t *testing.T) {
 	}
 }
 
+// TestWorkReviewRevocationAfterActorConsentAndDeadlineLoss keeps withdrawal
+// available to a current operator when the old approval's authority is invalid.
 func TestWorkReviewRevocationAfterActorConsentAndDeadlineLoss(t *testing.T) {
 	b := workBrowserFixture(t)
 	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
@@ -359,6 +372,8 @@ func TestWorkReviewRevocationAfterActorConsentAndDeadlineLoss(t *testing.T) {
 	}
 }
 
+// TestWorkReviewConcurrentDecisionsAndChangedEvidence observes durable results
+// from simultaneous native submissions and refuses stale or foreign-actor retries.
 func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	b := workBrowserFixture(t)
 	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
@@ -404,6 +419,8 @@ func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	}
 }
 
+// TestWorkReviewBoundedHistoryAndFailedRead checks exact equal-time pagination
+// and refuses to present a denied history query as a successful empty ledger.
 func TestWorkReviewBoundedHistoryAndFailedRead(t *testing.T) {
 	b, op := approvalFixture(t)
 	var ids []string
@@ -444,12 +461,17 @@ func TestWorkReviewBoundedHistoryAndFailedRead(t *testing.T) {
 	if _, err := migrator.Exec(t.Context(), `REVOKE SELECT ON portal_work_revocations FROM portal_runtime`); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		// The test context is canceled before cleanup; restoration stays bounded.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT SELECT ON portal_work_revocations TO portal_runtime`); err != nil {
+			t.Error("fixture read grant restoration failed", err)
+		}
+	})
 	page, err = b.svc.readWorkReview(t.Context(), op, proposalRequestID, 0, triageCursor{})
 	if err == nil || len(page.History) != 0 {
 		t.Fatal("failed history read was presented as a successful empty result")
-	}
-	if _, err := migrator.Exec(t.Context(), `GRANT SELECT ON portal_work_revocations TO portal_runtime`); err != nil {
-		t.Fatal("fixture read grant restoration failed", err)
 	}
 	for _, raw := range []string{"invoice=0", "invoice=51", "invoice=1&invoice=2", "cursor=bad", "client_id=forged", fmt.Sprintf("invoice=%d", 1<<31)} {
 		_, _, valid := workReviewQuery(httptest.NewRequest("GET", "https://example.invalid/portal/?"+raw, nil))

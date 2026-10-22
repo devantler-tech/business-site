@@ -51,6 +51,8 @@ func workRenderFixture(view string) (workReviewData, int) {
 	return d, selected
 }
 
+// renderedWorkLinkPages exercises both languages of each explicit work state
+// through the actual template set for method-aware route and asset validation.
 func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {
@@ -168,6 +170,8 @@ func checkWorkDocument(markup, lang, view string) error {
 	return nil
 }
 
+// TestWorkReviewRenderedInventory preserves all eighteen explicit documents and
+// catches missing evidence, wrong states and forged native-form compositions.
 func TestWorkReviewRenderedInventory(t *testing.T) {
 	pages, err := renderedLinkPages("work-review.html")
 	if err != nil || len(pages) != 18 {

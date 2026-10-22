@@ -21,6 +21,8 @@ type workPageData struct {
 	ReviewInvoice    int
 }
 
+// workReviewQuery accepts at most one language, bounded invoice selector and
+// history cursor; query input supplies no client identity or decision authority.
 func workReviewQuery(r *http.Request) (int, triageCursor, bool) {
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
@@ -49,6 +51,8 @@ func workReviewQuery(r *http.Request) (int, triageCursor, bool) {
 	return invoice, cursor, true
 }
 
+// workPage localizes already-authorized evidence and preserves its invoice and
+// history selectors in native navigation without writing a work decision.
 func (b *browser) workPage(r *http.Request, work workReviewData, invoice int) workPageData {
 	page := workPageData{pageData: b.data(r, "work-review", "", nosurf.Token(r)), Work: work, Base: "/portal/operator/requests/" + work.Request, RevocationKey: secret(), ReviewInvoice: invoice}
 	page.Path = page.Base + "/work-review"
@@ -110,6 +114,8 @@ func (b *browser) showWorkReview(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buffer.Bytes())
 }
 
+// parseWorkForm requires the exact native form fields and canonical generation;
+// the domain transaction independently validates every submitted comparison.
 func parseWorkForm(r *http.Request, approval bool) (workApprovalInput, workRevocationInput, bool) {
 	if r.ParseForm() != nil {
 		return workApprovalInput{}, workRevocationInput{}, false
@@ -144,14 +150,18 @@ func parseWorkForm(r *http.Request, approval bool) (workApprovalInput, workRevoc
 	return d, workRevocationInput{}, valid && invoice > 0 && opaqueRequestID.MatchString(d.Acceptance) && len(d.EvidenceHash) == 64
 }
 
+// approveWork selects explicit approval under the shared secured POST boundary.
 func (b *browser) approveWork(w http.ResponseWriter, r *http.Request) {
 	b.submitWork(w, r, true)
 }
 
+// revokeWork selects withdrawal without requiring valid historical funding.
 func (b *browser) revokeWork(w http.ResponseWriter, r *http.Request) {
 	b.submitWork(w, r, false)
 }
 
+// submitWork binds the original durable session after the domain's final SDK
+// wait and held locks, then redirects only after the explicit decision commits.
 func (b *browser) submitWork(w http.ResponseWriter, r *http.Request, approval bool) {
 	a, revocation, valid := parseWorkForm(r, approval)
 	if !valid {
@@ -186,6 +196,8 @@ func (b *browser) submitWork(w http.ResponseWriter, r *http.Request, approval bo
 	}
 }
 
+// workError returns a localized recovery instruction without reflecting private
+// evidence or raw storage errors in the failed decision response.
 func (b *browser) workError(w http.ResponseWriter, r *http.Request, status int) {
 	page := b.data(r, "unavailable", "", "")
 	page.Unavailable = "The work decision was not recorded. Reload the review and check its current agreement, funding and selection before trying again."

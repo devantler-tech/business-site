@@ -123,7 +123,7 @@ selection; retries cannot renew, restore or resurrect authority. Native EN/DA
 operator forms show the exact agreement and selected invoice, complete credit
 revision history, current approval status and bounded terminal history. Approval
 and revocation require separate explicit submissions with stale-form comparisons;
-GET and HEAD never make a decision. The independent gate has no environment
+GET and HEAD never record a decision. The independent gate has no environment
 activation mapping. No worker or API/MCP endpoint is added, and client work is not
 activated.
 

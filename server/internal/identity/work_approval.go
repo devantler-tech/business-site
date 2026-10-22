@@ -172,6 +172,8 @@ func (s *Foundation) persistWorkApproval(ctx context.Context, p Principal, id st
 
 type workResponseCheck func(context.Context, pgx.Tx, string) error
 
+// persistWorkApprovalChecked applies the same evidence and retry policy as an
+// internal decision while binding optional browser authority before commit.
 func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal, id string, input workApprovalInput, check workResponseCheck) (workApprovalReceipt, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -254,6 +256,8 @@ func (s *Foundation) revokeWorkApproval(ctx context.Context, p Principal, id str
 	return s.revokeWorkApprovalChecked(ctx, p, id, input, nil)
 }
 
+// revokeWorkApprovalChecked preserves terminal withdrawal and actor-bound retries
+// while requiring the caller's final authority checkpoint under the same locks.
 func (s *Foundation) revokeWorkApprovalChecked(ctx context.Context, p Principal, id string, input workRevocationInput, check workResponseCheck) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -366,6 +370,8 @@ func (s *Foundation) commitWork(ctx context.Context, p Principal, tx pgx.Tx, rea
 	return s.commitWorkChecked(ctx, p, tx, ready, deadline, nil)
 }
 
+// finishWorkResponse adapts the held transaction and original operator workspace
+// to the last private-response check without acquiring another pool connection.
 func (s *Foundation) finishWorkResponse(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, deadline time.Time, client string, check workResponseCheck) error {
 	var checkpoint func(context.Context) error
 	if check != nil {
