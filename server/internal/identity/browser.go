@@ -18,7 +18,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/credits.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/credits.html", "web/work-review.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -114,6 +114,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && (strings.HasSuffix(r.URL.Path, "/work-review") || strings.HasSuffix(r.URL.Path, "/work-approvals") || strings.HasSuffix(r.URL.Path, "/work-revocations")) && !s.workApprovalGate(r.Context()) {
+			http.NotFound(w, r)
+			return
+		}
 		// Do not trust caller-controlled Host or forwarded-origin headers.
 		if r.Host != u.Host {
 			http.Error(w, "Portal unavailable", 421)
@@ -157,6 +161,9 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices", b.submitInvoice)
 	mux.HandleFunc("GET /portal/operator/requests/{id}/invoices/{invoice}/credits", b.showCredits)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices/{invoice}/credits", b.submitCredit)
+	mux.HandleFunc("GET /portal/operator/requests/{id}/work-review", b.showWorkReview)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/work-approvals", b.approveWork)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/work-revocations", b.revokeWork)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)

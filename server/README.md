@@ -52,7 +52,7 @@ protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
 responsive layout and System/Light/Dark appearance. Only public CSS/JS are exposed.
 
-The five private page templates share their document metadata, header and footer
+The six private page templates share their document metadata, header and footer
 through ordinary Go `html/template` definitions in `portal.html`. Each page keeps
 its existing native forms, content and navigation targets. This presentation
 sharing adds no renderer process. `Browser` and the production executable use Go
@@ -116,11 +116,16 @@ prevent a fully-credited result. A globally reserved transfer identity cannot
 belong to two invoices or clients. This is manual evidence, not payment processing
 or work-start authority; no bank connection or activation mapping is added.
 
-The separately default-off [work-approval foundation](WORK-APPROVALS.md) persists
+The separately default-off [work-approval review](WORK-APPROVALS.md) persists
 an operator decision against exact agreement, invoice, funding and membership
 evidence for 168 elapsed hours. It retains terminal history and a confined current
-selection; retries cannot renew, restore or resurrect authority. It has no HTTP
-handler, operator UI, worker or API/MCP endpoint and does not activate client work.
+selection; retries cannot renew, restore or resurrect authority. Native EN/DA
+operator forms show the exact agreement and selected invoice, complete credit
+revision history, current approval status and bounded terminal history. Approval
+and revocation require separate explicit submissions with stale-form comparisons;
+GET and HEAD never record a decision. The independent gate has no environment
+activation mapping. No worker or API/MCP endpoint is added, and client work is not
+activated.
 
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)

@@ -96,15 +96,15 @@ function lint(files) {
   return { status: result.status, output: result.stdout + result.stderr };
 }
 
-test('the pinned checker analyzes all five actual Go HTML templates', () => {
+test('the pinned checker analyzes all six actual Go HTML templates', () => {
   const version = spawnSync('htmlhint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
   assert.equal(version.stdout.trim(), '1.9.2');
-  const result = lint(['portal', 'contact', 'requests', 'triage', 'credits'].map(name =>
+  const result = lint(['portal', 'contact', 'requests', 'triage', 'credits', 'work-review'].map(name =>
     join(root, 'server/internal/identity/web', `${name}.html`)));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Scanned 5 files/);
+  assert.match(result.output, /Scanned 6 files/);
 });
 
 test('the actual credit identity patterns retain native Unicode-v validation', () => {

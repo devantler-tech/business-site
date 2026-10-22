@@ -167,6 +167,14 @@ func requireWorkViewer(ctx context.Context, tx pgx.Tx, viewer workMember) error 
 // persistWorkApproval atomically appends one decision, permanently supersedes its
 // predecessor and advances the compare token. Retries never move that pointer.
 func (s *Foundation) persistWorkApproval(ctx context.Context, p Principal, id string, input workApprovalInput) (workApprovalReceipt, error) {
+	return s.persistWorkApprovalChecked(ctx, p, id, input, nil)
+}
+
+type workResponseCheck func(context.Context, pgx.Tx, string) error
+
+// persistWorkApprovalChecked applies the same evidence and retry policy as an
+// internal decision while binding optional browser authority before commit.
+func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal, id string, input workApprovalInput, check workResponseCheck) (workApprovalReceipt, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if !opaqueRequestID.MatchString(input.Key) || !opaqueRequestID.MatchString(input.Acceptance) || input.Invoice < 1 || input.Invoice > 50 || input.Expected < 0 || input.Expected == 1<<63-1 {
@@ -185,7 +193,7 @@ func (s *Foundation) persistWorkApproval(ctx context.Context, p Principal, id st
 		if saved.OperatorIssuer != p.issuer || saved.OperatorSubject != p.subject || saved.Expected != input.Expected || saved.Invoice != input.Invoice || saved.Acceptance != input.Acceptance || saved.EvidenceHash != input.EvidenceHash {
 			return workApprovalReceipt{}, errProposalConflict
 		}
-		return saved, s.commitWork(ctx, p, tx, s.approvalsReady, time.Time{})
+		return saved, s.finishWorkResponse(ctx, p, tx, s.approvalsReady, time.Time{}, viewer.Client, check)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return workApprovalReceipt{}, errTriageStorage
@@ -221,7 +229,7 @@ func (s *Foundation) persistWorkApproval(ctx context.Context, p Principal, id st
 	if err := moveWorkPointer(ctx, tx, id, client, saved.ID, pointer.Generation); err != nil {
 		return workApprovalReceipt{}, err
 	}
-	return saved, s.commitWork(ctx, p, tx, s.approvalsReady, saved.Expires)
+	return saved, s.finishWorkResponse(ctx, p, tx, s.approvalsReady, saved.Expires, viewer.Client, check)
 }
 
 func moveWorkPointer(ctx context.Context, tx pgx.Tx, id, client, approval string, expected int64) error {
@@ -245,6 +253,12 @@ func appendWorkRevocation(ctx context.Context, tx pgx.Tx, id, client string, p P
 // revokeWorkApproval needs current operator access, never valid old funding or
 // the former acceptor's membership. It appends history and clears no newer pointer.
 func (s *Foundation) revokeWorkApproval(ctx context.Context, p Principal, id string, input workRevocationInput) error {
+	return s.revokeWorkApprovalChecked(ctx, p, id, input, nil)
+}
+
+// revokeWorkApprovalChecked preserves terminal withdrawal and actor-bound retries
+// while requiring the caller's final authority checkpoint under the same locks.
+func (s *Foundation) revokeWorkApprovalChecked(ctx context.Context, p Principal, id string, input workRevocationInput, check workResponseCheck) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if !opaqueRequestID.MatchString(input.Key) || !opaqueRequestID.MatchString(input.Approval) || input.Expected < 1 || input.Expected == 1<<63-1 {
@@ -265,7 +279,7 @@ func (s *Foundation) revokeWorkApproval(ctx context.Context, p Principal, id str
 		if approval != input.Approval || issuer != p.issuer || subject != p.subject || expected != input.Expected || reason != "revoked" {
 			return errProposalConflict
 		}
-		return s.commitWork(ctx, p, tx, s.workApprovalGate, time.Time{})
+		return s.finishWorkResponse(ctx, p, tx, s.workApprovalGate, time.Time{}, viewer.Client, check)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return errTriageStorage
@@ -283,7 +297,7 @@ func (s *Foundation) revokeWorkApproval(ctx context.Context, p Principal, id str
 	if err := moveWorkPointer(ctx, tx, id, client, "", pointer.Generation); err != nil {
 		return err
 	}
-	return s.commitWork(ctx, p, tx, s.workApprovalGate, time.Time{})
+	return s.finishWorkResponse(ctx, p, tx, s.workApprovalGate, time.Time{}, viewer.Client, check)
 }
 
 // currentWorkApproval never falls back to an older receipt. A historical retry
@@ -299,23 +313,40 @@ func (s *Foundation) currentWorkApproval(ctx context.Context, p Principal, id st
 	if err != nil {
 		return workApprovalReceipt{}, false, err
 	}
+	d, valid, err := inspectWorkCurrent(ctx, tx, id, r.client, pointer, r.viewer)
+	if err != nil {
+		return workApprovalReceipt{}, false, err
+	}
+	deadline := time.Time{}
+	if valid {
+		deadline = d.Expires
+	}
+	if err := s.commitWork(ctx, p, tx, s.approvalsReady, deadline); err != nil {
+		return workApprovalReceipt{}, false, err
+	}
+	return d, valid, nil
+}
+
+// inspectWorkCurrent is the single selected-decision validity policy. Callers
+// own the request transaction, its final release gates and exclusive deadline.
+func inspectWorkCurrent(ctx context.Context, tx pgx.Tx, id, client string, pointer workPointer, viewer workMember) (workApprovalReceipt, bool, error) {
 	if pointer.ID == "" {
-		if err := requireWorkViewer(ctx, tx, r.viewer); err != nil {
+		if err := requireWorkViewer(ctx, tx, viewer); err != nil {
 			return workApprovalReceipt{}, false, err
 		}
-		return workApprovalReceipt{}, false, s.commitWork(ctx, p, tx, s.approvalsReady, time.Time{})
+		return workApprovalReceipt{}, false, nil
 	}
-	d, err := scanWorkApproval(tx.QueryRow(ctx, `SELECT `+workApprovalColumns+` FROM portal_work_approvals WHERE id=$1 AND request_id=$2 AND client_id=$3`, pointer.ID, id, r.client))
+	d, err := scanWorkApproval(tx.QueryRow(ctx, `SELECT `+workApprovalColumns+` FROM portal_work_approvals WHERE id=$1 AND request_id=$2 AND client_id=$3`, pointer.ID, id, client))
 	if err != nil {
 		return workApprovalReceipt{}, false, errTriageStorage
 	}
 	actor := workMember{Issuer: d.OperatorIssuer, Subject: d.OperatorSubject, Client: d.OperatorClient, Role: "operator", Incarnation: d.OperatorIncarnation}
-	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, r.client, d.Invoice, actor, r.viewer)
+	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, d.Invoice, actor, viewer)
 	if evidenceErr != nil && !errors.Is(evidenceErr, errProposalConflict) {
 		return workApprovalReceipt{}, false, evidenceErr
 	}
 	// A scope/funding conflict can precede collectWorkEvidence's membership step.
-	if err := requireWorkViewer(ctx, tx, r.viewer); err != nil {
+	if err := requireWorkViewer(ctx, tx, viewer); err != nil {
 		return workApprovalReceipt{}, false, err
 	}
 	var terminal bool
@@ -324,13 +355,6 @@ func (s *Foundation) currentWorkApproval(ctx context.Context, p Principal, id st
 		return workApprovalReceipt{}, false, errTriageStorage
 	}
 	valid := evidenceErr == nil && hash == d.EvidenceHash && !terminal && workDeadlineValid(at, d.Expires)
-	deadline := time.Time{}
-	if valid {
-		deadline = d.Expires
-	}
-	if err := s.commitWork(ctx, p, tx, s.approvalsReady, deadline); err != nil {
-		return workApprovalReceipt{}, false, err
-	}
 	return d, valid, nil
 }
 
@@ -343,8 +367,29 @@ func workDeadlineValid(at, expires time.Time) bool {
 // commitWork performs SDK waits before the final database deadline check and
 // principal-expiry checkpoint. The held membership locks survive through commit.
 func (s *Foundation) commitWork(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, deadline time.Time) error {
+	return s.commitWorkChecked(ctx, p, tx, ready, deadline, nil)
+}
+
+// finishWorkResponse adapts the held transaction and original operator workspace
+// to the last private-response check without acquiring another pool connection.
+func (s *Foundation) finishWorkResponse(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, deadline time.Time, client string, check workResponseCheck) error {
+	var checkpoint func(context.Context) error
+	if check != nil {
+		checkpoint = func(ctx context.Context) error { return check(ctx, tx, client) }
+	}
+	return s.commitWorkChecked(ctx, p, tx, ready, deadline, checkpoint)
+}
+
+// commitWorkChecked lets a private response bind fresh durable session bytes
+// after the last SDK wait, while request/membership locks still protect evidence.
+func (s *Foundation) commitWorkChecked(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool, deadline time.Time, checkpoint func(context.Context) error) error {
 	if !ready(ctx) || !time.Now().Before(p.expires) || ctx.Err() != nil {
 		return ErrDenied
+	}
+	if checkpoint != nil {
+		if err := checkpoint(ctx); err != nil {
+			return err
+		}
 	}
 	if !deadline.IsZero() {
 		var at time.Time

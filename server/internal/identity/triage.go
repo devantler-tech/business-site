@@ -133,6 +133,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
 	invoicesEnabled := acceptanceEnabled && b.foundation.invoicesReady(r.Context())
 	creditsEnabled := invoicesEnabled && b.foundation.creditsReady(r.Context())
+	workEnabled := id != "" && b.foundation.workApprovalGate(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -143,6 +144,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	page := b.triagePage(r, rows, id, q.Get("cursor"))
+	page.WorkReviewEnabled = workEnabled
 	if proposalsEnabled {
 		proposals, err := b.foundation.readProposals(r.Context(), p, id)
 		if err != nil {
@@ -227,6 +229,7 @@ func triageURL(cursor, lang string) string {
 
 type triagePageData struct {
 	pageData
+	WorkReviewEnabled bool
 	Requests          []projectRequest
 	Detail            bool
 	Next, LanguageURL string

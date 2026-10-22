@@ -7,7 +7,7 @@ scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 cd "$root/server"
 go test ./internal/identity -run '^TestPortalLink' -count=1 -timeout=60s
-for template in portal contact requests triage credits; do
+for template in portal contact requests triage credits work-review; do
   bash "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/$template.html" >"$scratch/$template.html"
   [[ -s "$scratch/$template.html" ]]
   grep -q 'method-aware link contract:' "$scratch/$template.html"
@@ -43,7 +43,7 @@ if [[ "$#" -eq 1 ]]; then
   # remain visible to the actual checker, including a deliberately broken one.
   controls="$(mktemp -d "$root/server/.portal-link-controls.XXXXXX")"
   trap 'rm -rf -- "$scratch" "$controls"' EXIT
-  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/credits.html"
+  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/credits.html" "$root/server/internal/identity/web/work-review.html"
   printf '<html><body><a href="https://devantler.tech/portal-link-contract-missing-01a132ba/">Broken link control</a></body></html>\n' >"$controls/broken.html"
   if lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$controls/broken.html" >"$scratch/broken-receipt" 2>&1; then
     echo 'portal-links: real Lychee accepted a broken ordinary link' >&2; exit 1

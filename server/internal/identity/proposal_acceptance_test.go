@@ -178,20 +178,8 @@ func TestAcceptanceSDKErrorAndStaleDenyActualHandlers(t *testing.T) {
 		t.Run(string(event), func(t *testing.T) {
 			b := acceptanceFixture(t)
 			f := acceptanceForm(t, b)
-			provider := &unsettledProvider{FeatureProvider: memprovider.NewInMemoryProvider(acceptanceMemoryFlags()), events: make(chan openfeature.Event, 1)}
-			if err := b.flags.SetProviderAndWait(t.Context(), provider); err != nil {
-				t.Fatal(err)
-			}
-			settled := make(chan struct{})
-			callback := func(openfeature.EventDetails) { close(settled) }
 			client := b.flags.NewClient()
-			client.AddHandler(event, &callback)
-			provider.events <- openfeature.Event{EventType: event}
-			select {
-			case <-settled:
-			case <-time.After(time.Second):
-				t.Fatal("SDK state did not settle")
-			}
+			requireFixtureSDKEvent(t, b.flags, client, acceptanceMemoryFlags(), event)
 			if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/proposal-acceptance", f, b.site.URL); status != 404 {
 				t.Fatal("unhealthy SDK accepted consent")
 			}

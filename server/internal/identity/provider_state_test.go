@@ -23,6 +23,27 @@ func (*unsettledProvider) Init(openfeature.EvaluationContext) error { return nil
 func (p *unsettledProvider) Shutdown()                              { p.close.Do(func() { close(p.events) }) }
 func (p *unsettledProvider) EventChannel() <-chan openfeature.Event { return p.events }
 
+// requireFixtureSDKEvent installs a true-valued provider, then observes its real
+// SDK state transition before any handler assertion. Both native journeys use
+// the same setup without substituting a boolean or bypassing event delivery.
+func requireFixtureSDKEvent(t *testing.T, api *openfeature.EvaluationAPI, client *openfeature.Client, flags map[string]memprovider.InMemoryFlag, event openfeature.EventType) {
+	t.Helper()
+	seen := make(chan struct{})
+	callback := func(openfeature.EventDetails) { close(seen) }
+	client.AddHandler(event, &callback)
+	t.Cleanup(func() { client.RemoveHandler(event, &callback) })
+	provider := &unsettledProvider{FeatureProvider: memprovider.NewInMemoryProvider(flags), events: make(chan openfeature.Event, 1)}
+	if err := api.SetProviderAndWait(t.Context(), provider); err != nil {
+		t.Fatal("provider fixture initialization failed", err)
+	}
+	provider.events <- openfeature.Event{EventType: event}
+	select {
+	case <-seen:
+	case <-time.After(time.Second):
+		t.Fatal("SDK state control did not settle")
+	}
+}
+
 // The SDK may evaluate ERROR/STALE providers, even when they return true.
 // The application's identity boundary must reject those states independently.
 func TestReadyRejectsUnhealthySDKProvider(t *testing.T) {

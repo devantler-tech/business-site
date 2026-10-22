@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // TestBrowserVisualFixture is an explicitly synthetic, loopback-only UI runner.
@@ -22,7 +24,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation"}, []any{true, true, true, true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"}, []any{true, true, true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -40,7 +42,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	operator := enroll(t, b.svc, b.f, "visual-preparation", "fictional-operator", "operator")
-	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 299500, MonthlyMinor: 9900, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
+	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 375000, MonthlyMinor: 12500, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
 	if err := b.svc.persistProposal(t.Context(), operator, requestID, proposal); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +54,15 @@ func TestBrowserVisualFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key); err != nil {
+	acceptance, err := b.svc.acceptProposal(t.Context(), client, requestID, review.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoice := projectInvoice{Key: secret(), Acceptance: acceptance.ID, Reference: "TEST-VISUAL-01", Purpose: "Fictional agreed iteration installment", AmountMinor: 12500, NetMinor: pgtype.Int8{Int64: 10000, Valid: true}, VATMinor: pgtype.Int8{Int64: 2500, Valid: true}}
+	if err := b.svc.persistInvoice(t.Context(), operator, requestID, invoice); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.persistCredit(t.Context(), operator, requestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "visual-transfer", State: "confirmed", AmountMinor: 12500, Note: "Fictional observation; no bank connection"}); err != nil {
 		t.Fatal(err)
 	}
 	b.mu.Lock()
@@ -64,6 +74,11 @@ func TestBrowserVisualFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	origin := "http://localhost:" + fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
+	// Configure the shared clients before concurrent page and asset requests begin.
+	siteClient, brokerClient := b.site.Client(), b.broker.Client()
+	for _, client := range []*http.Client{siteClient, brokerClient} {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && (r.URL.Path == "/portal/sign-in" || r.URL.Path == "/portal/contact/verify") {
 			b.mu.Lock()
@@ -89,14 +104,13 @@ func TestBrowserVisualFixture(t *testing.T) {
 			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
 			return
 		}
-		base, client, path := b.site.URL, b.site.Client(), r.URL.RequestURI()
+		base, client, path := b.site.URL, siteClient, r.URL.RequestURI()
 		if strings.HasPrefix(r.URL.Path, "/fixture/broker/") {
-			base, client, path = b.broker.URL, b.broker.Client(), strings.TrimPrefix(r.URL.RequestURI(), "/fixture/broker")
+			base, client, path = b.broker.URL, brokerClient, strings.TrimPrefix(r.URL.RequestURI(), "/fixture/broker")
 		}
-		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 		req, err := http.NewRequestWithContext(r.Context(), r.Method, base+path, r.Body)
 		if err != nil {
-			http.Error(w, "Fixture unavailable", 503)
+			http.Error(w, "Fixture unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		req.Header = r.Header.Clone()
@@ -119,10 +133,14 @@ func TestBrowserVisualFixture(t *testing.T) {
 		}
 		res, err := client.Do(req)
 		if err != nil {
-			http.Error(w, "Fixture unavailable", 503)
+			http.Error(w, "Fixture unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		defer res.Body.Close()
+		defer func() {
+			if err := res.Body.Close(); err != nil {
+				t.Error("synthetic response cleanup failed")
+			}
+		}()
 		for key, values := range res.Header {
 			if key == "Set-Cookie" || key == "Content-Length" {
 				continue
@@ -161,6 +179,37 @@ func TestBrowserVisualFixture(t *testing.T) {
 	})}
 	t.Cleanup(func() { _ = server.Close() })
 	go func() { _ = server.Serve(listener) }()
+	if !t.Run("ConcurrentPageLoads", func(t *testing.T) {
+		client := &http.Client{Timeout: 5 * time.Second}
+		for i := range 8 {
+			t.Run(fmt.Sprint(i), func(t *testing.T) {
+				t.Parallel()
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, origin+"/portal/sign-in", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				res, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if res.StatusCode != http.StatusOK {
+					t.Errorf("synthetic sign-in status = %d; want 200", res.StatusCode)
+				}
+				if _, err := io.Copy(io.Discard, res.Body); err != nil {
+					t.Error(err)
+				}
+				if err := res.Body.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+		}
+	}) {
+		return
+	}
+	// Short mode checks concurrent forwarding without opening an interactive lease.
+	if testing.Short() {
+		return
+	}
 	fmt.Printf("SYNTHETIC_VISUAL_URL=%s/portal/sign-in?lang=da\n", origin)
 	// Bounded interactive proof, never an unattended production service.
 	select {
