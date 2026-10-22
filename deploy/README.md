@@ -19,7 +19,8 @@ arguments and runtime restrictions. Neither mode verifies a registry signature;
 that remains mandatory in the signed publisher's independent receipt check.
 
 The package uses two replicas, a half-core/256 MiB limit and the real `/healthz`
-probe. These are provisional bounds, not load, availability or recovery evidence.
+probe, plus an application-owned disruption budget allowing one unavailable Pod.
+These are provisional bounds, not load, availability, actual drain or recovery evidence.
 Only gateway ingress to the application port is opened. No application egress,
 database, migration, broker or private activation setting is configured.
 

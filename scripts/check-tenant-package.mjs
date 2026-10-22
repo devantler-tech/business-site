@@ -13,10 +13,11 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 2, "resource count");
+  assert.equal(docs.length, 3, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
-  for (const resource of [app, network]) {
+  const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
+  for (const resource of [app, network, budget]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
     keys(resource.metadata, ["name", "namespace"]);
     assert.equal(resource.metadata.name, "business-site");
@@ -24,6 +25,11 @@ export function validateTenantPackage(input) {
   }
   assert.equal(app.apiVersion, "kro.run/v1alpha1");
   assert.equal(network.apiVersion, "cilium.io/v2");
+  assert.equal(budget.apiVersion, "policy/v1");
+  assert.deepEqual(budget.spec, {
+    maxUnavailable: 1,
+    selector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
+  });
   const spec = app.spec;
   keys(spec, ["name", "image", "host", "port", "replicas", "probePath", "cpuRequest", "memoryRequest", "cpuLimit", "memoryLimit", "args", "runAsUser", "runAsGroup", "readOnlyRootFilesystem", "secretProjections"]);
   assert.equal(spec.name, "business-site");

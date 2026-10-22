@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - webapp.yaml
   - network-policy.yaml
+  - disruption-budget.yaml

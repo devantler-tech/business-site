@@ -18,6 +18,7 @@ test("the real Kustomize package renders deterministically and admits the public
   let first;
   assert.doesNotThrow(() => { first = render(); }, "the source-owned package must exist and render");
   assert.equal(render(), first);
+  assert.ok(yaml.loadAll(first).some((d) => d?.kind === "PodDisruptionBudget"), "each workload needs a drain-safe budget");
   const result = check(first);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
@@ -49,11 +50,18 @@ for (const [name, mutate] of [
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
   ["an all-pod selector", (d) => { d[1].spec.endpointSelector = {}; }],
+  ["a missing disruption budget", (d) => { d.splice(2, 1); }],
+  ["a foreign disruption-budget namespace", (d) => { d[2].metadata.namespace = "foreign"; }],
+  ["an empty disruption-budget selector", (d) => { d[2].spec.selector = {}; }],
+  ["a budget selecting another workload", (d) => { d[2].spec.selector.matchLabels["app.kubernetes.io/name"] = "other"; }],
+  ["a drain-blocking budget", (d) => { d[2].spec.maxUnavailable = 0; }],
+  ["a percentage budget", (d) => { d[2].spec.maxUnavailable = "50%"; }],
+  ["a conflicting minimum-available budget", (d) => { d[2].spec.minAvailable = 1; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
-    const docs = yaml.loadAll(render());
-    // Ordering is deliberately normalized by kind, not Kustomize's sort order.
-    docs.sort((a, b) => Number(b.kind === "WebApp") - Number(a.kind === "WebApp"));
+    const rendered = yaml.loadAll(render());
+    // Each target is selected by kind, independent of Kustomize's sort order.
+    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget"].map((kind) => rendered.find((d) => d.kind === kind));
     mutate(docs);
     const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
     assert.equal(result.status, 1, result.stdout);

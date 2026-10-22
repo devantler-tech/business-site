@@ -30,8 +30,11 @@ platform consumer applies this directory, so adding it activates nothing.
 
 Two replicas and explicit resource bounds provide a starting configuration, not
 production capacity, availability or recovery evidence. KRO uses soft topology
-spreading and creates no disruption budget. Live acceptance must measure these
-properties rather than infer them from the declaration.
+spreading and creates no disruption budget. The application therefore owns a
+separate namespaced `maxUnavailable: 1` budget selecting the generated Pod label.
+Current Platform `ba9d698cc5e791eb49f8b87d60de62f0a40bdba4` explicitly grants tenant
+PDB management and retains this house pattern in its drain-safety policy.
+Live acceptance must measure these properties rather than infer them from source.
 
 ## Validation boundary
 
