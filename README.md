@@ -64,7 +64,7 @@ This repository's [`publish-site.yaml`](.github/workflows/publish-site.yaml) own
 publication on main pushes, admitted manual runs and daily ranking refreshes. Production
 publication requires `SITE_PUBLICATION_ENABLED=true` and the protected main-only deployment
 environment. Manual runs default to artifact-only `preview`, even when publication is enabled.
-The old reusable publisher is retained for its legacy immutable callers, not as the live owner.
+Historical immutable callers retain their Git revision; there is no second publisher export on the default branch.
 
 A source merge or preview artifact is not publication evidence. Operators check the successful
 deployment and the live [`publication-source.json`](https://devantler.tech/publication-source.json)

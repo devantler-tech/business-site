@@ -73,19 +73,3 @@ test("the actual common shell removes reference output when selected building fa
     assert.equal(existsSync(join(directory,"dist")),false,"A failed selected build cannot leave a publishable-looking reference");
   } finally { rmSync(directory,{recursive:true}); }
 });
-test("the retained legacy publisher supports pre-candidate sources and propagates current install failures", () => {
-  const directory=mkdtempSync(join(tmpdir(),"legacy-candidate-"));
-  try {
-    mkdirSync(join(directory,"bin"));
-    const capture=join(directory,"installed");
-    writeFileSync(join(directory,"bin/npm"),'#!/bin/sh\nprintf "%s\\n" "$*" >> "$CAPTURE"\nexit "${FAIL_INSTALL:-0}"\n',{mode:0o700});
-    const step=load(".github/workflows/publish-pages.yaml").jobs.build.steps.find(step=>step.name==="Install candidate frontend dependencies");
-    const run = env => spawnSync("/bin/bash",["-eo","pipefail","-c",step.run],{cwd:directory,env:{...process.env,PATH:`${directory}/bin:${process.env.PATH}`,CAPTURE:capture,...env},timeout:10000});
-    assert.equal(run({}).status,0);
-    assert.equal(existsSync(capture),false,"A source predating the candidate has nothing to install");
-    mkdirSync(join(directory,"web")); writeFileSync(join(directory,"web/package-lock.json"),"{}");
-    assert.equal(run({}).status,0);
-    assert.equal(readFileSync(capture,"utf8"),"--prefix web ci\n");
-    assert.equal(run({FAIL_INSTALL:"42"}).status,42,"An existing candidate lockfile never makes installation optional");
-  } finally { rmSync(directory,{recursive:true}); }
-});

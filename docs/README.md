@@ -9,8 +9,8 @@ CV data and build-time previews. Application paths are relative to the repositor
 The source-owned `.github/workflows/publish-site.yaml` builds this repository's exact `main`
 revision and publishes to its own Pages resource at devantler.tech when its admission gates
 pass. It is an ordinary push/manual/scheduled workflow, not a callable reusable workflow.
-The old reusable `publish-pages.yaml` is retained for legacy immutable callers; it is not
-the active production publisher. Neither workflow deploys the private portal backend.
+Historical immutable callers retain their Git revision; no legacy publisher is exported on
+the default branch. The current publisher does not deploy the private portal backend.
 
 ## Develop
 

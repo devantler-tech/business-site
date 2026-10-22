@@ -14,11 +14,11 @@ workflow publication, the domain and enforced HTTPS, with one deployment branch 
 source `70775006afa71b8fbd5144269cdb74676304e3d6`, attempt 1 and publish mode.
 
 [Monorepo #4082](https://github.com/devantler-tech/monorepo/pull/4082) retired its old publisher.
-The retained reusable `publish-pages.yaml` and its header describe the **legacy** monorepo caller
-contract, not current domain ownership or a live publication path. Its receipt has a
-`callerRevision`; the source-owned receipt instead records `workflowRunId`, `workflowRunAttempt`
-and `publicationMode`. Do not use the legacy caller/header to infer current ownership, invoke a
-second publisher or repeat the domain transfer. The cutover procedure below records the accepted
+The former reusable `publish-pages.yaml` is retired from the default branch; historical immutable
+callers still resolve its reviewed Git revision. Its legacy receipt has a `callerRevision`;
+the source-owned receipt instead records `workflowRunId`, `workflowRunAttempt` and
+`publicationMode`. Historical caller contracts do not establish current ownership or authorize
+a second publisher or another domain transfer. The cutover procedure below records the accepted
 migration and rollback constraints; it is not outstanding setup work.
 
 ## Context and decision
