@@ -1157,6 +1157,21 @@ for repository in actions maintenance; do
   fail_match "Retired links: $repository is rejected" "$c" "Retired-repo link"
 done
 
+for repository in actions maintenance reusable-workflows; do
+  for suffix in -runner _helpers .tools; do
+    c="$tmp/similar-$repository-$suffix"; build_fixture "$c"
+    printf '<a href="https://github.com/devantler-tech/%s%s">Independent source</a>\n' \
+      "$repository" "$suffix" >> "$c/src/content/docs/index.mdx"
+    pass_case "Retired links: distinct $repository$suffix is accepted" "$c"
+  done
+  for suffix in /tree/main '?tab=readme-ov-file' '#usage' .git; do
+    c="$tmp/boundary-$repository-${suffix//[^a-zA-Z0-9]/_}"; build_fixture "$c"
+    printf '<a href="https://github.com/devantler-tech/%s%s">Retired source</a>\n' \
+      "$repository" "$suffix" >> "$c/src/content/docs/index.mdx"
+    fail_match "Retired links: $repository$suffix is rejected" "$c" "Retired-repo link"
+  done
+done
+
 if [ "$fail" -ne 0 ]; then
   printf '❌ active-projects drift-guard self-test FAILED\n' >&2
   exit 1

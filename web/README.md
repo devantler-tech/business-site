@@ -44,7 +44,7 @@ as Astro, not a second translation catalogue.
 Projects preserves the six eligible tools selected by the shared ranking implementation,
 the actual observation timestamp, the restrained KSail workflow and masked desktop detail,
 one compact public website example, hosting context and native research disclosure.
-The complete thirteen-entry inventory and old product/research anchors remain authoritative.
+The complete [shared product inventory](../src/data/public-products.json) and retained product/research anchors remain authoritative.
 `/projects/active/` and `/projects/completed/` retain incoming fragments and have no-JavaScript
 fallback links. No GitHub request or ranking token is sent to a visitor's browser.
 

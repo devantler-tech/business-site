@@ -143,8 +143,11 @@ for entry in "${retired_repo_urls[@]}"; do
   replacement_url="${entry##*|}"
 
   # Components and data also render public links. Inspect the whole source tree,
-  # not just MDX; distinguish no matches from an incomplete read.
-  if hits=$(grep -rFlI "$retired_url" "$site_root/src"); then
+  # not just MDX; match a complete repository slug, including clone URLs, and
+  # distinguish no matches from an incomplete read. Similar repo names are valid.
+  retired_name="${retired_url##*/}"
+  retired_pattern="https://github[.]com/devantler-tech/${retired_name}([.]git)?([^[:alnum:]_.-]|$)"
+  if hits=$(grep -rEliI -- "$retired_pattern" "$site_root/src"); then
     while IFS= read -r hit; do
       echo "::error file=${hit#"$repo_root"/}::Retired-repo link: this page links to '${retired_url}', \
 which is retired. Link '${replacement_url}' instead." >&2

@@ -56,7 +56,7 @@ export interface Cv {
 }
 
 export const cv: Cv = {
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   name: "Nikolai Emil Damm",
   title: "Developer Experience Engineer",
   location: "Funen, Denmark",
@@ -200,7 +200,7 @@ export const cv: Cv = {
     {
       title: "Actions & Reusable Workflows",
       summary:
-        "A curated library of GitHub Actions and reusable workflows for Go, .NET, docs, releases, and repository automation.",
+        "Composite GitHub Actions and reusable jobs for testing, tool setup, signed publication, releases, and repository automation.",
       url: "https://github.com/devantler-tech/.github",
     },
   ],
