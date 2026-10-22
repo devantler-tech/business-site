@@ -22,7 +22,7 @@ function mandatoryQualityChecks(candidate) {
     'npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs',
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
-    'npx --yes --package=secretlint@13.0.5 --package=@secretlint/secretlint-rule-preset-recommend@13.0.5 -- node --test scripts/portal-credential-quality.test.mjs',
+    'npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs',
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
     const steps = job.steps.filter(step => step.run === command);
