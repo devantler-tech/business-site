@@ -39,6 +39,37 @@ test("the disruption budget admits two or three replicas", () => {
   }
 });
 
+test("the real admission command accepts the exact proposed staging destination", () => {
+  const docs = yaml.loadAll(render());
+  docs.find((d) => d?.kind === "WebApp").spec.host = "business-site.platform.devantler.tech";
+  const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, "tenant package: public-only package accepted\n");
+});
+
+for (const host of [
+  "business-site.example.invalid",
+  "devantler.tech",
+  "www.devantler.tech",
+  "*.platform.devantler.tech",
+  "business-site.*.devantler.tech",
+  "business-site.platform.devantler.tech.attacker.invalid",
+  "business-site.platform.devantler.tech.",
+  "BUSINESS-SITE.platform.devantler.tech",
+  "wedding.platform.devantler.tech",
+  "business-site.platform.lan",
+  "",
+]) {
+  test(`the real admission command refuses the unapproved hostname ${JSON.stringify(host)}`, () => {
+    const docs = yaml.loadAll(render());
+    docs.find((d) => d?.kind === "WebApp").spec.host = host;
+    const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
+    assert.equal(result.status, 1, result.stdout);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "tenant package: rejected input; review the public-only package contract\n");
+  });
+}
+
 // Each mutation names a distinct forbidden capability or runtime failure.
 for (const [name, mutate] of [
   ["an extra Secret resource", (d) => d.push({ apiVersion: "v1", kind: "Secret", metadata: { name: "extra" } })],
