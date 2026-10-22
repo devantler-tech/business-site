@@ -39,9 +39,14 @@ Live acceptance must measure these properties rather than infer them from source
 ## Validation boundary
 
 The application policy validates the actual Kustomize output: a closed resource
-set, immutable same-repository image, inert hostname, bounded resources, correct
-runtime arguments/probe/identity, single selected input and ingress-only network
-policy. Mutation controls exercise that real rendering/validation path. Actual
+set, exact independently verified baseline image, inert hostname, bounded resources,
+two or three replicas under the one-unavailable budget, correct runtime
+arguments/probe/identity, single selected input and gateway-only ingress.
+[Cilium's documented `egress: [{}]`](https://docs.cilium.io/en/stable/security/policy/layer3/#ingress-egress-default-deny)
+enables egress default deny without adding outbound allowances. This is additive
+policy, not a deny overriding allowances in other platform policies. Empty or
+omitted egress and explicit default-deny opt-outs are rejected. Mutation controls
+exercise that real rendering/validation path. Actual
 restricted-image controls consume those rendered arguments with fictional input.
 
 This is source-contract and Docker runtime proof, not a generated Kubernetes API,

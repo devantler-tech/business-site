@@ -18,11 +18,16 @@ newly tested production image as an explicit argument, retaining the rendered
 arguments and runtime restrictions. Neither mode verifies a registry signature;
 that remains mandatory in the signed publisher's independent receipt check.
 
-The package uses two replicas, a half-core/256 MiB limit and the real `/healthz`
-probe, plus an application-owned disruption budget allowing one unavailable Pod.
+The package uses two replicas (the validator permits two or three), a
+half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned
+disruption budget allowing one unavailable Pod.
 These are provisional bounds, not load, availability, actual drain or recovery evidence.
-Only gateway ingress to the application port is opened. No application egress,
-database, migration, broker or private activation setting is configured.
+Only gateway ingress to the application port is opened. Cilium's documented
+`egress: [{}]` enables egress default deny; this package adds no outbound allow
+rule. Other platform policies remain additive, so this is not an overriding deny
+of every platform-granted connection. No database, migration, broker or private
+activation setting is configured. The checker accepts only the committed,
+independently verified baseline image; a same-repository digest alone is insufficient.
 
 The selected disclosure file must be provided separately in the same namespace.
 The platform projects it read-only at the fixed mount with mode 0440 and the

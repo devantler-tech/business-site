@@ -24,6 +24,21 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
+test("the rendered network policy explicitly enables egress default deny", () => {
+  const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
+  // Cilium's documented default-deny rule is one empty rule, not an empty list.
+  assert.deepEqual(network.spec.egress, [{}]);
+});
+
+test("the disruption budget admits two or three replicas", () => {
+  for (const replicas of [2, 3]) {
+    const docs = yaml.loadAll(render());
+    docs.find((d) => d?.kind === "WebApp").spec.replicas = replicas;
+    const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
+    assert.equal(result.status, 0, result.stderr);
+  }
+});
+
 // Each mutation names a distinct forbidden capability or runtime failure.
 for (const [name, mutate] of [
   ["an extra Secret resource", (d) => d.push({ apiVersion: "v1", kind: "Secret", metadata: { name: "extra" } })],
@@ -31,6 +46,7 @@ for (const [name, mutate] of [
   ["a missing namespace", (d) => { delete d[0].metadata.namespace; }],
   ["a mutable image tag", (d) => { d[0].spec.image = "ghcr.io/devantler-tech/business-site:latest"; }],
   ["a foreign image", (d) => { d[0].spec.image = `ghcr.io/other/business-site@sha256:${"a".repeat(64)}`; }],
+  ["an unverified same-repository image digest", (d) => { d[0].spec.image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
   ["a production hostname", (d) => { d[0].spec.host = "devantler.tech"; }],
   ["an unknown schema field", (d) => { d[0].spec.command = ["/bin/sh"]; }],
   ["portal activation input", (d) => { d[0].spec.env = [{ name: "PORTAL_IDENTITY", value: "true" }]; }],
@@ -43,12 +59,16 @@ for (const [name, mutate] of [
   ["a wrong service port", (d) => { d[0].spec.port = 3000; }],
   ["unbounded memory", (d) => { d[0].spec.memoryLimit = "4Gi"; }],
   ["zero replicas", (d) => { d[0].spec.replicas = 0; }],
+  ["one replica under a one-unavailable budget", (d) => { d[0].spec.replicas = 1; }],
   ["missing disclosure", (d) => { d[0].spec.secretProjections = []; }],
   ["an extra private key", (d) => { d[0].spec.secretProjections[0].items.push({ key: "db", path: "db" }); }],
   ["a traversal projection", (d) => { d[0].spec.secretProjections[0].items[0].path = "../disclosure"; }],
   ["an additional Secret projection", (d) => { d[0].spec.secretProjections.push({ secretName: "other", items: [] }); }],
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
+  ["an empty egress list without default-deny enforcement", (d) => { d[1].spec.egress = []; }],
+  ["an omitted egress policy", (d) => { delete d[1].spec.egress; }],
+  ["disabled egress default deny", (d) => { d[1].spec.enableDefaultDeny = { egress: false }; }],
   ["an all-pod selector", (d) => { d[1].spec.endpointSelector = {}; }],
   ["a missing disruption budget", (d) => { d.splice(2, 1); }],
   ["a foreign disruption-budget namespace", (d) => { d[2].metadata.namespace = "foreign"; }],
