@@ -1,6 +1,12 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+The explicit offline `cmd/runtime-receipt` admits the public runtime publication
+ZIP without extraction, network access or filesystem writes. Read `../deploy/README.md`.
+Retain the closed receipt/member schema, bounded same-descriptor snapshot, complete
+CRC checks and caller-bound original source/run/attempt. Its ordinary tests include
+the compiled command. Admission is not signature, current-CI, release or deployment
+proof; #276 owns the separate publisher caller and independent signed-pair proof.
 The shared test-only maintenance inventory preserves all 120 original Go documents.
 The separate work-review inventory adds 18 actual EN/DA documents with explicit
 state, native-form and evidence expectations; retain both inventories.
