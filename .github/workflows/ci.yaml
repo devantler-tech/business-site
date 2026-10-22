@@ -383,8 +383,19 @@ jobs:
           go mod verify
           test -z "$(gofmt -l .)"
           go vet ./...
+      - name: Verify complete ordinary-suite composition
+        working-directory: .
+        run: node --test scripts/identity-cohorts.test.mjs
+      - name: List the complete compiled ordinary test inventory
+        run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test broker and durable access boundary
-        run: go test -race -coverprofile=coverage.out -p=1 ./... -count=1 -timeout=90s
+        shell: bash
+        run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl
+      - name: Test work approval and review boundary
+        shell: bash
+        run: go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+      - name: Verify every ordinary test ran exactly once
+        run: node ../scripts/identity-cohorts.mjs
       - name: Scan reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
