@@ -13,7 +13,7 @@ const featured = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
 const anchors = {
   ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
-  'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
+  'world-at-ruin': ['️-world-at-ruin--'], '.github': ['-reusable-workflows-', '-actions-'],
   'agent-skills': ['-agent-skills--'], 'agent-plugins': ['-agent-plugins---'],
   'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
 };
@@ -68,7 +68,7 @@ for (const locale of ['en', 'da']) {
     assert.ok(shelf);
     assert.doesNotMatch(shelf, /<details\b/);
     const cards = [...shelf.matchAll(/<article\b[^>]*data-public-product="([^"]+)"[^>]*data-stars="(\d+)"[^>]*>([\s\S]*?)<\/article>/g)];
-    assert.equal(cards.length, featured ? 6 : 13);
+    assert.equal(cards.length, featured ? 6 : 12);
     if (!featured) assert.deepEqual(cards.map(([, repo]) => repo).sort(), catalogue.map((item) => item.repository).sort());
     for (const [, repo, count, html] of cards) {
       assert.equal(Number(count), stars.repositories[repo]);

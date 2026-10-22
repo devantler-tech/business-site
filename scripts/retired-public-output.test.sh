@@ -12,7 +12,13 @@ for page in index.html da/index.html projects/index.html; do
     'http://github.com/devantler-tech/reusable-workflows/tree/main' \
     'https://github.com/DEVANTLER-TECH/REUSABLE-WORKFLOWS' \
     'https://github.com/devantler-tech/reusable&#x2D;workflows' \
-    'https://github.com/devantler-tech/%72eusable-workflows'; do
+    'https://github.com/devantler-tech/%72eusable-workflows' \
+    'https://github.com/devantler-tech/actions' \
+    '//github.com/DEVANTLER-TECH/ACTIONS/tree/main' \
+    'https://github.com/devantler-tech/%61ctions' \
+    'https://github.com/devantler-tech/maintenance' \
+    '//github.com/DEVANTLER-TECH/MAINTENANCE/tree/main' \
+    'https://github.com/devantler-tech/%6daintenance'; do
   cp -R "$dist" "$tmp/site"
   printf '<a href="%s">Retired source</a>\n' "$href" >> "$tmp/site/$page"
   if out="$(node "$here/check-business-site.mjs" "$tmp/site" 2>&1)"; then
@@ -35,4 +41,4 @@ for href in \
   node "$here/check-business-site.mjs" "$tmp/site" >/dev/null
   rm -rf "$tmp/site"
 done
-printf 'Retired public output: PASS — 18 actual EN/DA/Projects rejection controls and 3 unrelated destinations\n'
+printf 'Retired public output: PASS — 36 actual EN/DA/Projects rejection controls and 3 unrelated destinations\n'

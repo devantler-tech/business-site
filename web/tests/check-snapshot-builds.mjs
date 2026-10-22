@@ -14,7 +14,7 @@ fresh.observedAt = fresh.fetchedAt.slice(0, 10);
 Object.assign(fresh.repositories, {
   "provider-upjet-unifi": 900, "kyverno-policies": 800, "khoist": 700,
   "agent-plugins": 600, "agent-skills": 500, ksail: 400, ".github": 300,
-  "world-at-ruin": 10000, actions: 9000,
+  "world-at-ruin": 10000,
 });
 
 /**
@@ -43,11 +43,15 @@ try {
   Reflect.deleteProperty(incomplete.repositories, "ksail");
   const missingMetadata = structuredClone(fresh);
   Reflect.deleteProperty(missingMetadata.metadata, "ksail");
+  const retired = structuredClone(fresh);
+  Object.assign(retired.repositories, { actions: 9000 });
+  Object.assign(retired.metadata, { actions: { private: false, archived: false, fork: false } });
   /** @type {[string, string | null][]} */
   const inputs = [
     ["missing.json", null], ["invalid.json", "{"],
     ["stale.json", JSON.stringify(stale)], ["future.json", JSON.stringify(future)],
     ["incomplete.json", JSON.stringify(incomplete)], ["metadata.json", JSON.stringify(missingMetadata)],
+    ["retired.json", JSON.stringify(retired)],
   ];
   for (const [name, bytes] of inputs) {
     const path = join(scratch, name);

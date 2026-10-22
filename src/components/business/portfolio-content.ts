@@ -42,7 +42,7 @@ export const ksailStories = {
 
 export const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
-  'world-at-ruin': ['️-world-at-ruin--'], actions: ['-reusable-workflows-', '-actions-'],
+  'world-at-ruin': ['️-world-at-ruin--'], '.github': ['-reusable-workflows-', '-actions-'],
   'agent-skills': ['-agent-skills--'], 'agent-plugins': ['-agent-plugins---'],
   'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
 };

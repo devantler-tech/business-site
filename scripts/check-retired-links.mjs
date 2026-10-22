@@ -10,7 +10,7 @@ export function assertNoRetiredRepositoryLinks(html) {
       const target = new URL(attribute.value, 'https://devantler.tech/');
       if (target.hostname !== 'github.com') continue;
       const path = decodeURIComponent(target.pathname).toLowerCase();
-      assert.ok(!/^\/devantler-tech\/reusable-workflows(?:\/|$)/.test(path),
+      assert.ok(!/^\/devantler-tech\/(?:reusable-workflows|actions|maintenance)(?:\/|$)/.test(path),
         'Rendered public pages must not link to retired repositories');
     }
     for (const child of node.childNodes ?? []) inspect(child);
