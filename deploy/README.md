@@ -115,7 +115,9 @@ Node 22/npm 11 environment; the application still builds and validates under Nod
 The final read-only job verifies both immutable subjects and both version aliases under the exact
 accepted publisher identity and paired source/version/run/attempt/original-CI/public-digest claims.
 It compares the actual manifest package with the source YAML, allowing only the separately verified
-image pin, and rechecks current CI/publication attempts. Before and after those registry reads,
+image pin, and rechecks current CI/publication attempts. The verifier creates an exclusive extraction
+directory for Flux before pulling the authenticated immutable package. A failed or partial pull
+never emits a publication receipt. Before and after those registry reads,
 it also requires the release to remain published and its lightweight or bounded annotated tag to
 resolve to the verified source. Its public
 `business-site-runtime-publication` artifact is emitted only after verification succeeds.
