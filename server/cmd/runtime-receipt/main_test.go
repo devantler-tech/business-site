@@ -112,7 +112,7 @@ func TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt(t *testing.T) {
 		"wrong signer":                  strings.Replace(fixtureReceipt, "@refs/heads/main", "@refs/heads/topic", 1),
 		"malformed digest":              strings.Replace(fixtureReceipt, strings.Repeat("b", 64), strings.Repeat("B", 64), 1),
 		"oversized receipt":             strings.Repeat(" ", 16385) + fixtureReceipt,
-		"invalid UTF8":                  strings.Replace(fixtureReceipt, "production-template", "production-\xfftemplate", 1),
+		"invalid UTF8":                  strings.Replace(fixtureReceipt, "production-template", "production-"+string([]byte{0xff})+"template", 1),
 	} {
 		t.Run(name, func(t *testing.T) { refuse(t, inputs(t, archiveBytes(t, members(receipt)))) })
 	}
