@@ -72,7 +72,7 @@ test('only nine complete fictional strings are recognized; the full preset is re
 test('the actual pinned scanner examines the complete tracked server', () => {
   const version = spawnSync('secretlint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '13.0.5');
+  assert.equal(version.stdout.trim(), '13.0.7');
   const tracked = spawnSync('git', ['ls-files', '-z', '--', 'server'], { cwd: root, encoding: 'utf8' });
   assert.equal(tracked.status, 0);
   const files = tracked.stdout.split('\0').filter(Boolean);
