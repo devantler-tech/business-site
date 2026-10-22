@@ -66,7 +66,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
   reviewed #25 cutover; production deployment still requires the enabled source switch and
   protected main-only environment. Manual artifact-only previews can run with the switch off.
-  `publish-pages.yaml` retains legacy immutable callers, not live ownership.
+  The retired reusable publisher is available only at historical immutable Git revisions.
   This static publisher does not deploy a private portal
   backend, identity, customer isolation, checkout or paid subscription system.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain

@@ -56,7 +56,7 @@ import { load } from 'js-yaml';
 const root = process.argv[2];
 for (const [file, job] of [
   ['ci.yaml', 'build-docs'], ['ci.yaml', 'test-portal-identity'],
-  ['publish-site.yaml', 'build'], ['publish-pages.yaml', 'build'],
+  ['publish-site.yaml', 'build'],
 ]) {
   const workflow = load(fs.readFileSync(`${root}/.github/workflows/${file}`, 'utf8'));
   const steps = workflow.jobs[job].steps.filter(step => step.uses?.startsWith('actions/checkout@'));
@@ -83,7 +83,7 @@ while IFS=$'\t' read -r label depth; do
   bash "$guard" "$clone" || fail "$label has incomplete source history"
   assert_date "$clone" 2020-03-01T12:00:00.000Z || fail "$label rewrites the unchanged article date"
 done < "$scratch/checkouts"
-[[ "$count" == 4 ]] || fail 'not every maintained builder was examined'
+[[ "$count" == 3 ]] || fail 'not every maintained builder was examined'
 
 bash "$guard" "$fixture" || fail 'complete source history rejected'
 # Require the supplied source directory to fail specifically inside the history guard.
@@ -242,4 +242,4 @@ assert.equal(date(footer[0]), new Date(Number(timestamp) * 1000).toISOString(), 
 console.log('journal output: PASS — native article modification and publication dates preserved');
 JS
 fi
-printf '%s\n' 'journal history: PASS — article edit/unrelated commits, four real checkout depths, and incomplete-history rejection'
+printf '%s\n' 'journal history: PASS — article edit/unrelated commits, three real checkout depths, and incomplete-history rejection'
