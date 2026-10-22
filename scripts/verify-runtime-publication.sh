@@ -18,7 +18,34 @@ fail() {
 [[ ! -e "$RUNNER_TEMP/runtime-publication.json" && ! -L "$RUNNER_TEMP/runtime-publication.json" ]] || fail 'receipt path already exists'
 work="$(mktemp -d "$RUNNER_TEMP/runtime-pair.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
+read_release_json() {
+  (
+    ulimit -f 8192
+    gh api --hostname github.com "repos/$repo/$1" >"$2"
+  ) 2>/dev/null || fail 'current release or tag read'
+  jq -se 'length==1 and (.[0]|type)=="object"' "$2" >/dev/null || fail 'current release or tag document'
+}
+check_current_release() {
+  local oid kind depth=0
+  read_release_json "releases/tags/v$VERSION" "$work/release.json"
+  jq -e --arg tag "v$VERSION" '.tag_name==$tag and .draft==false and .prerelease==false and
+    (.published_at|type)=="string" and (.published_at|length)>0' "$work/release.json" >/dev/null || fail 'release withdrawn or changed'
+  read_release_json "git/ref/tags/v$VERSION" "$work/tag.json"
+  jq -e --arg ref "refs/tags/v$VERSION" '.ref==$ref' "$work/tag.json" >/dev/null || fail 'release tag ref'
+  oid="$(jq -er '.object.sha' "$work/tag.json")"
+  kind="$(jq -er '.object.type' "$work/tag.json")"
+  while [[ "$kind" == tag && "$depth" -lt 5 ]]; do
+    [[ "$oid" =~ ^[0-9a-f]{40}$ ]] || fail 'release tag object identity'
+    read_release_json "git/tags/$oid" "$work/tag-object.json"
+    jq -e --arg sha "$oid" '.sha==$sha' "$work/tag-object.json" >/dev/null || fail 'release tag object mismatch'
+    oid="$(jq -er '.object.sha' "$work/tag-object.json")"
+    kind="$(jq -er '.object.type' "$work/tag-object.json")"
+    depth=$((depth + 1))
+  done
+  [[ "$kind" == commit && "$oid" == "$SOURCE_SHA" ]] || fail 'release tag source changed'
+}
 check_current_runs() {
+  check_current_release
   gh api --hostname github.com "repos/$repo/actions/runs/$ORIGINAL_CI_RUN_ID" >"$work/ci.json" || fail 'original CI read'
   jq -se --arg source "$SOURCE_SHA" --arg run "$ORIGINAL_CI_RUN_ID" --arg attempt "$ORIGINAL_CI_RUN_ATTEMPT" '
     length==1 and (.[0]|.id==($run|tonumber) and .run_attempt==($attempt|tonumber) and

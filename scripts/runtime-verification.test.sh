@@ -34,6 +34,18 @@ case "$4" in
     jq -n --arg source "$SOURCE_SHA" --argjson attempt "${CI_ATTEMPT:-2}" '{id:123,run_attempt:$attempt,event:"push",head_sha:$source,head_branch:"main",path:".github/workflows/ci.yaml",status:"completed",conclusion:"success",repository:{full_name:"devantler-tech/business-site"},head_repository:{full_name:"devantler-tech/business-site"}}' ;;
   repos/devantler-tech/business-site/actions/runs/999)
     jq -n --arg source "$SOURCE_SHA" --argjson attempt "${PUBLISH_ATTEMPT:-1}" '{id:999,run_attempt:$attempt,event:"release",head_sha:$source,path:".github/workflows/publish-runtime.yaml",status:"in_progress",conclusion:null,repository:{full_name:"devantler-tech/business-site"}}' ;;
+  repos/devantler-tech/business-site/releases/tags/v1.2.3)
+    printf 'read\n' >> "$FIXTURE/release-reads"
+    draft=${RELEASE_DRAFT:-false}
+    if [[ "${WITHDRAW_AFTER_VERIFY:-false}" == true && -s "$FIXTURE/calls" ]]; then draft=true; fi
+    jq -n --argjson draft "$draft" --argjson prerelease "${RELEASE_PRERELEASE:-false}" --arg published "${PUBLISHED_AT-2026-10-22T12:00:00Z}" '{tag_name:"v1.2.3",draft:$draft,prerelease:$prerelease,published_at:$published}' ;;
+  repos/devantler-tech/business-site/git/ref/tags/v1.2.3)
+    printf 'read\n' >> "$FIXTURE/tag-reads"
+    source=${TAG_SOURCE:-$SOURCE_SHA}
+    if [[ "${MOVE_AFTER_VERIFY:-false}" == true && -s "$FIXTURE/calls" ]]; then source=1123456789abcdef0123456789abcdef01234567; fi
+    jq -n --arg source "$source" --arg kind "${TAG_KIND:-commit}" '{ref:"refs/tags/v1.2.3",object:{sha:$source,type:$kind}}' ;;
+  repos/devantler-tech/business-site/git/tags/0123456789abcdef0123456789abcdef01234567)
+    jq -n --arg source "$SOURCE_SHA" --arg kind "${TAG_TARGET_KIND:-commit}" '{sha:$source,object:{sha:$source,type:$kind}}' ;;
   *) exit 98 ;;
 esac
 FIXTURE
@@ -70,6 +82,8 @@ chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
 reset_fixture() {
   rm -f "$scratch/runner/runtime-publication.json"
   printf '' >"$scratch/calls"
+  printf '' >"$scratch/release-reads"
+  printf '' >"$scratch/tag-reads"
   jq -n --arg sha "$source" --arg image "$image" --arg manifests "$manifests" --arg public "$public" --arg workflow "$workflow" '[{
     critical:{identity:{"docker-reference":("ghcr.io/devantler-tech/business-site@"+$image)},image:{"docker-manifest-digest":$image}},
     optional:{"devantler.repository":"devantler-tech/business-site","devantler.source-sha":$sha,"devantler.source-ref":"v1.2.3","devantler.version":"1.2.3",
@@ -99,15 +113,24 @@ if origin ORIGIN_FAIL=true; then fail 'original cryptographic verifier failure w
 reset_fixture
 verify || fail 'the independently signed matching immutable subjects and version aliases must verify'
 [[ "$(wc -l <"$scratch/calls" | tr -d ' ')" == 4 ]] || fail 'both immutable subjects and both version aliases must be read'
+[[ "$(wc -l <"$scratch/release-reads" | tr -d ' ')" == 2 && "$(wc -l <"$scratch/tag-reads" | tr -d ' ')" == 2 ]] || fail 'current release and tag must be checked before and after registry reads'
 jq -e --arg source "$source" --arg image "ghcr.io/devantler-tech/business-site@$image" --arg manifests "ghcr.io/devantler-tech/business-site/manifests@$manifests" '
   .sourceRevision==$source and .image==$image and .manifests==$manifests and .version=="1.2.3" and
   .publicationRunId=="999" and .publicationRunAttempt=="1" and .ciRunId=="123" and .ciRunAttempt=="2"
 ' "$scratch/runner/runtime-publication.json" >/dev/null || fail 'verified receipt does not identify the pair'
-for context in VERIFY_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true VERSION=01.2.3; do
+reset_fixture
+if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a moved Git tag with otherwise valid signatures was accepted'; fi
+[[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
+reset_fixture
+verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
+for context in VERIFY_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
   if verify "$context"; then fail 'failed signature, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'
 done
+reset_fixture
+if verify TAG_KIND=tag TAG_TARGET_KIND=tag; then fail 'an unbounded annotated-tag chain was accepted'; fi
+[[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'recursive tag left a receipt'
 for target in image-signature image-tag manifests-signature manifests-tag; do
   for mutation in '.[0].optional["devantler.source-sha"]="wrong"' \
     '.[0].optional["devantler.ci-run-attempt"]="1"' \
@@ -121,4 +144,4 @@ for target in image-signature image-tag manifests-signature manifests-tag; do
     [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'invalid signature left a receipt'
   done
 done
-printf 'runtime verification: PASS — origin failure, source immutability, both immutable/tag subjects, paired claims and rendered source closure\n'
+printf 'runtime verification: PASS — origin failure, source immutability, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'
