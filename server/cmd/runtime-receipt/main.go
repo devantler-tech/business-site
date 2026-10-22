@@ -115,7 +115,7 @@ func archiveReceipt(data []byte) ([]byte, error) {
 		body, readErr := io.ReadAll(io.LimitReader(stream, int64(limit)+1))
 		closeErr := stream.Close()
 		total += len(body)
-		if readErr != nil || closeErr != nil || len(body) > limit || total > totalLimit || !utf8.Valid(body) || !json.Valid(body) {
+		if readErr != nil || closeErr != nil || len(body) > limit || total > totalLimit || !utf8.Valid(body) || !validMemberJSON(f.Name, body) {
 			return nil, errRefused
 		}
 		if f.Name == "receipt.json" {
@@ -126,6 +126,26 @@ func archiveReceipt(data []byte) ([]byte, error) {
 		return nil, errRefused
 	}
 	return receipt, nil
+}
+
+// validMemberJSON permits Cosign's nonempty attestation stream, but no other member stream.
+func validMemberJSON(name string, body []byte) bool {
+	if name != "attestation.json" {
+		return json.Valid(body)
+	}
+	d := json.NewDecoder(bytes.NewReader(body))
+	records := 0
+	for {
+		var record json.RawMessage
+		err := d.Decode(&record)
+		if err == io.EOF {
+			return records > 0
+		}
+		if err != nil {
+			return false
+		}
+		records++
+	}
 }
 
 // decodeReceipt admits exactly eleven string fields and rejects JSON key aliases and duplicates.

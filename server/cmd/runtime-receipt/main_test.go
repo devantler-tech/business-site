@@ -95,6 +95,55 @@ func TestRuntimeReceiptAcceptsCompleteBoundArchive(t *testing.T) {
 	}
 }
 
+// TestRuntimeReceiptAttestationStream admits all Cosign records, not only the first.
+func TestRuntimeReceiptAttestationStream(t *testing.T) {
+	const record = `{"payload":"fixture","payloadType":"application/vnd.in-toto+json","signatures":[]}`
+	for name, body := range map[string]string{
+		"one record":        record,
+		"retry records":     record + "\n" + record + "\n",
+		"formatted records": "\n{\n\"payload\":\"fixture\"\n}\n" + record + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			entries := members(fixtureReceipt)
+			entries[4].body = body
+			var output bytes.Buffer
+			if err := run(context.Background(), inputs(t, archiveBytes(t, entries)), &output); err != nil {
+				t.Fatal("valid attestation stream was refused")
+			}
+			var got, want map[string]string
+			if json.Unmarshal(output.Bytes(), &got) != nil || json.Unmarshal([]byte(fixtureReceipt), &want) != nil || len(got) != len(want) {
+				t.Fatal("admitted receipt was incomplete")
+			}
+			for key, value := range want {
+				if got[key] != value {
+					t.Fatal("attestation admission changed the bound receipt")
+				}
+			}
+		})
+	}
+	for name, body := range map[string]string{
+		"empty":              "",
+		"whitespace":         " \n\t",
+		"malformed first":    "{\n" + record,
+		"malformed later":    record + "\n{",
+		"trailing garbage":   record + "\nnot-json",
+		"invalid UTF8 later": record + "\n\"" + string([]byte{0xff}) + "\"",
+	} {
+		t.Run(name, func(t *testing.T) {
+			entries := members(fixtureReceipt)
+			entries[4].body = body
+			refuse(t, inputs(t, archiveBytes(t, entries)))
+		})
+	}
+	for index := range 4 {
+		t.Run("non-attestation stream "+strconv.Itoa(index), func(t *testing.T) {
+			entries := members(fixtureReceipt)
+			entries[index].body += "\n{}"
+			refuse(t, inputs(t, archiveBytes(t, entries)))
+		})
+	}
+}
+
 // TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt rejects schema and identity ambiguity.
 func TestRuntimeReceiptRejectsAmbiguousOrUnboundReceipt(t *testing.T) {
 	for name, receipt := range map[string]string{
@@ -278,7 +327,9 @@ func TestRuntimeReceiptCompiledCommand(t *testing.T) {
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v: %s", err, output)
 	}
-	args := inputs(t, archiveBytes(t, members(fixtureReceipt)))
+	entries := members(fixtureReceipt)
+	entries[4].body = "{}\n{}\n"
+	args := inputs(t, archiveBytes(t, entries))
 	output, err := exec.CommandContext(t.Context(), binaryPath, args...).Output()
 	if err != nil || !bytes.Contains(output, []byte(`"ciRunId":"12345"`)) {
 		t.Fatal("compiled command did not admit valid input")

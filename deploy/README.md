@@ -61,6 +61,10 @@ go test -race ./cmd/runtime-receipt -count=1 -timeout=45s
 The explicit command makes no network request or filesystem write. It emits the
 eleven-field receipt only after verifying the archive digest, exact five regular
 JSON members, complete streams and source/run/attempt/profile/signer bindings.
+The Cosign `attestation.json` member may contain multiple JSON records, as a
+successful retry can verify earlier attestations for the same image digest. Every
+record must be valid, the stream must be nonempty, and all other members still
+require exactly one JSON value. This does not replace cryptographic verification.
 It reads one descriptor into a bounded snapshot, never extracts paths, and rejects
 symlinks, pipes, ambiguous receipt keys and unsafe numeric IDs. Compressed input
 is limited to 4 MiB, each expanded member to 2 MiB, total expanded content to
