@@ -19,7 +19,7 @@ function mandatoryQualityChecks(candidate) {
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
     'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
-    'npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    'npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs',
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
     'npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs',

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -18,6 +18,26 @@ function check(text, file = scopedFile) {
   assert.ifError(result.error);
   assert.equal(result.signal, null);
   return { status: result.status, output: result.stdout + result.stderr };
+}
+
+function checkFiles(files, options = []) {
+  const result = spawnSync('cspell', ['lint', '--config', config, '--no-config-search',
+    '--no-progress', '--no-color', '--no-cache', '--no-glob-symlinks', '--no-follow-symlinks',
+    ...options, ...files], {
+    cwd: root, encoding: 'utf8', timeout: 30000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.signal, null);
+  return { status: result.status, output: result.stdout + result.stderr };
+}
+
+function assertCompleteScan(result, count) {
+  assert.equal(result.status, 0, result.output);
+  const summaries = result.output.split(/\r?\n/)
+    .filter(line => line.startsWith('CSpell: Files checked:'));
+  assert.deepEqual(summaries, [
+    `CSpell: Files checked: ${count}, Issues found: 0 in 0 files.`,
+  ], 'the checked-file census must equal the complete requested input list');
 }
 
 test('the glossary retains default checking and only three exact adversarial URL spellings', () => {
@@ -37,7 +57,7 @@ test('the pinned checker examines the complete tracked server source', () => {
   const version = spawnSync('cspell', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '10.1.1');
+  assert.equal(version.stdout.trim(), '10.4.0');
   const tracked = spawnSync('git', ['ls-files', '-z', '--', 'server'], {
     cwd: root, encoding: 'utf8', timeout: 30000,
   });
@@ -45,15 +65,41 @@ test('the pinned checker examines the complete tracked server source', () => {
   assert.equal(tracked.status, 0);
   const files = tracked.stdout.split('\0').filter(file => /\.(go|html|js|css|md|sql|json)$/.test(file));
   assert.ok(files.length > 0);
-  const result = spawnSync('cspell', ['lint', '--config', config, '--no-config-search',
-    '--no-progress', '--no-color', '--no-cache', ...files], {
-    cwd: root, encoding: 'utf8', timeout: 30000,
-  });
-  assert.ifError(result.error);
-  assert.equal(result.signal, null);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr + result.stdout, /Issues found: 0/);
+  assertCompleteScan(checkFiles(files), files.length);
 });
+
+test('the complete-scan census accepts two actual checked files', () => {
+  // Stay in the same selection scope as the tracked source and resolve host aliases.
+  const directory = realpathSync(mkdtempSync(join(root, 'portal-spelling-census-')));
+  try {
+    const files = ['first.txt', 'second.txt'].map(name => join(directory, name));
+    for (const file of files) writeFileSync(file, 'Authentication confirmed.');
+    assertCompleteScan(checkFiles(files), files.length);
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
+});
+
+for (const omission of ['symlink', 'excluded']) {
+  test(`the complete-scan census rejects a silently ${omission} input beside a checked file`, () => {
+    const directory = realpathSync(mkdtempSync(join(root, 'portal-spelling-census-')));
+    try {
+      const ordinary = join(directory, 'ordinary.txt');
+      const typo = join(directory, 'typo.txt');
+      const linked = join(directory, 'linked.txt');
+      writeFileSync(ordinary, 'Authentication confirmed.');
+      writeFileSync(typo, 'authentciation');
+      symlinkSync(typo, linked);
+      const files = [ordinary, omission === 'symlink' ? linked : typo];
+      const result = checkFiles(files, omission === 'excluded' ? ['--exclude', relative(root, typo)] : []);
+      assert.equal(result.status, 0, result.output);
+      assert.match(result.output, /Files checked: 1, Issues found: 0 in 0 files\./);
+      assert.throws(() => assertCompleteScan(result, files.length), /checked-file census/);
+    } finally {
+      rmSync(directory, { recursive: true });
+    }
+  });
+}
 
 test('valid Danish copy and project API names pass the real checker', () => {
   const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contacttrial contacttrialintegration contactintegration autofocus. pipefail coverprofile.');

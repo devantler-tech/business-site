@@ -461,7 +461,7 @@ jobs:
         run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
       - name: Verify portal copy and API vocabulary with retained typo failures
         working-directory: .
-        run: npx --yes --package=cspell@10.1.1 -- node --test scripts/portal-spelling-quality.test.mjs
+        run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
       - name: Verify package documentation with all selected Go files
         working-directory: .
         env:

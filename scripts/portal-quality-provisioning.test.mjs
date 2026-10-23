@@ -13,7 +13,7 @@ const packages = {
   htmlhint: '1.9.2',
   secretlint: '13.0.7',
   '@secretlint/secretlint-rule-preset-recommend': '13.0.7',
-  cspell: '10.1.1',
+  cspell: '10.4.0',
 };
 
 const manifest = JSON.parse(readFileSync('package.json'));
@@ -118,7 +118,7 @@ test('installed exact checkers need no registry resolution and retain observer f
     for (const specifications of [
       ['htmlhint@1.9.2'],
       ['secretlint@13.0.7', '@secretlint/secretlint-rule-preset-recommend@13.0.7'],
-      ['cspell@10.1.1'],
+      ['cspell@10.4.0'],
     ]) {
       assert.deepEqual(await run(root, specifications).result, { code: 0, signal: null, output: '' });
       const failure = await run(root, specifications, 17).result;
