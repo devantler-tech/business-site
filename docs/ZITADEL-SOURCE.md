@@ -110,3 +110,49 @@ The profile does not publish an identity image or activate login. Full asset and
 linked-module notices, corresponding-source publication, restricted container
 execution and actual invitation/login browser proof still belong to #308/#305.
 Source correspondence is not a bit-for-bit reproducibility claim.
+
+## Selected Login V1 icon inventory
+
+The Linux builder requires the explicit standard-library Go verifier before its
+success receipt. It inspects the generated login Go file as syntax and decodes
+its ZIP data without executing or extracting it. Every archive member is bounded
+and CRC-read completely. The selected four fonts must match the frozen source,
+generated-output digests and actual decoded members; changed or extra members
+in that font directory are refused. The statik digest must remain unchanged
+across service compilation.
+
+The verifier checks all eleven WOFF/TTF tables, the complete EOT-wrapped TTF,
+the three TrueType codepoint maps, and all ten SVG-font/vector mappings. The
+closed SVG path transform uses x × 32 and 960 − 32y on a fixed eighth-unit grid
+only after exact immutable byte checks. This is SVG geometry and wrapper
+correspondence, not a general TrueType-outline or reproducible-generation claim.
+
+`third_party/zitadel-login-icons/` retains the complete immutable Icons8 license
+and notices and the actual clipboard vector. Its notice records the added final
+newline and the discrepancy with the original solid clipboard. The MIT option
+is selected; the original source vectors and unmodified font binaries remain
+in the prepared upstream source. Original IcoMoon settings/history remain unknown.
+
+The deterministic `login-icons-inventory.json` is a diagnostic distribution
+input retained by CI, not an identity service or complete legal admission.
+All input identities and the four embedded paths are inspectable there. Once
+the build has completed, repeat its inventory without changing that output:
+
+```sh
+go run scripts/zitadel-login-icons.go --inventory \
+  --build "$work/linux-build" --notices third_party/zitadel-login-icons
+```
+
+No arguments are inert. Explicit mode accepts exactly one pending or completed
+build receipt and emits JSON only after all checks pass. Missing, duplicate,
+substituted, linked, malformed or incomplete selected evidence fails with no
+success inventory. The ordinary website build never invokes this tool.
+
+```sh
+(cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
+```
+
+These local tests use frozen public font/vector fixtures, real ZIP/Go-syntax
+decoding and adverse inputs. They do not replace the separate clean Linux build
+or actual post-merge inventory collection. The interface and limits are recorded
+in [ADR 0022](adr/0022-output-bound-login-icon-inventory.md).

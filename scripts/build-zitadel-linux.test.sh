@@ -7,6 +7,9 @@ scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/recipe/scripts" "$scratch/bin" "$scratch/upstream"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
+mkdir "$scratch/recipe/third_party"
+cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 build="$scratch/recipe/scripts/build-zitadel-linux.sh"
 # These are process doubles, not alternative production build entrypoints.
 cat >"$scratch/recipe/scripts/prepare-zitadel-source.sh" <<'STUB'
@@ -70,7 +73,18 @@ case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'version -m') printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n';;
   'mod verify') :;;
+  'run '*)
+    [[ "$*" == *'zitadel-login-icons.go --inventory --build '* && "$*" == *' --notices '* ]]
+    [[ -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+    if [[ "${TEST_FAIL:-}" = inventory ]]; then echo 'plausible partial inventory'; exit 42; fi
+    echo '{"fixture":"orchestration only"}';;
   'list -deps')
+    case "${TEST_MISSING:-}" in
+      login-compiled) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go"],IgnoredGoFiles:["statik.go"]}';;
+      login-directory) echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/login/statik","Dir":"wrong","GoFiles":["generate.go","statik.go"]}';;
+      login-extra) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go","statik.go","unselected.go"]}';;
+      *) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go","statik.go"]}';;
+    esac
     if [[ "${TEST_MISSING:-}" = embed ]]; then echo '{}'; else
       echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/console","EmbedPatterns":["static"],"EmbedFiles":["static/index.html","static/main.js","static/styles.css","static/3rdpartylicenses.txt"]}'
     fi;;
@@ -118,12 +132,16 @@ reject failed-generation TEST_FAIL=generate
 reject incomplete-generation TEST_MISSING=statik
 reject missing-console-script TEST_MISSING=script
 reject missing-console-embed TEST_MISSING=embed
+reject excluded-login-registration TEST_MISSING=login-compiled
+reject substituted-login-directory TEST_MISSING=login-directory
+reject extra-login-source TEST_MISSING=login-extra
 reject unembedded-console-reference TEST_MISSING=hidden-reference
 reject leaked-font TEST_FONT=leaked
 reject leaked-font-file TEST_FONT=file
 reject leaked-font-link TEST_FONT=symlink
 reject failed-compiler TEST_FAIL=compile
 reject empty-binary TEST_MISSING=binary
+reject failed-icon-inventory TEST_FAIL=inventory
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
