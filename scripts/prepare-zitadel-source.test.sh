@@ -5,8 +5,10 @@ export LC_ALL=C
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 prepare="$root/scripts/prepare-zitadel-source.sh"
 scratch="$(mktemp -d)"
+scratch="$(cd "$scratch" && pwd -P)"
 trap 'rm -rf -- "$scratch"' EXIT
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
+# Assert a nonzero process result, retaining its output for failure diagnosis.
 reject() {
   local status=0
   "$@" >"$scratch/result" 2>&1 || status=$?
@@ -119,4 +121,42 @@ test ! -e "$scratch/failed-hash-output"
 reject env PATH="$scratch/hash-bin:$PATH" SOURCE_TEST_SHASUM="$real_shasum" SOURCE_TEST_HASH_STATUS=0 \
   bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/empty-hash-output"
 test ! -e "$scratch/empty-hash-output"
+
+# Either failed final move must release only this invocation's reservation.
+real_mv="$(command -v mv)"
+mkdir "$scratch/move-bin"
+cat >"$scratch/move-bin/mv" <<'WRAPPER'
+#!/usr/bin/env bash
+if [[ "${2:-}" == "$SOURCE_TEST_FAILED_MOVE" ]]; then exit 42; fi
+exec "$SOURCE_TEST_MV" "$@"
+WRAPPER
+chmod 755 "$scratch/move-bin/mv"
+leaked_output=0
+for part in source source-preparation.json; do
+  destination="$scratch/failed-move-$part"
+  reject env PATH="$scratch/move-bin:$PATH" SOURCE_TEST_MV="$real_mv" SOURCE_TEST_FAILED_MOVE="$destination/$part" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$destination"
+  if [[ -e "$destination" ]]; then
+    printf 'Failed final move left reserved output: %s\n' "$part" >&2
+    leaked_output=1
+  fi
+done
+test "$leaked_output" -eq 0
+
+# A competing creator wins the reservation and keeps its unrelated output.
+real_mkdir="$(command -v mkdir)"
+mkdir "$scratch/mkdir-bin"
+cat >"$scratch/mkdir-bin/mkdir" <<'WRAPPER'
+#!/usr/bin/env bash
+if [[ "$#" -eq 4 && "$1" == -m && "$2" == 700 && "$3" == -- && "$4" == "$SOURCE_TEST_OUTPUT" ]]; then
+  "$SOURCE_TEST_MKDIR" -- "$4" || exit
+  printf 'other creator\n' >"$4/sentinel"
+  exit 1
+fi
+exec "$SOURCE_TEST_MKDIR" "$@"
+WRAPPER
+chmod 755 "$scratch/mkdir-bin/mkdir"
+reject env PATH="$scratch/mkdir-bin:$PATH" SOURCE_TEST_MKDIR="$real_mkdir" SOURCE_TEST_OUTPUT="$scratch/competing-output" \
+  bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/competing-output"
+test "$(cat "$scratch/competing-output/sentinel")" = 'other creator'
 printf '%s\n' 'Frozen ZITADEL source preparation and refusal controls passed.'

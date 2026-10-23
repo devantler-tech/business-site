@@ -3,6 +3,7 @@
 set -euo pipefail
 export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
+# Print a source-preparation diagnostic and terminate the explicit operation.
 fail() { printf 'zitadel-source: %s\n' "$1" >&2; exit 1; }
 source_repo='' output='' requested=0
 while [[ "$#" -gt 0 ]]; do
@@ -71,6 +72,11 @@ jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
 mkdir -m 700 -- "$output"
+complete=0
+# Arm output cleanup only after our reservation succeeds. A competing creator's
+# failed mkdir keeps the original stage-only trap and never deletes their data.
+trap 'if [[ "$complete" -eq 0 ]]; then rm -rf -- "$output"; fi; rm -rf -- "$stage"' EXIT
 mv "$stage/source" "$output/source"
 mv "$stage/source-preparation.json" "$output/source-preparation.json"
+complete=1
 printf 'Prepared frozen source only: %s\n' "$output"

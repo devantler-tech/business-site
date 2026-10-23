@@ -14,7 +14,7 @@ bash scripts/prepare-zitadel-source.sh --prepare \
   --source "$work/upstream" --output "$work/prepared"
 ```
 
-The command requires committed source
+The command reads the following committed source revision:
 `8afa5dd37a8e723efb9eace8d09fd5c1cccef694` and a new output location.
 It uses immutable Git objects, not the input checkout's current files. Local
 changes and untracked files remain untouched and do not enter the result.
@@ -33,6 +33,9 @@ The result contains:
 No argument is an inert, successful no-op. Explicit preparation requires both
 paths; there is no default destination and no overwrite mode. A successful receipt
 does not prove a complete upstream build or confer release authority.
+An ordinary final-move failure removes this invocation's reserved output; a
+competing creator's output is preserved. An uncatchable termination such as
+SIGKILL can still leave an incomplete directory, which is never a success receipt.
 
 ## Distribution boundary
 
