@@ -63,6 +63,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
   without the unadmitted Ailerons assets. Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.
+- `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
+  amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
+  CI retains build diagnostics only; successful compilation is not image admission,
+  distribution clearance or portal activation. Read the same source/build guide.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the
@@ -118,6 +122,8 @@ node --test scripts/tenant-package.test.mjs
 node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
+bash scripts/build-zitadel-linux.test.sh
+bash scripts/zitadel-build-contract.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts

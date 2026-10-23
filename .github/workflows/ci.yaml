@@ -25,6 +25,7 @@ jobs:
       docs-audit-contract: ${{ steps.filter.outputs.docs-audit-contract }}
       docs-npm-toolchain: ${{ steps.filter.outputs.docs-npm-toolchain }}
       active-projects: ${{ steps.filter.outputs.active-projects }}
+      zitadel-build: ${{ steps.filter.outputs.zitadel-build }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +36,10 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
+            zitadel-build:
+              - 'scripts/*zitadel*'
+              - 'docs/ZITADEL-SOURCE.md'
+              - '.github/workflows/ci.yaml'
             docs:
               - '.node-version'
               - 'research/**'
@@ -291,6 +296,70 @@ jobs:
           persist-credentials: false
       - name: Exercise frozen upstream source preparation and refusal controls
         run: bash scripts/prepare-zitadel-source.test.sh
+      - name: Exercise Linux build orchestration refusal controls
+        run: |
+          bash scripts/build-zitadel-linux.test.sh
+          bash scripts/zitadel-build-contract.test.sh
+
+  build-zitadel-linux:
+    needs: changes
+    if: needs.changes.outputs.zitadel-build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+      COREPACK_ENABLE_PROJECT_SPEC: "0"
+      COREPACK_DEFAULT_TO_LATEST: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Admit the disposable build capacity
+        run: |
+          test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 12582912
+          test "$(awk '/MemTotal:/ {print $2}' /proc/meminfo)" -ge 12582912
+      - name: Setup the frozen identity Go compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      # This isolated upstream profile does not install or build the website's
+      # npm application. Its older Node input is exact and checksum-bound.
+      - name: Prepare the frozen identity JavaScript toolchain
+        run: |
+          tools="$RUNNER_TEMP/zitadel-tools"
+          mkdir "$tools"
+          curl --fail --location --silent --show-error --max-time 120 https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz -o "$tools/node.tar.xz"
+          (cd "$tools" && printf '%s\n' 'df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  node.tar.xz' | shasum -a 256 -c -)
+          tar -xJf "$tools/node.tar.xz" -C "$tools"
+          export PATH="$tools/node-v22.23.3-linux-x64/bin:$PATH"
+          corepack enable
+          corepack prepare pnpm@10.30.3 --activate
+          echo "$tools/node-v22.23.3-linux-x64/bin" >> "$GITHUB_PATH"
+      - name: Fetch the frozen public upstream input
+        run: |
+          git init "$RUNNER_TEMP/zitadel-upstream"
+          git -C "$RUNNER_TEMP/zitadel-upstream" fetch --no-write-fetch-head --depth=1 https://github.com/zitadel/zitadel.git +refs/tags/v4.20.0:refs/tags/v4.20.0
+          test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
+      - name: Build the complete native Linux service and embedded console
+        run: bash scripts/build-zitadel-linux.sh --build --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+      - name: Preserve build diagnostics, not unadmitted service distribution
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zitadel-linux-build-evidence
+          path: |
+            ${{ runner.temp }}/zitadel-build/build-receipt.json
+            ${{ runner.temp }}/zitadel-build/packages.jsonl
+            ${{ runner.temp }}/zitadel-build/*.txt
+            ${{ runner.temp }}/zitadel-build/*.log
+            ${{ runner.temp }}/zitadel-build/*.sha256
+          if-no-files-found: error
+          retention-days: 7
 
   test-repository-contracts:
     runs-on: ubuntu-latest
@@ -593,6 +662,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-zitadel-source
+      - build-zitadel-linux
       - test-portal-identity
       - test-combined-runtime
     steps:
@@ -608,6 +678,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-zitadel-source.result }}
+            ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-combined-runtime.result }}
 
@@ -625,6 +696,7 @@ jobs:
       - drift-check-active-projects
       - test-repository-contracts
       - test-zitadel-source
+      - build-zitadel-linux
       - test-portal-identity
       - test-combined-runtime
       - validation
@@ -642,6 +714,7 @@ jobs:
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
             ${{ needs.test-zitadel-source.result }}
+            ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}

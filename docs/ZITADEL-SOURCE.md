@@ -76,3 +76,37 @@ bash scripts/prepare-zitadel-source.test.sh /path/to/zitadel-source
 
 CI runs the network-backed control as a mandatory read-only job in both required
 aggregates. The test owns and removes its disposable checkout and outputs.
+
+## Build the complete Linux service
+
+The explicit build profile requires a clean Linux amd64 host, Go 1.26.10,
+Node 22.23.3, pnpm 10.30.3, GNU time and binutils. It prepares a fresh source
+archive itself; it never resumes generated output from an earlier experiment.
+
+```sh
+bash scripts/build-zitadel-linux.sh --build \
+  --source "$work/upstream" --output "$work/linux-build"
+```
+
+With no arguments it is inert. The selected upstream root/console/client/proto
+workspace closure is installed from the frozen lock. Root pnpm 10.30.3 is used
+in both root and console, despite the console's older package-manager declaration;
+both actual versions are checked. API generation finishes before console generation
+can replace their shared OpenAPI plugin. The recipe changes only the native
+generator-install target's command concurrency to sequential, preserves its original
+configuration, and bounds outer tasks and Go compilation independently.
+
+The final Go compiler receives the frozen upstream version, full revision and
+commit date explicitly, because the prepared archive has no Git metadata. The
+output contains build logs, per-phase GNU time measurements, dependency/package
+metadata, generated-file digests, an ELF/build-info record and a success receipt
+only after the binary executes its version command. Failed outputs remain for
+diagnosis without a success receipt; do not treat their presence as readiness.
+
+CI uses a new standard public Ubuntu VM, admits at least 12 GiB RAM/disk, and
+uploads diagnostics only—not the service binary, console or other unadmitted
+distribution assets. Ordinary website jobs retain their own Node 24 toolchain.
+The profile does not publish an identity image or activate login. Full asset and
+linked-module notices, corresponding-source publication, restricted container
+execution and actual invitation/login browser proof still belong to #308/#305.
+Source correspondence is not a bit-for-bit reproducibility claim.
