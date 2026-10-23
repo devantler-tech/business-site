@@ -33,12 +33,16 @@ if [[ "$#" -eq 1 ]]; then
   git clone --shared --no-checkout -- "$1" "$scratch/upstream" >"$scratch/clone.log" 2>&1
 else
   test "$#" -eq 0
-  git clone --filter=blob:none --depth=1 --branch v4.20.0 \
+  git clone --filter=blob:none --no-checkout --depth=1 --branch v4.20.0 \
     https://github.com/zitadel/zitadel.git "$scratch/upstream" >"$scratch/clone.log" 2>&1
 fi
-git -C "$scratch/upstream" checkout --detach "$pin" >"$scratch/checkout.log" 2>&1
+# Hydrate immutable objects through the independent archive, not another full copy.
+# A sparse working tree also proves that preparation never reads checkout bytes.
+git -C "$scratch/upstream" read-tree "$pin"
 mkdir "$scratch/pristine"
 git -C "$scratch/upstream" --no-replace-objects archive "$pin" | tar -x -C "$scratch/pristine"
+mkdir -p "$scratch/upstream/console/src"
+git -C "$scratch/upstream" show "$pin:console/src/styles.scss" >"$scratch/upstream/console/src/styles.scss"
 
 # Dirty/untracked input bytes must neither leak into output nor be overwritten.
 printf '\nLOCAL-ONLY-FICTIONAL-MARKER\n' >>"$scratch/upstream/console/src/styles.scss"
@@ -65,6 +69,7 @@ mv "$scratch/expected-console" "$scratch/pristine/console/src/styles.scss"
 grep -Fvx "@import 'faces/ailerons_font_faces';" "$scratch/pristine/internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss" >"$scratch/expected-login"
 mv "$scratch/expected-login" "$scratch/pristine/internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
+rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
@@ -76,6 +81,7 @@ shasum -a 256 "$scratch/prepared source/source-preparation.json" >"$scratch/rece
 reject bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
 shasum -a 256 "$scratch/prepared source/source-preparation.json" >"$scratch/receipt-after"
 cmp "$scratch/receipt-before" "$scratch/receipt-after"
+rm -rf -- "$scratch/prepared source"
 mkdir "$scratch/existing"
 printf 'keep\n' >"$scratch/existing/sentinel"
 reject bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/existing"
@@ -193,4 +199,82 @@ if [[ -e "$scratch/implicit-fetch" ]]; then
   boundary_failure=1
 fi
 test "$boundary_failure" -eq 0
+
+# Committed regular-file permissions survive any caller umask, including execute masks.
+review_failures=0
+for mask in 0133 0077; do
+  destination="$scratch/umask-$mask"
+  if bash -c 'umask "$1"; exec bash "$2" --prepare --source "$3" --output "$4"' \
+    -- "$mask" "$prepare" "$scratch/upstream" "$destination" >"$scratch/umask-$mask.log" 2>&1; then
+    if [[ -n "$(find "$destination/source" -type f ! -perm 0644 ! -perm 0755 -print)" ]]; then
+      echo "Preparation changed committed permissions under umask $mask." >&2
+      review_failures=$((review_failures + 1))
+    fi
+    (cd "$destination/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$scratch/actual-executables"
+    git -C "$scratch/upstream" ls-tree -r "$pin" | awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' | sort >"$scratch/expected-executables"
+    if ! cmp "$scratch/expected-executables" "$scratch/actual-executables"; then
+      echo "Preparation changed executable paths under umask $mask." >&2
+      review_failures=$((review_failures + 1))
+    fi
+  else
+    echo "Preparation failed under umask $mask." >&2
+    review_failures=$((review_failures + 1))
+  fi
+  rm -rf -- "$destination"
+done
+
+# Correct bytes with substituted permissions are not accepted as committed source.
+real_tar="$(command -v tar)"
+mode_path="$(git -C "$scratch/upstream" ls-tree -r "$pin" | awk '$1 == "100755" && !found {print substr($0,index($0,"\t")+1); found=1}')"
+test -n "$mode_path"
+mkdir "$scratch/mode-bin"
+cat >"$scratch/mode-bin/tar" <<'WRAPPER'
+#!/usr/bin/env bash
+"$SOURCE_TEST_TAR" "$@" || exit
+if [[ "$#" -eq 4 && "$1" == -xpf && "$3" == -C ]]; then
+  chmod "$SOURCE_TEST_BAD_MODE" "$4/$SOURCE_TEST_MODE_PATH"
+fi
+WRAPPER
+chmod 755 "$scratch/mode-bin/tar"
+for mode in 0777 0644; do
+  destination="$scratch/substituted-mode-$mode"
+  reject env PATH="$scratch/mode-bin:$PATH" SOURCE_TEST_TAR="$real_tar" SOURCE_TEST_BAD_MODE="$mode" SOURCE_TEST_MODE_PATH="$mode_path" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$destination"
+  test ! -e "$destination"
+done
+
+# A different enclosing Git worktree must not select the source bytes being hashed.
+for format in sha1 sha256; do
+  git init -q --object-format="$format" "$scratch/enclosing-$format"
+  if ! bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/enclosing-$format/prepared" >"$scratch/enclosing-$format.log" 2>&1; then
+    echo "Preparation failed inside a different $format Git worktree." >&2
+    review_failures=$((review_failures + 1))
+  fi
+  rm -rf -- "$scratch/enclosing-$format/prepared"
+done
+
+# Catchable termination immediately after successful mkdir must not strand a reservation.
+mkdir "$scratch/signal-bin"
+cat >"$scratch/signal-bin/mkdir" <<'WRAPPER'
+#!/usr/bin/env bash
+if [[ "$#" -eq 4 && "$1" == -m && "$2" == 700 && "$3" == -- && "$4" == "$SOURCE_TEST_OUTPUT" ]]; then
+  "$SOURCE_TEST_MKDIR" "$@" || exit
+  kill -s "$SOURCE_TEST_SIGNAL" "$PPID"
+  exit 0
+fi
+exec "$SOURCE_TEST_MKDIR" "$@"
+WRAPPER
+chmod 755 "$scratch/signal-bin/mkdir"
+for signal in HUP INT TERM; do
+  destination="$scratch/interrupted-$signal"
+  signal_status=0
+  env PATH="$scratch/signal-bin:$PATH" SOURCE_TEST_MKDIR="$real_mkdir" SOURCE_TEST_OUTPUT="$destination" SOURCE_TEST_SIGNAL="$signal" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$destination" >"$scratch/signal-$signal.log" 2>&1 || signal_status=$?
+  if [[ "$signal_status" -eq 0 || -e "$destination" ]]; then
+    echo "Signal $signal did not refuse and clean up the incomplete reservation." >&2
+    review_failures=$((review_failures + 1))
+  fi
+  rm -rf -- "$destination"
+done
+test "$review_failures" -eq 0
 printf '%s\n' 'Frozen ZITADEL source preparation and refusal controls passed.'

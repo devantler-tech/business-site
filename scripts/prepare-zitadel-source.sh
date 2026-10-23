@@ -2,6 +2,8 @@
 # Offline, explicit source preparation. No build, image or deployment authority.
 set -euo pipefail
 export LC_ALL=C
+# Exported source has committed public file modes inside a private reservation.
+umask 022
 # No implicit promisor fetch or configured Git transport belongs to this offline operation.
 export GIT_NO_LAZY_FETCH=1 GIT_ALLOW_PROTOCOL=''
 [[ "$#" -gt 0 ]] || exit 0
@@ -35,6 +37,7 @@ output="$parent/$name"
 [[ "$output" != "$source_repo/"* ]] || fail 'output must be outside the input repository'
 stage="$(mktemp -d "$parent/.zitadel-source.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
+trap 'exit 1' HUP INT TERM
 mkdir "$stage/source"
 # Admit only regular committed files before extraction; never working-copy bytes,
 # symlinks, submodules, LFS downloads, hooks or generated files from the input.
@@ -45,8 +48,10 @@ awk '{print $3}' "$stage/tree" >"$stage/expected-hashes"
 awk '{print substr($0,index($0,"\t")+1)}' "$stage/tree" >"$stage/paths"
 # Git quotes control-character paths; do not interpret or silently omit one.
 if grep -q '^"' "$stage/paths"; then fail 'unsupported quoted source path'; fi
-git -C "$source_repo" --no-replace-objects archive --format=tar "$pin" | tar -xf - -C "$stage/source"
-(cd "$stage/source" && git hash-object --no-filters --stdin-paths <"$stage/paths") >"$stage/actual-hashes"
+git -C "$source_repo" --no-replace-objects -c tar.umask=0022 archive --format=tar "$pin" | tar -xpf - -C "$stage/source"
+# Absolute paths cannot be reinterpreted relative to an enclosing Git worktree.
+awk -v prefix="$stage/source/" '{print prefix $0}' "$stage/paths" >"$stage/absolute-paths"
+git -C "$source_repo" --no-replace-objects hash-object --no-filters --stdin-paths <"$stage/absolute-paths" >"$stage/actual-hashes"
 cmp "$stage/expected-hashes" "$stage/actual-hashes" || fail 'archive contents differ from committed source'
 (cd "$stage/source" && find . -type f | sed 's@^./@@' | sort) >"$stage/actual-paths"
 sort "$stage/paths" >"$stage/expected-paths"
@@ -62,6 +67,12 @@ rm -- "$stage/source/console/src/assets/ailerons.otf" \
   "$stage/source/console/src/styles/ailerons.scss" \
   "$stage/source/internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf" \
   "$stage/source/internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss"
+# Check every surviving regular-file mode, not just bytes or executable examples.
+(cd "$stage/source" && find . -type f ! -perm 0644 ! -perm 0755 -print) >"$stage/invalid-modes"
+[[ ! -s "$stage/invalid-modes" ]] || fail 'source has unexpected file permissions'
+awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' "$stage/tree" | sort >"$stage/expected-executables"
+(cd "$stage/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$stage/actual-executables"
+cmp "$stage/expected-executables" "$stage/actual-executables" || fail 'source executable modes differ from committed source'
 recipe_hash="$(shasum -a 256 "$0" | awk '{print $1}')" || fail 'recipe hash read failed'
 input_hash="$(shasum -a 256 "$root/scripts/zitadel-source-inputs.sha256" | awk '{print $1}')" || fail 'input-manifest hash read failed'
 [[ "$recipe_hash" =~ ^[0-9a-f]{64}$ && "$input_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'receipt hash is incomplete'
@@ -74,11 +85,15 @@ jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
     changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss"]}' >"$stage/source-preparation.json"
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
+reserved=0 complete=0 interrupted=0
+# Arm ownership-aware cleanup before mkdir. Defer catchable termination until its
+# result is recorded, closing the mkdir-to-flag window without deleting a rival.
+trap 'if [[ "$reserved" -eq 1 && "$complete" -eq 0 ]]; then rm -rf -- "$output"; fi; rm -rf -- "$stage"' EXIT
+trap 'interrupted=1' HUP INT TERM
 mkdir -m 700 -- "$output"
-complete=0
-# Arm output cleanup only after our reservation succeeds. A competing creator's
-# failed mkdir keeps the original stage-only trap and never deletes their data.
-trap 'if [[ "$complete" -eq 0 ]]; then rm -rf -- "$output"; fi; rm -rf -- "$stage"' EXIT
+reserved=1
+trap 'exit 1' HUP INT TERM
+[[ "$interrupted" -eq 0 ]] || fail 'interrupted during output reservation'
 mv "$stage/source" "$output/source"
 mv "$stage/source-preparation.json" "$output/source-preparation.json"
 complete=1

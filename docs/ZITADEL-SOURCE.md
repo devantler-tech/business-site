@@ -22,6 +22,10 @@ Replacement Git objects are ignored. Unsupported entry types, incomplete or
 failed archive reads, changed affected inputs and existing output are refused.
 The input must already contain every required Git object: lazy fetching and Git
 transports are disabled. The output must be outside the input repository.
+An output inside a different Git worktree is supported. Hashing uses absolute
+extracted paths, not that worktree's index or root. Regular source files retain
+their committed 0644/0755 modes independently of the caller's umask; every
+surviving mode and the complete executable-path set are checked before completion.
 
 The result contains:
 
@@ -35,8 +39,10 @@ The result contains:
 No argument is an inert, successful no-op. Explicit preparation requires both
 paths; there is no default destination and no overwrite mode. A successful receipt
 does not prove a complete upstream build or confer release authority.
-An ordinary final-move failure removes this invocation's reserved output; a
-competing creator's output is preserved. An uncatchable termination such as
+An ordinary final-move failure or catchable termination removes this invocation's
+incomplete reserved output; a competing creator's output is preserved. During
+reservation, signal handling defers exit until mkdir's ownership result is recorded.
+An uncatchable termination such as
 SIGKILL can still leave an incomplete directory, which is never a success receipt.
 
 ## Distribution boundary
