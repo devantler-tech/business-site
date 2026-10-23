@@ -13,10 +13,12 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 3, "resource count");
+  assert.equal(docs.length, 5, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
+  const store = docs.find((d) => d?.kind === "SecretStore");
+  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
   for (const resource of [app, network, budget]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
     keys(resource.metadata, ["name", "namespace"]);
@@ -29,6 +31,29 @@ export function validateTenantPackage(input) {
   assert.deepEqual(budget.spec, {
     maxUnavailable: 1,
     selector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
+  });
+  for (const [resource, name] of [[store, "openbao"], [disclosure, "business-site-disclosure"]]) {
+    keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
+    keys(resource.metadata, ["name", "namespace"]);
+    assert.equal(resource.apiVersion, "external-secrets.io/v1");
+    assert.equal(resource.metadata.name, name);
+    assert.equal(resource.metadata.namespace, "business-site");
+  }
+  assert.deepEqual(store.spec, {
+    provider: {
+      vault: {
+        server: "http://openbao-active.openbao.svc.cluster.local:8200",
+        path: "secret",
+        version: "v2",
+        auth: { kubernetes: { mountPath: "kubernetes", role: "business-site", serviceAccountRef: { name: "business-site" } } },
+      },
+    },
+  });
+  assert.deepEqual(disclosure.spec, {
+    refreshInterval: "1h",
+    secretStoreRef: { name: "openbao", kind: "SecretStore" },
+    target: { name: "business-site-disclosure", creationPolicy: "Owner" },
+    data: [{ secretKey: "company-disclosure", remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" } }],
   });
   const spec = app.spec;
   keys(spec, ["name", "image", "host", "port", "replicas", "probePath", "cpuRequest", "memoryRequest", "cpuLimit", "memoryLimit", "args", "runAsUser", "runAsGroup", "readOnlyRootFilesystem", "secretProjections"]);

@@ -30,10 +30,24 @@ of every platform-granted connection. No database, migration, broker or private
 activation setting is configured. The checker accepts only the committed,
 independently verified baseline image; a same-repository digest alone is insufficient.
 
-The selected disclosure file must be provided separately in the same namespace.
-The platform projects it read-only at the fixed mount with mode 0440 and the
-application's primary group. No disclosure value belongs in this repository or
-image. Tests use fictional values in disposable volumes.
+The application-owned namespaced `openbao` SecretStore authenticates as only the
+`business-site` service account, using the dedicated `business-site` role. Its
+ExternalSecret reads only `company-disclosure` from the planned
+`apps/business-site/public-disclosure` KV-v2 entry and owns the same-namespace
+`business-site-disclosure` Secret. The WebApp projects that selected key read-only
+at the fixed mount with mode 0440 and the application's primary group. No shared
+ClusterSecretStore, bulk import, private-value writer or inline value is admitted.
+
+These declarations neither provision the Platform authentication role nor create
+the private value. Before registration, Platform must separately bind that role
+to this exact service account and namespace, with read permission limited to the
+disclosure entry. The owner must materialize the confirmed disclosure privately
+through the supported non-printing store mechanism. A missing or unsafe required
+file must prevent serving; a fictional placeholder is not a production input.
+The runtime snapshots the file at startup, so disclosure rotation requires a
+reviewed restart. Controller synchronization and real projection/rotation behavior
+remain separate live acceptance. No disclosure value belongs in this repository,
+image or publication receipt. Tests use fictional values in disposable volumes.
 
 The package proposes exactly `business-site.platform.devantler.tech` for public
 staging. Its validator rejects the former example name, the production address,
@@ -44,6 +58,9 @@ selected input materialization and network/controller behavior. Do not apply thi
 directory to an ambient cluster. No DNS change or production cutover is included.
 
 Issue #102 retains actual platform consumption proof and each adopted signed pair.
+The input declarations tracked by #300 require their own newly verified signed
+image/manifest publication before consumption; the earlier v1.0.2 pair does not
+contain these declarations and cannot be relabeled as doing so.
 See [the original source-contract decision](../docs/adr/0019-public-tenant-package.md)
 and [the staging-hostname decision](../docs/adr/0020-public-staging-hostname.md).
 

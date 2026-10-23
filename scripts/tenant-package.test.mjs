@@ -30,6 +30,25 @@ test("the rendered network policy explicitly enables egress default deny", () =>
   assert.deepEqual(network.spec.egress, [{}]);
 });
 
+test("the rendered package supplies the required disclosure through its own namespaced store", () => {
+  const docs = yaml.loadAll(render());
+  const store = docs.find((d) => d?.kind === "SecretStore");
+  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
+  const app = docs.find((d) => d?.kind === "WebApp");
+  assert.ok(store, "the required file needs an application-owned store declaration");
+  assert.ok(disclosure, "the required file needs an explicit synchronization declaration");
+  assert.equal(store.metadata.namespace, "business-site");
+  assert.equal(store.spec.provider.vault.auth.kubernetes.role, "business-site");
+  assert.deepEqual(store.spec.provider.vault.auth.kubernetes.serviceAccountRef, { name: "business-site" });
+  assert.deepEqual(disclosure.spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
+  assert.equal(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
+  assert.deepEqual(disclosure.spec.data, [{
+    secretKey: app.spec.secretProjections[0].items[0].key,
+    remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" },
+  }]);
+  assert.equal(check(render()).status, 0);
+});
+
 test("the disruption budget admits two or three replicas", () => {
   for (const replicas of [2, 3]) {
     const docs = yaml.loadAll(render());
@@ -108,11 +127,36 @@ for (const [name, mutate] of [
   ["a drain-blocking budget", (d) => { d[2].spec.maxUnavailable = 0; }],
   ["a percentage budget", (d) => { d[2].spec.maxUnavailable = "50%"; }],
   ["a conflicting minimum-available budget", (d) => { d[2].spec.minAvailable = 1; }],
+  ["a missing namespaced store", (d) => { d.splice(3, 1); }],
+  ["a missing disclosure synchronization", (d) => { d.splice(4, 1); }],
+  ["a duplicate store", (d) => { d.push(structuredClone(d[3])); }],
+  ["a foreign store namespace", (d) => { d[3].metadata.namespace = "foreign"; }],
+  ["the shared infrastructure role", (d) => { d[3].spec.provider.vault.auth.kubernetes.role = "external-secrets"; }],
+  ["a missing store service account", (d) => { delete d[3].spec.provider.vault.auth.kubernetes.serviceAccountRef; }],
+  ["a foreign service account", (d) => { d[3].spec.provider.vault.auth.kubernetes.serviceAccountRef.name = "other"; }],
+  ["a cross-namespace service account", (d) => { d[3].spec.provider.vault.auth.kubernetes.serviceAccountRef.namespace = "other"; }],
+  ["token-based store authentication", (d) => { d[3].spec.provider.vault.auth = { tokenSecretRef: { name: "other", key: "token" } }; }],
+  ["a foreign vault endpoint", (d) => { d[3].spec.provider.vault.server = "https://other.invalid"; }],
+  ["a different vault mount", (d) => { d[3].spec.provider.vault.path = "other"; }],
+  ["a different vault version", (d) => { d[3].spec.provider.vault.version = "v1"; }],
+  ["a different authentication mount", (d) => { d[3].spec.provider.vault.auth.kubernetes.mountPath = "other"; }],
+  ["a shared cluster store", (d) => { d[4].spec.secretStoreRef.kind = "ClusterSecretStore"; }],
+  ["a different namespaced store", (d) => { d[4].spec.secretStoreRef.name = "other"; }],
+  ["a foreign disclosure namespace", (d) => { d[4].metadata.namespace = "foreign"; }],
+  ["a foreign disclosure target", (d) => { d[4].spec.target.name = "other"; }],
+  ["bulk private-data imports", (d) => { d[4].spec.dataFrom = [{ extract: { key: "other" } }]; }],
+  ["additional private keys", (d) => { d[4].spec.data.push({ secretKey: "other", remoteRef: { key: "other" } }); }],
+  ["a different disclosure source", (d) => { d[4].spec.data[0].remoteRef.key = "apps/other/public-disclosure"; }],
+  ["a different disclosure property", (d) => { d[4].spec.data[0].remoteRef.property = "other"; }],
+  ["an inline disclosure value", (d) => { d[4].spec.target.template = { data: { "company-disclosure": "fictional private value" } }; }],
+  ["a private-value writer", (d) => { d[4].kind = "PushSecret"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
     // Each target is selected by kind, independent of Kustomize's sort order.
-    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget"].map((kind) => rendered.find((d) => d.kind === kind));
+    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore", "ExternalSecret"].map((kind) => rendered.find((d) => d.kind === kind));
+    assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
+      "each refusal must start from a complete accepted package");
     mutate(docs);
     const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
     assert.equal(result.status, 1, result.stdout);
