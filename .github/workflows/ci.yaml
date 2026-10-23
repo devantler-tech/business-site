@@ -279,6 +279,19 @@ jobs:
       - name: Check the About page and CV data for drift
         run: node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
 
+  test-zitadel-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise frozen upstream source preparation and refusal controls
+        run: bash scripts/prepare-zitadel-source.test.sh
+
   test-repository-contracts:
     runs-on: ubuntu-latest
     permissions:
@@ -579,6 +592,7 @@ jobs:
       - test-docs-npm-toolchain
       - drift-check-active-projects
       - test-repository-contracts
+      - test-zitadel-source
       - test-portal-identity
       - test-combined-runtime
     steps:
@@ -593,6 +607,7 @@ jobs:
             ${{ needs.test-docs-npm-toolchain.result }}
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
+            ${{ needs.test-zitadel-source.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-combined-runtime.result }}
 
@@ -609,6 +624,7 @@ jobs:
       - test-docs-npm-toolchain
       - drift-check-active-projects
       - test-repository-contracts
+      - test-zitadel-source
       - test-portal-identity
       - test-combined-runtime
       - validation
@@ -625,6 +641,7 @@ jobs:
             ${{ needs.test-docs-npm-toolchain.result }}
             ${{ needs.drift-check-active-projects.result }}
             ${{ needs.test-repository-contracts.result }}
+            ${{ needs.test-zitadel-source.result }}
             ${{ needs.test-portal-identity.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
