@@ -1,6 +1,12 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/customer-identity-config` explicitly prepares dormant native Keycloak/Dex
+documents with no network, user, secret-value or activation operations. Read
+`CUSTOMER-IDENTITY.md`. Preserve empty invitation-only realm inputs, exact HTTPS
+callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
+semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
+Keep the portal's maintained generic OIDC boundary and current membership checks.
 The explicit offline `cmd/runtime-receipt` admits the public runtime publication
 ZIP without extraction, network access or filesystem writes. Read `../deploy/README.md`.
 Retain the closed receipt/member schema, bounded same-descriptor snapshot, complete

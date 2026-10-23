@@ -81,6 +81,8 @@
     "hardlinks",
     "pollable",
     "contactintegration",
+    "customeridentity",
+    "TOTP",
     "autofocus",
     "udfff",
     "libexec",
