@@ -77,7 +77,7 @@ jobs:
     needs: admit
     permissions:
       contents: read
-    uses: devantler-tech/.github/.github/workflows/create-release.yaml@cd6530fc05d1148e5ad40ebd02ea3a98e0158296
+    uses: devantler-tech/.github/.github/workflows/create-release.yaml@8723698de8a2265c7b77db7df030f30aa33a958a
     with:
       disable-issue-side-effects: true
       warn-missing-breaking-bang: true
