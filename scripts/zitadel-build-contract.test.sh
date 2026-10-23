@@ -33,8 +33,8 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        length == 6 and (unique | length == 6) and
-        all(test("/zitadel-build/(build-receipt\\.json|packages\\.jsonl|login-icons-inventory\\.json|\\*\\.(txt|log|sha256))$")))) and
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "*.txt", "*.log", "*.sha256"] |
+          map("$" + "{{ runner.temp }}/zitadel-build/" + .) | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
     any(.jobs.validation.steps[]; (.with["job-results"] // "" | contains("needs.build-zitadel-linux.result"))) and
@@ -57,10 +57,11 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path="" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("build-receipt.json") | not)) | join("\n")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("/zitadel-build/login-icons-inventory.json"; "/./zitadel-build/build-receipt.json")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.name="other-evidence" else . end)' \
   '.jobs.validation.needs |= map(select(. != "build-zitadel-linux"))' \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including seventeen broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including eighteen broken-wiring controls.'

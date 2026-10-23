@@ -136,6 +136,24 @@ func invoke(build, notices string) (int, string, string) {
 	return code, out.String(), err.String()
 }
 
+func changeJSONField(t *testing.T, path, field string, value any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(data, &object); err != nil {
+		t.Fatal(err)
+	}
+	object[field] = value
+	data, err = json.Marshal(object)
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, path, data)
+}
+
 func TestInventoryDefaultOffAndCompleteSelectedOutput(t *testing.T) {
 	var out, err bytes.Buffer
 	if code := run(nil, &out, &err); code != 0 || out.Len() != 0 || err.Len() != 0 {
@@ -168,13 +186,60 @@ func TestInventoryDefaultOffAndCompleteSelectedOutput(t *testing.T) {
 	}
 }
 
+func TestInventoryUsesTheCheckedClipboardSnapshot(t *testing.T) {
+	build, notices := buildFixture(t)
+	noticeRoot, err := filepath.EvalSymlinks(notices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clipboardReads := 0
+	read := func(root, relative string, limit int64) ([]byte, error) {
+		data, err := readAt(root, relative, limit)
+		if err == nil && root == noticeRoot && relative == "clipboard.svg" {
+			clipboardReads++
+			if clipboardReads == 1 {
+				// Change the real file after its first complete read. Both forms
+				// share the upstream blob but only the first has the pinned digest.
+				put(t, filepath.Join(notices, relative), bytes.TrimSuffix(data, []byte("\n")))
+			}
+		}
+		return data, err
+	}
+	got, err := inspectWithRead(build, notices, read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "9a526c626cdb157f44c29831d5c99eba3d719a92758a257891164538090fd739"
+	if clipboardReads != 1 || got.Glyphs[7].RetainedSHA256 != want {
+		t.Fatalf("inventory used a second, unchecked clipboard snapshot: reads=%d retained=%s", clipboardReads, got.Glyphs[7].RetainedSHA256)
+	}
+	found := false
+	for _, input := range got.Inputs {
+		if input.Path == "clipboard.svg" {
+			found = true
+			if input.SHA256 != want {
+				t.Fatalf("clipboard input and glyph snapshots differ: %s", input.SHA256)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("checked clipboard input absent from inventory")
+	}
+}
+
 func TestInventoryRejectsMissingSubstitutedAndPartialInputs(t *testing.T) {
 	cases := map[string]func(*testing.T, string, string){
 		"wrong profile": func(t *testing.T, b, n string) {
-			put(t, filepath.Join(b, "build-receipt.pending"), []byte(`{"upstreamCommit":"8afa5dd37a8e723efb9eace8d09fd5c1cccef694","profile":"other"}`))
+			changeJSONField(t, filepath.Join(b, "build-receipt.pending"), "profile", "other")
+		},
+		"wrong platform": func(t *testing.T, b, n string) {
+			changeJSONField(t, filepath.Join(b, "build-receipt.pending"), "platform", "linux/arm64")
+		},
+		"wrong reproducibility": func(t *testing.T, b, n string) {
+			changeJSONField(t, filepath.Join(b, "build-receipt.pending"), "reproducible", true)
 		},
 		"wrong preparation": func(t *testing.T, b, n string) {
-			put(t, filepath.Join(b, "prepared/source-preparation.json"), []byte(`{"upstreamCommit":"other"}`))
+			changeJSONField(t, filepath.Join(b, "prepared/source-preparation.json"), "upstreamCommit", "other")
 		},
 		"missing manifest": func(t *testing.T, b, n string) {
 			if err := os.Remove(filepath.Join(b, "generated.sha256")); err != nil {
@@ -245,9 +310,33 @@ func TestInventoryRejectsMissingSubstitutedAndPartialInputs(t *testing.T) {
 			}
 		},
 	}
+	wanted := map[string]string{
+		"wrong profile":                          "unsupported build profile",
+		"wrong platform":                         "unsupported build profile",
+		"wrong reproducibility":                  "unsupported build profile",
+		"wrong preparation":                      "source-preparation.json upstreamCommit",
+		"missing manifest":                       "generated.sha256: no such file",
+		"partial manifest":                       "statik digest does not match selected output",
+		"duplicate manifest":                     "duplicate or unclean generated member",
+		"plausible prefix then invalid manifest": "malformed generated inventory",
+		"missing notice":                         "LICENSE.md: no such file",
+		"truncated license":                      "notice/source identity differs: LICENSE.md",
+		"wrong clipboard":                        "notice/source identity differs: clipboard.svg",
+		"extra font":                             "selected directory membership differs",
+		"different embedded payload":             "embedded font differs",
+		"linked parent":                          "linked input: LICENSE.md",
+		"linked prepared source root":            "linked input: prepared/source/",
+	}
 	for _, ext := range []string{"eot", "ttf", "woff", "svg"} {
 		for _, kind := range []string{"missing", "substituted"} {
 			ext, kind := ext, kind
+			wanted[kind+" "+ext] = "font source/output identity differs:"
+			if kind == "missing" {
+				wanted[kind+" "+ext] = "selected directory membership differs"
+				if ext == "eot" {
+					wanted[kind+" "+ext] = "lgn-icons.eot: no such file"
+				}
+			}
 			cases[kind+" "+ext] = func(t *testing.T, b, n string) {
 				p := filepath.Join(b, "prepared/source/internal/api/ui/login/static/resources/fonts/lgn-icons/fonts/lgn-icons."+ext)
 				if kind == "missing" {
@@ -263,6 +352,10 @@ func TestInventoryRejectsMissingSubstitutedAndPartialInputs(t *testing.T) {
 	}
 	for name := range fixture(t).Vectors {
 		name := name
+		wanted["substituted vector "+name] = "immutable vector differs:"
+		if name == "clipboard-solid.svg" {
+			wanted["substituted vector "+name] = "original solid clipboard input differs"
+		}
 		cases["substituted vector "+name] = func(t *testing.T, b, n string) {
 			put(t, filepath.Join(b, "prepared/source/internal/api/ui/login/static/resources/fonts/lgn-icons/svg", name), []byte(`<svg viewBox="0 0 32 32"><path d="M0 0Z"/></svg>`))
 		}
@@ -274,6 +367,9 @@ func TestInventoryRejectsMissingSubstitutedAndPartialInputs(t *testing.T) {
 			code, out, msg := invoke(b, n)
 			if code == 0 || out != "" || msg == "" {
 				t.Fatalf("failure published success inventory: %d %q %q", code, out, msg)
+			}
+			if wanted[name] == "" || !strings.Contains(msg, wanted[name]) {
+				t.Fatalf("named rejection did not reach its check (want %q): %s", wanted[name], msg)
 			}
 		})
 	}

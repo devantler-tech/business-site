@@ -135,7 +135,10 @@ func run(args []string, out, diagnostic io.Writer) int {
 	return 0
 }
 
+// digest identifies the exact retained bytes in the output inventory.
 func digest(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
+
+// blob reproduces Git's frozen object identity; SHA-256 separately binds retained bytes.
 func blob(b []byte) string {
 	return fmt.Sprintf("%x", sha1.Sum(append([]byte(fmt.Sprintf("blob %d\x00", len(b))), b...)))
 }
@@ -195,6 +198,7 @@ func readAt(root, relative string, limit int64) ([]byte, error) {
 	return b, nil
 }
 
+// exactDirectory refuses absent, linked, nonregular or additional selected members.
 func exactDirectory(root, relative string, want []string) error {
 	// Reading a child first verifies the parents, including the selected directory.
 	if len(want) == 0 {
@@ -278,7 +282,13 @@ func jsonObject(data []byte) (map[string]json.RawMessage, error) {
 	return object, nil
 }
 
+// inspect uses confined disk reads for the selected build and retained notice roots.
 func inspect(build, notices string) (inventory, error) {
+	return inspectWithRead(build, notices, readAt)
+}
+
+// inspectWithRead joins the complete snapshots supplied by the confined reader.
+func inspectWithRead(build, notices string, readInput func(string, string, int64) ([]byte, error)) (inventory, error) {
 	var result inventory
 	build, err := filepath.EvalSymlinks(build)
 	if err != nil {
@@ -289,7 +299,7 @@ func inspect(build, notices string) (inventory, error) {
 		return result, err
 	}
 	read := func(root, p string, cap int64) ([]byte, error) {
-		b, e := readAt(root, p, cap)
+		b, e := readInput(root, p, cap)
 		if e == nil {
 			result.Inputs = append(result.Inputs, inputRecord{p, digest(b)})
 		}
@@ -311,7 +321,7 @@ func inspect(build, notices string) (inventory, error) {
 		return result, fmt.Errorf("missing build receipt")
 	}
 	for _, p := range []string{receipt, "prepared/source-preparation.json"} {
-		b, e := readAt(build, p, 1<<20)
+		b, e := readInput(build, p, 1<<20)
 		if e != nil {
 			return result, e
 		}
@@ -336,6 +346,7 @@ func inspect(build, notices string) (inventory, error) {
 	if err = exactDirectory(notices, ".", []string{"LICENSE.md", "NOTICE.md", "clipboard.svg"}); err != nil {
 		return result, err
 	}
+	noticeBytes := map[string][]byte{}
 	for p, want := range map[string]string{"LICENSE.md": "55a4cc3d450a9dfa4d12c7de238442562899868299b800dbac6c70ca6d99c490", "NOTICE.md": "bbbf1549408fef9c90199ac0859a49a110683cf3b89394e0402d030a7cfe5155", "clipboard.svg": "9a526c626cdb157f44c29831d5c99eba3d719a92758a257891164538090fd739"} {
 		b, e := read(notices, p, 1<<20)
 		if e != nil {
@@ -344,6 +355,7 @@ func inspect(build, notices string) (inventory, error) {
 		if digest(b) != want {
 			return result, fmt.Errorf("notice/source identity differs: %s", p)
 		}
+		noticeBytes[p] = b
 	}
 	// Keep the derived source path below the selected build root. Promoting it
 	// to a new root would allow a linked prepared/source to escape confinement.
@@ -423,11 +435,7 @@ func inspect(build, notices string) (inventory, error) {
 	if blob(vectors["clipboard-solid.svg"]) != "7edc3eda1ebbc7cc7f60763f06beaa4b25579602" {
 		return result, fmt.Errorf("original solid clipboard input differs")
 	}
-	clipboard, err := readAt(notices, "clipboard.svg", 1<<20)
-	if err != nil {
-		return result, err
-	}
-	vectors["clipboard.svg"] = clipboard
+	vectors["clipboard.svg"] = noticeBytes["clipboard.svg"]
 	for _, g := range glyphInputs {
 		b := vectors[g.name+".svg"]
 		if g.name == "clipboard" {
@@ -666,6 +674,7 @@ func checkWrappers(fonts map[string][]byte) error {
 	return nil
 }
 
+// checkCmap requires all three frozen encodings to map the selected codepoints to their glyph slots.
 func checkCmap(tables map[string][]byte) error {
 	b := tables["cmap"]
 	maxp := tables["maxp"]
@@ -740,6 +749,7 @@ func checkCmap(tables map[string][]byte) error {
 	return nil
 }
 
+// checkGlyphs joins each frozen SVG-font codepoint to its actual normalized source geometry.
 func checkGlyphs(font []byte, vectors map[string][]byte) ([]string, error) {
 	var doc struct {
 		XMLName xml.Name `xml:"svg"`
