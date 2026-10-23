@@ -267,7 +267,7 @@ func (b *browserFixture) start(inv string) string {
 	if status != http.StatusOK {
 		b.t.Fatalf("login start status=%d want200: %s", status, body)
 	}
-	req, err := http.NewRequest("GET", brokerHandoffAddress(b.t, body), nil)
+	req, err := http.NewRequestWithContext(b.t.Context(), "GET", brokerHandoffAddress(b.t, body), nil)
 	if err != nil {
 		b.t.Fatal(err)
 	}

@@ -85,6 +85,8 @@
     "contactintegration",
     "customeridentity",
     "ZITADEL",
+    "Authelia",
+    "authentik",
     "Passwordless",
     "TOTP",
     "autofocus",

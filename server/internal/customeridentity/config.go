@@ -96,6 +96,8 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 				"issuer": inputs.ZitadelIssuer, "clientID": "${CUSTOMER_ZITADEL_CLIENT_ID}",
 				"clientSecret": "${CUSTOMER_ZITADEL_CLIENT_SECRET}", "redirectURI": callback,
 				"scopes": []string{"profile", "email"}, "pkceChallenge": "S256", "getUserInfo": true,
+				// Dex requires a boolean claim, not true. ZITADEL Login V1 enforces
+				// address verification; purpose-bound portal contact proof checks true.
 				"insecureSkipEmailVerified": false, "insecureEnableGroups": false, "insecureSkipVerify": false,
 			},
 		}},

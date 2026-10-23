@@ -74,8 +74,23 @@ verification lifetime. Portal logout alone does not end that SSO session. Passwo
 and external login are disabled initially. Exercise expiring/replayed links, wrong
 factors, recovery and deactivation against the actual selected version.
 
-Dex requests `profile`/`email`, adds `openid`, reads UserInfo and keeps strict email,
-TLS and subject checks. It sends S256 to ZITADEL; the confidential upstream client
+Dex requests `profile`/`email`, adds `openid` and reads UserInfo with issuer, subject
+and TLS checks. Its `insecureSkipEmailVerified=false` requires a boolean verification
+claim but **does not reject a present `false`**. It is not an email-verification
+policy. The selected ZITADEL Login V1 requires address verification before completing
+authentication, including after an email change. Keep that native lifecycle in
+acceptance tests; do not pre-verify an invited user's address administratively.
+
+Ordinary portal sign-in requests only `openid` and authorizes current, explicitly
+invited issuer/subject membership, not email. It neither collects nor confirms the
+saved contact address. The separate purpose-bound contact-confirmation flow requires
+the signed boolean `email_verified=true` and the exact saved address/revision. A
+missing, malformed or false claim is refused there. UserInfo can reflect an email
+changed after authentication; never promote its address or status into membership,
+roles or contact proof on ordinary sign-in. This configuration does not promise that
+Dex refuses every identity carrying a false verification claim.
+
+Dex sends S256 to ZITADEL; the confidential upstream client
 has no documented setting that guarantees rejecting an omitted challenge. Do not
 claim that rejection without proof. The downstream Dex policy requires S256.
 
@@ -128,6 +143,14 @@ Native account deactivation refused a new sign-in but left an issued portal sess
 usable until separate portal revocation, which immediately denied that session.
 The bounded host lease expired during an earlier continuation; that attempt did not
 reach the portal and was repeated with a fresh disposable fixture, not counted green.
+
+A separate fresh native instance tested an administrator-created, unverified invited
+account. Dex redirected to ZITADEL's email-verification/password-initialization screen;
+a wrong verification code was refused and no portal callback occurred. This confirms
+that native lifecycle boundary, not a universal true-only claim filter in Dex. The
+fresh fixture's first setup attempt rejected a generated administrator password
+without a symbol; compliant private bootstrap input allowed the retry. The product
+preparer creates no administrator and does not supply that password.
 
 The first browser attempt exposed Chromium blocking the provider redirect under
 the portal's strict form policy. The corrected native handoff document completed

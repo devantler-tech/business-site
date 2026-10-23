@@ -9,7 +9,8 @@
 The portal trusts dedicated customer Dex, initially connected by OIDC to a dedicated
 self-hosted ZITADEL instance. Approved invitees use local accounts. Public user and
 organization registration, external and passwordless login are disabled initially.
-Password plus MFA and verified email are required. Social providers are future work.
+ZITADEL's invited-user login requires password, MFA and address verification.
+Social providers are future work.
 
 Customer and infrastructure issuers, clients, secrets, administration and stores
 remain separate. Business-specific source belongs in business-site. The portal owns
@@ -55,8 +56,8 @@ this does not automatically admit production binaries/images.
 
 Setup explicitly skips first-instance creation. Native merged defaults can
 otherwise create an administrator; omitting `Human` is unsafe. Actual bootstrap
-requires separately private fresh administrator inputs and persisted policy
-readback. Initial policy belongs in `DefaultInstance` configuration, not setup
+requires separately private fresh administrator inputs and verification of persisted
+policies. Initial policy belongs in `DefaultInstance` configuration, not setup
 steps. Existing instances require supported API updates, not rerender/restart.
 
 The modern application API creates a confidential web client with code grant and
@@ -64,8 +65,17 @@ exact Dex callback, returning generated client credentials. Dex reads these priv
 references; the portal uses a different downstream credential. Source preparation
 neither expands values nor creates users, projects or applications.
 
-Dex sends S256 and reads UserInfo with strict verified-email/TLS checks. The
-upstream confidential client has no documented enforce-PKCE switch; do not claim
+Dex sends S256 and reads UserInfo with issuer, subject and TLS checks. Its
+`insecureSkipEmailVerified=false` requires a boolean claim but accepts a present
+`false`; it does not enforce verification. Selected ZITADEL Login V1 enforces
+address verification before authentication completes, including after a changed
+address. UserInfo can reflect a later email change, so this is not a universal
+true-only claim guarantee at Dex. Ordinary portal sign-in requests only `openid`
+and uses invited issuer/subject membership. Only explicit contact confirmation
+requests email claims and requires a signed `email_verified=true` for the exact
+saved address/revision. Never grant contact proof or authority from ordinary login.
+
+The upstream confidential client has no documented enforce-PKCE switch; do not claim
 challenge omission is rejected without proof. Downstream Dex independently requires
 S256. No password, implicit, administrative or offline portal grant is introduced.
 Short tokens never replace current portal membership checks.
@@ -118,3 +128,4 @@ authority. Activate separately and reversibly only after these pass.
 - [Authelia account backends](https://www.authelia.com/configuration/first-factor/introduction/).
 - [Keycloak container guidance](https://www.keycloak.org/server/containers).
 - [Pinned Dex connector](https://github.com/dexidp/dex/blob/05a275057112ba93e17db21f600b756f000f1c21/connector/oidc/oidc.go).
+- [Pinned native email-verification steps](https://github.com/zitadel/zitadel/blob/8afa5dd37a8e723efb9eace8d09fd5c1cccef694/internal/auth/repository/eventsourcing/eventstore/auth_request.go#L1119) and [current UserInfo email mapping](https://github.com/zitadel/zitadel/blob/8afa5dd37a8e723efb9eace8d09fd5c1cccef694/internal/api/oidc/userinfo.go#L218).
