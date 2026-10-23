@@ -345,7 +345,9 @@ func inspect(build, notices string) (inventory, error) {
 			return result, fmt.Errorf("notice/source identity differs: %s", p)
 		}
 	}
-	source := filepath.Join(build, "prepared/source")
+	// Keep the derived source path below the selected build root. Promoting it
+	// to a new root would allow a linked prepared/source to escape confinement.
+	sourcePrefix := "prepared/source/"
 	manifestBytes, err := read(build, "generated.sha256", 8<<20)
 	if err != nil {
 		return result, err
@@ -361,7 +363,7 @@ func inspect(build, notices string) (inventory, error) {
 		}
 		entries[p] = line[:64]
 	}
-	statik, err := read(source, statikPath, 32<<20)
+	statik, err := read(build, sourcePrefix+statikPath, 32<<20)
 	if err != nil {
 		return result, err
 	}
@@ -373,13 +375,13 @@ func inspect(build, notices string) (inventory, error) {
 		return result, err
 	}
 	fontNames := []string{"lgn-icons.eot", "lgn-icons.svg", "lgn-icons.ttf", "lgn-icons.woff"}
-	if err = exactDirectory(source, iconRoot+"fonts", fontNames); err != nil {
+	if err = exactDirectory(build, sourcePrefix+iconRoot+"fonts", fontNames); err != nil {
 		return result, err
 	}
 	fonts := map[string][]byte{}
 	for _, name := range fontNames {
 		p := iconRoot + "fonts/" + name
-		b, e := read(source, p, 1<<20)
+		b, e := read(build, sourcePrefix+p, 1<<20)
 		if e != nil {
 			return result, e
 		}
@@ -408,11 +410,11 @@ func inspect(build, notices string) (inventory, error) {
 			vectorNames = append(vectorNames, g.name+".svg")
 		}
 	}
-	if err = exactDirectory(source, iconRoot+"svg", vectorNames); err != nil {
+	if err = exactDirectory(build, sourcePrefix+iconRoot+"svg", vectorNames); err != nil {
 		return result, err
 	}
 	for _, name := range vectorNames {
-		b, e := read(source, iconRoot+"svg/"+name, 1<<20)
+		b, e := read(build, sourcePrefix+iconRoot+"svg/"+name, 1<<20)
 		if e != nil {
 			return result, e
 		}
@@ -464,9 +466,16 @@ func decodeStatik(data []byte) (map[string][]byte, error) {
 	if len(data) > 32<<20 {
 		return bad()
 	}
-	f, err := parser.ParseFile(token.NewFileSet(), "statik.go", data, 0)
+	f, err := parser.ParseFile(token.NewFileSet(), "statik.go", data, parser.ParseComments)
 	if err != nil || f.Name.Name != "statik" || len(f.Decls) != 3 {
 		return bad()
+	}
+	for _, group := range f.Comments {
+		for _, comment := range group.List {
+			if strings.HasPrefix(comment.Text, "//go:") || strings.HasPrefix(comment.Text, "// +build") {
+				return bad()
+			}
+		}
 	}
 	imp, ok := f.Decls[0].(*ast.GenDecl)
 	if !ok || imp.Tok != token.IMPORT || len(imp.Specs) != 1 {

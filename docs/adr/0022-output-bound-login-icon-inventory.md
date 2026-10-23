@@ -17,6 +17,9 @@ It reads one bounded snapshot of the prepared source, preparation receipt,
 generated-output manifest and notice inputs. It parses the generated Go as data,
 requiring the known single-literal login registration, and inspects the decoded
 ZIP without importing, executing or extracting generated code.
+Prepared-source reads stay beneath the selected build root, including parent-link
+checks. Compiler-control comments are rejected; the native builder also requires
+Go's actual dependency selection to include that exact login registration file.
 
 Admit only the frozen four font byte identities and ten codepoint/vector bindings.
 Compare all WOFF tables with the TTF and the EOT suffix with that exact TTF.

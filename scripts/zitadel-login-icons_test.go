@@ -234,6 +234,16 @@ func TestInventoryRejectsMissingSubstitutedAndPartialInputs(t *testing.T) {
 				t.Fatal(e)
 			}
 		},
+		"linked prepared source root": func(t *testing.T, b, n string) {
+			p := filepath.Join(b, "prepared/source")
+			outside := filepath.Join(t.TempDir(), "source")
+			if err := os.Rename(p, outside); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, p); err != nil {
+				t.Fatal(err)
+			}
+		},
 	}
 	for _, ext := range []string{"eot", "ttf", "woff", "svg"} {
 		for _, kind := range []string{"missing", "substituted"} {
@@ -301,6 +311,8 @@ func TestStatikIsInspectedWithoutExecution(t *testing.T) {
 		t.Fatalf("valid archive rejected: %v", err)
 	}
 	for name, data := range map[string][]byte{
+		"compiler excluded registration":   append([]byte("//go:build ignore\n\n"), good...),
+		"legacy compiler exclusion":        append([]byte("// +build ignore\n\n"), good...),
 		"wrong namespace":                  bytes.Replace(good, []byte(`RegisterWithNamespace("login"`), []byte(`RegisterWithNamespace("other"`), 1),
 		"second init":                      append(append([]byte{}, good...), []byte("func init(){}\n")...),
 		"reassigned literal":               bytes.Replace(good, []byte("; fs.Register"), []byte("; data=\"changed\"; fs.Register"), 1),
