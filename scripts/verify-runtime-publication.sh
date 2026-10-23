@@ -112,10 +112,10 @@ flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
 while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
-  case "$member" in webapp.yaml | network-policy.yaml | disruption-budget.yaml | kustomization.yaml | README.md) ;; *) fail 'unexpected manifest member' ;; esac
+  case "$member" in webapp.yaml | network-policy.yaml | disruption-budget.yaml | secret-store.yaml | external-secret-disclosure.yaml | kustomization.yaml | README.md) ;; *) fail 'unexpected manifest member' ;; esac
   [[ -f "$entry" && ! -L "$entry" && "$(wc -c <"$entry")" -le 1048576 ]] || fail 'manifest member bounds'
 done <<<"$entries"
-for member in webapp.yaml network-policy.yaml disruption-budget.yaml kustomization.yaml; do
+for member in webapp.yaml network-policy.yaml disruption-budget.yaml secret-store.yaml external-secret-disclosure.yaml kustomization.yaml; do
   [[ -f "$work/manifests/$member" && -f "deploy/$member" && ! -L "deploy/$member" ]] || fail 'missing source manifest'
   yq -o=json -I=0 '.' "deploy/$member" >"$work/source.json" || fail 'source manifest parse'
   if [[ "$member" == webapp.yaml ]]; then

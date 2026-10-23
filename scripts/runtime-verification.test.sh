@@ -81,6 +81,10 @@ IMAGE="ghcr.io/devantler-tech/business-site@$IMAGE_DIGEST" yq -i '.spec.image=st
 [[ "${PULL_FAIL:-false}" == false ]] || exit 1
 if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.example.invalid"' "$5/webapp.yaml"; fi
 if [[ "${EXTRA_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/extra.txt"; fi
+if [[ "${MISSING_STORE:-false}" == true ]]; then rm "$5/secret-store.yaml"; fi
+if [[ "${MISSING_DISCLOSURE:-false}" == true ]]; then rm "$5/external-secret-disclosure.yaml"; fi
+if [[ "${ALTER_STORE:-false}" == true ]]; then yq -i '.spec.provider.vault.auth.kubernetes.role="foreign-tenant"' "$5/secret-store.yaml"; fi
+if [[ "${ALTER_DISCLOSURE:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.property="unapproved"' "$5/external-secret-disclosure.yaml"; fi
 FIXTURE
 chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
 # Restore independent signed-subject fixtures and clear receipts/read counters between controls.
@@ -132,7 +136,7 @@ if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a move
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
 reset_fixture
 verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
-for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
+for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
   if verify "$context"; then fail 'failed signature/pull, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'
