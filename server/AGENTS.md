@@ -8,7 +8,8 @@ organization registration, supported embedded login selection, exact HTTPS
 callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
 semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
-The sign-in POST completes in an escaped, no-store native navigation document,
+Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
+native navigation document,
 not an HTTP redirect through the whole upstream chain. Preserve its immediate
 refresh/native-link agreement, configured-broker-only destination and strict CSP;
 do not add provider origins or arbitrary HTTPS form destinations.

@@ -162,7 +162,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 			w.Header().Set("Location", origin+strings.TrimPrefix(location, b.site.URL))
 		}
 		w.WriteHeader(res.StatusCode)
-		if r.Method == http.MethodPost && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
+		if r.Method == http.MethodPost && (r.URL.Path == "/portal/sign-in" || r.URL.Path == "/portal/contact/verify") && res.StatusCode == http.StatusOK {
 			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
 			if readErr != nil || len(body) > 64*1024 {
 				return

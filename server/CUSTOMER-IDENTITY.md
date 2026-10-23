@@ -157,6 +157,17 @@ the portal's strict form policy. The corrected native handoff document completed
 the same chain without adding upstream origins to the portal policy. The ordinary
 HTTP controls alone had not observed this browser-only failure.
 
+Review found the same direct form redirect in the separately gated contact-proof
+flow. A failing HTTP control reproduced it before both flows adopted the shared
+handoff. A second real native composition enabled only identity and contact proof
+for its fictional account: Chromium completed invitation verification, password,
+MFA and ordinary `openid` sign-in, saved an unconfirmed contact, then followed the
+contact POST's 200 handoff through Dex and ZITADEL and back to a confirmed saved
+address. The trace included both real upstream origins with no CSP refusal. The
+confirmation control disappeared; the Danish contact page had no overflow at
+390 pixels. This used the maintained Foundation/Browser with injected in-memory
+fixture flags, not a new activation mapping or a change to the ordinary trial host.
+
 Two five-sample, roughly one-second process observations covered idle and native
 password-recovery activity. ZITADEL including embedded login used 79–106 MiB RSS,
 Dex 18–20 MiB, the Go portal about 13 MiB, all 20 PostgreSQL processes 110–132 MiB,

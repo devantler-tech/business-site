@@ -244,7 +244,7 @@ func TestBrowserBrokerHandoffDocument(t *testing.T) {
 		if err != nil || u.Scheme+"://"+u.Host != b.broker.URL || u.Path != "/authorize" || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" || u.Query().Get("state") == "" {
 			t.Fatal("handoff destination was not the configured, attempt-bound broker")
 		}
-		if !strings.Contains(body, `content="0;url=`+html.EscapeString(address)+`"`) || strings.Contains(body, "attacker.example.invalid") || !strings.Contains(body, `<html lang="`+lang+`">`) {
+		if brokerHandoffRefreshAddress(t, body) != address || strings.Contains(body, "attacker.example.invalid") || !strings.Contains(body, `<html lang="`+lang+`">`) {
 			t.Fatal("automatic and accessible native handoffs disagree or leak caller navigation")
 		}
 	}
@@ -257,6 +257,15 @@ func brokerHandoffAddress(t testing.TB, body string) string {
 		t.Fatal("missing or ambiguous native broker continuation")
 	}
 	return html.UnescapeString(links[0][1])
+}
+
+func brokerHandoffRefreshAddress(t testing.TB, body string) string {
+	t.Helper()
+	refreshes := regexp.MustCompile(`<meta http-equiv="refresh" content="0;url=([^"]+)">`).FindAllStringSubmatch(body, -1)
+	if len(refreshes) != 1 {
+		t.Fatal("missing or ambiguous native broker refresh")
+	}
+	return html.UnescapeString(refreshes[0][1])
 }
 
 // start follows the real CSRF-protected sign-in and synthetic broker redirect.
