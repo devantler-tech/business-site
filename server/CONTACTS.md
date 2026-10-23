@@ -16,6 +16,13 @@ with the current issuer and subject in an expiring, single-use database attempt.
 Only this flow requests `openid email` and the email claims in the signed ID Token;
 ordinary sign-in still requests only `openid` and never confirms a contact.
 
+Like sign-in, the form POST finishes in a no-store broker handoff document with
+an immediate native navigation and accessible continuation link. It does not
+redirect the submitted form through every upstream provider. Both paths share
+this handoff and retain the broker-only form policy; never add provider origins
+to that allowlist. Transaction purpose, original client/revision and expiry
+remain bound across the navigation.
+
 The actual callback consumes the contact-purpose attempt before the maintained
 code exchange, PKCE and token verification. Both consumers filter the stored
 purpose; a browser-session marker only selects which consumer to invoke.
@@ -64,8 +71,10 @@ Use the [actual disposable database suite](README.md#actual-database-tests), inc
 the real TLS broker/callback path, purpose/replay controls, historical upgrade,
 contact changes, current client access and late SQL/SDK checkpoint failures.
 The rendered-link contract covers enabled, confirmed and recovery forms in EN/DA.
-Native browser checks use only the bounded synthetic visual fixture, not real
-Google/Microsoft accounts or customer data.
+Native browser checks use only fictional accounts and disposable stores, not real
+Google/Microsoft accounts or customer data. A visual gateway does not prove broker
+or browser-policy acceptance. An explicitly selected real ZITADEL/Dex fixture
+remains local acceptance, never production activation.
 
 Business-site#93 reviews the temporary gate by 14 November 2026 after actual rollout
 evidence. A source merge, signed runtime image and public Pages receipt do not

@@ -150,7 +150,7 @@ func (b *browser) beginContactVerification(w http.ResponseWriter, r *http.Reques
 	configuration := b.oauth
 	configuration.Scopes = []string{oidcScope, "email"}
 	address := configuration.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce), oauth2.SetAuthURLParam("claims", `{"id_token":{"email":null,"email_verified":null}}`))
-	http.Redirect(w, r, address, http.StatusSeeOther)
+	b.brokerHandoff(w, r, address)
 }
 
 // contactVerificationFailure offers recovery only through current client access.

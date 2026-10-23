@@ -226,15 +226,57 @@ func (b *browserFixture) invite(subject, client, role string) string {
 	return inv
 }
 
+// TestBrowserBrokerHandoffDocument prevents form-action from following the
+// broker's entire upstream chain, without widening the portal's CSP origins.
+func TestBrowserBrokerHandoffDocument(t *testing.T) {
+	b := newBrowserFixture(t)
+	for _, lang := range []string{"en", "da"} {
+		token := b.csrf("/portal/sign-in?lang=" + lang)
+		status, body, headers := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "lang": {lang}, "return_to": {"https://attacker.example.invalid"}}, b.site.URL)
+		if status != http.StatusOK || headers.Get("Location") != "" || headers.Get("Refresh") != "" {
+			t.Fatalf("handoff must finish the form navigation in a fresh HTML document: status=%d", status)
+		}
+		if headers.Get("Cache-Control") != "no-store" || !strings.Contains(headers.Get("Content-Security-Policy"), "form-action 'self' "+b.broker.URL+";") {
+			t.Fatal("handoff weakened its cache or form-action boundary")
+		}
+		address := brokerHandoffAddress(t, body)
+		u, err := url.Parse(address)
+		if err != nil || u.Scheme+"://"+u.Host != b.broker.URL || u.Path != "/authorize" || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" || u.Query().Get("state") == "" {
+			t.Fatal("handoff destination was not the configured, attempt-bound broker")
+		}
+		if brokerHandoffRefreshAddress(t, body) != address || strings.Contains(body, "attacker.example.invalid") || !strings.Contains(body, `<html lang="`+lang+`">`) {
+			t.Fatal("automatic and accessible native handoffs disagree or leak caller navigation")
+		}
+	}
+}
+
+func brokerHandoffAddress(t testing.TB, body string) string {
+	t.Helper()
+	links := regexp.MustCompile(`<a id="broker-continue" href="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	if len(links) != 1 {
+		t.Fatal("missing or ambiguous native broker continuation")
+	}
+	return html.UnescapeString(links[0][1])
+}
+
+func brokerHandoffRefreshAddress(t testing.TB, body string) string {
+	t.Helper()
+	refreshes := regexp.MustCompile(`<meta http-equiv="refresh" content="0;url=([^"]+)">`).FindAllStringSubmatch(body, -1)
+	if len(refreshes) != 1 {
+		t.Fatal("missing or ambiguous native broker refresh")
+	}
+	return html.UnescapeString(refreshes[0][1])
+}
+
 // start follows the real CSRF-protected sign-in and synthetic broker redirect.
 func (b *browserFixture) start(inv string) string {
 	b.t.Helper()
 	token := b.csrf("/portal/sign-in?lang=da")
-	status, body, h := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "invitation": {inv}, "lang": {"da"}, "return_to": {"https://attacker.example.invalid"}, "role": {"operator"}}, b.site.URL)
-	if status != 303 {
-		b.t.Fatalf("login start status=%d want303: %s", status, body)
+	status, body, _ := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "invitation": {inv}, "lang": {"da"}, "return_to": {"https://attacker.example.invalid"}, "role": {"operator"}}, b.site.URL)
+	if status != http.StatusOK {
+		b.t.Fatalf("login start status=%d want200: %s", status, body)
 	}
-	req, err := http.NewRequest("GET", h.Get("Location"), nil)
+	req, err := http.NewRequestWithContext(b.t.Context(), "GET", brokerHandoffAddress(b.t, body), nil)
 	if err != nil {
 		b.t.Fatal(err)
 	}

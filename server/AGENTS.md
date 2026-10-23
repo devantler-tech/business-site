@@ -1,6 +1,18 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/customer-identity-config` explicitly prepares dormant native ZITADEL/Dex
+documents with no network, user, secret-value or activation operations. Read
+`CUSTOMER-IDENTITY.md`. Preserve skipped first-instance bootstrap, closed user and
+organization registration, supported embedded login selection, exact HTTPS
+callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
+semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
+Keep the portal's maintained generic OIDC boundary and current membership checks.
+Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
+native navigation document,
+not an HTTP redirect through the whole upstream chain. Preserve its immediate
+refresh/native-link agreement, configured-broker-only destination and strict CSP;
+do not add provider origins or arbitrary HTTPS form destinations.
 The explicit offline `cmd/runtime-receipt` admits the public runtime publication
 ZIP without extraction, network access or filesystem writes. Read `../deploy/README.md`.
 Retain the closed receipt/member schema, bounded same-descriptor snapshot, complete

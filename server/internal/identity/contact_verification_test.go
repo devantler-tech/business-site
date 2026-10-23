@@ -23,6 +23,40 @@ func assertContactUnconfirmed(t *testing.T, b *browserFixture) {
 	}
 }
 
+// TestContactVerificationBrokerHandoffDocument keeps an authenticated form's
+// provider chain outside form-action without broadening its origin allowlist.
+func TestContactVerificationBrokerHandoffDocument(t *testing.T) {
+	b := savedVerificationContact(t)
+	for _, lang := range []string{"en", "da"} {
+		form := url.Values{"csrf_token": {b.csrf("/portal/contact?lang=" + lang)}, "revision": {"1"}, "lang": {lang}}
+		status, body, headers := b.request("POST", "/portal/contact/verify", form, b.site.URL)
+		if status != http.StatusOK || headers.Get("Location") != "" || headers.Get("Refresh") != "" {
+			t.Fatalf("contact proof must start with a fresh navigation document: status=%d", status)
+		}
+		if headers.Get("Cache-Control") != "no-store" || !strings.Contains(headers.Get("Content-Security-Policy"), "form-action 'self' "+b.broker.URL+";") {
+			t.Fatal("contact handoff weakened its cache or form-action boundary")
+		}
+		address := brokerHandoffAddress(t, body)
+		u, err := url.Parse(address)
+		if err != nil || u.Scheme+"://"+u.Host != b.broker.URL || u.Path != "/authorize" || u.Query().Get("scope") != "openid email" || u.Query().Get("claims") != `{"id_token":{"email":null,"email_verified":null}}` || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" || u.Query().Get("state") == "" {
+			t.Fatal("contact handoff lost its exact broker, proof scope or transaction binding")
+		}
+		metaMatches := brokerHandoffRefreshAddress(t, body) == address
+		languageMatches := strings.Contains(body, `<html lang="`+lang+`">`)
+		if !metaMatches || !languageMatches {
+			t.Fatalf("automatic and accessible contact handoffs disagree: meta=%t language=%t", metaMatches, languageMatches)
+		}
+		other := "da"
+		if lang == "da" {
+			other = "en"
+		}
+		if !strings.Contains(body, `href="/portal/contact?lang=`+other+`"`) || strings.Contains(body, `href="/portal/contact/verify?`) {
+			t.Fatal("contact handoff language link must return to a safe read, not GET the proof mutation")
+		}
+		assertContactUnconfirmed(t, b)
+	}
+}
+
 func TestContactVerificationRefusesUnsupportedSignedClaims(t *testing.T) {
 	for _, change := range []struct {
 		name   string
@@ -459,11 +493,12 @@ func savedVerificationContact(t *testing.T) *browserFixture {
 func verificationStart(t *testing.T, b *browserFixture, revision string) string {
 	t.Helper()
 	form := url.Values{"csrf_token": {b.csrf("/portal/contact")}, "revision": {revision}, "lang": {"en"}}
-	status, _, headers := b.request("POST", "/portal/contact/verify", form, b.site.URL)
-	if status != http.StatusSeeOther {
-		t.Fatalf("explicit confirmation start status=%d want303", status)
+	status, body, _ := b.request("POST", "/portal/contact/verify", form, b.site.URL)
+	if status != http.StatusOK {
+		t.Fatalf("explicit confirmation start status=%d want200", status)
 	}
-	u, err := url.Parse(headers.Get("Location"))
+	address := brokerHandoffAddress(t, body)
+	u, err := url.Parse(address)
 	if err != nil || u.Query().Get("scope") != "openid email" {
 		t.Fatal("confirmation did not request exactly the broker email scope")
 	}
@@ -472,7 +507,11 @@ func verificationStart(t *testing.T, b *browserFixture, revision string) string 
 	b.mu.Unlock()
 	client := b.broker.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	response, err := client.Get(headers.Get("Location"))
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, address, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}

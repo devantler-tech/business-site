@@ -231,7 +231,21 @@ func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "lang", lang)
 	b.sessions.SetDeadline(r.Context(), time.Now().Add(10*time.Minute))
 	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce))
-	http.Redirect(w, r, address, http.StatusSeeOther)
+	b.brokerHandoff(w, r, address)
+}
+
+// brokerHandoff starts native navigation for an internally constructed broker URL.
+// Both ordinary sign-in and purpose-bound contact proof retain the same strict CSP.
+func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address string) {
+	// Finish the form POST in a fresh portal document. Chromium applies the
+	// submitting document's form-action policy to every redirect in a broker's
+	// upstream chain; a direct POST redirect would require knowing all providers.
+	// Ordinary navigation keeps this boundary confined to the configured broker.
+	d := b.data(r, "broker-handoff", "", "")
+	d.BrokerURL = address
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
 }
 
 // callback consumes the attempt before exchange, verifies broker proof and
@@ -371,6 +385,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
+	BrokerURL                                                                                                                                              string
 	LanguageURL                                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                                        bool
@@ -395,6 +410,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	// Recovery links must not GET a POST-only route or replay an OIDC callback.
 	if kind == "error" || kind == "unavailable" || path == "/portal/logout" || path == "/portal/callback" {
 		path = "/portal/sign-in"
+	}
+	if path == "/portal/contact/verify" {
+		path = "/portal/contact"
 	}
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" || kind == "invoice-error" || kind == "credit-error" {
 		path = "/portal/operator/requests"

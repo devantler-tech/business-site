@@ -5,6 +5,7 @@
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
 {{if eq .Kind `sign-in`}}<form method="post" action="/portal/sign-in"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><label for="invitation">{{.Invitation}}</label><input id="invitation" name="invitation" autocomplete="off" maxlength="256" spellcheck="false"><p>{{if eq .Lang `da`}}Du skal være inviteret for at få adgang. Brug dit sædvanlige login på næste side.{{else}}Access is invitation-only. Use your usual sign-in on the next page.{{end}}</p><button type="submit">{{.Action}}</button></form>
+{{else if eq .Kind `broker-handoff`}}<p>{{if eq .Lang `da`}}Du bliver sendt videre til dit login.{{else}}Continuing to your sign-in.{{end}}</p><a id="broker-continue" href="{{.BrokerURL}}">{{.Action}}</a>
 {{else if or (eq .Kind `home`) (eq .Kind `operator`)}}<h2>{{if eq .Kind `operator`}}{{.Operator}}{{else}}{{.SignedIn}}{{end}}</h2>
 <p>{{if eq .Lang `da`}}Dit arbejdsområde{{else}}Your workspace{{end}}: <strong>{{.Client}}</strong></p>{{if eq .Kind `home`}}<p><a href="/portal/contact?lang={{.Lang}}">{{if eq .Lang `da`}}Dine kontaktoplysninger{{else}}Your contact details{{end}}</a></p>{{end}}<p>{{.Boundary}}</p><form method="post" action="/portal/logout?lang={{.Lang}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">{{.Logout}}</button></form>
 {{else if eq .Kind `triage-invalid`}}<p role="alert">{{if eq .Lang `da`}}Denne side med forespørgsler kunne ikke åbnes. Gå tilbage til oversigten for at starte igen.{{else}}This inbox page could not be opened. Return to requests to start again.{{end}}</p><a class="button" href="/portal/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a>
@@ -18,7 +19,7 @@
 </section><a class="back" href="/">{{.Back}}</a></main>{{template "portal-footer" .}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}"><title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}">{{if eq .Kind `broker-handoff`}}<meta http-equiv="refresh" content="0;url={{.BrokerURL}}">{{end}}<title>{{.Title}} — Devantler Tech</title><link rel="stylesheet" href="/portal/assets/portal.css"></head>
 <body>{{end}}
 
 {{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>

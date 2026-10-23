@@ -57,6 +57,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
+  Customer identity source preparation uses dedicated customer Dex and self-hosted
+  ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
+  deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the
