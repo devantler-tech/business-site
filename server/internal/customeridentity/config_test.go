@@ -3,10 +3,12 @@ package customeridentity
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 )
 
+// TestPreparationDisabled proves that unconfigured preparation stays dormant.
 func TestPreparationDisabled(t *testing.T) {
 	for _, inputs := range []Endpoints{{}, {DexIssuer: "http://unsafe.invalid"}} {
 		got, err := Prepare(false, inputs)
@@ -16,9 +18,12 @@ func TestPreparationDisabled(t *testing.T) {
 	}
 }
 
+// TestPreparationRejectsUnsafeEndpoints retains each distinct origin/refusal case.
 func TestPreparationRejectsUnsafeEndpoints(t *testing.T) {
 	valid := Endpoints{"https://login.example.invalid", "https://accounts.example.invalid/realms/customers", "https://site.example.invalid/portal/callback"}
-	for _, bad := range []string{"", "http://login.example.invalid", "https://user:secret@login.example.invalid", "https://login.example.invalid/?query=x", "https://login.example.invalid/#fragment", "https://login.example.invalid:443", "https://127.0.0.1", "https://localhost", "https://LOGIN.example.invalid", "https://login.example.invalid/other", "https://login.example.invalid/%2e%2e", "https://login.example.invalid?", "https://login.example.invalid."} {
+	// Preserve the fictional user-info input without a credential-bearing literal.
+	withUserinfo := (&url.URL{Scheme: "https", User: url.UserPassword("user", "secret"), Host: "login.example.invalid"}).String()
+	for _, bad := range []string{"", "http://login.example.invalid", withUserinfo, "https://login.example.invalid/?query=x", "https://login.example.invalid/#fragment", "https://login.example.invalid:443", "https://127.0.0.1", "https://localhost", "https://LOGIN.example.invalid", "https://login.example.invalid/other", "https://login.example.invalid/%2e%2e", "https://login.example.invalid?", "https://login.example.invalid."} {
 		t.Run(bad, func(t *testing.T) {
 			inputs := valid
 			inputs.DexIssuer = bad
@@ -46,6 +51,7 @@ func TestPreparationRejectsUnsafeEndpoints(t *testing.T) {
 	}
 }
 
+// TestPreparedNativeConfiguration checks both native policies and secret separation.
 func TestPreparedNativeConfiguration(t *testing.T) {
 	t.Setenv("CUSTOMER_KEYCLOAK_CLIENT_SECRET", "FICTIONAL_KEYCLOAK_SECRET_SENTINEL")
 	t.Setenv("CUSTOMER_PORTAL_CLIENT_SECRET", "FICTIONAL_PORTAL_SECRET_SENTINEL")
@@ -78,11 +84,11 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 			t.Errorf("realm must contain no pre-created %s", key)
 		}
 	}
-	clients := realm["clients"].([]any)
+	clients := nativeValue[[]any](t, realm["clients"])
 	if len(clients) != 1 {
 		t.Fatalf("expected one confidential Dex upstream client: %v", clients)
 	}
-	client := clients[0].(map[string]any)
+	client := nativeValue[map[string]any](t, clients[0])
 	for key, want := range map[string]any{"clientId": "customer-dex", "publicClient": false, "standardFlowEnabled": true, "directAccessGrantsEnabled": false, "implicitFlowEnabled": false, "serviceAccountsEnabled": false, "fullScopeAllowed": false, "secret": "${CUSTOMER_KEYCLOAK_CLIENT_SECRET}"} {
 		if client[key] != want {
 			t.Errorf("Keycloak client %s = %v; want %v", key, client[key], want)
@@ -91,12 +97,12 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 	assertJSON(t, client["redirectUris"], `["https://login.example.invalid/callback"]`)
 	assertJSON(t, client["attributes"], `{"pkce.code.challenge.method":"S256"}`)
 	required := map[string]bool{}
-	for _, value := range realm["requiredActions"].([]any) {
-		action := value.(map[string]any)
+	for _, value := range nativeValue[[]any](t, realm["requiredActions"]) {
+		action := nativeValue[map[string]any](t, value)
 		if action["enabled"] != true || action["defaultAction"] != true {
 			t.Errorf("required onboarding action disabled: %v", action)
 		}
-		required[action["providerId"].(string)] = true
+		required[nativeValue[string](t, action["providerId"])] = true
 	}
 	for _, action := range []string{"VERIFY_EMAIL", "UPDATE_PASSWORD", "CONFIGURE_TOTP"} {
 		if !required[action] {
@@ -110,21 +116,22 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 	if dex["issuer"] != "https://login.example.invalid" || dex["enablePasswordDB"] != false {
 		t.Errorf("Dex must remain the sole configured customer issuer without a password DB: %v", dex)
 	}
-	connectors := dex["connectors"].([]any)
+	connectors := nativeValue[[]any](t, dex["connectors"])
 	if len(connectors) != 1 {
 		t.Fatalf("social connectors must not be created: %v", connectors)
 	}
-	connector := connectors[0].(map[string]any)
+	connector := nativeValue[map[string]any](t, connectors[0])
 	if connector["id"] != "customer-keycloak" || connector["type"] != "oidc" {
 		t.Errorf("unexpected customer connector: %v", connector)
 	}
-	config := connector["config"].(map[string]any)
+	config := nativeValue[map[string]any](t, connector["config"])
 	assertJSON(t, config, `{"issuer":"https://accounts.example.invalid/realms/customers","clientID":"customer-dex","clientSecret":"${CUSTOMER_KEYCLOAK_CLIENT_SECRET}","redirectURI":"https://login.example.invalid/callback","scopes":["profile","email"],"pkceChallenge":"S256","insecureSkipEmailVerified":false,"insecureEnableGroups":false,"insecureSkipVerify":false}`)
 	assertJSON(t, dex["staticClients"], `[{"id":"business-portal","name":"Devantler Tech portal","public":false,"secretEnv":"CUSTOMER_PORTAL_CLIENT_SECRET","redirectURIs":["https://site.example.invalid/portal/callback"]}]`)
 	assertJSON(t, dex["oauth2"], `{"responseTypes":["code"],"grantTypes":["authorization_code"],"skipApprovalScreen":false,"pkce":{"enforce":true,"codeChallengeMethodsSupported":["S256"]}}`)
 	assertJSON(t, dex["expiry"], `{"idTokens":"5m","authRequests":"5m","signingKeys":"6h"}`)
-	storage := dex["storage"].(map[string]any)
-	if storage["type"] != "postgres" || storage["config"].(map[string]any)["ssl"].(map[string]any)["mode"] != "verify-full" {
+	storage := nativeValue[map[string]any](t, dex["storage"])
+	storageConfig := nativeValue[map[string]any](t, storage["config"])
+	if storage["type"] != "postgres" || nativeValue[map[string]any](t, storageConfig["ssl"])["mode"] != "verify-full" {
 		t.Errorf("Dex requires durable, certificate-verified storage: %v", storage)
 	}
 	for _, unsafe := range []string{"staticPasswords", "trustedPeers", "issuerAlias", "providerDiscoveryOverrides", "insecureSkipIssuerCheck", "offline_access", "client_credentials"} {
@@ -137,6 +144,17 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 	}
 }
 
+// nativeValue reports schema-shape failures at the assertion instead of panicking.
+func nativeValue[T any](t *testing.T, value any) T {
+	t.Helper()
+	result, ok := value.(T)
+	if !ok {
+		t.Fatalf("unexpected native field type %T", value)
+	}
+	return result
+}
+
+// assertJSON compares native values independent of JSON map-key ordering.
 func assertJSON(t *testing.T, got any, want string) {
 	t.Helper()
 	encoded, err := json.Marshal(got)

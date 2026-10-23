@@ -108,6 +108,7 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 	return json.MarshalIndent(map[string]any{"keycloakRealm": realm, "dexConfig": dex}, "", "  ")
 }
 
+// endpoint admits only the exact HTTPS spelling expected by one identity hop.
 func endpoint(raw, path string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil || u.Host != u.Hostname() ||
@@ -124,6 +125,7 @@ func endpoint(raw, path string) (*url.URL, error) {
 	return u, nil
 }
 
+// requiredAction enables an onboarding action for every newly provisioned account.
 func requiredAction(id, name string, priority int) map[string]any {
 	return map[string]any{"alias": id, "providerId": id, "name": name, "enabled": true, "defaultAction": true, "priority": priority, "config": map[string]string{}}
 }

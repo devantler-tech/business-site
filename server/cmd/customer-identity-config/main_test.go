@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// TestExplicitPreparation covers dormant output and complete-write admission.
 func TestExplicitPreparation(t *testing.T) {
 	for _, args := range [][]string{nil, {"--prepare=false"}} {
 		var out bytes.Buffer
@@ -27,6 +28,7 @@ func TestExplicitPreparation(t *testing.T) {
 	}
 }
 
+// TestInvalidArgumentsProduceNoPackage retains the command's fail-closed boundary.
 func TestInvalidArgumentsProduceNoPackage(t *testing.T) {
 	for _, args := range [][]string{{"--prepare"}, {"--unknown"}, {"unexpected"}, {"--prepare=not-a-boolean"}} {
 		var out bytes.Buffer
@@ -38,8 +40,10 @@ func TestInvalidArgumentsProduceNoPackage(t *testing.T) {
 
 type brokenWriter struct{}
 
+// Write models a failed output destination without emitting a partial package.
 func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("fictional writer failure") }
 
 type shortWriter struct{}
 
+// Write models an incomplete write even when the destination reports no error.
 func (shortWriter) Write([]byte) (int, error) { return 1, nil }

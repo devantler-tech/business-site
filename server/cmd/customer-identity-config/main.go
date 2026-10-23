@@ -12,6 +12,7 @@ import (
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 )
 
+// main reports refusals without reflecting endpoint or credential input.
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "customer identity configuration refused") // No input or credential values in diagnostics.
@@ -19,6 +20,7 @@ func main() {
 	}
 }
 
+// run validates the complete opt-in request before emitting either native document.
 func run(args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("customer-identity-config", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
