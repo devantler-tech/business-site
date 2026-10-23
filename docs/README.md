@@ -133,7 +133,7 @@ historical bookmarks remain available; the wider public-work link leads to the o
 
 Projects selects exactly six curated maintained tools from complete public GitHub metadata,
 ordered by descending stars and repository-name ties. Games, templates, legacy Actions, forks,
-archived and private repositories cannot enter this showcase. All thirteen entries remain in the
+archived and private repositories cannot enter this showcase. All twelve entries remain in the
 underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
 unrestricted open source. Stars indicate popularity, not a quality guarantee.
 
@@ -364,9 +364,9 @@ tools, libraries, templates and source-available inspiration appears only when b
 `src/data/public-products.json` holds the full curated bilingual descriptions. The
 `public-products:` inventory in `src/content/docs/projects/active.mdx` is checked against this JSON;
 that MDX file holds legacy portfolio metadata, not the public description-editing surface.
-The production contract verifies the rendered catalogue. Shared Actions live in `.github`; the
-old `actions` repository has a separately labelled legacy card for existing consumers and bookmarks,
-and directs new projects to `.github`. Repository licences govern reuse; World at Ruin is a pre-alpha game
+The production contract verifies the rendered catalogue. Shared Actions and reusable workflows
+live in `.github`; historical automation bookmarks now identify that maintained entry rather than
+advertising a retired repository. Repository licences govern reuse; World at Ruin is a pre-alpha game
 whose source is available for study, not unrestricted reuse or hosting.
 
 `src/data/github-stars.json` is generated with an explicit UTC observation date. Cards sort by GitHub

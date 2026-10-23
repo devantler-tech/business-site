@@ -117,7 +117,7 @@ node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
 ```
 
 Audit dependency changes with `scripts/audit-dependencies.sh` from the repository root. The real
-cross-product drift check runs in the monorepo against its pinned site and Actions products;
+cross-product drift check runs in the monorepo against its pinned site and maintained `.github` catalogue;
 standalone CI exercises the checker's hermetic fixtures and the actual CV. Do not substitute
 fixtures for the aggregator's cross-product validation or weaken a failing check.
 

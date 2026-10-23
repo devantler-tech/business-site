@@ -454,6 +454,13 @@ jobs:
           node --test scripts/runtime-contract.test.mjs
           node --test scripts/go-contact.test.mjs
           node --test scripts/container-contract.test.mjs
+      - name: Prepare the runner-provided Kubernetes renderer
+        id: tenant-renderer
+        timeout-minutes: 1
+        working-directory: .
+        run: |
+          command -v kubectl
+          kubectl version --client --output=json
       - name: Verify the dormant public tenant package and refusal controls
         working-directory: .
         run: node --test scripts/tenant-package.test.mjs

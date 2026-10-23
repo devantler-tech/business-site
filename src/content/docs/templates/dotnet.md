@@ -38,4 +38,4 @@ dotnet test
 ## Links
 
 - 📦 [Template on GitHub](https://github.com/devantler-tech/dotnet-template)
-- 🔄 [Reusable workflows used by this template](https://github.com/devantler-tech/actions/tree/main/.github/workflows)
+- 🔄 [Reusable workflows used by this template](https://github.com/devantler-tech/.github/tree/main/.github/workflows)

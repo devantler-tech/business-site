@@ -1,15 +1,14 @@
 {
-  "observedAt": "2026-10-20",
-  "fetchedAt": "2026-10-20T13:14:52Z",
+  "observedAt": "2026-10-22",
+  "fetchedAt": "2026-10-22T21:22:43Z",
   "repositories": {
     ".github": 1,
-    "actions": 2,
     "agent-plugins": 2,
     "agent-skills": 3,
     "dotnet-template": 1,
     "go-template": 1,
     "khoist": 1,
-    "ksail": 165,
+    "ksail": 164,
     "kyverno-policies": 1,
     "platform-template": 2,
     "platform-tenant-template": 2,
@@ -18,11 +17,6 @@
   },
   "metadata": {
     ".github": {
-      "private": false,
-      "archived": false,
-      "fork": false
-    },
-    "actions": {
       "private": false,
       "archived": false,
       "fork": false

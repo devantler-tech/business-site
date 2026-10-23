@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { load } from 'js-yaml';
 
@@ -37,6 +39,18 @@ function assertStages(w) {
   assert.equal(go?.with?.['cache-dependency-path'], 'server/go.sum');
   const build = runtime.steps.findIndex(s => s.run === 'bash scripts/package-runtime.sh --release');
   assert.ok(build >= 0);
+  const preparations = runtime.steps.filter(s => s.id === 'tenant-renderer');
+  assert.equal(preparations.length, 1, 'renderer CLI startup must be prepared independently of package assertions');
+  assert.deepEqual(preparations[0], {
+    name: 'Prepare the runner-provided Kubernetes renderer',
+    id: 'tenant-renderer',
+    'timeout-minutes': 1,
+    'working-directory': '.',
+    run: 'command -v kubectl\nkubectl version --client --output=json\n',
+  });
+  const packageAssertions = runtime.steps.findIndex(s => s.run === 'node --test scripts/tenant-package.test.mjs');
+  assert.ok(packageAssertions >= 0);
+  assert.ok(runtime.steps.indexOf(preparations[0]) < packageAssertions, 'prepare the CLI before the first bounded render');
   for (const command of ['npm ci', 'npm --prefix web ci']) {
     const installs = runtime.steps.filter(s => s.run === command);
     assert.equal(installs.length, 1);
@@ -49,6 +63,31 @@ function assertStages(w) {
 }
 
 test('CI isolates setup and packaging without weakening the complete publication chain', () => assertStages(workflow));
+
+test('the actual renderer startup command propagates failure even after plausible version output', () => {
+  const setup = workflow.jobs['test-combined-runtime'].steps.find(s => s.id === 'tenant-renderer');
+  assert.ok(setup, 'the actual inline renderer preparation must exist');
+  const scratch = mkdtempSync(path.join(tmpdir(), 'tenant-renderer-control-'));
+  try {
+    const executable = path.join(scratch, 'kubectl');
+    const record = path.join(scratch, 'calls');
+    writeFileSync(executable, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$RENDERER_RECORD"\nprintf "%s\\n" \'{"clientVersion":{"gitVersion":"v1.35.0"},"kustomizeVersion":"v5.7.1"}\'\nexit "$RENDERER_EXIT"\n');
+    chmodSync(executable, 0o700);
+    for (const exit of [0, 23]) {
+      writeFileSync(record, '');
+      const result = spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', setup.run], {
+        env: { PATH: scratch, RENDERER_RECORD: record, RENDERER_EXIT: String(exit) },
+        encoding: 'utf8', timeout: 5000,
+      });
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, exit);
+      assert.match(result.stdout, /clientVersion/, 'the refusing producer emitted plausible output first');
+      assert.equal(readFileSync(record, 'utf8'), 'version --client --output=json\n');
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
 
 // A scaled fault model, not a network benchmark or an Actions runner: execute a
 // deadline-bound child for each actual job's assigned work. A delayed compiler
@@ -99,6 +138,17 @@ for (const [name, mutate] of [
   ['package writes permission', w => { w.jobs['test-combined-runtime'].permissions.packages = 'write'; }],
   ['incomplete compiler cache key', w => { w.jobs['test-combined-runtime'].steps.find(s => s.with?.cache === 'npm').with['cache-dependency-path'] = 'package-lock.json'; }],
   ['shallow package checkout', w => { w.jobs['test-combined-runtime'].steps.find(s => s.uses?.startsWith('actions/checkout@')).with['fetch-depth'] = 1; }],
+  ['missing renderer startup', w => { w.jobs['test-combined-runtime'].steps = w.jobs['test-combined-runtime'].steps.filter(s => s.id !== 'tenant-renderer'); }],
+  ['conditional renderer startup', w => { w.jobs['test-combined-runtime'].steps.find(s => s.id === 'tenant-renderer').if = 'false'; }],
+  ['ignored renderer startup failure', w => { w.jobs['test-combined-runtime'].steps.find(s => s.id === 'tenant-renderer')['continue-on-error'] = true; }],
+  ['masked renderer startup failure', w => { w.jobs['test-combined-runtime'].steps.find(s => s.id === 'tenant-renderer').run += ' || true'; }],
+  ['extended renderer startup budget', w => { w.jobs['test-combined-runtime'].steps.find(s => s.id === 'tenant-renderer')['timeout-minutes'] = 10; }],
+  ['renderer startup after package assertions', w => {
+    const runtime = w.jobs['test-combined-runtime'];
+    const setup = runtime.steps.find(s => s.id === 'tenant-renderer');
+    runtime.steps = runtime.steps.filter(s => s.id !== 'tenant-renderer');
+    runtime.steps.push(setup);
+  }],
   ...['validation', 'status'].flatMap(gate => ['test-portal-identity', 'test-combined-runtime'].flatMap(stage => [
     [`${gate} omits ${stage}`, w => { w.jobs[gate].needs = w.jobs[gate].needs.filter(n => n !== stage); }],
     [`${gate} ignores ${stage} result`, w => { w.jobs[gate].steps[0].with['job-results'] = w.jobs[gate].steps[0].with['job-results'].replace('${{ needs.' + stage + '.result }}', 'success'); }],

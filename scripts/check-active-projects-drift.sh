@@ -2,16 +2,11 @@
 #
 # check-active-projects-drift.sh
 #
-# Guards current .github automation inventories and the retained legacy Actions lists.
-# Current actions live in .github-public/actions and callable workflows in
-# .github-public/.github/workflows; both are checked independently of legacy metadata.
-# Guards the hand-maintained Actions / Reusable Workflows lists on the Active
-# Projects page (src/content/docs/projects/active.mdx) against silent
-# drift from their source-of-truth repo. Both lists are sourced from the
-# devantler-tech/actions submodule (the standalone reusable-workflows repo was
-# merged into it and archived 2026-07-10 — monorepo#1964): composite actions
-# live in its top-level directories, reusable workflows in its
-# .github/workflows. The check is entirely network-free: it reads only the
+# Guards the maintained Actions / Reusable Workflows lists on the Active
+# Projects page against their one source of truth, devantler-tech/.github.
+# Composite actions live in actions/ and callable workflows in .github/workflows.
+# No retired repository checkout is needed. The check is entirely network-free:
+# it reads only the
 # already-checked-out submodule, never the GitHub API.
 #
 #   - Actions list       — one bullet per composite action, so it maps 1:1 to
@@ -99,10 +94,8 @@ site_root="${SITE_ROOT:-$repo_root}"
 
 mdx="$site_root/src/content/docs/projects/active.mdx"
 homepage="$site_root/src/content/docs/index.mdx"
-actions_dir="$repo_root/github/devantler-tech/github-actions/actions"
-rw_workflows_dir="$repo_root/github/devantler-tech/github-actions/actions/.github/workflows"
-current_actions_dir="$repo_root/github/devantler-tech/.github-public/actions"
-current_workflows_dir="$repo_root/github/devantler-tech/.github-public/.github/workflows"
+actions_dir="$repo_root/github/devantler-tech/.github-public/actions"
+rw_workflows_dir="$repo_root/github/devantler-tech/.github-public/.github/workflows"
 gitmodules="$repo_root/.gitmodules"
 templates_dir="$site_root/src/content/docs/templates"
 content_dir="$site_root/src/content"
@@ -110,7 +103,7 @@ homepage_parity_checker="$script_dir/check-homepage-project-parity.mjs"
 public_catalogue="$site_root/src/data/public-products.json"
 
 # Anchor each H2 section on the source repo URL it links to — unique and stable.
-actions_anchor="](https://github.com/devantler-tech/actions)"
+actions_anchor="](https://github.com/devantler-tech/.github)"
 
 fail=0
 
@@ -123,10 +116,8 @@ die_missing() {
 [ -f "$homepage" ] || die_missing "homepage index.mdx" "$homepage"
 [ -f "$homepage_parity_checker" ] || die_missing "homepage parity checker" "$homepage_parity_checker"
 [ -f "$public_catalogue" ] || die_missing "Public product catalogue" "$public_catalogue"
-[ -d "$actions_dir" ] || die_missing "actions submodule" "$actions_dir"
-[ -d "$rw_workflows_dir" ] || die_missing "actions submodule workflows directory" "$rw_workflows_dir"
-[ -d "$current_actions_dir" ] || die_missing "current automation actions" "$current_actions_dir"
-[ -d "$current_workflows_dir" ] || die_missing "current automation workflows" "$current_workflows_dir"
+[ -d "$actions_dir" ] || die_missing "maintained automation actions" "$actions_dir"
+[ -d "$rw_workflows_dir" ] || die_missing "maintained automation workflows" "$rw_workflows_dir"
 [ -d "$content_dir" ] || die_missing "docs content directory" "$content_dir"
 
 # --- Retired repos: no page may still link to one -----------------------------
@@ -142,7 +133,9 @@ die_missing() {
 # here rather than queried, so add a repo when it is archived/renamed, together
 # with what to link instead.
 retired_repo_urls=(
-  "https://github.com/devantler-tech/reusable-workflows|https://github.com/devantler-tech/actions/tree/main/.github/workflows"
+  "https://github.com/devantler-tech/reusable-workflows|https://github.com/devantler-tech/.github"
+  "https://github.com/devantler-tech/actions|https://github.com/devantler-tech/.github"
+  "https://github.com/devantler-tech/maintenance|https://github.com/devantler-tech/.github"
 )
 
 for entry in "${retired_repo_urls[@]}"; do
@@ -150,11 +143,14 @@ for entry in "${retired_repo_urls[@]}"; do
   replacement_url="${entry##*|}"
 
   # Components and data also render public links. Inspect the whole source tree,
-  # not just MDX; distinguish no matches from an incomplete read.
-  if hits=$(grep -rFlI "$retired_url" "$site_root/src"); then
+  # not just MDX; match a complete repository slug, including clone URLs, and
+  # distinguish no matches from an incomplete read. Similar repo names are valid.
+  retired_name="${retired_url##*/}"
+  retired_pattern="https://github[.]com/devantler-tech/${retired_name}([.]git)?([^[:alnum:]_.-]|$)"
+  if hits=$(grep -rEliI -- "$retired_pattern" "$site_root/src"); then
     while IFS= read -r hit; do
       echo "::error file=${hit#"$repo_root"/}::Retired-repo link: this page links to '${retired_url}', \
-which is archived (read-only). Link '${replacement_url}' instead." >&2
+which is retired. Link '${replacement_url}' instead." >&2
     done <<<"$hits"
     fail=1
   else
@@ -225,21 +221,24 @@ actions_marker=$(
 )
 actions_declared=$(printf '%s' "$actions_marker" | tr ',' '\n' | sed '/^$/d' | sort -u)
 
-if [ -z "$actions_marker" ]; then
+if [ "$(grep -oF 'actions-dirs:' "$mdx" | wc -l | tr -d ' ')" -gt 1 ]; then
+  echo "::error::Actions list drift: inventory must occur exactly once" >&2
+  fail=1
+elif [ -z "$actions_marker" ]; then
   echo "::error file=src/content/docs/projects/active.mdx::Missing 'actions-dirs: a,b,c' marker \
 in the '## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$actions_count" -ne "$actions_bullets" ]; then
   echo "::error file=src/content/docs/projects/active.mdx::Actions list drift: \
-${actions_count} composite action(s) in the actions submodule but ${actions_bullets} bullet(s) under \
-'## ⚡ Actions'. An action was added or removed in devantler-tech/actions but the list was not updated — \
+${actions_count} composite action(s) in the maintained catalogue but ${actions_bullets} bullet(s) under \
+'## ⚡ Actions'. An action was added or removed in devantler-tech/.github but the list was not updated — \
 update the '## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
   fail=1
 elif [ "$actions_declared" != "$actions_live" ]; then
   only_live=$(comm -23 <(printf '%s\n' "$actions_live") <(printf '%s\n' "$actions_declared") | paste -sd, -)
   only_marker=$(comm -13 <(printf '%s\n' "$actions_live") <(printf '%s\n' "$actions_declared") | paste -sd, -)
   echo "::error file=src/content/docs/projects/active.mdx::Actions list drift: the 'actions-dirs' \
-marker does not match the action directories in devantler-tech/actions. \
+marker does not match the action directories in devantler-tech/.github. \
 Missing from marker: [${only_live:-none}]. Stale in marker (no longer a real action): [${only_marker:-none}]. \
 An action was added, removed, or renamed — update the matching bullet AND the 'actions-dirs' marker in the \
 '## ⚡ Actions' section of src/content/docs/projects/active.mdx." >&2
@@ -296,7 +295,11 @@ rw_marker=$(
 )
 rw_declared=$(printf '%s' "$rw_marker" | tr ',' '\n' | sed '/^$/d' | sort -u)
 
-if [ -z "$rw_expected" ]; then
+if [ "$(grep -oF 'reusable-workflows-count:' "$mdx" | wc -l | tr -d ' ')" -gt 1 ] ||
+   [ "$(grep -oF 'reusable-workflows-names:' "$mdx" | wc -l | tr -d ' ')" -gt 1 ]; then
+  echo "::error::Reusable Workflows drift: each inventory must occur exactly once" >&2
+  fail=1
+elif [ -z "$rw_expected" ]; then
   echo "::error file=src/content/docs/projects/active.mdx::Missing 'reusable-workflows-count: N' \
 marker in the '## 🔄 Reusable Workflows' section of src/content/docs/projects/active.mdx." >&2
   fail=1
@@ -306,8 +309,8 @@ marker in the '## 🔄 Reusable Workflows' section of src/content/docs/projects/
   fail=1
 elif [ "$rw_count" -ne "$rw_expected" ]; then
   echo "::error file=src/content/docs/projects/active.mdx::Reusable Workflows drift: \
-${rw_count} reusable (workflow_call) workflow(s) in the actions submodule but the marker \
-declares ${rw_expected}. A workflow was added or removed in devantler-tech/actions — review \
+${rw_count} reusable (workflow_call) workflow(s) in the maintained catalogue but the marker \
+declares ${rw_expected}. A workflow was added or removed in devantler-tech/.github — review \
 the category bullets under '## 🔄 Reusable Workflows' in src/content/docs/projects/active.mdx and \
 update the 'reusable-workflows-count' marker to ${rw_count}." >&2
   fail=1
@@ -316,7 +319,7 @@ elif [ "$rw_declared" != "$rw_live" ]; then
   only_marker=$(comm -13 <(printf '%s\n' "$rw_live") <(printf '%s\n' "$rw_declared") | paste -sd, -)
   echo "::error file=src/content/docs/projects/active.mdx::Reusable Workflows drift: the \
 'reusable-workflows-names' marker does not match the workflow_call workflows in \
-devantler-tech/actions. Missing from marker: [${only_live:-none}]. \
+devantler-tech/.github. Missing from marker: [${only_live:-none}]. \
 Stale in marker (no longer a workflow_call workflow): [${only_marker:-none}]. A workflow was added, \
 removed, or renamed — review the category bullets under '## 🔄 Reusable Workflows' AND update the \
 'reusable-workflows-names' marker in src/content/docs/projects/active.mdx." >&2
@@ -324,37 +327,6 @@ removed, or renamed — review the category bullets under '## 🔄 Reusable Work
 else
   echo "OK: Reusable Workflows in sync (${rw_count} workflow_call workflows == marker ${rw_expected}, name set matches)."
 fi
-
-# Current shared automation has its own exact inventories. Both action extensions
-# are valid; parse actual top-level workflow events with the same YAML parser.
-current_actions_live=$(
-  find "$current_actions_dir" -mindepth 2 -maxdepth 2 -type f \( -name action.yaml -o -name action.yml \) \
-    | awk -F/ '{ print $(NF - 1) }' | sort -u
-)
-current_workflows_live="$(reusable_workflows "$current_workflows_dir")"
-check_current_inventory() {
-  local marker="$1" live="$2" label="$3" declared entries
-  entries="$(grep -oE "${marker}:[[:space:]]*[a-z0-9,_-]+" "$mdx" | sed -E "s/^${marker}:[[:space:]]*//" || true)"
-  if [ -z "$entries" ]; then
-    echo "::error::Missing '$marker' inventory in active.mdx" >&2
-    fail=1
-    return
-  fi
-  if [ "$(printf '%s\n' "$entries" | wc -l | tr -d ' ')" -ne 1 ]; then
-    echo "::error::$label drift: inventory must occur exactly once" >&2
-    fail=1
-    return
-  fi
-  declared="$(printf '%s' "$entries" | tr ',' '\n' | sort -u)"
-  if [ "$declared" != "$live" ]; then
-    echo "::error::$label drift: update '$marker' to match the pinned devantler-tech/.github inventory" >&2
-    fail=1
-  else
-    echo "OK: $label inventory matches the current automation owner."
-  fi
-}
-check_current_inventory github-automation-actions "$current_actions_live" "Current GitHub Actions"
-check_current_inventory github-automation-workflows "$current_workflows_live" "Current reusable workflows"
 
 # --- Submodules: every submodule is consciously represented (or excluded) ------
 # Live submodule paths from .gitmodules (a tracked file at the repo root, so no

@@ -2,6 +2,24 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { rankPublicProducts } from '../src/data/public-products.ts';
 import catalogue from '../src/data/public-products.json' with { type: 'json' };
+import { legacyAnchors } from '../src/components/business/portfolio-content.ts';
+import { assertNoRetiredRepositoryLinks } from './check-retired-links.mjs';
+
+test('retired automation is not a product and its bookmarks identify the maintained owner', () => {
+  assert.ok(catalogue.every(({ repository }) => !['actions', 'maintenance', 'reusable-workflows'].includes(repository)));
+  assert.deepEqual(legacyAnchors['.github'], ['-reusable-workflows-', '-actions-']);
+  assert.equal(legacyAnchors.actions, undefined);
+});
+
+test('rendered links reject every retired automation owner without rejecting similarly named projects', () => {
+  for (const repository of ['actions', 'maintenance', 'reusable-workflows']) {
+    for (const href of [`https://github.com/devantler-tech/${repository}`, `//github.com/DEVANTLER-TECH/${repository.toUpperCase()}/tree/main`]) {
+      assert.throws(() => assertNoRetiredRepositoryLinks(`<a href="${href}">Source</a>`), /must not link to retired repositories/);
+    }
+    assertNoRetiredRepositoryLinks(`<a href="https://github.com/devantler-tech/${repository}-example">Other project</a>`);
+  }
+  assertNoRetiredRepositoryLinks('<a href="https://github.com/devantler-tech/.github">Maintained catalogue</a>');
+});
 
 const snapshot = (repositories) => ({ observedAt: '2026-10-07', repositories });
 test('restricted-reuse products identify their own actual licence filename', () => {

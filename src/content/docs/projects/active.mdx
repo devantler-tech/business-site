@@ -9,19 +9,17 @@ import platformImg from "../../../assets/editorial/cloud-fleet.webp";
 
 <div class="projects-page">
 
-{/* public-products: .github,actions,agent-plugins,agent-skills,dotnet-template,go-template,khoist,ksail,kyverno-policies,platform-template,platform-tenant-template,provider-upjet-unifi,world-at-ruin */}
-{/* github-automation-actions: aggregate-job-checks,approve-pr,check-ci-run-budget,cleanup-ghcr-packages,create-issues-from-todos,dependency-review,diagnose-flux,enable-auto-merge-on-pr,free-disk-space,guard-installed-skill-edits,login-to-ghcr,run-dotnet-tests,setup-agent-skills,setup-go-toolchain,setup-ksail-cli,update-agent-skills,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines */}
-{/* github-automation-workflows: apply-signed-fixes,create-release,delete-workflow-runs,delete-workflow-runs-readonly,dependency-review,deploy-github-pages,enable-auto-merge,inspect-release-recovery,lint,publish-app,publish-manifests,run-dotnet-tests,scan-for-todo-comments,scan-for-todo-comments-default-fixture,scan-for-todo-comments-readonly,scan-for-workflow-vulnerabilities,sync-cluster-policies,template-sync,update-agent-skills,validate-go-project,validate-go-project-readonly */}
+{/* public-products: .github,agent-plugins,agent-skills,dotnet-template,go-template,khoist,ksail,kyverno-policies,platform-template,platform-tenant-template,provider-upjet-unifi,world-at-ruin */}
 
 This is Devantler Tech’s wider technical portfolio, maintained by its founder, Nikolai Emil Damm. It includes developer tools, experimental products and personal projects—not a catalogue of paid client work. Contributors and feedback are welcome through each public project's contribution guidelines.
 
-{/* projects-submodules: applications/ascoachingogvaner=grouped,applications/aws=infra,applications/business-site=omitted,applications/khoist=section,applications/fleet-gitops=infra,applications/ksail=section,applications/unifi=omitted,applications/wedding-app=grouped,applications/world-at-ruin=section,github/devantler-tech/.github-public=infra,github/devantler-tech/github-actions/actions=section,github/personal/.github-public=infra,github/personal/profile=infra,homebrew-tap=omitted,libraries/agent-plugins=section,libraries/agent-skills=section,libraries/kyverno-policies=section,libraries/provider-upjet-unifi=section,platform=section,templates/dotnet-template=templates-page,templates/platform-tenant-template=templates-page,templates/go-template=templates-page,templates/platform-template=templates-page
+{/* projects-submodules: applications/ascoachingogvaner=grouped,applications/aws=infra,applications/business-site=omitted,applications/khoist=section,applications/fleet-gitops=infra,applications/ksail=section,applications/unifi=omitted,applications/wedding-app=grouped,applications/world-at-ruin=section,github/devantler-tech/.github-public=section,github/personal/.github-public=infra,github/personal/profile=infra,homebrew-tap=omitted,libraries/agent-plugins=section,libraries/agent-skills=section,libraries/kyverno-policies=section,libraries/provider-upjet-unifi=section,platform=section,templates/dotnet-template=templates-page,templates/platform-tenant-template=templates-page,templates/go-template=templates-page,templates/platform-template=templates-page
 
   This marker pins EVERY submodule this monorepo tracks (the source-of-truth is .gitmodules) to how it is represented on the site, so a newly-added product can't silently go unlisted. The docs CI drift-check asserts this path set EQUALS the live .gitmodules paths; when a submodule is added or removed, record it here with one disposition and update the page if needed:
-    • section        — has its own H2 product section on this page (KSail, Platform, KHoist, World at Ruin, Reusable Workflows, Actions, Agent Skills, Agent Plugins, UniFi Provider). The Reusable Workflows section is backed by the actions submodule (its .github/workflows), not a submodule of its own.
+    • section        — has its own H2 product section on this page. Shared Actions and Reusable Workflows are both owned by the maintained .github submodule.
     • grouped        — a self-hosted application folded into the "🏠 Self-Hosted Personal Apps" section (wedding-app, ascoachingogvaner), independently of source-repository visibility.
     • templates-page — a starter template listed on the Templates page (/templates/) instead of here.
-    • infra          — an internal config/automation/GitOps-state repo, not surfaced as a project (the .github-public/profile/fleet-gitops repos, and the aws config tenant the Platform reconciles).
+    • infra          — an internal config/GitOps-state repo, not surfaced as a project (the personal .github-public/profile/fleet-gitops repos, and the aws config tenant the Platform reconciles).
     • omitted        — deliberately outside the reusable-products shelf: this business website itself, the homebrew-tap distribution tap and the private applications/unifi network config. Promote to section/grouped if it should appear.
 */}
 
@@ -66,24 +64,25 @@ A couple of small apps I build and self-host for my family — they run as tenan
 - **Wedding App** — a small service I put together around a family wedding.
 - **AS Coaching og Vaner** — a small website I host on behalf of a family member.
 
-## [🔄 Reusable Workflows](https://github.com/devantler-tech/actions/tree/main/.github/workflows) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
+## [🔄 Reusable Workflows](https://github.com/devantler-tech/.github/tree/main/.github/workflows) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
 
-A collection of [reusable GitHub Actions workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) that encapsulate common CI/CD patterns, shipped from the [actions](https://github.com/devantler-tech/actions) repo (the standalone reusable-workflows repo was merged into it and archived). Used across all DevantlerTech projects to ensure consistency and reduce duplication.
+A collection of [reusable GitHub Actions workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) shipped from the maintained [.github catalogue](https://github.com/devantler-tech/.github). Organization-required PR checks cover shared concerns; reusable jobs serve multiple production callers. A workflow used by only one product belongs to that product.
 
-- **CI Workflows**: [Go](https://go.dev/) testing/linting, [.NET](https://dotnet.microsoft.com/) testing, repo-wide linting, [dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review)
-- **CD Workflows**: [GitHub Pages](https://pages.github.com/) publish, application/library releases, manifests-only [OCI](https://opencontainers.org/) publish, workflow-run cleanup
-- **Automation**: Auto-merge for trusted bots, [semantic-release](https://semantic-release.gitbook.io/), TODO scanning, [Kyverno](https://kyverno.io/) policy sync, [Zizmor](https://github.com/woodruffw/zizmor) workflow analysis, [agent skills](https://github.com/devantler-tech/agent-skills) updates, [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) sync, signed commit-back of exported auto-fixes
+- **CI Workflows**: [Go](https://go.dev/) testing/linting, repository linting, [dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review) and [Zizmor](https://github.com/woodruffw/zizmor) workflow analysis
+- **CD Workflows**: Signed application and manifests-only [OCI](https://opencontainers.org/) publication, plus [semantic-release](https://semantic-release.gitbook.io/) versioning
+- **Automation**: Auto-merge for trusted bots, TODO scanning, [agent skills](https://github.com/devantler-tech/agent-skills) updates, [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) sync and signed commit-back of exported auto-fixes
 
-{/* reusable-workflows-count: 17 — this categorical list covers every reusable (workflow_call) workflow in devantler-tech/actions' .github/workflows; the docs CI drift-check fails when a workflow is added or removed there. When that happens, review the category bullets above and bump this number to match. */}
+{/* reusable-workflows-count: 16 — complete callable-file inventory, including internal offline fixtures; fixtures are not public APIs. Changes require reviewing the categories above and the maintained catalogue's public/internal indexes. */}
 
-{/* reusable-workflows-names: apply-signed-fixes,create-release,delete-workflow-runs,dependency-review,deploy-github-pages,enable-auto-merge,lint,publish-app,publish-dotnet-library,publish-manifests,run-dotnet-tests,scan-for-todo-comments,scan-for-workflow-vulnerabilities,sync-cluster-policies,template-sync,update-agent-skills,validate-go-project — the exact set of reusable (workflow_call) workflow filenames (minus .yaml) in devantler-tech/actions' .github/workflows. The docs CI drift-check asserts this set EQUALS the live workflow_call workflows, so an added, removed, OR renamed workflow breaks the build even when the count is unchanged (a count alone misses renames and net-zero swaps). When that happens, review the category bullets above and update this marker together with the count. */}
+{/* reusable-workflows-names: apply-signed-fixes,create-release,dependency-review,enable-auto-merge,lint,publish-app,publish-manifests,release-recovery-offline-fixture,scan-for-todo-comments,scan-for-todo-comments-default-fixture,scan-for-todo-comments-readonly,scan-for-workflow-vulnerabilities,template-sync,update-agent-skills,validate-go-project,validate-go-project-readonly — exact workflow_call filenames in the pinned .github catalogue, including internal fixtures. Counts alone cannot detect renames or same-size swaps. */}
 
-## [⚡ Actions](https://github.com/devantler-tech/actions) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
+## [⚡ Actions](https://github.com/devantler-tech/.github) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
 
 A collection of [composite GitHub Actions](https://docs.github.com/en/actions/tutorials/create-actions/create-a-composite-action) that provide small, reusable components for CI/CD workflows.
 
 - **Aggregate Job Checks**: Aggregate multiple job results into a single required check
 - **Approve PR**: Approve a PR using a GitHub App identity
+- **Check CI Run Budget**: Report when complete PR feedback exceeds the agreed runtime budget
 - **Dependency Review**: Scan a PR's dependency changes for vulnerabilities and disallowed licenses
 - **Diagnose Flux**: Dump [Flux](https://fluxcd.io/) reconcile state, controller logs, and failing pod logs to debug a stuck deploy in CI/CD
 - **Enable Auto-Merge**: Enable auto-merge on a pull request
@@ -103,7 +102,7 @@ A collection of [composite GitHub Actions](https://docs.github.com/en/actions/tu
 - **Validate Retired Repository Links**: Reject links to retired GitHub repositories, with documented historical exceptions
 - **Validate Shell Pipelines**: Find early-exit `grep` assertions in shell scripts before `pipefail` can invert their result
 
-{/* actions-dirs: aggregate-job-checks,approve-pr,dependency-review,diagnose-flux,enable-auto-merge-on-pr,cleanup-ghcr-packages,free-disk-space,guard-installed-skill-edits,login-to-ghcr,run-dotnet-tests,setup-agent-skills,setup-go-toolchain,setup-ksail-cli,create-issues-from-todos,update-agent-skills,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines — one entry per composite-action directory in devantler-tech/actions, in bullet order. The docs CI drift-check asserts this set EQUALS the live action directories, so an added, removed, OR renamed action breaks the build. When that happens, update the matching bullet above and this marker together. */}
+{/* actions-dirs: aggregate-job-checks,approve-pr,check-ci-run-budget,dependency-review,diagnose-flux,enable-auto-merge-on-pr,cleanup-ghcr-packages,free-disk-space,guard-installed-skill-edits,login-to-ghcr,run-dotnet-tests,setup-agent-skills,setup-go-toolchain,setup-ksail-cli,create-issues-from-todos,update-agent-skills,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines — exact composite-action directory set in the pinned .github catalogue. Update the matching bullet and this one inventory together when an action changes. */}
 
 ## [🧠 Agent Skills](https://github.com/devantler-tech/agent-skills) ![GitHub Copilot](https://img.shields.io/badge/GitHub%20Copilot-000000.svg?style=for-the-badge&logo=githubcopilot&logoColor=white) ![Claude](https://img.shields.io/badge/Claude-D97757.svg?style=for-the-badge&logo=claude&logoColor=white)
 

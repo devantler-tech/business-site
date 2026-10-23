@@ -41,7 +41,7 @@ for (const path of readdirSync(root, { recursive: true })) {
 }
 const html = (path) => readFileSync(resolve(root, path, 'index.html'), 'utf8');
 const home = html('');
-const publicRepositories = ['.github', 'actions', 'agent-plugins', 'agent-skills', 'dotnet-template', 'go-template', 'khoist', 'ksail', 'kyverno-policies', 'platform-template', 'platform-tenant-template', 'provider-upjet-unifi', 'world-at-ruin'];
+const publicRepositories = ['.github', 'agent-plugins', 'agent-skills', 'dotnet-template', 'go-template', 'khoist', 'ksail', 'kyverno-policies', 'platform-template', 'platform-tenant-template', 'provider-upjet-unifi', 'world-at-ruin'];
 const projectInventory = readFileSync(new URL('../src/content/docs/projects/active.mdx', import.meta.url), 'utf8');
 assert.doesNotMatch(projectInventory, /grouped\s*—\s*a private self-hosted app|source repositories are private/, 'Application grouping must not imply private source repositories');
 const publicCatalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.json', import.meta.url), 'utf8'));
@@ -201,7 +201,7 @@ for (const locale of ['en', 'da']) {
         ['ksail', ['️-ksail---']],
         ['khoist', ['data-product-controller', '-data-product-controller--']],
         ['world-at-ruin', ['️-world-at-ruin--']],
-        ['actions', ['-reusable-workflows-', '-actions-']],
+        ['.github', ['-reusable-workflows-', '-actions-']],
         ['agent-skills', ['-agent-skills--']],
         ['agent-plugins', ['-agent-plugins---']],
         ['provider-upjet-unifi', ['-unifi-provider---']],
