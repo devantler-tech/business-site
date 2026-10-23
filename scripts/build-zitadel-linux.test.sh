@@ -48,7 +48,7 @@ elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
 else
   grep -q '@zitadel/api:generate' "$TEST_CALLS"
   mkdir -p console/dist/console internal/api/ui/console/static
-  printf '<base href="/ui/console/"><script src="main.js"></script><link rel="stylesheet" href="styles.css">' >console/dist/console/index.html
+  printf '<base href="/ui/console/"><script src="./main.js"></script><link rel="stylesheet" href="./styles.css">' >console/dist/console/index.html
   for f in main.js styles.css 3rdpartylicenses.txt; do echo generated >"console/dist/console/$f"; done
   mkdir -p console/dist/console/assets
   echo 'native Go embed excludes dot files' >console/dist/console/assets/.gitignore

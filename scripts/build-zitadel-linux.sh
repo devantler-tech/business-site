@@ -106,6 +106,7 @@ comm -23 "$output/console-all-files.txt" "$output/console-files.txt" >"$output/c
 cmp "$output/console-files.txt" "$output/console-embed.txt" || fail 'Go compiler does not embed the complete console'
 while IFS= read -r reference; do
   reference="${reference#*\"}"; reference="${reference%\"}"
+  while [[ "$reference" == ./* ]]; do reference="${reference#./}"; done
   grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
 done <"$output/console-references.txt"
 mkdir "$output/service"
