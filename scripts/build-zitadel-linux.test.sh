@@ -50,9 +50,15 @@ else
   mkdir -p console/dist/console internal/api/ui/console/static
   printf '<base href="/ui/console/"><script src="main.js"></script><link rel="stylesheet" href="styles.css">' >console/dist/console/index.html
   for f in main.js styles.css 3rdpartylicenses.txt; do echo generated >"console/dist/console/$f"; done
+  mkdir -p console/dist/console/assets
+  echo 'native Go embed excludes dot files' >console/dist/console/assets/.gitignore
+  if [[ "${TEST_MISSING:-}" = hidden-reference ]]; then
+    echo '<script src="_main.js"></script>' >console/dist/console/index.html
+    echo generated >console/dist/console/_main.js
+  fi
   [[ "${TEST_MISSING:-}" != script ]] || rm console/dist/console/main.js
   if [[ "${TEST_FONT:-}" = leaked ]]; then echo Ailerons >console/dist/console/styles.css; fi
-  cp console/dist/console/* internal/api/ui/console/static/
+  cp -R console/dist/console/* internal/api/ui/console/static/
 fi
 STUB
 cat >"$scratch/bin/go" <<'STUB'
@@ -64,7 +70,7 @@ case "$1 $2" in
   'mod verify') :;;
   'list -deps')
     if [[ "${TEST_MISSING:-}" = embed ]]; then echo '{}'; else
-      echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/console","EmbedFiles":["static/index.html","static/main.js","static/styles.css","static/3rdpartylicenses.txt"]}'
+      echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/console","EmbedPatterns":["static"],"EmbedFiles":["static/index.html","static/main.js","static/styles.css","static/3rdpartylicenses.txt"]}'
     fi;;
   'build '*)
     while [[ "$1" != -o ]]; do shift; done; shift
@@ -93,6 +99,7 @@ test ! -e "$TEST_CALLS"
 failures=0
 reject() {
   local label="$1"; shift
+  : >"$TEST_CALLS"
   if env "$@" bash "$build" --build --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
     echo "incorrectly admitted $label" >&2; failures=$((failures + 1))
   fi
@@ -108,10 +115,12 @@ reject failed-generation TEST_FAIL=generate
 reject incomplete-generation TEST_MISSING=statik
 reject missing-console-script TEST_MISSING=script
 reject missing-console-embed TEST_MISSING=embed
+reject unembedded-console-reference TEST_MISSING=hidden-reference
 reject leaked-font TEST_FONT=leaked
 reject failed-compiler TEST_FAIL=compile
 reject empty-binary TEST_MISSING=binary
 test "$failures" -eq 0
+: >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
 jq -e '.platform == "linux/amd64" and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .reproducible == false' "$scratch/complete/build-receipt.json"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi

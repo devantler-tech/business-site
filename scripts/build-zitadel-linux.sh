@@ -14,7 +14,7 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 [[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit build, source and output are required'
-for tool in bash git jq shasum node pnpm go time readelf find sort cmp diff grep sed awk; do
+for tool in bash git jq shasum node pnpm go time readelf find sort cmp comm diff grep sed awk; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
 done
 [[ "$(uname -s)" = Linux && "$(uname -m)" = x86_64 ]] || fail 'only native Linux amd64 is admitted'
@@ -95,9 +95,19 @@ grep -riE 'aileron' "$console" "$embedded" internal/api/ui/login/static/resource
 go mod verify
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 go list -deps -json . >"$output/packages.jsonl"
+jq -e 'select(.ImportPath == "github.com/zitadel/zitadel/internal/api/ui/console") | .EmbedPatterns == ["static"]' "$output/packages.jsonl" >/dev/null
 jq -er 'select(.ImportPath == "github.com/zitadel/zitadel/internal/api/ui/console") | .EmbedFiles[]' "$output/packages.jsonl" | sort >"$output/console-embed.txt"
-(cd internal/api/ui/console && find static -type f | sort) >"$output/console-files.txt"
+# Native go:embed directory semantics omit dot/underscore path components, such
+# as the copied assets/.gitignore. Preserve those inputs and record exclusions;
+# referenced runtime resources must still appear in the actual compiler set.
+(cd internal/api/ui/console && find static \( -name '.*' -o -name '_*' \) -prune -o -type f -print | sort) >"$output/console-files.txt"
+(cd internal/api/ui/console && find static -type f | sort) >"$output/console-all-files.txt"
+comm -23 "$output/console-all-files.txt" "$output/console-files.txt" >"$output/console-native-exclusions.txt"
 cmp "$output/console-files.txt" "$output/console-embed.txt" || fail 'Go compiler does not embed the complete console'
+while IFS= read -r reference; do
+  reference="${reference#*\"}"; reference="${reference%\"}"
+  grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
+done <"$output/console-references.txt"
 mkdir "$output/service"
 binary="$output/service/zitadel"
 run_phase compile go build -buildvcs=false -o "$binary" \
