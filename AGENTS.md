@@ -60,6 +60,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Customer identity source preparation uses dedicated customer Dex and self-hosted
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
+- `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
+  without the unadmitted Ailerons assets. Read `docs/ZITADEL-SOURCE.md`; the offline
+  output and receipt are not a build, complete license admission or image release.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the
@@ -114,6 +117,7 @@ node --test scripts/tenant-package.test.mjs
 # Actual Docker runtime check; CI supplies its newly built production image:
 node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
+bash scripts/prepare-zitadel-source.test.sh
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
