@@ -17,22 +17,13 @@ cover:
   image: ../../../assets/editorial/journal-proved-work.webp
 ---
 
-import { Image } from "astro:assets";
-import processDiagram from "../../../assets/agentic-engineering-process.png";
-
 Getting an AI agent to write code is the easy part. The difficult part is making sure it works on the right problem, changes the right thing, and produces evidence strong enough to call the result complete.
 
 I use a scheduled **Agentic Engineer** across the Devantler Tech portfolio. It keeps products healthy, moves their roadmaps forward, and works through GitHub Issues and pull requests like another engineer would. The process is designed around one distinction: activity is not an outcome.
 
 An open pull request is activity. Green CI is useful evidence. The outcome is a working solution that resolves the problem that started the work.
 
-<Image
-  src={processDiagram}
-  alt="Three category boxes showing the Agentic Engineering process: research and identify the problem, select and verify a solution, then deliver and prove the outcome"
-  layout="full-width"
-/>
-
-The [evergreen Agentic Engineering page](/agentic-engineering/) contains the editable Mermaid definition and the concise process reference. This post explains why I structured the loop this way.
+The [current process diagram and reference](/agentic-engineering/#the-process) show the maintained selection rules alongside research, review and delivery. This post explains why I structured the loop this way.
 
 ## The unit of work is a proved outcome
 
@@ -58,7 +49,7 @@ GitHub Issues and the portfolio Project board are not the source of truth for wh
 
 ## Solution starts with selection, not code
 
-Once the problem is concrete, the agent selects the first actionable task on a fixed ladder: live breakage, open pull requests, security issues, bugs, then the oldest actionable issue. It never descends while a higher rung still contains actionable work, and it checks whether another engineer already owns the same artifact.
+The agent first addresses live breakage, then finishes work already started, including open pull requests and due verification. Critical obligations come next, followed by value-prioritized Ready work and refinement. An ordinary bug or security label does not make a task urgent. New work is chosen for its outcome, risk and cost of waiting within available delivery capacity; age breaks comparable ties and helps identify neglected work. The agent never descends while a higher rung still has actionable work, and it checks whether another engineer already owns the same artifact.
 
 Implementation happens in an isolated Git worktree and branch. That is essential when multiple agents work concurrently: isolation is what turns parallelism from a race into separate, reviewable changes.
 

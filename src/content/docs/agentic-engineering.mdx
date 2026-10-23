@@ -45,7 +45,7 @@ block-beta
     S4["<b>7. Review the proposed change</b><br/>AI review · optional human steering"]
     S3["<b>6. Test against the identified issue</b><br/>Unit · integration · end-to-end · security"]
     S2["<b>5. Implement an isolated change</b><br/>Git worktree · branch · feature flag"]
-    S1["<b>4. Select by the fixed priority ladder</b><br/>Breakage → PRs → security → bugs → oldest issue"]
+    S1["<b>4. Finish first, then select by value</b><br/>Live breakage → started work → critical obligations<br/>Ready work → refinement"]
   end
 
   space
@@ -102,7 +102,7 @@ The output is an evidence-backed problem statement, not a guess or a task chosen
 
 The solution begins only after the problem is known.
 
-1. **Select the first actionable task in the fixed priority ladder.** Work top-down through live breakage, open pull requests, security issues, bugs, and then the oldest actionable issue. Do not descend while a higher rung still has actionable work.
+1. **Finish first, then select by value.** Work top-down through live breakage, started work, critical obligations, value-prioritized Ready work, and refinement. Finish existing pull requests and due verification before starting more. Ordinary bug or security labels do not establish urgency. Pull new Ready work only with delivery capacity; compare outcomes, risk and the cost of waiting, using age to break comparable ties and check for neglected work. Do not descend while a higher rung still has actionable work.
 2. **Implement in isolation.** Use a dedicated worktree and branch so concurrent agents cannot overwrite one another.
 3. **Test against the identified issue.** Combine focused tests with the repository's wider lint, integration, end-to-end, and security checks.
 4. **Review the proposed change.** Use a draft pull request for required AI review and optional human steering without implying that the work is ready.
