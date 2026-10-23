@@ -87,7 +87,7 @@ diff -qr "$console" "$embedded" >"$output/console-copy.raw.diff" || diff_status=
 [[ "$diff_status" -le 1 ]] || fail 'console comparison failed'
 grep -v '^Only in .*: gitkeep$' "$output/console-copy.raw.diff" >"$output/console-copy.diff" || [[ "$?" -eq 1 ]]
 [[ ! -s "$output/console-copy.diff" ]] || fail 'embedded console differs from built console'
-find console/src internal/api/ui/login/static "$console" "$embedded" -iname '*aileron*' -print >"$output/font-paths.txt"
+find console/src internal/api/ui/login/static "$console" "$embedded" \( -type f -o -type l \) -iname '*aileron*' -print >"$output/font-paths.txt"
 [[ ! -s "$output/font-paths.txt" ]] || fail 'unadmitted font file survived'
 font_status=0
 grep -riE 'aileron' "$console" "$embedded" internal/api/ui/login/static/resources/themes/zitadel/css >"$output/font-references.txt" || font_status=$?

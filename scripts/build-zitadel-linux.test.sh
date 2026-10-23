@@ -13,7 +13,7 @@ cat >"$scratch/recipe/scripts/prepare-zitadel-source.sh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 out="$5"
-mkdir -p "$out/source/console/src" "$out/source/apps/api" "$out/source/proto"
+mkdir -p "$out/source/console/src" "$out/source/apps/api" "$out/source/proto" "$out/source/internal/api/ui/login/static/resources/fonts/ailerons"
 for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock; do
   printf 'frozen input\n' >"$out/source/$f"
 done
@@ -58,6 +58,8 @@ else
   fi
   [[ "${TEST_MISSING:-}" != script ]] || rm console/dist/console/main.js
   if [[ "${TEST_FONT:-}" = leaked ]]; then echo Ailerons >console/dist/console/styles.css; fi
+  if [[ "${TEST_FONT:-}" = file ]]; then echo unadmitted >console/dist/console/ailerons.otf; fi
+  if [[ "${TEST_FONT:-}" = symlink ]]; then ln -s styles.css console/dist/console/ailerons.otf; fi
   cp -R console/dist/console/* internal/api/ui/console/static/
 fi
 STUB
@@ -117,6 +119,8 @@ reject missing-console-script TEST_MISSING=script
 reject missing-console-embed TEST_MISSING=embed
 reject unembedded-console-reference TEST_MISSING=hidden-reference
 reject leaked-font TEST_FONT=leaked
+reject leaked-font-file TEST_FONT=file
+reject leaked-font-link TEST_FONT=symlink
 reject failed-compiler TEST_FAIL=compile
 reject empty-binary TEST_MISSING=binary
 test "$failures" -eq 0
