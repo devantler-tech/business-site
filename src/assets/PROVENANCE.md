@@ -16,15 +16,16 @@ Closes the acceptance criteria of [#2176](https://github.com/devantler-tech/mono
 
 ## `agentic-engineering-process.png`
 
-Inline diagram for the Agentic Engineering blog post. The Agentic Engineering
-documentation page renders the editable Mermaid source.
+Retired inline diagram from the Agentic Engineering blog post, retained as a historical
+asset. It is not consumed by the site. The post now links to the maintained diagram in
+`src/content/docs/agentic-engineering.mdx` instead of displaying a duplicate.
 
-- **Origin:** rendered from the Mermaid `block-beta` definition embedded in
-  `docs/src/content/docs/agentic-engineering.mdx`.
+- **Origin:** rendered from the earlier Mermaid `block-beta` definition at its historical
+  monorepo path, `docs/src/content/docs/agentic-engineering.mdx`.
 - **Rendering:** light background, three category boxes, and a numbered serpentine activity flow;
   exported at 3808×2142 (16:9).
-- **Status:** the MDX Mermaid definition is the editable source. Regenerate the PNG from that source
-  whenever the process or diagram changes, and update both in the same change.
+- **Status:** this raster is frozen provenance, not a current process reference. Do not regenerate
+  it when the maintained Mermaid diagram changes; update the live definition only.
 
 ## `editorial/*.webp`
 
