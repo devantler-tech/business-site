@@ -99,7 +99,8 @@ shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 go list -deps -json . >"$output/packages.jsonl"
 jq -se --arg directory "$PWD/internal/api/ui/login/statik" '
   map(select(.ImportPath == "github.com/zitadel/zitadel/internal/api/ui/login/statik")) |
-  length == 1 and .[0].Dir == $directory and .[0].GoFiles == ["statik.go"] and
+  length == 1 and .[0].Dir == $directory and
+  ((.[0].GoFiles // []) | sort) == ["generate.go", "statik.go"] and
   ((.[0].IgnoredGoFiles // []) | index("statik.go") == null)
 ' "$output/packages.jsonl" >/dev/null || fail 'Go compiler does not select the inspected login registration'
 jq -e 'select(.ImportPath == "github.com/zitadel/zitadel/internal/api/ui/console") | .EmbedPatterns == ["static"]' "$output/packages.jsonl" >/dev/null

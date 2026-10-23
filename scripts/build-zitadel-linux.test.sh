@@ -80,9 +80,10 @@ case "$1 $2" in
     echo '{"fixture":"orchestration only"}';;
   'list -deps')
     case "${TEST_MISSING:-}" in
-      login-compiled) echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/login/statik","Dir":"wrong","GoFiles":[],"IgnoredGoFiles":["statik.go"]}';;
-      login-directory) echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/login/statik","Dir":"wrong","GoFiles":["statik.go"]}';;
-      *) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["statik.go"]}';;
+      login-compiled) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go"],IgnoredGoFiles:["statik.go"]}';;
+      login-directory) echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/login/statik","Dir":"wrong","GoFiles":["generate.go","statik.go"]}';;
+      login-extra) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go","statik.go","unselected.go"]}';;
+      *) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go","statik.go"]}';;
     esac
     if [[ "${TEST_MISSING:-}" = embed ]]; then echo '{}'; else
       echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/console","EmbedPatterns":["static"],"EmbedFiles":["static/index.html","static/main.js","static/styles.css","static/3rdpartylicenses.txt"]}'
@@ -133,6 +134,7 @@ reject missing-console-script TEST_MISSING=script
 reject missing-console-embed TEST_MISSING=embed
 reject excluded-login-registration TEST_MISSING=login-compiled
 reject substituted-login-directory TEST_MISSING=login-directory
+reject extra-login-source TEST_MISSING=login-extra
 reject unembedded-console-reference TEST_MISSING=hidden-reference
 reject leaked-font TEST_FONT=leaked
 reject leaked-font-file TEST_FONT=file
