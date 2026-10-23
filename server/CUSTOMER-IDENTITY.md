@@ -28,7 +28,7 @@ The output wraps four documents. Extract each for its actual consumer; the wrapp
 is not a deployment or import format. A failed or partial write is not a package.
 
 | Document             | Consumer and boundary                                                                                                                                                                           |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `zitadelConfig`      | Native `--config`: HTTPS, initial instance policies, supported embedded Login V1, closed user/organization registration, password/lockout/MFA and token lifetimes.                              |
 | `zitadelSteps`       | Native `--steps`: `FirstInstance.Skip=true` prevents creating the upstream default administrator or any instance.                                                                               |
 | `zitadelApplication` | Modern `CreateApplication` request template for one confidential web client, code grant and the exact Dex callback. Supply its project ID privately after controlled instance/project creation. |
