@@ -2,6 +2,8 @@
 # Offline, explicit source preparation. No build, image or deployment authority.
 set -euo pipefail
 export LC_ALL=C
+# No implicit promisor fetch or configured Git transport belongs to this offline operation.
+export GIT_NO_LAZY_FETCH=1 GIT_ALLOW_PROTOCOL=''
 [[ "$#" -gt 0 ]] || exit 0
 # Print a source-preparation diagnostic and terminate the explicit operation.
 fail() { printf 'zitadel-source: %s\n' "$1" >&2; exit 1; }
@@ -30,6 +32,7 @@ name="$(basename "$output")"
 [[ "$name" != . && "$name" != .. && "$name" != / ]] || fail 'invalid output name'
 output="$parent/$name"
 [[ ! -e "$output" && ! -L "$output" ]] || fail 'output already exists'
+[[ "$output" != "$source_repo/"* ]] || fail 'output must be outside the input repository'
 stage="$(mktemp -d "$parent/.zitadel-source.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 mkdir "$stage/source"

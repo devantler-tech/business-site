@@ -159,4 +159,38 @@ chmod 755 "$scratch/mkdir-bin/mkdir"
 reject env PATH="$scratch/mkdir-bin:$PATH" SOURCE_TEST_MKDIR="$real_mkdir" SOURCE_TEST_OUTPUT="$scratch/competing-output" \
   bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/competing-output"
 test "$(cat "$scratch/competing-output/sentinel")" = 'other creator'
+
+# Output cannot modify the input checkout, even as a new untracked directory.
+boundary_failure=0
+if bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/upstream/nested-output" >"$scratch/nested-result" 2>&1; then
+  echo 'Preparation accepted output inside its input checkout.' >&2
+  boundary_failure=1
+fi
+if ! grep -qF 'output must be outside the input repository' "$scratch/nested-result"; then
+  echo 'Nested output lacks an explicit input-preservation refusal.' >&2
+  boundary_failure=1
+fi
+
+# Real missing Git blobs must not invoke even a local promisor transport.
+git init -q "$scratch/blobless"
+printf '%s\n' "$pin" | git -C "$scratch/upstream" pack-objects --stdout --revs --filter=blob:none |
+  git -C "$scratch/blobless" index-pack --stdin --promisor >/dev/null
+cat >"$scratch/promise-upload-pack" <<'WRAPPER'
+#!/usr/bin/env bash
+printf 'implicit fetch attempted\n' >"$SOURCE_TEST_FETCH_LOG"
+exit 42
+WRAPPER
+chmod 755 "$scratch/promise-upload-pack"
+git -C "$scratch/blobless" remote add origin "$scratch/upstream"
+git -C "$scratch/blobless" config remote.origin.promisor true
+git -C "$scratch/blobless" config remote.origin.partialclonefilter blob:none
+git -C "$scratch/blobless" config remote.origin.uploadpack "$scratch/promise-upload-pack"
+reject env GIT_NO_LAZY_FETCH=0 GIT_ALLOW_PROTOCOL=file SOURCE_TEST_FETCH_LOG="$scratch/implicit-fetch" \
+  bash "$prepare" --prepare --source "$scratch/blobless" --output "$scratch/blobless-output"
+test ! -e "$scratch/blobless-output"
+if [[ -e "$scratch/implicit-fetch" ]]; then
+  echo 'Preparation invoked an implicit Git fetch.' >&2
+  boundary_failure=1
+fi
+test "$boundary_failure" -eq 0
 printf '%s\n' 'Frozen ZITADEL source preparation and refusal controls passed.'

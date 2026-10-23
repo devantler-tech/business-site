@@ -20,6 +20,8 @@ It uses immutable Git objects, not the input checkout's current files. Local
 changes and untracked files remain untouched and do not enter the result.
 Replacement Git objects are ignored. Unsupported entry types, incomplete or
 failed archive reads, changed affected inputs and existing output are refused.
+The input must already contain every required Git object: lazy fetching and Git
+transports are disabled. The output must be outside the input repository.
 
 The result contains:
 
