@@ -15,7 +15,7 @@ func TestExplicitPreparation(t *testing.T) {
 			t.Fatalf("default-off command emitted configuration: %q %v", out.String(), err)
 		}
 	}
-	args := []string{"--prepare", "--dex-issuer=https://login.example.invalid", "--keycloak-issuer=https://accounts.example.invalid/realms/customers", "--portal-callback=https://site.example.invalid/portal/callback"}
+	args := []string{"--prepare", "--dex-issuer=https://login.example.invalid", "--zitadel-issuer=https://accounts.example.invalid", "--portal-callback=https://site.example.invalid/portal/callback"}
 	var out bytes.Buffer
 	if err := run(args, &out); err != nil || !json.Valid(out.Bytes()) {
 		t.Fatalf("explicit preparation failed: %v %q", err, out.String())

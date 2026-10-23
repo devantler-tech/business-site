@@ -231,7 +231,15 @@ func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "lang", lang)
 	b.sessions.SetDeadline(r.Context(), time.Now().Add(10*time.Minute))
 	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce))
-	http.Redirect(w, r, address, http.StatusSeeOther)
+	// Finish the form POST in a fresh portal document. Chromium applies the
+	// submitting document's form-action policy to every redirect in a broker's
+	// upstream chain; a direct POST redirect would require knowing all providers.
+	// Ordinary navigation keeps this boundary confined to the configured broker.
+	d := b.data(r, "broker-handoff", "", "")
+	d.BrokerURL = address
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
 }
 
 // callback consumes the attempt before exchange, verifies broker proof and
@@ -371,6 +379,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
+	BrokerURL                                                                                                                                              string
 	LanguageURL                                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                                        bool

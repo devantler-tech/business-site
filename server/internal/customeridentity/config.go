@@ -14,13 +14,13 @@ import (
 // Endpoints are the three separately approved public HTTPS identity destinations.
 type Endpoints struct {
 	DexIssuer      string
-	KeycloakIssuer string
+	ZitadelIssuer  string
 	PortalCallback string
 }
 
 var dnsName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$`)
 
-// Prepare emits the two native JSON documents only with explicit source opt-in.
+// Prepare emits native configuration and API request templates with explicit opt-in.
 // Secret references remain unresolved; the result is not a deployment package.
 func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 	if !enabled {
@@ -30,9 +30,9 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("customer Dex requires a canonical HTTPS origin")
 	}
-	idp, err := endpoint(inputs.KeycloakIssuer, "/realms/customers")
+	idp, err := endpoint(inputs.ZitadelIssuer, "")
 	if err != nil {
-		return nil, errors.New("customer Keycloak requires a canonical HTTPS customers realm")
+		return nil, errors.New("customer ZITADEL requires a canonical HTTPS origin")
 	}
 	portal, err := endpoint(inputs.PortalCallback, "/portal/callback")
 	if err != nil {
@@ -42,40 +42,40 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 		return nil, errors.New("customer broker, provider and portal require separate origins")
 	}
 	callback := inputs.DexIssuer + "/callback"
-	realm := map[string]any{
-		"realm": "customers", "displayName": "Devantler Tech", "enabled": true,
-		"sslRequired": "all", "registrationAllowed": false, "registrationEmailAsUsername": false,
-		"loginWithEmailAllowed": true, "duplicateEmailsAllowed": false,
-		"resetPasswordAllowed": true, "editUsernameAllowed": false,
-		"verifyEmail": true, "rememberMe": false, "bruteForceProtected": true,
-		"accessTokenLifespan": 300, "ssoSessionIdleTimeout": 900, "ssoSessionMaxLifespan": 28800,
-		"actionTokenGeneratedByAdminLifespan": 900, "actionTokenGeneratedByUserLifespan": 300,
-		"passwordPolicy":              "length(14) and notUsername and notEmail",
-		"internationalizationEnabled": true, "supportedLocales": []string{"en", "da"}, "defaultLocale": "en",
-		"users": []any{}, "identityProviders": []any{}, "userFederationProviders": []any{},
-		"requiredActions": []any{
-			requiredAction("VERIFY_EMAIL", "Verify email", 10),
-			requiredAction("UPDATE_PASSWORD", "Set password", 20),
-			requiredAction("CONFIGURE_TOTP", "Configure authenticator", 30),
-		},
-		"browserFlow": "customer-browser",
-		"authenticationFlows": []any{map[string]any{
-			"alias": "customer-browser", "providerId": "basic-flow", "topLevel": true, "builtIn": false,
-			"authenticationExecutions": []any{
-				map[string]any{"authenticator": "auth-username-password-form", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 10, "userSetupAllowed": false},
-				map[string]any{"authenticator": "auth-otp-form", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 20, "userSetupAllowed": true},
+	provider := map[string]any{
+		"ExternalDomain": idp.Host, "ExternalPort": 443, "ExternalSecure": true,
+		"TLS": map[string]any{"Enabled": true, "CertPath": "/run/customer-zitadel/tls.crt", "KeyPath": "/run/customer-zitadel/tls.key"},
+		"DefaultInstance": map[string]any{
+			"LoginPolicy": map[string]any{
+				"AllowUsernamePassword": true, "AllowRegister": false, "AllowExternalIDP": false,
+				"ForceMFA": true, "ForceMFALocalOnly": false, "HidePasswordReset": false,
+				"IgnoreUnknownUsernames": true, "AllowDomainDiscovery": false, "DisableLoginWithPhone": true,
+				"PasswordlessType": 0, "PasswordCheckLifetime": "15m", "ExternalLoginCheckLifetime": "15m",
+				"MfaInitSkipLifetime": "0s", "SecondFactorCheckLifetime": "15m", "MultiFactorCheckLifetime": "15m",
+				"DefaultRedirectURI": "https://" + portal.Host + "/portal",
 			},
-		}},
-		"clients": []any{map[string]any{
-			"clientId": "customer-dex", "name": "Customer Dex", "enabled": true,
-			"protocol": "openid-connect", "clientAuthenticatorType": "client-secret",
-			"secret": "${CUSTOMER_KEYCLOAK_CLIENT_SECRET}", "publicClient": false,
-			"standardFlowEnabled": true, "directAccessGrantsEnabled": false,
-			"implicitFlowEnabled": false, "serviceAccountsEnabled": false, "fullScopeAllowed": false,
-			"redirectUris": []string{callback}, "webOrigins": []string{},
-			"defaultClientScopes": []string{"profile", "email"}, "optionalClientScopes": []string{},
-			"attributes": map[string]string{"pkce.code.challenge.method": "S256"},
-		}},
+			"Restrictions":             map[string]bool{"DisallowPublicOrgRegistration": true},
+			"PasswordComplexityPolicy": map[string]int{"MinLength": 14},
+			"LockoutPolicy":            map[string]any{"MaxPasswordAttempts": 5, "MaxOTPAttempts": 5, "ShouldShowLockoutFailure": false},
+			"Features":                 map[string]any{"LoginV2": map[string]bool{"Required": false}},
+			"OIDCSettings": map[string]string{
+				"AccessTokenLifetime": "5m", "IdTokenLifetime": "5m", "RefreshTokenIdleExpiration": "15m", "RefreshTokenExpiration": "8h",
+			},
+		},
+	}
+	// Native setup otherwise merges a well-known default human administrator.
+	// Source preparation cannot supply private bootstrap authority or create an instance.
+	steps := map[string]any{"FirstInstance": map[string]bool{"Skip": true}}
+	application := map[string]any{
+		"projectId": "${CUSTOMER_ZITADEL_PROJECT_ID}", "name": "Customer Dex",
+		"oidcConfiguration": map[string]any{
+			"redirectUris": []string{callback}, "responseTypes": []string{"OIDC_RESPONSE_TYPE_CODE"},
+			"grantTypes": []string{"OIDC_GRANT_TYPE_AUTHORIZATION_CODE"}, "applicationType": "OIDC_APP_TYPE_WEB",
+			"authMethodType": "OIDC_AUTH_METHOD_TYPE_BASIC", "version": "OIDC_VERSION_1_0", "developmentMode": false,
+			"accessTokenRoleAssertion": false, "idTokenRoleAssertion": false, "idTokenUserinfoAssertion": false,
+			"additionalOrigins": []string{}, "postLogoutRedirectUris": []string{},
+			"loginVersion": map[string]any{"loginV1": map[string]any{}},
+		},
 	}
 	dex := map[string]any{
 		"issuer": inputs.DexIssuer, "enablePasswordDB": false,
@@ -91,11 +91,11 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 			"pkce": map[string]any{"enforce": true, "codeChallengeMethodsSupported": []string{"S256"}},
 		},
 		"connectors": []any{map[string]any{
-			"type": "oidc", "id": "customer-keycloak", "name": "Devantler Tech account",
+			"type": "oidc", "id": "customer-zitadel", "name": "Devantler Tech account",
 			"config": map[string]any{
-				"issuer": inputs.KeycloakIssuer, "clientID": "customer-dex",
-				"clientSecret": "${CUSTOMER_KEYCLOAK_CLIENT_SECRET}", "redirectURI": callback,
-				"scopes": []string{"profile", "email"}, "pkceChallenge": "S256",
+				"issuer": inputs.ZitadelIssuer, "clientID": "${CUSTOMER_ZITADEL_CLIENT_ID}",
+				"clientSecret": "${CUSTOMER_ZITADEL_CLIENT_SECRET}", "redirectURI": callback,
+				"scopes": []string{"profile", "email"}, "pkceChallenge": "S256", "getUserInfo": true,
 				"insecureSkipEmailVerified": false, "insecureEnableGroups": false, "insecureSkipVerify": false,
 			},
 		}},
@@ -105,7 +105,7 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 		}},
 		"logger": map[string]any{"level": "warn", "format": "json", "excludeFields": []string{"email", "username", "preferred_username", "groups"}},
 	}
-	return json.MarshalIndent(map[string]any{"keycloakRealm": realm, "dexConfig": dex}, "", "  ")
+	return json.MarshalIndent(map[string]any{"zitadelConfig": provider, "zitadelSteps": steps, "zitadelApplication": application, "dexConfig": dex}, "", "  ")
 }
 
 // endpoint admits only the exact HTTPS spelling expected by one identity hop.
@@ -123,9 +123,4 @@ func endpoint(raw, path string) (*url.URL, error) {
 		}
 	}
 	return u, nil
-}
-
-// requiredAction enables an onboarding action for every newly provisioned account.
-func requiredAction(id, name string, priority int) map[string]any {
-	return map[string]any{"alias": id, "providerId": id, "name": name, "enabled": true, "defaultAction": true, "priority": priority, "config": map[string]string{}}
 }

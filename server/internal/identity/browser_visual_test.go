@@ -162,6 +162,15 @@ func TestBrowserVisualFixture(t *testing.T) {
 			w.Header().Set("Location", origin+strings.TrimPrefix(location, b.site.URL))
 		}
 		w.WriteHeader(res.StatusCode)
+		if r.Method == http.MethodPost && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
+			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
+			if readErr != nil || len(body) > 64*1024 {
+				return
+			}
+			// Rewrite only this fictional gateway's native broker navigation.
+			_, _ = io.WriteString(w, strings.ReplaceAll(string(body), b.broker.URL+"/auth", origin+"/fixture/broker/auth"))
+			return
+		}
 		if r.Method == http.MethodGet && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
 			// Fictional, disposable gateway only: preload its synthetic invitation
 			// so UI evaluation does not expose any token in terminal diagnostics.

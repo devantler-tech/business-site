@@ -43,6 +43,13 @@ verifier. Code exchange is bounded and cannot follow redirects. Signed issuer,
 audience, expiry and nonce checks remain mandatory. No return URL, email, provider
 group or browser-supplied role grants authority.
 
+The sign-in POST finishes in a no-store, context-escaped HTML handoff document
+with an immediate native refresh and accessible broker link. Browser navigation
+then starts a new document journey: Chromium otherwise applies the submitting
+page's `form-action` policy to every redirect through upstream providers. The
+portal retains its strict policy and knows only its configured broker; it does
+not allow arbitrary form destinations or maintain a social-provider origin list.
+
 Opaque SCS sessions are stored in PostgreSQL with hashed storage keys, rotated
 across sign-in, destroyed on logout, and bounded by both token expiry and a
 30-minute absolute lifetime. Each private request rechecks current membership;

@@ -1,111 +1,120 @@
-# Customer identity through Dex and self-hosted Keycloak
+# Customer identity through Dex and self-hosted ZITADEL
 
-- Status: Accepted for source preparation; deployment and activation require separate proof.
+- Status: Accepted for source preparation; runtime and activation need separate proof.
 - Date: 2026-10-23
-- Scope: business-site #302 and #303; monorepo #3936 and #3939 remain open.
+- Scope: business-site #302/#303/#305; monorepo #3936/#3939 remain open.
 
 ## Decision
 
-The portal trusts a dedicated **customer Dex** issuer. Dex initially has one OIDC
-connector to a dedicated **Keycloak customer realm**. Invited people use local
-Keycloak accounts; public registration and social connectors are disabled.
-Infrastructure identity, administrators, clients, secrets and stores remain separate.
-All business-specific source belongs in this repository, not the monorepo or Platform.
+The portal trusts dedicated customer Dex, initially connected by OIDC to a dedicated
+self-hosted ZITADEL instance. Approved invitees use local accounts. Public user and
+organization registration, external and passwordless login are disabled initially.
+Password plus MFA and verified email are required. Social providers are future work.
 
-Keycloak supplies maintained account administration, credentials, MFA, recovery,
-OIDC and future federation. The portal does not implement these mechanisms. It
-continues to own its invitations, current membership, client isolation and operator
-permissions independently of a successful login. Identity is the verified Dex
-issuer and subject, never email, an email domain or a Keycloak role/group.
+Customer and infrastructure issuers, clients, secrets, administration and stores
+remain separate. Business-specific source belongs in business-site. The portal owns
+current invitations, membership and customer authorization independently of login.
+Verified issuer+subject is identity; email, domains and group/role claims never grant
+portal authority. No provider-specific SDK or password store belongs in the portal.
 
-## Considered options
+## Alternatives and evidence
 
-| Option | Fit and trade-off |
-| --- | --- |
-| Keycloak | Selected: local accounts, required actions, MFA, recovery, administrative APIs and federation under Apache-2.0. Requires operating and updating a JVM service and its PostgreSQL store; no resource-efficiency claim is made without measurement. |
-| authentik | Viable self-hosted alternative with invitation-gated enrollment flows and OIDC. Its server/worker deployment and separate enterprise feature boundary add no demonstrated benefit for this initial local-account scope. |
-| ZITADEL | Viable API-oriented self-hosted or managed identity platform with local accounts and federation. Its AGPL-3.0/commercial licensing and distinct operational lifecycle need a separate adoption review; neither implies a mandatory paid plan for self-hosting. |
-| Dex alone | Useful broker, not the selected full local-user administration and recovery system. Its static-password facility is not our customer directory. |
-| Portal → Keycloak directly | Fewer components, but removes the stable broker boundary explicitly requested by the maintainer. |
-| Hosted IDaaS | A possible future choice, not an initial supplier or subscription dependency. |
+| Option                          | Assessment                                                                                                                                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ZITADEL                         | Selected: maintained customer administration, invitations, recovery, MFA, OIDC and APIs; Go backend with self-hosted/managed options. Requires PostgreSQL and operational lifecycle management. Core licensing is AGPL-3.0 with commercial alternatives. |
+| Authelia                        | Lightweight authentication/OIDC gateway; project-reported normal usage below 30 MB. Users live in a file or LDAP backend with no internal registration lifecycle. Additional directory/invitation machinery would be required.                           |
+| Keycloak                        | Capable local accounts and federation under Apache-2.0. A JVM service with a documented recommended 2 GB container limit for smaller production deployments; not a measured footprint.                                                                   |
+| authentik                       | Viable invitation-oriented alternative; server/worker operations and enterprise feature boundaries offer no demonstrated initial-scope advantage.                                                                                                        |
+| Dex alone                       | The selected broker, not a full customer directory/recovery service. Static passwords are not our customer account store.                                                                                                                                |
+| Portal directly to the provider | Fewer hops, but removes the broker explicitly requested by the maintainer.                                                                                                                                                                               |
+| Hosted IDaaS                    | A future option, not an initial paid supplier dependency.                                                                                                                                                                                                |
 
-Selection is based on the required account lifecycle and standard interfaces, not
-stars, market popularity or a claim that one product is universally best. No
-license, support contract, paid enrollment or new vendor account is purchased.
-Existing hosting is not free: measure capacity, upgrades, monitoring, two isolated
-identity stores, backups and restore work, mail delivery and operator time before
-deployment. Do not share database owners or tables with the portal or admin identity.
+Language and popularity alone establish neither security nor longevity. Prefer
+standard interfaces, maintained lifecycle APIs, recoverable state and measured
+complete-stack resources. ZITADEL's approximately 512 MB core sizing guidance,
+Authelia's reported normal usage and Keycloak's recommended limit are different
+metrics, not a comparative benchmark. No performance-superiority claim follows.
 
-## First-release boundary
+Use supported embedded Login V1 for current requirements. New v4 instances may
+default to V2, so set both instance and application selection explicitly. V2 adds
+a separate Next.js service, login-to-API credential and routing. Adopt it for a
+concrete need, not by accident; never freeze unsupported releases to save memory.
 
-The explicit offline preparer emits an empty native realm and a native Dex
-configuration; its default emits nothing. It adds no deployment resources, user,
-mail, secret value, portal activation setting or public-site asset. A successful
-preparation does not prove either upstream service accepts the configuration.
-The formats were inspected against Keycloak 26.8.1 and Dex 2.46.0 source; executable
-versions/images, provenance and vulnerability review belong to runtime adoption.
+Deploy ZITADEL independently and unmodified where possible. Review actual core,
+login and tooling licenses and retain required notices/source obligations. Vendor
+guidance distinguishes API integration from modifying/combining its AGPL code;
+this is not legal clearance for future customization or resale. No paid license,
+enrollment or new vendor account is purchased here.
 
-Keycloak administrators create only approved invitees with unverified email and
-no pre-shared password. Expiring required-action email establishes control of the
-address and requires credential setup and authenticator enrollment. Realm actions
-default to verification, password setup and TOTP. The selected customer browser
-flow requires password and OTP sequentially, without cookie, Kerberos or
-conditional-factor alternatives. An account without an OTP must enroll before
-authentication completes; enrollment alone is not the ongoing enforcement policy.
-Public self-registration,
-social/federation imports, implicit flow, password grants and client service accounts
-are off. Recovery and re-enrollment require the same verified-mail and operator
-controls, not a custom bypass. Validate link expiry/replay and every recovery path
-against the actual deployed version before admitting real users.
+## Source and provisioning boundary
 
-The customer Dex upstream client accepts only its exact `/callback`. The portal
-client accepts only the portal's exact `/portal/callback`. Both hops use code flow
-and S256 PKCE, with confidential, independently rotated credentials. Dex receives
-no platform scope, administrative role, groups or offline refresh-token grant.
-Certificate and verified-email checks remain enabled. Dex identity tokens and
-authentication requests expire after five minutes; its signing-key rotation is
-six hours. Short identity tokens are
-not a substitute for current portal membership checks.
+The offline preparer emits ZITADEL configuration, setup steps, an application API
+request template and Dex configuration. It defaults to no output and is absent
+from ordinary builds/publication. Formats target ZITADEL 4.20.0 and Dex 2.46.0;
+this does not automatically admit production binaries/images.
 
-## The cost of the extra hop
+Setup explicitly skips first-instance creation. Native merged defaults can
+otherwise create an administrator; omitting `Human` is unsafe. Actual bootstrap
+requires separately private fresh administrator inputs and persisted policy
+readback. Initial policy belongs in `DefaultInstance` configuration, not setup
+steps. Existing instances require supported API updates, not rerender/restart.
 
-Dex preserves the portal's issuer boundary if Keycloak or a future provider changes,
-but adds a service, durable state, key rotation and another availability dependency.
-Portal logout does not imply universal upstream SSO logout. Disabling a Keycloak
-account does not revoke an already-issued Dex token or portal session immediately.
-Revoke portal membership/sessions explicitly for immediate denial, then disable the
-upstream account and test the resulting behavior. Observe both links, failure modes,
-expiry, replay and recovery rather than assuming end-to-end semantics from OIDC.
+The modern application API creates a confidential web client with code grant and
+exact Dex callback, returning generated client credentials. Dex reads these private
+references; the portal uses a different downstream credential. Source preparation
+neither expands values nor creates users, projects or applications.
 
-Retain the Dex issuer, client and `customer-keycloak` connector ID, and protect the
-upstream immutable subject. Database recovery and destructive realm re-import can
-change identity. Moving a social provider between Keycloak and Dex is not transparent:
-it can produce another subject. Require deliberate, authenticated account linking
-or a reviewed identity migration; never join by matching email.
+Dex sends S256 and reads UserInfo with strict verified-email/TLS checks. The
+upstream confidential client has no documented enforce-PKCE switch; do not claim
+challenge omission is rejected without proof. Downstream Dex independently requires
+S256. No password, implicit, administrative or offline portal grant is introduced.
+Short tokens never replace current portal membership checks.
 
-## Later social login
+## Lifecycle and the extra hop
 
-Google, Microsoft, Apple and GitHub remain future providers. They may be connected
-through Keycloak or directly through Dex after compatibility, consent, enrollment
-and identity-linking review. Turning off self-registration does not prevent an
-upstream broker from creating accounts through first-login flows. Invitation-only
-portal authorization remains mandatory even after such a provider is added.
-Apple membership and its form-post/rotating client-secret requirements are deferred,
-not prerequisites for the local-account first release.
+Native invitations establish email control, password setup and MFA. Never pre-share
+customer passwords or assume verified email. Prove link expiry/replay, wrong factors,
+subsequent MFA, recovery and deactivation with actual pinned services. Close public
+organization creation as well as self-registration.
 
-## Activation evidence
+Dex preserves the portal issuer boundary but adds durable state, key rotation and
+an availability dependency. Portal logout is local, not universal SSO logout;
+upstream deactivation does not immediately destroy portal sessions. Current portal
+membership/session revocation provides immediate denial. Exercise both boundaries.
 
-Keep portal access closed until a reviewed source-owned deployment proves isolated
-workload permissions, TLS/discovery, signed claims and code exchange, actual invite
-delivery and MFA/recovery, account revocation, two-client/operator separation,
-restart/restore and privacy/retention behavior. Restrict administrative access and
-provide private secret delivery and separate storage recovery. Do not widen tenant
-Helm or RBAC authority to bypass missing generic Platform capabilities.
+Preserve the adopted Dex issuer, client, connector ID and upstream subject. Provider
+or federation-path changes can change subjects. Migration/linking requires proof
+of both identities, never matching email. Future Google/Microsoft/Apple/GitHub
+integration also needs enrollment, consent, protocol and privacy review and must
+not reopen automatic account creation. Apple membership is not required initially.
 
-## Primary evidence
+## Activation and measurement
 
-- [Keycloak administration](https://www.keycloak.org/docs/latest/server_admin/index.html): administered users, required actions, MFA, recovery and federation.
-- [Keycloak runtime](https://www.keycloak.org/server/containers) and [Apache-2.0 license](https://github.com/keycloak/keycloak/blob/26.8.1/LICENSE.txt).
-- [authentik invitations](https://docs.goauthentik.io/users-sources/user/invitations/) and [configuration](https://docs.goauthentik.io/install-config/configuration/).
-- [ZITADEL self-hosting](https://zitadel.com/docs/self-hosting/deploy/overview) and [licensing](https://help.zitadel.com/zitadel-licensing-faqs).
-- [Dex OIDC connector](https://github.com/dexidp/dex/blob/v2.46.0/connector/oidc/oidc.go), [configuration](https://github.com/dexidp/dex/blob/v2.46.0/cmd/dex/config.go) and [SQL storage](https://github.com/dexidp/dex/blob/v2.46.0/storage/sql/config.go).
+Source preparation, native startup, observed browser acceptance, signed publication
+and deployed acceptance are separate gates. A fictional native fixture must use
+real ZITADEL, Dex and the maintained portal path with trusted TLS and no certificate
+warning bypass. Synthetic brokers and rewritten cookies are not that proof. Keep
+loopback fixture endpoint adaptations out of the strict production preparer.
+
+Measure ZITADEL including embedded login, Dex, all PostgreSQL processes, portal and
+any gateway/mail fixture at warm idle, during login and after repeated journeys.
+Record exact versions, platform, workload, sample window and failures. Native RSS
+is not a container limit or unique physical RAM: shared PostgreSQL pages can be
+counted repeatedly. Include a separate login service if V2 is selected.
+
+Before activation, prove source-owned immutable provenance, restricted workloads,
+private credential delivery/rotation, exact TLS/routing, durable restart/restore,
+real mail, invitation/MFA/recovery/revocation and two-customer/operator separation.
+Resolve generic Platform prerequisites without broadening tenant Helm/RBAC
+authority. Activate separately and reversibly only after these pass.
+
+## Primary sources
+
+- [Users and invitations](https://zitadel.com/docs/guides/manage/console/users-overview).
+- [Supported Login V1 and V2 adoption](https://zitadel.com/docs/self-hosting/manage/adopt-login-v2).
+- [Production requirements](https://zitadel.com/docs/self-hosting/manage/production) and [licensing](https://help.zitadel.com/zitadel-licensing-faqs).
+- [Pinned bootstrap](https://github.com/zitadel/zitadel/blob/8afa5dd37a8e723efb9eace8d09fd5c1cccef694/cmd/setup/03.go) and [defaults](https://github.com/zitadel/zitadel/blob/8afa5dd37a8e723efb9eace8d09fd5c1cccef694/cmd/defaults.yaml).
+- [Modern application API](https://zitadel.com/docs/reference/api/application/zitadel.application.v2.ApplicationService.CreateApplication).
+- [Authelia account backends](https://www.authelia.com/configuration/first-factor/introduction/).
+- [Keycloak container guidance](https://www.keycloak.org/server/containers).
+- [Pinned Dex connector](https://github.com/dexidp/dex/blob/05a275057112ba93e17db21f600b756f000f1c21/connector/oidc/oidc.go).

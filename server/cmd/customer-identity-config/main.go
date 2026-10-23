@@ -1,4 +1,4 @@
-// Command customer-identity-config prepares dormant Keycloak and Dex documents.
+// Command customer-identity-config prepares dormant ZITADEL and Dex documents.
 // It does not contact services, create users, write credentials or activate login.
 package main
 
@@ -20,14 +20,14 @@ func main() {
 	}
 }
 
-// run validates the complete opt-in request before emitting either native document.
+// run validates the complete opt-in request before emitting any native documents.
 func run(args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("customer-identity-config", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	prepare := flags.Bool("prepare", false, "prepare dormant source configuration, not a deployment")
 	inputs := customeridentity.Endpoints{}
 	flags.StringVar(&inputs.DexIssuer, "dex-issuer", "", "approved customer Dex HTTPS origin")
-	flags.StringVar(&inputs.KeycloakIssuer, "keycloak-issuer", "", "approved customer Keycloak HTTPS realm")
+	flags.StringVar(&inputs.ZitadelIssuer, "zitadel-issuer", "", "approved customer ZITADEL HTTPS origin")
 	flags.StringVar(&inputs.PortalCallback, "portal-callback", "", "approved portal HTTPS callback")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
 		return errors.New("invalid preparation arguments")

@@ -1,10 +1,10 @@
 # Prepare customer sign-in configuration
 
-The portal uses customer Dex, backed initially by an invitation-only Keycloak
-customer realm. See [ADR 0021](../docs/adr/0021-customer-identity-provider.md).
-The offline command prepares source inputs only. It creates no services, users,
-credentials, DNS, mail, database or portal activation. Normal publication does not
-run it or include its output.
+The portal trusts dedicated customer Dex, backed by self-hosted ZITADEL for
+invited local users. See [ADR 0021](../docs/adr/0021-customer-identity-provider.md).
+The explicit offline command prepares source inputs only. It creates no services,
+users, credentials, DNS, mail, database or portal activation. Ordinary builds and
+publication do not run it or include its output.
 
 From `server/`, using the exact compiler in `go.mod`:
 
@@ -13,58 +13,82 @@ GOTOOLCHAIN=local go run ./cmd/customer-identity-config
 # No output unless preparation is explicitly requested.
 GOTOOLCHAIN=local go run ./cmd/customer-identity-config --prepare \
   --dex-issuer=https://login.example.invalid \
-  --keycloak-issuer=https://accounts.example.invalid/realms/customers \
+  --zitadel-issuer=https://accounts.example.invalid \
   --portal-callback=https://site.example.invalid/portal/callback
 ```
 
-The fictional endpoints deliberately cannot be used for public deployment. Supply
-separately approved canonical HTTPS destinations with three distinct origins;
-wildcard callbacks, query/fragment aliases, credentials, IPs and insecure URLs are
-refused. The command emits one JSON object containing `keycloakRealm` and
-`dexConfig`. Extract those two objects for their native consumers, not the wrapper.
-Check the command's exit status: an interrupted or failed write is not a complete
-package. No real endpoint is chosen or registered by this command.
+These fictional destinations cannot be deployed publicly. Supply separately
+approved canonical HTTPS origins on distinct hosts. Ports, IPs, user information,
+wildcards, paths on either issuer, queries, fragments and alternate spellings fail.
+The portal callback must end exactly in `/portal/callback`.
 
-## Private inputs and lifecycle
+## Native consumers and private provisioning
 
-Keycloak imports the `CUSTOMER_KEYCLOAK_CLIENT_SECRET` placeholder into its durable
-realm configuration. Dex expands the same variable for its upstream connector;
-keep its maintained `DEX_EXPAND_ENV` behavior enabled. Its sole portal client reads
-the **different** `CUSTOMER_PORTAL_CLIENT_SECRET` via native `secretEnv`. Project
-that latter credential privately into the portal's existing supported secret-file
-input; do not give the portal Keycloak administrative or database credentials.
-Never commit expanded documents, account records, invite links or secret values.
+The output wraps four documents. Extract each for its actual consumer; the wrapper
+is not a deployment or import format. A failed or partial write is not a package.
 
-Dex's separate PostgreSQL store needs `CUSTOMER_DEX_DB_HOST`,
-`CUSTOMER_DEX_DB_USER`, `CUSTOMER_DEX_DB_PASSWORD` and a verified database CA at
-`/run/customer-dex/database-ca.pem`. Its listener needs a matching certificate and
-key at `/run/customer-dex/tls.crt` and `/run/customer-dex/tls.key`. Keycloak needs
-its own durable PostgreSQL configuration, hostname/proxy policy, protected
-administration and verified mail delivery; these are not fabricated by the preparer.
-Missing expansion or private inputs must fail the runtime preflight rather than
-fall back to development storage, development mode or unverified TLS.
-That deployment preflight is not implemented by this offline command. Keycloak
-can retain an unresolved placeholder when an environment variable is absent;
-reject absent, empty or unresolved values before import. Use JSON-safe generated
-credentials or proper JSON escaping when transporting private values, and verify
-the persisted client and Dex agree without displaying either credential.
+| Document             | Consumer and boundary                                                                                                                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zitadelConfig`      | Native `--config`: HTTPS, initial instance policies, supported embedded Login V1, closed user/organization registration, password/lockout/MFA and token lifetimes.                              |
+| `zitadelSteps`       | Native `--steps`: `FirstInstance.Skip=true` prevents creating the upstream default administrator or any instance.                                                                               |
+| `zitadelApplication` | Modern `CreateApplication` request template for one confidential web client, code grant and the exact Dex callback. Supply its project ID privately after controlled instance/project creation. |
+| `dexConfig`          | Native customer Dex configuration with one ZITADEL OIDC connector and one separate confidential portal client.                                                                                  |
 
-Realm import is initial provisioning, not continuous reconciliation or a backup.
-Startup imports can skip an existing realm. Secret rotation requires updating the
-actual persisted client, coordinating Dex, observing new logins and revoking the old
-credential. Re-rendering a placeholder or restarting a skipped import is not proof
-of rotation. Never overwrite a populated realm to apply a configuration update.
+The formats target ZITADEL 4.20.0 and Dex 2.46.0. Submit a privately completed
+application request to `/zitadel.application.v2.ApplicationService/CreateApplication`
+with its supported Connect protocol and private provisioning authorization. Save the
+returned client ID and secret privately as `CUSTOMER_ZITADEL_CLIENT_ID` and
+`CUSTOMER_ZITADEL_CLIENT_SECRET`; neither is a fixed source identifier. Dex expands
+those native environment references. Its independent downstream client reads
+`CUSTOMER_PORTAL_CLIENT_SECRET` through `secretEnv`. Only that downstream credential
+belongs in the portal's supported private secret-file input. The portal receives
+no provider administration, database or bootstrap credentials.
 
-Administrators provision approved users without a pre-shared password or an assumed
-verified email. Require a real email address: enabling email verification alone
-does not establish that an account has one. Send a bounded required-action link for email verification,
-password setup and TOTP enrollment. Verify actual link delivery, expiry, replay,
-later MFA enforcement, reset and lost-factor handling before inviting real people.
-The initial browser flow requires password and OTP on each upstream login; it
-deliberately does not reuse a Keycloak browser SSO cookie.
-Do not create customer accounts or send mail from this source-preparation command.
-The portal's separate durable invitation and membership must still authorize the
-authenticated Dex subject; provisioning a Keycloak user grants no portal access.
+The source command does not expand private values or render the API template.
+Runtime preflight must reject missing, empty or unresolved inputs and use JSON-safe
+substitution. Never commit expanded configurations, invite links or account data.
+The ZITADEL configuration has no database, master key, mail or bootstrap credential.
+It is deliberately insufficient to create a usable identity instance alone.
+
+Actual initial provisioning needs a separate private steps document with explicit
+fresh administrator inputs and `Skip=false`. Omitting `Human` does not prevent
+upstream default account creation. Verify the persisted policy/client state before
+exposure. `DefaultInstance` policies belong in `--config`, not `FirstInstance`
+steps; unknown setup keys can otherwise be silently ineffective. Startup defaults
+initialize a new instance, not reconciliation of an existing one. Use supported
+administration APIs for existing policies and persisted credential rotation.
+
+ZITADEL needs its own PostgreSQL role/store, private master key, verified database
+TLS, certificate/key and working mail. Dex needs independent durable PostgreSQL
+credentials and a CA at `/run/customer-dex/database-ca.pem`, plus its own TLS
+certificate/key. Missing inputs must fail before runtime startup; never fall back
+to development storage or unverified TLS. That deployment preflight remains #305.
+
+## Invited users and authorization
+
+Administrators create only approved users, without pre-shared customer passwords
+or an email marked verified in advance. Native invitation mail establishes address
+control and credential setup. Fresh authentication requires MFA; an upstream SSO
+session can reuse its already-verified factor within the configured 15-minute
+verification lifetime. Portal logout alone does not end that SSO session. Passwordless
+and external login are disabled initially. Exercise expiring/replayed links, wrong
+factors, recovery and deactivation against the actual selected version.
+
+Dex requests `profile`/`email`, adds `openid`, reads UserInfo and keeps strict email,
+TLS and subject checks. It sends S256 to ZITADEL; the confidential upstream client
+has no documented setting that guarantees rejecting an omitted challenge. Do not
+claim that rejection without proof. The downstream Dex policy requires S256.
+
+An upstream account grants no portal membership. Trusted portal provisioning must
+invite the actual verified Dex issuer/subject into its intended workspace, never
+derive identity from email or use the upstream ZITADEL subject directly. Preserve
+the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
+paths needs explicit migration/linking with proof of both identities.
+
+Portal logout destroys its local session, not all upstream SSO sessions. Upstream
+deactivation prevents new login but does not instantly revoke portal sessions;
+revoke portal membership/sessions for immediate denial and test each boundary.
+Google, Microsoft, Apple and GitHub remain unconfigured.
 
 ## Validation and remaining proof
 
@@ -72,9 +96,50 @@ authenticated Dex subject; provisioning a Keycloak user grants no portal access.
 GOTOOLCHAIN=local go test -race ./internal/customeridentity ./cmd/customer-identity-config -count=1 -timeout=90s
 ```
 
-The ordinary module-wide inventory and both complementary test cohorts include
-these packages automatically. Tests exercise the command's native payloads,
-default-off output, unsafe input refusals and failed output. They do not prove a
-running Keycloak/Dex chain, mail, MFA, browser login or controller convergence.
-Parent #302 retains those activation requirements. Google, Microsoft, Apple and
-GitHub configuration is absent by design from this first slice.
+Both complete ordinary cohorts include these packages. Payload tests prove source
+preparation, not native service/browser acceptance. #303 tracks real local flow and
+resource proof; #305 owns signed runtime delivery; #302 retains deployed acceptance
+and real mail before separate activation. Synthetic brokers do not satisfy those gates.
+
+Login V1 is embedded and supported for normal v4 operation. Login V2 adds a separate
+Next.js service, API credential and routing; select it for a demonstrated need and
+include it in resource/security accounting. Measure ZITADEL including login, Dex,
+PostgreSQL, portal and any gateway/mail fixture at idle and during login. Report
+versions, platform, duration and failures. Summed process RSS double-counts some
+shared pages; it is not unique physical RAM or a production container limit.
+
+### Local native acceptance — 23 October 2026
+
+A disposable arm64 macOS fixture used the checksum-verified ZITADEL 4.20.0 native
+release, Dex 2.46.0 built from its pinned release commit, PostgreSQL 17, the unchanged
+maintained Go trial host and a loopback-only mail sink. An existing trusted local CA
+issued short-lived fixture certificates; no trust store, certificate check or CSP
+was bypassed. Numeric loopback ports and local database connections were explicit
+fixture adaptations, not relaxed production endpoint or database-TLS requirements.
+
+Native APIs persisted the selected policies and generated the confidential app's
+client credentials. The actual browser completed invitation/password setup, required
+authenticator enrollment, Dex consent and the signed-in portal workspace. A consumed
+callback returned 400 without workspace data. Logout, immediate portal-membership
+revocation, email-backed password recovery, rejection of the old password and reused
+recovery link, wrong-factor refusal and retained MFA after recovery were observed.
+Fresh authentication after recovery returned through Dex into the actual portal.
+Native account deactivation refused a new sign-in but left an issued portal session
+usable until separate portal revocation, which immediately denied that session.
+The bounded host lease expired during an earlier continuation; that attempt did not
+reach the portal and was repeated with a fresh disposable fixture, not counted green.
+
+The first browser attempt exposed Chromium blocking the provider redirect under
+the portal's strict form policy. The corrected native handoff document completed
+the same chain without adding upstream origins to the portal policy. The ordinary
+HTTP controls alone had not observed this browser-only failure.
+
+Two five-sample, roughly one-second process observations covered idle and native
+password-recovery activity. ZITADEL including embedded login used 79–106 MiB RSS,
+Dex 18–20 MiB, the Go portal about 13 MiB, all 20 PostgreSQL processes 110–132 MiB,
+and the fictional mail sink 7–9 MiB. The sampled per-observation sum was 228–279 MiB;
+the separate controller added about 11 MiB. Browser/automation memory is excluded.
+These short observations are not peak/load measurements, unique physical memory,
+container sizing, deployment capacity or a head-to-head comparison with Keycloak.
+Real database TLS, restricted production identities, delivery/recovery, deployed
+client/operator isolation and customer activation remain #302/#305 acceptance.
