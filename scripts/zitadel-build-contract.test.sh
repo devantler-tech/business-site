@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 yq -o=json '.' "$root/.github/workflows/ci.yaml" >"$scratch/ci.json"
+# Validate one complete workflow document, including mandatory diagnostic retention.
 check() {
   jq -e '
     .jobs["build-zitadel-linux"] as $job |
@@ -22,8 +23,13 @@ check() {
       (.run | contains("corepack prepare pnpm@10.30.3 --activate"))) and
     any($job.steps[]; .name == "Fetch the frozen public upstream input" and
       (.run | contains("8afa5dd37a8e723efb9eace8d09fd5c1cccef694"))) and
+    ([$job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))] | length == 1) and
     all($job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"));
+      .if == "always()" and .with["if-no-files-found"] == "error" and
+      (.["continue-on-error"] == null or .["continue-on-error"] == false) and
+      .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
+        length == 5 and (unique | length == 5) and
         all(test("/zitadel-build/(build-receipt\\.json|packages\\.jsonl|\\*\\.(txt|log|sha256))$")))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -37,9 +43,17 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=("$"+"{{ runner.temp }}/zitadel-build/service") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select((.uses // "" | startswith("actions/upload-artifact@")) | not))' \
+  '.jobs["build-zitadel-linux"].steps += [.jobs["build-zitadel-linux"].steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))]' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .if="success()" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with["if-no-files-found"]="ignore" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path="" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("build-receipt.json") | not)) | join("\n")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.name="other-evidence" else . end)' \
   '.jobs.validation.needs |= map(select(. != "build-zitadel-linux"))' \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including six broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including fourteen broken-wiring controls.'

@@ -3,6 +3,7 @@
 set -euo pipefail
 export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
+# Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
 requested=0 source_repo='' output=''
 while [[ "$#" -gt 0 ]]; do
@@ -55,6 +56,7 @@ jq '.targets["generate-install"].options.parallel = false' apps/api/project.json
 cp "$output/api-project.serial.json" apps/api/project.json
 export GOCACHE="$output/go-cache" GOMODCACHE="$output/go-modules"
 mkdir "$GOCACHE" "$GOMODCACHE"
+# Run one real phase with its own resource/log records and preserve failure status.
 run_phase() {
   local name="$1"; shift
   # pipefail preserves a failing process even when its final log says success.

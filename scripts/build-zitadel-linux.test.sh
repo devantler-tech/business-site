@@ -99,6 +99,7 @@ bash "$build"
 test ! -e "$TEST_CALLS"
 # Record all failures so a missing guard cannot hide behind the first rejection.
 failures=0
+# Require a malformed-input build to fail without publishing a success receipt.
 reject() {
   local label="$1"; shift
   : >"$TEST_CALLS"
