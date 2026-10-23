@@ -67,6 +67,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
   CI retains build diagnostics only; successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+- `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
+  fonts, decoded statik members and retained notices. It is inactive without
+  arguments and is mandatory in the Linux build, not the public website build.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the
@@ -124,6 +127,7 @@ bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
+(cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
