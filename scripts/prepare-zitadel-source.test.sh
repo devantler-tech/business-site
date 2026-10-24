@@ -79,7 +79,7 @@ mv "$scratch/expected-login" "$scratch/pristine/internal/api/ui/login/static/res
 # Pin the only newly declared changed file independently of the preparer.
 metadata=internal/id/sonyflake.go
 test "$(shasum -a 256 "$scratch/prepared source/source/$metadata" | awk '{print $1}')" = \
-  3ac3286d55661db102ed3f521f713dbc385df3a1e1731525e9aaed3762ef0b21
+  74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc
 cp "$scratch/prepared source/source/$metadata" "$scratch/pristine/$metadata"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"

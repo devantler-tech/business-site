@@ -68,6 +68,14 @@ mv "$stage/login" "$stage/source/$login"
 metadata=internal/id/sonyflake.go
 awk '
   $0 == "\t\"encoding/json\"" || $0 == "\t\"github.com/jarcoal/jpath\"" { next }
+  /^func machineID\(\)/ {
+    machine++
+    print
+    print "\tif GeneratorConfig != nil && GeneratorConfig.Identification.Webhook.JPath != nil {"
+    print "\t\treturn 0, fmt.Errorf(\"metadata JSONPath is unsupported by this source profile\")"
+    print "\t}"
+    next
+  }
   /^func extractMetadataResponse\(/ {
     selected++
     print "func extractMetadataResponse(path *string, data []byte) ([]byte, error) {"
@@ -78,10 +86,10 @@ awk '
     print "}"
   }
   !selected { print }
-  END { if (selected != 1) exit 1 }
+  END { if (machine != 1 || selected != 1) exit 1 }
 ' "$stage/source/$metadata" >"$stage/metadata"
 metadata_hash="$(shasum -a 256 "$stage/metadata" | awk '{print $1}')" || fail 'metadata transform hash failed'
-[[ "$metadata_hash" = 3ac3286d55661db102ed3f521f713dbc385df3a1e1731525e9aaed3762ef0b21 ]] || fail 'metadata transform differs'
+[[ "$metadata_hash" = 74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc ]] || fail 'metadata transform differs'
 mv "$stage/metadata" "$stage/source/$metadata"
 rm -- "$stage/source/console/src/assets/ailerons.otf" \
   "$stage/source/console/src/styles/ailerons.scss" \
