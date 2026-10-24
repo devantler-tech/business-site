@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 	"unicode/utf8"
 )
 
@@ -254,9 +255,70 @@ type noticeState struct {
 	PackagesSHA256    string           `json:"packagesSha256"`
 	RecipeSHA256      string           `json:"recipeSha256"`
 	Supplement        *supplementState `json:"supplement,omitempty"`
+	Toolchain         *noticeToolchain `json:"toolchain,omitempty"`
 }
 
-type noticeSupplementConfig struct{ Directory, CatalogueHash string }
+type noticeSupplementConfig struct{ Directory, CatalogueHash, ToolchainRoot string }
+
+type noticeToolchainSection struct {
+	Source string `json:"source"`
+	Offset int    `json:"offset"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeToolchainEvidence struct {
+	Version       string                   `json:"version"`
+	RawDiagnostic string                   `json:"rawDiagnostic"`
+	Bytes         int                      `json:"bytes"`
+	SHA256        string                   `json:"sha256"`
+	Sections      []noticeToolchainSection `json:"sections"`
+}
+
+type noticeToolchain struct {
+	Evidence noticeToolchainEvidence `json:"evidence"`
+	Text     []byte                  `json:"text"`
+}
+
+// noticeToolchainSnapshot retains checked distribution terms, not compiler code
+// or a claim of complete selected-module/incorporated-source coverage.
+func noticeToolchainSnapshot(root string, read noticeReader) (*noticeToolchain, error) {
+	result := &noticeToolchain{Evidence: noticeToolchainEvidence{Version: "1.26.10", RawDiagnostic: "go-toolchain-notices.txt"}}
+	for _, input := range []struct{ name, hash string }{
+		{"LICENSE", "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"},
+		{"PATENTS", "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"},
+		{"VERSION", ""},
+	} {
+		data, err := read(root, input.name, 16<<10)
+		if err != nil || len(data) == 0 || !utf8.Valid(data) || bytes.ContainsRune(data, 0) {
+			return nil, fmt.Errorf("toolchain distribution input unavailable")
+		}
+		if input.hash != "" && noticeDigest(data) != input.hash {
+			return nil, fmt.Errorf("toolchain distribution terms differ")
+		}
+		if input.name == "VERSION" {
+			lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+			if len(lines) > 2 || lines[0] != "go1.26.10" {
+				return nil, fmt.Errorf("toolchain distribution version differs")
+			}
+			if len(lines) == 2 {
+				if !strings.HasPrefix(lines[1], "time ") {
+					return nil, fmt.Errorf("invalid distribution time")
+				}
+				if _, err := time.Parse(time.RFC3339, strings.TrimPrefix(lines[1], "time ")); err != nil {
+					return nil, fmt.Errorf("invalid distribution time")
+				}
+			}
+		}
+		result.Text = append(result.Text, []byte("Source: GOROOT/"+input.name+"\n\n")...)
+		result.Evidence.Sections = append(result.Evidence.Sections, noticeToolchainSection{"GOROOT/" + input.name, len(result.Text), len(data), noticeDigest(data)})
+		result.Text = append(result.Text, data...)
+		result.Text = append(result.Text, '\n', '\n')
+	}
+	result.Evidence.Bytes = len(result.Text)
+	result.Evidence.SHA256 = noticeDigest(result.Text)
+	return result, nil
+}
 
 type noticeBinding struct {
 	Path   string `json:"path"`
@@ -264,18 +326,20 @@ type noticeBinding struct {
 }
 
 type noticeInventory struct {
-	SchemaVersion  int             `json:"schemaVersion"`
-	UpstreamCommit string          `json:"upstreamCommit"`
-	Profile        string          `json:"profile"`
-	OriginalPaths  []string        `json:"originalPaths"`
-	RawDiagnostic  string          `json:"rawDiagnostic"`
-	Bytes          int             `json:"bytes"`
-	SHA256         string          `json:"sha256"`
-	Inputs         []noticeBinding `json:"inputs"`
-	ImageAdmission string          `json:"imageAdmission"`
-	LicenseClosure string          `json:"licenseClosure"`
-	Reproducible   bool            `json:"reproducible"`
+	SchemaVersion  int                      `json:"schemaVersion"`
+	UpstreamCommit string                   `json:"upstreamCommit"`
+	Profile        string                   `json:"profile"`
+	OriginalPaths  []string                 `json:"originalPaths"`
+	RawDiagnostic  string                   `json:"rawDiagnostic"`
+	Bytes          int                      `json:"bytes"`
+	SHA256         string                   `json:"sha256"`
+	Inputs         []noticeBinding          `json:"inputs"`
+	ImageAdmission string                   `json:"imageAdmission"`
+	LicenseClosure string                   `json:"licenseClosure"`
+	Reproducible   bool                     `json:"reproducible"`
+	Toolchain      *noticeToolchainEvidence `json:"toolchain,omitempty"`
 	supplement     *supplementState
+	toolchain      *noticeToolchain
 }
 
 func main() { os.Exit(noticeRun(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -301,7 +365,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 		switch key {
 		case "--snapshot", "--inventory":
 			values[key] = "true"
-		case "--build", "--recipe", "--supplement":
+		case "--build", "--recipe", "--supplement", "--toolchain":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
 				return fail(fmt.Errorf("missing argument"))
 			}
@@ -311,14 +375,21 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 			return fail(fmt.Errorf("unexpected argument"))
 		}
 	}
-	validCount := len(values) == 3 || (len(values) == 4 && values["--supplement"] != "")
+	optional := 0
+	if values["--supplement"] != "" {
+		optional++
+	}
+	if values["--toolchain"] != "" {
+		optional++
+	}
+	validCount := len(values) == 3+optional
 	if !validCount || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
 		return fail(fmt.Errorf("expected one mode, build and recipe"))
 	}
 	var result any
 	options := []noticeSupplementConfig{}
-	if values["--supplement"] != "" {
-		options = append(options, noticeSupplementConfig{values["--supplement"], catalogueHash})
+	if optional > 0 {
+		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"]})
 	}
 	var captured *noticeInventory
 	if values["--snapshot"] != "" {
@@ -343,10 +414,6 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 		return fail(err)
 	}
 	b = append(b, '\n')
-	n, err := out.Write(b)
-	if err != nil || n != len(b) {
-		return fail(fmt.Errorf("incomplete inventory output"))
-	}
 	if captured != nil && captured.supplement != nil {
 		s := captured.supplement
 		inventory := struct {
@@ -377,6 +444,16 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 		if e = noticeWriteDiagnostic(values["--build"], supplementInventoryPending, append(encoded, '\n')); e != nil {
 			return fail(e)
 		}
+	}
+	if captured != nil && captured.toolchain != nil {
+		if err := noticeWriteDiagnostic(values["--build"], captured.toolchain.Evidence.RawDiagnostic, captured.toolchain.Text); err != nil {
+			return fail(err)
+		}
+	}
+	// A complete inventory is emitted only after all retained diagnostics succeed.
+	n, err := out.Write(b)
+	if err != nil || n != len(b) {
+		return fail(fmt.Errorf("incomplete inventory output"))
 	}
 	return 0
 }
@@ -657,9 +734,17 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 		return result, fmt.Errorf("ambiguous supplement options")
 	}
 	if len(options) == 1 {
-		result.Supplement, err = noticeSupplementSnapshot(build, options[0].Directory, options[0].CatalogueHash, read)
-		if err != nil {
-			return result, err
+		if options[0].Directory != "" {
+			result.Supplement, err = noticeSupplementSnapshot(build, options[0].Directory, options[0].CatalogueHash, read)
+			if err != nil {
+				return result, err
+			}
+		}
+		if options[0].ToolchainRoot != "" {
+			result.Toolchain, err = noticeToolchainSnapshot(options[0].ToolchainRoot, read)
+			if err != nil {
+				return result, err
+			}
 		}
 	}
 	return result, nil
@@ -756,5 +841,9 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 		{"service/zitadel", noticeDigest(binary)},
 	}}
 	result.supplement = before.Supplement
+	result.toolchain = before.Toolchain
+	if before.Toolchain != nil {
+		result.Toolchain = &before.Toolchain.Evidence
+	}
 	return result, append([]byte(nil), before.Raw...), nil
 }

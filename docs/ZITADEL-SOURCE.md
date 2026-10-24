@@ -185,7 +185,7 @@ identity, not the pre-compilation snapshot, executable, console bundle or prepar
 source tree. The raw text can be inspected in that run's evidence artifact.
 
 ```sh
-(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go)
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go)
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 ```
@@ -231,3 +231,29 @@ verification of registry provenance signatures or package reproducibility. Other
 bundle sections, linked Go/toolchain terms, copied assets, corresponding source,
 restricted runtime and authenticated image publication remain #308/#305 work.
 `licenseClosure` and `imageAdmission` stay `unknown`; the portal remains off.
+
+## Selected compiler-distribution terms
+
+The explicit Linux recipe obtains `GOROOT` from its selected Go 1.26.10 compiler
+and passes it as `--toolchain` to the same before/after compilation capture.
+It rechecks the compiler version and distribution path before final capture.
+The reader requires complete, regular, nonlinked LICENSE, PATENTS and VERSION
+files from that directory. The full LICENSE/PATENTS digests are pinned; VERSION
+must name Go 1.26.10 and contain only the optional distribution timestamp.
+
+`go-toolchain-notices.txt` preserves those checked bytes with deterministic
+framing. The existing console inventory's `toolchain` section records their
+original relative paths, offsets, sizes and digests, plus the complete text's
+digest. Its unchanged receipt, binary-digest, recipe and package-observation
+bindings join these terms to this build. Revalidation rejects changed bytes
+between compilation phases; failed reads/writes or existing outputs leave no
+final success receipt. Ordinary raw-only capture and website builds omit this
+explicit input and produce no compiler-notice diagnostic.
+
+The existing text diagnostic allow-list retains this file; no compiler, module
+tree, executable or additional JSON artifact is admitted. Hermetic fixtures are
+in `scripts/testdata/go1.26.10`; the actual Linux job reads its selected installed
+distribution, never the fixtures. This is not independent verification of the
+compiler executable or a new reproducibility claim. Selected Go dependency,
+nested-module and incorporated-source terms remain under #326; complete
+distribution/image admission remains unknown under #308.
