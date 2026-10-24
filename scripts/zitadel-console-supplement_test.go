@@ -17,6 +17,8 @@ type supplementFixture struct {
 	text                   []byte
 }
 
+// newSupplementFixture builds an isolated pnpm package graph and matching notice
+// catalogue, including a transitive qrcode edge and one decoded source-map notice.
 func newSupplementFixture(t *testing.T) supplementFixture {
 	t.Helper()
 	f := supplementFixture{noticeFixture: newNoticeFixture(t), notices: t.TempDir(), aliases: map[string]string{}, roots: map[string]string{}}
@@ -71,6 +73,8 @@ func newSupplementFixture(t *testing.T) supplementFixture {
 	return f
 }
 
+// TestSupplementRetainsCheckedTextAndTransitivePackageEdge checks verbatim terms
+// and rejects substitution of a hoisted qrcode for the selected transitive edge.
 func TestSupplementRetainsCheckedTextAndTransitivePackageEdge(t *testing.T) {
 	f := newSupplementFixture(t)
 	state, err := noticeSupplementSnapshot(f.build, f.notices, f.catalogueHash, noticeRead)
@@ -93,6 +97,8 @@ func TestSupplementRetainsCheckedTextAndTransitivePackageEdge(t *testing.T) {
 	}
 }
 
+// TestSupplementRefusesIncompleteSubstitutedAndEscapingInputs exercises missing,
+// changed, linked and escaping inputs plus read errors and catalogue ambiguity.
 func TestSupplementRefusesIncompleteSubstitutedAndEscapingInputs(t *testing.T) {
 	for _, kind := range []string{"missing-text", "truncated-text", "changed-text", "changed-package", "changed-version", "changed-source", "changed-lock", "linked-text", "linked-package-leaf", "escaping-alias", "dangling-alias", "cyclic-alias", "linked-parent", "changed-parent-edge", "changed-catalogue", "duplicate-catalogue-key", "partial-read-error"} {
 		t.Run(kind, func(t *testing.T) {
@@ -179,6 +185,8 @@ func TestSupplementRefusesIncompleteSubstitutedAndEscapingInputs(t *testing.T) {
 	}
 }
 
+// TestSupplementOutputUsesCheckedReads ensures emitted terms use the bytes that
+// passed validation even when the underlying file is replaced after its read.
 func TestSupplementOutputUsesCheckedReads(t *testing.T) {
 	f := newSupplementFixture(t)
 	reads := 0
@@ -196,6 +204,8 @@ func TestSupplementOutputUsesCheckedReads(t *testing.T) {
 	}
 }
 
+// TestSupplementCaptureRejectsPostCompileReplacement checks the compilation
+// snapshot against later changes to retained text, package inputs and aliases.
 func TestSupplementCaptureRejectsPostCompileReplacement(t *testing.T) {
 	for _, kind := range []string{"alias", "terms-and-catalogue", "metadata-and-catalogue", "other-build-notice"} {
 		t.Run(kind, func(t *testing.T) {
@@ -256,6 +266,8 @@ func TestSupplementCaptureRejectsPostCompileReplacement(t *testing.T) {
 	}
 }
 
+// TestSupplementCommandBindsExactInventoryAndNeverOverwrites exercises the real
+// command's inventory bindings, retained bytes and refusal to replace diagnostics.
 func TestSupplementCommandBindsExactInventoryAndNeverOverwrites(t *testing.T) {
 	f := newSupplementFixture(t)
 	var out, diagnostic bytes.Buffer
@@ -310,6 +322,8 @@ func TestSupplementCommandBindsExactInventoryAndNeverOverwrites(t *testing.T) {
 	}
 }
 
+// TestSupplementPinnedTextsIncludeBothProtobufLicenses checks the reviewed
+// catalogue's complete protobuf terms and opentype root and embedded notices.
 func TestSupplementPinnedTextsIncludeBothProtobufLicenses(t *testing.T) {
 	directory := filepath.Join("..", "third_party", "zitadel-console-notices")
 	data, err := noticeRead(directory, "catalogue.json", 1<<20)
@@ -356,6 +370,8 @@ func TestSupplementPinnedTextsIncludeBothProtobufLicenses(t *testing.T) {
 	}
 }
 
+// TestSupplementImmutableSourceVariantsAreExplicit rejects unsupported component
+// kinds and malformed immutable-source identities in a rebound catalogue.
 func TestSupplementImmutableSourceVariantsAreExplicit(t *testing.T) {
 	for _, kind := range []string{"complete", "header", "wrong-full-digest", "wrong-full-size", "wrong-header-span", "wrong-source", "unknown-kind"} {
 		t.Run(kind, func(t *testing.T) {
@@ -458,6 +474,8 @@ func addSourceMapSubject(t *testing.T, f *supplementFixture) {
 	}
 }
 
+// TestSupplementRetainsTheDecodedSourceMapNotice checks that the selected decoded
+// notice is emitted verbatim with its package, span and complete input bindings.
 func TestSupplementRetainsTheDecodedSourceMapNotice(t *testing.T) {
 	f := newSupplementFixture(t)
 	state, err := noticeSupplementSnapshot(f.build, f.notices, f.catalogueHash, noticeRead)
@@ -474,6 +492,8 @@ func TestSupplementRetainsTheDecodedSourceMapNotice(t *testing.T) {
 	}
 }
 
+// TestSupplementSourceMapRejectsCoherentlyChangedInputs rebinds outer digests so
+// malformed maps and altered selections reach the decoder's own rejection checks.
 func TestSupplementSourceMapRejectsCoherentlyChangedInputs(t *testing.T) {
 	for _, kind := range []string{"decoded-tail", "duplicate-source", "misaligned", "selected-null", "selected-object", "wrong-version", "malformed", "trailing", "duplicate-key", "invalid-utf8", "missing-descriptor", "missing-index", "wrong-index", "wrong-span", "descriptor-on-installed"} {
 		t.Run(kind, func(t *testing.T) {
@@ -549,6 +569,8 @@ func TestSupplementSourceMapRejectsCoherentlyChangedInputs(t *testing.T) {
 	}
 }
 
+// TestSupplementSourceMapRejectsUnavailableAndChangedFiles checks missing, linked
+// and substituted map/package/bundle inputs and errors after a complete map read.
 func TestSupplementSourceMapRejectsUnavailableAndChangedFiles(t *testing.T) {
 	for _, kind := range []string{"missing-map", "truncated-map", "changed-map", "changed-module", "changed-browser", "changed-package", "changed-text", "linked-map", "read-error"} {
 		t.Run(kind, func(t *testing.T) {
@@ -596,6 +618,8 @@ func TestSupplementSourceMapRejectsUnavailableAndChangedFiles(t *testing.T) {
 	}
 }
 
+// TestSupplementSourceMapSnapshotRejectsCoherentMapReplacement ensures a map and
+// catalogue changed together after compilation still disagree with the snapshot.
 func TestSupplementSourceMapSnapshotRejectsCoherentMapReplacement(t *testing.T) {
 	f := newSupplementFixture(t)
 	config := noticeSupplementConfig{Directory: f.notices, CatalogueHash: f.catalogueHash}
@@ -636,6 +660,8 @@ func TestSupplementSourceMapSnapshotRejectsCoherentMapReplacement(t *testing.T) 
 	}
 }
 
+// TestSupplementSourceMapUsesTheCheckedMapBytes checks that decoding consumes the
+// single validated read rather than reopening a subsequently replaced map file.
 func TestSupplementSourceMapUsesTheCheckedMapBytes(t *testing.T) {
 	f := newSupplementFixture(t)
 	mapPath := f.roots["opentype.js"] + "/dist/opentype.min.mjs.map"
@@ -654,6 +680,8 @@ func TestSupplementSourceMapUsesTheCheckedMapBytes(t *testing.T) {
 	}
 }
 
+// FuzzSupplementMappedSource accepts only the descriptor's exact decoded bytes
+// across valid, malformed and ambiguous source-map inputs.
 func FuzzSupplementMappedSource(f *testing.F) {
 	index := 0
 	text := "complete fixture text\r\nquotes \" and multibyte å"
