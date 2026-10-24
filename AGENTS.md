@@ -97,7 +97,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `Dockerfile.zitadel` and `scripts/zitadel-image-{package,smoke}.go` assemble an
   explicit local identity image and exercise only its real version command. CI
   checks a closed package, the copied-back image payload and inspected container
-  restrictions, then removes only its own container and image tag. The bounded
+  restrictions, then removes only its owner-bound container and local image. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
   This grants no image publication, daemon/database/login acceptance or activation.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64

@@ -43,6 +43,7 @@ func imageExecute(duration time.Duration, name string, args ...string) ([]byte, 
 type imageConfig struct {
 	User, Image, WorkingDir string
 	Entrypoint, Cmd         []string
+	Labels                  map[string]string
 }
 type imageInspect struct {
 	ID, Os, Architecture string
@@ -153,20 +154,21 @@ func imageSmoke(build, repo, output string, run imageCommand) (result error) {
 	if _, err = rand.Read(nonce[:]); err != nil {
 		return err
 	}
-	tag := "business-site-zitadel-local:" + hex.EncodeToString(nonce[:])
+	owner := hex.EncodeToString(nonce[:])
+	ownerLabel := "org.devantler-tech.identity-smoke-owner"
 	container := ""
-	ownedName := ""
-	built, cleaned := false, false
+	ownedContainer, ownedImage := "", ""
+	cleaned := false
 	cleanup := func() error {
 		var failures []string
-		if ownedName != "" {
-			if _, e := run(30*time.Second, "docker", "rm", "--force", ownedName); e != nil {
+		if ownedContainer != "" {
+			if _, e := run(30*time.Second, "docker", "rm", "--force", ownedContainer); e != nil {
 				failures = append(failures, "owned container")
 			}
 		}
-		if built {
-			if _, e := run(30*time.Second, "docker", "image", "rm", tag); e != nil {
-				failures = append(failures, "owned image tag")
+		if ownedImage != "" {
+			if _, e := run(30*time.Second, "docker", "image", "rm", ownedImage); e != nil {
+				failures = append(failures, "owned image")
 			}
 		}
 		if len(failures) != 0 {
@@ -185,11 +187,19 @@ func imageSmoke(build, repo, output string, run imageCommand) (result error) {
 			}
 		}
 	}()
-	built = true
-	if _, err = run(3*time.Minute, "docker", "build", "--network=none", "--pull=false", "--platform=linux/amd64", "--file", filepath.Join(repo, "Dockerfile.zitadel"), "--tag", tag, contextDir); err != nil {
+	if _, err = run(3*time.Minute, "docker", "build", "--network=none", "--pull=false", "--platform=linux/amd64", "--file", filepath.Join(repo, "Dockerfile.zitadel"), "--label", ownerLabel+"="+owner, "--iidfile", filepath.Join(output, "image.id"), contextDir); err != nil {
 		return fmt.Errorf("local image build failed: %w", err)
 	}
-	inspection, err := run(30*time.Second, "docker", "image", "inspect", tag)
+	idBytes, err := imageRead(output, "image.id", 128)
+	if err != nil {
+		return err
+	}
+	imageID := strings.TrimSpace(string(idBytes))
+	digestPattern := regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+	if !digestPattern.MatchString(imageID) {
+		return fmt.Errorf("invalid local image identity")
+	}
+	inspection, err := run(30*time.Second, "docker", "image", "inspect", imageID)
 	if err != nil {
 		return err
 	}
@@ -198,12 +208,14 @@ func imageSmoke(build, repo, output string, run imageCommand) (result error) {
 		return fmt.Errorf("invalid local image inspection")
 	}
 	i := images[0]
-	digestPattern := regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
-	if !digestPattern.MatchString(i.ID) || i.Os != "linux" || i.Architecture != "amd64" || i.Config.WorkingDir != "/app" || !imageSafeConfig(i.Config) {
+	if i.ID != imageID || i.Config.Labels[ownerLabel] != owner {
+		return fmt.Errorf("local image ownership not confirmed")
+	}
+	ownedImage = i.ID
+	if i.Os != "linux" || i.Architecture != "amd64" || i.Config.WorkingDir != "/app" || !imageSafeConfig(i.Config) {
 		return fmt.Errorf("local image configuration differs")
 	}
-	ownedName = "business-site-zitadel-cli-" + hex.EncodeToString(nonce[:])
-	created, err := run(30*time.Second, "docker", "create", "--name", ownedName, "--pull=never", "--platform=linux/amd64", "--network=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=32", "--memory=256m", "--cpus=1", i.ID)
+	created, err := run(30*time.Second, "docker", "create", "--label", ownerLabel+"="+owner, "--pull=never", "--platform=linux/amd64", "--network=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=32", "--memory=256m", "--cpus=1", i.ID)
 	if err != nil {
 		return err
 	}
@@ -215,6 +227,11 @@ func imageSmoke(build, repo, output string, run imageCommand) (result error) {
 	if err != nil {
 		return err
 	}
+	var candidates []imageContainer
+	if err = imageDecode(before, &candidates); err != nil || len(candidates) != 1 || candidates[0].ID != container || candidates[0].Image != i.ID || candidates[0].Config.Labels[ownerLabel] != owner {
+		return fmt.Errorf("local container ownership not confirmed")
+	}
+	ownedContainer = container
 	if _, err = imageInspectContainer(before, container, i.ID, "created"); err != nil {
 		return err
 	}

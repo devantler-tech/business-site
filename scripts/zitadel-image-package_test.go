@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -215,5 +216,19 @@ func TestImageOutputDoesNotAlterInputTrees(t *testing.T) {
 				t.Fatal("rejected smoke altered inputs")
 			}
 		})
+	}
+}
+
+func TestImageEntryHasNoUnverifiedPackagingShortcut(t *testing.T) {
+	build, repo, output := imageTestFixture(t)
+	var out, diagnostic bytes.Buffer
+	if imageRun(nil, &out, &diagnostic) != 0 || out.Len() != 0 || diagnostic.Len() != 0 {
+		t.Fatal("ordinary entrypoint is not inert")
+	}
+	if imageRun([]string{"--package", "--build", build, "--repository", repo, "--output", output}, &out, &diagnostic) == 0 {
+		t.Fatal("standalone packaging bypasses completed-input revalidation")
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatal("refused shortcut created output")
 	}
 }

@@ -358,7 +358,7 @@ func imageVerifyContext(root, seal string) error {
 	})
 }
 
-func imageRun(args []string, out, diagnostic io.Writer) int {
+func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0
 	}
@@ -370,9 +370,9 @@ func imageRun(args []string, out, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch k {
-		case "--package", "--verify-context", "--smoke":
+		case "--smoke":
 			values[k] = "true"
-		case "--build", "--repository", "--output", "--context", "--seal":
+		case "--build", "--repository", "--output":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
 				return fail(fmt.Errorf("missing argument"))
 			}
@@ -381,16 +381,6 @@ func imageRun(args []string, out, diagnostic io.Writer) int {
 		default:
 			return fail(fmt.Errorf("unexpected argument"))
 		}
-	}
-	if values["--package"] != "" && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
-		seal, err := imagePackage(values["--build"], values["--repository"], values["--output"])
-		if err != nil {
-			return fail(err)
-		}
-		if n, err := fmt.Fprintln(out, seal); err != nil || n != 65 {
-			return fail(fmt.Errorf("incomplete seal output"))
-		}
-		return 0
 	}
 	if values["--smoke"] != "" && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
 		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
@@ -401,13 +391,7 @@ func imageRun(args []string, out, diagnostic io.Writer) int {
 		}
 		return 0
 	}
-	if values["--verify-context"] != "" && len(values) == 3 && values["--context"] != "" && values["--seal"] != "" {
-		if err := imageVerifyContext(values["--context"], values["--seal"]); err != nil {
-			return fail(err)
-		}
-		return 0
-	}
-	return fail(fmt.Errorf("expected explicit package or context verification arguments"))
+	return fail(fmt.Errorf("expected explicit smoke, build, repository and output arguments"))
 }
 
 func main() { os.Exit(imageRun(os.Args[1:], os.Stdout, os.Stderr)) }

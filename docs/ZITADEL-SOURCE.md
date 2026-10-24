@@ -438,7 +438,8 @@ no privilege escalation and built-in seccomp support. The CLI test is bounded
 to 32 PIDs, 256 MiB, one CPU and a 30-second execution deadline. These are test
 limits, not measured production sizing. It requires the exact frozen version,
 zero exit, an exited container and no OOM/dead state. Only the generated unique
-container and local image tag are removed. Cleanup or receipt-write failure
+container and local image are removed by their inspected, owner-bound immutable
+identities. No tag or container name is overwritten or reclaimed. Cleanup or receipt-write failure
 cannot produce a success diagnostic.
 
 The diagnostic records the local image identity, context and recipe digests,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 	t.Helper()
 	started := false
+	owner := ""
 	return func(_ time.Duration, name string, args ...string) ([]byte, error) {
 		if name == "go" {
 			if args[0] == "env" {
@@ -41,6 +43,14 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			}
 			return imageTestJSON(t, map[string]any{"OSType": "linux", "Architecture": "x86_64", "SecurityOptions": security}), nil
 		case args[0] == "build":
+			for i, arg := range args {
+				if arg == "--label" {
+					owner = strings.TrimPrefix(args[i+1], "org.devantler-tech.identity-smoke-owner=")
+				}
+				if arg == "--iidfile" {
+					imageTestWrite(t, filepath.Dir(args[i+1]), filepath.Base(args[i+1]), []byte("sha256:"+strings.Repeat("b", 64)+"\n"))
+				}
+			}
 			if kind == "build-error" {
 				return []byte("successfully built plausible-image"), fmt.Errorf("failed build")
 			}
@@ -54,7 +64,7 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			if kind == "architecture" {
 				arch = "arm64"
 			}
-			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app"}}}), nil
+			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app", "Labels": map[string]string{"org.devantler-tech.identity-smoke-owner": owner}}}}), nil
 		case args[0] == "create":
 			for _, flag := range []string{"--read-only", "--network=none", "--user=65532:65532", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pull=never", "--platform=linux/amd64", "--pids-limit=32", "--memory=256m", "--cpus=1"} {
 				if !strings.Contains(command, flag) {
@@ -70,6 +80,7 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			}
 			state := map[string]any{"Status": status, "Running": false, "Dead": false, "OOMKilled": false, "ExitCode": 0}
 			config := map[string]any{"User": "65532:65532", "Image": "sha256:" + strings.Repeat("b", 64), "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}}
+			config["Labels"] = map[string]string{"org.devantler-tech.identity-smoke-owner": owner}
 			mounts := []any{}
 			switch kind {
 			case "container-user":
@@ -169,5 +180,34 @@ func TestRestrictedImageSmokeRejectsFailedOrWeakenedExecution(t *testing.T) {
 				t.Fatal("failed smoke emitted a success receipt")
 			}
 		})
+	}
+}
+
+func TestImageCleanupNeverDeletesAnUnownedObject(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	base := imageSmokeDouble(t, build, "")
+	deleted := false
+	run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+		if name == "docker" && (args[0] == "rm" || (args[0] == "image" && args[1] == "rm")) {
+			deleted = true
+		}
+		b, err := base(d, name, args...)
+		if name == "docker" && args[0] == "image" && args[1] == "inspect" && err == nil {
+			var images []map[string]any
+			if e := json.Unmarshal(b, &images); e != nil {
+				t.Fatal(e)
+			}
+			images[0]["Config"].(map[string]any)["Labels"] = map[string]string{"org.devantler-tech.identity-smoke-owner": "foreign"}
+			b = imageTestJSON(t, images)
+		}
+		return b, err
+	}
+	if imageSmoke(build, repo, out, run) == nil {
+		t.Fatal("unowned image accepted")
+	}
+	if deleted {
+		t.Fatal("cleanup attempted to delete an unowned object")
 	}
 }
