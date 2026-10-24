@@ -168,7 +168,7 @@ Each rewrite made KSail better. The shell script validated the idea. The .NET ve
 The current Go version of KSail provides:
 
 - **One binary** — No external dependencies except Docker
-- **Multiple distributions** — Kind, K3d, and Talos
+- **Multiple distributions** — Vanilla (Kind), K3s (K3d), and Talos
 - **Customizable stack** — CNI (Cilium, Calico), CSI, metrics-server, cert-manager
 - **GitOps native** — Built-in Flux and ArgoCD support
 - **Secret management** — Integrated SOPS encryption
