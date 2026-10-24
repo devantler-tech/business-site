@@ -24,6 +24,9 @@ const noticeEmbedded = "internal/api/ui/console/static/3rdpartylicenses.txt"
 const noticeBefore = "console-notices.before.json"
 const noticeRaw = "console-third-party-notices.txt"
 const noticeLimit = 2 << 20
+const sourceLicensePath = "prepared/source/LICENSE"
+const sourceLicenseRaw = "zitadel-root-license.txt"
+const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
 
 type noticeReader func(string, string, int64) ([]byte, error)
 
@@ -300,18 +303,44 @@ func supplementMappedSource(data []byte, selected *supplementSourceMap) ([]byte,
 }
 
 type noticeState struct {
-	SchemaVersion     int              `json:"schemaVersion"`
-	Raw               []byte           `json:"raw"`
-	PreparationSHA256 string           `json:"preparationSha256"`
-	LockSHA256        string           `json:"lockSha256"`
-	InputsSHA256      string           `json:"inputsSha256"`
-	PackagesSHA256    string           `json:"packagesSha256"`
-	RecipeSHA256      string           `json:"recipeSha256"`
-	Supplement        *supplementState `json:"supplement,omitempty"`
-	Toolchain         *noticeToolchain `json:"toolchain,omitempty"`
+	SchemaVersion     int                  `json:"schemaVersion"`
+	Raw               []byte               `json:"raw"`
+	PreparationSHA256 string               `json:"preparationSha256"`
+	LockSHA256        string               `json:"lockSha256"`
+	InputsSHA256      string               `json:"inputsSha256"`
+	PackagesSHA256    string               `json:"packagesSha256"`
+	RecipeSHA256      string               `json:"recipeSha256"`
+	Supplement        *supplementState     `json:"supplement,omitempty"`
+	Toolchain         *noticeToolchain     `json:"toolchain,omitempty"`
+	SourceLicense     *noticeSourceLicense `json:"sourceLicense,omitempty"`
 }
 
-type noticeSupplementConfig struct{ Directory, CatalogueHash, ToolchainRoot string }
+type noticeSupplementConfig struct {
+	Directory, CatalogueHash, ToolchainRoot string
+	SourceLicense                           bool
+}
+
+type noticeSourceLicenseEvidence struct {
+	Source        string `json:"source"`
+	RawDiagnostic string `json:"rawDiagnostic"`
+	Bytes         int    `json:"bytes"`
+	SHA256        string `json:"sha256"`
+}
+
+type noticeSourceLicense struct {
+	Evidence noticeSourceLicenseEvidence `json:"evidence"`
+	Text     []byte                      `json:"text"`
+}
+
+// noticeSourceLicenseSnapshot retains only the complete frozen root licence
+// from this build's prepared source. Component and module closure stay unknown.
+func noticeSourceLicenseSnapshot(build string, read noticeReader) (*noticeSourceLicense, error) {
+	data, err := read(build, sourceLicensePath, 64<<10)
+	if err != nil || len(data) != 34522 || noticeDigest(data) != sourceLicenseHash || !utf8.Valid(data) || bytes.ContainsRune(data, 0) {
+		return nil, fmt.Errorf("source licence input differs or is unavailable")
+	}
+	return &noticeSourceLicense{Evidence: noticeSourceLicenseEvidence{sourceLicensePath, sourceLicenseRaw, len(data), noticeDigest(data)}, Text: data}, nil
+}
 
 type noticeToolchainSection struct {
 	Source string `json:"source"`
@@ -379,20 +408,22 @@ type noticeBinding struct {
 }
 
 type noticeInventory struct {
-	SchemaVersion  int                      `json:"schemaVersion"`
-	UpstreamCommit string                   `json:"upstreamCommit"`
-	Profile        string                   `json:"profile"`
-	OriginalPaths  []string                 `json:"originalPaths"`
-	RawDiagnostic  string                   `json:"rawDiagnostic"`
-	Bytes          int                      `json:"bytes"`
-	SHA256         string                   `json:"sha256"`
-	Inputs         []noticeBinding          `json:"inputs"`
-	ImageAdmission string                   `json:"imageAdmission"`
-	LicenseClosure string                   `json:"licenseClosure"`
-	Reproducible   bool                     `json:"reproducible"`
-	Toolchain      *noticeToolchainEvidence `json:"toolchain,omitempty"`
+	SchemaVersion  int                          `json:"schemaVersion"`
+	UpstreamCommit string                       `json:"upstreamCommit"`
+	Profile        string                       `json:"profile"`
+	OriginalPaths  []string                     `json:"originalPaths"`
+	RawDiagnostic  string                       `json:"rawDiagnostic"`
+	Bytes          int                          `json:"bytes"`
+	SHA256         string                       `json:"sha256"`
+	Inputs         []noticeBinding              `json:"inputs"`
+	ImageAdmission string                       `json:"imageAdmission"`
+	LicenseClosure string                       `json:"licenseClosure"`
+	Reproducible   bool                         `json:"reproducible"`
+	Toolchain      *noticeToolchainEvidence     `json:"toolchain,omitempty"`
+	SourceLicense  *noticeSourceLicenseEvidence `json:"sourceLicense,omitempty"`
 	supplement     *supplementState
 	toolchain      *noticeToolchain
+	sourceLicense  *noticeSourceLicense
 }
 
 func main() { os.Exit(noticeRun(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -416,7 +447,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch key {
-		case "--snapshot", "--inventory":
+		case "--snapshot", "--inventory", "--source-license":
 			values[key] = "true"
 		case "--build", "--recipe", "--supplement", "--toolchain":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -435,6 +466,9 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	if values["--toolchain"] != "" {
 		optional++
 	}
+	if values["--source-license"] != "" {
+		optional++
+	}
 	validCount := len(values) == 3+optional
 	if !validCount || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
 		return fail(fmt.Errorf("expected one mode, build and recipe"))
@@ -442,7 +476,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	var result any
 	options := []noticeSupplementConfig{}
 	if optional > 0 {
-		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"]})
+		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"], SourceLicense: values["--source-license"] != ""})
 	}
 	var captured *noticeInventory
 	if values["--snapshot"] != "" {
@@ -500,6 +534,11 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	}
 	if captured != nil && captured.toolchain != nil {
 		if err := noticeWriteDiagnostic(values["--build"], captured.toolchain.Evidence.RawDiagnostic, captured.toolchain.Text); err != nil {
+			return fail(err)
+		}
+	}
+	if captured != nil && captured.sourceLicense != nil {
+		if err := noticeWriteDiagnostic(values["--build"], captured.sourceLicense.Evidence.RawDiagnostic, captured.sourceLicense.Text); err != nil {
 			return fail(err)
 		}
 	}
@@ -799,6 +838,12 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 				return result, err
 			}
 		}
+		if options[0].SourceLicense {
+			result.SourceLicense, err = noticeSourceLicenseSnapshot(build, read)
+			if err != nil {
+				return result, err
+			}
+		}
 	}
 	return result, nil
 }
@@ -897,6 +942,10 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 	result.toolchain = before.Toolchain
 	if before.Toolchain != nil {
 		result.Toolchain = &before.Toolchain.Evidence
+	}
+	result.sourceLicense = before.SourceLicense
+	if before.SourceLicense != nil {
+		result.SourceLicense = &before.SourceLicense.Evidence
 	}
 	return result, append([]byte(nil), before.Raw...), nil
 }

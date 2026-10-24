@@ -40,6 +40,7 @@ jobs:
               - 'scripts/*zitadel*'
               - 'scripts/testdata/zitadel-login-icons/**'
               - 'scripts/testdata/go1.26.10/**'
+              - 'scripts/testdata/zitadel-source/**'
               - 'third_party/zitadel-login-icons/**'
               - 'third_party/zitadel-console-notices/**'
               - 'docs/ZITADEL-SOURCE.md'
@@ -336,7 +337,7 @@ jobs:
         run: go test -race zitadel-login-icons.go zitadel-login-icons_test.go
       - name: Verify the bounded console notice capture
         working-directory: scripts
-        run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go
+        run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go
       # This isolated upstream profile does not install or build the website's
       # npm application. Its older Node input is exact and checksum-bound.
       - name: Prepare the frozen identity JavaScript toolchain

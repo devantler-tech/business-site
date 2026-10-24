@@ -185,7 +185,7 @@ identity, not the pre-compilation snapshot, executable, console bundle or prepar
 source tree. The raw text can be inspected in that run's evidence artifact.
 
 ```sh
-(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go)
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 ```
@@ -266,3 +266,33 @@ distribution, never the fixtures. This is not independent verification of the
 compiler executable or a new reproducibility claim. Selected Go dependency,
 nested-module and incorporated-source terms remain under #326; complete
 distribution/image admission remains unknown under #308.
+
+## Frozen upstream root licence
+
+Both Linux capture phases require `--source-license`. The same collector reads
+only `prepared/source/LICENSE` from this build, through the existing bounded,
+regular, nonlinked checked reader. It requires the complete frozen ZITADEL
+revision's 34,522-byte AGPL v3 text, SHA-256
+`4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b`.
+No network lookup, current upstream text or test fixture substitutes for that input.
+
+The snapshot stores the checked bytes and their identity; final capture revalidates
+them after compilation. `zitadel-root-license.txt` retains those bytes verbatim,
+without framing or newline normalization. The existing inventory's `sourceLicense`
+section records the original path, diagnostic name, size and digest, bound by its
+unchanged source revision and nine build/recipe/compiler-graph/binary/receipt
+observations. The supplement binds this final, expanded inventory too.
+
+Missing, truncated, substituted, linked or incomplete/erroring input, changed
+capture options or post-snapshot bytes, an existing diagnostic and failed output
+all prevent successful completion. The complete inventory is emitted only after
+every selected diagnostic is retained; the recipe finalizes no successful build
+receipt after a failed phase. The existing text allow-list retains this diagnostic;
+no additional JSON, executable, module cache or prepared source is uploaded.
+
+No-argument and ordinary raw-only capture remain inert with respect to root terms.
+The byte-exact public fixture in `scripts/testdata/zitadel-source/LICENSE` tests
+this boundary; the real Linux job reads its actual prepared upstream root instead.
+This does not cover component-specific, dependency, nested-module or incorporated
+terms. Those remain under #326; complete `licenseClosure` and `imageAdmission`
+remain `unknown`, reproducibility is not established and the portal stays off.

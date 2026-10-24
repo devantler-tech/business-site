@@ -84,6 +84,7 @@ case "$1 $2" in
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
+      [[ "${12:-}" = --source-license && "$#" -eq 12 ]] || { echo 'prepared root licence capture not required' >&2; exit 42; }
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
@@ -96,6 +97,8 @@ case "$1 $2" in
         if [[ "${TEST_FAIL:-}" = supplement ]]; then echo 'plausible partial supplement'; exit 42; fi
         printf 'verbatim Go distribution fixture\n' >"$5/go-toolchain-notices.txt"
         if [[ "${TEST_FAIL:-}" = toolchain ]]; then echo 'plausible partial toolchain retention'; exit 42; fi
+        printf 'verbatim source root licence fixture\n' >"$5/zitadel-root-license.txt"
+        if [[ "${TEST_FAIL:-}" = source-license ]]; then echo 'plausible partial root licence retention'; exit 42; fi
       fi
       echo '{"fixture":"orchestration only"}'
     else
@@ -176,6 +179,7 @@ reject failed-notice-snapshot TEST_FAIL=notice-snapshot
 reject failed-notice-capture TEST_FAIL=notice-capture
 reject failed-supplement TEST_FAIL=supplement
 reject failed-toolchain TEST_FAIL=toolchain
+reject failed-source-license TEST_FAIL=source-license
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
@@ -186,5 +190,6 @@ test -s "$scratch/complete/console-notice-verifier.sha256"
 test -s "$scratch/complete/console-notices-supplement.txt"
 test -s "$scratch/complete/console-notices-supplement-inventory.json"
 test -s "$scratch/complete/go-toolchain-notices.txt"
+test -s "$scratch/complete/zitadel-root-license.txt"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

@@ -11,6 +11,7 @@ check() {
     .jobs["build-zitadel-linux"] as $job |
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
     $job["runs-on"] == "ubuntu-24.04" and
     $job.permissions == {contents:"read"} and
     $job["continue-on-error"] == null and
@@ -26,7 +27,7 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify the bounded console notice capture" and
       .["working-directory"] == "scripts" and
-      .run == "go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go" and
+      .run == "go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Prepare the frozen identity JavaScript toolchain" and
       (.run | contains("df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de")) and
@@ -49,6 +50,8 @@ check() {
 }
 check "$scratch/ci.json"
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/zitadel-source/\\*\\*"; "other-input/**")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-source-notices_test.go"; "")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-toolchain-notices_test.go"; "")) else . end)' \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
@@ -79,4 +82,4 @@ for mutation in \
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including twenty-seven broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including twenty-nine broken-wiring controls.'

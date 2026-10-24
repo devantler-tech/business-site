@@ -119,7 +119,7 @@ while IFS= read -r reference; do
   while [[ "$reference" == ./* ]]; do reference="${reference#./}"; done
   grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
 done <"$output/console-references.txt"
-go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" >"$output/console-notices.before.json"
+go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license >"$output/console-notices.before.json"
 shasum -a 256 internal/api/ui/login/statik/statik.go >"$output/login-statik.before.sha256"
 mkdir "$output/service"
 binary="$output/service/zitadel"
@@ -147,7 +147,7 @@ jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg 
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
     '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false}' >"$output/build-receipt.pending"
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
-go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" >"$output/console-notices-inventory.pending"
+go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license >"$output/console-notices-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
 mv "$output/login-icons-inventory.pending" "$output/login-icons-inventory.json"
 mv "$output/console-notices-inventory.pending" "$output/console-notices-inventory.json"
