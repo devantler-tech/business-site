@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"debug/buildinfo"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -27,6 +30,8 @@ const noticeLimit = 2 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
+const moduleCatalogueHash = "dd6df4a16bcdf080328314075dcb8d7c483f539eaef7aee88f41519ef95c1a9d"
+const moduleNoticeRaw = "go-module-notices.txt"
 
 type noticeReader func(string, string, int64) ([]byte, error)
 
@@ -313,11 +318,255 @@ type noticeState struct {
 	Supplement        *supplementState     `json:"supplement,omitempty"`
 	Toolchain         *noticeToolchain     `json:"toolchain,omitempty"`
 	SourceLicense     *noticeSourceLicense `json:"sourceLicense,omitempty"`
+	Modules           *noticeModules       `json:"modules,omitempty"`
 }
 
 type noticeSupplementConfig struct {
 	Directory, CatalogueHash, ToolchainRoot string
 	SourceLicense                           bool
+	ModuleDirectory, ModuleCatalogueHash    string
+}
+
+type noticeModuleIdentity struct {
+	Path     string
+	Version  string
+	Sum      string
+	GoModSum string
+	Main     bool
+	Replace  *noticeModuleIdentity
+}
+
+type noticeModuleComponent struct {
+	File   string `json:"file"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeModuleEntry struct {
+	Original   noticeModuleIdentity    `json:"original"`
+	Effective  noticeModuleIdentity    `json:"effective"`
+	Components []noticeModuleComponent `json:"components"`
+}
+
+type noticeModuleCatalogue struct {
+	SchemaVersion   int                 `json:"schemaVersion"`
+	UpstreamCommit  string              `json:"upstreamCommit"`
+	MetadataProfile string              `json:"metadataProfile"`
+	GoModSHA256     string              `json:"goModSha256"`
+	GoSumSHA256     string              `json:"goSumSha256"`
+	Modules         []noticeModuleEntry `json:"modules"`
+}
+
+type noticeModuleSection struct {
+	Source string `json:"source"`
+	Offset int    `json:"offset"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeModuleRecord struct {
+	Original   noticeModuleIdentity  `json:"original"`
+	Effective  noticeModuleIdentity  `json:"effective"`
+	Components []noticeModuleSection `json:"components"`
+}
+
+type noticeModuleEvidence struct {
+	CatalogueSHA256 string               `json:"catalogueSha256"`
+	GoModSHA256     string               `json:"goModSha256"`
+	GoSumSHA256     string               `json:"goSumSha256"`
+	RawDiagnostic   string               `json:"rawDiagnostic"`
+	Bytes           int                  `json:"bytes"`
+	SHA256          string               `json:"sha256"`
+	Modules         []noticeModuleRecord `json:"modules"`
+}
+
+type noticeModules struct {
+	Evidence noticeModuleEvidence `json:"evidence"`
+	Text     []byte               `json:"text"`
+}
+
+// noticeModuleEscape uses Go's ASCII uppercase escape for reviewed cache paths.
+func noticeModuleEscape(value string) string {
+	var result strings.Builder
+	for _, c := range value {
+		if c >= 'A' && c <= 'Z' {
+			result.WriteByte('!')
+			result.WriteRune(c + 'a' - 'A')
+		} else {
+			result.WriteRune(c)
+		}
+	}
+	return result.String()
+}
+
+// noticeModuleSnapshot joins the whole compiler graph to one checked catalogue,
+// this build's frozen lock and resolved cache, then retains its complete bytes.
+func noticeModuleSnapshot(build, directory, catalogueHash string, read noticeReader) (*noticeModules, error) {
+	data, err := read(directory, "catalogue.json", 1<<20)
+	if err != nil || noticeDigest(data) != catalogueHash || !noticeDigestPattern.MatchString(catalogueHash) {
+		return nil, fmt.Errorf("module catalogue unavailable or changed")
+	}
+	if _, err = noticeObject(data); err != nil {
+		return nil, err
+	}
+	var catalogue noticeModuleCatalogue
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&catalogue); err != nil {
+		return nil, fmt.Errorf("module catalogue JSON: %w", err)
+	}
+	if catalogue.SchemaVersion != 1 || catalogue.UpstreamCommit != noticePin || catalogue.MetadataProfile != "machine-id-no-jsonpath-v1" || len(catalogue.Modules) < 1 || len(catalogue.Modules) > 512 {
+		return nil, fmt.Errorf("unsupported module catalogue")
+	}
+	locks := map[string][]byte{}
+	for name, expected := range map[string]string{"go.mod": catalogue.GoModSHA256, "go.sum": catalogue.GoSumSHA256} {
+		body, e := read(build, "prepared/source/"+name, 1<<20)
+		if e != nil || !noticeDigestPattern.MatchString(expected) || noticeDigest(body) != expected {
+			return nil, fmt.Errorf("module root lock differs")
+		}
+		locks[name] = body
+	}
+	sums := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSuffix(string(locks["go.sum"]), "\n"), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 || sums[fields[0]+" "+fields[1]] != "" {
+			return nil, fmt.Errorf("invalid or duplicate module sum")
+		}
+		sums[fields[0]+" "+fields[1]] = fields[2]
+	}
+	wanted := map[string]noticeModuleEntry{}
+	previous := ""
+	for _, entry := range catalogue.Modules {
+		id, effective := entry.Original, entry.Effective
+		if id.Path <= previous || id.Path == "" || id.Main || effective.Main || effective.Replace != nil || path.Clean(effective.Path) != effective.Path || strings.ContainsAny(effective.Path+effective.Version, "\\\r\n\t ") || effective.Version == "" || len(entry.Components) == 0 {
+			return nil, fmt.Errorf("invalid, duplicate or unordered module identity")
+		}
+		previous = id.Path
+		selected := id
+		if id.Replace != nil {
+			selected = *id.Replace
+		}
+		if !reflect.DeepEqual(selected, effective) || !strings.HasPrefix(effective.Sum, "h1:") || !strings.HasPrefix(effective.GoModSum, "h1:") {
+			return nil, fmt.Errorf("module replacement identity differs")
+		}
+		if sums[effective.Path+" "+effective.Version] != effective.Sum || sums[effective.Path+" "+effective.Version+"/go.mod"] != effective.GoModSum {
+			return nil, fmt.Errorf("selected module absent from frozen sums")
+		}
+		wanted[id.Path] = entry
+	}
+	packages, err := read(build, "packages.jsonl", 64<<20)
+	if err != nil {
+		return nil, fmt.Errorf("module compiler observation unavailable")
+	}
+	stream := json.NewDecoder(bytes.NewReader(packages))
+	seenPackages := map[string]bool{}
+	seenModules := map[string]bool{}
+	for {
+		var raw json.RawMessage
+		if e := stream.Decode(&raw); e == io.EOF {
+			break
+		} else if e != nil {
+			return nil, fmt.Errorf("incomplete module compiler observation")
+		}
+		obj, e := noticeObject(raw)
+		if e != nil {
+			return nil, e
+		}
+		importPath, ok := obj["ImportPath"].(string)
+		if !ok || importPath == "" || seenPackages[importPath] || (obj["Incomplete"] != nil && obj["Incomplete"] != false) || obj["Error"] != nil || (obj["DepsErrors"] != nil && !reflect.DeepEqual(obj["DepsErrors"], []any{})) {
+			return nil, fmt.Errorf("invalid or duplicate module package observation")
+		}
+		seenPackages[importPath] = true
+		if obj["Module"] == nil {
+			if obj["Standard"] != true {
+				return nil, fmt.Errorf("nonstandard package lacks its module")
+			}
+			continue
+		}
+		module, ok := obj["Module"].(map[string]any)
+		if !ok || obj["Standard"] == true {
+			return nil, fmt.Errorf("invalid module observation")
+		}
+		moduleBytes, e := json.Marshal(module)
+		if e != nil {
+			return nil, e
+		}
+		var observed noticeModuleIdentity
+		if e = json.Unmarshal(moduleBytes, &observed); e != nil {
+			return nil, e
+		}
+		if observed.Main {
+			if observed.Path != "github.com/zitadel/zitadel" || observed.Version != "" || observed.Sum != "" || observed.GoModSum != "" || observed.Replace != nil || module["Dir"] != filepath.Join(build, "prepared/source") || module["GoMod"] != filepath.Join(build, "prepared/source/go.mod") {
+				return nil, fmt.Errorf("wrong root module observation")
+			}
+			continue
+		}
+		entry, ok := wanted[observed.Path]
+		if !ok || !reflect.DeepEqual(observed, entry.Original) {
+			return nil, fmt.Errorf("selected module identity differs from catalogue")
+		}
+		effective := entry.Effective
+		cacheRoot := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version)
+		cacheMod := "go-modules/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version) + ".mod"
+		if module["Dir"] != filepath.Join(build, cacheRoot) || module["GoMod"] != filepath.Join(build, cacheMod) {
+			return nil, fmt.Errorf("selected module is outside this build cache")
+		}
+		packageDir, ok := obj["Dir"].(string)
+		if !ok || (packageDir != filepath.Join(build, cacheRoot) && !strings.HasPrefix(packageDir, filepath.Join(build, cacheRoot)+string(filepath.Separator))) || (importPath != observed.Path && !strings.HasPrefix(importPath, observed.Path+"/")) {
+			return nil, fmt.Errorf("package is outside its selected module")
+		}
+		if observed.Replace != nil {
+			replacement, ok := module["Replace"].(map[string]any)
+			if !ok || replacement["Dir"] != module["Dir"] || replacement["GoMod"] != module["GoMod"] {
+				return nil, fmt.Errorf("replacement cache observation differs")
+			}
+		}
+		seenModules[observed.Path] = true
+	}
+	if len(seenModules) != len(wanted) {
+		return nil, fmt.Errorf("selected module observation is incomplete")
+	}
+	result := &noticeModules{Evidence: noticeModuleEvidence{CatalogueSHA256: catalogueHash, GoModSHA256: catalogue.GoModSHA256, GoSumSHA256: catalogue.GoSumSHA256, RawDiagnostic: moduleNoticeRaw}}
+	for _, entry := range catalogue.Modules {
+		effective := entry.Effective
+		cache := "go-modules/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version)
+		mod, e := read(build, cache+".mod", 1<<20)
+		if e != nil {
+			return nil, fmt.Errorf("selected module go.mod unavailable")
+		}
+		modHash := sha256.Sum256([]byte(noticeDigest(mod) + "  go.mod\n"))
+		if "h1:"+base64.StdEncoding.EncodeToString(modHash[:]) != effective.GoModSum {
+			return nil, fmt.Errorf("selected module go.mod checksum differs")
+		}
+		zipHash, e := read(build, cache+".ziphash", 128)
+		if e != nil || strings.TrimSuffix(string(zipHash), "\n") != effective.Sum {
+			return nil, fmt.Errorf("selected module archive checksum differs")
+		}
+		record := noticeModuleRecord{Original: entry.Original, Effective: effective}
+		previousFile := ""
+		for _, component := range entry.Components {
+			if component.File <= previousFile || path.Base(component.File) != component.File || strings.ContainsAny(component.File, "\\\r\n\t") || component.Bytes < 1 || component.Bytes > 64<<10 || !noticeDigestPattern.MatchString(component.SHA256) {
+				return nil, fmt.Errorf("invalid or duplicate root component")
+			}
+			previousFile = component.File
+			source := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version) + "/" + component.File
+			text, e := read(build, source, 64<<10)
+			if e != nil || len(text) != component.Bytes || noticeDigest(text) != component.SHA256 || !utf8.Valid(text) || bytes.ContainsRune(text, 0) {
+				return nil, fmt.Errorf("selected module root terms differ or are unavailable")
+			}
+			result.Text = append(result.Text, []byte("Source: "+entry.Original.Path+"@"+entry.Original.Version+" => "+effective.Path+"@"+effective.Version+"/"+component.File+"\n\n")...)
+			record.Components = append(record.Components, noticeModuleSection{source, len(result.Text), len(text), noticeDigest(text)})
+			result.Text = append(result.Text, text...)
+			result.Text = append(result.Text, '\n', '\n')
+			if len(result.Text) > noticeLimit {
+				return nil, fmt.Errorf("module notice output exceeds limit")
+			}
+		}
+		result.Evidence.Modules = append(result.Evidence.Modules, record)
+	}
+	result.Evidence.Bytes = len(result.Text)
+	result.Evidence.SHA256 = noticeDigest(result.Text)
+	return result, nil
 }
 
 type noticeSourceLicenseEvidence struct {
@@ -421,21 +670,60 @@ type noticeInventory struct {
 	Reproducible   bool                         `json:"reproducible"`
 	Toolchain      *noticeToolchainEvidence     `json:"toolchain,omitempty"`
 	SourceLicense  *noticeSourceLicenseEvidence `json:"sourceLicense,omitempty"`
+	Modules        *noticeModuleEvidence        `json:"modules,omitempty"`
 	supplement     *supplementState
 	toolchain      *noticeToolchain
 	sourceLicense  *noticeSourceLicense
+	moduleNotices  *noticeModules
 }
 
 func main() { os.Exit(noticeRun(os.Args[1:], os.Stdout, os.Stderr)) }
 
 // noticeRun is inert unless one complete explicit mode is selected.
 func noticeRun(args []string, out, diagnostic io.Writer) int {
-	return noticeRunWithCatalogue(args, out, diagnostic, supplementCatalogueHash)
+	return noticeRunWithCatalogues(args, out, diagnostic, supplementCatalogueHash, moduleCatalogueHash)
+}
+
+// noticeRunWithCatalogues exposes only test injection, never a CLI trust override.
+func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueHash string) int {
+	return noticeRunWithCatalogues(args, out, diagnostic, catalogueHash, moduleCatalogueHash)
+}
+
+// noticeJoinBuildInfo is the selected-module binary boundary, not a legal verdict.
+func noticeJoinBuildInfo(info *debug.BuildInfo, expected []*debug.Module) error {
+	if info == nil || info.GoVersion != "go1.26.10" || info.Path != "github.com/zitadel/zitadel" || info.Main.Path != "github.com/zitadel/zitadel" || info.Main.Version != "(devel)" || info.Main.Sum != "" || info.Main.Replace != nil || len(expected) == 0 || len(info.Deps) != len(expected) {
+		return fmt.Errorf("module binary identity differs")
+	}
+	settings := map[string]string{}
+	for _, setting := range info.Settings {
+		if _, ok := settings[setting.Key]; ok {
+			return fmt.Errorf("duplicate binary setting")
+		}
+		settings[setting.Key] = setting.Value
+	}
+	if settings["GOOS"] != "linux" || settings["GOARCH"] != "amd64" || settings["CGO_ENABLED"] != "0" {
+		return fmt.Errorf("module binary target differs")
+	}
+	wanted := map[string]*debug.Module{}
+	for _, module := range expected {
+		if module == nil || module.Path == "" || wanted[module.Path] != nil {
+			return fmt.Errorf("invalid expected binary module")
+		}
+		wanted[module.Path] = module
+	}
+	seen := map[string]bool{}
+	for _, module := range info.Deps {
+		if module == nil || seen[module.Path] || !reflect.DeepEqual(module, wanted[module.Path]) {
+			return fmt.Errorf("binary dependency set differs")
+		}
+		seen[module.Path] = true
+	}
+	return nil
 }
 
 // noticeRunWithCatalogue keeps the curation identity injectable in hermetic
 // tests. The public command always supplies its compiled, reviewed constant.
-func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueHash string) int {
+func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogueHash, moduleHash string) int {
 	if len(args) == 0 {
 		return 0
 	}
@@ -449,7 +737,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 		switch key {
 		case "--snapshot", "--inventory", "--source-license":
 			values[key] = "true"
-		case "--build", "--recipe", "--supplement", "--toolchain":
+		case "--build", "--recipe", "--supplement", "--toolchain", "--modules":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
 				return fail(fmt.Errorf("missing argument"))
 			}
@@ -469,6 +757,9 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	if values["--source-license"] != "" {
 		optional++
 	}
+	if values["--modules"] != "" {
+		optional++
+	}
 	validCount := len(values) == 3+optional
 	if !validCount || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
 		return fail(fmt.Errorf("expected one mode, build and recipe"))
@@ -476,7 +767,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	var result any
 	options := []noticeSupplementConfig{}
 	if optional > 0 {
-		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"], SourceLicense: values["--source-license"] != ""})
+		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"], SourceLicense: values["--source-license"] != "", ModuleDirectory: values["--modules"], ModuleCatalogueHash: moduleHash})
 	}
 	var captured *noticeInventory
 	if values["--snapshot"] != "" {
@@ -539,6 +830,11 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 	}
 	if captured != nil && captured.sourceLicense != nil {
 		if err := noticeWriteDiagnostic(values["--build"], captured.sourceLicense.Evidence.RawDiagnostic, captured.sourceLicense.Text); err != nil {
+			return fail(err)
+		}
+	}
+	if captured != nil && captured.moduleNotices != nil {
+		if err := noticeWriteDiagnostic(values["--build"], moduleNoticeRaw, captured.moduleNotices.Text); err != nil {
 			return fail(err)
 		}
 	}
@@ -844,6 +1140,15 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 				return result, err
 			}
 		}
+		if options[0].ModuleDirectory != "" {
+			if obj["metadataProfile"] != "machine-id-no-jsonpath-v1" {
+				return result, fmt.Errorf("unsupported module preparation profile")
+			}
+			result.Modules, err = noticeModuleSnapshot(build, options[0].ModuleDirectory, options[0].ModuleCatalogueHash, read)
+			if err != nil {
+				return result, err
+			}
+		}
 	}
 	return result, nil
 }
@@ -927,6 +1232,23 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 	if err != nil || len(binary) == 0 || obj["binarySha256"] != noticeDigest(binary) {
 		return result, nil, fmt.Errorf("binary binding differs")
 	}
+	if before.Modules != nil {
+		info, e := buildinfo.Read(bytes.NewReader(binary))
+		if e != nil {
+			return result, nil, fmt.Errorf("module binary metadata unreadable: %w", e)
+		}
+		var expected []*debug.Module
+		for _, record := range before.Modules.Evidence.Modules {
+			module := &debug.Module{Path: record.Original.Path, Version: record.Original.Version, Sum: record.Original.Sum}
+			if replacement := record.Original.Replace; replacement != nil {
+				module.Replace = &debug.Module{Path: replacement.Path, Version: replacement.Version, Sum: replacement.Sum}
+			}
+			expected = append(expected, module)
+		}
+		if e = noticeJoinBuildInfo(info, expected); e != nil {
+			return result, nil, e
+		}
+	}
 	result = noticeInventory{SchemaVersion: 1, UpstreamCommit: noticePin, Profile: "api-login-v1-console", OriginalPaths: []string{noticeConsole, noticeEmbedded}, RawDiagnostic: noticeRaw, Bytes: len(before.Raw), SHA256: noticeDigest(before.Raw), ImageAdmission: "unknown", LicenseClosure: "unknown", Reproducible: false, Inputs: []noticeBinding{
 		{"build-receipt.json", noticeDigest(receipt)},
 		{"prepared/source-preparation.json", before.PreparationSHA256},
@@ -946,6 +1268,10 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 	result.sourceLicense = before.SourceLicense
 	if before.SourceLicense != nil {
 		result.SourceLicense = &before.SourceLicense.Evidence
+	}
+	result.moduleNotices = before.Modules
+	if before.Modules != nil {
+		result.Modules = &before.Modules.Evidence
 	}
 	return result, append([]byte(nil), before.Raw...), nil
 }

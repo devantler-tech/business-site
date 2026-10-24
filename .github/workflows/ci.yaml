@@ -44,6 +44,7 @@ jobs:
               - 'scripts/testdata/zitadel-metadata-profile/**'
               - 'third_party/zitadel-login-icons/**'
               - 'third_party/zitadel-console-notices/**'
+              - 'third_party/zitadel-go-module-notices/**'
               - 'docs/ZITADEL-SOURCE.md'
               - '.github/workflows/ci.yaml'
             docs:
