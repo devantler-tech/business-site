@@ -598,11 +598,12 @@ type noticeToolchainSection struct {
 }
 
 type noticeToolchainEvidence struct {
-	Version       string                   `json:"version"`
-	RawDiagnostic string                   `json:"rawDiagnostic"`
-	Bytes         int                      `json:"bytes"`
-	SHA256        string                   `json:"sha256"`
-	Sections      []noticeToolchainSection `json:"sections"`
+	Version        string                   `json:"version"`
+	RawDiagnostic  string                   `json:"rawDiagnostic"`
+	Bytes          int                      `json:"bytes"`
+	SHA256         string                   `json:"sha256"`
+	Sections       []noticeToolchainSection `json:"sections"`
+	VendorPackages []string                 `json:"vendorPackages,omitempty"`
 }
 
 type noticeToolchain struct {
@@ -645,9 +646,79 @@ func noticeToolchainSnapshot(root string, read noticeReader) (*noticeToolchain, 
 		result.Text = append(result.Text, data...)
 		result.Text = append(result.Text, '\n', '\n')
 	}
+	// Equal checked texts share a retained span; each original vendor path is
+	// still read independently and keeps its own provenance in the inventory.
+	for _, module := range []string{"net", "crypto", "text", "sys"} {
+		for index, name := range []string{"LICENSE", "PATENTS"} {
+			source := "src/vendor/golang.org/x/" + module + "/" + name
+			data, err := read(root, source, 16<<10)
+			section := result.Evidence.Sections[index]
+			if err != nil || !bytes.Equal(data, result.Text[section.Offset:section.Offset+section.Bytes]) {
+				return nil, fmt.Errorf("selected toolchain vendor terms unavailable or different: %s", source)
+			}
+			section.Source = "GOROOT/" + source
+			result.Evidence.Sections = append(result.Evidence.Sections, section)
+		}
+	}
 	result.Evidence.Bytes = len(result.Text)
 	result.Evidence.SHA256 = noticeDigest(result.Text)
 	return result, nil
+}
+
+// noticeToolchainPackages binds the frozen profile's complete vendor selection
+// to the actual selected compiler, not a coincidentally present source tree.
+func noticeToolchainPackages(data []byte, root string) ([]string, error) {
+	wanted := strings.Fields(`
+vendor/golang.org/x/crypto/chacha20
+vendor/golang.org/x/crypto/chacha20poly1305
+vendor/golang.org/x/crypto/cryptobyte
+vendor/golang.org/x/crypto/cryptobyte/asn1
+vendor/golang.org/x/crypto/internal/alias
+vendor/golang.org/x/crypto/internal/poly1305
+vendor/golang.org/x/net/dns/dnsmessage
+vendor/golang.org/x/net/http/httpguts
+vendor/golang.org/x/net/http/httpproxy
+vendor/golang.org/x/net/http2/hpack
+vendor/golang.org/x/net/idna
+vendor/golang.org/x/sys/cpu
+vendor/golang.org/x/text/secure/bidirule
+vendor/golang.org/x/text/transform
+vendor/golang.org/x/text/unicode/bidi
+vendor/golang.org/x/text/unicode/norm`)
+	expected := make(map[string]bool, len(wanted))
+	for _, name := range wanted {
+		expected[name] = true
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	seen, vendors := map[string]bool{}, map[string]bool{}
+	for {
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, fmt.Errorf("incomplete compiler vendor observation")
+		}
+		object, err := noticeObject(raw)
+		if err != nil {
+			return nil, err
+		}
+		name, ok := object["ImportPath"].(string)
+		if !ok || name == "" || seen[name] || (object["Incomplete"] != nil && object["Incomplete"] != false) || object["Error"] != nil || (object["DepsErrors"] != nil && !reflect.DeepEqual(object["DepsErrors"], []any{})) {
+			return nil, fmt.Errorf("invalid or duplicate compiler package observation")
+		}
+		seen[name] = true
+		if !strings.HasPrefix(name, "vendor/") {
+			continue
+		}
+		if !expected[name] || object["Standard"] != true || object["Module"] != nil || object["Dir"] != filepath.Join(root, "src", name) {
+			return nil, fmt.Errorf("selected compiler vendor package differs")
+		}
+		vendors[name] = true
+	}
+	if len(vendors) != len(wanted) {
+		return nil, fmt.Errorf("selected compiler vendor observation is incomplete")
+	}
+	return wanted, nil
 }
 
 type noticeBinding struct {
@@ -1135,6 +1206,10 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 		}
 		if options[0].ToolchainRoot != "" {
 			result.Toolchain, err = noticeToolchainSnapshot(options[0].ToolchainRoot, read)
+			if err != nil {
+				return result, err
+			}
+			result.Toolchain.Evidence.VendorPackages, err = noticeToolchainPackages(packages, options[0].ToolchainRoot)
 			if err != nil {
 				return result, err
 			}

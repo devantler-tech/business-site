@@ -5,11 +5,265 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// Literal observations from the selected Linux Go 1.26.10 build, not a list
+// obtained from the collector being tested.
+var vendorFixturePackages = []string{
+	"vendor/golang.org/x/crypto/chacha20",
+	"vendor/golang.org/x/crypto/chacha20poly1305",
+	"vendor/golang.org/x/crypto/cryptobyte",
+	"vendor/golang.org/x/crypto/cryptobyte/asn1",
+	"vendor/golang.org/x/crypto/internal/alias",
+	"vendor/golang.org/x/crypto/internal/poly1305",
+	"vendor/golang.org/x/net/dns/dnsmessage",
+	"vendor/golang.org/x/net/http/httpguts",
+	"vendor/golang.org/x/net/http/httpproxy",
+	"vendor/golang.org/x/net/http2/hpack",
+	"vendor/golang.org/x/net/idna",
+	"vendor/golang.org/x/sys/cpu",
+	"vendor/golang.org/x/text/secure/bidirule",
+	"vendor/golang.org/x/text/transform",
+	"vendor/golang.org/x/text/unicode/bidi",
+	"vendor/golang.org/x/text/unicode/norm",
+}
+
+func bindVendorFixture(t *testing.T, f noticeFixture, root string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range vendorFixturePackages {
+		data = append(data, noticeJSON(t, map[string]any{"ImportPath": name, "Standard": true, "Dir": filepath.Join(root, "src", name), "GoFiles": []string{"selected.go"}})...)
+	}
+	writeNotice(t, f.build, "packages.jsonl", data)
+	for _, module := range []string{"net", "crypto", "text", "sys"} {
+		for _, name := range []string{"LICENSE", "PATENTS"} {
+			data, err := os.ReadFile(filepath.Join(root, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeNotice(t, root, "src/vendor/golang.org/x/"+module+"/"+name, data)
+		}
+	}
+}
+
+func changeVendorPackages(t *testing.T, f noticeFixture, change func([]map[string]any) []map[string]any) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	var packages []map[string]any
+	for {
+		var item map[string]any
+		if err = decoder.Decode(&item); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		packages = append(packages, item)
+	}
+	var output []byte
+	for _, item := range change(packages) {
+		output = append(output, noticeJSON(t, item)...)
+	}
+	writeNotice(t, f.build, "packages.jsonl", output)
+}
+
+// Removing vendor reads must lose provenance even though the root texts match.
+func TestToolchainVendorProvenanceRetainsCheckedDeduplicatedSpans(t *testing.T) {
+	f := newNoticeFixture(t)
+	root := newToolchainRoot(t)
+	bindVendorFixture(t, f, root)
+	var out, diagnostic bytes.Buffer
+	args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
+	if noticeRun(args, &out, &diagnostic) != 0 {
+		t.Fatal(diagnostic.String())
+	}
+	writeNotice(t, f.build, noticeBefore, out.Bytes())
+	out.Reset()
+	args[0] = "--inventory"
+	if noticeRun(args, &out, &diagnostic) != 0 {
+		t.Fatal(diagnostic.String())
+	}
+	var result noticeInventory
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Toolchain.Sections) != 11 {
+		t.Fatalf("vendor provenance missing: retained %d component identities, want 11", len(result.Toolchain.Sections))
+	}
+	var object map[string]any
+	if err := json.Unmarshal(out.Bytes(), &object); err != nil {
+		t.Fatal(err)
+	}
+	selected := object["toolchain"].(map[string]any)["vendorPackages"]
+	want, _ := json.Marshal(vendorFixturePackages)
+	got, _ := json.Marshal(selected)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("selected vendor identities differ: %s", got)
+	}
+	raw, err := os.ReadFile(filepath.Join(f.build, "go-toolchain-notices.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"LICENSE", "PATENTS"} {
+		body, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil || bytes.Count(raw, body) != 1 {
+			t.Fatalf("equal %s content was omitted or duplicated: %v", name, err)
+		}
+	}
+	for i, module := range []string{"net", "crypto", "text", "sys"} {
+		for j, name := range []string{"LICENSE", "PATENTS"} {
+			alias := result.Toolchain.Sections[3+i*2+j]
+			original := result.Toolchain.Sections[j]
+			if alias.Source != "GOROOT/src/vendor/golang.org/x/"+module+"/"+name || alias.Offset != original.Offset || alias.Bytes != original.Bytes || alias.SHA256 != original.SHA256 || alias.Offset < 0 || alias.Bytes > len(raw)-alias.Offset {
+				t.Fatalf("incorrect verified alias: %+v", alias)
+			}
+		}
+	}
+}
+
+// Merely retaining Go's root terms must not admit absent or altered vendor terms.
+func TestToolchainVendorSnapshotRejectsEveryUnusableInput(t *testing.T) {
+	for _, module := range []string{"net", "crypto", "text", "sys"} {
+		for _, name := range []string{"LICENSE", "PATENTS"} {
+			file := "src/vendor/golang.org/x/" + module + "/" + name
+			for _, fault := range []string{"absent", "truncated", "substituted", "linked", "linked-directory", "partial-error"} {
+				t.Run(module+"/"+name+"/"+fault, func(t *testing.T) {
+					f := newNoticeFixture(t)
+					root := newToolchainRoot(t)
+					bindVendorFixture(t, f, root)
+					reader := noticeRead
+					switch fault {
+					case "absent":
+						if err := os.Remove(filepath.Join(root, file)); err != nil {
+							t.Fatal(err)
+						}
+					case "truncated":
+						writeNotice(t, root, file, []byte("Copyright 2009 The Go Authors.\n"))
+					case "substituted":
+						writeNotice(t, root, file, []byte("A different complete grant.\n"))
+					case "linked":
+						if err := os.Remove(filepath.Join(root, file)); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Symlink(filepath.Join(root, name), filepath.Join(root, file)); err != nil {
+							t.Fatal(err)
+						}
+					case "linked-directory":
+						directory := filepath.Dir(filepath.Join(root, file))
+						if err := os.Rename(directory, directory+".real"); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Symlink(directory+".real", directory); err != nil {
+							t.Fatal(err)
+						}
+					case "partial-error":
+						reader = func(directory, path string, limit int64) ([]byte, error) {
+							if directory == root && path == file {
+								data, err := noticeRead(directory, path, limit)
+								if err != nil {
+									t.Fatal(err)
+								}
+								return data, errors.New("read failed after complete plausible output")
+							}
+							return noticeRead(directory, path, limit)
+						}
+					}
+					if _, err := noticeToolchainSnapshot(root, reader); err == nil {
+						t.Fatal("unusable selected vendor terms accepted")
+					}
+				})
+			}
+		}
+	}
+}
+
+// A second read can substitute a different graph for the bytes bound in the
+// snapshot. Vendor selection must consume that same first checked observation.
+func TestToolchainVendorUsesTheAlreadyCheckedPackageObservation(t *testing.T) {
+	f := newNoticeFixture(t)
+	root := newToolchainRoot(t)
+	bindVendorFixture(t, f, root)
+	original, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := 0
+	reader := func(directory, name string, limit int64) ([]byte, error) {
+		data, err := noticeRead(directory, name, limit)
+		if directory == f.build && name == "packages.jsonl" {
+			reads++
+			writeNotice(t, f.build, name, []byte("{}\n"))
+		}
+		return data, err
+	}
+	state, err := noticeSnapshot(f.build, f.recipe, reader, noticeSupplementConfig{ToolchainRoot: root})
+	if err != nil || reads != 1 || state.PackagesSHA256 != noticeHash(original) || state.Toolchain == nil || len(state.Toolchain.Evidence.VendorPackages) != 16 {
+		t.Fatalf("vendor selection did not use checked package bytes: reads=%d, error=%v", reads, err)
+	}
+}
+
+func TestToolchainVendorCaptureRejectsChangedSelection(t *testing.T) {
+	for _, fault := range []string{"missing", "duplicate", "extra", "nonstandard", "escaping-directory", "incomplete", "deps-error", "malformed-tail", "post-snapshot-terms"} {
+		t.Run(fault, func(t *testing.T) {
+			f := newNoticeFixture(t)
+			root := newToolchainRoot(t)
+			bindVendorFixture(t, f, root)
+			var out, diagnostic bytes.Buffer
+			args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
+			if fault == "post-snapshot-terms" {
+				if noticeRun(args, &out, &diagnostic) != 0 {
+					t.Fatal(diagnostic.String())
+				}
+				writeNotice(t, f.build, noticeBefore, out.Bytes())
+				writeNotice(t, root, "src/vendor/golang.org/x/net/LICENSE", []byte("changed after snapshot\n"))
+				args[0] = "--inventory"
+			} else {
+				changeVendorPackages(t, f, func(items []map[string]any) []map[string]any {
+					last := items[len(items)-1]
+					switch fault {
+					case "missing":
+						return items[:len(items)-1]
+					case "duplicate":
+						return append(items, last)
+					case "extra":
+						last["ImportPath"] = "vendor/example.com/unreviewed"
+					case "nonstandard":
+						last["Standard"] = false
+					case "escaping-directory":
+						last["Dir"] = filepath.Join(root, "..", "unrelated")
+					case "incomplete":
+						last["Incomplete"] = true
+					case "deps-error":
+						last["DepsErrors"] = []any{map[string]any{"Err": "dependency observation failed"}}
+					}
+					return items
+				})
+				if fault == "malformed-tail" {
+					data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					writeNotice(t, f.build, "packages.jsonl", append(data, []byte("{\"ImportPath\":")...))
+				}
+			}
+			out.Reset()
+			if noticeRun(args, &out, &diagnostic) == 0 || out.Len() != 0 {
+				t.Fatalf("invalid vendor observation admitted: %s", fault)
+			}
+		})
+	}
+}
 
 func newToolchainRoot(t *testing.T) string {
 	t.Helper()
@@ -20,6 +274,9 @@ func newToolchainRoot(t *testing.T) string {
 			t.Fatal(err)
 		}
 		writeNotice(t, root, name, data)
+		for _, module := range []string{"net", "crypto", "text", "sys"} {
+			writeNotice(t, root, "src/vendor/golang.org/x/"+module+"/"+name, data)
+		}
 	}
 	writeNotice(t, root, "VERSION", []byte("go1.26.10\ntime 2026-10-01T00:00:00Z\n"))
 	return root
@@ -30,6 +287,7 @@ func newToolchainRoot(t *testing.T) string {
 func TestToolchainNoticeCLIProducesBoundVerbatimOutput(t *testing.T) {
 	f := newNoticeFixture(t)
 	root := newToolchainRoot(t)
+	bindVendorFixture(t, f, root)
 	var out, diagnostic bytes.Buffer
 	args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
 	if rc := noticeRun(args, &out, &diagnostic); rc != 0 {
@@ -65,7 +323,7 @@ func TestToolchainNoticeCLIProducesBoundVerbatimOutput(t *testing.T) {
 		}
 	}
 	proof := decoded.Toolchain
-	if proof.Version != "1.26.10" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 3 || len(decoded.Inputs) != 9 {
+	if proof.Version != "1.26.10" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 11 || len(decoded.Inputs) != 9 {
 		t.Fatal("incomplete toolchain/build binding")
 	}
 	for i, name := range []string{"LICENSE", "PATENTS", "VERSION"} {
@@ -89,6 +347,7 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			f := newNoticeFixture(t)
 			root := newToolchainRoot(t)
+			bindVendorFixture(t, f, root)
 			var out, diagnostic bytes.Buffer
 			args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
 			if rc := noticeRun(args, &out, &diagnostic); rc != 0 {
@@ -127,6 +386,7 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 func TestToolchainAndSupplementShareTheActualCaptureBoundary(t *testing.T) {
 	f := newSupplementFixture(t)
 	root := newToolchainRoot(t)
+	bindVendorFixture(t, f.noticeFixture, root)
 	license, err := os.ReadFile("testdata/zitadel-source/LICENSE")
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +462,7 @@ func TestToolchainRefusesInvalidDistributionInputs(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			f := newNoticeFixture(t)
 			root := newToolchainRoot(t)
+			bindVendorFixture(t, f, root)
 			switch kind {
 			case "missing-license":
 				if err := os.Remove(filepath.Join(root, "LICENSE")); err != nil {

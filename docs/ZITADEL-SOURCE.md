@@ -273,6 +273,13 @@ The reader requires complete, regular, nonlinked LICENSE, PATENTS and VERSION
 files from that directory. The full LICENSE/PATENTS digests are pinned; VERSION
 must name Go 1.26.10 and contain only the optional distribution timestamp.
 
+The same explicit input also checks the eight LICENSE/PATENTS files beneath
+`GOROOT/src/vendor/golang.org/x/{net,crypto,text,sys}`. A complete observation of
+the frozen profile's 16 selected vendor packages must name standard packages in
+this actual compiler directory. Missing, extra, duplicate, partial or escaping
+observations fail. Selection uses the same checked package bytes bound in the
+snapshot, never a second unchecked read.
+
 `go-toolchain-notices.txt` preserves those checked bytes with deterministic
 framing. The existing console inventory's `toolchain` section records their
 original relative paths, offsets, sizes and digests, plus the complete text's
@@ -281,6 +288,15 @@ bindings join these terms to this build. Revalidation rejects changed bytes
 between compilation phases; failed reads/writes or existing outputs leave no
 final success receipt. Ordinary raw-only capture and website builds omit this
 explicit input and produce no compiler-notice diagnostic.
+
+The vendor texts are independently read and compared byte for byte with the
+checked root terms. Equal texts reuse the root spans without adding duplicate
+text. The inventory retains all eleven original component identities, including
+the eight vendor paths, and the sorted selected `vendorPackages` list. Each
+alias carries its retained span's exact offset, size and digest. Both build
+phases require the existing `--toolchain` input; no ambient discovery or separate
+vendor switch is used. A changed or unreadable vendor file cannot produce a
+final success receipt, even when the root files remain valid.
 
 The existing text diagnostic allow-list retains this file; no compiler, module
 tree, executable or additional JSON artifact is admitted. Hermetic fixtures are
