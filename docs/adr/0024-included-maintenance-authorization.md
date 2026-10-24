@@ -19,14 +19,18 @@ Keep three separate records under the Go/PostgreSQL authority:
 
 1. **Maintenance entitlement.** A versioned record per client and maintained
    project, naming the exact accepted proposal version it derives from, the
-   agreed maintenance scope and an explicit service period from a start time to
-   an end time. Only an authorized operator records or corrects it, from that
-   accepted agreement; it never manufactures client consent, and a monthly price
-   alone never creates one. Each change appends a new immutable version.
+   agreed maintenance scope and an explicit service period. Period bounds are
+   PostgreSQL `timestamptz` values compared with the transaction's database time
+   at microsecond precision: the start is included and the end is excluded. Only
+   an authorized operator records or corrects an entitlement, from that accepted
+   agreement; it never manufactures client consent, and a monthly price alone
+   never creates one. Each change appends a new immutable version.
 2. **Included-task authorization.** An operator's explicit decision that one
    described task is included maintenance under exactly one entitlement version.
-   It binds client, project, entitlement version and the accepting client's and
-   approving operator's membership incarnations
+   The decision is the operator's alone and creates no new client acceptance. It
+   binds client, project and entitlement version, the membership incarnation of
+   the client acceptor already recorded for that accepted proposal version, and
+   the approving operator's incarnation
    ([ADR 0018](0018-durable-membership-incarnations.md)). Decisions are immutable,
    with actor- and content-bound retries; revocation appends terminal evidence.
 3. **Queue eligibility and worker claims** stay in #20's single portal-owned
@@ -36,13 +40,16 @@ Keep three separate records under the Go/PostgreSQL authority:
 
 ### Entitlement states
 
-One domain reader returns exactly one state, judged at database time:
+One domain reader returns exactly one state, judged at database time. The
+**governing version** at that time is the newest recorded version whose service
+period contains it, so a renewal recorded ahead of its start governs only from
+that start.
 
 | State | Meaning | New included-task authorization |
 |---|---|---|
-| active | latest version, start reached, end not reached, not cancelled or disputed | permitted |
-| future | start not reached | paused |
-| ended | end reached | paused |
+| active | a governing version exists, it is not cancelled or disputed, and its authorization history is below its bound | permitted |
+| future | no version governs yet: every recorded period starts later | paused |
+| ended | no version governs any more: the latest period has ended | paused |
 | cancelled | operator recorded a cancellation | paused |
 | disputed | operator recorded a dispute | paused |
 | unavailable | missing, unreadable, overflowed or inconsistent facts | paused |
@@ -66,11 +73,14 @@ payment-provider event can neither classify a task nor change an entitlement.
 
 ### Validity and invalidation
 
-A task authorization is valid only while its entitlement version is the latest
-one, that version is active and its bound memberships are still the current
-incarnations. It ends at the earliest of revocation, a newer entitlement version
-(renewal, scope or project change, correction), the end of the service period or
-a membership transition. It has no elapsed lifetime of its own and reuses neither
+A task authorization is valid only while its entitlement version is the
+governing version, that version is active and its bound memberships are still
+the current incarnations. A correction or a scope or project change recorded for
+the current period governs at once. A renewal for a later period governs only
+from its start, so recording it early neither ends current authorizations nor
+pauses the current period. An authorization therefore ends at the earliest of
+revocation, a newer governing version, the end of its version's service period
+or a membership transition. It has no elapsed lifetime of its own and reuses neither
 the paid-scope approval's 168-hour window nor its invoice binding. Restoring
 earlier values, labels, totals or roles never revives an ended authorization; a
 new explicit operator decision is required.
@@ -91,9 +101,11 @@ failed or overflowed history read is unavailable, never an empty success.
 
 ### Emergency and security work
 
-Security fixes and incident recovery that must happen regardless of a client's
-entitlement keep their own separately authorized route. They are not a general
-maintenance exemption.
+Only security fixes and incident recovery that must happen regardless of a
+client's entitlement use their own separately authorized route. A task on that
+route is never also recorded as included maintenance, and it is not a general
+maintenance exemption: every other bug fix follows the included-maintenance
+rules above.
 
 ### Release
 
@@ -116,8 +128,9 @@ forms ([ADR 0017](0017-retain-go-private-presentation.md)).
 ## Verification
 
 Use disposable restricted-role PostgreSQL and fictional data. Cover a covered fix
-authorized without a new invoice; future, active and end-boundary cases; renewal,
-correction, revocation and restoration; changed project, agreement or scope;
+authorized without a new invoice; future, active and end-boundary cases; a
+renewal recorded ahead of its start; renewal, correction, revocation and
+restoration; changed project, agreement or scope;
 cross-client access and stale memberships; disputed and unavailable facts;
 bounded and failed history reads; concurrent authorizations; late SDK and
 cancellation checks; and English/Danish operator and client journeys. Keep every
