@@ -30,7 +30,8 @@ Keep three separate records under the Go/PostgreSQL authority:
    ([ADR 0018](0018-durable-membership-incarnations.md)). Decisions are immutable,
    with actor- and content-bound retries; revocation appends terminal evidence.
 3. **Queue eligibility and worker claims** stay in #20's single portal-owned
-   boundary. Neither record above starts an agent, publishes work, or changes
+   boundary, which also owns request order, service classes and never preempting
+   active work. Neither record above starts an agent, publishes work, or changes
    portfolio review, merge, spend or repository-access controls.
 
 ### Entitlement states
@@ -48,7 +49,9 @@ One domain reader returns exactly one state, judged at database time:
 
 Paused stops automated eligibility only. It never terminates a contract, adds a
 payment or grace period, denies a contractual remedy or creates a refund rule;
-those stay agreement terms handled outside this code.
+those stay agreement terms handled outside this code. An unpaid monthly fee
+changes no state by itself: the operator records a dispute or cancellation when
+the agreement says so.
 
 ### Classification
 
@@ -97,7 +100,8 @@ maintenance exemption.
 A distinct false-default release decision has no environment activation mapping;
 missing, false, wrong-type, failed and stale evaluations deny. Migrations are
 additive and owned by the separate migrator, runtime grants stay least-privilege
-and the runtime runs no DDL. Private pages use the retained Go frame and native
+and the runtime runs no DDL. Client isolation is enforced by the authority's own
+client-scoped queries, never assumed from database row-level security. Private pages use the retained Go frame and native
 forms ([ADR 0017](0017-retain-go-private-presentation.md)).
 
 ## Alternatives
