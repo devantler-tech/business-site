@@ -67,6 +67,7 @@ func newSupplementFixture(t *testing.T) supplementFixture {
 	catalogue := noticeJSON(t, map[string]any{"schemaVersion": 1, "upstreamCommit": noticePin, "lockSha256": noticeHash(lock), "ngIconsProvenance": "fixture only", "packages": packages})
 	writeNotice(t, f.notices, "catalogue.json", catalogue)
 	f.catalogueHash = noticeHash(catalogue)
+	addSourceMapSubject(t, &f)
 	return f
 }
 
@@ -76,7 +77,7 @@ func TestSupplementRetainsCheckedTextAndTransitivePackageEdge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.CatalogueSHA256 != f.catalogueHash || len(state.Inputs) != 23 || len(state.Aliases) != 8 || len(state.Sections) != 7 || len(state.Text) == 0 {
+	if state.CatalogueSHA256 != f.catalogueHash || len(state.Inputs) != 30 || len(state.Aliases) != 9 || len(state.Sections) != 9 || len(state.Text) == 0 {
 		t.Fatal("missing supplement bindings")
 	}
 	for _, name := range []string{"qrcode", "@bufbuild/protobuf", "google-protobuf"} {
@@ -322,6 +323,9 @@ func TestSupplementPinnedTextsIncludeBothProtobufLicenses(t *testing.T) {
 	if err = json.Unmarshal(data, &catalogue); err != nil {
 		t.Fatal(err)
 	}
+	if len(catalogue.Packages) != 9 || catalogue.Packages[8].Name != "opentype.js" || catalogue.Packages[8].Version != "1.3.5" {
+		t.Fatal("selected opentype subject missing")
+	}
 	for _, pkg := range catalogue.Packages {
 		roles := map[string]bool{}
 		for _, component := range pkg.Components {
@@ -339,6 +343,15 @@ func TestSupplementPinnedTextsIncludeBothProtobufLicenses(t *testing.T) {
 		}
 		if pkg.Name == "google-protobuf" && (!roles["bsd-license"] || !roles["apache-license"] || !roles["closure-attribution"]) {
 			t.Fatal("google-protobuf lost a license component")
+		}
+		if pkg.Name == "opentype.js" {
+			if len(pkg.Components) != 2 || !roles["root-license"] || !roles["tiny-inflate-license"] || len(pkg.IdentityOnlyInputs) != 2 {
+				t.Fatal("opentype lost root/embedded terms or complete bundle identities")
+			}
+			component := pkg.Components[1]
+			if component.Kind != "installed-source-map" || component.SourceMap == nil || component.SourceMap.Index == nil || *component.SourceMap.Index != 0 || component.SourceMap.Source != "../src/tiny-inflate@1.0.3.esm.mjs" || component.SourceMap.Bytes != 11040 || component.SourceMap.SHA256 != "961d49e9aa0b5823e235e5667e0384919291bfac9788f7aff2c72a515e3dc8f7" || component.Bytes != 1084 || component.Offset != 0 {
+				t.Fatal("source-map curation identity changed")
+			}
 		}
 	}
 }
@@ -388,4 +401,278 @@ func TestSupplementImmutableSourceVariantsAreExplicit(t *testing.T) {
 			}
 		})
 	}
+}
+
+// addSourceMapSubject keeps the original eight fixture identities intact and
+// adds one real escaped JSON source map, not a stub of the map decoder.
+func addSourceMapSubject(t *testing.T, f *supplementFixture) {
+	t.Helper()
+	root := "node_modules/.pnpm/opentype.js@1.3.5_fixture-peer/node_modules/opentype.js"
+	f.roots["opentype.js"] = root
+	source := filepath.Join(f.build, "prepared/source")
+	metadata := noticeJSON(t, map[string]any{"name": "opentype.js", "version": "1.3.5"})
+	writeNotice(t, source, root+"/package.json", metadata)
+	license := []byte("complete fixture root terms for opentype.js\r\n")
+	text := []byte("/* fixture MIT notice: quotes \"kept\", slash \\, multibyte å\r\nall terms retained */\r\n")
+	decoded := append(append([]byte(nil), text...), []byte("unselected source tail\n")...)
+	mapBytes := noticeJSON(t, map[string]any{"version": 3, "sources": []string{"../src/tiny-inflate@1.0.3.esm.mjs", "other.js"}, "sourcesContent": []any{string(decoded), "unrelated"}, "names": []string{}, "mappings": ""})
+	writeNotice(t, source, root+"/LICENSE", license)
+	writeNotice(t, source, root+"/dist/opentype.min.mjs.map", mapBytes)
+	writeNotice(t, f.notices, "opentype-license.txt", license)
+	writeNotice(t, f.notices, "tiny-inflate-license.txt", text)
+	components := []any{
+		map[string]any{"role": "root-license", "kind": "installed", "original": "LICENSE", "originalBytes": len(license), "originalSha256": noticeHash(license), "offset": 0, "bytes": len(license), "sha256": noticeHash(license), "retained": "opentype-license.txt"},
+		map[string]any{"role": "tiny-inflate-license", "kind": "installed-source-map", "original": "dist/opentype.min.mjs.map", "originalBytes": len(mapBytes), "originalSha256": noticeHash(mapBytes), "offset": 0, "bytes": len(text), "sha256": noticeHash(text), "retained": "tiny-inflate-license.txt", "sourceMap": map[string]any{"index": 0, "source": "../src/tiny-inflate@1.0.3.esm.mjs", "bytes": len(decoded), "sha256": noticeHash(decoded)}},
+	}
+	identities := []any{}
+	for _, path := range []string{"dist/opentype.mjs", "dist/opentype.js"} {
+		bundle := []byte("fixture complete selected bundle: " + path + "\n")
+		writeNotice(t, source, root+"/"+path, bundle)
+		identities = append(identities, map[string]any{"path": path, "bytes": len(bundle), "sha256": noticeHash(bundle)})
+	}
+	pkg := map[string]any{"name": "opentype.js", "version": "1.3.5", "sri": "sha512-fixture-identity", "tarball": "fixture.tgz", "packageJsonSha256": noticeHash(metadata), "components": components, "identityOnlyInputs": identities}
+	data, err := os.ReadFile(filepath.Join(f.notices, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue map[string]any
+	if err = json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	catalogue["packages"] = append(catalogue["packages"].([]any), pkg)
+	data = noticeJSON(t, catalogue)
+	writeNotice(t, f.notices, "catalogue.json", data)
+	f.catalogueHash = noticeHash(data)
+	alias := "console/node_modules/opentype.js"
+	f.aliases["opentype.js"] = alias
+	absolute := filepath.Join(source, alias)
+	if err = os.MkdirAll(filepath.Dir(absolute), 0700); err != nil {
+		t.Fatal(err)
+	}
+	target, err := filepath.Rel(filepath.Dir(absolute), filepath.Join(source, root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(target, absolute); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSupplementRetainsTheDecodedSourceMapNotice(t *testing.T) {
+	f := newSupplementFixture(t)
+	state, err := noticeSupplementSnapshot(f.build, f.notices, f.catalogueHash, noticeRead)
+	if err != nil {
+		t.Fatalf("complete selected source-map component refused: %v", err)
+	}
+	text, err := os.ReadFile(filepath.Join(f.notices, "tiny-inflate-license.txt"))
+	if err != nil || !bytes.Contains(state.Text, text) || len(state.Aliases) != 9 || len(state.Sections) != 9 || len(state.Inputs) != 30 {
+		t.Fatal("lost decoded bytes, original subjects or exact-input bindings")
+	}
+	section := state.Sections[len(state.Sections)-1]
+	if section.Package != "opentype.js" || section.Role != "tiny-inflate-license" || !bytes.Equal(state.Text[section.Offset:section.Offset+section.Bytes], text) {
+		t.Fatal("source-map section does not retain exact decoded text")
+	}
+}
+
+func TestSupplementSourceMapRejectsCoherentlyChangedInputs(t *testing.T) {
+	for _, kind := range []string{"decoded-tail", "duplicate-source", "misaligned", "selected-null", "selected-object", "wrong-version", "malformed", "trailing", "duplicate-key", "invalid-utf8", "missing-descriptor", "missing-index", "wrong-index", "wrong-span", "descriptor-on-installed"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newSupplementFixture(t)
+			catalogueBytes, err := os.ReadFile(filepath.Join(f.notices, "catalogue.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var catalogue map[string]any
+			if err = json.Unmarshal(catalogueBytes, &catalogue); err != nil {
+				t.Fatal(err)
+			}
+			pkg := catalogue["packages"].([]any)[8].(map[string]any)
+			component := pkg["components"].([]any)[1].(map[string]any)
+			selection := component["sourceMap"].(map[string]any)
+			mapPath := f.roots["opentype.js"] + "/dist/opentype.min.mjs.map"
+			source := filepath.Join(f.build, "prepared/source")
+			data, err := os.ReadFile(filepath.Join(source, mapPath))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var document map[string]any
+			if err = json.Unmarshal(data, &document); err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "decoded-tail":
+				document["sourcesContent"].([]any)[0] = document["sourcesContent"].([]any)[0].(string) + "changed outside retained span"
+			case "duplicate-source":
+				document["sources"] = append(document["sources"].([]any), selection["source"])
+				document["sourcesContent"] = append(document["sourcesContent"].([]any), "duplicate selected content")
+			case "misaligned":
+				document["sourcesContent"] = []any{}
+			case "selected-null":
+				document["sourcesContent"].([]any)[0] = nil
+			case "selected-object":
+				document["sourcesContent"].([]any)[0] = map[string]any{"not": "source text"}
+			case "wrong-version":
+				document["version"] = 2
+			case "missing-descriptor":
+				delete(component, "sourceMap")
+			case "missing-index":
+				delete(selection, "index")
+			case "wrong-index":
+				selection["index"] = 1
+			case "wrong-span":
+				component["offset"] = 1
+			case "descriptor-on-installed":
+				pkg["components"].([]any)[0].(map[string]any)["sourceMap"] = selection
+			}
+			data = noticeJSON(t, document)
+			switch kind {
+			case "malformed":
+				data = []byte("{")
+			case "trailing":
+				data = append(data, []byte("{}")...)
+			case "duplicate-key":
+				data = append([]byte(`{"version":3,`), data[1:]...)
+			case "invalid-utf8":
+				data = append(data, 0xff)
+			}
+			writeNotice(t, source, mapPath, data)
+			// Rebind the complete map and catalogue. These failures must reach
+			// selection/decoded-source validation, not only the outer hash guard.
+			component["originalBytes"] = len(data)
+			component["originalSha256"] = noticeHash(data)
+			catalogueBytes = noticeJSON(t, catalogue)
+			writeNotice(t, f.notices, "catalogue.json", catalogueBytes)
+			if _, err = noticeSupplementSnapshot(f.build, f.notices, noticeHash(catalogueBytes), noticeRead); err == nil {
+				t.Fatalf("admitted coherently rebound %s", kind)
+			}
+		})
+	}
+}
+
+func TestSupplementSourceMapRejectsUnavailableAndChangedFiles(t *testing.T) {
+	for _, kind := range []string{"missing-map", "truncated-map", "changed-map", "changed-module", "changed-browser", "changed-package", "changed-text", "linked-map", "read-error"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newSupplementFixture(t)
+			source := filepath.Join(f.build, "prepared/source")
+			root := f.roots["opentype.js"]
+			mapPath := root + "/dist/opentype.min.mjs.map"
+			reader := noticeReader(noticeRead)
+			switch kind {
+			case "missing-map":
+				if err := os.Remove(filepath.Join(source, mapPath)); err != nil {
+					t.Fatal(err)
+				}
+			case "truncated-map", "changed-map":
+				writeNotice(t, source, mapPath, []byte(`{"version":3}`))
+			case "changed-module":
+				writeNotice(t, source, root+"/dist/opentype.mjs", []byte("substitute bundle"))
+			case "changed-browser":
+				writeNotice(t, source, root+"/dist/opentype.js", []byte("substitute browser bundle"))
+			case "changed-package":
+				writeNotice(t, source, root+"/package.json", []byte(`{"name":"opentype.js","version":"1.3.6"}`))
+			case "changed-text":
+				writeNotice(t, f.notices, "tiny-inflate-license.txt", []byte("substitute terms"))
+			case "linked-map":
+				p := filepath.Join(source, mapPath)
+				if err := os.Rename(p, p+".real"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("opentype.min.mjs.map.real", p); err != nil {
+					t.Fatal(err)
+				}
+			case "read-error":
+				reader = func(directory, relative string, limit int64) ([]byte, error) {
+					data, err := noticeRead(directory, relative, limit)
+					if relative == mapPath {
+						return data, errors.New("failure after plausible complete map")
+					}
+					return data, err
+				}
+			}
+			if _, err := noticeSupplementSnapshot(f.build, f.notices, f.catalogueHash, reader); err == nil {
+				t.Fatalf("admitted %s", kind)
+			}
+		})
+	}
+}
+
+func TestSupplementSourceMapSnapshotRejectsCoherentMapReplacement(t *testing.T) {
+	f := newSupplementFixture(t)
+	config := noticeSupplementConfig{Directory: f.notices, CatalogueHash: f.catalogueHash}
+	state, err := noticeSnapshot(f.build, f.recipe, noticeRead, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeNotice(t, f.build, noticeBefore, noticeJSON(t, state))
+	source := filepath.Join(f.build, "prepared/source")
+	mapPath := f.roots["opentype.js"] + "/dist/opentype.min.mjs.map"
+	data, err := os.ReadFile(filepath.Join(source, mapPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err = json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	document["names"] = []string{"coherently changed map metadata"}
+	data = noticeJSON(t, document)
+	writeNotice(t, source, mapPath, data)
+	catalogueBytes, err := os.ReadFile(filepath.Join(f.notices, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue map[string]any
+	if err = json.Unmarshal(catalogueBytes, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	component := catalogue["packages"].([]any)[8].(map[string]any)["components"].([]any)[1].(map[string]any)
+	component["originalBytes"] = len(data)
+	component["originalSha256"] = noticeHash(data)
+	catalogueBytes = noticeJSON(t, catalogue)
+	writeNotice(t, f.notices, "catalogue.json", catalogueBytes)
+	config.CatalogueHash = noticeHash(catalogueBytes)
+	if _, _, err = noticeCapture(f.build, f.recipe, noticeRead, config); err == nil || !strings.Contains(err.Error(), "compile snapshot") {
+		t.Fatalf("coherent source-map substitution admitted: %v", err)
+	}
+}
+
+func TestSupplementSourceMapUsesTheCheckedMapBytes(t *testing.T) {
+	f := newSupplementFixture(t)
+	mapPath := f.roots["opentype.js"] + "/dist/opentype.min.mjs.map"
+	reads := 0
+	reader := func(directory, relative string, limit int64) ([]byte, error) {
+		data, err := noticeRead(directory, relative, limit)
+		if relative == mapPath {
+			reads++
+			writeNotice(t, directory, relative, []byte("unchecked replacement"))
+		}
+		return data, err
+	}
+	state, err := noticeSupplementSnapshot(f.build, f.notices, f.catalogueHash, reader)
+	if err != nil || reads != 1 || !bytes.Contains(state.Text, []byte("fixture MIT notice")) || bytes.Contains(state.Text, []byte("unchecked replacement")) {
+		t.Fatalf("unchecked map reread: %v", err)
+	}
+}
+
+func FuzzSupplementMappedSource(f *testing.F) {
+	index := 0
+	text := "complete fixture text\r\nquotes \" and multibyte å"
+	selection := &supplementSourceMap{Index: &index, Source: "logical-source", Bytes: len(text), SHA256: noticeHash([]byte(text))}
+	valid, err := json.Marshal(map[string]any{"version": 3, "sources": []string{"logical-source"}, "sourcesContent": []string{text}})
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(valid)
+	f.Add([]byte(`{"version":3,"sources":[],"sourcesContent":[]}`))
+	f.Add([]byte(`{"version":3,"version":3}`))
+	f.Add([]byte(`{}`))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 16384 {
+			return
+		}
+		got, err := supplementMappedSource(data, selection)
+		if err == nil && !bytes.Equal(got, []byte(text)) {
+			t.Fatal("accepted a different decoded source")
+		}
+	})
 }

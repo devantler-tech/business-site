@@ -76,9 +76,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Its explicit `--toolchain` input also retains the selected Go distribution's
   LICENSE, PATENTS and VERSION in the Linux recipe, not the public website build.
   This does not cover all selected Go modules or incorporated-source terms.
-  Its explicit `--supplement` input retains seven selected packages' complete
+  Its explicit `--supplement` input retains eight selected packages' complete
   notice components separately, without changing generated Angular text. Read
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
+  The opentype.js component checks one exact decoded source-map notice; logical
+  source identifiers are inert data, never paths to read or URLs to fetch.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the
