@@ -643,6 +643,46 @@ func TestModuleRootCheckedReadsAndRevalidation(t *testing.T) {
 	}
 }
 
+// Module selection must inspect the same checked graph whose digest is retained,
+// not a replacement read that can hide an extra unreviewed dependency.
+func TestModuleRootUsesTheAlreadyCheckedPackageObservation(t *testing.T) {
+	for _, kind := range []string{"checked-then-invalid", "unreviewed-then-valid"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newModuleRootFixture(t)
+			original, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, later := original, []byte("{}\n")
+			if kind == "unreviewed-then-valid" {
+				first = append(append([]byte(nil), original...), []byte("{\"ImportPath\":\"unreviewed.example/pkg\",\"Module\":{\"Path\":\"unreviewed.example/pkg\",\"Version\":\"v1.0.0\"}}\n")...)
+				later = original
+			}
+			reads := 0
+			reader := func(root, name string, limit int64) ([]byte, error) {
+				if root == f.build && name == "packages.jsonl" {
+					reads++
+					if reads == 1 {
+						return first, nil
+					}
+					return later, nil
+				}
+				return noticeRead(root, name, limit)
+			}
+			state, err := noticeSnapshot(f.build, f.recipe, reader, noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash})
+			if kind == "unreviewed-then-valid" {
+				if err == nil {
+					t.Fatal("unreviewed checked graph hidden by a later valid read")
+				}
+				return
+			}
+			if err != nil || reads != 1 || state.PackagesSHA256 != noticeHash(first) || state.Modules == nil {
+				t.Fatalf("module selection did not use checked package bytes: reads=%d, error=%v", reads, err)
+			}
+		})
+	}
+}
+
 // Refuse changed module snapshots/options before consulting any service binary.
 func TestModuleRootCaptureRejectsChangedSnapshotBeforeBinaryRead(t *testing.T) {
 	for _, kind := range []string{"omitted-option", "added-option", "changed-text", "changed-digest", "changed-path", "missing-snapshot-module"} {
