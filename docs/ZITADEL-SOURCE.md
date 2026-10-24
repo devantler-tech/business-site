@@ -185,7 +185,7 @@ identity, not the pre-compilation snapshot, executable, console bundle or prepar
 source tree. The raw text can be inspected in that run's evidence artifact.
 
 ```sh
-(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go)
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go)
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 ```
@@ -197,3 +197,37 @@ each bundled package's section is complete: inspect the fresh hosted text and tr
 missing sections under #308. Overall `licenseClosure` and `imageAdmission` remain
 `unknown`; capture grants no image publication, production identity changes or
 portal activation.
+
+## Selected console notice supplement
+
+The Linux recipe requires the collector's explicit `--supplement
+third_party/zitadel-console-notices` input in both snapshot and inventory phases.
+It preserves the Angular file unchanged and retains separate verbatim terms for
+the seven selected dependencies documented in that directory's README. No build
+fetches replacement license text. A compiled catalogue digest and exact frozen
+lock bind the selected versions, package metadata, installed source/header/license
+bytes and reviewed upstream texts. Ordinary raw-only capture is not this selected
+supplement profile, and ordinary website builds never invoke either profile.
+
+The resolver admits only a normal relative pnpm alias directly into this prepared
+source's `.pnpm` store. It checks every alias parent and every resolved regular-file
+component; the original notice reader's symlink refusal is unchanged. qrcode is
+resolved from angularx-qrcode's exact dependency edge, not a possibly hoisted copy.
+The snapshot includes the checked selected bytes, metadata, alias identities and
+catalogue; after compilation all are revalidated. Output uses those checked bytes,
+not a subsequent copy from an unchecked path.
+
+`console-notices-supplement.txt` preserves each component's exact bytes inside
+deterministic framing. The compact supplement inventory records offsets, lengths,
+hashes, exact package/source metadata, selected observations and the original
+notice-inventory hash, whose receipt/binary/recipe joins are retained. Both pending
+inventories are finalized before the unchanged success receipt. Any read/write,
+phase or finalization failure leaves no build-success receipt. CI adds only the
+exact supplement JSON to its allow-list; its existing text pattern retains the
+supplement, not executable JavaScript, tarballs, node_modules or the prepared tree.
+
+This is selected retained-text evidence, not complete distribution admission,
+verification of registry provenance signatures or package reproducibility. Other
+bundle sections, linked Go/toolchain terms, copied assets, corresponding source,
+restricted runtime and authenticated image publication remain #308/#305 work.
+`licenseClosure` and `imageAdmission` stay `unknown`; the portal remains off.
