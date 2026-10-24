@@ -530,19 +530,39 @@ func TestModuleRootSnapshotRefusesIncompleteOrContradictoryEvidence(t *testing.T
 	}
 }
 
-// The complete original/replacement metadata set must match, not just a subset.
+// Each invalid fixture must reach its intended identity, target or dependency
+// boundary; an earlier, unrelated rejection must not stand in for that proof.
 func TestModuleRootBinaryJoinRequiresExactCheckedBuildInformation(t *testing.T) {
-	for _, kind := range []string{"valid", "missing", "extra", "duplicate", "version", "sum", "replacement", "root", "compiler", "platform", "dynamic", "nil"} {
-		t.Run(kind, func(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want string
+	}{
+		{"valid", ""},
+		{"missing", "module binary identity differs"},
+		{"surplus", "module binary identity differs"},
+		{"extra", "binary dependency set differs"},
+		{"duplicate", "binary dependency set differs"},
+		{"version", "binary dependency set differs"},
+		{"sum", "binary dependency set differs"},
+		{"replacement", "binary dependency set differs"},
+		{"root", "module binary identity differs"},
+		{"compiler", "module binary identity differs"},
+		{"platform", "module binary target differs"},
+		{"dynamic", "module binary target differs"},
+		{"nil", "module binary identity differs"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			wanted := []*debug.Module{{Path: "example.com/dep", Version: "v1.2.3", Sum: "h1:original"}, {Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/replaced", Version: "v1.1.0", Sum: "h1:replaced"}}}
 			info := &debug.BuildInfo{GoVersion: "go1.26.10", Path: "github.com/zitadel/zitadel", Main: debug.Module{Path: "github.com/zitadel/zitadel", Version: "(devel)"}, Deps: []*debug.Module{{Path: "example.com/dep", Version: "v1.2.3", Sum: "h1:original"}, {Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/replaced", Version: "v1.1.0", Sum: "h1:replaced"}}}, Settings: []debug.BuildSetting{{Key: "GOOS", Value: "linux"}, {Key: "GOARCH", Value: "amd64"}, {Key: "CGO_ENABLED", Value: "0"}}}
-			switch kind {
+			switch test.name {
 			case "missing":
 				info.Deps = info.Deps[:1]
-			case "extra":
+			case "surplus":
 				info.Deps = append(info.Deps, &debug.Module{Path: "example.com/extra", Version: "v1.0.0"})
+			case "extra":
+				info.Deps[1] = &debug.Module{Path: "example.com/extra", Version: "v1.0.0"}
 			case "duplicate":
-				info.Deps = append(info.Deps, info.Deps[0])
+				info.Deps[1] = info.Deps[0]
 			case "version":
 				info.Deps[0].Version = "v2.0.0"
 			case "sum":
@@ -561,12 +581,12 @@ func TestModuleRootBinaryJoinRequiresExactCheckedBuildInformation(t *testing.T) 
 				info = nil
 			}
 			err := noticeJoinBuildInfo(info, wanted)
-			if kind == "valid" {
+			if test.want == "" {
 				if err != nil {
 					t.Fatal(err)
 				}
-			} else if err == nil {
-				t.Fatalf("admitted %s", kind)
+			} else if err == nil || err.Error() != test.want {
+				t.Fatalf("wanted rejection %q, got %v", test.want, err)
 			}
 		})
 	}
