@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -431,6 +432,16 @@ func main() { os.Exit(noticeRun(os.Args[1:], os.Stdout, os.Stderr)) }
 // noticeRun is inert unless one complete explicit mode is selected.
 func noticeRun(args []string, out, diagnostic io.Writer) int {
 	return noticeRunWithCatalogue(args, out, diagnostic, supplementCatalogueHash)
+}
+
+// noticeRunWithCatalogues exposes only test injection, never a CLI trust override.
+func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogueHash, moduleCatalogueHash string) int {
+	return noticeRunWithCatalogue(args, out, diagnostic, catalogueHash)
+}
+
+// noticeJoinBuildInfo is the selected-module binary boundary, not a legal verdict.
+func noticeJoinBuildInfo(info *debug.BuildInfo, expected []*debug.Module) error {
+	return fmt.Errorf("module build-information join is not implemented")
 }
 
 // noticeRunWithCatalogue keeps the curation identity injectable in hermetic
