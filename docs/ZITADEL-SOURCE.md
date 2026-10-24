@@ -336,7 +336,7 @@ This does not cover component-specific, dependency, nested-module or incorporate
 terms. Those remain under #326; complete `licenseClosure` and `imageAdmission`
 remain `unknown`, reproducibility is not established and the portal stays off.
 
-## Selected dependency root notices
+## Selected dependency root and nested notices
 
 Both native Linux capture phases require `--modules
 third_party/zitadel-go-module-notices`. The compiled catalogue digest binds all
@@ -346,6 +346,21 @@ licence labels, current upstream files or everything listed in go.sum. It record
 262 root text components, including the complete MinIO CREDITS file and qualified
 or mixed-case licence names. The lib/pq notice.go and notice_test.go source files
 are not misclassified as legal text.
+
+The same catalogue also retains eleven complete nested notice files (14,604
+original bytes) in nine selected modules: goja's Lucent and V8 terms, go-jose's
+JSON terms, go-webauthn's revoke terms, golang-lru's list terms, compress's S2
+terms, Prometheus's gddo terms, River's Levenshtein terms, testify's difflib and
+spew terms, and the Google API module's uritemplates terms. Each nested entry
+explicitly names a module-relative package beside or below its notice. That package
+must occur in the complete checked compiler graph, in the exact cache directory
+implied by its original import path. Replacement modules retain the original
+import namespace while using the effective cache identity. An unselected
+package, unrelated directory, traversal, alias or changed notice refuses capture;
+a root component cannot masquerade as a nested package component.
+Prometheus retains its ancestor gddo notice through the selected httputil package;
+the notice directory itself does not have to be a compiled package. This explicit
+association does not infer applicability to unselected or sibling directories.
 
 The same collector streams the complete compiler graph from the already checked
 bytes bound in its snapshot, never a second path read. It refuses incomplete or
@@ -366,7 +381,8 @@ capture without a success inventory or completed build receipt.
 `go-module-notices.txt` retains every component's complete verbatim bytes in
 deterministic source-labelled framing. The existing console inventory's `modules`
 section records the catalogue, both frozen root locks, every original/effective
-identity and each component's relative source path, offset, size and digest. Its
+identity and each component's relative source path, offset, size and digest.
+Nested components also retain their selected-package provenance. Its
 existing nine preparation, graph, recipe, binary and receipt bindings remain in
 force. Equal text still has a separate retained source identity. The existing
 2 MiB text and 4 MiB snapshot bounds are unchanged. The public snapshot writer
@@ -378,7 +394,8 @@ output or service compilation; individually valid text sizes do not bypass it.
 The existing root-level text diagnostic pattern retains only this additional
 text output; it does not admit executables, module ZIPs, module trees or prepared
 source. No-argument, unflagged capture and ordinary website builds remain inert
-with respect to these terms. Complete incorporated-source, nested-module and
-compiler-vendored exceptions remain explicit #326 work. Root retention is not a
+with respect to these terms. Other nested candidates, selected copied-source
+headers, embedded data and remaining compiler-vendored exceptions stay explicit
+#326 work. The eleven selected texts do not clear those other obligations. Retention is not a
 legal classifier, full licence closure, image admission, a reproducibility result,
 restricted-runtime proof or customer-login activation.

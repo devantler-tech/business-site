@@ -80,7 +80,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   It checks the frozen profile's complete 16-package compiler-vendor selection
   against that actual distribution and retains all eight vendor term identities
   through checked, byte-equal root spans. Normal unflagged capture remains inert.
-  This does not cover all selected Go modules or incorporated-source terms.
+  Its explicit `--modules` input retains all selected dependency root components
+  plus eleven curated nested notices. A nested component must name its actual
+  compiler-selected package, with an exact import-directory and cache binding.
+  Remaining incorporated-source terms are not cleared by this retention.
   The explicit `--source-license` input retains the complete frozen root LICENSE
   from this build's prepared source; it is required in both Linux capture phases.
   This is selected text retention, not full distribution or image admission.

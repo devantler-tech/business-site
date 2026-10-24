@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -31,7 +32,7 @@ const noticeSnapshotLimit = 4 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
-const moduleCatalogueHash = "dd6df4a16bcdf080328314075dcb8d7c483f539eaef7aee88f41519ef95c1a9d"
+const moduleCatalogueHash = "601a7f309ce620930ed6e6095961a5e39cd6438650ef345e478046351c18ceac"
 const moduleNoticeRaw = "go-module-notices.txt"
 
 type noticeReader func(string, string, int64) ([]byte, error)
@@ -338,9 +339,10 @@ type noticeModuleIdentity struct {
 }
 
 type noticeModuleComponent struct {
-	File   string `json:"file"`
-	Bytes  int    `json:"bytes"`
-	SHA256 string `json:"sha256"`
+	File    string `json:"file"`
+	Package string `json:"package,omitempty"`
+	Bytes   int    `json:"bytes"`
+	SHA256  string `json:"sha256"`
 }
 
 type noticeModuleEntry struct {
@@ -359,10 +361,11 @@ type noticeModuleCatalogue struct {
 }
 
 type noticeModuleSection struct {
-	Source string `json:"source"`
-	Offset int    `json:"offset"`
-	Bytes  int    `json:"bytes"`
-	SHA256 string `json:"sha256"`
+	Source  string `json:"source"`
+	Package string `json:"package,omitempty"`
+	Offset  int    `json:"offset"`
+	Bytes   int    `json:"bytes"`
+	SHA256  string `json:"sha256"`
 }
 
 type noticeModuleRecord struct {
@@ -398,6 +401,14 @@ func noticeModuleEscape(value string) string {
 		}
 	}
 	return result.String()
+}
+
+// noticeModuleRelativePath admits only canonical, module-relative file paths.
+func noticeModuleRelativePath(value string) bool {
+	return value != "" && value != "." && value != ".." &&
+		path.Clean(value) == value && !path.IsAbs(value) &&
+		!strings.HasPrefix(value, "../") && !strings.Contains(value, "\\") &&
+		!strings.ContainsFunc(value, func(c rune) bool { return unicode.IsSpace(c) || unicode.IsControl(c) })
 }
 
 // noticeModuleSnapshot joins the whole compiler graph to one checked catalogue,
@@ -460,6 +471,7 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 	stream := json.NewDecoder(bytes.NewReader(packages))
 	seenPackages := map[string]bool{}
 	seenModules := map[string]bool{}
+	selectedDirectories := map[string]map[string]bool{}
 	for {
 		var raw json.RawMessage
 		if e := stream.Decode(&raw); e == io.EOF {
@@ -511,8 +523,18 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 			return nil, fmt.Errorf("selected module is outside this build cache")
 		}
 		packageDir, ok := obj["Dir"].(string)
-		if !ok || (packageDir != filepath.Join(build, cacheRoot) && !strings.HasPrefix(packageDir, filepath.Join(build, cacheRoot)+string(filepath.Separator))) || (importPath != observed.Path && !strings.HasPrefix(importPath, observed.Path+"/")) {
+		if !ok || (importPath != observed.Path && !strings.HasPrefix(importPath, observed.Path+"/")) {
 			return nil, fmt.Errorf("package is outside its selected module")
+		}
+		relative := ""
+		if importPath != observed.Path {
+			relative = strings.TrimPrefix(importPath, observed.Path+"/")
+			if !noticeModuleRelativePath(relative) {
+				return nil, fmt.Errorf("package import suffix is not canonical")
+			}
+		}
+		if packageDir != filepath.Join(build, cacheRoot, relative) {
+			return nil, fmt.Errorf("package directory differs from its import identity")
 		}
 		if observed.Replace != nil {
 			replacement, ok := module["Replace"].(map[string]any)
@@ -521,6 +543,10 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 			}
 		}
 		seenModules[observed.Path] = true
+		if selectedDirectories[observed.Path] == nil {
+			selectedDirectories[observed.Path] = map[string]bool{}
+		}
+		selectedDirectories[observed.Path][relative] = true
 	}
 	if len(seenModules) != len(wanted) {
 		return nil, fmt.Errorf("selected module observation is incomplete")
@@ -544,17 +570,27 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 		record := noticeModuleRecord{Original: entry.Original, Effective: effective}
 		previousFile := ""
 		for _, component := range entry.Components {
-			if component.File <= previousFile || path.Base(component.File) != component.File || strings.ContainsAny(component.File, "\\\r\n\t") || component.Bytes < 1 || component.Bytes > 64<<10 || !noticeDigestPattern.MatchString(component.SHA256) {
-				return nil, fmt.Errorf("invalid or duplicate root component")
+			if component.File <= previousFile || !noticeModuleRelativePath(component.File) || component.Bytes < 1 || component.Bytes > 64<<10 || !noticeDigestPattern.MatchString(component.SHA256) {
+				return nil, fmt.Errorf("invalid or duplicate module component")
+			}
+			if component.Package == "" {
+				if path.Base(component.File) != component.File {
+					return nil, fmt.Errorf("nested component lacks a selected package")
+				}
+			} else {
+				directory := path.Dir(component.File)
+				if !noticeModuleRelativePath(component.Package) || directory == "." || (directory != component.Package && !strings.HasPrefix(component.Package, directory+"/")) || !selectedDirectories[entry.Original.Path][component.Package] {
+					return nil, fmt.Errorf("nested component is not bound to its selected package")
+				}
 			}
 			previousFile = component.File
 			source := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version) + "/" + component.File
 			text, e := read(build, source, 64<<10)
 			if e != nil || len(text) != component.Bytes || noticeDigest(text) != component.SHA256 || !utf8.Valid(text) || bytes.ContainsRune(text, 0) {
-				return nil, fmt.Errorf("selected module root terms differ or are unavailable")
+				return nil, fmt.Errorf("selected module terms differ or are unavailable")
 			}
 			result.Text = append(result.Text, []byte("Source: "+entry.Original.Path+"@"+entry.Original.Version+" => "+effective.Path+"@"+effective.Version+"/"+component.File+"\n\n")...)
-			record.Components = append(record.Components, noticeModuleSection{source, len(result.Text), len(text), noticeDigest(text)})
+			record.Components = append(record.Components, noticeModuleSection{Source: source, Package: component.Package, Offset: len(result.Text), Bytes: len(text), SHA256: noticeDigest(text)})
 			result.Text = append(result.Text, text...)
 			result.Text = append(result.Text, '\n', '\n')
 			if len(result.Text) > noticeLimit {
