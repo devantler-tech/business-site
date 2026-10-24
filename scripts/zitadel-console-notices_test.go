@@ -89,6 +89,84 @@ func TestNoticeCapturePreservesExactBytesAndBindings(t *testing.T) {
 	}
 }
 
+// A package must recheck completed build inputs without rewriting diagnostics.
+func TestCompletedNoticeVerificationIsReadOnly(t *testing.T) {
+	f := newNoticeFixture(t)
+	var inventory, diagnostic bytes.Buffer
+	args := []string{"--build", f.build, "--recipe", f.recipe}
+	if noticeRun(append([]string{"--inventory"}, args...), &inventory, &diagnostic) != 0 {
+		t.Fatal(diagnostic.String())
+	}
+	writeNotice(t, f.build, "console-notices-inventory.json", inventory.Bytes())
+	if err := os.Rename(filepath.Join(f.build, "build-receipt.pending"), filepath.Join(f.build, "build-receipt.json")); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(f.build, noticeRaw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		var out, errors bytes.Buffer
+		if rc := noticeRun(append([]string{"--verify"}, args...), &out, &errors); rc != 0 {
+			t.Fatalf("completed verification failed: %s", &errors)
+		}
+		if !bytes.Equal(out.Bytes(), inventory.Bytes()) {
+			t.Fatal("verification did not return the complete unchanged inventory")
+		}
+	}
+	after, err := os.ReadFile(filepath.Join(f.build, noticeRaw))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("verification changed retained diagnostics")
+	}
+}
+
+func TestCompletedNoticeVerificationRefusesChangedEvidence(t *testing.T) {
+	for _, kind := range []string{"pending", "ambiguous", "missing-inventory", "changed-inventory", "changed-text", "linked-text", "changed-binary", "conflicting-mode"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newNoticeFixture(t)
+			var inventory, diagnostic bytes.Buffer
+			args := []string{"--build", f.build, "--recipe", f.recipe}
+			if noticeRun(append([]string{"--inventory"}, args...), &inventory, &diagnostic) != 0 {
+				t.Fatal(diagnostic.String())
+			}
+			writeNotice(t, f.build, "console-notices-inventory.json", inventory.Bytes())
+			if kind != "pending" {
+				if err := os.Rename(filepath.Join(f.build, "build-receipt.pending"), filepath.Join(f.build, "build-receipt.json")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			switch kind {
+			case "ambiguous":
+				writeNotice(t, f.build, "build-receipt.pending", []byte("{}"))
+			case "missing-inventory":
+				if err := os.Remove(filepath.Join(f.build, "console-notices-inventory.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-inventory":
+				writeNotice(t, f.build, "console-notices-inventory.json", append(inventory.Bytes(), '\n'))
+			case "changed-text":
+				writeNotice(t, f.build, noticeRaw, []byte("plausible retained terms\n"))
+			case "linked-text":
+				p := filepath.Join(f.build, noticeRaw)
+				if err := os.Rename(p, p+".original"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(p+".original", p); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-binary":
+				writeNotice(t, f.build, "service/zitadel", []byte("other selected fixture binary\n"))
+			case "conflicting-mode":
+				args = append(args, "--inventory")
+			}
+			var out, errors bytes.Buffer
+			if rc := noticeRun(append([]string{"--verify"}, args...), &out, &errors); rc == 0 || out.Len() != 0 {
+				t.Fatalf("invalid completed evidence accepted: %s", kind)
+			}
+		})
+	}
+}
+
 func changeNoticeJSON(t *testing.T, f noticeFixture, path string, change func(map[string]any)) {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(f.build, path))

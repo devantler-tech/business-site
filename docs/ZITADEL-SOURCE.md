@@ -399,3 +399,59 @@ headers, embedded data and remaining compiler-vendored exceptions stay explicit
 #326 work. The eleven selected texts do not clear those other obligations. Retention is not a
 legal classifier, full licence closure, image admission, a reproducibility result,
 restricted-runtime proof or customer-login activation.
+
+## Local restricted image CLI test
+
+The explicit image test packages the actual successful Linux build and observes
+its version command inside a restricted container. Run it on native Linux amd64
+with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
+
+```sh
+go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go \
+  --smoke --build "$work/linux-build" --repository "$PWD" \
+  --output "$work/local-image-test"
+```
+
+The output must be new and outside both input trees. A parent-directory alias
+does not permit output inside them. No arguments perform no work. Ordinary
+website builds and publishers do not invoke this entrypoint. The selected Linux
+CI job invokes it after its actual native build and retains only the compact
+`image-smoke.json` diagnostic alongside the existing build evidence.
+
+The notice collector's read-only `--verify` mode repeats the actual completed
+build capture, compares every retained diagnostic and final inventory, and
+emits the unchanged inventory only when every check passes. It requires the
+final build receipt; pending or ambiguous evidence is refused. The image test
+uses that mode and the existing login-icon verifier before packaging.
+
+The closed context contains the checked executable, unchanged build receipt,
+three notice inventories, five complete retained notice outputs and three
+retained login-icon materials. Its manifest binds all thirteen payload files,
+sizes, modes and digests. A dedicated Dockerfile uses the existing immutable
+distroless static base and UID/GID 65532. The actual image payload is copied back
+from the owned stopped container and compared with that sealed context; matching
+version prose alone does not prove matching bytes.
+
+The command inspects image and container configuration, requires network none,
+a read-only root, no mounts or published ports, all capabilities dropped,
+no privilege escalation and built-in seccomp support. The CLI test is bounded
+to 32 PIDs, 256 MiB, one CPU and a 30-second execution deadline. These are test
+limits, not measured production sizing. It requires the exact frozen version,
+zero exit, an exited container and no OOM/dead state. Only the generated unique
+container and local image are removed by their inspected, owner-bound immutable
+identities. No tag or container name is overwritten or reclaimed. Cleanup or receipt-write failure
+cannot produce a success diagnostic.
+
+The diagnostic records the local image identity, context and recipe digests,
+payload file bindings, configured user, inspected restrictions, exact output,
+exit and cleanup. `cli-version-smoke` does not establish a daemon's effective
+process credentials or memory footprint, service setup/start, PostgreSQL/TLS,
+mail, browser login, MFA, recovery or revocation. Process-double controls are
+separate from the mandatory actual Docker execution in hosted Linux CI.
+
+The context, executable, image and prepared source are not uploaded or pushed
+by this test. No customer credentials or configuration are supplied.
+`licenseClosure` and `imageAdmission` remain `unknown`, and `reproducible` stays
+false. Remaining terms and corresponding source remain #326/#308; complete
+restricted services and actual invitation/login acceptance remain #305/#302.
+The portal and identity publication remain off.

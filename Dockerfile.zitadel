@@ -1,0 +1,9 @@
+# Explicit local test context only; this image is not admitted for publication.
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+WORKDIR /app
+COPY --chown=65532:65532 zitadel build-receipt.json package-manifest.json /app/
+COPY --chown=65532:65532 notices/ /app/notices/
+USER 65532:65532
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/app/zitadel"]
+CMD ["--version"]
