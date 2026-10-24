@@ -449,6 +449,16 @@ func sourceUnpackTree(archive, digest, seal, output string) (result error) {
 	if err != nil {
 		return err
 	}
+	// Reconstruct the admitted stream independently of the tar reader. Readers
+	// skip padding and unused header bytes; those cannot carry hidden payload.
+	canonicalHash := sha256.New()
+	canonical := tar.NewWriter(canonicalHash)
+	if err := canonical.WriteHeader(sourceHeader("source-manifest.json", int64(len(raw)), 0444)); err != nil {
+		return err
+	}
+	if n, err := canonical.Write(raw); err != nil || n != len(raw) {
+		return errors.Join(fmt.Errorf("incomplete canonical source manifest"), err)
+	}
 	if err := sourceWrite(filepath.Join(output, "source-manifest.json"), raw, 0444); err != nil {
 		return err
 	}
@@ -464,6 +474,12 @@ func sourceUnpackTree(archive, digest, seal, output string) (result error) {
 		body, err := io.ReadAll(io.LimitReader(r, member.Bytes+1))
 		if err != nil || int64(len(body)) != member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
 			return fmt.Errorf("incomplete or altered archived source: %s", name)
+		}
+		if err := canonical.WriteHeader(sourceHeader(name, member.Bytes, int64(member.Mode))); err != nil {
+			return err
+		}
+		if n, err := canonical.Write(body); err != nil || n != len(body) {
+			return errors.Join(fmt.Errorf("incomplete canonical source member"), err)
 		}
 		destination := filepath.Join(output, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
@@ -482,6 +498,12 @@ func sourceUnpackTree(archive, digest, seal, output string) (result error) {
 	}
 	if fmt.Sprintf("%x", hash.Sum(nil)) != digest {
 		return fmt.Errorf("source archive digest differs")
+	}
+	if err := canonical.Close(); err != nil {
+		return err
+	}
+	if fmt.Sprintf("%x", canonicalHash.Sum(nil)) != digest {
+		return fmt.Errorf("source archive has noncanonical headers or padding")
 	}
 	if _, err := sourceVerifyTree(output, seal); err != nil {
 		return err

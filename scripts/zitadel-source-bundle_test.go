@@ -16,7 +16,7 @@ import (
 )
 
 func TestSourceArchiveReplaysOnlyItsCompleteClosedTree(t *testing.T) {
-	for _, kind := range []string{"valid", "empty-source", "valid-records", "changed-record", "changed-archive", "wrong-archive-seal", "wrong-tree-seal", "missing", "extra", "duplicate", "link", "traversal", "mode", "trailing", "truncated", "existing-output"} {
+	for _, kind := range []string{"valid", "empty-source", "valid-records", "changed-record", "changed-archive", "hidden-padding", "wrong-archive-seal", "wrong-tree-seal", "missing", "extra", "duplicate", "link", "traversal", "mode", "trailing", "truncated", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
 			input := t.TempDir()
 			body := []byte("package source\n")
@@ -57,6 +57,9 @@ func TestSourceArchiveReplaysOnlyItsCompleteClosedTree(t *testing.T) {
 			}
 			if kind == "changed-archive" {
 				raw[1024] ^= 1
+			}
+			if kind == "hidden-padding" {
+				raw[1536+len(body)] = 0x7f
 			}
 			if kind == "truncated" {
 				raw = raw[:len(raw)-700]
