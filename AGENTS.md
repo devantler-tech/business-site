@@ -76,6 +76,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Its explicit `--toolchain` input also retains the selected Go distribution's
   LICENSE, PATENTS and VERSION in the Linux recipe, not the public website build.
   This does not cover all selected Go modules or incorporated-source terms.
+  The explicit `--source-license` input retains the complete frozen root LICENSE
+  from this build's prepared source; it is required in both Linux capture phases.
+  This is selected text retention, not full distribution or image admission.
   Its explicit `--supplement` input retains eight selected packages' complete
   notice components separately, without changing generated Angular text. Read
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
@@ -139,7 +142,7 @@ bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
-(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go)
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts

@@ -127,13 +127,18 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 func TestToolchainAndSupplementShareTheActualCaptureBoundary(t *testing.T) {
 	f := newSupplementFixture(t)
 	root := newToolchainRoot(t)
+	license, err := os.ReadFile("testdata/zitadel-source/LICENSE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeNotice(t, f.build, "prepared/source/LICENSE", license)
 	var out, diagnostic bytes.Buffer
-	args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--supplement", f.notices, "--toolchain", root}
+	args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--supplement", f.notices, "--toolchain", root, "--source-license"}
 	if rc := noticeRunWithCatalogue(args, &out, &diagnostic, f.catalogueHash); rc != 0 {
 		t.Fatal(diagnostic.String())
 	}
 	var snapshot noticeState
-	if err := json.Unmarshal(out.Bytes(), &snapshot); err != nil || snapshot.Supplement == nil || snapshot.Toolchain == nil {
+	if err := json.Unmarshal(out.Bytes(), &snapshot); err != nil || snapshot.Supplement == nil || snapshot.Toolchain == nil || snapshot.SourceLicense == nil {
 		t.Fatal("combined snapshot incomplete")
 	}
 	writeNotice(t, f.build, noticeBefore, out.Bytes())
@@ -142,7 +147,7 @@ func TestToolchainAndSupplementShareTheActualCaptureBoundary(t *testing.T) {
 	if rc := noticeRunWithCatalogue(args, &out, &diagnostic, f.catalogueHash); rc != 0 {
 		t.Fatal(diagnostic.String())
 	}
-	for _, name := range []string{noticeRaw, supplementRaw, "go-toolchain-notices.txt"} {
+	for _, name := range []string{noticeRaw, supplementRaw, "go-toolchain-notices.txt", "zitadel-root-license.txt"} {
 		if data, err := os.ReadFile(filepath.Join(f.build, name)); err != nil || len(data) == 0 {
 			t.Fatalf("missing %s", name)
 		}
