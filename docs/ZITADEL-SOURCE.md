@@ -203,7 +203,7 @@ portal activation.
 The Linux recipe requires the collector's explicit `--supplement
 third_party/zitadel-console-notices` input in both snapshot and inventory phases.
 It preserves the Angular file unchanged and retains separate verbatim terms for
-the seven selected dependencies documented in that directory's README. No build
+the eight selected dependencies documented in that directory's README. No build
 fetches replacement license text. A compiled catalogue digest and exact frozen
 lock bind the selected versions, package metadata, installed source/header/license
 bytes and reviewed upstream texts. Ordinary raw-only capture is not this selected
@@ -216,6 +216,15 @@ resolved from angularx-qrcode's exact dependency edge, not a possibly hoisted co
 The snapshot includes the checked selected bytes, metadata, alias identities and
 catalogue; after compilation all are revalidated. Output uses those checked bytes,
 not a subsequent copy from an unchecked path.
+
+For opentype.js, one version-3 source map supplies a separately required
+tiny-inflate notice. The catalogue binds the complete map, explicit logical
+source/index, exact decoded source and retained span, alongside the root license
+and both complete module/browser bundle identities. Duplicate keys, ambiguous
+sources, malformed arrays, changed decoded bytes and post-snapshot replacement
+are rejected. Logical source identifiers are never read as paths or fetched;
+no mapping interpretation or emitted-instruction coverage is asserted. The map
+and executable bundles remain excluded from diagnostic artifacts.
 
 `console-notices-supplement.txt` preserves each component's exact bytes inside
 deterministic framing. The compact supplement inventory records offsets, lengths,

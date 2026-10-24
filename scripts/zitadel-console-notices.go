@@ -44,16 +44,24 @@ type supplementAlias struct {
 }
 
 type supplementComponent struct {
-	Role           string `json:"role"`
-	Kind           string `json:"kind"`
-	Original       string `json:"original"`
-	OriginalBytes  int    `json:"originalBytes"`
-	OriginalSHA256 string `json:"originalSha256"`
-	Offset         int    `json:"offset"`
-	Bytes          int    `json:"bytes"`
-	SHA256         string `json:"sha256"`
-	Retained       string `json:"retained"`
-	GitBlob        string `json:"gitBlob,omitempty"`
+	Role           string               `json:"role"`
+	Kind           string               `json:"kind"`
+	Original       string               `json:"original"`
+	OriginalBytes  int                  `json:"originalBytes"`
+	OriginalSHA256 string               `json:"originalSha256"`
+	Offset         int                  `json:"offset"`
+	Bytes          int                  `json:"bytes"`
+	SHA256         string               `json:"sha256"`
+	Retained       string               `json:"retained"`
+	GitBlob        string               `json:"gitBlob,omitempty"`
+	SourceMap      *supplementSourceMap `json:"sourceMap,omitempty"`
+}
+
+type supplementSourceMap struct {
+	Index  *int   `json:"index"`
+	Source string `json:"source"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
 }
 
 type supplementIdentity struct {
@@ -90,7 +98,7 @@ type supplementSection struct {
 	SHA256  string `json:"sha256"`
 }
 
-const supplementCatalogueHash = "8d3788c0b223eba81f8d0b462ec4322b3757cef3f1150b3bc54388b5127e9cd7"
+const supplementCatalogueHash = "4f964bd659a7656f7951c363535120af0fe881be37b1ac522e0964dd41647206"
 const supplementRaw = "console-notices-supplement.txt"
 const supplementInventoryPending = "console-notices-supplement-inventory.pending"
 
@@ -127,7 +135,7 @@ func supplementResolve(source, alias, name string) (supplementAlias, error) {
 	return supplementAlias{Package: name, Path: alias, Target: link, Resolved: rel}, nil
 }
 
-// noticeSupplementSnapshot checks a hash-pinned eight-package closure (seven
+// noticeSupplementSnapshot checks a hash-pinned nine-package closure (eight
 // notice subjects plus qrcode's parent). It emits only checked selected bytes.
 func noticeSupplementSnapshot(build, notices, expected string, read noticeReader) (*supplementState, error) {
 	data, err := read(notices, "catalogue.json", 1<<20)
@@ -143,7 +151,7 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 	if err = d.Decode(&catalogue); err != nil {
 		return nil, fmt.Errorf("invalid supplement catalogue: %w", err)
 	}
-	if catalogue.SchemaVersion != 1 || catalogue.UpstreamCommit != noticePin || len(catalogue.Packages) != 8 {
+	if catalogue.SchemaVersion != 1 || catalogue.UpstreamCommit != noticePin || len(catalogue.Packages) != 9 {
 		return nil, fmt.Errorf("unsupported supplement catalogue")
 	}
 	lock, err := read(build, "prepared/source/pnpm-lock.yaml", 16<<20)
@@ -151,13 +159,13 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 		return nil, fmt.Errorf("supplement frozen lock differs")
 	}
 	result := &supplementState{CatalogueSHA256: expected, Catalogue: catalogue, Inputs: []noticeBinding{{"catalogue.json", expected}}}
-	names := []string{"qrcode", "@ng-icons/core", "grpc-web", "@connectrpc/connect", "@connectrpc/connect-web", "@bufbuild/protobuf", "google-protobuf", "angularx-qrcode"}
-	versions := []string{"1.5.4", "33.4.0", "2.0.2", "2.1.2", "2.1.2", "2.13.0", "4.0.2", "21.0.5"}
+	names := []string{"qrcode", "@ng-icons/core", "grpc-web", "@connectrpc/connect", "@connectrpc/connect-web", "@bufbuild/protobuf", "google-protobuf", "angularx-qrcode", "opentype.js"}
+	versions := []string{"1.5.4", "33.4.0", "2.0.2", "2.1.2", "2.1.2", "2.13.0", "4.0.2", "21.0.5", "1.3.5"}
 	source := filepath.Join(build, "prepared/source")
 	resolved := map[string]supplementAlias{}
 	// The parent resolves first. qrcode is its sibling edge in this pnpm
 	// node_modules directory, never a guessed/hoisted console dependency.
-	for _, i := range []int{7, 0, 1, 2, 3, 4, 5, 6} {
+	for _, i := range []int{7, 0, 1, 2, 3, 4, 5, 6, 8} {
 		pkg := catalogue.Packages[i]
 		if pkg.Name != names[i] || pkg.Version != versions[i] || !strings.HasPrefix(pkg.SRI, "sha512-") || !noticeDigestPattern.MatchString(pkg.PackageJSONSHA256) {
 			return nil, fmt.Errorf("unsupported supplement package")
@@ -199,16 +207,31 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 				return nil, fmt.Errorf("invalid or duplicate supplement component")
 			}
 			roles[component.Role] = true
+			if component.Kind != "installed-source-map" && component.SourceMap != nil {
+				return nil, fmt.Errorf("unexpected source-map descriptor")
+			}
 			text, e := read(notices, component.Retained, noticeLimit)
 			if e != nil || len(text) != component.Bytes || noticeDigest(text) != component.SHA256 || !utf8.Valid(text) {
 				return nil, fmt.Errorf("supplement retained text differs")
 			}
-			if component.Kind == "installed" {
+			sectionSource := component.Original
+			if component.Kind == "installed" || component.Kind == "installed-source-map" {
 				original, e := read(source, root+"/"+component.Original, 2<<20)
-				if e != nil || len(original) != component.OriginalBytes || noticeDigest(original) != component.OriginalSHA256 || component.Offset < 0 || component.Offset > len(original) || component.Bytes > len(original)-component.Offset || !bytes.Equal(text, original[component.Offset:component.Offset+component.Bytes]) {
+				if e != nil || len(original) != component.OriginalBytes || noticeDigest(original) != component.OriginalSHA256 {
 					return nil, fmt.Errorf("supplement installed text identity differs")
 				}
 				result.Inputs = append(result.Inputs, noticeBinding{"prepared/source/" + root + "/" + component.Original, noticeDigest(original)})
+				selected := original
+				if component.Kind == "installed-source-map" {
+					selected, e = supplementMappedSource(original, component.SourceMap)
+					if e != nil {
+						return nil, e
+					}
+					sectionSource += fmt.Sprintf("#sourcesContent[%d]:%s", *component.SourceMap.Index, component.SourceMap.Source)
+				}
+				if component.Offset < 0 || component.Offset > len(selected) || component.Bytes > len(selected)-component.Offset || !bytes.Equal(text, selected[component.Offset:component.Offset+component.Bytes]) {
+					return nil, fmt.Errorf("supplement selected text differs")
+				}
 			} else {
 				if !strings.HasPrefix(component.Original, "https://raw.githubusercontent.com/") || !noticeDigestPattern.MatchString(component.OriginalSHA256) || component.OriginalBytes < 1 || component.OriginalBytes > 2<<20 || component.Offset < 0 || component.Offset > component.OriginalBytes || component.Bytes > component.OriginalBytes-component.Offset {
 					return nil, fmt.Errorf("invalid immutable supplement source")
@@ -226,9 +249,9 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 				}
 			}
 			result.Inputs = append(result.Inputs, noticeBinding{component.Retained, noticeDigest(text)})
-			header := fmt.Sprintf("Package: %s@%s\nComponent: %s\nSource: %s\n\n", pkg.Name, pkg.Version, component.Role, component.Original)
+			header := fmt.Sprintf("Package: %s@%s\nComponent: %s\nSource: %s\n\n", pkg.Name, pkg.Version, component.Role, sectionSource)
 			result.Text = append(result.Text, []byte(header)...)
-			result.Sections = append(result.Sections, supplementSection{pkg.Name, pkg.Version, component.Role, component.Original, len(result.Text), len(text), noticeDigest(text)})
+			result.Sections = append(result.Sections, supplementSection{pkg.Name, pkg.Version, component.Role, sectionSource, len(result.Text), len(text), noticeDigest(text)})
 			result.Text = append(result.Text, text...)
 			result.Text = append(result.Text, '\n', '\n')
 		}
@@ -244,6 +267,36 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 		return nil, fmt.Errorf("supplement exceeds limit")
 	}
 	return result, nil
+}
+
+// supplementMappedSource checks one exact embedded source. Logical identifiers
+// are inert strings: they are never resolved as file paths or fetched as URLs.
+func supplementMappedSource(data []byte, selected *supplementSourceMap) ([]byte, error) {
+	if selected == nil || selected.Index == nil || *selected.Index < 0 || selected.Source == "" || len(selected.Source) > 4096 || selected.Bytes < 1 || selected.Bytes > noticeLimit || !noticeDigestPattern.MatchString(selected.SHA256) || !utf8.Valid(data) {
+		return nil, fmt.Errorf("invalid source-map descriptor")
+	}
+	if _, err := noticeObject(data); err != nil {
+		return nil, fmt.Errorf("invalid source map: %w", err)
+	}
+	var document struct {
+		Version  int               `json:"version"`
+		Sources  []string          `json:"sources"`
+		Contents []json.RawMessage `json:"sourcesContent"`
+	}
+	if err := json.Unmarshal(data, &document); err != nil || document.Version != 3 || len(document.Sources) != len(document.Contents) || *selected.Index >= len(document.Sources) || document.Sources[*selected.Index] != selected.Source {
+		return nil, fmt.Errorf("invalid source-map selection")
+	}
+	count := 0
+	for _, identifier := range document.Sources {
+		if identifier == selected.Source {
+			count++
+		}
+	}
+	var decoded string
+	if count != 1 || json.Unmarshal(document.Contents[*selected.Index], &decoded) != nil || len(decoded) != selected.Bytes || noticeDigest([]byte(decoded)) != selected.SHA256 {
+		return nil, fmt.Errorf("decoded source-map identity differs")
+	}
+	return []byte(decoded), nil
 }
 
 type noticeState struct {

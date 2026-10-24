@@ -245,6 +245,55 @@
       "sri": "sha512-9Kv/Mi5tKzAkBL2xhYZyPaJEoq+b24mIpUAntp16kIBiozVnpGI6DbigTPJiSDkV7EpYHdjBJNGj8igFAHEp6g==",
       "tarball": "angularx-qrcode-21.0.5.tgz",
       "version": "21.0.5"
+    },
+    {
+      "components": [
+        {
+          "bytes": 1085,
+          "kind": "installed",
+          "offset": 0,
+          "original": "LICENSE",
+          "originalBytes": 1085,
+          "originalSha256": "a5b87c9bc191e7f9c06b07bd7cbbed3ed846dfdb50e859484b2c245aa1ab2e61",
+          "retained": "opentype-LICENSE",
+          "role": "root-license",
+          "sha256": "a5b87c9bc191e7f9c06b07bd7cbbed3ed846dfdb50e859484b2c245aa1ab2e61"
+        },
+        {
+          "bytes": 1084,
+          "kind": "installed-source-map",
+          "offset": 0,
+          "original": "dist/opentype.min.mjs.map",
+          "originalBytes": 1046132,
+          "originalSha256": "68d5baef1cd349554428de1b307d81d4595311b324d3e65f3715dc6e8a4dca9d",
+          "retained": "tiny-inflate-license.txt",
+          "role": "tiny-inflate-license",
+          "sha256": "2af3d4c93529722bd5083f8f8b51c185423c06fb86d62ca00cd7c16182eebf39",
+          "sourceMap": {
+            "index": 0,
+            "source": "../src/tiny-inflate@1.0.3.esm.mjs",
+            "bytes": 11040,
+            "sha256": "961d49e9aa0b5823e235e5667e0384919291bfac9788f7aff2c72a515e3dc8f7"
+          }
+        }
+      ],
+      "identityOnlyInputs": [
+        {
+          "bytes": 494695,
+          "path": "dist/opentype.mjs",
+          "sha256": "e139522ac432bb38fb4878d772012f0ad351993c36d7815d65a9890fb3fe68fb"
+        },
+        {
+          "bytes": 528484,
+          "path": "dist/opentype.js",
+          "sha256": "737212d8aae53d1996ef10b315e4369a1542ebb9b94c13c5f99793914745d484"
+        }
+      ],
+      "name": "opentype.js",
+      "packageJsonSha256": "f55e095c8e1fb36b21efd6f5f0d6f50753e57b991b7f9cba80f974cab30044d2",
+      "sri": "sha512-thKDiELidAApOvXlncrpwDZKJCa9fXLEKM4+FoEWI+qTLDeNb+h7EkN+8a7KQODsB1GZ+Exz9KknkoPrEdXZDw==",
+      "tarball": "opentype.js-1.3.5.tgz",
+      "version": "1.3.5"
     }
   ],
   "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
