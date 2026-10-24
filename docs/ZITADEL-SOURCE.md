@@ -442,7 +442,10 @@ prepared-source round trip establishes only that source snapshot's correspondenc
 The Linux builder's optional `--capture-source` flag invokes `--capture-build`
 immediately before installation. It retains the preparation receipt, original and
 serialized API configuration, seven-input hash record, four exact recipes/input
-files, build guide and a dated modification record. A complete file manifest
+files, build guide and a dated modification record. That date belongs to the frozen
+modification set, not capture time; update it when the declared modifications change.
+Tests recapture identical inputs two simulated days apart to preserve stable seals.
+A complete file manifest
 keeps those ten records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.

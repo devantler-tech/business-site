@@ -13,8 +13,12 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"testing/synctest"
+	"time"
 )
 
+// TestSourceArchiveReplaysOnlyItsCompleteClosedTree rejects altered archive bytes,
+// hidden padding, unsafe metadata and incomplete or additional tree members.
 func TestSourceArchiveReplaysOnlyItsCompleteClosedTree(t *testing.T) {
 	for _, kind := range []string{"valid", "empty-source", "valid-records", "changed-record", "changed-archive", "hidden-padding", "wrong-archive-seal", "wrong-tree-seal", "missing", "extra", "duplicate", "link", "traversal", "mode", "trailing", "truncated", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
@@ -166,6 +170,8 @@ func TestSourceArchiveReplaysOnlyItsCompleteClosedTree(t *testing.T) {
 	}
 }
 
+// TestSourceBundleCommandIsInertWithoutExplicitMode keeps routine invocation inert
+// and refuses ambiguous or unsupported operation arguments.
 func TestSourceBundleCommandIsInertWithoutExplicitMode(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	if code := sourceBundleRun(nil, &out, &diagnostic); code != 0 || out.Len() != 0 || diagnostic.Len() != 0 {
@@ -176,6 +182,8 @@ func TestSourceBundleCommandIsInertWithoutExplicitMode(t *testing.T) {
 	}
 }
 
+// TestPreparedSourceCommandRejectsAnOtherwiseValidSubstitute distinguishes a
+// structurally valid snapshot from the actual frozen prepared-source profile.
 func TestPreparedSourceCommandRejectsAnOtherwiseValidSubstitute(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "source.go"), []byte("package source\n"), 0644); err != nil {
@@ -191,6 +199,8 @@ func TestPreparedSourceCommandRejectsAnOtherwiseValidSubstitute(t *testing.T) {
 	}
 }
 
+// TestSourceBuildRecordsCannotDeclareExecutableModes preserves source executables
+// without granting execution permissions to retained provenance records.
 func TestSourceBuildRecordsCannotDeclareExecutableModes(t *testing.T) {
 	input := t.TempDir()
 	if err := os.WriteFile(filepath.Join(input, "source.go"), []byte("package source\n"), 0644); err != nil {
@@ -220,6 +230,8 @@ func TestSourceBuildRecordsCannotDeclareExecutableModes(t *testing.T) {
 	}
 }
 
+// TestSourcePackCannotModifyItsInputOrAnExistingArchive checks output reservation
+// safety, including archive destinations that alias captured input.
 func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 	input := t.TempDir()
 	if err := os.WriteFile(filepath.Join(input, "source.go"), []byte("package source\n"), 0644); err != nil {
@@ -259,6 +271,8 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 	}
 }
 
+// TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
+// and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
@@ -321,7 +335,24 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 				write(output, "keep", "keep")
 			}
-			got, err := sourceCaptureBuild(build, repo, output, policy)
+			var got sourceCaptureSummary
+			synctest.Test(t, func(t *testing.T) {
+				got, err = sourceCaptureBuild(build, repo, output, policy)
+				if kind == "valid" && err == nil {
+					time.Sleep(48 * time.Hour)
+					later, laterErr := sourceCaptureBuild(build, repo, filepath.Join(t.TempDir(), "later"), policy)
+					if laterErr != nil || got.ManifestSHA256 != later.ManifestSHA256 {
+						t.Fatalf("unchanged modifications depend on capture date: first=%s later=%s: %v", got.ManifestSHA256, later.ManifestSHA256, laterErr)
+					}
+					raw, readErr := os.ReadFile(filepath.Join(output, "records/modifications.json"))
+					var record struct {
+						ModifiedOn string `json:"modifiedOn"`
+					}
+					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-24" {
+						t.Fatalf("modification date does not describe the frozen changes: %s: %v", raw, readErr)
+					}
+				}
+			})
 			if kind == "valid" {
 				if err != nil || got.Files != 8 || got.Records != 10 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
@@ -346,6 +377,8 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 	}
 }
 
+// TestSourceSealPreservesEmptySourceBootstrapAndExecutableMode protects maintained
+// source that a generated-output exclusion heuristic could incorrectly discard.
 func TestSourceSealPreservesEmptySourceBootstrapAndExecutableMode(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]struct {
@@ -405,6 +438,8 @@ func TestSourceSealPreservesEmptySourceBootstrapAndExecutableMode(t *testing.T) 
 	}
 }
 
+// TestSourceSealRefusesOutputAliasedIntoItsInput checks lexical and physical
+// aliases before a snapshot can alter the source it is supposed to preserve.
 func TestSourceSealRefusesOutputAliasedIntoItsInput(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "source")
@@ -427,6 +462,8 @@ func TestSourceSealRefusesOutputAliasedIntoItsInput(t *testing.T) {
 	}
 }
 
+// TestSourceSealRefusesUnsafeMembersWithoutPublishingSuccess checks unsafe tree
+// entries and confirms that refusal removes only this operation's reservation.
 func TestSourceSealRefusesUnsafeMembersWithoutPublishingSuccess(t *testing.T) {
 	for _, kind := range []string{"file-link", "directory-link", "fifo", "private-mode", "oversized", "empty-tree", "linked-root", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
@@ -494,6 +531,7 @@ type sourceOutputFixture struct {
 	closed int
 }
 
+// Write simulates incomplete publication even when an output reports no error.
 func (f *sourceOutputFixture) Write(body []byte) (int, error) {
 	switch f.mode {
 	case "short":
@@ -505,18 +543,24 @@ func (f *sourceOutputFixture) Write(body []byte) (int, error) {
 	}
 	return len(body), nil
 }
+
+// Chmod injects a metadata failure after otherwise successful output writes.
 func (f *sourceOutputFixture) Chmod(os.FileMode) error {
 	if f.mode == "mode" {
 		return errors.New("mode failure")
 	}
 	return nil
 }
+
+// Sync injects a failed durability operation rather than silently accepting it.
 func (f *sourceOutputFixture) Sync() error {
 	if f.mode == "sync" {
 		return errors.New("flush failure")
 	}
 	return nil
 }
+
+// Close tracks closure and can fail after all earlier publication stages pass.
 func (f *sourceOutputFixture) Close() error {
 	f.closed++
 	if f.mode == "close" {
@@ -524,6 +568,9 @@ func (f *sourceOutputFixture) Close() error {
 	}
 	return nil
 }
+
+// TestSourceOutputCannotSucceedAfterIncompletePublication requires every write,
+// metadata, durability and close result to succeed before output is accepted.
 func TestSourceOutputCannotSucceedAfterIncompletePublication(t *testing.T) {
 	for _, mode := range []string{"valid", "short", "partial-error", "complete-error", "mode", "sync", "close"} {
 		t.Run(mode, func(t *testing.T) {
@@ -536,6 +583,7 @@ func TestSourceOutputCannotSucceedAfterIncompletePublication(t *testing.T) {
 	}
 }
 
+// Read supplies controlled short content, trailing bytes or read failures.
 func (f *sourceReadFixture) Read(p []byte) (int, error) {
 	if len(f.body) == 0 {
 		return 0, io.EOF
@@ -545,11 +593,14 @@ func (f *sourceReadFixture) Read(p []byte) (int, error) {
 	return n, f.readError
 }
 
+// Close models an input failure that arrives after all expected bytes were read.
 func (f *sourceReadFixture) Close() error {
 	f.closed++
 	return f.closeError
 }
 
+// TestSourceReadRequiresCompleteBytesAndSuccessfulClose rejects plausible partial
+// success, surplus content and a final input-close failure.
 func TestSourceReadRequiresCompleteBytesAndSuccessfulClose(t *testing.T) {
 	for _, kind := range []string{"valid", "empty", "complete-error", "partial-error", "truncated", "extra", "close-error", "negative-size", "oversized"} {
 		t.Run(kind, func(t *testing.T) {
@@ -589,6 +640,8 @@ func TestSourceReadRequiresCompleteBytesAndSuccessfulClose(t *testing.T) {
 	}
 }
 
+// TestSourceSealReadbackRequiresItsExactClosedTree rechecks actual bytes, modes
+// and membership rather than trusting a previously written manifest alone.
 func TestSourceSealReadbackRequiresItsExactClosedTree(t *testing.T) {
 	for _, kind := range []string{"valid", "changed", "missing", "extra", "empty-directory", "mode", "link", "wrong-seal", "duplicate-key", "trailing-json"} {
 		t.Run(kind, func(t *testing.T) {

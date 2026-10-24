@@ -31,6 +31,10 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 // preparer after the native API serialization change, before installation.
 const sourcePreparedProfile = "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d"
 
+// sourceModifiedOn dates the frozen modification set, not its later capture.
+// Update it with that set; identical inputs must retain the same source seal.
+const sourceModifiedOn = "2026-10-24"
+
 type sourceCapturePolicy struct{ Prepared, OriginalAPI, SerialAPI, Preparation string }
 type sourceCaptureSummary struct {
 	ManifestSHA256        string `json:"manifestSha256"`
@@ -115,7 +119,7 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		UpstreamCommit        string   `json:"upstreamCommit"`
 		PreparedProfileSHA256 string   `json:"preparedProfileSha256"`
 		Modifications         []string `json:"modifications"`
-	}{1, time.Now().UTC().Format("2006-01-02"), prep.UpstreamCommit, seal, []string{
+	}{1, sourceModifiedOn, prep.UpstreamCommit, seal, []string{
 		"Remove the four Ailerons font/style paths and their two imports.",
 		"Refuse the optional JSONPath machine-ID metadata selector; preserve raw response and host/IP identification.",
 		"Set apps/api/project.json generate-install.options.parallel to false; preserve all fourteen native install commands.",
@@ -244,6 +248,7 @@ func sourceAddRecords(root, seal string, records map[string][]byte) (string, err
 	return fmt.Sprintf("%x", sha256.Sum256(raw)), nil
 }
 
+// main preserves the explicit command's checked success or refusal status.
 func main() { os.Exit(sourceBundleRun(os.Args[1:], os.Stdout, os.Stderr)) }
 
 // sourceBundleRun is inert until one supported explicit operation is selected.
