@@ -422,6 +422,7 @@
     "sslkey",
     "attrs",
     "pgxstore",
+    "memstore",
     "pkce",
     "portalen",
     "portalvisual",

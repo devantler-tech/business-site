@@ -30,10 +30,10 @@ func labelledGoroutines(t testing.TB, value string) int {
 	}
 	// Each record starts with "<count> @ <pcs>"; its optional labels line follows.
 	// Records are sorted by count, so a match may be the first one after the header.
-	want := "# labels: " + fmt.Sprintf("{%q:%q}", constructionLabel, value)
+	want := fmt.Sprintf("# labels: {%q:%q}", constructionLabel, value)
 	lines := strings.Split(profile.String(), "\n")
 	if !strings.HasPrefix(lines[0], "goroutine profile: total ") {
-		t.Fatalf("unrecognised goroutine profile header %q", lines[0])
+		t.Fatalf("unrecognized goroutine profile header %q", lines[0])
 	}
 	total, current, records := 0, 0, 0
 	for _, line := range lines[1:] {
@@ -76,7 +76,7 @@ func awaitLabelled(t testing.TB, value string, done func(int) bool) (int, bool) 
 // TestDefaultSessionStoreStopsWithoutRace exercises the public API Browser
 // calls immediately after scs.New. Under the race detector, scs v2.9.0 reports a
 // data race here because its worker creates the stop channel itself.
-func TestDefaultSessionStoreStopsWithoutRace(t *testing.T) {
+func TestDefaultSessionStoreStopsWithoutRace(_ *testing.T) {
 	for range 256 {
 		memstore.New().StopCleanup()
 	}
