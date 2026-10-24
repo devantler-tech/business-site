@@ -32,7 +32,7 @@ const noticeSnapshotLimit = 4 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
-const moduleCatalogueHash = "0c81fdeb0ee4036608022a84a429c9232a51975bf1c03ca53fbc8745c88544a1"
+const moduleCatalogueHash = "601a7f309ce620930ed6e6095961a5e39cd6438650ef345e478046351c18ceac"
 const moduleNoticeRaw = "go-module-notices.txt"
 
 type noticeReader func(string, string, int64) ([]byte, error)
@@ -577,8 +577,11 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 				if path.Base(component.File) != component.File {
 					return nil, fmt.Errorf("nested component lacks a selected package")
 				}
-			} else if !noticeModuleRelativePath(component.Package) || path.Dir(component.File) != component.Package || !selectedDirectories[entry.Original.Path][component.Package] {
-				return nil, fmt.Errorf("nested component is not bound to its selected package")
+			} else {
+				directory := path.Dir(component.File)
+				if !noticeModuleRelativePath(component.Package) || directory == "." || (directory != component.Package && !strings.HasPrefix(component.Package, directory+"/")) || !selectedDirectories[entry.Original.Path][component.Package] {
+					return nil, fmt.Errorf("nested component is not bound to its selected package")
+				}
 			}
 			previousFile = component.File
 			source := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version) + "/" + component.File

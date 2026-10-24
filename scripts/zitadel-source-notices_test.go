@@ -447,6 +447,48 @@ func TestModulePackageDirectoryMustMatchItsImportIdentity(t *testing.T) {
 	}
 }
 
+func TestNestedNoticeCanBelongToASelectedDescendantPackage(t *testing.T) {
+	f := nestedModuleFixture(t, 0)
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue noticeModuleCatalogue
+	if err := json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	components := catalogue.Modules[0].Components
+	components[len(components)-1].Package = "nested/child"
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+	graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(graph, []byte("\n")), []byte("\n"))
+	var observed map[string]any
+	if err := json.Unmarshal(lines[len(lines)-1], &observed); err != nil {
+		t.Fatal(err)
+	}
+	observed["ImportPath"] = "example.com/Dep/nested/child"
+	observed["Dir"] = filepath.Join(f.build, "go-modules/example.com/!dep@v1.2.3/nested/child")
+	lines[len(lines)-1] = bytes.TrimSuffix(noticeJSON(t, observed), []byte("\n"))
+	writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines, []byte("\n")), '\n'))
+	var out, diagnostic bytes.Buffer
+	if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code != 0 {
+		t.Fatalf("ancestor notice refused for selected descendant: %s", &diagnostic)
+	}
+	var state noticeState
+	if err := json.Unmarshal(out.Bytes(), &state); err != nil || state.Modules == nil {
+		t.Fatalf("missing nested snapshot: %v", err)
+	}
+	section := state.Modules.Evidence.Modules[0].Components[len(components)-1]
+	if section.Package != "nested/child" || section.Bytes != 39 || !bytes.Equal(state.Modules.Text[section.Offset:section.Offset+section.Bytes], []byte("An independent nested copyright grant.\n")) {
+		t.Fatal("ancestor notice lost selected-descendant provenance or complete bytes")
+	}
+}
+
 func TestModuleImportSuffixCannotAliasItsRoot(t *testing.T) {
 	f := newModuleRootFixture(t)
 	data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
@@ -468,7 +510,7 @@ func TestModuleImportSuffixCannotAliasItsRoot(t *testing.T) {
 }
 
 func TestNestedModuleNoticesRefuseUnboundOrChangedComponents(t *testing.T) {
-	for _, kind := range []string{"unselected", "wrong-package", "missing-package", "parent-path", "absolute-path", "unclean-path", "backslash", "space", "control", "root-as-nested", "duplicate", "truncated", "same-size-change", "missing", "linked-file", "linked-directory"} {
+	for _, kind := range []string{"unselected", "unselected-child", "selected-sibling", "wrong-package", "missing-package", "parent-path", "absolute-path", "unclean-path", "backslash", "space", "control", "root-as-nested", "duplicate", "truncated", "same-size-change", "missing", "linked-file", "linked-directory"} {
 		t.Run(kind, func(t *testing.T) {
 			f := nestedModuleFixture(t, 0)
 			data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
@@ -492,6 +534,23 @@ func TestNestedModuleNoticesRefuseUnboundOrChangedComponents(t *testing.T) {
 				writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines[:len(lines)-1], []byte("\n")), '\n'))
 			case "wrong-package":
 				component.Package = "other"
+			case "unselected-child":
+				component.Package = "nested/child"
+			case "selected-sibling":
+				component.Package = "nested-other"
+				graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				lines := bytes.Split(bytes.TrimSuffix(graph, []byte("\n")), []byte("\n"))
+				var observed map[string]any
+				if err := json.Unmarshal(lines[len(lines)-1], &observed); err != nil {
+					t.Fatal(err)
+				}
+				observed["ImportPath"] = "example.com/Dep/nested-other"
+				observed["Dir"] = filepath.Join(f.build, "go-modules/example.com/!dep@v1.2.3/nested-other")
+				lines[len(lines)-1] = bytes.TrimSuffix(noticeJSON(t, observed), []byte("\n"))
+				writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines, []byte("\n")), '\n'))
 			case "missing-package":
 				component.Package = ""
 			case "parent-path":

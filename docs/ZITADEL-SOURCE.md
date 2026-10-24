@@ -352,12 +352,15 @@ original bytes) in nine selected modules: goja's Lucent and V8 terms, go-jose's
 JSON terms, go-webauthn's revoke terms, golang-lru's list terms, compress's S2
 terms, Prometheus's gddo terms, River's Levenshtein terms, testify's difflib and
 spew terms, and the Google API module's uritemplates terms. Each nested entry
-explicitly names the module-relative package beside its notice. That package
+explicitly names a module-relative package beside or below its notice. That package
 must occur in the complete checked compiler graph, in the exact cache directory
 implied by its original import path. Replacement modules retain the original
 import namespace while using the effective cache identity. An unselected
 package, unrelated directory, traversal, alias or changed notice refuses capture;
 a root component cannot masquerade as a nested package component.
+Prometheus retains its ancestor gddo notice through the selected httputil package;
+the notice directory itself does not have to be a compiled package. This explicit
+association does not infer applicability to unselected or sibling directories.
 
 The same collector streams the complete compiler graph from the already checked
 bytes bound in its snapshot, never a second path read. It refuses incomplete or

@@ -3343,7 +3343,7 @@
         },
         {
           "file": "internal/github.com/golang/gddo/LICENSE",
-          "package": "internal/github.com/golang/gddo",
+          "package": "internal/github.com/golang/gddo/httputil",
           "bytes": 1479,
           "sha256": "dfffb9ec737eaba985243e95a549bd8c3a4d462032cfe603e2a6704c346427b6"
         }
