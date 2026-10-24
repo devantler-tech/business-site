@@ -137,7 +137,7 @@ func TestToolchainVendorSnapshotRejectsEveryUnusableInput(t *testing.T) {
 	for _, module := range []string{"net", "crypto", "text", "sys"} {
 		for _, name := range []string{"LICENSE", "PATENTS"} {
 			file := "src/vendor/golang.org/x/" + module + "/" + name
-			for _, fault := range []string{"absent", "truncated", "substituted", "linked", "partial-error"} {
+			for _, fault := range []string{"absent", "truncated", "substituted", "linked", "linked-directory", "partial-error"} {
 				t.Run(module+"/"+name+"/"+fault, func(t *testing.T) {
 					f := newNoticeFixture(t)
 					root := newToolchainRoot(t)
@@ -159,10 +159,22 @@ func TestToolchainVendorSnapshotRejectsEveryUnusableInput(t *testing.T) {
 						if err := os.Symlink(filepath.Join(root, name), filepath.Join(root, file)); err != nil {
 							t.Fatal(err)
 						}
+					case "linked-directory":
+						directory := filepath.Dir(filepath.Join(root, file))
+						if err := os.Rename(directory, directory+".real"); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Symlink(directory+".real", directory); err != nil {
+							t.Fatal(err)
+						}
 					case "partial-error":
 						reader = func(directory, path string, limit int64) ([]byte, error) {
 							if directory == root && path == file {
-								return []byte("Copyright 2009 The Go Authors.\n"), errors.New("read failed after plausible output")
+								data, err := noticeRead(directory, path, limit)
+								if err != nil {
+									t.Fatal(err)
+								}
+								return data, errors.New("read failed after complete plausible output")
 							}
 							return noticeRead(directory, path, limit)
 						}
@@ -173,6 +185,31 @@ func TestToolchainVendorSnapshotRejectsEveryUnusableInput(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// A second read can substitute a different graph for the bytes bound in the
+// snapshot. Vendor selection must consume that same first checked observation.
+func TestToolchainVendorUsesTheAlreadyCheckedPackageObservation(t *testing.T) {
+	f := newNoticeFixture(t)
+	root := newToolchainRoot(t)
+	bindVendorFixture(t, f, root)
+	original, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := 0
+	reader := func(directory, name string, limit int64) ([]byte, error) {
+		data, err := noticeRead(directory, name, limit)
+		if directory == f.build && name == "packages.jsonl" {
+			reads++
+			writeNotice(t, f.build, name, []byte("{}\n"))
+		}
+		return data, err
+	}
+	state, err := noticeSnapshot(f.build, f.recipe, reader, noticeSupplementConfig{ToolchainRoot: root})
+	if err != nil || reads != 1 || state.PackagesSHA256 != noticeHash(original) || state.Toolchain == nil || len(state.Toolchain.Evidence.VendorPackages) != 16 {
+		t.Fatalf("vendor selection did not use checked package bytes: reads=%d, error=%v", reads, err)
 	}
 }
 
@@ -237,6 +274,9 @@ func newToolchainRoot(t *testing.T) string {
 			t.Fatal(err)
 		}
 		writeNotice(t, root, name, data)
+		for _, module := range []string{"net", "crypto", "text", "sys"} {
+			writeNotice(t, root, "src/vendor/golang.org/x/"+module+"/"+name, data)
+		}
 	}
 	writeNotice(t, root, "VERSION", []byte("go1.26.10\ntime 2026-10-01T00:00:00Z\n"))
 	return root
@@ -247,6 +287,7 @@ func newToolchainRoot(t *testing.T) string {
 func TestToolchainNoticeCLIProducesBoundVerbatimOutput(t *testing.T) {
 	f := newNoticeFixture(t)
 	root := newToolchainRoot(t)
+	bindVendorFixture(t, f, root)
 	var out, diagnostic bytes.Buffer
 	args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
 	if rc := noticeRun(args, &out, &diagnostic); rc != 0 {
@@ -282,7 +323,7 @@ func TestToolchainNoticeCLIProducesBoundVerbatimOutput(t *testing.T) {
 		}
 	}
 	proof := decoded.Toolchain
-	if proof.Version != "1.26.10" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 3 || len(decoded.Inputs) != 9 {
+	if proof.Version != "1.26.10" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 11 || len(decoded.Inputs) != 9 {
 		t.Fatal("incomplete toolchain/build binding")
 	}
 	for i, name := range []string{"LICENSE", "PATENTS", "VERSION"} {
@@ -306,6 +347,7 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			f := newNoticeFixture(t)
 			root := newToolchainRoot(t)
+			bindVendorFixture(t, f, root)
 			var out, diagnostic bytes.Buffer
 			args := []string{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--toolchain", root}
 			if rc := noticeRun(args, &out, &diagnostic); rc != 0 {
@@ -344,6 +386,7 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 func TestToolchainAndSupplementShareTheActualCaptureBoundary(t *testing.T) {
 	f := newSupplementFixture(t)
 	root := newToolchainRoot(t)
+	bindVendorFixture(t, f.noticeFixture, root)
 	license, err := os.ReadFile("testdata/zitadel-source/LICENSE")
 	if err != nil {
 		t.Fatal(err)
@@ -419,6 +462,7 @@ func TestToolchainRefusesInvalidDistributionInputs(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			f := newNoticeFixture(t)
 			root := newToolchainRoot(t)
+			bindVendorFixture(t, f, root)
 			switch kind {
 			case "missing-license":
 				if err := os.Remove(filepath.Join(root, "LICENSE")); err != nil {

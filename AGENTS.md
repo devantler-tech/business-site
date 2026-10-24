@@ -77,6 +77,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   with a checked snapshot; raw diagnostic capture is not complete license admission.
   Its explicit `--toolchain` input also retains the selected Go distribution's
   LICENSE, PATENTS and VERSION in the Linux recipe, not the public website build.
+  It checks the frozen profile's complete 16-package compiler-vendor selection
+  against that actual distribution and retains all eight vendor term identities
+  through checked, byte-equal root spans. Normal unflagged capture remains inert.
   This does not cover all selected Go modules or incorporated-source terms.
   The explicit `--source-license` input retains the complete frozen root LICENSE
   from this build's prepared source; it is required in both Linux capture phases.
