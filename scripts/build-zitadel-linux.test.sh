@@ -15,6 +15,7 @@ cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
+cp -R "$root/third_party/zitadel-go-module-notices" "$scratch/recipe/third_party/"
 build="$scratch/recipe/scripts/build-zitadel-linux.sh"
 # These are process doubles, not alternative production build entrypoints.
 cat >"$scratch/recipe/scripts/prepare-zitadel-source.sh" <<'STUB'
@@ -82,13 +83,15 @@ case "$1 $2" in
     if [[ "${TEST_UNADMITTED:-}" = binary ]]; then printf '\tdep\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_FAIL:-}" = binary-metadata ]]; then exit 42; fi;;
-  'mod verify') :;;
+  'mod verify')
+    if [[ "${TEST_FAIL:-}" = module-integrity && -s "${GOCACHE%/go-cache}/service/zitadel" ]]; then echo 'plausible module verification followed by failure'; exit 42; fi;;
   'run '*)
     if [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
-      [[ "${12:-}" = --source-license && "$#" -eq 12 ]] || { echo 'prepared root licence capture not required' >&2; exit 42; }
+      [[ "${12:-}" = --source-license ]] || { echo 'prepared root licence capture not required' >&2; exit 42; }
+      [[ "${13:-}" = --modules && "$#" -eq 14 && -s "${14:-}/catalogue.json" ]] || { echo 'selected Go module root retention not required' >&2; exit 42; }
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
@@ -103,6 +106,8 @@ case "$1 $2" in
         if [[ "${TEST_FAIL:-}" = toolchain ]]; then echo 'plausible partial toolchain retention'; exit 42; fi
         printf 'verbatim source root licence fixture\n' >"$5/zitadel-root-license.txt"
         if [[ "${TEST_FAIL:-}" = source-license ]]; then echo 'plausible partial root licence retention'; exit 42; fi
+        printf 'verbatim selected module fixture\n' >"$5/go-module-notices.txt"
+        if [[ "${TEST_FAIL:-}" = modules ]]; then echo 'plausible partial module retention'; exit 42; fi
       fi
       echo '{"fixture":"orchestration only"}'
     else
@@ -187,6 +192,8 @@ reject failed-notice-capture TEST_FAIL=notice-capture
 reject failed-supplement TEST_FAIL=supplement
 reject failed-toolchain TEST_FAIL=toolchain
 reject failed-source-license TEST_FAIL=source-license
+reject failed-module-retention TEST_FAIL=modules
+reject changed-module-cache TEST_FAIL=module-integrity
 reject unsupported-metadata-profile TEST_METADATA_PROFILE=other
 reject unadmitted-metadata-graph TEST_UNADMITTED=graph
 reject unadmitted-metadata-binary TEST_UNADMITTED=binary
@@ -205,5 +212,6 @@ test -s "$scratch/complete/console-notices-supplement.txt"
 test -s "$scratch/complete/console-notices-supplement-inventory.json"
 test -s "$scratch/complete/go-toolchain-notices.txt"
 test -s "$scratch/complete/zitadel-root-license.txt"
+test -s "$scratch/complete/go-module-notices.txt"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'
