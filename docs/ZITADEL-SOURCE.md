@@ -352,7 +352,11 @@ section records the catalogue, both frozen root locks, every original/effective
 identity and each component's relative source path, offset, size and digest. Its
 existing nine preparation, graph, recipe, binary and receipt bindings remain in
 force. Equal text still has a separate retained source identity. The existing
-2 MiB text and 4 MiB snapshot bounds are unchanged.
+2 MiB text and 4 MiB snapshot bounds are unchanged. The public snapshot writer
+counts the complete encoded JSON, including base64, metadata and its trailing
+newline, against the same aggregate limit used by capture. An oversized
+combination refuses with an explicit size-limit diagnostic before any snapshot
+output or service compilation; individually valid text sizes do not bypass it.
 
 The existing root-level text diagnostic pattern retains only this additional
 text output; it does not admit executables, module ZIPs, module trees or prepared

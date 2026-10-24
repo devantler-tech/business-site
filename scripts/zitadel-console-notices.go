@@ -27,6 +27,7 @@ const noticeEmbedded = "internal/api/ui/console/static/3rdpartylicenses.txt"
 const noticeBefore = "console-notices.before.json"
 const noticeRaw = "console-third-party-notices.txt"
 const noticeLimit = 2 << 20
+const noticeSnapshotLimit = 4 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
@@ -792,6 +793,12 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 		return fail(err)
 	}
 	b = append(b, '\n')
+	// The public snapshot writer and capture reader share one aggregate budget.
+	// Base64 and metadata overhead count, so refuse before emitting a snapshot
+	// that a later capture would reject only after the service compilation.
+	if values["--snapshot"] != "" && len(b) > noticeSnapshotLimit {
+		return fail(fmt.Errorf("encoded compile snapshot exceeds %d-byte limit", noticeSnapshotLimit))
+	}
 	if captured != nil && captured.supplement != nil {
 		s := captured.supplement
 		inventory := struct {
@@ -1160,7 +1167,7 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 	if err != nil {
 		return result, nil, err
 	}
-	beforeBytes, err := read(build, noticeBefore, 4<<20)
+	beforeBytes, err := read(build, noticeBefore, noticeSnapshotLimit)
 	if err != nil {
 		return result, nil, fmt.Errorf("compile snapshot unavailable")
 	}
