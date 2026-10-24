@@ -208,8 +208,21 @@ func noticeSupplementSnapshot(build, notices, expected string, read noticeReader
 					return nil, fmt.Errorf("supplement installed text identity differs")
 				}
 				result.Inputs = append(result.Inputs, noticeBinding{"prepared/source/" + root + "/" + component.Original, noticeDigest(original)})
-			} else if component.Kind != "immutable-source" || !strings.HasPrefix(component.Original, "https://raw.githubusercontent.com/") {
-				return nil, fmt.Errorf("unsupported supplement source")
+			} else {
+				if !strings.HasPrefix(component.Original, "https://raw.githubusercontent.com/") || !noticeDigestPattern.MatchString(component.OriginalSHA256) || component.OriginalBytes < 1 || component.OriginalBytes > 2<<20 || component.Offset < 0 || component.Offset > component.OriginalBytes || component.Bytes > component.OriginalBytes-component.Offset {
+					return nil, fmt.Errorf("invalid immutable supplement source")
+				}
+				switch component.Kind {
+				case "immutable-source":
+					if component.Offset != 0 || component.Bytes != component.OriginalBytes || component.SHA256 != component.OriginalSHA256 {
+						return nil, fmt.Errorf("complete immutable source identity differs")
+					}
+				case "immutable-source-header":
+					// The full source digest is a curation observation, not a
+					// build-time read. Only this separately pinned span is emitted.
+				default:
+					return nil, fmt.Errorf("unsupported supplement source")
+				}
 			}
 			result.Inputs = append(result.Inputs, noticeBinding{component.Retained, noticeDigest(text)})
 			header := fmt.Sprintf("Package: %s@%s\nComponent: %s\nSource: %s\n\n", pkg.Name, pkg.Version, component.Role, component.Original)

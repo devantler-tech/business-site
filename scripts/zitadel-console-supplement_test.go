@@ -342,3 +342,50 @@ func TestSupplementPinnedTextsIncludeBothProtobufLicenses(t *testing.T) {
 		}
 	}
 }
+
+func TestSupplementImmutableSourceVariantsAreExplicit(t *testing.T) {
+	for _, kind := range []string{"complete", "header", "wrong-full-digest", "wrong-full-size", "wrong-header-span", "wrong-source", "unknown-kind"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newSupplementFixture(t)
+			data, _ := os.ReadFile(filepath.Join(f.notices, "catalogue.json"))
+			var catalogue map[string]any
+			if err := json.Unmarshal(data, &catalogue); err != nil {
+				t.Fatal(err)
+			}
+			component := catalogue["packages"].([]any)[2].(map[string]any)["components"].([]any)[0].(map[string]any)
+			text, _ := os.ReadFile(filepath.Join(f.notices, "grpc-web.txt"))
+			component["kind"] = "immutable-source"
+			component["offset"] = 0
+			component["original"] = "https://raw.githubusercontent.com/grpc/grpc-web/ea2d8dae34e8cc19df2c1836a5e590a6e30bcb87/LICENSE"
+			component["originalBytes"] = len(text)
+			component["originalSha256"] = noticeHash(text)
+			switch kind {
+			case "header", "wrong-header-span":
+				component["kind"] = "immutable-source-header"
+				component["originalBytes"] = len(text) + 100
+				component["originalSha256"] = noticeHash([]byte("curation-only full upstream source identity"))
+				if kind == "wrong-header-span" {
+					component["offset"] = len(text) + 101
+				}
+			case "wrong-full-digest":
+				component["originalSha256"] = strings.Repeat("0", 64)
+			case "wrong-full-size":
+				component["originalBytes"] = len(text) + 1
+			case "wrong-source":
+				component["original"] = "http://unapproved.invalid/LICENSE"
+			case "unknown-kind":
+				component["kind"] = "silently-generalized"
+			}
+			data = noticeJSON(t, catalogue)
+			writeNotice(t, f.notices, "catalogue.json", data)
+			_, err := noticeSupplementSnapshot(f.build, f.notices, noticeHash(data), noticeRead)
+			valid := kind == "complete" || kind == "header"
+			if valid && err != nil {
+				t.Fatalf("valid %s refused: %v", kind, err)
+			}
+			if !valid && err == nil {
+				t.Fatalf("invalid %s admitted", kind)
+			}
+		})
+	}
+}
