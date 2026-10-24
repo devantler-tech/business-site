@@ -83,7 +83,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Its explicit `--modules` input retains all selected dependency root components
   plus eleven curated nested notices. A nested component must name its actual
   compiler-selected package, with an exact import-directory and cache binding.
-  Remaining incorporated-source terms are not cleared by this retention.
+  The same catalogue retains twelve selected source identities and seventeen
+  attribution/origin spans, checked against whole-file hashes and actual GoFiles.
+  It retains reviewed external terms, binds the PSL embeds and ignored generator,
+  and verifies the historical PSL source without emitting its data as diagnostics.
+  Read `third_party/zitadel-go-module-notices/README.md` for provenance and limits.
   The explicit `--source-license` input retains the complete frozen root LICENSE
   from this build's prepared source; it is required in both Linux capture phases.
   This is selected text retention, not full distribution or image admission.

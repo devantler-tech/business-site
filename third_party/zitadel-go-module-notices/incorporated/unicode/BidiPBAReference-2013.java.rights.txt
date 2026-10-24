@@ -1,0 +1,10 @@
+/*
+ * Last Revised: 2013-09-02
+ * 
+ * Credits:
+ * Written by Asmus Freytag
+ * 
+ * (C) Copyright ASMUS, Inc. 2013, All Rights Reserved
+ *
+ * Distributed under the Terms of Use in http://www.unicode.org/copyright.html.
+ */

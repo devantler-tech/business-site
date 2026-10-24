@@ -394,11 +394,31 @@ output or service compilation; individually valid text sizes do not bypass it.
 The existing root-level text diagnostic pattern retains only this additional
 text output; it does not admit executables, module ZIPs, module trees or prepared
 source. No-argument, unflagged capture and ordinary website builds remain inert
-with respect to these terms. Other nested candidates, selected copied-source
-headers, embedded data and remaining compiler-vendored exceptions stay explicit
-#326 work. The eleven selected texts do not clear those other obligations. Retention is not a
-legal classifier, full licence closure, image admission, a reproducibility result,
-restricted-runtime proof or customer-login activation.
+with respect to these terms.
+
+The catalogue's incorporated-source entries retain seventeen verbatim spans from
+twelve actual compiler-selected Go files. A whole-file size/hash and the exact
+package's GoFiles membership are required before slicing. Terms references name
+already retained complete components; equal Go BSD bytes are reused with explicit
+source relationships. Eight additional full or extracted external notice files
+retain the assessed MIT, zlib, Unicode and PSL material. Read
+`third_party/zitadel-go-module-notices/README.md` for their precise provenance.
+
+The PSL entry additionally checks all three actual EmbedFiles and the ignored
+generator, including their complete sizes/hashes. The complete historical list
+is a checked corresponding-source input in this repository, with a recipient
+source reference in the retained text and inventory. Its data and generator code
+are not notice diagnostics and the collector never executes that generator.
+Static semantic correspondence does not claim byte-for-byte regeneration of its
+optimized tables. Unicode and zlib reference terms do not establish the precise
+historical source revisions copied by their downstream adaptations.
+
+Wrong or unselected source, changed or overlapping spans, unrelated terms,
+changed external inputs, linked files, failed reads and contradictory generator
+selection refuse the same snapshot/capture path. Full corresponding-source
+packaging and clean replay remain under #343/#308. This is assessed text/input
+retention, not a legal classifier, full licence closure, image admission,
+reproducibility, restricted-runtime proof or customer-login activation.
 
 ## Local restricted image CLI test
 

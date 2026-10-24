@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,7 +33,7 @@ const noticeSnapshotLimit = 4 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
-const moduleCatalogueHash = "601a7f309ce620930ed6e6095961a5e39cd6438650ef345e478046351c18ceac"
+const moduleCatalogueHash = "dfdff48e6a821277bfc9fa1b2a2133e316dfc8850c6f4fc13cdbf97625c17047"
 const moduleNoticeRaw = "go-module-notices.txt"
 
 type noticeReader func(string, string, int64) ([]byte, error)
@@ -349,7 +350,72 @@ type noticeModuleEntry struct {
 	Original   noticeModuleIdentity    `json:"original"`
 	Effective  noticeModuleIdentity    `json:"effective"`
 	Components []noticeModuleComponent `json:"components"`
+	Origins    []noticeModuleOrigin    `json:"origins,omitempty"`
 }
+
+type noticeOriginSpan struct {
+	Offset int    `json:"offset"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeOriginTerm struct {
+	Module string `json:"module"`
+	File   string `json:"file"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeOriginExternal struct {
+	File     string `json:"file"`
+	Upstream string `json:"upstream"`
+	Bytes    int    `json:"bytes"`
+	SHA256   string `json:"sha256"`
+}
+
+type noticeOriginInput struct {
+	File   string `json:"file"`
+	Kind   string `json:"kind"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type noticeModuleOrigin struct {
+	File         string                 `json:"file"`
+	Package      string                 `json:"package"`
+	Bytes        int                    `json:"bytes"`
+	SHA256       string                 `json:"sha256"`
+	Spans        []noticeOriginSpan     `json:"spans"`
+	Terms        []noticeOriginTerm     `json:"terms,omitempty"`
+	Notices      []noticeOriginExternal `json:"notices,omitempty"`
+	SourceInputs []noticeOriginExternal `json:"sourceInputs,omitempty"`
+	Inputs       []noticeOriginInput    `json:"inputs,omitempty"`
+}
+
+type noticeOriginSection struct {
+	SourceOffset int    `json:"sourceOffset"`
+	Offset       int    `json:"offset"`
+	Bytes        int    `json:"bytes"`
+	SHA256       string `json:"sha256"`
+}
+
+type noticeOriginExternalSection struct {
+	noticeOriginExternal
+	Offset int `json:"offset"`
+}
+
+type noticeOriginRecord struct {
+	Source       string                        `json:"source"`
+	Package      string                        `json:"package"`
+	Bytes        int                           `json:"bytes"`
+	SHA256       string                        `json:"sha256"`
+	Spans        []noticeOriginSection         `json:"spans"`
+	Terms        []noticeOriginTerm            `json:"terms,omitempty"`
+	Notices      []noticeOriginExternalSection `json:"notices,omitempty"`
+	SourceInputs []noticeOriginExternal        `json:"sourceInputs,omitempty"`
+	Inputs       []noticeOriginInput           `json:"inputs,omitempty"`
+}
+
+type noticeSelectedSources map[string]map[string]map[string]bool
 
 type noticeModuleCatalogue struct {
 	SchemaVersion   int                 `json:"schemaVersion"`
@@ -372,6 +438,7 @@ type noticeModuleRecord struct {
 	Original   noticeModuleIdentity  `json:"original"`
 	Effective  noticeModuleIdentity  `json:"effective"`
 	Components []noticeModuleSection `json:"components"`
+	Origins    []noticeOriginRecord  `json:"origins,omitempty"`
 }
 
 type noticeModuleEvidence struct {
@@ -472,6 +539,7 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 	seenPackages := map[string]bool{}
 	seenModules := map[string]bool{}
 	selectedDirectories := map[string]map[string]bool{}
+	selectedSources := map[string]noticeSelectedSources{}
 	for {
 		var raw json.RawMessage
 		if e := stream.Decode(&raw); e == io.EOF {
@@ -547,11 +615,34 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 			selectedDirectories[observed.Path] = map[string]bool{}
 		}
 		selectedDirectories[observed.Path][relative] = true
+		if selectedSources[observed.Path] == nil {
+			selectedSources[observed.Path] = noticeSelectedSources{}
+		}
+		fields := map[string]map[string]bool{}
+		for _, field := range []string{"GoFiles", "EmbedFiles", "IgnoredGoFiles"} {
+			fields[field] = map[string]bool{}
+			if obj[field] == nil {
+				continue
+			}
+			files, ok := obj[field].([]any)
+			if !ok {
+				return nil, fmt.Errorf("invalid module package source observation")
+			}
+			for _, raw := range files {
+				file, ok := raw.(string)
+				if !ok || !noticeModuleRelativePath(file) || fields[field][file] || (field != "EmbedFiles" && path.Base(file) != file) {
+					return nil, fmt.Errorf("invalid module package source filename")
+				}
+				fields[field][file] = true
+			}
+		}
+		selectedSources[observed.Path][importPath] = fields
 	}
 	if len(seenModules) != len(wanted) {
 		return nil, fmt.Errorf("selected module observation is incomplete")
 	}
 	result := &noticeModules{Evidence: noticeModuleEvidence{CatalogueSHA256: catalogueHash, GoModSHA256: catalogue.GoModSHA256, GoSumSHA256: catalogue.GoSumSHA256, RawDiagnostic: moduleNoticeRaw}}
+	externalPurposes := map[string]bool{}
 	for _, entry := range catalogue.Modules {
 		effective := entry.Effective
 		cache := "go-modules/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version)
@@ -597,11 +688,137 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 				return nil, fmt.Errorf("module notice output exceeds limit")
 			}
 		}
+		if err := noticeRetainOrigins(build, directory, entry, wanted, selectedSources[entry.Original.Path], externalPurposes, read, result, &record); err != nil {
+			return nil, err
+		}
 		result.Evidence.Modules = append(result.Evidence.Modules, record)
 	}
 	result.Evidence.Bytes = len(result.Text)
 	result.Evidence.SHA256 = noticeDigest(result.Text)
 	return result, nil
+}
+
+// Origins are a closed, reviewed set of selected source spans, not a filename
+// discovery rule. Source-input and ignored-generator bytes are checked, never
+// emitted or executed. Complete corresponding-source delivery is separate.
+func noticeRetainOrigins(build, directory string, entry noticeModuleEntry, catalogue map[string]noticeModuleEntry, selected noticeSelectedSources, externalPurposes map[string]bool, read noticeReader, result *noticeModules, record *noticeModuleRecord) error {
+	cache := "go-modules/" + noticeModuleEscape(entry.Effective.Path) + "@" + noticeModuleEscape(entry.Effective.Version) + "/"
+	previous := ""
+	for _, origin := range entry.Origins {
+		if origin.File <= previous || !noticeModuleRelativePath(origin.File) || origin.Bytes < 1 || origin.Bytes > 1<<20 || !noticeDigestPattern.MatchString(origin.SHA256) || len(origin.Spans) == 0 || len(origin.Spans) > 32 || len(origin.Terms)+len(origin.Notices) == 0 {
+			return fmt.Errorf("invalid or unordered module origin")
+		}
+		previous = origin.File
+		packageRelative := ""
+		if origin.Package != entry.Original.Path {
+			if !strings.HasPrefix(origin.Package, entry.Original.Path+"/") {
+				return fmt.Errorf("module origin has a foreign package")
+			}
+			packageRelative = strings.TrimPrefix(origin.Package, entry.Original.Path+"/")
+		}
+		fields := selected[origin.Package]
+		if fields == nil || path.Join(packageRelative, path.Base(origin.File)) != origin.File || !fields["GoFiles"][path.Base(origin.File)] {
+			return fmt.Errorf("module origin source is not compiler-selected")
+		}
+		source := cache + origin.File
+		body, err := read(build, source, 1<<20)
+		if err != nil || len(body) != origin.Bytes || noticeDigest(body) != origin.SHA256 || !utf8.Valid(body) || bytes.ContainsRune(body, 0) {
+			return fmt.Errorf("module origin source differs or is unavailable")
+		}
+		// Optional lists are omitted by the saved JSON snapshot when empty.
+		// Canonicalize only empty representations here so the unchanged checked
+		// state compares exactly after reading it back; keep every nonempty item.
+		retained := noticeOriginRecord{
+			Source: source, Package: origin.Package, Bytes: origin.Bytes, SHA256: origin.SHA256,
+			Terms:        append([]noticeOriginTerm(nil), origin.Terms...),
+			SourceInputs: append([]noticeOriginExternal(nil), origin.SourceInputs...),
+			Inputs:       append([]noticeOriginInput(nil), origin.Inputs...),
+		}
+		previousTerm := ""
+		for _, term := range origin.Terms {
+			key := term.Module + "/" + term.File
+			if key <= previousTerm || !noticeModuleRelativePath(term.File) || !noticeDigestPattern.MatchString(term.SHA256) {
+				return fmt.Errorf("invalid module origin terms reference")
+			}
+			previousTerm = key
+			found := false
+			for _, component := range catalogue[term.Module].Components {
+				if component.File == term.File && component.SHA256 == term.SHA256 {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("module origin terms are not retained components")
+			}
+		}
+		previousInput := ""
+		for _, input := range origin.Inputs {
+			field := map[string]string{"embed": "EmbedFiles", "generator": "IgnoredGoFiles"}[input.Kind]
+			name := strings.TrimPrefix(input.File, packageRelative+"/")
+			if packageRelative == "" {
+				name = input.File
+			}
+			if input.File <= previousInput || !noticeModuleRelativePath(input.File) || field == "" || path.Join(packageRelative, name) != input.File || !fields[field][name] || (input.Kind == "generator" && fields["GoFiles"][name]) || input.Bytes < 1 || input.Bytes > 1<<20 || !noticeDigestPattern.MatchString(input.SHA256) {
+				return fmt.Errorf("module origin input is not its selected embed or ignored generator")
+			}
+			previousInput = input.File
+			data, e := read(build, cache+input.File, 1<<20)
+			if e != nil || len(data) != input.Bytes || noticeDigest(data) != input.SHA256 {
+				return fmt.Errorf("module origin input differs or is unavailable")
+			}
+		}
+		end := 0
+		for _, span := range origin.Spans {
+			if span.Offset < end || span.Offset > len(body) || span.Bytes < 1 || span.Bytes > len(body)-span.Offset || !noticeDigestPattern.MatchString(span.SHA256) {
+				return fmt.Errorf("invalid or overlapping module origin span")
+			}
+			text := body[span.Offset : span.Offset+span.Bytes]
+			if !utf8.Valid(text) || noticeDigest(text) != span.SHA256 {
+				return fmt.Errorf("module origin span differs")
+			}
+			end = span.Offset + span.Bytes
+			result.Text = append(result.Text, []byte(fmt.Sprintf("Origin: %s [%d:%d]\n\n", source, span.Offset, end))...)
+			retained.Spans = append(retained.Spans, noticeOriginSection{span.Offset, len(result.Text), len(text), span.SHA256})
+			result.Text = append(result.Text, text...)
+			result.Text = append(result.Text, '\n', '\n')
+		}
+		externalFiles := map[string]bool{}
+		for _, set := range []struct {
+			values []noticeOriginExternal
+			emit   bool
+		}{{origin.Notices, true}, {origin.SourceInputs, false}} {
+			previousFile := ""
+			for _, input := range set.values {
+				u, err := url.Parse(input.Upstream)
+				if input.File <= previousFile || externalFiles[input.File] || !noticeModuleRelativePath(input.File) || !strings.HasPrefix(input.File, "incorporated/") || input.Bytes < 1 || input.Bytes > 512<<10 || !noticeDigestPattern.MatchString(input.SHA256) || err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Port() != "" || u.RawQuery != "" || u.Fragment != "" || len(input.Upstream) > 4096 || strings.ContainsFunc(input.Upstream, func(c rune) bool { return unicode.IsSpace(c) || unicode.IsControl(c) }) {
+					return fmt.Errorf("invalid module origin external input")
+				}
+				previousFile = input.File
+				externalFiles[input.File] = true
+				if purpose, exists := externalPurposes[input.File]; exists && purpose != set.emit {
+					return fmt.Errorf("module origin external input has contradictory purposes")
+				}
+				externalPurposes[input.File] = set.emit
+				text, e := read(directory, input.File, 512<<10)
+				if e != nil || len(text) != input.Bytes || noticeDigest(text) != input.SHA256 || !utf8.Valid(text) || bytes.ContainsRune(text, 0) {
+					return fmt.Errorf("module origin external input differs or is unavailable")
+				}
+				if set.emit {
+					result.Text = append(result.Text, []byte("Source: "+input.Upstream+"\n\n")...)
+					retained.Notices = append(retained.Notices, noticeOriginExternalSection{input, len(result.Text)})
+					result.Text = append(result.Text, text...)
+					result.Text = append(result.Text, '\n', '\n')
+				} else {
+					result.Text = append(result.Text, []byte("Corresponding source input: "+input.Upstream+" (SHA-256 "+input.SHA256+")\n\n")...)
+				}
+			}
+		}
+		if len(result.Text) > noticeLimit {
+			return fmt.Errorf("module origin notice output exceeds limit")
+		}
+		record.Origins = append(record.Origins, retained)
+	}
+	return nil
 }
 
 type noticeSourceLicenseEvidence struct {
