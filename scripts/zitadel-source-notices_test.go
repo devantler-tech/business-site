@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -395,6 +396,48 @@ func TestModuleRootSnapshotPreservesAllIdentitiesAndVerbatimComponents(t *testin
 	}
 }
 
+// Individually valid retained texts can exceed the encoded snapshot budget.
+// Refuse that combination before emitting a snapshot and starting compilation.
+func TestModuleRootSnapshotRefusesOversizedCombinedTextsBeforeOutput(t *testing.T) {
+	f := newModuleRootFixture(t)
+	raw := bytes.Repeat([]byte("A"), 2<<20)
+	writeNotice(t, f.build, "prepared/source/"+noticeConsole, raw)
+	writeNotice(t, f.build, "prepared/source/"+noticeEmbedded, raw)
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue noticeModuleCatalogue
+	if err = json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	original := catalogue.Modules[0].Components
+	components := append([]noticeModuleComponent(nil), original[0])
+	text := bytes.Repeat([]byte("B"), 64<<10)
+	for i := 0; i < 24; i++ {
+		name := fmt.Sprintf("NOTICE-%02d", i)
+		writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/"+name, text)
+		components = append(components, noticeModuleComponent{File: name, Bytes: len(text), SHA256: noticeHash(text)})
+	}
+	catalogue.Modules[0].Components = append(components, original[1])
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+	state, err := noticeSnapshot(f.build, f.recipe, noticeRead, noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash})
+	if err != nil || state.Modules == nil || len(state.Modules.Text) > 2<<20 {
+		t.Fatalf("individually valid fixture refused: %v", err)
+	}
+	encoded, err := json.MarshalIndent(state, "", "  ")
+	if err != nil || len(encoded)+1 <= 4<<20 {
+		t.Fatalf("fixture does not exercise the aggregate snapshot limit: %v", err)
+	}
+	var out, diagnostic bytes.Buffer
+	code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash)
+	if code == 0 || out.Len() != 0 || !strings.Contains(diagnostic.String(), "snapshot") || !strings.Contains(diagnostic.String(), "limit") {
+		t.Fatalf("oversized aggregate snapshot was not refused before output: code=%d bytes=%d diagnostic=%s", code, out.Len(), &diagnostic)
+	}
+}
+
 // A plausible prefix or one valid licence cannot hide a changed graph or input.
 func TestModuleRootSnapshotRefusesIncompleteOrContradictoryEvidence(t *testing.T) {
 	for _, kind := range []string{"missing-terms", "truncated-terms", "same-size-substitution", "linked-terms", "linked-cache", "escaping-directory", "missing-module", "extra-module", "contradictory-module", "duplicate-package", "wrong-version", "wrong-sum", "wrong-replacement", "wrong-mod-sum", "changed-root-mod", "changed-root-sum", "changed-cache-mod", "changed-ziphash", "catalogue-substitution", "missing-catalogue", "graph-producer-prefix"} {
@@ -586,8 +629,15 @@ func TestModuleRootCheckedReadsAndRevalidation(t *testing.T) {
 				t.Fatalf("checked bytes were not retained: %v", err)
 			}
 			writeNotice(t, f.build, noticeBefore, noticeJSON(t, state))
-			if _, _, err := noticeCapture(f.build, f.recipe, noticeRead, options); err == nil {
-				t.Fatal("post-snapshot module replacement admitted")
+			binaryReads := 0
+			captureReader := func(root, name string, limit int64) ([]byte, error) {
+				if name == "service/zitadel" {
+					binaryReads++
+				}
+				return noticeRead(root, name, limit)
+			}
+			if _, _, err := noticeCapture(f.build, f.recipe, captureReader, options); err == nil || binaryReads != 0 {
+				t.Fatal("post-snapshot module replacement reached binary capture")
 			}
 		})
 	}
