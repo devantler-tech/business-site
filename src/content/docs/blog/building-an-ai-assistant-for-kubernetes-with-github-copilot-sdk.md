@@ -20,7 +20,7 @@ What if managing Kubernetes clusters was as simple as having a conversation?
 
 [KSail](https://github.com/devantler-tech/ksail) has always been about reducing overhead. It started as shell scripts, became a [.NET tool with embedded binaries](/blog/building-ksail-from-shell-to-dotnet-to-go/), and is now a pure Go SDK that bundles kubectl, helm, kind, k3d, flux, and argocd into a single binary. Each iteration removed friction: first installation overhead (one binary instead of six tools), then workflow overhead (consistent commands across distributions).
 
-The chat feature is the next step: **removing cognitive overhead**. Instead of memorizing that `ksail cluster init --distribution Talos --provider Hetzner --cni Cilium --gitops-engine Flux --local-registry '${GITHUB_USER}:${GITHUB_TOKEN}@ghcr.io/devantler-tech/ksail/system-test-manifests' --control-planes 3 --workers 2` is the syntax to create a Talos cluster on Hetzner with three control plane nodes, two worker nodes, Cilium as a CNI, and Flux as your GitOps engine set up to sync with an OCI image in GHCR, you can just say: "Create a HA Talos cluster on Hetzner with Cilium and Flux set up to sync with ghcr.io/devantler-tech/ksail/system-test-manifests." (pheeew).
+The chat feature is the next step: **removing cognitive overhead**. Instead of memorizing that `ksail project init --distribution Talos --provider Hetzner --cni Cilium --gitops-engine Flux --local-registry '${GITHUB_USER}:${GITHUB_TOKEN}@ghcr.io/devantler-tech/ksail/system-test-manifests' --control-planes 3 --workers 2` is the syntax to set up a Talos cluster on Hetzner with three control plane nodes, two worker nodes, Cilium as a CNI, and Flux as your GitOps engine set up to sync with an OCI image in GHCR, you can just say: "Create a HA Talos cluster on Hetzner with Cilium and Flux set up to sync with ghcr.io/devantler-tech/ksail/system-test-manifests." (pheeew).
 
 This post covers the technical journey of building `ksail chat` using the [GitHub Copilot SDK for Go](https://github.com/github/copilot-sdk/tree/main/go), [Bubbletea](https://github.com/charmbracelet/bubbletea) TUI framework, and [glamour](https://github.com/charmbracelet/glamour) for markdown rendering.
 
@@ -185,20 +185,20 @@ The chat assistant is functional but still in its infancy. Each improvement targ
 - **Better context** — understand the user's specific cluster state, not just general KSail knowledge
 - **Streaming cancellation** — more responsive interaction when the SDK supports it
 
-If you want to try it:
+If you want to try it (updated for KSail v7.204 on 24 October 2026, where the chat command is `ksail open chat`):
 
 ```bash
-# Install KSail v5+
-brew install devantler-tech/tap/ksail
+# Install KSail
+brew install --cask devantler-tech/tap/ksail
 
-# Start a chat session (requires GitHub Copilot access)
-ksail chat
+# Start a chat session (GitHub Copilot by default; --provider selects another AI provider)
+ksail open chat
 
 # Or use non-TUI mode
-ksail chat --tui=false
+ksail open chat --tui=false
 ```
 
-The full implementation is in the [KSail repository](https://github.com/devantler-tech/ksail) — the TUI lives in `pkg/cli/ui/chat/` and the tools generator in `pkg/svc/chat/generator/`.
+The full implementation is in the [KSail repository](https://github.com/devantler-tech/ksail) — the TUI lives in `pkg/cli/ui/chat/` and the tools generator in `pkg/toolgen/`.
 
 Feedback and contributions welcome!
 

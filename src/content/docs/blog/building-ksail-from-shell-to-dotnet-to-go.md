@@ -174,18 +174,21 @@ The current Go version of KSail provides:
 - **Secret management** — Integrated SOPS encryption
 - **Declarative configuration** — Everything as code in `ksail.yaml`
 
+> [!NOTE]
+> The commands below were updated to match KSail v7.204 (checked on 24 October 2026).
+
 Installation is simple:
 
 ```bash
 brew install --cask devantler-tech/tap/ksail
 # or
-go install github.com/devantler-tech/ksail/v5@latest
+curl -fsSL https://github.com/devantler-tech/ksail/releases/latest/download/install.sh | sh
 ```
 
 And usage is straightforward:
 
 ```bash
-ksail cluster init --distribution Kind --cni Cilium --gitops-engine Flux
+ksail project init --distribution Vanilla --cni Cilium --gitops-engine Flux
 ksail cluster create
 ksail workload apply -k ./k8s
 ksail cluster connect  # Opens K9s
