@@ -63,6 +63,26 @@ sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$sta
 sed "/^@import 'faces\/ailerons_font_faces';$/d" "$stage/source/$login" >"$stage/login"
 mv "$stage/console" "$stage/source/$console"
 mv "$stage/login" "$stage/source/$login"
+# This hash-bound profile has no JSONPath metadata selector. Preserve host/IP
+# identification and the exact raw-response path; configured selectors refuse.
+metadata=internal/id/sonyflake.go
+awk '
+  $0 == "\t\"encoding/json\"" || $0 == "\t\"github.com/jarcoal/jpath\"" { next }
+  /^func extractMetadataResponse\(/ {
+    selected++
+    print "func extractMetadataResponse(path *string, data []byte) ([]byte, error) {"
+    print "\tif path != nil {"
+    print "\t\treturn nil, fmt.Errorf(\"metadata JSONPath is unsupported by this source profile\")"
+    print "\t}"
+    print "\treturn data, nil"
+    print "}"
+  }
+  !selected { print }
+  END { if (selected != 1) exit 1 }
+' "$stage/source/$metadata" >"$stage/metadata"
+metadata_hash="$(shasum -a 256 "$stage/metadata" | awk '{print $1}')" || fail 'metadata transform hash failed'
+[[ "$metadata_hash" = 3ac3286d55661db102ed3f521f713dbc385df3a1e1731525e9aaed3762ef0b21 ]] || fail 'metadata transform differs'
+mv "$stage/metadata" "$stage/source/$metadata"
 rm -- "$stage/source/console/src/assets/ailerons.otf" \
   "$stage/source/console/src/styles/ailerons.scss" \
   "$stage/source/internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf" \
@@ -78,11 +98,11 @@ input_hash="$(shasum -a 256 "$root/scripts/zitadel-source-inputs.sha256" | awk '
 [[ "$recipe_hash" =~ ^[0-9a-f]{64}$ && "$input_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'receipt hash is incomplete'
 jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
   '{schemaVersion:1,upstreamCommit:$pin,recipeSha256:$recipe,inputManifestSha256:$inputs,
-    imageAdmission:"unknown",licenseClosure:"unknown",
+    imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:"machine-id-no-jsonpath-v1",
     removedFiles:["console/src/assets/ailerons.otf","console/src/styles/ailerons.scss",
       "internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf",
       "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss"],
-    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss"]}' >"$stage/source-preparation.json"
+    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go"]}' >"$stage/source-preparation.json"
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
 reserved=0 complete=0 interrupted=0

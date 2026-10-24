@@ -55,6 +55,14 @@ test -f "$scratch/upstream/local-only.txt"
 test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
 
+# Exercise the real prepared machine-ID function through its native package.
+# These tests add no production source or dependencies to the prepared output.
+cp "$root/scripts/testdata/zitadel-metadata-profile/metadata_profile_test.go" \
+  "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
+(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
+  go test -mod=readonly -count=1 ./internal/id -run '^TestCustomerMetadataProfile')
+rm -- "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
+
 for path in \
   console/src/assets/ailerons.otf \
   console/src/styles/ailerons.scss \
@@ -68,12 +76,19 @@ grep -Fvx "@import './styles/ailerons.scss';" "$scratch/pristine/console/src/sty
 mv "$scratch/expected-console" "$scratch/pristine/console/src/styles.scss"
 grep -Fvx "@import 'faces/ailerons_font_faces';" "$scratch/pristine/internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss" >"$scratch/expected-login"
 mv "$scratch/expected-login" "$scratch/pristine/internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss"
+# Pin the only newly declared changed file independently of the preparer.
+metadata=internal/id/sonyflake.go
+test "$(shasum -a 256 "$scratch/prepared source/source/$metadata" | awk '{print $1}')" = \
+  3ac3286d55661db102ed3f521f713dbc385df3a1e1731525e9aaed3762ef0b21
+cp "$scratch/prepared source/source/$metadata" "$scratch/pristine/$metadata"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
-  (.removedFiles | length) == 4 and (.changedFiles | length) == 2
+  (.removedFiles | length) == 4 and
+  .metadataProfile == "machine-id-no-jsonpath-v1" and
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
 # Never overwrite a completed output or a pre-existing directory/symlink.
@@ -111,6 +126,27 @@ test ! -e "$scratch/partial-output"
 reject env PATH="$scratch/bin:$PATH" SOURCE_TEST_GIT="$real_git" SOURCE_TEST_PARTIAL="$scratch/partial.tar" SOURCE_TEST_ARCHIVE_STATUS=0 \
   bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/truncated-output"
 test ! -e "$scratch/truncated-output"
+
+# A plausible partial metadata transform is never a prepared source receipt,
+# whether its producer reports failure or incorrectly reports success.
+real_awk="$(command -v awk)"
+mkdir "$scratch/metadata-bin"
+cat >"$scratch/metadata-bin/awk" <<'WRAPPER'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  if [[ "$arg" == */internal/id/sonyflake.go ]]; then
+    printf 'package id\n'
+    exit "${SOURCE_TEST_METADATA_STATUS:-42}"
+  fi
+done
+exec "$SOURCE_TEST_AWK" "$@"
+WRAPPER
+chmod 755 "$scratch/metadata-bin/awk"
+for status in 42 0; do
+  reject env PATH="$scratch/metadata-bin:$PATH" SOURCE_TEST_AWK="$real_awk" SOURCE_TEST_METADATA_STATUS="$status" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/partial-metadata-$status"
+  test ! -e "$scratch/partial-metadata-$status"
+done
 
 # A failed receipt-input read cannot be hidden by a successful JSON writer.
 real_shasum="$(command -v shasum)"

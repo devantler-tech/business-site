@@ -26,8 +26,8 @@ for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/p
   printf 'frozen input\n' >"$out/source/$f"
 done
 printf '{"targets":{"generate-install":{"options":{"commands":["native generator"]}}}}\n' >"$out/source/apps/api/project.json"
-jq -n --arg pin "${TEST_PIN:-8afa5dd37a8e723efb9eace8d09fd5c1cccef694}" \
-  '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown"}' >"$out/source-preparation.json"
+jq -n --arg pin "${TEST_PIN:-8afa5dd37a8e723efb9eace8d09fd5c1cccef694}" --arg profile "${TEST_METADATA_PROFILE:-machine-id-no-jsonpath-v1}" \
+  '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:$profile}' >"$out/source-preparation.json"
 STUB
 cat >"$scratch/bin/uname" <<'STUB'
 #!/usr/bin/env bash
@@ -77,7 +77,11 @@ set -euo pipefail
 case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'env GOROOT') echo "$TEST_GOROOT";;
-  'version -m') printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n';;
+  'version -m')
+    printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n'
+    if [[ "${TEST_UNADMITTED:-}" = binary ]]; then printf '\tdep\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
+    if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
+    if [[ "${TEST_FAIL:-}" = binary-metadata ]]; then exit 42; fi;;
   'mod verify') :;;
   'run '*)
     if [[ "$2" == */zitadel-console-notices.go ]]; then
@@ -116,7 +120,10 @@ case "$1 $2" in
     esac
     if [[ "${TEST_MISSING:-}" = embed ]]; then echo '{}'; else
       echo '{"ImportPath":"github.com/zitadel/zitadel/internal/api/ui/console","EmbedPatterns":["static"],"EmbedFiles":["static/index.html","static/main.js","static/styles.css","static/3rdpartylicenses.txt"]}'
-    fi;;
+    fi
+    if [[ "${TEST_UNADMITTED:-}" = graph ]]; then echo '{"ImportPath":"github.com/jarcoal/jpath","Module":{"Path":"github.com/jarcoal/jpath"}}'; fi
+    if [[ "${TEST_UNADMITTED:-}" = graph-replacement ]]; then echo '{"ImportPath":"example.invalid/selector","Module":{"Path":"example.invalid/selector","Replace":{"Path":"github.com/jarcoal/jpath"}}}'; fi
+    if [[ "${TEST_FAIL:-}" = package-graph ]]; then exit 42; fi;;
   'build '*)
     while [[ "$1" != -o ]]; do shift; done; shift
     if [[ "${TEST_FAIL:-}" = compile ]]; then echo 'Successfully ran target build'; exit 42; fi
@@ -180,6 +187,13 @@ reject failed-notice-capture TEST_FAIL=notice-capture
 reject failed-supplement TEST_FAIL=supplement
 reject failed-toolchain TEST_FAIL=toolchain
 reject failed-source-license TEST_FAIL=source-license
+reject unsupported-metadata-profile TEST_METADATA_PROFILE=other
+reject unadmitted-metadata-graph TEST_UNADMITTED=graph
+reject unadmitted-metadata-binary TEST_UNADMITTED=binary
+reject unadmitted-metadata-replacement-graph TEST_UNADMITTED=graph-replacement
+reject unadmitted-metadata-replacement-binary TEST_UNADMITTED=binary-replacement
+reject partial-package-graph TEST_FAIL=package-graph
+reject partial-binary-metadata TEST_FAIL=binary-metadata
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"

@@ -47,7 +47,7 @@ version=4.20.0
 source_date=2026-10-22T07:05:44Z
 started="$(date -u +%s)"
 bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
-jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$output/prepared/source-preparation.json" >/dev/null
+jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
 shasum -a 256 "${inputs[@]}" >"$output/inputs.sha256"
@@ -99,6 +99,11 @@ grep -riE 'aileron' "$console" "$embedded" internal/api/ui/login/static/resource
 go mod verify
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 go list -deps -json . >"$output/packages.jsonl"
+jq -se 'length > 0 and all(.[];
+  (.ImportPath != "github.com/jarcoal/jpath") and
+  ((.ImportPath // "") | startswith("github.com/jarcoal/jpath/") | not) and
+  (.Module.Path != "github.com/jarcoal/jpath") and
+  (.Module.Replace.Path != "github.com/jarcoal/jpath"))' "$output/packages.jsonl" >/dev/null || fail 'unadmitted metadata selector remains in compiler inputs'
 jq -se --arg directory "$PWD/internal/api/ui/login/statik" '
   map(select(.ImportPath == "github.com/zitadel/zitadel/internal/api/ui/login/statik")) |
   length == 1 and .[0].Dir == $directory and
@@ -131,6 +136,8 @@ grep -q 'Advanced Micro Devices X86-64' "$output/elf.txt" || fail 'wrong ELF arc
 readelf -l "$binary" >"$output/elf-program.txt"
 if grep -q INTERP "$output/elf-program.txt"; then fail 'unexpected dynamic interpreter'; fi
 go version -m "$binary" >"$output/build-info.txt"
+awk '($1 == "dep" || $1 == "=>" || $1 == "mod") && $2 == "github.com/jarcoal/jpath" {bad=1} END {exit bad}' \
+  "$output/build-info.txt" || fail 'unadmitted metadata selector remains in binary metadata'
 for expected in go1.26.10 GOOS=linux GOARCH=amd64 CGO_ENABLED=0; do
   grep -qF "$expected" "$output/build-info.txt" || fail "service build info missing: $expected"
 done
