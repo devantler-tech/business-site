@@ -331,7 +331,8 @@ licence labels, current upstream files or everything listed in go.sum. It record
 or mixed-case licence names. The lib/pq notice.go and notice_test.go source files
 are not misclassified as legal text.
 
-The same collector streams the complete compiler graph, refuses incomplete or
+The same collector streams the complete compiler graph from the already checked
+bytes bound in its snapshot, never a second path read. It refuses incomplete or
 contradictory observations, preserves original and effective replacement
 identities, and reads only the resolved cache inside this fresh build. Each
 selected version's cached go.mod checksum and archive checksum marker must match

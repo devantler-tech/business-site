@@ -402,7 +402,7 @@ func noticeModuleEscape(value string) string {
 
 // noticeModuleSnapshot joins the whole compiler graph to one checked catalogue,
 // this build's frozen lock and resolved cache, then retains its complete bytes.
-func noticeModuleSnapshot(build, directory, catalogueHash string, read noticeReader) (*noticeModules, error) {
+func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byte, read noticeReader) (*noticeModules, error) {
 	data, err := read(directory, "catalogue.json", 1<<20)
 	if err != nil || noticeDigest(data) != catalogueHash || !noticeDigestPattern.MatchString(catalogueHash) {
 		return nil, fmt.Errorf("module catalogue unavailable or changed")
@@ -455,10 +455,8 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, read noticeRea
 		}
 		wanted[id.Path] = entry
 	}
-	packages, err := read(build, "packages.jsonl", 64<<20)
-	if err != nil {
-		return nil, fmt.Errorf("module compiler observation unavailable")
-	}
+	// Reuse the observation already checked and bound by noticeSnapshot. A
+	// second path read could validate a graph different from the retained hash.
 	stream := json.NewDecoder(bytes.NewReader(packages))
 	seenPackages := map[string]bool{}
 	seenModules := map[string]bool{}
@@ -1151,7 +1149,7 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 			if obj["metadataProfile"] != "machine-id-no-jsonpath-v1" {
 				return result, fmt.Errorf("unsupported module preparation profile")
 			}
-			result.Modules, err = noticeModuleSnapshot(build, options[0].ModuleDirectory, options[0].ModuleCatalogueHash, read)
+			result.Modules, err = noticeModuleSnapshot(build, options[0].ModuleDirectory, options[0].ModuleCatalogueHash, packages, read)
 			if err != nil {
 				return result, err
 			}
