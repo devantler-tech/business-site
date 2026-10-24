@@ -9,7 +9,7 @@ its repository's own terms. No hosted service or paid enrollment is introduced.
 | Compiled module                                           | Version                            | Upstream license                                                                                                                                |
 |-----------------------------------------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | github.com/alexedwards/scs/pgxstore                       | v0.0.0-20251002162104-209de6e426de | [MIT](https://raw.githubusercontent.com/alexedwards/scs/209de6e426de9259665975ce16b91331d228f052/LICENSE)                                       |
-| github.com/alexedwards/scs/v2                             | v2.9.0                             | [MIT](https://raw.githubusercontent.com/alexedwards/scs/ab20b3feb5e9981c1f79cee8a97a289810134163/LICENSE)                                       |
+| github.com/alexedwards/scs/v2                             | v2.9.1-0.20250927102904-c45a9d145a22 | [MIT](https://raw.githubusercontent.com/alexedwards/scs/c45a9d145a2266eab22fe9ca486b299c1d4220d3/LICENSE)                                     |
 | github.com/coreos/go-oidc/v3                              | v3.21.0                            | [Apache-2.0](https://raw.githubusercontent.com/coreos/go-oidc/c914bd380327a5a3a81403774d1a5d5b73772ce7/LICENSE)                                 |
 | github.com/go-jose/go-jose/v4                             | v4.1.4                             | [Apache-2.0](https://raw.githubusercontent.com/go-jose/go-jose/0e59876635f3dbf46d7b5e97b52bb75a3f96e7d9/LICENSE)                                |
 | github.com/jackc/pgpassfile                               | v1.0.0                             | [MIT](https://raw.githubusercontent.com/jackc/pgpassfile/99d8e8e28945ffceaf75b0299fcb2bb656b8a683/LICENSE)                                      |
@@ -39,6 +39,10 @@ PostgreSQL 17.11 with a digest-pinned official image, never a production databas
 SCS supplies opaque sessions with its maintained pgx/v5 store, not an application
 reimplementation of session cryptography. The application explicitly rotates and
 destroys tokens, hashes stored tokens and checks current membership on each request.
+SCS is pinned to upstream revision c45a9d1 because no tagged release contains its
+memstore fix: the revision creates the default in-memory store's stop channel before
+starting its cleanup worker, so the browser can stop that unused worker immediately
+without a data race. Move to the first tagged release that contains c45a9d1.
 Nosurf 1.2.0 is the upstream-patched version for
 [CVE-2025-46721](https://github.com/justinas/nosurf/security/advisories/GHSA-w9hf-35q4-vcjw).
 Every state-changing handler requires its token; origin checks alone are insufficient.
