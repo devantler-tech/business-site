@@ -9,6 +9,7 @@ yq -o=json '.' "$root/.github/workflows/ci.yaml" >"$scratch/ci.json"
 check() {
   jq -e '
     .jobs["build-zitadel-linux"] as $job |
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     $job["runs-on"] == "ubuntu-24.04" and
     $job.permissions == {contents:"read"} and
     $job["continue-on-error"] == null and
@@ -24,7 +25,7 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify the bounded console notice capture" and
       .["working-directory"] == "scripts" and
-      .run == "go test -race zitadel-console-notices.go zitadel-console-notices_test.go" and
+      .run == "go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Prepare the frozen identity JavaScript toolchain" and
       (.run | contains("df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de")) and
@@ -37,7 +38,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "*.txt", "*.log", "*.sha256"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -48,6 +49,8 @@ check() {
 check "$scratch/ci.json"
 for mutation in \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("third_party/zitadel-console-notices/\\*\\*"; "other-input/**")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("console-notices-supplement-inventory.json") | not)) | join("\n")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the bounded login icon inventory"))' \
@@ -73,4 +76,4 @@ for mutation in \
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including twenty-three broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including twenty-five broken-wiring controls.'

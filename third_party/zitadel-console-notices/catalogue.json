@@ -1,0 +1,252 @@
+{
+  "lockSha256": "b881c1adea82bb48195b0a5725b041f3a476c45adea565a531172f3ab398ddaf",
+  "ngIconsProvenance": "Decoded registry provenance/source selection is not cryptographically verified; source/package reproducibility remains unproven.",
+  "packages": [
+    {
+      "components": [
+        {
+          "bytes": 1076,
+          "kind": "installed",
+          "offset": 0,
+          "original": "license",
+          "originalBytes": 1076,
+          "originalSha256": "8df47c6ad9ac2c41eb9b2a72def9908959da0ede8dadd56c7b249c1bdb0c5ce6",
+          "retained": "qrcode-license.txt",
+          "role": "license",
+          "sha256": "8df47c6ad9ac2c41eb9b2a72def9908959da0ede8dadd56c7b249c1bdb0c5ce6"
+        }
+      ],
+      "name": "qrcode",
+      "packageJsonSha256": "cbe26d7282c802f4ab9c1f790c5d8450d2b5c82e8bb5f67e3a5c2641ea347d1d",
+      "sri": "sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==",
+      "tarball": "qrcode-1.5.4.tgz",
+      "version": "1.5.4"
+    },
+    {
+      "components": [
+        {
+          "bytes": 1053,
+          "kind": "immutable-source",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/ng-icons/ng-icons/d6fe7b79ab95ce9a35feac85a083f3b84a9eb0a3/LICENSE.md",
+          "originalBytes": 1053,
+          "originalSha256": "13fb1d1ebc52e14fce36d8250232d559fc47c8a91636ebf16697835efb6da1f0",
+          "retained": "ng-icons-LICENSE.md",
+          "role": "license",
+          "sha256": "13fb1d1ebc52e14fce36d8250232d559fc47c8a91636ebf16697835efb6da1f0"
+        }
+      ],
+      "identityOnlyInputs": [
+        {
+          "bytes": 29249,
+          "path": "fesm2022/ng-icons-core.mjs",
+          "sha256": "0c2548d762189234027e1f8fe1ec79abe9ea1c73a5651927db6707059d3f6ce3"
+        }
+      ],
+      "name": "@ng-icons/core",
+      "packageJsonSha256": "d9239b3e7c993844d60f78467ca746880c3ea62a61e938530bd3e13b34de5049",
+      "sri": "sha512-UGAs6q67mdS87qJE3u3iXVjnaKxxB8ALxCWvxQz+vDaE/3o9OpgCPrL4ZZIwPOYjBER0YUPctJNy6ng1C24FEA==",
+      "tarball": "ng-icons-core-33.4.0.tgz",
+      "version": "33.4.0"
+    },
+    {
+      "components": [
+        {
+          "bytes": 11357,
+          "kind": "immutable-source",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/grpc/grpc-web/ea2d8dae34e8cc19df2c1836a5e590a6e30bcb87/LICENSE",
+          "originalBytes": 11357,
+          "originalSha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "retained": "grpc-web-LICENSE",
+          "role": "license",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "bytes": 84,
+          "kind": "installed",
+          "offset": 0,
+          "original": "index.js",
+          "originalBytes": 26727,
+          "originalSha256": "7370d3598be96c73d49b5f9e27e066fb86c9a497bf0e84bd585bd2607a9870dd",
+          "retained": "grpc-web-attribution.txt",
+          "role": "attribution",
+          "sha256": "6f451d925cddd9d9f35c5c112aebb058c6ac610515a04ae82aff2c1f966a3ac7"
+        },
+        {
+          "bytes": 602,
+          "gitBlob": "93f2eff1e3661663cc8248f32700e12ded8e1a4b",
+          "kind": "immutable-source-header",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/grpc/grpc-web/ea2d8dae34e8cc19df2c1836a5e590a6e30bcb87/javascript/net/grpc/web/grpcwebclientbase.js",
+          "originalBytes": 14078,
+          "originalSha256": "2941a3536f60da5741370d16ab33fdc7a2a099f1eef5d15fdef716d483fe4c8d",
+          "retained": "grpc-web-google-source-attribution.txt",
+          "role": "google-source-attribution",
+          "sha256": "224506478be0f26af4120dbeab425efc529b544151d4e0cca267f09f478e2b50"
+        }
+      ],
+      "name": "grpc-web",
+      "packageJsonSha256": "bec2cdc5812122702fa01c1183543c0de79b5e39d646434718766b75ddc825fe",
+      "sri": "sha512-bvBP0/d5jyVM3eGxxffJhRLAPpH6eXhJeUzBT+bSIEgUKkG4a/BotEimVeW3phP0WLnsJnkRl8uQdRf2yDLaVA==",
+      "tarball": "grpc-web-2.0.2.tgz",
+      "version": "2.0.2"
+    },
+    {
+      "components": [
+        {
+          "bytes": 11354,
+          "kind": "immutable-source",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/connectrpc/connect-es/104238c58152e324ac16a99563f5eeea8ae7136d/LICENSE",
+          "originalBytes": 11354,
+          "originalSha256": "445e3398edab2a40d8d5e5c1a1d533af6464fbae8378ecc0caaf2668e9bbea73",
+          "retained": "connect-LICENSE",
+          "role": "license",
+          "sha256": "445e3398edab2a40d8d5e5c1a1d533af6464fbae8378ecc0caaf2668e9bbea73"
+        },
+        {
+          "bytes": 602,
+          "kind": "installed",
+          "offset": 0,
+          "original": "dist/esm/index.js",
+          "originalBytes": 1422,
+          "originalSha256": "20a46a492a151ac5717f100505a53877f4dd2dab9ee900416f9ec7b5ce3acce6",
+          "retained": "connect-attribution.txt",
+          "role": "attribution",
+          "sha256": "e01fde43e84618ece70bd9401756fd7baa2c04c18787d0332f0c7ac472e74624"
+        }
+      ],
+      "name": "@connectrpc/connect",
+      "packageJsonSha256": "2a6a26b2ed4811a12883d1d86503fdff9fdfee180bddb802b13f8c0e48e5ab02",
+      "sri": "sha512-MXkBijtcX09R10Eb6sFeIetc6w6746eio6xtfuyVOH7oQAacT1X0GzMIQFux6Qy8cq3W/T5qX5Bei8YbFtmRGA==",
+      "tarball": "connect-2.1.2.tgz",
+      "version": "2.1.2"
+    },
+    {
+      "components": [
+        {
+          "bytes": 11354,
+          "kind": "immutable-source",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/connectrpc/connect-es/104238c58152e324ac16a99563f5eeea8ae7136d/LICENSE",
+          "originalBytes": 11354,
+          "originalSha256": "445e3398edab2a40d8d5e5c1a1d533af6464fbae8378ecc0caaf2668e9bbea73",
+          "retained": "connect-LICENSE",
+          "role": "license",
+          "sha256": "445e3398edab2a40d8d5e5c1a1d533af6464fbae8378ecc0caaf2668e9bbea73"
+        },
+        {
+          "bytes": 602,
+          "kind": "installed",
+          "offset": 0,
+          "original": "dist/esm/index.js",
+          "originalBytes": 733,
+          "originalSha256": "42f5f82e91261d3a8ddc87578bb05a2f000cbdaebd8a2c4a4c428c279e16f5a3",
+          "retained": "connect-web-attribution.txt",
+          "role": "attribution",
+          "sha256": "e01fde43e84618ece70bd9401756fd7baa2c04c18787d0332f0c7ac472e74624"
+        }
+      ],
+      "name": "@connectrpc/connect-web",
+      "packageJsonSha256": "d8f270db734f49c4ee6cad2cb432e65871eac889680d5d1fd8552464c8368f3d",
+      "sri": "sha512-1tfaK85MU+gJjwwmL31d2rzdf0XCYX99chZf63uG89SGBUd4XuZ4ZzhGo2u79TPXOE6nLIZQ2okrpyey42PYdg==",
+      "tarball": "connect-web-2.1.2.tgz",
+      "version": "2.1.2"
+    },
+    {
+      "components": [
+        {
+          "bytes": 11357,
+          "kind": "immutable-source",
+          "offset": 0,
+          "original": "https://raw.githubusercontent.com/bufbuild/protobuf-es/0648534fac5eed9a2775807c0ade241de425f244/LICENSE",
+          "originalBytes": 11357,
+          "originalSha256": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449",
+          "retained": "protobuf-LICENSE",
+          "role": "apache-license",
+          "sha256": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449"
+        },
+        {
+          "bytes": 605,
+          "kind": "installed",
+          "offset": 0,
+          "original": "dist/esm/index.js",
+          "originalBytes": 1227,
+          "originalSha256": "8682a066cf855574abf093eb0c0aec93399a9ea135b9641977c5cec90b1400a8",
+          "retained": "protobuf-buf-attribution.txt",
+          "role": "buf-attribution",
+          "sha256": "cbc300ed2b08a4853eb3b953cc60ebe2f6f739ce0dfa3c82735eb2715e204f16"
+        },
+        {
+          "bytes": 1812,
+          "kind": "installed",
+          "offset": 0,
+          "original": "dist/esm/wire/varint.js",
+          "originalBytes": 11586,
+          "originalSha256": "71edee071faa5f0ebbeda63fa23e009983da9e413db2340feb6287d95f497dcd",
+          "retained": "protobuf-google-bsd-license.txt",
+          "role": "google-bsd-license",
+          "sha256": "0e952cb110ff6944789fbe47c25b38819a3866c04c7c5cbea8d0c0d8f3a92f0e"
+        }
+      ],
+      "name": "@bufbuild/protobuf",
+      "packageJsonSha256": "f2d6e843bb5d6fc455ec178b191a3593fc15f5e2b89c7b92b78dca4d87d3e5b7",
+      "sri": "sha512-acq7c49vxfm1ggJ95P70TX7ABDM0vxr1SYD3BB0o0jnBLB4OAqeHyKuN+cD3w80gXEDQ2zxHpR6CUeA+O/aU9g==",
+      "tarball": "protobuf-2.13.0.tgz",
+      "version": "2.13.0"
+    },
+    {
+      "components": [
+        {
+          "bytes": 1519,
+          "kind": "installed",
+          "offset": 0,
+          "original": "LICENSE.md",
+          "originalBytes": 1519,
+          "originalSha256": "103441a2584cb720426c60320bcba53807024aab3080b00e0da841c305757a34",
+          "retained": "google-protobuf-bsd-license.txt",
+          "role": "bsd-license",
+          "sha256": "103441a2584cb720426c60320bcba53807024aab3080b00e0da841c305757a34"
+        },
+        {
+          "bytes": 10173,
+          "kind": "installed",
+          "offset": 0,
+          "original": "LICENSE-asserts.md",
+          "originalBytes": 10173,
+          "originalSha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "retained": "google-protobuf-apache-license.txt",
+          "role": "apache-license",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9"
+        },
+        {
+          "bytes": 84,
+          "kind": "installed",
+          "offset": 0,
+          "original": "google-protobuf.js",
+          "originalBytes": 245090,
+          "originalSha256": "7c05fac01c16bb72ac332a4129fd5b543e2c9cb28f9c14710b754d769c80042f",
+          "retained": "google-protobuf-closure-attribution.txt",
+          "role": "closure-attribution",
+          "sha256": "6f451d925cddd9d9f35c5c112aebb058c6ac610515a04ae82aff2c1f966a3ac7"
+        }
+      ],
+      "name": "google-protobuf",
+      "packageJsonSha256": "15b51e85ce5451f600ce64b2fab5f6cba5482bd86f345cc69e0039fd26aeaa8d",
+      "sri": "sha512-yD2fqbNgvJPuQwdKJiPdbUcXveNRxgqy070gzsBsCyFJA8Qdj9oxa9xtkddb/JEhcDk0RD5SfGUWg+nhINfMxA==",
+      "tarball": "google-protobuf-4.0.2.tgz",
+      "version": "4.0.2"
+    },
+    {
+      "components": null,
+      "name": "angularx-qrcode",
+      "packageJsonSha256": "576affabb711fe10c5e9fc8a26a3072f02b4adc958603c552b14170ce997943d",
+      "sri": "sha512-9Kv/Mi5tKzAkBL2xhYZyPaJEoq+b24mIpUAntp16kIBiozVnpGI6DbigTPJiSDkV7EpYHdjBJNGj8igFAHEp6g==",
+      "tarball": "angularx-qrcode-21.0.5.tgz",
+      "version": "21.0.5"
+    }
+  ],
+  "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
+  "schemaVersion": 1
+}

@@ -11,6 +11,7 @@ cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
+cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
 build="$scratch/recipe/scripts/build-zitadel-linux.sh"
 # These are process doubles, not alternative production build entrypoints.
 cat >"$scratch/recipe/scripts/prepare-zitadel-source.sh" <<'STUB'
@@ -77,6 +78,7 @@ case "$1 $2" in
   'run '*)
     if [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
+      [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
@@ -84,6 +86,9 @@ case "$1 $2" in
         [[ "$3" = --inventory && -s "$5/console-notices.before.json" && -s "$5/service/zitadel" && -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
         if [[ "${TEST_FAIL:-}" = notice-capture ]]; then echo 'plausible partial capture'; exit 42; fi
         printf 'raw notice fixture\n' >"$5/console-third-party-notices.txt"
+        printf 'verbatim supplement fixture\n' >"$5/console-notices-supplement.txt"
+        printf '{"fixture":"supplement orchestration only"}\n' >"$5/console-notices-supplement-inventory.pending"
+        if [[ "${TEST_FAIL:-}" = supplement ]]; then echo 'plausible partial supplement'; exit 42; fi
       fi
       echo '{"fixture":"orchestration only"}'
     else
@@ -161,6 +166,7 @@ reject empty-binary TEST_MISSING=binary
 reject failed-icon-inventory TEST_FAIL=inventory
 reject failed-notice-snapshot TEST_FAIL=notice-snapshot
 reject failed-notice-capture TEST_FAIL=notice-capture
+reject failed-supplement TEST_FAIL=supplement
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
@@ -168,5 +174,7 @@ jq -e '.platform == "linux/amd64" and .imageAdmission == "unknown" and .licenseC
 test -s "$scratch/complete/console-notices-inventory.json"
 test -s "$scratch/complete/console-third-party-notices.txt"
 test -s "$scratch/complete/console-notice-verifier.sha256"
+test -s "$scratch/complete/console-notices-supplement.txt"
+test -s "$scratch/complete/console-notices-supplement-inventory.json"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

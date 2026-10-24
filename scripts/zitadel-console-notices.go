@@ -26,15 +26,237 @@ const noticeLimit = 2 << 20
 
 type noticeReader func(string, string, int64) ([]byte, error)
 
-type noticeState struct {
-	SchemaVersion     int    `json:"schemaVersion"`
-	Raw               []byte `json:"raw"`
-	PreparationSHA256 string `json:"preparationSha256"`
-	LockSHA256        string `json:"lockSha256"`
-	InputsSHA256      string `json:"inputsSha256"`
-	PackagesSHA256    string `json:"packagesSha256"`
-	RecipeSHA256      string `json:"recipeSha256"`
+type supplementState struct {
+	CatalogueSHA256 string              `json:"catalogueSha256"`
+	Text            []byte              `json:"text"`
+	Inputs          []noticeBinding     `json:"inputs"`
+	Aliases         []supplementAlias   `json:"aliases"`
+	Sections        []supplementSection `json:"sections"`
+	Catalogue       supplementCatalogue `json:"catalogue"`
 }
+
+type supplementAlias struct {
+	Package  string `json:"package"`
+	Path     string `json:"path"`
+	Target   string `json:"target"`
+	Resolved string `json:"resolved"`
+}
+
+type supplementComponent struct {
+	Role           string `json:"role"`
+	Kind           string `json:"kind"`
+	Original       string `json:"original"`
+	OriginalBytes  int    `json:"originalBytes"`
+	OriginalSHA256 string `json:"originalSha256"`
+	Offset         int    `json:"offset"`
+	Bytes          int    `json:"bytes"`
+	SHA256         string `json:"sha256"`
+	Retained       string `json:"retained"`
+	GitBlob        string `json:"gitBlob,omitempty"`
+}
+
+type supplementIdentity struct {
+	Path   string `json:"path"`
+	Bytes  int    `json:"bytes"`
+	SHA256 string `json:"sha256"`
+}
+
+type supplementPackage struct {
+	Name               string                `json:"name"`
+	Version            string                `json:"version"`
+	SRI                string                `json:"sri"`
+	Tarball            string                `json:"tarball"`
+	PackageJSONSHA256  string                `json:"packageJsonSha256"`
+	Components         []supplementComponent `json:"components"`
+	IdentityOnlyInputs []supplementIdentity  `json:"identityOnlyInputs,omitempty"`
+}
+
+type supplementCatalogue struct {
+	SchemaVersion     int                 `json:"schemaVersion"`
+	UpstreamCommit    string              `json:"upstreamCommit"`
+	LockSHA256        string              `json:"lockSha256"`
+	NgIconsProvenance string              `json:"ngIconsProvenance"`
+	Packages          []supplementPackage `json:"packages"`
+}
+
+type supplementSection struct {
+	Package string `json:"package"`
+	Version string `json:"version"`
+	Role    string `json:"role"`
+	Source  string `json:"source"`
+	Offset  int    `json:"offset"`
+	Bytes   int    `json:"bytes"`
+	SHA256  string `json:"sha256"`
+}
+
+const supplementCatalogueHash = "8d3788c0b223eba81f8d0b462ec4322b3757cef3f1150b3bc54388b5127e9cd7"
+const supplementRaw = "console-notices-supplement.txt"
+const supplementInventoryPending = "console-notices-supplement-inventory.pending"
+
+// supplementResolve admits one normal pnpm alias hop into this prepared store.
+// Every target component is subsequently checked by noticeRead; no global link
+// policy is relaxed and no outside target content is read.
+func supplementResolve(source, alias, name string) (supplementAlias, error) {
+	var result supplementAlias
+	if path.Clean(alias) != alias || path.IsAbs(alias) || strings.HasPrefix(alias, "../") {
+		return result, fmt.Errorf("unclean package alias")
+	}
+	parts := strings.Split(alias, "/")
+	for i := 1; i < len(parts); i++ {
+		info, err := os.Lstat(filepath.Join(source, filepath.FromSlash(strings.Join(parts[:i], "/"))))
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return result, fmt.Errorf("linked or unavailable alias parent")
+		}
+	}
+	link, err := os.Readlink(filepath.Join(source, filepath.FromSlash(alias)))
+	if err != nil || link == "" || len(link) > 4096 || filepath.IsAbs(link) {
+		return result, fmt.Errorf("invalid package alias")
+	}
+	target := filepath.Clean(filepath.Join(filepath.Dir(filepath.FromSlash(alias)), link))
+	rel := filepath.ToSlash(target)
+	prefix := "node_modules/.pnpm/"
+	suffix := "/node_modules/" + name
+	if !strings.HasPrefix(rel, prefix) || !strings.HasSuffix(rel, suffix) {
+		return result, fmt.Errorf("escaping or unsupported package alias")
+	}
+	store := strings.TrimSuffix(strings.TrimPrefix(rel, prefix), suffix)
+	if store == "" || strings.Contains(store, "/") || store == "." || store == ".." {
+		return result, fmt.Errorf("ambiguous package store")
+	}
+	return supplementAlias{Package: name, Path: alias, Target: link, Resolved: rel}, nil
+}
+
+// noticeSupplementSnapshot checks a hash-pinned eight-package closure (seven
+// notice subjects plus qrcode's parent). It emits only checked selected bytes.
+func noticeSupplementSnapshot(build, notices, expected string, read noticeReader) (*supplementState, error) {
+	data, err := read(notices, "catalogue.json", 1<<20)
+	if err != nil || noticeDigest(data) != expected {
+		return nil, fmt.Errorf("supplement catalogue identity differs")
+	}
+	if _, err = noticeObject(data); err != nil {
+		return nil, err
+	}
+	var catalogue supplementCatalogue
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err = d.Decode(&catalogue); err != nil {
+		return nil, fmt.Errorf("invalid supplement catalogue: %w", err)
+	}
+	if catalogue.SchemaVersion != 1 || catalogue.UpstreamCommit != noticePin || len(catalogue.Packages) != 8 {
+		return nil, fmt.Errorf("unsupported supplement catalogue")
+	}
+	lock, err := read(build, "prepared/source/pnpm-lock.yaml", 16<<20)
+	if err != nil || noticeDigest(lock) != catalogue.LockSHA256 {
+		return nil, fmt.Errorf("supplement frozen lock differs")
+	}
+	result := &supplementState{CatalogueSHA256: expected, Catalogue: catalogue, Inputs: []noticeBinding{{"catalogue.json", expected}}}
+	names := []string{"qrcode", "@ng-icons/core", "grpc-web", "@connectrpc/connect", "@connectrpc/connect-web", "@bufbuild/protobuf", "google-protobuf", "angularx-qrcode"}
+	versions := []string{"1.5.4", "33.4.0", "2.0.2", "2.1.2", "2.1.2", "2.13.0", "4.0.2", "21.0.5"}
+	source := filepath.Join(build, "prepared/source")
+	resolved := map[string]supplementAlias{}
+	// The parent resolves first. qrcode is its sibling edge in this pnpm
+	// node_modules directory, never a guessed/hoisted console dependency.
+	for _, i := range []int{7, 0, 1, 2, 3, 4, 5, 6} {
+		pkg := catalogue.Packages[i]
+		if pkg.Name != names[i] || pkg.Version != versions[i] || !strings.HasPrefix(pkg.SRI, "sha512-") || !noticeDigestPattern.MatchString(pkg.PackageJSONSHA256) {
+			return nil, fmt.Errorf("unsupported supplement package")
+		}
+		alias := "console/node_modules/" + pkg.Name
+		if i == 0 {
+			alias = path.Join(path.Dir(resolved["angularx-qrcode"].Resolved), "qrcode")
+		}
+		observation, e := supplementResolve(source, alias, pkg.Name)
+		if e != nil {
+			return nil, e
+		}
+		metadata, e := read(source, observation.Resolved+"/package.json", 1<<20)
+		if e != nil || noticeDigest(metadata) != pkg.PackageJSONSHA256 {
+			return nil, fmt.Errorf("supplement package metadata differs")
+		}
+		obj, e := noticeObject(metadata)
+		if e != nil || obj["name"] != pkg.Name || obj["version"] != pkg.Version {
+			return nil, fmt.Errorf("supplement package identity differs")
+		}
+		if i == 7 {
+			deps, ok := obj["dependencies"].(map[string]any)
+			if !ok || deps["qrcode"] != "1.5.4" {
+				return nil, fmt.Errorf("qrcode parent edge differs")
+			}
+		}
+		resolved[pkg.Name] = observation
+		result.Aliases = append(result.Aliases, observation)
+		result.Inputs = append(result.Inputs, noticeBinding{"prepared/source/" + observation.Resolved + "/package.json", noticeDigest(metadata)})
+	}
+	for _, pkg := range catalogue.Packages {
+		root := resolved[pkg.Name].Resolved
+		if pkg.Name != "angularx-qrcode" && len(pkg.Components) == 0 {
+			return nil, fmt.Errorf("supplement terms absent")
+		}
+		roles := map[string]bool{}
+		for _, component := range pkg.Components {
+			if component.Role == "" || roles[component.Role] || component.Retained == "" || path.Base(component.Retained) != component.Retained || component.Bytes < 1 || component.Bytes > noticeLimit || !noticeDigestPattern.MatchString(component.SHA256) {
+				return nil, fmt.Errorf("invalid or duplicate supplement component")
+			}
+			roles[component.Role] = true
+			text, e := read(notices, component.Retained, noticeLimit)
+			if e != nil || len(text) != component.Bytes || noticeDigest(text) != component.SHA256 || !utf8.Valid(text) {
+				return nil, fmt.Errorf("supplement retained text differs")
+			}
+			if component.Kind == "installed" {
+				original, e := read(source, root+"/"+component.Original, 2<<20)
+				if e != nil || len(original) != component.OriginalBytes || noticeDigest(original) != component.OriginalSHA256 || component.Offset < 0 || component.Offset > len(original) || component.Bytes > len(original)-component.Offset || !bytes.Equal(text, original[component.Offset:component.Offset+component.Bytes]) {
+					return nil, fmt.Errorf("supplement installed text identity differs")
+				}
+				result.Inputs = append(result.Inputs, noticeBinding{"prepared/source/" + root + "/" + component.Original, noticeDigest(original)})
+			} else {
+				if !strings.HasPrefix(component.Original, "https://raw.githubusercontent.com/") || !noticeDigestPattern.MatchString(component.OriginalSHA256) || component.OriginalBytes < 1 || component.OriginalBytes > 2<<20 || component.Offset < 0 || component.Offset > component.OriginalBytes || component.Bytes > component.OriginalBytes-component.Offset {
+					return nil, fmt.Errorf("invalid immutable supplement source")
+				}
+				switch component.Kind {
+				case "immutable-source":
+					if component.Offset != 0 || component.Bytes != component.OriginalBytes || component.SHA256 != component.OriginalSHA256 {
+						return nil, fmt.Errorf("complete immutable source identity differs")
+					}
+				case "immutable-source-header":
+					// The full source digest is a curation observation, not a
+					// build-time read. Only this separately pinned span is emitted.
+				default:
+					return nil, fmt.Errorf("unsupported supplement source")
+				}
+			}
+			result.Inputs = append(result.Inputs, noticeBinding{component.Retained, noticeDigest(text)})
+			header := fmt.Sprintf("Package: %s@%s\nComponent: %s\nSource: %s\n\n", pkg.Name, pkg.Version, component.Role, component.Original)
+			result.Text = append(result.Text, []byte(header)...)
+			result.Sections = append(result.Sections, supplementSection{pkg.Name, pkg.Version, component.Role, component.Original, len(result.Text), len(text), noticeDigest(text)})
+			result.Text = append(result.Text, text...)
+			result.Text = append(result.Text, '\n', '\n')
+		}
+		for _, identity := range pkg.IdentityOnlyInputs {
+			original, e := read(source, root+"/"+identity.Path, 2<<20)
+			if e != nil || len(original) != identity.Bytes || noticeDigest(original) != identity.SHA256 {
+				return nil, fmt.Errorf("supplement package code identity differs")
+			}
+			result.Inputs = append(result.Inputs, noticeBinding{"prepared/source/" + root + "/" + identity.Path, noticeDigest(original)})
+		}
+	}
+	if len(result.Text) > noticeLimit {
+		return nil, fmt.Errorf("supplement exceeds limit")
+	}
+	return result, nil
+}
+
+type noticeState struct {
+	SchemaVersion     int              `json:"schemaVersion"`
+	Raw               []byte           `json:"raw"`
+	PreparationSHA256 string           `json:"preparationSha256"`
+	LockSHA256        string           `json:"lockSha256"`
+	InputsSHA256      string           `json:"inputsSha256"`
+	PackagesSHA256    string           `json:"packagesSha256"`
+	RecipeSHA256      string           `json:"recipeSha256"`
+	Supplement        *supplementState `json:"supplement,omitempty"`
+}
+
+type noticeSupplementConfig struct{ Directory, CatalogueHash string }
 
 type noticeBinding struct {
 	Path   string `json:"path"`
@@ -53,12 +275,19 @@ type noticeInventory struct {
 	ImageAdmission string          `json:"imageAdmission"`
 	LicenseClosure string          `json:"licenseClosure"`
 	Reproducible   bool            `json:"reproducible"`
+	supplement     *supplementState
 }
 
 func main() { os.Exit(noticeRun(os.Args[1:], os.Stdout, os.Stderr)) }
 
 // noticeRun is inert unless one complete explicit mode is selected.
 func noticeRun(args []string, out, diagnostic io.Writer) int {
+	return noticeRunWithCatalogue(args, out, diagnostic, supplementCatalogueHash)
+}
+
+// noticeRunWithCatalogue keeps the curation identity injectable in hermetic
+// tests. The public command always supplies its compiled, reviewed constant.
+func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueHash string) int {
 	if len(args) == 0 {
 		return 0
 	}
@@ -72,7 +301,7 @@ func noticeRun(args []string, out, diagnostic io.Writer) int {
 		switch key {
 		case "--snapshot", "--inventory":
 			values[key] = "true"
-		case "--build", "--recipe":
+		case "--build", "--recipe", "--supplement":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
 				return fail(fmt.Errorf("missing argument"))
 			}
@@ -82,38 +311,32 @@ func noticeRun(args []string, out, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("unexpected argument"))
 		}
 	}
-	if len(values) != 3 || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
+	validCount := len(values) == 3 || (len(values) == 4 && values["--supplement"] != "")
+	if !validCount || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
 		return fail(fmt.Errorf("expected one mode, build and recipe"))
 	}
 	var result any
+	options := []noticeSupplementConfig{}
+	if values["--supplement"] != "" {
+		options = append(options, noticeSupplementConfig{values["--supplement"], catalogueHash})
+	}
+	var captured *noticeInventory
 	if values["--snapshot"] != "" {
-		state, err := noticeSnapshot(values["--build"], values["--recipe"], noticeRead)
+		state, err := noticeSnapshot(values["--build"], values["--recipe"], noticeRead, options...)
 		if err != nil {
 			return fail(err)
 		}
 		result = state
 	} else {
-		inventory, raw, err := noticeCapture(values["--build"], values["--recipe"], noticeRead)
+		inventory, raw, err := noticeCapture(values["--build"], values["--recipe"], noticeRead, options...)
 		if err != nil {
 			return fail(err)
 		}
-		root, err := os.OpenRoot(values["--build"])
-		if err != nil {
-			return fail(fmt.Errorf("output root unavailable"))
-		}
-		defer root.Close()
-		f, err := root.OpenFile(noticeRaw, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			return fail(fmt.Errorf("raw diagnostic already exists or is unavailable"))
-		}
-		n, writeErr := f.Write(raw)
-		syncErr := f.Sync()
-		closeErr := f.Close()
-		if writeErr != nil || syncErr != nil || closeErr != nil || n != len(raw) {
-			_ = root.Remove(noticeRaw)
-			return fail(fmt.Errorf("incomplete raw diagnostic write"))
+		if err = noticeWriteDiagnostic(values["--build"], noticeRaw, raw); err != nil {
+			return fail(err)
 		}
 		result = inventory
+		captured = &inventory
 	}
 	b, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
@@ -124,7 +347,63 @@ func noticeRun(args []string, out, diagnostic io.Writer) int {
 	if err != nil || n != len(b) {
 		return fail(fmt.Errorf("incomplete inventory output"))
 	}
+	if captured != nil && captured.supplement != nil {
+		s := captured.supplement
+		inventory := struct {
+			SchemaVersion         int                 `json:"schemaVersion"`
+			UpstreamCommit        string              `json:"upstreamCommit"`
+			Profile               string              `json:"profile"`
+			RawDiagnostic         string              `json:"rawDiagnostic"`
+			Bytes                 int                 `json:"bytes"`
+			SHA256                string              `json:"sha256"`
+			NoticeInventorySHA256 string              `json:"noticeInventorySha256"`
+			CatalogueSHA256       string              `json:"catalogueSha256"`
+			Catalogue             supplementCatalogue `json:"catalogue"`
+			Aliases               []supplementAlias   `json:"aliases"`
+			Sections              []supplementSection `json:"sections"`
+			SelectedInputs        []noticeBinding     `json:"selectedInputs"`
+			BuildInputs           []noticeBinding     `json:"buildInputs"`
+			LicenseClosure        string              `json:"licenseClosure"`
+			ImageAdmission        string              `json:"imageAdmission"`
+			Reproducible          bool                `json:"reproducible"`
+		}{1, noticePin, "api-login-v1-console", supplementRaw, len(s.Text), noticeDigest(s.Text), noticeDigest(b), s.CatalogueSHA256, s.Catalogue, s.Aliases, s.Sections, s.Inputs, captured.Inputs, "unknown", "unknown", false}
+		encoded, e := json.MarshalIndent(inventory, "", "  ")
+		if e != nil {
+			return fail(e)
+		}
+		if e = noticeWriteDiagnostic(values["--build"], supplementRaw, s.Text); e != nil {
+			return fail(e)
+		}
+		if e = noticeWriteDiagnostic(values["--build"], supplementInventoryPending, append(encoded, '\n')); e != nil {
+			return fail(e)
+		}
+	}
 	return 0
+}
+
+// noticeWriteDiagnostic never replaces an output, and propagates short writes,
+// sync and close failures; a failed build cannot finalize its success receipt.
+func noticeWriteDiagnostic(build, name string, data []byte) error {
+	root, err := os.OpenRoot(build)
+	if err != nil {
+		return fmt.Errorf("diagnostic root unavailable")
+	}
+	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	rootErr := root.Close()
+	if err != nil {
+		return fmt.Errorf("diagnostic exists or is unavailable")
+	}
+	if rootErr != nil {
+		_ = f.Close()
+		return fmt.Errorf("diagnostic root close failed")
+	}
+	n, writeErr := f.Write(data)
+	syncErr := f.Sync()
+	closeErr := f.Close()
+	if writeErr != nil || syncErr != nil || closeErr != nil || n != len(data) {
+		return fmt.Errorf("incomplete diagnostic write")
+	}
+	return nil
 }
 
 // noticeRead confines every selected path and refuses nonregular or linked inputs.
@@ -319,7 +598,7 @@ func noticePackages(data []byte, build string) error {
 }
 
 // noticeSnapshot records checked raw bytes and their pre-compilation input identities.
-func noticeSnapshot(build, recipe string, read noticeReader) (noticeState, error) {
+func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSupplementConfig) (noticeState, error) {
 	var result noticeState
 	console, err := read(build, "prepared/source/"+noticeConsole, noticeLimit)
 	if err != nil || len(console) == 0 || !utf8.Valid(console) {
@@ -373,13 +652,23 @@ func noticeSnapshot(build, recipe string, read noticeReader) (noticeState, error
 	if err != nil || len(recipeBytes) == 0 {
 		return result, fmt.Errorf("recipe binding unavailable")
 	}
-	return noticeState{SchemaVersion: 1, Raw: console, PreparationSHA256: noticeDigest(prep), LockSHA256: noticeDigest(lock), InputsSHA256: noticeDigest(inputs), PackagesSHA256: noticeDigest(packages), RecipeSHA256: noticeDigest(recipeBytes)}, nil
+	result = noticeState{SchemaVersion: 1, Raw: console, PreparationSHA256: noticeDigest(prep), LockSHA256: noticeDigest(lock), InputsSHA256: noticeDigest(inputs), PackagesSHA256: noticeDigest(packages), RecipeSHA256: noticeDigest(recipeBytes)}
+	if len(options) > 1 {
+		return result, fmt.Errorf("ambiguous supplement options")
+	}
+	if len(options) == 1 {
+		result.Supplement, err = noticeSupplementSnapshot(build, options[0].Directory, options[0].CatalogueHash, read)
+		if err != nil {
+			return result, err
+		}
+	}
+	return result, nil
 }
 
 // noticeCapture joins the unchanged checked snapshot to the final manifest and binary receipt.
-func noticeCapture(build, recipe string, read noticeReader) (noticeInventory, []byte, error) {
+func noticeCapture(build, recipe string, read noticeReader, options ...noticeSupplementConfig) (noticeInventory, []byte, error) {
 	var result noticeInventory
-	current, err := noticeSnapshot(build, recipe, read)
+	current, err := noticeSnapshot(build, recipe, read, options...)
 	if err != nil {
 		return result, nil, err
 	}
@@ -466,5 +755,6 @@ func noticeCapture(build, recipe string, read noticeReader) (noticeInventory, []
 		{"scripts/build-zitadel-linux.sh", before.RecipeSHA256},
 		{"service/zitadel", noticeDigest(binary)},
 	}}
+	result.supplement = before.Supplement
 	return result, append([]byte(nil), before.Raw...), nil
 }
