@@ -164,11 +164,20 @@ binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
 if [[ "$capture_source" -eq 1 ]]; then
+  # Retain only the complete service-selected graph, after compilation and the
+  # final module verification. The separate tool's checksum-bound dependency is
+  # tooling, not an extra service module or a complete offline-replay closure.
+  (cd "$root/tools/zitadel-module-sources" && go run . --capture --build "$output" --catalogue "$root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources") >"$output/go-module-source-capture.pending"
+  jq -e '.schemaVersion == 1 and .modules == 231 and .files == 466 and .selectedServiceGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/go-module-source-capture.pending" >/dev/null || fail 'incomplete selected Go source capture'
+  go_modules_manifest="$(jq -er .manifestSha256 "$output/go-module-source-capture.pending")"
+  (cd "$root/tools/zitadel-module-sources" && go run . --verify "$output/selected-go-sources" --sha256 "$go_modules_manifest") >"$output/go-module-source-readback.pending"
+  cmp "$output/go-module-source-capture.pending" "$output/go-module-source-readback.pending" || fail 'selected Go source readback differs'
+  shasum -a 256 "$root/tools/zitadel-module-sources/"*.go "$root/tools/zitadel-module-sources/go.mod" "$root/tools/zitadel-module-sources/go.sum" >"$output/go-module-source-verifier.sha256"
   go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/source-snapshot" "$source_manifest" >"$output/source-readback.pending"
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
-  source_snapshot_json="$(jq -n --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" '$capture[0] + $archive[0] + {dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" '$capture[0] + $archive[0] + {goModules:$modules[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" \

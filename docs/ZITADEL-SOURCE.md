@@ -453,6 +453,28 @@ CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
 diagnostics; the source archive, recipe bodies and executable remain excluded.
 
+The same explicit flag also retains the selected service's complete Go ZIP and
+go.mod inputs after compilation and final module verification. The otherwise
+inert tool in `tools/zitadel-module-sources/` checks the frozen catalogue and locks,
+every original/effective replacement, and equality between the root command's
+dependency list and the complete compiler stream. It copies only the 231 selected
+effective module pairs from this build's private cache. Go's maintained module
+library recomputes full archive/go.mod content sums; `.ziphash` is not trusted.
+
+The retained directory contains 462 source payloads and four literal metadata
+records plus an externally sealed manifest. Readback verifies complete bytes,
+membership, sizes and canonical file modes, rejecting linked inputs and partial
+I/O. CI copies the actual retained package into a fresh directory and verifies
+it again. Its manifest and compact round-trip result are diagnostics; source ZIPs
+and go.mod payloads are excluded. The completed binary/recipe receipt binds the
+narrow `sourceSnapshot.goModules` result. The verifier's checksum-pinned module
+library is a separate build-tool acquisition, not a service dependency.
+
+This is selected service-Go retention, not generator-tool, pnpm/workspace or BSR
+source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
+remain false. No ordinary build, publisher, deployed login or customer access is
+enabled by this capture.
+
 Issue #343 also requires actual selected dependency capture and a clean,
 network-denied native replay before its full acceptance criteria are complete.
 Source/image publication and the recipient's source offer remain #308.

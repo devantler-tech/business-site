@@ -17,6 +17,7 @@ check() {
     any($source.steps[]; .run == "bash scripts/prepare-zitadel-source.test.sh" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("tools/zitadel-module-sources/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
@@ -47,6 +48,18 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify selected Go source retention" and
+      .["working-directory"] == "tools/zitadel-module-sources" and
+      .run == "go test -race ./..." and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Copy and verify the actual retained Go module inputs" and
+      (.run | contains(".sourceSnapshot.goModules.manifestSha256")) and
+      (.run | contains("cp -R")) and
+      (.run | contains("go run . --verify")) and
+      (.run | contains("cmp")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify selected Go source retention") < index("Build the complete native Linux service and embedded console")) and
+    ([$job.steps[].name] | index("Copy and verify the actual retained Go module inputs") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Unpack and verify the actual pre-install source archive" and
       (.run | contains("go run scripts/zitadel-source-bundle.go --unpack")) and
       (.run | contains(".sourceSnapshot.manifestSha256")) and
@@ -70,7 +83,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -81,6 +94,13 @@ check() {
 check "$scratch/ci.json"
 controls=0
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("tools/zitadel-module-sources"; "missing/tool") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected Go source retention"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Copy and verify the actual retained Go module inputs"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Copy and verify the actual retained Go module inputs" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Copy and verify the actual retained Go module inputs" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify sealed source snapshots and closed archive controls"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify sealed source snapshots and closed archive controls" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify sealed source snapshots and closed archive controls" then .["continue-on-error"]=true else . end)' \

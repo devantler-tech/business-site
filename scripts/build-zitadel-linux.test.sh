@@ -13,6 +13,8 @@ cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
+mkdir "$scratch/recipe/tools"
+cp -R "$root/tools/zitadel-module-sources" "$scratch/recipe/tools/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
@@ -105,6 +107,17 @@ case "$1 $2" in
           echo '{"fixture":"complete source readback"}';;
         *) exit 42;;
       esac
+    elif [[ "$2" = . && "$PWD" = */tools/zitadel-module-sources ]]; then
+      if [[ "$3" = --capture ]]; then
+        [[ "$#" -eq 9 && "$4" = --build && -s "$5/service/zitadel" && "$6" = --catalogue && -s "$7" && "$8" = --output ]]
+        if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
+        mkdir "$9"
+      else
+        [[ "$#" -eq 6 && "$3" = --verify && -d "$4" && "$5" = --sha256 && "$6" = "$(printf '%064d' 0 | tr 0 b)" ]]
+        if [[ "${TEST_FAIL:-}" = module-source-readback ]]; then echo '{"modules":231}'; exit 42; fi
+      fi
+      if [[ "${TEST_FAIL:-}" = module-source-incomplete ]]; then echo '{"modules":230}'; exit; fi
+      jq -n '{schemaVersion:1,manifestSha256:("b"*64),modules:231,files:466,bytes:123,selectedServiceGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
     elif [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
@@ -233,10 +246,12 @@ test -s "$scratch/complete/go-toolchain-notices.txt"
 test -s "$scratch/complete/zitadel-root-license.txt"
 test -s "$scratch/complete/go-module-notices.txt"
 test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
+test ! -e "$scratch/complete/selected-go-sources"
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/captured"
 jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 10 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
-for failure in source-capture source-readback; do
+jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+for failure in source-capture source-readback module-source-capture module-source-readback module-source-incomplete; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"

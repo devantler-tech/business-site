@@ -16,6 +16,12 @@ updates:
       interval: daily
     cooldown:
       default-days: 7
+  - package-ecosystem: gomod
+    directory: /tools/zitadel-module-sources
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
