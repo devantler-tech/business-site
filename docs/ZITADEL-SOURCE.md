@@ -420,6 +420,40 @@ packaging and clean replay remain under #343/#308. This is assessed text/input
 retention, not a legal classifier, full licence closure, image admission,
 reproducibility, restricted-runtime proof or customer-login activation.
 
+## Explicit prepared-source snapshots
+
+`scripts/zitadel-source-bundle.go` admits the complete frozen prepared source
+after the Linux recipe's API serialization change and before installation. Its
+`--seal-prepared <source> <new-snapshot>` operation compares all sorted file names,
+bytes and executable modes with the frozen profile. It preserves empty files and
+maintained protobuf bootstrap sources. A substituted preparation or lock fails.
+No arguments perform no operation.
+
+`--pack <snapshot> <manifest-sha256> <new-tar>` writes a closed USTAR archive and
+reports its separate SHA-256. `--unpack <tar> <archive-sha256> <manifest-sha256>
+<new-snapshot>` rechecks exact ordered regular members, complete bytes and declared
+metadata. The output must be new. Traversal, links, duplicates, missing or extra
+members, changed identities and trailing input fail without publishing a success
+receipt. `--verify <snapshot> <manifest-sha256>` reads the closed snapshot without
+modifying it. The archive digest is external; it never rewrites the manifest.
+
+These operations do not install dependencies or run the upstream build. A
+prepared-source round trip establishes only that source snapshot's correspondence.
+The Linux builder's optional `--capture-source` flag invokes `--capture-build`
+immediately before installation. It retains the preparation receipt, original and
+serialized API configuration, seven-input hash record, four exact recipes/input
+files, build guide and a dated modification record. A complete file manifest
+keeps those ten records separate from the upstream source. The completed build
+receipt binds the preserved source/archive identities to its actual binary and
+recipe, after a full post-build readback. Default invocation omits this capture.
+CI explicitly enables it and unpacks the actual archive into a new reservation.
+Only the compact manifest, round-trip result and completed build receipt enter
+diagnostics; the source archive, recipe bodies and executable remain excluded.
+
+Issue #343 also requires actual selected dependency capture and a clean,
+network-denied native replay before its full acceptance criteria are complete.
+Source/image publication and the recipient's source offer remain #308.
+
 ## Local restricted image CLI test
 
 The explicit image test packages the actual successful Linux build and observes

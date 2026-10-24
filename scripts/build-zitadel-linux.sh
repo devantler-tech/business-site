@@ -5,13 +5,14 @@ export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
-requested=0 source_repo='' output=''
+requested=0 capture_source=0 source_repo='' output=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
+    --capture-source) [[ "$capture_source" -eq 0 ]] || fail 'duplicate source capture'; capture_source=1; shift ;;
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
     --output) [[ -z "$output" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid output'; output="$2"; shift 2 ;;
-    *) fail 'expected --build --source <frozen-git-repository> --output <new-directory>' ;;
+    *) fail 'expected --build [--capture-source] --source <frozen-git-repository> --output <new-directory>' ;;
   esac
 done
 [[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit build, source and output are required'
@@ -58,6 +59,16 @@ jq '.targets["generate-install"].options.parallel = false' apps/api/project.json
 cp "$output/api-project.serial.json" apps/api/project.json
 export GOCACHE="$output/go-cache" GOMODCACHE="$output/go-modules"
 mkdir "$GOCACHE" "$GOMODCACHE"
+source_snapshot_json=null
+if [[ "$capture_source" -eq 1 ]]; then
+  # Capture before any install/generation can alter maintained source or add
+  # caches. The helper admits the complete fixed profile, not just seven locks.
+  go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
+  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 10 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
+  go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
+  jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
+fi
 # Run one real phase with its own resource/log records and preserve failure status.
 run_phase() {
   local name="$1"; shift
@@ -152,9 +163,17 @@ shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zita
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
+if [[ "$capture_source" -eq 1 ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/source-snapshot" "$source_manifest" >"$output/source-readback.pending"
+  archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
+  jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
+  jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
+  source_snapshot_json="$(jq -n --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" '$capture[0] + $archive[0] + {dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
+  --argjson snapshot "$source_snapshot_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
-    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false}' >"$output/build-receipt.pending"
+    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end)' >"$output/build-receipt.pending"
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
 go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"

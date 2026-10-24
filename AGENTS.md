@@ -69,6 +69,15 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
   CI retains build diagnostics only; successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+- `scripts/zitadel-source-bundle.go` is an explicit, otherwise inert source-input
+  snapshot/archive verifier. Its prepared-source operation admits only the complete
+  frozen tree after API serialization, preserving empty files and executable modes.
+  Archive replay checks closed member identities without executing source. It does
+  not yet supply dependency acquisition, native offline compilation or publication.
+  The Linux builder's explicit `--capture-source` option captures before install,
+  retains ten literal build/modification records and rechecks the snapshot/archive
+  before binding their identities to the completed binary's build receipt. CI
+  unpacks that actual archive; diagnostics exclude its full source bytes.
 - `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
   fonts, decoded statik members and retained notices. It is inactive without
   arguments and is mandatory in the Linux build, not the public website build.
@@ -166,6 +175,7 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
+(cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
