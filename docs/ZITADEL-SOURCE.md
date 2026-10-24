@@ -156,3 +156,44 @@ These local tests use frozen public font/vector fixtures, real ZIP/Go-syntax
 decoding and adverse inputs. They do not replace the separate clean Linux build
 or actual post-merge inventory collection. The interface and limits are recorded
 in [ADR 0022](adr/0022-output-bound-login-icon-inventory.md).
+
+## Same-build Angular notice capture
+
+The explicit Linux build retains `console-third-party-notices.txt` byte for byte
+from the actual generated `console/dist/console/3rdpartylicenses.txt`. The matching
+`console-notices-inventory.json` binds it to the identical embedded copy, both
+generated-manifest entries, the complete compiler observation, frozen dependency
+lock, preparation, build recipe and final binary/receipt. Both generated notice
+copies and all selected observations must be present and unambiguous.
+
+Before compilation the standard-library Go collector checks and snapshots the
+raw bytes and selected input identities. After compilation it revalidates the
+same inputs, refuses a replaced snapshot and emits the checked bytes rather than
+reopening an unchecked path for copying. The pending receipt is renamed unchanged
+only after both notice and icon inventories succeed. A failed phase, including
+plausible output followed by a nonzero exit, never publishes a build-success receipt.
+Neither capture mode runs without explicit arguments; the ordinary website build
+does not invoke it. Existing raw diagnostics are never overwritten.
+
+Within the fresh, single-writer build directory, reads are confined, bounded,
+nonblocking for replaced special files and complete. This is not a general-purpose
+defence against hostile concurrent filesystem mutation.
+The raw text limit is 2 MiB; the compiler-observation limit is 64 MiB and the
+selected service-binary limit is 512 MiB. The source and generated notice files
+are unchanged. CI retains the raw diagnostic, compact binding record and verifier
+identity, not the pre-compilation snapshot, executable, console bundle or prepared
+source tree. The raw text can be inspected in that run's evidence artifact.
+
+```sh
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go)
+bash scripts/build-zitadel-linux.test.sh
+bash scripts/zitadel-build-contract.test.sh
+```
+
+These controls cover actual checked-byte output, malformed/partial/duplicate
+observations, changed inputs across compilation and failure propagation. Fixtures
+are not the hosted Angular notice text. Capturing a notice does not establish that
+each bundled package's section is complete: inspect the fresh hosted text and track
+missing sections under #308. Overall `licenseClosure` and `imageAdmission` remain
+`unknown`; capture grants no image publication, production identity changes or
+portal activation.

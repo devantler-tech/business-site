@@ -8,6 +8,7 @@ trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/recipe/scripts" "$scratch/bin" "$scratch/upstream"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 build="$scratch/recipe/scripts/build-zitadel-linux.sh"
@@ -74,10 +75,23 @@ case "$1 $2" in
   'version -m') printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n';;
   'mod verify') :;;
   'run '*)
-    [[ "$*" == *'zitadel-login-icons.go --inventory --build '* && "$*" == *' --notices '* ]]
-    [[ -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
-    if [[ "${TEST_FAIL:-}" = inventory ]]; then echo 'plausible partial inventory'; exit 42; fi
-    echo '{"fixture":"orchestration only"}';;
+    if [[ "$2" == */zitadel-console-notices.go ]]; then
+      [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
+      if [[ "$3" = --snapshot ]]; then
+        [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
+        if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
+      else
+        [[ "$3" = --inventory && -s "$5/console-notices.before.json" && -s "$5/service/zitadel" && -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+        if [[ "${TEST_FAIL:-}" = notice-capture ]]; then echo 'plausible partial capture'; exit 42; fi
+        printf 'raw notice fixture\n' >"$5/console-third-party-notices.txt"
+      fi
+      echo '{"fixture":"orchestration only"}'
+    else
+      [[ "$*" == *'zitadel-login-icons.go --inventory --build '* && "$*" == *' --notices '* ]]
+      [[ -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+      if [[ "${TEST_FAIL:-}" = inventory ]]; then echo 'plausible partial inventory'; exit 42; fi
+      echo '{"fixture":"orchestration only"}'
+    fi;;
   'list -deps')
     case "${TEST_MISSING:-}" in
       login-compiled) jq -n --arg dir "$PWD/internal/api/ui/login/statik" '{ImportPath:"github.com/zitadel/zitadel/internal/api/ui/login/statik",Dir:$dir,GoFiles:["generate.go"],IgnoredGoFiles:["statik.go"]}';;
@@ -120,7 +134,10 @@ reject() {
   if env "$@" bash "$build" --build --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
     echo "incorrectly admitted $label" >&2; failures=$((failures + 1))
   fi
-  test ! -e "$scratch/$label/build-receipt.json"
+  if [[ -e "$scratch/$label/build-receipt.json" ]]; then
+    echo "failure published success receipt: $label" >&2
+    failures=$((failures + 1))
+  fi
 }
 reject wrong-os TEST_OS=Darwin
 reject wrong-go TEST_GO=go1.27.2
@@ -142,9 +159,14 @@ reject leaked-font-link TEST_FONT=symlink
 reject failed-compiler TEST_FAIL=compile
 reject empty-binary TEST_MISSING=binary
 reject failed-icon-inventory TEST_FAIL=inventory
+reject failed-notice-snapshot TEST_FAIL=notice-snapshot
+reject failed-notice-capture TEST_FAIL=notice-capture
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
 jq -e '.platform == "linux/amd64" and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .reproducible == false' "$scratch/complete/build-receipt.json"
+test -s "$scratch/complete/console-notices-inventory.json"
+test -s "$scratch/complete/console-third-party-notices.txt"
+test -s "$scratch/complete/console-notice-verifier.sha256"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'
