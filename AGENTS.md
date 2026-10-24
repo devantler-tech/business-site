@@ -73,6 +73,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.
+  Its explicit `--toolchain` input also retains the selected Go distribution's
+  LICENSE, PATENTS and VERSION in the Linux recipe, not the public website build.
+  This does not cover all selected Go modules or incorporated-source terms.
   Its explicit `--supplement` input retains seven selected packages' complete
   notice components separately, without changing generated Angular text. Read
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
@@ -134,7 +137,7 @@ bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
-(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go)
+(cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts

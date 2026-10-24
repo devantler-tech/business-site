@@ -6,6 +6,9 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/recipe/scripts" "$scratch/bin" "$scratch/upstream"
+mkdir "$scratch/go-distribution"
+cp "$root/scripts/testdata/go1.26.10/LICENSE" "$root/scripts/testdata/go1.26.10/PATENTS" "$scratch/go-distribution/"
+printf 'go1.26.10\n' >"$scratch/go-distribution/VERSION"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
@@ -73,12 +76,14 @@ cat >"$scratch/bin/go" <<'STUB'
 set -euo pipefail
 case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
+  'env GOROOT') echo "$TEST_GOROOT";;
   'version -m') printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n';;
   'mod verify') :;;
   'run '*)
     if [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
+      [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
@@ -89,6 +94,8 @@ case "$1 $2" in
         printf 'verbatim supplement fixture\n' >"$5/console-notices-supplement.txt"
         printf '{"fixture":"supplement orchestration only"}\n' >"$5/console-notices-supplement-inventory.pending"
         if [[ "${TEST_FAIL:-}" = supplement ]]; then echo 'plausible partial supplement'; exit 42; fi
+        printf 'verbatim Go distribution fixture\n' >"$5/go-toolchain-notices.txt"
+        if [[ "${TEST_FAIL:-}" = toolchain ]]; then echo 'plausible partial toolchain retention'; exit 42; fi
       fi
       echo '{"fixture":"orchestration only"}'
     else
@@ -128,6 +135,7 @@ echo 'Machine: Advanced Micro Devices X86-64'
 STUB
 chmod 755 "$scratch/bin/"*
 export PATH="$scratch/bin:$PATH" TEST_CALLS="$scratch/calls"
+export TEST_GOROOT="$scratch/go-distribution"
 bash "$build"
 test ! -e "$TEST_CALLS"
 # Record all failures so a missing guard cannot hide behind the first rejection.
@@ -167,6 +175,7 @@ reject failed-icon-inventory TEST_FAIL=inventory
 reject failed-notice-snapshot TEST_FAIL=notice-snapshot
 reject failed-notice-capture TEST_FAIL=notice-capture
 reject failed-supplement TEST_FAIL=supplement
+reject failed-toolchain TEST_FAIL=toolchain
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
@@ -176,5 +185,6 @@ test -s "$scratch/complete/console-third-party-notices.txt"
 test -s "$scratch/complete/console-notice-verifier.sha256"
 test -s "$scratch/complete/console-notices-supplement.txt"
 test -s "$scratch/complete/console-notices-supplement-inventory.json"
+test -s "$scratch/complete/go-toolchain-notices.txt"
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

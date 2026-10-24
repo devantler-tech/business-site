@@ -199,7 +199,7 @@ func TestSupplementCaptureRejectsPostCompileReplacement(t *testing.T) {
 	for _, kind := range []string{"alias", "terms-and-catalogue", "metadata-and-catalogue", "other-build-notice"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newSupplementFixture(t)
-			config := noticeSupplementConfig{f.notices, f.catalogueHash}
+			config := noticeSupplementConfig{Directory: f.notices, CatalogueHash: f.catalogueHash}
 			state, err := noticeSnapshot(f.build, f.recipe, noticeRead, config)
 			if err != nil {
 				t.Fatal(err)
