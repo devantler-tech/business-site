@@ -286,6 +286,18 @@ func newModuleRootFixture(t *testing.T) moduleRootFixture {
 	rootSum := []byte("example.com/Dep v1.2.3 " + sumA + "\nexample.com/Dep v1.2.3/go.mod " + modA + "\nexample.com/replaced v1.1.0 " + sumB + "\nexample.com/replaced v1.1.0/go.mod " + modB + "\n")
 	writeNotice(t, f.build, "prepared/source/go.mod", rootMod)
 	writeNotice(t, f.build, "prepared/source/go.sum", rootSum)
+	changeNoticeJSON(t, f.noticeFixture, "prepared/source-preparation.json", func(v map[string]any) { v["metadataProfile"] = "machine-id-no-jsonpath-v1" })
+	packageBytes, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	packageLines := bytes.Split(bytes.TrimSuffix(packageBytes, []byte("\n")), []byte("\n"))
+	var consolePackage map[string]any
+	if err = json.Unmarshal(packageLines[1], &consolePackage); err != nil {
+		t.Fatal(err)
+	}
+	consolePackage["Module"] = map[string]any{"Path": "github.com/zitadel/zitadel", "Main": true, "Dir": filepath.Join(f.build, "prepared/source"), "GoMod": filepath.Join(f.build, "prepared/source/go.mod")}
+	writeNotice(t, f.build, "packages.jsonl", append([]byte("{\"ImportPath\":\"fmt\",\"Standard\":true}\n"), noticeJSON(t, consolePackage)...))
 	license := []byte("A complete fixture copyright and grant.\r\n")
 	patent := []byte("A complete independent patent notice.\n")
 	component := func(name string, body []byte) map[string]any {
@@ -534,5 +546,100 @@ func TestModuleRootDefaultOffAndOptionBoundary(t *testing.T) {
 		if noticeRun(args, &out, &diagnostic) == 0 || out.Len() != 0 {
 			t.Fatal("ambiguous module selection admitted")
 		}
+	}
+}
+
+// A reader that returns plausible bytes and an error is not a successful read;
+// checked bytes must be retained rather than reopening their changed pathname.
+func TestModuleRootCheckedReadsAndRevalidation(t *testing.T) {
+	for _, kind := range []string{"checked", "complete-error", "partial-error", "truncated"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newModuleRootFixture(t)
+			target := "go-modules/example.com/!dep@v1.2.3/LICENSE"
+			reads := 0
+			reader := func(root, name string, limit int64) ([]byte, error) {
+				data, err := noticeRead(root, name, limit)
+				if name == target {
+					reads++
+					switch kind {
+					case "complete-error":
+						return data, errors.New("read failed after complete bytes")
+					case "partial-error":
+						return data[:5], errors.New("partial read failed")
+					case "truncated":
+						return data[:5], nil
+					default:
+						writeNotice(t, f.build, name, []byte("unchecked replacement"))
+					}
+				}
+				return data, err
+			}
+			options := noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash}
+			state, err := noticeSnapshot(f.build, f.recipe, reader, options)
+			if kind != "checked" {
+				if err == nil || state.Modules != nil {
+					t.Fatal("admitted incomplete/erroring module read")
+				}
+				return
+			}
+			if err != nil || reads != 1 || state.Modules == nil || !bytes.Contains(state.Modules.Text, []byte("A complete fixture copyright and grant.\r\n")) {
+				t.Fatalf("checked bytes were not retained: %v", err)
+			}
+			writeNotice(t, f.build, noticeBefore, noticeJSON(t, state))
+			if _, _, err := noticeCapture(f.build, f.recipe, noticeRead, options); err == nil {
+				t.Fatal("post-snapshot module replacement admitted")
+			}
+		})
+	}
+}
+
+// Refuse changed module snapshots/options before consulting any service binary.
+func TestModuleRootCaptureRejectsChangedSnapshotBeforeBinaryRead(t *testing.T) {
+	for _, kind := range []string{"omitted-option", "added-option", "changed-text", "changed-digest", "changed-path", "missing-snapshot-module"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newModuleRootFixture(t)
+			options := noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash}
+			beforeOptions := options
+			if kind == "added-option" {
+				beforeOptions = noticeSupplementConfig{}
+			}
+			state, err := noticeSnapshot(f.build, f.recipe, noticeRead, beforeOptions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeNotice(t, f.build, noticeBefore, noticeJSON(t, state))
+			if kind == "omitted-option" {
+				options = noticeSupplementConfig{}
+			}
+			if strings.HasPrefix(kind, "changed-") || kind == "missing-snapshot-module" {
+				changeNoticeJSON(t, f.noticeFixture, noticeBefore, func(value map[string]any) {
+					if kind == "missing-snapshot-module" {
+						delete(value, "modules")
+						return
+					}
+					modules := value["modules"].(map[string]any)
+					if kind == "changed-text" {
+						modules["text"] = "dW5jaGVja2Vk"
+						return
+					}
+					evidence := modules["evidence"].(map[string]any)
+					if kind == "changed-digest" {
+						evidence["sha256"] = strings.Repeat("0", 64)
+					} else {
+						evidence["rawDiagnostic"] = "other.txt"
+					}
+				})
+			}
+			binaryReads := 0
+			reader := func(root, name string, limit int64) ([]byte, error) {
+				if name == "service/zitadel" {
+					binaryReads++
+				}
+				return noticeRead(root, name, limit)
+			}
+			if _, _, err := noticeCapture(f.build, f.recipe, reader, options); err == nil || binaryReads != 0 {
+				t.Fatal("changed snapshot reached binary capture")
+			}
+		})
 	}
 }

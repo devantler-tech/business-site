@@ -319,3 +319,45 @@ this boundary; the real Linux job reads its actual prepared upstream root instea
 This does not cover component-specific, dependency, nested-module or incorporated
 terms. Those remain under #326; complete `licenseClosure` and `imageAdmission`
 remain `unknown`, reproducibility is not established and the portal stays off.
+
+## Selected dependency root notices
+
+Both native Linux capture phases require `--modules
+third_party/zitadel-go-module-notices`. The compiled catalogue digest binds all
+231 selected dependency identities and the frozen upstream go.mod/go.sum. The
+catalogue was curated from checksum-matched complete module archives, not from
+licence labels, current upstream files or everything listed in go.sum. It records
+262 root text components, including the complete MinIO CREDITS file and qualified
+or mixed-case licence names. The lib/pq notice.go and notice_test.go source files
+are not misclassified as legal text.
+
+The same collector streams the complete compiler graph, refuses incomplete or
+contradictory observations, preserves original and effective replacement
+identities, and reads only the resolved cache inside this fresh build. Each
+selected version's cached go.mod checksum and archive checksum marker must match
+the frozen sums. The recipe verifies the module cache before and after compilation.
+Every admitted component must match its exact size and digest through the existing
+bounded, complete, regular-file reader; an unrelated global cache is never used.
+
+The snapshot stores the checked bytes. Capture revalidates them and reads build
+information from the already checked binary bytes using Go's standard reader,
+not an unchecked second path open or a partial textual command result. All
+original/replaced binary dependency records, compiler and Linux/static target
+settings must match. Missing, extra, duplicate or changed identities refuse
+capture without a success inventory or completed build receipt.
+
+`go-module-notices.txt` retains every component's complete verbatim bytes in
+deterministic source-labelled framing. The existing console inventory's `modules`
+section records the catalogue, both frozen root locks, every original/effective
+identity and each component's relative source path, offset, size and digest. Its
+existing nine preparation, graph, recipe, binary and receipt bindings remain in
+force. Equal text still has a separate retained source identity. The existing
+2 MiB text and 4 MiB snapshot bounds are unchanged.
+
+The existing root-level text diagnostic pattern retains only this additional
+text output; it does not admit executables, module ZIPs, module trees or prepared
+source. No-argument, unflagged capture and ordinary website builds remain inert
+with respect to these terms. Complete incorporated-source, nested-module and
+compiler-vendored exceptions remain explicit #326 work. Root retention is not a
+legal classifier, full licence closure, image admission, a reproducibility result,
+restricted-runtime proof or customer-login activation.

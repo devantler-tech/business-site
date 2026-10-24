@@ -17,6 +17,7 @@ check() {
     any($source.steps[]; .run == "bash scripts/prepare-zitadel-source.test.sh" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-metadata-profile/**"))) and
@@ -58,6 +59,7 @@ check() {
 }
 check "$scratch/ci.json"
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("third_party/zitadel-go-module-notices/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/zitadel-metadata-profile/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["test-zitadel-source"].steps |= map(select((.uses // "" | startswith("actions/setup-go@")) | not))' \
   '.jobs["test-zitadel-source"].steps |= map(if (.uses // "" | startswith("actions/setup-go@")) then .with["go-version"]="1.27.2" else . end)' \
@@ -96,4 +98,4 @@ for mutation in \
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including thirty-five broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including thirty-six broken-wiring controls.'
