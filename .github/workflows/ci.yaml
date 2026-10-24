@@ -349,6 +349,9 @@ jobs:
       - name: Verify local identity image packaging and execution controls
         working-directory: scripts
         run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go
+      - name: Verify sealed source snapshots and closed archive controls
+        working-directory: scripts
+        run: go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go
       # This isolated upstream profile does not install or build the website's
       # npm application. Its older Node input is exact and checksum-bound.
       - name: Prepare the frozen identity JavaScript toolchain
@@ -368,7 +371,13 @@ jobs:
           git -C "$RUNNER_TEMP/zitadel-upstream" fetch --no-write-fetch-head --depth=1 https://github.com/zitadel/zitadel.git +refs/tags/v4.20.0:refs/tags/v4.20.0
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
-        run: bash scripts/build-zitadel-linux.sh --build --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+        run: bash scripts/build-zitadel-linux.sh --build --capture-source --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+      - name: Unpack and verify the actual pre-install source archive
+        run: |
+          manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          archive="$(jq -er '.sourceSnapshot.archiveSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          go run scripts/zitadel-source-bundle.go --unpack "$RUNNER_TEMP/zitadel-build/prepared-source.tar" "$archive" "$manifest" "$RUNNER_TEMP/zitadel-source-roundtrip" > "$RUNNER_TEMP/zitadel-build/source-roundtrip.json"
+          cmp "$RUNNER_TEMP/zitadel-build/source-snapshot/source-manifest.json" "$RUNNER_TEMP/zitadel-source-roundtrip/source-manifest.json"
       - name: Exercise the local restricted identity image
         run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
       - name: Preserve build diagnostics, not unadmitted service distribution
@@ -385,6 +394,8 @@ jobs:
             ${{ runner.temp }}/zitadel-build/*.txt
             ${{ runner.temp }}/zitadel-build/*.log
             ${{ runner.temp }}/zitadel-build/*.sha256
+            ${{ runner.temp }}/zitadel-build/source-snapshot/source-manifest.json
+            ${{ runner.temp }}/zitadel-build/source-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
           if-no-files-found: error
           retention-days: 7

@@ -12,6 +12,7 @@ printf 'go1.26.10\n' >"$scratch/go-distribution/VERSION"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
@@ -86,7 +87,25 @@ case "$1 $2" in
   'mod verify')
     if [[ "${TEST_FAIL:-}" = module-integrity && -s "${GOCACHE%/go-cache}/service/zitadel" ]]; then echo 'plausible module verification followed by failure'; exit 42; fi;;
   'run '*)
-    if [[ "$2" == */zitadel-console-notices.go ]]; then
+    if [[ "$2" == */zitadel-source-bundle.go ]]; then
+      if [[ "${TEST_FAIL:-}" = source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
+      case "$3" in
+        --capture-build)
+          [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
+          mkdir "$6"
+          jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:10,bytes:261683913,recipeSha256:$recipe}';;
+        --pack)
+          [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
+          echo 'source archive fixture' >"$6"
+          jq -n --arg archive "$(shasum -a 256 "$6" | awk '{print $1}')" '{archiveSha256:$archive,manifestSha256:("a"*64)}';;
+        --verify)
+          [[ "$#" -eq 5 && -d "$4" ]]
+          if [[ "${TEST_FAIL:-}" = source-readback ]]; then echo '{"files":[]}'; exit 42; fi
+          echo '{"fixture":"complete source readback"}';;
+        *) exit 42;;
+      esac
+    elif [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
@@ -213,5 +232,14 @@ test -s "$scratch/complete/console-notices-supplement-inventory.json"
 test -s "$scratch/complete/go-toolchain-notices.txt"
 test -s "$scratch/complete/zitadel-root-license.txt"
 test -s "$scratch/complete/go-module-notices.txt"
+test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
+: >"$TEST_CALLS"
+bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/captured"
+jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 10 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+for failure in source-capture source-readback; do
+  : >"$TEST_CALLS"
+  if env TEST_FAIL="$failure" bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted" >&2; exit 1; fi
+  test ! -e "$scratch/$failure/build-receipt.json"
+done
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

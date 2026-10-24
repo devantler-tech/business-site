@@ -28,7 +28,7 @@ check() {
     $job.needs == "changes" and
     $job.if == "needs.changes.outputs.zitadel-build == '\''true'\''" and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
-      .run == "bash scripts/build-zitadel-linux.sh --build --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
+      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
@@ -43,6 +43,18 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify sealed source snapshots and closed archive controls" and
+      .["working-directory"] == "scripts" and
+      .run == "go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Unpack and verify the actual pre-install source archive" and
+      (.run | contains("go run scripts/zitadel-source-bundle.go --unpack")) and
+      (.run | contains(".sourceSnapshot.manifestSha256")) and
+      (.run | contains(".sourceSnapshot.archiveSha256")) and
+      (.run | contains("cmp \"$RUNNER_TEMP/zitadel-build/source-snapshot/source-manifest.json\" \"$RUNNER_TEMP/zitadel-source-roundtrip/source-manifest.json\"")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify sealed source snapshots and closed archive controls") < index("Build the complete native Linux service and embedded console")) and
+    ([$job.steps[].name] | index("Unpack and verify the actual pre-install source archive") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -58,7 +70,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -67,7 +79,17 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+controls=0
 for mutation in \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify sealed source snapshots and closed archive controls"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify sealed source snapshots and closed archive controls" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify sealed source snapshots and closed archive controls" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Unpack and verify the actual pre-install source archive"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Unpack and verify the actual pre-install source archive" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Unpack and verify the actual pre-install source archive" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Unpack and verify the actual pre-install source archive" then .run=(.run | sub("--unpack"; "--verify")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .run=(.run | sub(" --capture-source"; "")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("source-snapshot/source-manifest.json"; "source-snapshot/**")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("Dockerfile.zitadel"; "other-input")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify local identity image packaging and execution controls"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .if="false" else . end)' \
@@ -112,5 +134,6 @@ for mutation in \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
+  controls=$((controls+1))
 done
-echo 'ZITADEL build CI contract passed, including forty-two broken-wiring controls.'
+printf 'ZITADEL build CI contract passed, including %s broken-wiring controls.\n' "$controls"
