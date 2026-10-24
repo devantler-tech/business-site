@@ -61,7 +61,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
-  without the unadmitted Ailerons assets. Read `docs/ZITADEL-SOURCE.md`; the offline
+  without the unadmitted Ailerons assets or JSONPath machine-ID selector. Configured
+  metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
+  Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.
 - `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.

@@ -9,9 +9,17 @@ yq -o=json '.' "$root/.github/workflows/ci.yaml" >"$scratch/ci.json"
 check() {
   jq -e '
     .jobs["build-zitadel-linux"] as $job |
+    .jobs["test-zitadel-source"] as $source |
+    $source.if == null and $source["continue-on-error"] == null and
+    any($source.steps[]; (.uses // "" | startswith("actions/setup-go@")) and
+      .with["go-version"] == "1.26.10" and .with.cache == false and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($source.steps[]; .run == "bash scripts/prepare-zitadel-source.test.sh" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-metadata-profile/**"))) and
     $job["runs-on"] == "ubuntu-24.04" and
     $job.permissions == {contents:"read"} and
     $job["continue-on-error"] == null and
@@ -50,6 +58,12 @@ check() {
 }
 check "$scratch/ci.json"
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/zitadel-metadata-profile/\\*\\*"; "other-input/**")) else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(select((.uses // "" | startswith("actions/setup-go@")) | not))' \
+  '.jobs["test-zitadel-source"].steps |= map(if (.uses // "" | startswith("actions/setup-go@")) then .with["go-version"]="1.27.2" else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(if (.uses // "" | startswith("actions/setup-go@")) then .if="false" else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(if .run == "bash scripts/prepare-zitadel-source.test.sh" then .if="false" else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(if .run == "bash scripts/prepare-zitadel-source.test.sh" then .["continue-on-error"]=true else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/zitadel-source/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-source-notices_test.go"; "")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
@@ -82,4 +96,4 @@ for mutation in \
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
 done
-echo 'ZITADEL build CI contract passed, including twenty-nine broken-wiring controls.'
+echo 'ZITADEL build CI contract passed, including thirty-five broken-wiring controls.'

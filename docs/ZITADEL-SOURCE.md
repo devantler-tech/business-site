@@ -1,7 +1,8 @@
 # Prepare identity service source
 
 The explicit offline preparer produces the frozen ZITADEL 4.20.0 source without
-the unadmitted Ailerons font assets. It does not fetch, compile, publish an image,
+the unadmitted Ailerons font assets or the JSONPath machine-ID metadata selector.
+It does not fetch, compile, publish an image,
 configure an account or activate the portal. Ordinary builds never invoke it.
 
 Use Bash, Git, tar, Perl's `shasum`, jq and standard Unix file tools:
@@ -30,7 +31,8 @@ surviving mode and the complete executable-path set are checked before completio
 The result contains:
 
 - `source/`: committed source with two font files, two font-face sources and their
-  two imports removed. Every unrelated source file is preserved, including the
+  two imports removed, plus the narrowly modified machine-ID function described
+  below. Every unrelated source file is preserved, including the
   native API, protobuf, assets, statik, console and pack build graph.
 - `source-preparation.json`: the upstream revision, preparation recipe/input
   hashes and exact modified paths. Overall license closure and image admission
@@ -52,6 +54,23 @@ The exact removed font bytes are identified in
 An applicable distribution grant was not established for them. This is an
 admission decision, not a finding of infringement.
 
+The `machine-id-no-jsonpath-v1` preparation profile removes the only linked use of
+`github.com/jarcoal/jpath`. The exact selected module archive did not establish an
+applicable distribution grant. This is an unresolved rights question, not a claim
+that no grant exists elsewhere. The initial customer profile does not need this
+optional selector: any non-nil metadata `JPath` setting now returns an explicit
+unsupported-profile error, including an empty selector. It never silently falls
+back to a different machine ID. Metadata responses without a selector retain their
+exact raw bytes; hostname, private-IP and configured machine-ID behavior is unchanged.
+
+The transform checks the complete original and resulting `internal/id/sonyflake.go`
+bytes. Upstream `go.mod` and `go.sum` remain unchanged; a declaration there is not
+evidence of linkage. The actual Linux compiler graph and final binary build metadata
+must both exclude the module, including replacements, before a success receipt.
+Reintroducing JSONPath support requires a separately admitted implementation and
+compatibility validation, not removal of these exclusion checks. This restriction
+does not change the portal → customer Dex → ZITADEL login architecture.
+
 Retain the upstream root and component licenses and this modification recipe in
 corresponding source. Before distributing an image, #308 still requires a clean
 Linux build, complete output-bound asset/module notices, actual restricted-image
@@ -65,9 +84,13 @@ distribution. This preparer alone provides none of those results.
 bash scripts/prepare-zitadel-source.test.sh
 ```
 
-The test uses the real frozen public source and exercises default-off behavior,
+The test requires Go 1.26.10 and uses the real frozen public source. It exercises
+the actual prepared machine-ID package for exact raw-response preservation,
+explicit selector refusal and propagation through its HTTP metadata caller. It also
+exercises default-off behavior,
 unchanged input, complete transformed output, existing destinations, missing
-source and a plausible partial archive followed by failure. An optional local
+source, partial metadata transforms and a plausible partial archive followed by
+failure. An optional local
 repository argument reuses its immutable objects without changing that repository:
 
 ```sh

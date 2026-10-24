@@ -4,3 +4,4 @@
 7b7e81d5290606e47fa90799b79182cc61078a5de6d985605e7f8bf02b96807a  internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf
 c5f710f6e5b536b16e4a42d62c7e05cf47fde943d8433a238244aff675eaec15  internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss
 d4c9cef378f7ed31373ee45e10ab159c609cf999180b40fca44678d513ab6af8  internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
+273abacde7191a2965b8cb0998891e830eff90b8a612dfa8d7cce1c22d8a5440  internal/id/sonyflake.go
