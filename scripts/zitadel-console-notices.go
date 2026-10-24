@@ -841,7 +841,7 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch key {
-		case "--snapshot", "--inventory", "--source-license":
+		case "--snapshot", "--inventory", "--verify", "--source-license":
 			values[key] = "true"
 		case "--build", "--recipe", "--supplement", "--toolchain", "--modules":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -867,8 +867,30 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 		optional++
 	}
 	validCount := len(values) == 3+optional
-	if !validCount || (values["--snapshot"] == "") == (values["--inventory"] == "") || values["--build"] == "" || values["--recipe"] == "" {
+	modes := 0
+	for _, mode := range []string{"--snapshot", "--inventory", "--verify"} {
+		if values[mode] != "" {
+			modes++
+		}
+	}
+	if !validCount || modes != 1 || values["--build"] == "" || values["--recipe"] == "" {
 		return fail(fmt.Errorf("expected one mode, build and recipe"))
+	}
+	verify := values["--verify"] != ""
+	checkOrWrite := func(name string, data []byte) error {
+		if !verify {
+			return noticeWriteDiagnostic(values["--build"], name, data)
+		}
+		retained, err := noticeRead(values["--build"], name, noticeSnapshotLimit)
+		if err != nil || !bytes.Equal(retained, data) {
+			return fmt.Errorf("completed diagnostic differs: %s", name)
+		}
+		return nil
+	}
+	if verify {
+		if _, err := noticeRead(values["--build"], "build-receipt.json", noticeSnapshotLimit); err != nil {
+			return fail(fmt.Errorf("completed build receipt unavailable"))
+		}
 	}
 	var result any
 	options := []noticeSupplementConfig{}
@@ -887,7 +909,7 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 		if err != nil {
 			return fail(err)
 		}
-		if err = noticeWriteDiagnostic(values["--build"], noticeRaw, raw); err != nil {
+		if err = checkOrWrite(noticeRaw, raw); err != nil {
 			return fail(err)
 		}
 		result = inventory
@@ -928,25 +950,34 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 		if e != nil {
 			return fail(e)
 		}
-		if e = noticeWriteDiagnostic(values["--build"], supplementRaw, s.Text); e != nil {
+		if e = checkOrWrite(supplementRaw, s.Text); e != nil {
 			return fail(e)
 		}
-		if e = noticeWriteDiagnostic(values["--build"], supplementInventoryPending, append(encoded, '\n')); e != nil {
+		name := supplementInventoryPending
+		if verify {
+			name = "console-notices-supplement-inventory.json"
+		}
+		if e = checkOrWrite(name, append(encoded, '\n')); e != nil {
 			return fail(e)
 		}
 	}
 	if captured != nil && captured.toolchain != nil {
-		if err := noticeWriteDiagnostic(values["--build"], captured.toolchain.Evidence.RawDiagnostic, captured.toolchain.Text); err != nil {
+		if err := checkOrWrite(captured.toolchain.Evidence.RawDiagnostic, captured.toolchain.Text); err != nil {
 			return fail(err)
 		}
 	}
 	if captured != nil && captured.sourceLicense != nil {
-		if err := noticeWriteDiagnostic(values["--build"], captured.sourceLicense.Evidence.RawDiagnostic, captured.sourceLicense.Text); err != nil {
+		if err := checkOrWrite(captured.sourceLicense.Evidence.RawDiagnostic, captured.sourceLicense.Text); err != nil {
 			return fail(err)
 		}
 	}
 	if captured != nil && captured.moduleNotices != nil {
-		if err := noticeWriteDiagnostic(values["--build"], moduleNoticeRaw, captured.moduleNotices.Text); err != nil {
+		if err := checkOrWrite(moduleNoticeRaw, captured.moduleNotices.Text); err != nil {
+			return fail(err)
+		}
+	}
+	if verify {
+		if err := checkOrWrite("console-notices-inventory.json", b); err != nil {
 			return fail(err)
 		}
 	}
