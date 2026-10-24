@@ -668,6 +668,254 @@ func TestModuleRootSnapshotPreservesAllIdentitiesAndVerbatimComponents(t *testin
 	}
 }
 
+// Dropping origin retention must lose these literal attribution bytes, while
+// compiler-unselected source and changed full-file inputs must be refused.
+func moduleOriginFixture(t *testing.T) moduleRootFixture {
+	t.Helper()
+	f := newModuleRootFixture(t)
+	source := []byte("package dep\n\n// Origin notice.\n\nfunc Unchanged() {}\n")
+	writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/adapted.go", source)
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue map[string]any
+	if err = json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	entry := catalogue["modules"].([]any)[0].(map[string]any)
+	entry["origins"] = []any{map[string]any{
+		"file": "adapted.go", "package": "example.com/Dep", "bytes": len(source), "sha256": noticeHash(source),
+		"spans":        []any{map[string]any{"offset": 13, "bytes": 18, "sha256": noticeHash([]byte("// Origin notice.\n"))}},
+		"terms":        []any{map[string]any{"module": "example.com/Dep", "file": "LICENSE", "sha256": noticeHash([]byte("A complete fixture copyright and grant.\r\n"))}},
+		"notices":      []any{map[string]any{"file": "incorporated/ORIGINAL.txt", "upstream": "https://example.org/LICENSE", "bytes": 33, "sha256": noticeHash([]byte("Additional full original grant.\r\n"))}},
+		"sourceInputs": []any{map[string]any{"file": "incorporated/source.dat", "upstream": "https://example.org/source.dat", "bytes": 29, "sha256": noticeHash([]byte("Corresponding source payload\n"))}},
+		"inputs": []any{
+			map[string]any{"file": "data/rules", "kind": "embed", "bytes": 6, "sha256": noticeHash([]byte("rules\n"))},
+			map[string]any{"file": "gen.go", "kind": "generator", "bytes": 21, "sha256": noticeHash([]byte("//go:build ignore\n//\n"))},
+		},
+	}}
+	writeNotice(t, f.catalogue, "incorporated/ORIGINAL.txt", []byte("Additional full original grant.\r\n"))
+	writeNotice(t, f.catalogue, "incorporated/source.dat", []byte("Corresponding source payload\n"))
+	writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/data/rules", []byte("rules\n"))
+	writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/gen.go", []byte("//go:build ignore\n//\n"))
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+	graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(graph, []byte("\n")), []byte("\n"))
+	var selected map[string]any
+	if err = json.Unmarshal(lines[2], &selected); err != nil {
+		t.Fatal(err)
+	}
+	selected["GoFiles"] = []string{"adapted.go"}
+	selected["EmbedFiles"] = []string{"data/rules"}
+	selected["IgnoredGoFiles"] = []string{"gen.go"}
+	lines[2] = bytes.TrimSuffix(noticeJSON(t, selected), []byte("\n"))
+	writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines, []byte("\n")), '\n'))
+	return f
+}
+
+func TestModuleOriginsRetainSelectedSourceSpans(t *testing.T) {
+	f := moduleOriginFixture(t)
+	var out, diagnostic bytes.Buffer
+	if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code != 0 {
+		t.Fatalf("selected source attribution was not retained: %s", &diagnostic)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	modules := got["modules"].(map[string]any)
+	var text []byte
+	encoded, _ := json.Marshal(modules["text"])
+	if err := json.Unmarshal(encoded, &text); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(text, []byte("// Origin notice.\n")) != 1 || bytes.Contains(text, []byte("func Unchanged")) {
+		t.Fatal("attribution was omitted, duplicated or replaced by source code")
+	}
+	if bytes.Count(text, []byte("Additional full original grant.\r\n")) != 1 || bytes.Contains(text, []byte("Corresponding source payload")) || bytes.Contains(text, []byte("rules\n")) {
+		t.Fatal("full notice missing or corresponding-source/embed bytes leaked into diagnostics")
+	}
+	if !bytes.Contains(text, []byte("https://example.org/source.dat")) {
+		t.Fatal("recipient cannot find the verified corresponding-source input")
+	}
+	rows := modules["evidence"].(map[string]any)["modules"].([]any)
+	origins := rows[0].(map[string]any)["origins"].([]any)
+	origin := origins[0].(map[string]any)
+	if len(origins) != 1 || origin["package"] != "example.com/Dep" || origin["source"] != "go-modules/example.com/!dep@v1.2.3/adapted.go" {
+		t.Fatal("actual source/package identity was lost")
+	}
+}
+
+func changeModuleOrigins(t *testing.T, f *moduleRootFixture, change func(*noticeModuleOrigin)) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue noticeModuleCatalogue
+	if err = json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	change(&catalogue.Modules[0].Origins[0])
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+}
+
+func TestModuleOriginsRefuseChangedOrUnselectedInputs(t *testing.T) {
+	for _, kind := range []string{
+		"foreign-package", "unselected-go-file", "traversal", "whole-source-changed", "source-missing", "source-linked",
+		"negative-span", "escaping-span", "overlapping-span", "wrong-span-hash", "no-spans", "missing-terms", "wrong-terms",
+		"changed-notice", "notice-truncated", "notice-linked", "notice-query", "notice-credentials", "notice-traversal",
+		"changed-source-input", "cross-purpose-input", "wrong-embed-kind", "changed-embed", "changed-generator", "compiled-generator",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			f := moduleOriginFixture(t)
+			cache := "go-modules/example.com/!dep@v1.2.3/"
+			want := "module origin"
+			changeModuleOrigins(t, &f, func(o *noticeModuleOrigin) {
+				switch kind {
+				case "foreign-package":
+					o.Package = "example.com/foreign"
+				case "unselected-go-file":
+					o.File = "unselected.go"
+				case "traversal":
+					o.File = "../adapted.go"
+				case "negative-span":
+					o.Spans[0].Offset = -1
+				case "escaping-span":
+					o.Spans[0].Offset = int(^uint(0) >> 1)
+				case "overlapping-span":
+					o.Spans = append(o.Spans, o.Spans[0])
+				case "wrong-span-hash":
+					o.Spans[0].SHA256 = strings.Repeat("0", 64)
+				case "no-spans":
+					o.Spans = nil
+				case "missing-terms":
+					o.Terms[0].Module = "example.com/foreign"
+				case "wrong-terms":
+					o.Terms[0].SHA256 = strings.Repeat("0", 64)
+				case "notice-query":
+					o.Notices[0].Upstream += "?secret=value"
+				case "notice-credentials":
+					o.Notices[0].Upstream = "https://user:password@example.org/LICENSE"
+				case "notice-traversal":
+					o.Notices[0].File = "../ORIGINAL.txt"
+				case "cross-purpose-input":
+					o.SourceInputs = append(o.SourceInputs, o.Notices[0])
+					o.SourceInputs[0], o.SourceInputs[1] = o.SourceInputs[1], o.SourceInputs[0]
+				case "wrong-embed-kind":
+					o.Inputs[0].Kind = "generator"
+				}
+			})
+			switch kind {
+			case "whole-source-changed":
+				writeNotice(t, f.build, cache+"adapted.go", []byte("package dep\n\n// Origin notice.\n\nfunc Different() {}\n"))
+			case "source-missing":
+				if err := os.Remove(filepath.Join(f.build, cache+"adapted.go")); err != nil {
+					t.Fatal(err)
+				}
+			case "source-linked":
+				p := filepath.Join(f.build, cache+"adapted.go")
+				if err := os.Rename(p, p+".real"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("adapted.go.real", p); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-notice", "notice-truncated":
+				text := []byte("Additional full substituted grant.\r\n")
+				if kind == "notice-truncated" {
+					text = []byte("Additional")
+				}
+				writeNotice(t, f.catalogue, "incorporated/ORIGINAL.txt", text)
+			case "notice-linked":
+				p := filepath.Join(f.catalogue, "incorporated/ORIGINAL.txt")
+				if err := os.Rename(p, p+".real"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("ORIGINAL.txt.real", p); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-source-input":
+				writeNotice(t, f.catalogue, "incorporated/source.dat", []byte("changed corresponding source\n"))
+			case "changed-embed":
+				writeNotice(t, f.build, cache+"data/rules", []byte("other\n"))
+			case "changed-generator":
+				writeNotice(t, f.build, cache+"gen.go", []byte("//go:build different\n"))
+			case "compiled-generator":
+				data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				data = bytes.Replace(data, []byte(`"GoFiles":["adapted.go"]`), []byte(`"GoFiles":["adapted.go","gen.go"]`), 1)
+				writeNotice(t, f.build, "packages.jsonl", data)
+			}
+			var out, diagnostic bytes.Buffer
+			if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code == 0 || out.Len() != 0 || !strings.Contains(diagnostic.String(), want) {
+				t.Fatalf("bad origin admitted or failed elsewhere: code=%d output=%d diagnostic=%s", code, out.Len(), &diagnostic)
+			}
+		})
+	}
+}
+
+func TestModuleOriginReaderFailureCannotAdmitPlausibleBytes(t *testing.T) {
+	for _, target := range []string{"adapted.go", "ORIGINAL.txt", "source.dat", "data/rules", "gen.go"} {
+		t.Run(target, func(t *testing.T) {
+			f := moduleOriginFixture(t)
+			reader := func(root, name string, limit int64) ([]byte, error) {
+				b, err := noticeRead(root, name, limit)
+				if strings.HasSuffix(name, target) && err == nil {
+					return b, fmt.Errorf("plausible partial read followed by failure")
+				}
+				return b, err
+			}
+			state, err := noticeSnapshot(f.build, f.recipe, reader, noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash})
+			if err == nil || state.Modules != nil || !strings.Contains(err.Error(), "module origin") {
+				t.Fatalf("failed origin read admitted or failed elsewhere: %v", err)
+			}
+		})
+	}
+}
+
+func TestModuleOriginSourceRoleCannotChangeAcrossOrigins(t *testing.T) {
+	f := moduleOriginFixture(t)
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue noticeModuleCatalogue
+	if err := json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	second := catalogue.Modules[0].Origins[0]
+	second.File = "zeta.go"
+	body := []byte("package dep\n\n// Origin notice.\n\nfunc Unchanged2() {}\n")
+	second.Bytes, second.SHA256 = len(body), noticeHash(body)
+	second.Notices, second.SourceInputs = second.SourceInputs, nil
+	catalogue.Modules[0].Origins = append(catalogue.Modules[0].Origins, second)
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+	writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/zeta.go", body)
+	graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph = bytes.Replace(graph, []byte(`"GoFiles":["adapted.go"]`), []byte(`"GoFiles":["adapted.go","zeta.go"]`), 1)
+	writeNotice(t, f.build, "packages.jsonl", graph)
+	var out, diagnostic bytes.Buffer
+	if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code == 0 || out.Len() != 0 || !strings.Contains(diagnostic.String(), "purpose") {
+		t.Fatalf("corresponding source became a notice in another origin: code=%d bytes=%d diagnostic=%s", code, out.Len(), &diagnostic)
+	}
+}
+
 // Individually valid retained texts can exceed the encoded snapshot budget.
 // Refuse that combination before emitting a snapshot and starting compilation.
 func TestModuleRootSnapshotRefusesOversizedCombinedTextsBeforeOutput(t *testing.T) {

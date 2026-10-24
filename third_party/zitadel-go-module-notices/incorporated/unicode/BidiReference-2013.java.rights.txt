@@ -1,0 +1,17 @@
+/*
+ * Last Revised: 2013-09-02
+ *
+ * Credits:
+ * Originally written by Doug Felt
+ * 
+ * Updated for Unicode 6.3 by Roozbeh Pournader, with feedback by Aharon Lanin
+ * 
+ * Updated by Asmus Freytag to implement the Paired Bracket Algorithm (PBA)
+ *
+ * Disclaimer and legal rights:
+ * (C) Copyright IBM Corp. 1999, All Rights Reserved
+ * (C) Copyright Google Inc. 2013, All Rights Reserved
+ * (C) Copyright ASMUS, Inc. 2013. All Rights Reserved
+ *
+ * Distributed under the Terms of Use in http://www.unicode.org/copyright.html.
+ */
