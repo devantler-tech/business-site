@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -749,6 +750,69 @@ func TestModuleOriginsRetainSelectedSourceSpans(t *testing.T) {
 	origin := origins[0].(map[string]any)
 	if len(origins) != 1 || origin["package"] != "example.com/Dep" || origin["source"] != "go-modules/example.com/!dep@v1.2.3/adapted.go" {
 		t.Fatal("actual source/package identity was lost")
+	}
+}
+
+// A curated JSON catalogue may spell an absent optional list as []. The
+// pre-compile snapshot must survive the same JSON save/read used after build.
+func TestModuleOriginsSnapshotRoundTripsEmptyOptionalArrays(t *testing.T) {
+	for _, field := range []string{"terms", "notices", "sourceInputs", "inputs"} {
+		t.Run(field, func(t *testing.T) {
+			f := moduleOriginFixture(t)
+			data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var catalogue map[string]any
+			if err = json.Unmarshal(data, &catalogue); err != nil {
+				t.Fatal(err)
+			}
+			origin := catalogue["modules"].([]any)[0].(map[string]any)["origins"].([]any)[0].(map[string]any)
+			origin[field] = []any{}
+			data = noticeJSON(t, catalogue)
+			f.hash = noticeHash(data)
+			writeNotice(t, f.catalogue, "catalogue.json", data)
+			state, err := noticeSnapshot(f.build, f.recipe, noticeRead, noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var saved noticeState
+			if err = json.Unmarshal(noticeJSON(t, state), &saved); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(state, saved) {
+				t.Fatal("unchanged compile snapshot differs after JSON save/read")
+			}
+		})
+	}
+}
+
+func TestModuleOriginsCaptureStillRefusesChangedRecordedAttribution(t *testing.T) {
+	for _, field := range []string{"terms", "sourceInputs", "inputs"} {
+		t.Run(field, func(t *testing.T) {
+			f := moduleOriginFixture(t)
+			options := noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash}
+			state, err := noticeSnapshot(f.build, f.recipe, noticeRead, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeNotice(t, f.build, noticeBefore, noticeJSON(t, state))
+			changeNoticeJSON(t, f.noticeFixture, noticeBefore, func(value map[string]any) {
+				rows := value["modules"].(map[string]any)["evidence"].(map[string]any)["modules"].([]any)
+				origin := rows[0].(map[string]any)["origins"].([]any)[0].(map[string]any)
+				delete(origin, field)
+			})
+			binaryReads := 0
+			read := func(root, name string, limit int64) ([]byte, error) {
+				if name == "service/zitadel" {
+					binaryReads++
+				}
+				return noticeRead(root, name, limit)
+			}
+			if _, _, err = noticeCapture(f.build, f.recipe, read, options); err == nil || err.Error() != "compile snapshot changed" || binaryReads != 0 {
+				t.Fatalf("changed attribution reached capture: binary reads=%d, error=%v", binaryReads, err)
+			}
+		})
 	}
 }
 

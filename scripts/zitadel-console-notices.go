@@ -725,7 +725,15 @@ func noticeRetainOrigins(build, directory string, entry noticeModuleEntry, catal
 		if err != nil || len(body) != origin.Bytes || noticeDigest(body) != origin.SHA256 || !utf8.Valid(body) || bytes.ContainsRune(body, 0) {
 			return fmt.Errorf("module origin source differs or is unavailable")
 		}
-		retained := noticeOriginRecord{Source: source, Package: origin.Package, Bytes: origin.Bytes, SHA256: origin.SHA256, Terms: origin.Terms, SourceInputs: origin.SourceInputs, Inputs: origin.Inputs}
+		// Optional lists are omitted by the saved JSON snapshot when empty.
+		// Canonicalize only empty representations here so the unchanged checked
+		// state compares exactly after reading it back; keep every nonempty item.
+		retained := noticeOriginRecord{
+			Source: source, Package: origin.Package, Bytes: origin.Bytes, SHA256: origin.SHA256,
+			Terms:        append([]noticeOriginTerm(nil), origin.Terms...),
+			SourceInputs: append([]noticeOriginExternal(nil), origin.SourceInputs...),
+			Inputs:       append([]noticeOriginInput(nil), origin.Inputs...),
+		}
 		previousTerm := ""
 		for _, term := range origin.Terms {
 			key := term.Module + "/" + term.File
