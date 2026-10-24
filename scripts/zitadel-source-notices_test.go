@@ -352,6 +352,219 @@ func newModuleRootFixture(t *testing.T) moduleRootFixture {
 	return f
 }
 
+// This package and notice are independent fixture inputs, not derived from the
+// production applicability checks. Both original and replaced modules use it.
+func nestedModuleFixture(t *testing.T, index int) moduleRootFixture {
+	t.Helper()
+	f := newModuleRootFixture(t)
+	data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalogue map[string]any
+	if err := json.Unmarshal(data, &catalogue); err != nil {
+		t.Fatal(err)
+	}
+	entry := catalogue["modules"].([]any)[index].(map[string]any)
+	entry["components"] = append(entry["components"].([]any), map[string]any{
+		"file": "nested/NOTICE", "package": "nested", "bytes": 39,
+		"sha256": noticeHash([]byte("An independent nested copyright grant.\n")),
+	})
+	data = noticeJSON(t, catalogue)
+	f.hash = noticeHash(data)
+	writeNotice(t, f.catalogue, "catalogue.json", data)
+	graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(graph, []byte("\n")), []byte("\n"))
+	var observed map[string]any
+	if err := json.Unmarshal(lines[index+2], &observed); err != nil {
+		t.Fatal(err)
+	}
+	cache := "go-modules/example.com/!dep@v1.2.3"
+	if index == 1 {
+		cache = "go-modules/example.com/replaced@v1.1.0"
+	}
+	observed["ImportPath"] = observed["ImportPath"].(string) + "/nested"
+	observed["Dir"] = filepath.Join(f.build, cache, "nested")
+	writeNotice(t, f.build, "packages.jsonl", append(graph, noticeJSON(t, observed)...))
+	writeNotice(t, f.build, cache+"/nested/NOTICE", []byte("An independent nested copyright grant.\n"))
+	return f
+}
+
+func TestNestedModuleNoticesRetainSelectedPackageAndCompleteBytes(t *testing.T) {
+	for index := range 2 {
+		t.Run(fmt.Sprintf("module-%d", index), func(t *testing.T) {
+			f := nestedModuleFixture(t, index)
+			var out, diagnostic bytes.Buffer
+			if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code != 0 {
+				t.Fatalf("selected nested notice refused: %s", &diagnostic)
+			}
+			var got struct {
+				Modules struct {
+					Text     []byte `json:"text"`
+					Evidence struct {
+						Modules []struct {
+							Components []struct {
+								Source, Package string
+								Offset, Bytes   int
+							} `json:"components"`
+						} `json:"modules"`
+					} `json:"evidence"`
+				} `json:"modules"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			components := got.Modules.Evidence.Modules[index].Components
+			section := components[len(components)-1]
+			if section.Package != "nested" || section.Bytes != 39 || !strings.HasSuffix(section.Source, "/nested/NOTICE") || !bytes.Equal(got.Modules.Text[section.Offset:section.Offset+section.Bytes], []byte("An independent nested copyright grant.\n")) {
+				t.Fatal("nested notice lost complete bytes or selected-package provenance")
+			}
+		})
+	}
+}
+
+// An import identity cannot claim a different directory within the cache.
+func TestModulePackageDirectoryMustMatchItsImportIdentity(t *testing.T) {
+	f := newModuleRootFixture(t)
+	data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(data, []byte("\n")), []byte("\n"))
+	var observed map[string]any
+	if err := json.Unmarshal(lines[2], &observed); err != nil {
+		t.Fatal(err)
+	}
+	observed["Dir"] = observed["Dir"].(string) + "/unrelated"
+	lines[2] = bytes.TrimSuffix(noticeJSON(t, observed), []byte("\n"))
+	writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines, []byte("\n")), '\n'))
+	var out, diagnostic bytes.Buffer
+	if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code == 0 || out.Len() != 0 {
+		t.Fatal("package admitted from a directory different from its import identity")
+	}
+}
+
+func TestModuleImportSuffixCannotAliasItsRoot(t *testing.T) {
+	f := newModuleRootFixture(t)
+	data, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(data, []byte("\n")), []byte("\n"))
+	var observed map[string]any
+	if err := json.Unmarshal(lines[2], &observed); err != nil {
+		t.Fatal(err)
+	}
+	observed["ImportPath"] = "example.com/Dep/"
+	lines[2] = bytes.TrimSuffix(noticeJSON(t, observed), []byte("\n"))
+	writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines, []byte("\n")), '\n'))
+	var out, diagnostic bytes.Buffer
+	if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code == 0 || out.Len() != 0 {
+		t.Fatal("noncanonical import suffix aliases the module root")
+	}
+}
+
+func TestNestedModuleNoticesRefuseUnboundOrChangedComponents(t *testing.T) {
+	for _, kind := range []string{"unselected", "wrong-package", "missing-package", "parent-path", "absolute-path", "unclean-path", "backslash", "space", "control", "root-as-nested", "duplicate", "truncated", "same-size-change", "missing", "linked-file", "linked-directory"} {
+		t.Run(kind, func(t *testing.T) {
+			f := nestedModuleFixture(t, 0)
+			data, err := os.ReadFile(filepath.Join(f.catalogue, "catalogue.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var catalogue noticeModuleCatalogue
+			if err := json.Unmarshal(data, &catalogue); err != nil {
+				t.Fatal(err)
+			}
+			components := catalogue.Modules[0].Components
+			component := &components[len(components)-1]
+			target := filepath.Join(f.build, "go-modules/example.com/!dep@v1.2.3/nested/NOTICE")
+			switch kind {
+			case "unselected":
+				graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				lines := bytes.Split(bytes.TrimSuffix(graph, []byte("\n")), []byte("\n"))
+				writeNotice(t, f.build, "packages.jsonl", append(bytes.Join(lines[:len(lines)-1], []byte("\n")), '\n'))
+			case "wrong-package":
+				component.Package = "other"
+			case "missing-package":
+				component.Package = ""
+			case "parent-path":
+				component.File, component.Package = "../NOTICE", ".."
+			case "absolute-path":
+				component.File, component.Package = "/nested/NOTICE", "/nested"
+			case "unclean-path":
+				component.File, component.Package = "nested/../nested/NOTICE", "nested/../nested"
+			case "backslash":
+				component.File, component.Package = "nested\\NOTICE", "nested"
+			case "space":
+				component.File, component.Package = "nested folder/NOTICE", "nested folder"
+			case "control":
+				component.File, component.Package = "nested\x00/NOTICE", "nested\x00"
+			case "root-as-nested":
+				components[0].Package = "nested"
+			case "duplicate":
+				catalogue.Modules[0].Components = append(components, *component)
+			case "truncated":
+				writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/nested/NOTICE", []byte("An independent nested copyright"))
+			case "same-size-change":
+				writeNotice(t, f.build, "go-modules/example.com/!dep@v1.2.3/nested/NOTICE", []byte("Xn independent nested copyright grant.\n"))
+			case "missing":
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+			case "linked-file", "linked-directory":
+				if kind == "linked-directory" {
+					target = filepath.Dir(target)
+				}
+				if err := os.Rename(target, target+".real"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Base(target)+".real", target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			data = noticeJSON(t, catalogue)
+			f.hash = noticeHash(data)
+			writeNotice(t, f.catalogue, "catalogue.json", data)
+			var out, diagnostic bytes.Buffer
+			if code := noticeRunWithCatalogues(f.args, &out, &diagnostic, supplementCatalogueHash, f.hash); code == 0 || out.Len() != 0 {
+				t.Fatalf("admitted %s: %s", kind, &diagnostic)
+			}
+			if !strings.Contains(diagnostic.String(), "component") && !strings.Contains(diagnostic.String(), "selected module terms") {
+				t.Fatalf("%s did not reach its component boundary: %s", kind, &diagnostic)
+			}
+		})
+	}
+}
+
+func TestNestedModuleNoticeReaderErrorCannotAdmitPlausibleBytes(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		t.Run(fmt.Sprintf("complete-%v", complete), func(t *testing.T) {
+			f := nestedModuleFixture(t, 0)
+			reader := func(root, name string, limit int64) ([]byte, error) {
+				data, err := noticeRead(root, name, limit)
+				if name == "go-modules/example.com/!dep@v1.2.3/nested/NOTICE" {
+					if !complete {
+						data = data[:5]
+					}
+					return data, errors.New("read failed after plausible bytes")
+				}
+				return data, err
+			}
+			state, err := noticeSnapshot(f.build, f.recipe, reader, noticeSupplementConfig{ModuleDirectory: f.catalogue, ModuleCatalogueHash: f.hash})
+			if err == nil || state.Modules != nil || !strings.Contains(err.Error(), "selected module terms") {
+				t.Fatalf("erroring nested read was admitted or failed elsewhere: %v", err)
+			}
+		})
+	}
+}
+
 // Removing module retention must fail this consumer-visible snapshot assertion.
 func TestModuleRootSnapshotPreservesAllIdentitiesAndVerbatimComponents(t *testing.T) {
 	f := newModuleRootFixture(t)
