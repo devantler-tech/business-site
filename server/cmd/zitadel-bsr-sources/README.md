@@ -25,16 +25,16 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false -o /absolute/zitadel-bsr-so
 
 An explicit acquisition caller must supply one owned input root containing:
 
-| Path | Input |
-|---|---|
-| `buf-cache/v3/modules/{b5,shake256}/buf.build/<owner>/<module>/<commit>/` | Complete native selected module trees |
-| `buf-cache/v3/commits/shake256/buf.build/<commit>.json` | Native commit records |
-| `bsr-exports/<owner>/<module>/` | Separate complete exports |
-| `bsr-records/<commit>.json` | Literal older registry commit/time responses |
-| `bsr-tools/{api,console}` | Actual supplied tool binaries, hashed but never executed or retained |
-| `bsr-tools/{api,console}.version` | Caller-observed `1.67.0` / `1.72.0`, each with one newline |
-| `source-snapshot/source-manifest.json` | Prepared-source manifest with an external seal |
-| `prepared/source/proto/buf.lock` | Exact frozen source lock |
+| Path                                                                      | Input                                                                |
+|---------------------------------------------------------------------------|----------------------------------------------------------------------|
+| `buf-cache/v3/modules/{b5,shake256}/buf.build/<owner>/<module>/<commit>/` | Complete native selected module trees                                |
+| `buf-cache/v3/commits/shake256/buf.build/<commit>.json`                   | Native commit records                                                |
+| `bsr-exports/<owner>/<module>/`                                           | Separate complete exports                                            |
+| `bsr-records/<commit>.json`                                               | Literal older registry commit/time responses                         |
+| `bsr-tools/{api,console}`                                                 | Actual supplied tool binaries, hashed but never executed or retained |
+| `bsr-tools/{api,console}.version`                                         | Caller-observed `1.67.0` / `1.72.0`, each with one newline           |
+| `source-snapshot/source-manifest.json`                                    | Prepared-source manifest with an external seal                       |
+| `prepared/source/proto/buf.lock`                                          | Exact frozen source lock                                             |
 
 The caller also supplies the literal reviewed recipe. Supplied tool byte hashes
 and version observations are retained bindings, not independent executable/version
