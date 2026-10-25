@@ -84,7 +84,6 @@ jobs:
           PUBLIC_CONTENT_PROFILE: "default"
           FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend != 'astro' && 'true' || 'false' }}
           FEATURE_COMPANY_IDENTITY: "true"
-          FEATURE_VAT_PRICES: "true"
           FEATURE_OFFER_COPY: "false"
           FEATURE_CUSTOMER_SCOPE: "false"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}

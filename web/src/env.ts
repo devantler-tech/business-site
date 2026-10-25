@@ -6,7 +6,6 @@ export const variables = defineEnvVars({
   FEATURE_COMPANY_IDENTITY: { static: true, schema: parseFrontendRelease },
   FEATURE_OFFER_COPY: { static: true, schema: parseFrontendRelease },
   FEATURE_CUSTOMER_SCOPE: { static: true, schema: parseFrontendRelease },
-  FEATURE_VAT_PRICES: { static: true, schema: parseFrontendRelease },
   COMPANY_POSTAL_ADDRESS: { static: true, schema: (value) => value },
   PUBLIC_CONTENT_PROFILE: { static: true, schema: (value) => {
     if (value === undefined || value === "default") return "default";

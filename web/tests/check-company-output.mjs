@@ -3,7 +3,6 @@ import { assertCompanyOutput } from "./company-output.mjs";
 assertCompanyOutput("web/build","dist",{
   identity:process.env.FEATURE_COMPANY_IDENTITY === "true",
   scope:process.env.FEATURE_CUSTOMER_SCOPE === "true",
-  vat:process.env.FEATURE_VAT_PRICES === "true",
   template:process.env.PUBLIC_CONTENT_PROFILE === "production-template",
   address:process.env.COMPANY_POSTAL_ADDRESS ?? "",
 });

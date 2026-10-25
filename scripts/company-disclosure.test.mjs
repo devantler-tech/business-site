@@ -7,7 +7,6 @@ import { parse } from 'parse5';
 // Exercise the actual generated visitor pages, not source-text or mock markup.
 const root = process.env.COMPANY_DISCLOSURE_DIST ?? 'dist';
 const enabled = process.env.FEATURE_COMPANY_IDENTITY === 'true';
-const vat = process.env.FEATURE_VAT_PRICES === 'true';
 const html = (path) => existsSync(join(root, path))
   ? readFileSync(join(root, path), 'utf8') : '';
 const walk = (node) => [node, ...(node.childNodes ?? []).flatMap(walk)];
@@ -26,11 +25,11 @@ for (const [prefix, locale] of [['', 'en'], ['da/', 'da']]) {
     }
     assert.ok(details, 'The enabled release needs a grouped company-information page');
     const value = text(details);
-    const type = vat ? (locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship') : 'PMV';
+    const type = locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship';
     for (const fact of ['Devantler Tech', '46830385', type, 'Nikolai Emil Damm', 'ned@devantler.tech']) {
       assert.ok(value.includes(fact), `Missing registered company fact: ${fact}`);
     }
-    if (vat) assert.doesNotMatch(text(nodes.find(node => node.tagName === 'body')), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
+    assert.doesNotMatch(text(nodes.find(node => node.tagName === 'body')), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
     const address = nodes.find((node) => attr(node, 'data-company-address') !== undefined);
     assert.ok(address, 'A physical business address is required, not merely a CVR');
     assert.ok(attr(address, 'data-pagefind-ignore') !== undefined, 'Do not duplicate the residential address in the site search index');
