@@ -48,6 +48,13 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 		return nil, ErrDenied
 	}
 	sm := scs.New()
+	// scs.New starts a cleanup worker for its default in-memory store, which is
+	// replaced below and never used. Stop it so construction leaves no goroutine.
+	// Stopping immediately is race-free only from scs revision c45a9d1 (pinned in
+	// go.mod), which creates the stop channel before starting the worker.
+	if unused, ok := sm.Store.(interface{ StopCleanup() }); ok {
+		unused.StopCleanup()
+	}
 	// No background logging of raw store errors. Expired rows never authenticate;
 	// scheduled retention/cleanup belongs to the eventual production operator.
 	sm.Store = pgxstore.NewWithConfig(s.pool, pgxstore.Config{TableName: "portal_sessions"})
