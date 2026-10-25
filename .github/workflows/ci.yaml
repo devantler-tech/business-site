@@ -516,6 +516,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/generator-checkpoint-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/bsr-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/bsr-schema-replay.json

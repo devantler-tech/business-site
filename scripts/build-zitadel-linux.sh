@@ -210,6 +210,8 @@ without_network() {
 run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
 if [[ "$capture_source" -eq 1 ]]; then
   pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
+  node "$root/tools/zitadel-pnpm-source/index.mjs" inspect --build "$output" >"$output/pnpm-installation-check.json"
+  jq -e '.schemaVersion == 1 and .profile == "native-installation-selection-v1" and .packages > 0 and .selectedPNPMSourcesCaptured == false and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false' "$output/pnpm-installation-check.json" >/dev/null || fail 'incomplete early native installation check'
 fi
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null

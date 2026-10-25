@@ -49,7 +49,13 @@ cat >"$scratch/bin/node" <<'STUB'
 set -euo pipefail
 if [[ "$1" = --version ]]; then echo "${TEST_NODE:-v22.23.3}"; exit; fi
 [[ "$1" == */tools/zitadel-pnpm-source/index.mjs ]]
-if [[ "$2" = capture ]]; then
+if [[ "$2" = inspect ]]; then
+  [[ "$#" -eq 4 && "$3" = --build && -s "$4/pnpm-selected-projects.json" && ! -e "$4/generate.log" ]]
+  [[ "${TEST_FAIL:-}" != pnpm-early-check ]] || exit 42
+  packages=1
+  [[ "${TEST_FAIL:-}" != pnpm-early-incomplete ]] || packages=0
+  jq -n --argjson packages "$packages" '{schemaVersion:1,profile:"native-installation-selection-v1",packages:$packages,optionalSkips:0,selectedPNPMSourcesCaptured:false,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+elif [[ "$2" = capture ]]; then
   [[ "$3" = --build && "$5" = --source-sha256 && "$7" = --output && "$9" = --scratch ]]
   jq -e 'length == 4' "$4/pnpm-selected-projects.json" >/dev/null
   [[ "${TEST_FAIL:-}" != pnpm-capture ]] || { echo '{"plausible":"partial"}'; exit 42; }
@@ -605,10 +611,11 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in generator-checkpoint-changed generator-observation generator-readback generator-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+for failure in pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
+  if [[ "$failure" = pnpm-early-* ]]; then test ! -e "$scratch/$failure/generate.log"; fi
   if [[ "$failure" = pnpm-tool-changed ]]; then cp "$root/tools/zitadel-pnpm-source/index.mjs" "$scratch/recipe/tools/zitadel-pnpm-source/index.mjs"; fi
 done
 capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0

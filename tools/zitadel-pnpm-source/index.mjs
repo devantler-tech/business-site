@@ -72,10 +72,10 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
     new Set(modules.skipped).size !== modules.skipped.length
   )
     fail("invalid native skips");
-  function select(lock) {
-    for (const id of importerIds) if (!lock.importers?.[id]) fail("missing installed importer");
+  function select(lock, roots = importerIds) {
+    for (const id of roots) if (!lock.importers?.[id]) fail("missing installed importer");
     const skipped = new Set();
-    const result = filterLockfileByImportersAndEngine(lock, importerIds, {
+    const result = filterLockfileByImportersAndEngine(lock, roots, {
       currentEngine: { nodeVersion: "22.23.3", pnpmVersion: "10.30.3" },
       engineStrict: false,
       include: included,
@@ -85,9 +85,9 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
       skipped,
       supportedArchitectures: { os: ["linux"], cpu: ["x64"], libc: ["glibc"] },
     });
-    assert.deepEqual(sorted(result.selectedImporterIds), importerIds, "workspace expansion differs");
+    assert.deepEqual(sorted(result.selectedImporterIds), roots, "workspace expansion differs");
     return {
-      importers: Object.fromEntries(importerIds.map((id) => [id, result.lockfile.importers[id]])),
+      importers: Object.fromEntries(roots.map((id) => [id, result.lockfile.importers[id]])),
       packages: result.lockfile.packages,
       skipped: sorted(skipped),
     };
@@ -99,7 +99,12 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
   assert.deepEqual(installed.packages, selected.packages, "installed package snapshots differ");
   assert.deepEqual(installed.skipped, selected.skipped, "installed skip classification differs");
   phase = "optional-skips";
-  if (JSON.stringify(sorted(modules.skipped)) !== JSON.stringify(selected.skipped)) {
+  // pnpm's installation manifest carries workspace-wide optional exclusions,
+  // including incompatible packages belonging only to unselected roots. Check
+  // that separate native classification exactly; source acquisition stays on the
+  // four observed roots and their selected current/wanted correspondence above.
+  const installationSkipped = select(wanted, sorted(Object.keys(wanted.importers))).skipped;
+  if (JSON.stringify(sorted(modules.skipped)) !== JSON.stringify(installationSkipped)) {
     const error = new InputFailure("actual optional skips differ");
     // Only identities from the checked frozen public lock can enter diagnostics;
     // never echo an unknown installation row, external message or host path.
@@ -115,10 +120,10 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
             : "unrecognised",
         );
     error.optionalSkips = {
-      expected: selected.skipped.length,
+      expected: installationSkipped.length,
       actual: modules.skipped.length,
-      missing: display(selected.skipped.filter((key) => !modules.skipped.includes(key))),
-      extra: display(sorted(modules.skipped).filter((key) => !selected.skipped.includes(key))),
+      missing: display(installationSkipped.filter((key) => !modules.skipped.includes(key))),
+      extra: display(sorted(modules.skipped).filter((key) => !installationSkipped.includes(key))),
     };
     throw error;
   }
@@ -405,8 +410,16 @@ const observations = [
 ];
 
 async function loadObservation(capsule, sourceRoot) {
+  return readInstallation(
+    path.join(capsule, "records/source"),
+    path.join(capsule, "records/projects.json"),
+    sourceRoot,
+    0o600,
+  );
+}
+
+async function readInstallation(copy, projectsFile, sourceRoot, mode) {
   phase = "native-metadata-readers";
-  const copy = path.join(capsule, "records/source");
   const wanted = await readWantedLockfile(copy, {
     ignoreIncompatible: false,
     useGitBranchLockfile: false,
@@ -414,7 +427,7 @@ async function loadObservation(capsule, sourceRoot) {
   });
   const current = await readCurrentLockfile(path.join(copy, "node_modules/.pnpm"), { ignoreIncompatible: false });
   const modules = await readModulesManifest(path.join(copy, "node_modules"));
-  const projects = json(readRegular(path.join(capsule, "records/projects.json"), metadataLimit, 0o600));
+  const projects = json(readRegular(projectsFile, metadataLimit, mode));
   if (modules?.virtualStoreDir === path.join(copy, "node_modules/.pnpm"))
     modules.virtualStoreDir = path.join(sourceRoot, "node_modules/.pnpm");
   phase = "native-store-locations";
@@ -429,11 +442,36 @@ async function loadObservation(capsule, sourceRoot) {
     const id = path.relative(sourceRoot, project.path) || ".";
     if (!importerIds.includes(id)) fail("unexpected native workspace");
     const manifest = json(
-      readRegular(memberPath(copy, `${id === "." ? "" : `${id}/`}package.json`), metadataLimit, 0o600),
+      readRegular(memberPath(copy, `${id === "." ? "" : `${id}/`}package.json`), metadataLimit, mode),
     );
     if (manifest.name !== project.name) fail("native workspace name differs from source");
   }
   return { selection: selectInstalled({ wanted, current, modules, projects }, sourceRoot), modules };
+}
+
+// This early read-only gate uses the same native selection as final capture,
+// before expensive Go generation. It never acquires, writes or claims sources.
+export async function inspectBuild({ build, expectedLock = frozenLock }) {
+  phase = "installation-paths";
+  if (!path.isAbsolute(build) || fs.realpathSync(build) !== build || !digest(expectedLock))
+    fail("physical build root and frozen lock required");
+  const sourceRoot = path.join(build, "prepared/source");
+  const originals = new Map(observations.map(([name]) => [name, readRegular(memberPath(build, name), metadataLimit)]));
+  if (sha256(originals.get("prepared/source/pnpm-lock.yaml")) !== expectedLock)
+    fail("wanted lock differs from frozen source");
+  const { selection } = await readInstallation(sourceRoot, path.join(build, "pnpm-selected-projects.json"), sourceRoot);
+  for (const [name, body] of originals)
+    if (!readRegular(memberPath(build, name), metadataLimit).equals(body))
+      fail("installation observation changed during early check");
+  return {
+    schemaVersion: 1,
+    profile: "native-installation-selection-v1",
+    packages: selection.packages.length,
+    optionalSkips: selection.skipped.length,
+    selectedPNPMSourcesCaptured: false,
+    dependencyInputsCaptured: false,
+    nativeOfflineReplayProved: false,
+  };
 }
 
 function closedMembers(root, expected, privateModes = true) {
@@ -811,7 +849,9 @@ async function main(args) {
     values[key] = value;
   }
   let result;
-  if (
+  if (operation === "inspect" && Object.keys(values).length === 1 && values["--build"]) {
+    result = await inspectBuild({ build: values["--build"] });
+  } else if (
     operation === "capture" &&
     Object.keys(values).length === 4 &&
     values["--build"] &&

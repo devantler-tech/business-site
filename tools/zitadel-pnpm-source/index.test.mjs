@@ -14,6 +14,7 @@ import {
   verifyCapsule,
   failureDiagnostic,
   readRegular,
+  inspectBuild,
 } from "./index.mjs";
 
 const require = createRequire(import.meta.url);
@@ -146,6 +147,28 @@ test("native selection retains peer instances, classifies skips and omits unrela
   );
   assert.equal(result.packages[0].integrity, result.packages[1].integrity);
   assert.equal(result.packages[0].tarball, "https://registry.npmjs.org/alpha/-/alpha-1.0.0.tgz");
+});
+
+test("native installation skips include incompatible optional packages from unselected workspace roots", () => {
+  const fixture = selectionFixture();
+  fixture.wanted.importers.docs = { optionalDependencies: { "outside-native": "1.0.0" } };
+  fixture.wanted.packages["outside-native@1.0.0"] = {
+    resolution: { integrity: sri("outside source") },
+    optional: true,
+    os: ["darwin"],
+  };
+  fixture.current = clone(fixture.wanted);
+  fixture.modules.skipped.push("outside-native@1.0.0");
+  const result = selectInstalled(fixture, root);
+  assert.deepEqual(result.importers, ids);
+  assert.deepEqual(result.skipped, ["native@1.0.0"]);
+  assert.equal(
+    result.packages.some((p) => p.depPath === "outside-native@1.0.0"),
+    false,
+  );
+  fixture.wanted.packages["outside-native@1.0.0"].os = ["linux"];
+  fixture.current = clone(fixture.wanted);
+  assert.throws(() => selectInstalled(fixture, root), /actual optional skips differ/);
 });
 
 test("optional-skip diagnostics are bounded and never echo unknown installation entries", () => {
@@ -361,6 +384,29 @@ async function buildFixture(t) {
   };
   return { ...f, build, source, store, indexPath, expectedLock, output, options };
 }
+
+test("the early installation check reads the real native metadata without creating a capsule or acquiring archives", async (t) => {
+  const f = await buildFixture(t);
+  const before = fs.readdirSync(f.build).sort();
+  const result = await inspectBuild({ build: f.build, expectedLock: f.expectedLock });
+  assert.equal(result.packages, 1);
+  assert.equal(result.optionalSkips, 0);
+  assert.equal(result.selectedPNPMSourcesCaptured, false);
+  assert.equal(result.dependencyInputsCaptured, false);
+  assert.equal(result.nativeOfflineReplayProved, false);
+  assert.deepEqual(fs.readdirSync(f.build).sort(), before);
+  assert.equal(fs.existsSync(f.output), false);
+});
+
+test("the early installation check rejects an invented optional skip and a substituted wanted lock", async (t) => {
+  const f = await buildFixture(t);
+  await assert.rejects(inspectBuild({ build: f.build, expectedLock: "b".repeat(64) }), /wanted lock differs/);
+  const manifest = path.join(f.source, "node_modules/.modules.yaml");
+  const data = JSON.parse(fs.readFileSync(manifest));
+  data.skipped = ["fictional-unselected-package"];
+  fs.writeFileSync(manifest, JSON.stringify(data));
+  await assert.rejects(inspectBuild({ build: f.build, expectedLock: f.expectedLock }), /actual optional skips differ/);
+});
 
 test("an acquired archive cannot be written before its complete locked SRI matches", async (t) => {
   const f = await buildFixture(t);

@@ -43,6 +43,18 @@ unsealed diagnosis and emits no success receipt; it never recursively deletes a
 pathname that might have been replaced.
 Failure output contains only a bounded stage and fixed reason/error category;
 native exception messages, stacks and source/configuration records are excluded.
+An optional-skip mismatch additionally reports bounded identities from the checked
+public frozen lock; unknown entries are redacted. pnpm's installation manifest
+records workspace-wide optional exclusions, including incompatible dependencies
+from unselected roots. That native full-workspace classification is checked
+separately from the four-root source graph; it never adds unselected archives to
+capture. Missing, invented or compatible-package skips still fail.
+
+The explicit read-only `inspect --build /physical/owned/build` operation runs
+immediately after installation, before expensive generation. It checks the same
+native metadata and frozen lock and rechecks its literal observations, acquiring
+no archives and creating no capsule. Its source-capture/offline flags remain
+false. Final capture repeats all selection checks after compilation.
 
 ```sh
 node tools/zitadel-pnpm-source/index.mjs capture \

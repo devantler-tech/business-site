@@ -612,7 +612,10 @@ are three additional records, making fourteen in total.
 Explicit source capture now invokes the pinned native SDK in
 `tools/zitadel-pnpm-source/` after the actual filtered installation and compilation.
 Its observed four workspace roots, current/wanted locks and actual optional skips
-must agree with the frozen Linux/x64/glibc graph. Peer instances remain separate;
+must agree with the frozen Linux/x64/glibc graph. The installation's complete
+workspace-wide skip metadata is checked separately, without acquiring sources
+from unselected roots. An early read-only metadata check runs before generation;
+final capture repeats the joins after compilation. Peer instances remain separate;
 original archives are deduplicated only by complete SRI. The collector checks
 original compressed bytes, freshly interpreted native file maps, lifecycle
 classification and every connected CAFS payload, then seals a closed private
