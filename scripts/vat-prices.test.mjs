@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { companyCopyFor, companyFacts } from '../src/components/business/company-copy.ts';
 import {
-  createBusinessCopy, guideOffers, netOf, offers, vatInclusiveOffers, vatPriceMarker, vatPriceNote, vatRatePercent,
+  createBusinessCopy, guideOffers, netOf, vatInclusiveOffers, vatPriceMarker, vatRatePercent,
 } from '../src/components/business/business-copy.ts';
+
+// Historical net floors are regression expectations, never a visitor price state.
+const offers = [{id:'website',setup:2995,monthly:99},{id:'app',setup:7995,monthly:299},{id:'service',setup:4995,monthly:199}];
 
 // The maintainer's #154 decision: rounded VAT-inclusive totals whose net amount
 // never falls below the earlier price, which now acts as a floor.
@@ -14,11 +17,9 @@ const decided = {
 };
 
 test('current identity has the confirmed effective date and no serialized PMV facts', () => {
-  assert.equal(companyFacts(true).businessType, 'Enkeltmandsvirksomhed');
-  assert.equal(companyFacts(true).vatEffectiveDate, '2026-10-20');
-  assert.doesNotMatch(JSON.stringify([companyFacts(true), companyCopyFor(true)]), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
-  assert.equal(companyFacts(false).businessType, 'PMV', 'false selects only the historical comparison');
-  assert.equal(companyFacts(false).vatEffectiveDate, undefined);
+  assert.equal(companyFacts().businessType, 'Enkeltmandsvirksomhed');
+  assert.equal(companyFacts().vatEffectiveDate, '2026-10-20');
+  assert.doesNotMatch(JSON.stringify([companyFacts(), companyCopyFor()]), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
 });
 
 test('VAT-inclusive totals are exactly the decided prices', () => {
@@ -64,35 +65,24 @@ test('net amounts must be exact whole kroner', () => {
   assert.throws(() => netOf(3749), /no whole-krone net amount/);
 });
 
-test('the release decision selects the guide prices and the marker', () => {
-  assert.equal(guideOffers(false), offers);
-  assert.equal(guideOffers(true), vatInclusiveOffers);
-  assert.equal(vatPriceMarker('en', false), null);
-  assert.equal(vatPriceMarker('da', false), null);
-  assert.equal(vatPriceMarker('en', true), 'incl. VAT');
-  assert.equal(vatPriceMarker('da', true), 'inkl. moms');
+test('ordinary builds always select the approved VAT-inclusive totals', () => {
+  assert.deepEqual(Object.fromEntries(guideOffers().map(({ id, setup, monthly }) => [id, { setup, monthly }])), decided);
+  assert.equal(vatPriceMarker('en'), 'incl. VAT');
+  assert.equal(vatPriceMarker('da'), 'inkl. moms');
+});
+
+test('ordinary builds cannot select historical company facts', () => {
+  assert.equal(companyFacts().businessType, 'Enkeltmandsvirksomhed');
+  assert.equal(companyFacts().vatEffectiveDate, '2026-10-20');
+  assert.doesNotMatch(JSON.stringify(companyCopyFor()), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
 });
 
 for (const identity of [false, true]) for (const offer of [false, true]) for (const scope of [false, true]) {
-  test(`VAT release selects consistent price and ordinary registration (identity=${identity}, offer=${offer}, scope=${scope})`, () => {
-    const off = createBusinessCopy(identity, offer, scope);
-    assert.deepEqual(createBusinessCopy(identity, offer, scope, false), off, 'off is the default');
-    const on = createBusinessCopy(identity, offer, scope, true);
-    for (const [locale, pmv, vat] of [
-      ['en', 'No VAT is charged under the current PMV setup.', 'Prices include 25% Danish VAT.'],
-      ['da', 'Der opkræves ikke moms under den nuværende PMV-ordning.', 'Priserne er inkl. 25 % moms.'],
-    ]) {
-      assert.ok(off[locale].priceNote.includes(pmv));
-      assert.ok(!on[locale].priceNote.includes(pmv));
-      assert.ok(on[locale].priceNote.includes(vat));
-      assert.equal(on[locale].priceNote, off[locale].priceNote.replace(pmv, vat));
-      assert.equal(on[locale].registrationType, locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship');
-      assert.deepEqual({ ...on[locale], priceNote: off[locale].priceNote, registrationType: off[locale].registrationType }, off[locale], 'unrelated offer and audience decisions stay unchanged');
-    }
+  test(`ordinary pricing is permanent without changing other releases (${identity}/${offer}/${scope})`, () => {
+    const copy = createBusinessCopy(identity, offer, scope);
+    assert.match(copy.en.priceNote, /Prices include 25% Danish VAT[.]/);
+    assert.match(copy.da.priceNote, /Priserne er inkl[.] 25 % moms[.]/);
+    assert.equal(copy.en.registrationType, 'Sole proprietorship');
+    assert.equal(copy.da.registrationType, 'Enkeltmandsvirksomhed');
   });
 }
-
-test('a price note that no longer states the PMV position fails the build instead of shipping mixed wording', () => {
-  assert.throws(() => vatPriceNote('en', 'Prices are indicative and in DKK.'), /review the VAT wording/);
-  assert.throws(() => vatPriceNote('da', 'Priserne er vejledende.'), /review the VAT wording/);
-});

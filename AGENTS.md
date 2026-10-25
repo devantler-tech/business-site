@@ -27,7 +27,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ordinary Astro comparison. Both ignore ambient frontend settings.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
-  The Svelte candidate preserves the four default-off company/offer/customer-scope/VAT settings
+  The Svelte candidate preserves the three default-off company/offer/customer-scope settings
   through its native server-only configuration. Shared layout/load data never carries the address;
   the company-page HTML transform retains escaped text and the runtime's template placeholders.
 - Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
@@ -252,11 +252,10 @@ Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optiona
 plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
 net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
-The source-owned publisher and production-template packager pin `FEATURE_VAT_PRICES=true`,
-company identity enabled, and revised-offer/customer-scope releases disabled. Both the selected
-Svelte frontend and explicit Astro recovery must retain those current facts. VAT=false/unset
-selects explicitly historical PMV comparison inputs, not a valid current-production rollback.
-Retire the temporary VAT gate only after reviewed publication and actual bilingual live proof.
+VAT-inclusive prices and current company facts are permanent in both frontends and every package
+profile. The source-owned publisher and production-template packager enable company identity and
+keep revised-offer/customer-scope releases disabled. The ordinary Astro comparison and explicit
+Astro recovery use the same approved price state; no historical no-VAT setting remains.
 This does not activate portal orders or expand eligible customer countries.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.

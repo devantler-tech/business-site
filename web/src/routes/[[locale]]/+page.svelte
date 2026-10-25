@@ -45,7 +45,7 @@
       <div class="offers">{#each t.offers as offer}<article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
         <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong>{#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
-        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
+        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
       </article>{/each}</div>

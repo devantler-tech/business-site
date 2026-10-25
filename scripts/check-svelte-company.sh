@@ -4,16 +4,16 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
-unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE FEATURE_VAT_PRICES PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
+unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
 export FEATURE_SVELTE_FRONTEND=true
-for mode in false historical published preview independent template unset; do
-  unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE FEATURE_VAT_PRICES PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
+for mode in false scoped published preview independent template unset; do
+  unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
   case "$mode" in
-    false) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false FEATURE_VAT_PRICES=false ;;
-    historical) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=true FEATURE_VAT_PRICES=false ;;
-    published) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false FEATURE_VAT_PRICES=true ;;
-    preview|template) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=true FEATURE_VAT_PRICES=true ;;
-    independent) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=false FEATURE_VAT_PRICES=false ;;
+    false) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false ;;
+    scoped) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=true ;;
+    published) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false ;;
+    preview|template) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=true ;;
+    independent) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=false ;;
   esac
   export COMPANY_POSTAL_ADDRESS=$'Example & <b>company-address-fixture-187</b> 1\n1234 Exampletown'
   if [[ "$mode" == template ]]; then
@@ -34,8 +34,8 @@ for mode in false historical published preview independent template unset; do
 done
 
 # Native framework validation must reject ambiguous switches before output.
-unset COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE FEATURE_VAT_PRICES
-for flag in FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE FEATURE_VAT_PRICES; do
+unset COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE
+for flag in FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_CUSTOMER_SCOPE; do
   if env "$flag=ambiguous" npm --prefix web run build > "$scratch/rejected.log" 2>&1; then
     printf 'Invalid business setting was accepted: %s\n' "$flag" >&2; exit 1
   fi

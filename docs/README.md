@@ -45,7 +45,7 @@ and `/da/` (Danish). Its offer amounts and translated copy live together in
 `src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
 Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
 These framework-neutral sources are also used by the isolated Svelte Home candidate; its matching
-server-only company/offer/customer-scope/VAT configuration is documented in `web/README.md`.
+server-only company/offer/customer-scope configuration is documented in `web/README.md`.
 The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
 the existing ranking implementation and complete dated snapshot with Astro. It preserves
 the curated six-tool output, compact public website example, research disclosure and old bookmarks
@@ -68,20 +68,16 @@ their published English/Danish alternatives until reviewed activation. CI builds
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
 
-`FEATURE_VAT_PRICES=true` selects the VAT-inclusive guide prices decided in #154: DKK 3,750 plus
-125/month for a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web
-service. Each price is marked "incl. VAT" / "inkl. moms", and the price note says prices include
-25% Danish VAT instead of stating the PMV position. The totals live in `vatInclusiveOffers` in
-`business-copy.ts`; `scripts/vat-prices.test.mjs` checks that each total's net amount stays at or
-above the earlier price and that VAT is never added twice. The maintainer confirmed ordinary
-VAT registration effective 20 October 2026. The same selection supplies ordinary localized
-company facts in the footer and company-information pages; it cannot leave contradictory PMV
-wording beside the current prices. The source-owned publisher and production-template packager
-explicitly enable VAT and company identity while retaining revised-offer/customer-scope settings
-at false. Svelte and explicit Astro recovery use that same production tuple. False/unset VAT
-states are historical comparison inputs only, not current-production recovery. CI retains them
-alongside an exact production probe. Protected merge, source/run receipt and actual bilingual
-visitor proof remain necessary; remove this temporary gate only after that proof.
+The VAT-inclusive guide prices decided in #154 are permanent: DKK 3,750 plus 125/month for
+a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web service.
+Each price is marked "incl. VAT" / "inkl. moms" and the note states the included 25% Danish VAT.
+The totals live in `vatInclusiveOffers` in `business-copy.ts`; `scripts/vat-prices.test.mjs`
+guards the exact approved totals, net floors and no double VAT. Current ordinary company facts
+are shared by both frontends and every package profile. The temporary VAT gate and historical
+comparison inputs are retired after reviewed publication and actual bilingual live proof (#346).
+The publisher and production-template packager retain company identity enabled with revised-offer
+and customer-scope releases disabled. The ordinary Astro comparison and explicit recovery also
+retain current prices. This does not activate orders, payments or additional customer eligibility.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -220,8 +216,8 @@ redesigns; reverting the publication change and redeploying remains the recovery
 Business copy describes websites, web apps and services without size-based marketing qualifiers.
 Starting prices cover an agreed first version, not a ceiling on eventual application size; further
 development is scoped and quoted separately. This neutral wording is shared by published, preview
-and rollback presentations. The official PMV registration terminology and historical technical
-writing remain accurate. The generated Home, About and Projects checks cover both languages and
+and rollback presentations. Keep current registration wording consistent across maintained journeys; historical technical
+writing retains its own context. The generated Home, About and Projects checks cover both languages and
 sharing metadata. The offer-release check distinguishes actual maintenance terms, not app labels
 or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
 
@@ -239,8 +235,8 @@ This copy is not order authorization: tax confirmations remain under #147,
 server-side eligibility under #146, and the separate hosted-offer assessment under #18.
 
 `src/data/company.json` holds the maintainer-confirmed registered name, CVR, ordinary sole-proprietor
-type, VAT effective date, owner and business email. The shared VAT selection retains separately
-named historical PMV facts solely for comparison. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
+type, VAT effective date, owner and business email. These current facts apply to every price
+state. With the default-off `FEATURE_COMPANY_IDENTITY=true` release preview,
 the shared footer identifies Devantler Tech (CVR 46830385), and Home offers a direct email
 link to `ned@devantler.tech` with LinkedIn as an alternative. False and entirely unset builds
 retain the existing LinkedIn contact and footer until reviewed activation and live proof.

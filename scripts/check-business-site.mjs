@@ -19,7 +19,6 @@ const company = JSON.parse(readFileSync(new URL('../src/data/company.json', impo
 const companyContact = `mailto:${company.email}`;
 const companyEnabled = (process.env.FEATURE_COMPANY_IDENTITY ?? 'false') === 'true';
 const featuredPortfolio = (process.env.FEATURE_FEATURED_PORTFOLIO ?? 'true') === 'true';
-const vatPrices = (process.env.FEATURE_VAT_PRICES ?? 'false') === 'true';
 for (const path of readdirSync(root, { recursive: true })) {
   if (path.endsWith('.html') && statSync(resolve(root, path)).isFile()) {
     const page = readFileSync(resolve(root, path), 'utf8');
@@ -28,11 +27,11 @@ for (const path of readdirSync(root, { recursive: true })) {
     const footer = page.match(/<footer\b[^>]*data-business-footer[^>]*>([\s\S]*?)<\/footer>/)?.[1];
     if (footer && companyEnabled) {
       const locale = parse(page).childNodes.find(node => node.tagName === 'html')?.attrs.find(attr => attr.name === 'lang')?.value;
-      const businessType = vatPrices ? (locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship') : 'PMV';
+      const businessType = locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship';
       for (const fact of [company.name, company.cvr, businessType, company.owner, company.email]) {
         assert.ok(footer.includes(fact), `${path}: shared footer identifies the registered business`);
       }
-      if (vatPrices) assert.doesNotMatch(footer, /\bPMV\b/i, `${path}: current identity never calls the registered business a PMV`);
+      assert.doesNotMatch(footer, /\bPMV\b/i, `${path}: current identity never calls the registered business a PMV`);
       assert.ok(footer.includes(`href="${companyContact}"`), `${path}: registered email is usable without a form backend`);
     } else if (footer) {
       assert.ok(!footer.includes(company.cvr) && !footer.includes(company.email), `${path}: unreleased registration remains absent`);
@@ -354,26 +353,22 @@ for (const [locale, path, alternate] of [['en', '', '/da/'], ['da', 'da', '/']])
   });
   assert.ok(details.open && scrolled, 'Following the homepage proof link opens and reveals the evidence');
   }
-  for (const [service, setup, monthly, englishPrice, danishPrice] of vatPrices ? [
+  for (const [service, setup, monthly, englishPrice, danishPrice] of [
     ['website', 3750, 125, 'DKK 3,750', '3.750 kr.'],
     ['app', 10000, 375, 'DKK 10,000', '10.000 kr.'],
     ['service', 6250, 250, 'DKK 6,250', '6.250 kr.'],
-  ] : [
-    ['website', 2995, 99, 'DKK 2,995', '2.995 kr.'],
-    ['app', 7995, 299, 'DKK 7,995', '7.995 kr.'],
-    ['service', 4995, 199, 'DKK 4,995', '4.995 kr.'],
   ]) {
     assert.match(page, new RegExp(`data-offer="${service}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     assert.ok(page.includes(locale === 'da' ? danishPrice : englishPrice), 'Starting price uses unambiguous language-appropriate grouping');
   }
   const marker = locale === 'da' ? 'inkl. moms' : 'incl. VAT';
   const markers = page.match(/class="vat-marker(?: [^"]*)?"[^>]*>[^<]*</g) ?? [];
-  assert.equal(markers.length, vatPrices ? 6 : 0, 'Every setup and hosting price carries the VAT marker exactly when VAT prices are released');
+  assert.equal(markers.length, 6, 'Every setup and hosting price carries the VAT marker');
   assert.ok(markers.every(item => item.includes(marker)), 'The VAT marker uses the page language');
   const pmvNote = locale === 'da' ? 'Der opkræves ikke moms under den nuværende PMV-ordning.' : 'No VAT is charged under the current PMV setup.';
   const vatNote = locale === 'da' ? 'Priserne er inkl. 25 % moms.' : 'Prices include 25% Danish VAT.';
-  assert.equal(page.includes(vatNote), vatPrices, 'The price note states VAT-inclusive prices exactly when they are released');
-  assert.equal(page.includes(pmvNote), !vatPrices, 'The PMV no-VAT note never appears beside VAT-inclusive prices');
+  assert.equal(page.includes(vatNote), true, 'The price note always states VAT-inclusive prices');
+  assert.equal(page.includes(pmvNote), false, 'The PMV no-VAT note never appears beside VAT-inclusive prices');
   assert.ok(page.includes('href="https://www.linkedin.com/in/nikolai-emil-damm-14a786150/"'), 'LinkedIn remains an alternative inquiry route');
   const contact = page.match(/<section\b[^>]*id="contact"[^>]*>([\s\S]*?)<\/section>/)?.[1];
   assert.equal(contact?.includes(`href="${companyContact}"`), companyEnabled, 'Both language homepages follow the registration release flag');

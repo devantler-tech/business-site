@@ -33,7 +33,7 @@ for (const [path, locale, title] of pages) {
       assert.ok(html.includes(`id="${section}"`), `missing homepage destination ${section}`);
     }
     assert.ok(html.indexOf('id="quality-title"') < html.indexOf('id="services"'), "quality precedes prices");
-    for (const [id, setup, monthly] of (process.env.FEATURE_VAT_PRICES === "true" ? [["website",3750,125],["app",10000,375],["service",6250,250]] : [["website", 2995, 99], ["app", 7995, 299], ["service", 4995, 199]])) {
+    for (const [id, setup, monthly] of [["website",3750,125],["app",10000,375],["service",6250,250]]) {
       assert.match(html, new RegExp(`data-offer="${id}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     }
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));

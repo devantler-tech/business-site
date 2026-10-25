@@ -5,18 +5,12 @@ export type Locale = 'en' | 'da';
 
 // Introductory guide prices, not a checkout catalogue. Scope and running costs
 // are confirmed in a written quote before a project starts.
-export const offers = [
-  { id: 'website', setup: 2995, monthly: 99 },
-  { id: 'app', setup: 7995, monthly: 299 },
-  { id: 'service', setup: 4995, monthly: 199 },
-] as const;
-
 /** Danish VAT rate, in percent, included in the VAT-inclusive guide prices. */
 export const vatRatePercent = 25;
 
 // VAT-inclusive guide totals decided for an ordinarily VAT-registered business
-// (#154). Each total's net amount stays at or above the matching `offers`
-// amount, so adding VAT never lowers what the business keeps.
+// (#154). Each total's net amount stays at or above the historical net floor
+// recorded in the pricing tests, so adding VAT never lowers what the business keeps.
 export const vatInclusiveOffers = [
   { id: 'website', setup: 3750, monthly: 125 },
   { id: 'app', setup: 10000, monthly: 375 },
@@ -30,33 +24,16 @@ export function netOf(total: number): number {
   return net;
 }
 
-/** The guide prices visitors see under the explicit VAT release decision. */
-export function guideOffers(vatPricesEnabled: boolean) {
-  return vatPricesEnabled ? vatInclusiveOffers : offers;
-}
+/** Approved VAT-inclusive guide prices, independent of presentation releases. */
+export function guideOffers() { return vatInclusiveOffers; }
 
-/** The marker shown beside each VAT-inclusive price; null while the release is off. */
-export function vatPriceMarker(locale: Locale, vatPricesEnabled: boolean): string | null {
-  if (!vatPricesEnabled) return null;
+/** Every setup and monthly price carries its localized VAT marker. */
+export function vatPriceMarker(locale: Locale): string {
   return locale === 'da' ? 'inkl. moms' : 'incl. VAT';
 }
 
-// The published and revised price notes both state the PMV position; the VAT
-// release replaces exactly that sentence and nothing else.
-const vatNotes = {
-  en: ['No VAT is charged under the current PMV setup.', `Prices include ${vatRatePercent}% Danish VAT.`],
-  da: ['Der opkræves ikke moms under den nuværende PMV-ordning.', `Priserne er inkl. ${vatRatePercent} % moms.`],
-} as const;
-
-/** Replace the PMV VAT sentence; fail the build if the note no longer carries it. */
-export function vatPriceNote(locale: Locale, priceNote: string): string {
-  const [pmv, vat] = vatNotes[locale];
-  if (!priceNote.includes(pmv)) throw new Error(`The ${locale} price note no longer states the PMV VAT position; review the VAT wording`);
-  return priceNote.replace(pmv, vat);
-}
-
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
-/** Homepage copy for the identity, offer and customer-scope decisions, before VAT pricing. */
+/** Homepage copy for the independent identity, offer and customer-scope decisions. */
 function createScopedCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled: boolean) {
 const previewCopy = {
   en: {
@@ -84,7 +61,7 @@ const previewCopy = {
       { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
       { title: 'A web service', description: 'Connect a process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
     ],
-    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. No VAT is charged under the current PMV setup.',
+    priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. Prices include 25% Danish VAT.',
     hostingTitle: 'Hosting that fits the project—not the other way around.',
     hostingText: 'Every client project hosted on my platform includes optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. We agree a rounded total based on hosting costs plus a fixed service fee to me. New features and larger iterations require a new agreement, including any change in running costs.',
     fitTitle: 'A good fit for planned, manageable work.',
@@ -125,7 +102,7 @@ const previewCopy = {
     contactNote: companyIdentityEnabled
       ? 'The email link opens your email app. There is no automatic booking or instant-support service.'
       : 'The link opens Nikolai’s public LinkedIn profile. There is no automatic booking or instant-support service.',
-    registrationType: 'Personally owned small business (PMV)',
+    registrationType: companyCopy.en.type,
     footer: 'Websites, software and hosting for businesses.', englishNote: 'The journal and technical documentation are currently in English.',
   },
   da: {
@@ -153,7 +130,7 @@ const previewCopy = {
       { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
       { title: 'En webservice', description: 'Forbind en proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
     ],
-    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Der opkræves ikke moms under den nuværende PMV-ordning.',
+    priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Priserne er inkl. 25 % moms.',
     hostingTitle: 'Hosting, der passer til projektet—ikke omvendt.',
     hostingText: 'Alle kundeprojekter, der hostes på min platform, har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Vi aftaler et afrundet beløb baseret på hostingudgifter plus et fast honorar til mig. Nye funktioner og større videreudvikling kræver en ny aftale, også om eventuelle ændringer i driftsudgifterne.',
     fitTitle: 'Til planlagt og overskueligt arbejde.',
@@ -194,7 +171,7 @@ const previewCopy = {
     contactNote: companyIdentityEnabled
       ? 'Emaillinket åbner dit emailprogram. Der er ingen automatisk booking eller øjeblikkelig support.'
       : 'Linket åbner Nikolais offentlige LinkedIn-profil. Der er ingen automatisk booking eller øjeblikkelig support.',
-    registrationType: 'Personligt ejet mindre virksomhed (PMV)',
+    registrationType: companyCopy.da.type,
     footer: 'Hjemmesider, software og hosting til virksomheder.', englishNote: 'Journal og teknisk dokumentation er foreløbig på engelsk.',
   },
 } as const;
@@ -221,16 +198,7 @@ return {
 };
 }
 
-/**
- * Build shared bilingual homepage copy from the caller's explicit release decisions.
- * Identity, revised offers, customer scope and VAT-inclusive prices are separate
- * release decisions. No framework environment or private company input is read here.
- */
-export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false, vatPricesEnabled = false) {
-  const scoped = createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
-  if (!vatPricesEnabled) return scoped;
-  return {
-    en: { ...scoped.en, priceNote: vatPriceNote('en', scoped.en.priceNote), registrationType: companyCopy.en.type },
-    da: { ...scoped.da, priceNote: vatPriceNote('da', scoped.da.priceNote), registrationType: companyCopy.da.type },
-  };
+/** Build shared bilingual copy without reading framework or private company inputs. */
+export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false) {
+  return createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
 }
