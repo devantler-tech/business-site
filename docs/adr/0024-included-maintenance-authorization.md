@@ -49,6 +49,13 @@ only that period's current revision. State changes, including cancellation or
 dispute, also append a revision. Superseded revisions remain audit evidence only:
 they are never candidates for either current or future coverage.
 
+New periods may be recorded out of chronological order. A renewal identifies the
+stable entitlement and its fixed client/project, and supplies a fresh period
+identity with agreement-derived bounds. It does not identify or replace a
+predecessor period. Reusing a period identity cannot change its current head:
+that requires an explicit correction. Coverage follows service-time intervals,
+never insertion order.
+
 Every period has a nonempty, finite half-open interval `[start,end)`. Current
 revisions of different periods under the same entitlement must never overlap,
 including cancelled or disputed periods. Every writer locks the stable entitlement
@@ -177,7 +184,9 @@ precision; a gap between two periods; an early renewal preserving the current
 head and its valid tasks; shortened and later-start corrections that never
 re-expose superseded coverage; a superseded future revision ignored by the
 `future` query; overlapping correction/renewal refused with both heads unchanged;
-and concurrent corrections/renewals preserving the non-overlap invariant.
+out-of-order non-overlapping periods, including an earlier period recorded later;
+changed renewal content under an existing period identity refused; and concurrent
+corrections/renewals preserving the non-overlap invariant.
 
 Also cover renewal, correction, revocation and restoration; forbidden client or
 project reassignment; changed agreement or scope; cross-client access and stale
