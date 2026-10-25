@@ -16,6 +16,12 @@ func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return nil
 	}
+	if args[0] == "observe-generators" {
+		return runGeneratorObservation(args[1:], stdout)
+	}
+	if args[0] == "verify-generator-checkpoint" {
+		return runGeneratorVerification(args[1:], stdout)
+	}
 	flags := flag.NewFlagSet("zitadel-module-sources", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	captureMode := flags.Bool("capture", false, "capture selected sources from a completed build")

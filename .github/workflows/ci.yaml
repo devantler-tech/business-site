@@ -441,6 +441,18 @@ jobs:
             .schemaVersion == 1 and .requests == 3 and .originalConsoleDownloadsConsumed == true and
             .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
           ' "$RUNNER_TEMP/zitadel-build/console-consumption-roundtrip.json" >/dev/null
+      - name: Verify the actual native API generator checkpoint
+        run: |
+          source="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          seal="$(jq -er '.sourceSnapshot.generatorBuildMetadata.checkpointSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          cp "$RUNNER_TEMP/zitadel-build/generator-checkpoint.json" "$RUNNER_TEMP/zitadel-generator-checkpoint.json"
+          "$RUNNER_TEMP/zitadel-module-sources" verify-generator-checkpoint --checkpoint "$RUNNER_TEMP/zitadel-generator-checkpoint.json" --sha256 "$seal" --source-sha256 "$source" > "$RUNNER_TEMP/zitadel-build/generator-checkpoint-roundtrip.json"
+          jq -e --slurpfile build "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            . == $build[0].sourceSnapshot.generatorBuildMetadata and
+            .schemaVersion == 1 and .sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256 and
+            .tools == 14 and .modules > 0 and .generatorBuildMetadataValidated == true and
+            .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
+          ' "$RUNNER_TEMP/zitadel-build/generator-checkpoint-roundtrip.json" >/dev/null
       - name: Copy and verify the actual retained Go module inputs
         run: |
           manifest="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -501,6 +513,8 @@ jobs:
             ${{ runner.temp }}/zitadel-build/prepared-build-receipt.json
             ${{ runner.temp }}/zitadel-build/selected-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/generator-checkpoint.json
+            ${{ runner.temp }}/zitadel-build/generator-checkpoint-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json

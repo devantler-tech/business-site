@@ -65,7 +65,12 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
   if (modules.nodeLinker !== "isolated") fail("native package linker differs");
   assert.deepEqual(modules.included, included, "dependency categories differ");
   assert.deepEqual(modules.registries, nativeRegistries, "native registry differs");
-  if (!Array.isArray(modules.skipped) || new Set(modules.skipped).size !== modules.skipped.length)
+  if (
+    !Array.isArray(modules.skipped) ||
+    modules.skipped.length > 4000 ||
+    !modules.skipped.every((value) => typeof value === "string" && value.length <= 1024) ||
+    new Set(modules.skipped).size !== modules.skipped.length
+  )
     fail("invalid native skips");
   function select(lock) {
     for (const id of importerIds) if (!lock.importers?.[id]) fail("missing installed importer");
@@ -94,7 +99,29 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
   assert.deepEqual(installed.packages, selected.packages, "installed package snapshots differ");
   assert.deepEqual(installed.skipped, selected.skipped, "installed skip classification differs");
   phase = "optional-skips";
-  assert.deepEqual(sorted(modules.skipped), selected.skipped, "actual optional skips differ");
+  if (JSON.stringify(sorted(modules.skipped)) !== JSON.stringify(selected.skipped)) {
+    const error = new InputFailure("actual optional skips differ");
+    // Only identities from the checked frozen public lock can enter diagnostics;
+    // never echo an unknown installation row, external message or host path.
+    const display = (values) =>
+      values
+        .slice(0, 24)
+        .map((key) =>
+          typeof key === "string" &&
+          key.length <= 256 &&
+          /^[A-Za-z0-9@/._+()=-]+$/.test(key) &&
+          Object.hasOwn(wanted.packages, key)
+            ? key
+            : "unrecognised",
+        );
+    error.optionalSkips = {
+      expected: selected.skipped.length,
+      actual: modules.skipped.length,
+      missing: display(selected.skipped.filter((key) => !modules.skipped.includes(key))),
+      extra: display(sorted(modules.skipped).filter((key) => !selected.skipped.includes(key))),
+    };
+    throw error;
+  }
   const active = Object.entries(selected.packages).filter(([key]) => !selected.skipped.includes(key));
   phase = "selected-packages";
   if (active.length === 0 || active.length > 4000) fail("empty or unbounded native selection");
@@ -122,35 +149,46 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
 
 // No pnpm timestamp shortcuts: inspect regular, unlinked files and hash every
 // byte through a non-following descriptor, checking identity again after read.
-function readRegular(filename, limit, mode, links = 1) {
+export function readRegular(filename, limit, mode, links = 1) {
   const full = path.resolve(filename);
-  if (full !== filename || fs.realpathSync(full) !== full) fail("linked native input");
+  if (full !== filename) fail("noncanonical native input");
   for (let parent = path.dirname(full); parent !== path.dirname(parent); parent = path.dirname(parent)) {
     const info = fs.lstatSync(parent);
     if (!info.isDirectory() || info.isSymbolicLink()) fail("linked native parent");
   }
-  const before = fs.lstatSync(full);
-  if (
-    !before.isFile() ||
-    before.nlink !== links ||
-    before.size > limit ||
-    (before.mode & 0o7000) !== 0 ||
-    (mode !== undefined && (before.mode & 0o7777) !== mode)
-  )
-    fail("invalid native file type, size or mode");
-  const fd = fs.openSync(full, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  // O_NONBLOCK lets descriptor validation reject a FIFO without waiting for a writer.
+  const fd = fs.openSync(full, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
   try {
     const opened = fs.fstatSync(fd);
-    if (opened.ino !== before.ino || opened.dev !== before.dev || opened.nlink !== links)
+    if (
+      !opened.isFile() ||
+      opened.nlink !== links ||
+      opened.size > limit ||
+      (opened.mode & 0o7000) !== 0 ||
+      (mode !== undefined && (opened.mode & 0o7777) !== mode)
+    )
+      fail("invalid native file type, size or mode");
+    const before = fs.lstatSync(full);
+    if (opened.ino !== before.ino || opened.dev !== before.dev || !before.isFile() || fs.realpathSync(full) !== full)
       fail("native file replaced before read");
-    const data = fs.readFileSync(fd);
+    // Allocate from the admitted descriptor size, never from a second path/stat
+    // read inside readFile. One extra byte detects growth without an unbounded read.
+    const buffer = Buffer.allocUnsafe(opened.size + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const n = fs.readSync(fd, buffer, size, buffer.length - size, null);
+      if (n === 0) break;
+      size += n;
+    }
+    const data = buffer.subarray(0, size);
     const after = fs.fstatSync(fd);
     const final = fs.lstatSync(full);
     if (
-      data.length !== before.size ||
-      after.size !== before.size ||
-      after.mtimeMs !== before.mtimeMs ||
-      after.ctimeMs !== before.ctimeMs ||
+      data.length !== opened.size ||
+      after.size !== opened.size ||
+      after.mode !== opened.mode ||
+      after.mtimeMs !== opened.mtimeMs ||
+      after.ctimeMs !== opened.ctimeMs ||
       after.nlink !== links ||
       final.ino !== opened.ino ||
       final.dev !== opened.dev ||
@@ -615,6 +653,7 @@ export function failureDiagnostic(error) {
   const firstLine = typeof error?.message === "string" ? error.message.split("\n")[0] : "";
   return {
     phase,
+    ...(error instanceof InputFailure && error.optionalSkips ? { optionalSkips: error.optionalSkips } : {}),
     reason:
       error instanceof InputFailure
         ? error.message

@@ -7,7 +7,14 @@ import { createRequire } from "node:module";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { selectInstalled, verifyPackageArchive, captureBuild, verifyCapsule, failureDiagnostic } from "./index.mjs";
+import {
+  selectInstalled,
+  verifyPackageArchive,
+  captureBuild,
+  verifyCapsule,
+  failureDiagnostic,
+  readRegular,
+} from "./index.mjs";
 
 const require = createRequire(import.meta.url);
 const { createCafs, getFilePathByModeInCafs } = require("@pnpm/store.cafs");
@@ -19,6 +26,63 @@ const ids = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"
 const root = "/owned/prepared/source";
 const sri = (body) => ssri.fromData(body, { algorithms: ["sha512"] }).toString();
 const clone = (value) => structuredClone(value);
+test("a FIFO input is refused without waiting for a writer", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "native-fifo-")));
+  const file = path.join(root, "payload");
+  try {
+    const created = spawnSync("mkfifo", [file], { encoding: "utf8" });
+    assert.equal(created.status, 0, created.stderr);
+    const entrypoint = fileURLToPath(new URL("./index.mjs", import.meta.url));
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import {readRegular} from ${JSON.stringify(entrypoint)}; readRegular(${JSON.stringify(file)},32);`,
+      ],
+      { encoding: "utf8", timeout: 2000 },
+    );
+    assert.equal(result.status, 1, "special-file refusal hung or succeeded");
+    assert.match(result.stderr, /invalid native file type, size or mode/);
+  } finally {
+    fs.rmSync(root, { recursive: true });
+  }
+});
+test("native reads use bounded descriptor operations rather than unbounded readFile", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "native-read-")));
+  const file = path.join(root, "payload");
+  fs.writeFileSync(file, "original", { mode: 0o600 });
+  const readFile = fs.readFileSync;
+  try {
+    fs.readFileSync = () => {
+      throw new Error("unbounded readFile was used");
+    };
+    assert.equal(readRegular(file, 8, 0o600).toString(), "original");
+  } finally {
+    fs.readFileSync = readFile;
+    fs.rmSync(root, { recursive: true });
+  }
+});
+test("a growing input fails after at most its admitted size plus one byte", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "native-growth-")));
+  const file = path.join(root, "payload");
+  fs.writeFileSync(file, "original", { mode: 0o600 });
+  const read = fs.readSync;
+  let bytes = 0;
+  try {
+    fs.readSync = (...args) => {
+      const n = read(...args);
+      bytes += n;
+      if (bytes === 8) fs.appendFileSync(file, Buffer.alloc(4096));
+      return n;
+    };
+    assert.throws(() => readRegular(file, 8, 0o600), /native file changed during read/);
+    assert.equal(bytes, 9);
+  } finally {
+    fs.readSync = read;
+    fs.rmSync(root, { recursive: true });
+  }
+});
 test("native failure diagnostics never echo external messages, stacks or invented codes", () => {
   const error = new Error("fictional-private-path and credential-like test data");
   error.code = "FICTIONAL_SECRET_VALUE";
@@ -82,6 +146,22 @@ test("native selection retains peer instances, classifies skips and omits unrela
   );
   assert.equal(result.packages[0].integrity, result.packages[1].integrity);
   assert.equal(result.packages[0].tarball, "https://registry.npmjs.org/alpha/-/alpha-1.0.0.tgz");
+});
+
+test("optional-skip diagnostics are bounded and never echo unknown installation entries", () => {
+  const fixture = selectionFixture();
+  fixture.modules.skipped.push("fictional-private-path-or-credential");
+  let error;
+  try {
+    selectInstalled(fixture, root);
+  } catch (caught) {
+    error = caught;
+  }
+  assert.ok(error);
+  const diagnostic = failureDiagnostic(error);
+  assert.equal(diagnostic.reason, "actual optional skips differ");
+  assert.deepEqual(diagnostic.optionalSkips, { expected: 1, actual: 2, missing: [], extra: ["unrecognised"] });
+  assert.equal(JSON.stringify(diagnostic).includes("fictional-private-path"), false);
 });
 
 test("the native built-in JSR metadata does not admit selected JSR downloads", () => {
@@ -281,6 +361,14 @@ async function buildFixture(t) {
   };
   return { ...f, build, source, store, indexPath, expectedLock, output, options };
 }
+
+test("an acquired archive cannot be written before its complete locked SRI matches", async (t) => {
+  const f = await buildFixture(t);
+  f.options.acquire = async () => Buffer.from("different downloaded bytes");
+  await assert.rejects(captureBuild(f.options), /original selected archive differs/);
+  assert.equal(fs.existsSync(path.join(f.output, "archives")), false);
+  assert.equal(fs.existsSync(path.join(f.output, "manifest.json")), false);
+});
 
 test("capture, final readback and fresh native CAFS restoration preserve literal inputs", async (t) => {
   const f = await buildFixture(t);

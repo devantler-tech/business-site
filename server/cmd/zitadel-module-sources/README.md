@@ -49,7 +49,24 @@ Failed capture removes only its newly reserved output; preexisting output is
 never replaced. CI verifies a fresh copy of the real package and uploads only
 compact manifest/round-trip diagnostics, not the retained sources.
 
-This is service-Go source retention. Generator-tool graphs, filtered pnpm inputs,
+The separate `observe-generators --build /absolute/build --source-sha256 SOURCE_SEAL`
+operation reads all fourteen actual API generator executables after generation and
+before the console installs its different OpenAPI binary. It validates the frozen
+Go locks and API install recipe, exact tool commands/main versions, Go 1.26.10,
+Linux amd64 and disabled CGO. It hashes each confined executable before and after
+reading native Go build information. The checkpoint retains every original
+main/dependency/replacement/settings record, including gci and the nested gRPC
+generator module. Its effective module union keys on both path and version;
+independent tool graphs may legitimately select different versions.
+
+`verify-generator-checkpoint --checkpoint /absolute/checkpoint.json --sha256 CHECKPOINT_SEAL
+--source-sha256 SOURCE_SEAL` checks a fresh copy against the caller's external seals
+and recomputes that complete union. CI joins the compact receipt to the original
+build receipt. This validates build metadata; it does **not** retain generator
+module archives, authenticate a binary signature, or enumerate graph-loading-only
+inputs. `dependencyInputsCaptured` and `nativeOfflineReplayProved` stay false.
+
+This is service-Go source retention plus a generator metadata checkpoint. Generator-tool sources, filtered pnpm inputs,
 BSR schema sources and clean network-denied full compilation remain #343. Full
 source/image admission and public retrieval remain #308. Daemon resources, deployed
 login and invited-customer acceptance remain #305/#302. No activation is implied.

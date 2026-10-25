@@ -522,6 +522,18 @@ source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
 remain false. No ordinary build, publisher, deployed login or customer access is
 enabled by this capture.
 
+The separate generator checkpoint reads all fourteen real API generator binaries
+immediately after generation, before console installation replaces OpenAPI 2.28
+with 2.22. It preserves complete native Go main/dependency/replacement/settings
+records and before/after byte hashes, requires the exact frozen tool identities,
+compiler and platform, and constructs an effective union by path **and version**.
+This includes gci despite its omission from upstream's output list, and the nested
+gRPC generator module. The builder checks the sealed checkpoint again after the
+build; CI verifies a copied checkpoint and joins its compact result to
+`sourceSnapshot.generatorBuildMetadata`. Generator metadata validation is not
+generator source retention or a complete acquisition graph: graph-loading-only
+module inputs and cold native replay still remain under #343.
+
 The same explicit capture also requires
 `--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
 Before native API generation, the builder creates a private Buf cache. It retains

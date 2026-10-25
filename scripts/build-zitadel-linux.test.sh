@@ -119,6 +119,7 @@ elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
   if [[ -n "${BUF_CACHE_DIR:-}" ]]; then mkdir -p "$BUF_CACHE_DIR"; echo ready >"$BUF_CACHE_DIR/cache-ready"; fi
 else
   grep -q '@zitadel/api:generate' "$TEST_CALLS"
+  if [[ "${TEST_FAIL:-}" = generator-checkpoint-changed ]]; then echo changed >>"${GOCACHE%/go-cache}/generator-checkpoint.json"; fi
   if [[ -n "${CONSOLE_ORIGINALS_TOOL:-}" ]]; then
     [[ "$TMPDIR" = "${GOCACHE%/go-cache}/console-download-tmp" ]]
     [[ "$(command -v curl)" = "${GOCACHE%/go-cache}/console-download-adapter/curl" ]]
@@ -401,6 +402,21 @@ chmod 755 "$TEST_BSR_VERIFIER"
 cat >"$TEST_MODULE_VERIFIER" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "$1" = observe-generators ]]; then
+  [[ "$#" -eq 5 && "$2" = --build && -e "$3/generate.log" && ! -e "$3/console.log" && "$4" = --source-sha256 ]]
+  [[ "${TEST_FAIL:-}" != generator-observation ]] || exit 42
+  printf 'native generator checkpoint\n'
+  exit
+fi
+if [[ "$1" = verify-generator-checkpoint ]]; then
+  [[ "$#" -eq 7 && "$2" = --checkpoint && -s "$3" && "$4" = --sha256 && "$6" = --source-sha256 ]]
+  [[ "$5" = "$(shasum -a 256 "$3" | awk '{print $1}')" ]]
+  [[ "${TEST_FAIL:-}" != generator-readback ]] || exit 42
+  tools=14
+  [[ "${TEST_FAIL:-}" != generator-incomplete ]] || tools=13
+  jq -n --arg seal "$5" --arg source "$7" --argjson tools "$tools" '{schemaVersion:1,sourceManifestSha256:$source,checkpointSha256:$seal,tools:$tools,modules:123,generatorBuildMetadataValidated:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
 if [[ "$1" = --capture ]]; then
   [[ "$#" -eq 7 && "$2" = --build && -s "$3/service/zitadel" && "$4" = --catalogue && -s "$5" && "$6" = --output ]]
   if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
@@ -572,6 +588,7 @@ if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
 jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 14 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -588,7 +605,7 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+for failure in generator-checkpoint-changed generator-observation generator-readback generator-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"

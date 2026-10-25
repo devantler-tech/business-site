@@ -57,6 +57,14 @@ check() {
     any($job.steps[]; .name == "Verify native pnpm source retention" and
       .run == "npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts\nnode --test tools/zitadel-pnpm-source/index.test.mjs\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify the actual native API generator checkpoint" and
+      (.run | contains(".sourceSnapshot.generatorBuildMetadata.checkpointSha256")) and
+      (.run | contains("cp \"$RUNNER_TEMP/zitadel-build/generator-checkpoint.json\" \"$RUNNER_TEMP/zitadel-generator-checkpoint.json\"")) and
+      (.run | contains("verify-generator-checkpoint --checkpoint \"$RUNNER_TEMP/zitadel-generator-checkpoint.json\" --sha256 \"$seal\" --source-sha256 \"$source\"")) and
+      (.run | contains(". == $build[0].sourceSnapshot.generatorBuildMetadata")) and
+      (.run | contains(".tools == 14")) and (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify the actual native API generator checkpoint") > index("Build the complete native Linux service and embedded console")) and
     ([$job.steps[].name] | index("Prepare the frozen identity JavaScript toolchain") < index("Verify native pnpm source retention") and
       index("Verify native pnpm source retention") < index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Verify and restore the actual selected pnpm sources" and
@@ -140,7 +148,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -193,6 +201,18 @@ if jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scrat
   echo 'CI accepted a replay record different from the embedded build receipt' >&2; exit 1
 fi
 controls=0
+# Execute the actual generator readback predicate on structured contradictory
+# records; an embedded claim cannot replace the independently verified copy.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify the actual native API generator checkpoint") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/generators.jq"
+jq -n '{schemaVersion:1,sourceManifestSha256:("a"*64),checkpointSha256:("b"*64),tools:14,modules:123,generatorBuildMetadataValidated:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/generators.json"
+jq -n --slurpfile receipt "$scratch/generators.json" '{sourceSnapshot:{manifestSha256:("a"*64),generatorBuildMetadata:$receipt[0]}}' >"$scratch/generator-build.json"
+jq -e --slurpfile build "$scratch/generator-build.json" -f "$scratch/generators.jq" "$scratch/generators.json" >/dev/null
+for mutation in '.tools=13' '.modules=0' '.generatorBuildMetadataValidated=false' '.sourceManifestSha256=("c"*64)' '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true' 'del(.checkpointSha256)'; do
+  jq "$mutation" "$scratch/generators.json" >"$scratch/bad-generators.json"
+  if jq -e --slurpfile build "$scratch/generator-build.json" -f "$scratch/generators.jq" "$scratch/bad-generators.json" >/dev/null; then
+    echo 'CI accepted a contradictory generator checkpoint receipt' >&2; exit 1
+  fi
+done
 # Execute the pnpm restoration predicate on real structured control records;
 # textual mentions alone cannot stand in for the source/receipt correspondence.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify and restore the actual selected pnpm sources") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/pnpm.jq"
@@ -275,6 +295,10 @@ for mutation in \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-toolchain-notices_test.go"; "")) else . end)' \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the actual native API generator checkpoint"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .run=(.run | sub("verify-generator-checkpoint"; "observe-generators")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the original console downloads and native consumption"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .["continue-on-error"]=true else . end)' \
