@@ -36,6 +36,12 @@ internal parents, extra or missing members, unknown/duplicate manifest fields,
 partial I/O and inconsistent selection. Canonical file permissions are applied
 to fresh owned descriptors, including under a restrictive umask.
 
+Decoded fields cannot appear under conflicting case variants in compiler
+observations, nested module/replacement records or retained manifests. Arbitrary
+map keys keep their native case-sensitive meaning; additional unconsumed compiler
+fields remain supported. An incomplete/error-bearing observation cannot become
+complete by overwriting one decoded field through a second spelling.
+
 Build and output directories are explicit, private and exclusively owned by the
 invocation. No concurrent writer may rename or replace them during capture or
 readback. Neither input metadata nor an archive can select commands to execute.

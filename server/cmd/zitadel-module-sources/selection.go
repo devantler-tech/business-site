@@ -82,9 +82,6 @@ func selectModules(raw, mod, sums, packages []byte, build, expected string) ([]e
 		} else if err != nil {
 			return nil, fmt.Errorf("incomplete compiler observation: %w", err)
 		}
-		if err := uniqueJSON(rawPackage); err != nil {
-			return nil, err
-		}
 		var p struct {
 			ImportPath, Dir, Name string
 			Standard, Incomplete  bool
@@ -93,7 +90,7 @@ func selectModules(raw, mod, sums, packages []byte, build, expected string) ([]e
 			Deps                  []string
 			Module                json.RawMessage
 		}
-		if err := json.Unmarshal(rawPackage, &p); err != nil || p.ImportPath == "" || seen[p.ImportPath] || p.Incomplete || (len(p.Error) != 0 && string(p.Error) != "null") || len(p.DepsErrors) != 0 {
+		if err := decodeObservation(rawPackage, &p); err != nil || p.ImportPath == "" || seen[p.ImportPath] || p.Incomplete || (len(p.Error) != 0 && string(p.Error) != "null") || len(p.DepsErrors) != 0 {
 			return nil, fmt.Errorf("invalid, incomplete or duplicate package")
 		}
 		seen[p.ImportPath] = true
@@ -112,7 +109,7 @@ func selectModules(raw, mod, sums, packages []byte, build, expected string) ([]e
 				Error      json.RawMessage
 			}
 		}
-		if json.Unmarshal(p.Module, &observed) != nil || json.Unmarshal(p.Module, &location) != nil || p.Standard || (len(location.Error) != 0 && string(location.Error) != "null") {
+		if decodeObservation(p.Module, &observed) != nil || decodeObservation(p.Module, &location) != nil || p.Standard || (len(location.Error) != 0 && string(location.Error) != "null") {
 			return nil, fmt.Errorf("invalid module observation")
 		}
 		if observed.Main {
@@ -183,6 +180,9 @@ func contentSum(sum string) bool {
 // decodeStrict refuses duplicate fields, unknown schema fields and trailing JSON.
 func decodeStrict(raw []byte, out any) error {
 	if err := uniqueJSON(raw); err != nil {
+		return err
+	}
+	if err := uniqueTypedFields(raw, reflect.TypeOf(out)); err != nil {
 		return err
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
