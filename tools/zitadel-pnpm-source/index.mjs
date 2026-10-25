@@ -20,8 +20,10 @@ const importerIds = [".", "console", "packages/zitadel-client", "packages/zitade
 const included = { dependencies: true, devDependencies: true, optionalDependencies: true };
 const registry = "https://registry.npmjs.org/";
 const sha256 = (body) => createHash("sha256").update(body).digest("hex");
+let phase = "arguments";
+class InputFailure extends Error {}
 const fail = (message) => {
-  throw new Error(message);
+  throw new InputFailure(message);
 };
 const sorted = (values) => [...values].sort();
 const frozenLock = "b881c1adea82bb48195b0a5725b041f3a476c45adea565a531172f3ab398ddaf";
@@ -40,6 +42,7 @@ function archiveIntegrity(value) {
 // Use pnpm's readers/filtering, preserving peer-qualified snapshots and native
 // platform skips. A wanted lock is not evidence that these roots were installed.
 export function selectInstalled({ wanted, current, modules, projects }, sourceRoot) {
+  phase = "workspace-selection";
   if (!path.isAbsolute(sourceRoot) || path.normalize(sourceRoot) !== sourceRoot || !Array.isArray(projects))
     fail("invalid native workspace observation");
   const observed = projects.map((project) => {
@@ -51,10 +54,12 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
     return relative;
   });
   assert.deepEqual(sorted(observed), importerIds, "native selected workspace differs");
+  phase = "installation-profile";
   if (!wanted || !current || wanted.lockfileVersion !== "9.0" || current.lockfileVersion !== "9.0")
     fail("native lock format differs");
-  if (modules?.packageManager !== "pnpm@10.30.3" || modules.layoutVersion !== 5 || modules.nodeLinker !== "isolated")
-    fail("native installation profile differs");
+  if (modules?.packageManager !== "pnpm@10.30.3") fail("native package manager differs");
+  if (modules.layoutVersion !== 5) fail("native modules layout differs");
+  if (modules.nodeLinker !== "isolated") fail("native package linker differs");
   assert.deepEqual(modules.included, included, "dependency categories differ");
   assert.deepEqual(modules.registries, { default: registry }, "native registry differs");
   if (!Array.isArray(modules.skipped) || new Set(modules.skipped).size !== modules.skipped.length)
@@ -80,9 +85,15 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
     };
   }
   const selected = select(wanted);
-  assert.deepEqual(select(current), selected, "installed lock differs from frozen wanted graph");
+  phase = "current-lock-join";
+  const installed = select(current);
+  assert.deepEqual(installed.importers, selected.importers, "installed importer records differ");
+  assert.deepEqual(installed.packages, selected.packages, "installed package snapshots differ");
+  assert.deepEqual(installed.skipped, selected.skipped, "installed skip classification differs");
+  phase = "optional-skips";
   assert.deepEqual(sorted(modules.skipped), selected.skipped, "actual optional skips differ");
   const active = Object.entries(selected.packages).filter(([key]) => !selected.skipped.includes(key));
+  phase = "selected-packages";
   if (active.length === 0 || active.length > 4000) fail("empty or unbounded native selection");
   const packages = active
     .sort(([a], [b]) => a.localeCompare(b, "en"))
@@ -353,6 +364,7 @@ const observations = [
 ];
 
 async function loadObservation(capsule, sourceRoot) {
+  phase = "native-metadata-readers";
   const copy = path.join(capsule, "records/source");
   const wanted = await readWantedLockfile(copy, {
     ignoreIncompatible: false,
@@ -364,12 +376,13 @@ async function loadObservation(capsule, sourceRoot) {
   const projects = json(readRegular(path.join(capsule, "records/projects.json"), metadataLimit, 0o600));
   if (modules?.virtualStoreDir === path.join(copy, "node_modules/.pnpm"))
     modules.virtualStoreDir = path.join(sourceRoot, "node_modules/.pnpm");
-  if (
-    modules?.virtualStoreDir !== path.join(sourceRoot, "node_modules/.pnpm") ||
-    modules.storeDir !== path.join(path.dirname(path.dirname(sourceRoot)), "pnpm-store/v10")
-  )
-    fail("installation escaped the build-owned stores");
+  phase = "native-store-locations";
+  if (modules?.virtualStoreDir !== path.join(sourceRoot, "node_modules/.pnpm"))
+    fail("installation virtual store differs");
+  if (modules.storeDir !== path.join(path.dirname(path.dirname(sourceRoot)), "pnpm-store/v10"))
+    fail("installation CAFS store differs");
   if (!Array.isArray(projects)) fail("native workspace selection is not an array");
+  phase = "workspace-source-identities";
   for (const project of projects) {
     if (!project || typeof project.path !== "string") fail("incomplete native workspace projection");
     const id = path.relative(sourceRoot, project.path) || ".";
@@ -459,6 +472,7 @@ export async function captureBuild({
   expectedLock = frozenLock,
   acquire = downloadOriginal,
 }) {
+  phase = "capture-paths";
   if (!digest(sourceManifestSha256) || !digest(expectedLock)) fail("complete external source/lock seals required");
   const sourceRoot = path.join(build, "prepared/source");
   if (!path.isAbsolute(build) || fs.realpathSync(build) !== build) fail("physical build root required");
@@ -469,12 +483,18 @@ export async function captureBuild({
   separate(scratch, path.join(build, "pnpm-store"));
   const reservation = reserve(output);
   reserve(scratch);
-  for (const [from, to] of observations) writeNew(output, to, readRegular(memberPath(build, from), metadataLimit));
-  for (const name of ["index.mjs", "package.json", "package-lock.json"])
+  for (const [from, to] of observations) {
+    phase = `literal-observation:${from}`;
+    writeNew(output, to, readRegular(memberPath(build, from), metadataLimit));
+  }
+  for (const name of ["index.mjs", "package.json", "package-lock.json"]) {
+    phase = `literal-sdk:${name}`;
     writeNew(output, `records/sdk/${name}`, readRegular(path.join(here, name), metadataLimit));
+  }
   if (sha256(readRegular(path.join(output, "records/source/pnpm-lock.yaml"), metadataLimit, 0o600)) !== expectedLock)
     fail("wanted lock differs from frozen source");
   const { selection, modules } = await loadObservation(output, sourceRoot);
+  phase = "connected-installation";
   const ownedLinks = installedLinks(sourceRoot);
   const packages = [],
     files = new Set(observations.map(([, to]) => to));
@@ -485,12 +505,14 @@ export async function captureBuild({
   const indexes = new Map();
   let bytes = 0;
   for (const selected of selection.packages) {
+    phase = "connected-index";
     const indexPath = getIndexFilePathInCafs(modules.storeDir, selected.integrity, selected.pkgId);
     const rawIndex = readRegular(indexPath, metadataLimit);
     const index = json(rawIndex);
     const existing = originals.get(selected.integrity);
     let original;
     if (!existing) {
+      phase = "original-archive-acquisition";
       original = await acquire(selected);
       if (!Buffer.isBuffer(original) || !ssri.checkData(original, selected.integrity, { strict: true }))
         fail("original selected archive differs");
@@ -503,6 +525,7 @@ export async function captureBuild({
     } else original = readRegular(memberPath(output, existing), packageLimit, 0o600);
     const validation = path.join(scratch, `package-${packages.length}`);
     fs.mkdirSync(validation, { mode: 0o700 });
+    phase = "original-archive-cafs-join";
     verifyPackageArchive(original, selected, index, modules.storeDir, validation, ownedLinks);
     const retainedIndex = `indexes/${sha256(rawIndex)}.json`;
     if (!files.has(retainedIndex)) {
@@ -562,6 +585,42 @@ export async function captureBuild({
   });
   sameDirectory(output, reservation);
   return result;
+}
+
+// Error objects from native libraries can carry source records or private paths.
+// Retain only our literal reasons and a small native error-code vocabulary.
+export function failureDiagnostic(error) {
+  const codes = new Set([
+    "ENOENT",
+    "EACCES",
+    "EPERM",
+    "EINTEGRITY",
+    "ERR_ASSERTION",
+    "ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY",
+  ]);
+  const assertions = new Set([
+    "native selected workspace differs",
+    "dependency categories differ",
+    "native registry differs",
+    "workspace expansion differs",
+    "installed importer records differ",
+    "installed package snapshots differ",
+    "installed skip classification differs",
+    "actual optional skips differ",
+    "connected index differs from original archive",
+  ]);
+  const firstLine = typeof error?.message === "string" ? error.message.split("\n")[0] : "";
+  return {
+    phase,
+    reason:
+      error instanceof InputFailure
+        ? error.message
+        : error?.code === "ERR_ASSERTION" && assertions.has(firstLine)
+          ? firstLine
+          : codes.has(error?.code)
+            ? error.code
+            : "native input rejected",
+  };
 }
 
 export async function verifyCapsule({ capsule, sha256: seal, scratch, expectedLock = frozenLock, restore }) {
@@ -743,7 +802,7 @@ async function main(args) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
-  main(process.argv.slice(2)).catch(() => {
-    process.stderr.write("zitadel-pnpm-source: selected input verification failed\n");
+  main(process.argv.slice(2)).catch((error) => {
+    process.stderr.write(`zitadel-pnpm-source: ${JSON.stringify(failureDiagnostic(error))}\n`);
     process.exitCode = 1;
   });

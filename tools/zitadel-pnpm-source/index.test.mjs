@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { selectInstalled, verifyPackageArchive, captureBuild, verifyCapsule } from "./index.mjs";
+import { selectInstalled, verifyPackageArchive, captureBuild, verifyCapsule, failureDiagnostic } from "./index.mjs";
 
 const require = createRequire(import.meta.url);
 const { createCafs, getFilePathByModeInCafs } = require("@pnpm/store.cafs");
@@ -19,6 +19,16 @@ const ids = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"
 const root = "/owned/prepared/source";
 const sri = (body) => ssri.fromData(body, { algorithms: ["sha512"] }).toString();
 const clone = (value) => structuredClone(value);
+test("native failure diagnostics never echo external messages, stacks or invented codes", () => {
+  const error = new Error("fictional-private-path and credential-like test data");
+  error.code = "FICTIONAL_SECRET_VALUE";
+  const diagnostic = JSON.stringify(failureDiagnostic(error));
+  assert.equal(diagnostic.includes("fictional-private-path"), false);
+  assert.equal(diagnostic.includes("FICTIONAL_SECRET_VALUE"), false);
+  assert.equal(diagnostic.includes("native input rejected"), true);
+  error.code = "ENOENT";
+  assert.equal(failureDiagnostic(error).reason, "ENOENT");
+});
 test("the native source entrypoint is inert without arguments and fails closed for invalid operations", () => {
   const entrypoint = fileURLToPath(new URL("./index.mjs", import.meta.url));
   const inert = spawnSync(process.execPath, [entrypoint], { encoding: "utf8" });

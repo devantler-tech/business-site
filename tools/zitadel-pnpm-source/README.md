@@ -36,6 +36,8 @@ precreated hexadecimal empty buckets are admitted. Capture finishes with complet
 connected and retained readback. A failed operation retains bounded private,
 unsealed diagnosis and emits no success receipt; it never recursively deletes a
 pathname that might have been replaced.
+Failure output contains only a bounded stage and fixed reason/error category;
+native exception messages, stacks and source/configuration records are excluded.
 
 ```sh
 node tools/zitadel-pnpm-source/index.mjs capture \

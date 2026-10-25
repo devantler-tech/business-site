@@ -78,8 +78,9 @@ required_filter_paths=(
 # A job works in docs/ when its own or the workflow's default working directory is docs/, a
 # step's working directory is, or a step enters it with cd, pushd or npm --prefix. Any path
 # with a docs component counts (./docs, ${{ github.workspace }}/docs), quoted or not. A step
-# that runs npm or npx anywhere counts too: npm is the tool whose major matters, so naming it
-# does not depend on spotting how a step reaches docs/. Audit wrapper invocations count
+# that runs npm or npx anywhere counts too, except the closed, independently
+# checksum-bound native identity SDK profile below. Any website/unknown command
+# in that same job still counts. Audit wrapper invocations count
 # from the root too. Legacy docs paths remain detectable, but a root working-directory
 # default alone must not turn every Bash-only job into a Node job.
 jobs_query=""
@@ -90,15 +91,39 @@ def enters_docs:
   or test("--prefix[ =]([^\\s;&|]*[/\"'])?docs([\"'/\\s;&|)]|$)");
 def runs_npm: test("(^|[\\s;&|(])(npm|npx|node)(\\s|$)");
 def runs_audit: test("(^|[/\\s;&|(])audit-dependencies(\\.test)?\\.sh([\\s;&|)]|$)");
+def mandatory: .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false);
+# This exact bootstrap, not a job/step name or marker, admits the SDK's own
+# older toolchain. It cannot admit a different download, skipped checksum, root
+# npm command, conditional setup or setup that runs after the SDK command.
+def native_sdk_setup:
+  ((.run // "") | rtrimstr("\n")) == ([
+    "tools=\"$RUNNER_TEMP/zitadel-tools\"",
+    "mkdir \"$tools\"",
+    "curl --fail --location --silent --show-error --max-time 120 https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz -o \"$tools/node.tar.xz\"",
+    "(cd \"$tools\" && printf '%s\\n' 'df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  node.tar.xz' | shasum -a 256 -c -)",
+    "tar -xJf \"$tools/node.tar.xz\" -C \"$tools\"",
+    "export PATH=\"$tools/node-v22.23.3-linux-x64/bin:$PATH\"",
+    "corepack enable",
+    "corepack prepare pnpm@10.30.3 --activate",
+    "echo \"$tools/node-v22.23.3-linux-x64/bin\" >> \"$GITHUB_PATH\""
+  ] | join("\n")) and mandatory;
+def without_native_sdk_commands:
+  split("\n") | map(select((gsub("^\\s+|\\s+$"; "") |
+    . == "npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts" or
+    . == "node --test tools/zitadel-pnpm-source/index.test.mjs" or
+    . == "node tools/zitadel-pnpm-source/index.mjs restore --capsule \"$RUNNER_TEMP/zitadel-pnpm-sources-roundtrip\" --sha256 \"$seal\" --scratch \"$RUNNER_TEMP/zitadel-pnpm-restore-work\" --store \"$RUNNER_TEMP/zitadel-pnpm-restored-store\" > \"$RUNNER_TEMP/zitadel-build/pnpm-source-roundtrip.json\"") | not)) | join("\n");
 (((.defaults // {}).run // {})["working-directory"]) as $workflow_default |
 (.jobs // {}) | to_entries[] |
 (((((.value.defaults // {}).run // {})["working-directory"]) // $workflow_default // "") | docs_dir)
   as $default_docs |
 (.value.steps // []) as $steps |
+[range(0; $steps | length) | select($steps[.] | native_sdk_setup)] as $native |
 [range(0; $steps | length) | select(
   (($steps[.]["working-directory"] // "") | docs_dir) or
   (($steps[.].run // "") | enters_docs) or
-  (($steps[.].run // "") | runs_npm) or
+  (. as $index | ($steps[$index].run // "") |
+    (if ($native | length) == 1 and $native[0] < $index and ($steps[$index] | mandatory)
+      then without_native_sdk_commands else . end) | runs_npm) or
   (($steps[.].run // "") | runs_audit) or
   ($default_docs and ($steps[.].run != null))
 )] as $docs |
@@ -109,7 +134,9 @@ select($default_docs or ($docs | length > 0) or ($setup | length > 0)) |
  (if ($setup | length) > 0 then ($steps[$setup[0]].with["node-version-file"] // "-" | tostring) else "-" end),
  (if ($setup | length) > 0 and ($docs | length) > 0 then ($setup[0] < $docs[0]) else true end | tostring),
  (if ($setup | length) > 0 then ($steps[$setup[0]] | .if == null and
-   (.["continue-on-error"] == null or .["continue-on-error"] == false)) else false end | tostring)]
+   (.["continue-on-error"] == null or .["continue-on-error"] == false)) else false end | tostring),
+ (if ($native | length) == 1 and ($docs | length) > 0 and ($setup | length) > 0
+   then $setup[0] > $native[0] else true end | tostring)]
 | @tsv
 JQ
 
@@ -167,19 +194,21 @@ check() {
   ')" || violation "cannot read Node types update policy" || return 1
   [ "${policy}" = true ] || violation "Node types major updates must be coordinated with the runtime" || return 1
 
-  local workflow base json rows job count node_version node_version_file ordered mandatory line npm_major
+  local workflow base json rows job count node_version node_version_file ordered mandatory native_authority line npm_major
   local found=" "
   for workflow in "${workflows_dir}"/*.yaml "${workflows_dir}"/*.yml; do
     [ -f "${workflow}" ] || continue
     base="$(basename "${workflow}")"
     json="$(yq -o=json '.' "${workflow}")" || violation "cannot parse ${base}" || return 1
     rows="$(jq -r "${jobs_query}" <<<"${json}")" || violation "cannot read the jobs of ${base}" || return 1
-    while IFS=$'\t' read -r job count node_version node_version_file ordered mandatory; do
+    while IFS=$'\t' read -r job count node_version node_version_file ordered mandatory native_authority; do
       [ -n "${job}" ] || continue
       found="${found}${base}:${job} "
       [ "${count}" = "1" ] ||
         violation "${base}:${job} works in docs/ but has ${count} actions/setup-node steps; it needs exactly one" ||
         return 1
+      [ "${native_authority}" = "true" ] ||
+        violation "${base}:${job} website Node setup must follow the native toolchain override" || return 1
       [ "${ordered}" = "true" ] ||
         violation "${base}:${job} sets up Node after its first step in docs/, so that step runs on the runner's default Node" ||
         return 1
@@ -272,6 +301,34 @@ reset_fixture() {
 }
 
 output="$(check "${repo_root}/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
+
+reset_fixture
+yq -i '.jobs["build-zitadel-linux"].steps =
+  [{"uses":"actions/setup-node@fixture","with":{"node-version-file":".node-version"}}] +
+  .jobs["build-zitadel-linux"].steps + [{"run":"npm ci"}]' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "native bootstrap overrides an earlier website Node setup" "website Node setup must follow"
+
+# The frozen native SDK has its own Node authority. Recognize only its exact
+# commands after the unconditional checksum-verified bootstrap. Website npm and
+# unknown/mixed commands in that same job must still require the site toolchain.
+for mutation in \
+  '.jobs["build-zitadel-linux"].steps += [{"run":"npm ci"}]' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run += "npm ci\n" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("--ignore-scripts"; "--ignore-scripts; npm ci")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("--ignore-scripts"; "--ignore-scripts \u0024(npm ci)")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps += [{"run":"node scripts/unknown.mjs"}]' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("tools/zitadel-pnpm-source"; "tools/unrecognized")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .run=(.run | sub("df450af8"; "00000000")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Prepare the frozen identity JavaScript toolchain"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= sort_by(if .name == "Verify native pnpm source retention" then 0 else 1 end)'; do
+  reset_fixture
+  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" | jq "$mutation" >"${fixture}/native-broken.json"
+  yq -P '.' "${fixture}/native-broken.json" >"${fixture}/.github/workflows/ci.yaml"
+  expect_failure "native SDK must not hide a website/unchecked toolchain command" "ci.yaml:build-zitadel-linux works in docs/ but has 0"
+done
 
 # A version-file consumer must fail closed on absent or conflicting authority,
 # and type checking must not admit APIs newer than the selected runtime.
