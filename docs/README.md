@@ -74,7 +74,8 @@ Each price is marked "incl. VAT" / "inkl. moms" and the note states the included
 The totals live in `vatInclusiveOffers` in `business-copy.ts`; `scripts/vat-prices.test.mjs`
 guards the exact approved totals, net floors and no double VAT. Current ordinary company facts
 are shared by both frontends and every package profile. The temporary VAT gate and historical
-comparison inputs are retired after reviewed publication and actual bilingual live proof (#346).
+comparison inputs are removed in source. Reviewed publication and fresh bilingual live verification
+remain tracked in #346 until their completion is recorded.
 The publisher and production-template packager retain company identity enabled with revised-offer
 and customer-scope releases disabled. The ordinary Astro comparison and explicit recovery also
 retain current prices. This does not activate orders, payments or additional customer eligibility.
