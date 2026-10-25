@@ -47,7 +47,7 @@ that start.
 
 | State | Meaning | New included-task authorization |
 |---|---|---|
-| active | a governing version exists, it is not cancelled or disputed, and its authorization history is below its bound | permitted |
+| active | a governing version exists and is not cancelled or disputed | permitted while that version's authorization history is below its bound |
 | future | no version governs yet: every recorded period starts later | paused |
 | ended | no version governs any more: the latest period has ended | paused |
 | cancelled | operator recorded a cancellation | paused |
@@ -95,8 +95,10 @@ cancellation checks retained.
 
 Revocation needs only current operator access and its own release gate. It never
 needs an active entitlement, valid funding or the original approver's
-membership. Positive history is bounded per entitlement version; reaching the
-bound closes new authorizations but never blocks revocation or correction. A
+membership. Positive history is bounded per entitlement version. The bound is
+applied only when admitting a new decision: reaching it closes new
+authorizations, but it never changes the entitlement's state, never ends an
+authorization already recorded and never blocks revocation or correction. A
 failed or overflowed history read is unavailable, never an empty success.
 
 ### Emergency and security work
@@ -113,8 +115,8 @@ A distinct false-default release decision has no environment activation mapping;
 missing, false, wrong-type, failed and stale evaluations deny. Migrations are
 additive and owned by the separate migrator, runtime grants stay least-privilege
 and the runtime runs no DDL. Client isolation is enforced by the authority's own
-client-scoped queries, never assumed from database row-level security. Private pages use the retained Go frame and native
-forms ([ADR 0017](0017-retain-go-private-presentation.md)).
+client-scoped queries, never assumed from database row-level security. Private
+pages use the retained Go frame and native forms ([ADR 0017](0017-retain-go-private-presentation.md)).
 
 ## Alternatives
 
@@ -130,9 +132,10 @@ forms ([ADR 0017](0017-retain-go-private-presentation.md)).
 Use disposable restricted-role PostgreSQL and fictional data. Cover a covered fix
 authorized without a new invoice; future, active and end-boundary cases; a
 renewal recorded ahead of its start; renewal, correction, revocation and
-restoration; changed project, agreement or scope;
-cross-client access and stale memberships; disputed and unavailable facts;
-bounded and failed history reads; concurrent authorizations; late SDK and
+restoration; changed project, agreement or scope; cross-client access and
+stale memberships; disputed and unavailable facts; bounded and failed history
+reads; a reached history bound that closes new decisions but leaves earlier
+authorizations valid; concurrent authorizations; late SDK and
 cancellation checks; and English/Danish operator and client journeys. Keep every
 existing gate. A source merge activates nothing: hosting, identity, privacy,
 legal/consumer and worker activation remain separate decisions.
