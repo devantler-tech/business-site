@@ -19,6 +19,9 @@ const ssri = require("ssri");
 const importerIds = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"];
 const included = { dependencies: true, devDependencies: true, optionalDependencies: true };
 const registry = "https://registry.npmjs.org/";
+// pnpm 10.30.3's own config adds this unused scope even without a project setting.
+// Matching that native metadata does not admit fetching JSR package sources.
+const nativeRegistries = { default: registry, "@jsr": "https://npm.jsr.io/" };
 const sha256 = (body) => createHash("sha256").update(body).digest("hex");
 let phase = "arguments";
 class InputFailure extends Error {}
@@ -61,7 +64,7 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
   if (modules.layoutVersion !== 5) fail("native modules layout differs");
   if (modules.nodeLinker !== "isolated") fail("native package linker differs");
   assert.deepEqual(modules.included, included, "dependency categories differ");
-  assert.deepEqual(modules.registries, { default: registry }, "native registry differs");
+  assert.deepEqual(modules.registries, nativeRegistries, "native registry differs");
   if (!Array.isArray(modules.skipped) || new Set(modules.skipped).size !== modules.skipped.length)
     fail("invalid native skips");
   function select(lock) {
@@ -99,7 +102,7 @@ export function selectInstalled({ wanted, current, modules, projects }, sourceRo
     .sort(([a], [b]) => a.localeCompare(b, "en"))
     .map(([depPath, snapshot]) => {
       const { name, version } = nameVerFromPkgSnapshot(depPath, snapshot);
-      const resolution = pkgSnapshotToResolution(depPath, snapshot, { default: registry });
+      const resolution = pkgSnapshotToResolution(depPath, snapshot, modules.registries);
       if (!name || !version || resolution.type || !resolution.tarball?.startsWith(registry))
         fail("non-registry selected input");
       const url = new URL(resolution.tarball);

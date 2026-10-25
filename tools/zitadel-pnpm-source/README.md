@@ -28,6 +28,11 @@ native CAFS interpretation. Every native file-map identity, size, mode and hash
 must match the connected index and actual cached bytes. Native lifecycle
 classification is independently derived with pnpm's `pkgRequiresBuild`; neither
 timestamps nor an index's unchecked `requiresBuild` field supplies proof.
+The exact native registry metadata also includes pnpm 10.30.3's built-in
+`@jsr` scope, independently checked in its frozen configuration source. Its
+presence does not admit JSR downloads: selected original archives must still
+resolve to the public npm registry. Missing, substituted or extra registry
+entries are rejected.
 
 Native hard links into this build's own installation are counted explicitly.
 Foreign links, symbolic/special files, nonempty side-effects caches, unselected

@@ -63,7 +63,7 @@ function selectionFixture() {
     skipped: ["native@1.0.0"],
     storeDir: "/owned/pnpm-store/v10",
     virtualStoreDir: `${root}/node_modules/.pnpm`,
-    registries: { default: "https://registry.npmjs.org/" },
+    registries: { default: "https://registry.npmjs.org/", "@jsr": "https://npm.jsr.io/" },
   };
   const projects = ids.map((id) => ({
     name: id === "." ? "@zitadel/zitadel" : `@zitadel/${path.basename(id)}`,
@@ -82,6 +82,14 @@ test("native selection retains peer instances, classifies skips and omits unrela
   );
   assert.equal(result.packages[0].integrity, result.packages[1].integrity);
   assert.equal(result.packages[0].tarball, "https://registry.npmjs.org/alpha/-/alpha-1.0.0.tgz");
+});
+
+test("the native built-in JSR metadata does not admit selected JSR downloads", () => {
+  const fixture = selectionFixture();
+  fixture.wanted.importers["."].dependencies["@jsr/example"] = "1.0.0";
+  fixture.wanted.packages["@jsr/example@1.0.0"] = { resolution: { integrity: sri("jsr source") } };
+  fixture.current = clone(fixture.wanted);
+  assert.throws(() => selectInstalled(fixture, root), /non-registry selected input/);
 });
 
 for (const [name, mutate] of [
@@ -170,6 +178,24 @@ for (const [name, mutate] of [
     },
   ],
   [
+    "substituted native built-in registry",
+    (f) => {
+      f.modules.registries["@jsr"] = "https://example.invalid/";
+    },
+  ],
+  [
+    "extra scoped registry",
+    (f) => {
+      f.modules.registries["@other"] = "https://example.invalid/";
+    },
+  ],
+  [
+    "missing native built-in registry",
+    (f) => {
+      delete f.modules.registries["@jsr"];
+    },
+  ],
+  [
     "non-registry resolution",
     (f) => {
       f.wanted.packages["peer@1.0.0"].resolution = { type: "git", repo: "x" };
@@ -224,7 +250,7 @@ async function buildFixture(t) {
     storeDir: store,
     virtualStoreDir: path.join(source, "node_modules/.pnpm"),
     virtualStoreDirMaxLength: 120,
-    registries: { default: "https://registry.npmjs.org/" },
+    registries: { default: "https://registry.npmjs.org/", "@jsr": "https://npm.jsr.io/" },
     hoistedDependencies: {},
     pendingBuilds: [],
     prunedAt: new Date().toISOString(),
