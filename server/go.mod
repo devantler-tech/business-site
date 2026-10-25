@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de
-	github.com/alexedwards/scs/v2 v2.9.0
+	github.com/alexedwards/scs/v2 v2.9.1-0.20250927102904-c45a9d145a22
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/justinas/nosurf v1.2.0
