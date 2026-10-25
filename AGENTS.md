@@ -85,7 +85,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   hash to that admitted input. CI rebuilds from the unpacked source and retains
   its joined receipt; this connected rebuild is not
   complete dependency capture or native offline replay. Keep both modes' private
-  Go/pnpm acquisition caches, public checksum verification and confined records.
+  Go/pnpm/schema acquisition caches, empty schema credentials/configuration,
+  public checksum verification and confined records.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI

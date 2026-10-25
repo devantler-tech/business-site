@@ -75,6 +75,11 @@ complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
 module_verifier_hash='' bsr_verifier_hash=''
+# Both source modes acquire schemas from an owned cache and empty configuration;
+# source restoration must not inherit a host cache or an account's credentials.
+export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
+unset BUF_TOKEN
+mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME"
 # Check the separately compiled command without changing the service compiler.
 verifier_digest() {
   local name="$1" executable="$2" command="$3"
@@ -91,9 +96,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   module_verifier_hash="$(verifier_digest go-module "$module_verifier" zitadel-module-sources)"
   bsr_verifier_hash="$(verifier_digest bsr "$bsr_verifier" zitadel-bsr-sources)"
   [[ "$module_verifier_hash" =~ ^[0-9a-f]{64}$ && "$bsr_verifier_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'verifier digest unavailable'
-  export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
-  unset BUF_TOKEN
-  mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME" "$output/bsr-tools"
+  mkdir -m 700 "$output/bsr-tools"
 fi
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
 version=4.20.0

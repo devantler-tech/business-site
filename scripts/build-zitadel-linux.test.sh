@@ -65,6 +65,8 @@ if [[ "$1" = install ]]; then
   [[ "$npm_config_globalconfig" = "$build_root/npm-globalrc" && -f "$npm_config_globalconfig" && ! -s "$npm_config_globalconfig" ]]
   [[ "$npm_config_engine_strict" = false && "$npm_config_registry" = https://registry.npmjs.org/ ]]
   [[ "$npm_config_side_effects_cache" = false && " $* " = *' --side-effects-cache=false '* ]]
+  [[ "${BUF_CACHE_DIR:-}" = "$build_root/buf-cache" && -d "$BUF_CACHE_DIR" ]]
+  [[ "${XDG_CONFIG_HOME:-}" = "$build_root/bsr-config" && -d "$XDG_CONFIG_HOME" && ! -v BUF_TOKEN ]]
   [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
   [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
   [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
@@ -376,7 +378,8 @@ reject partial-package-graph TEST_FAIL=package-graph
 reject partial-binary-metadata TEST_FAIL=binary-metadata
 test "$failures" -eq 0
 : >"$TEST_CALLS"
-bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
+env BUF_TOKEN=unrelated-fixture-token BUF_CACHE_DIR="$scratch/ambient-buf-cache" XDG_CONFIG_HOME="$scratch/ambient-buf-config" \
+  bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
 jq -e '.platform == "linux/amd64" and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .reproducible == false' "$scratch/complete/build-receipt.json"
 test -s "$scratch/complete/console-notices-inventory.json"
 test -s "$scratch/complete/console-third-party-notices.txt"
