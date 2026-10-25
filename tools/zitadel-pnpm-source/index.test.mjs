@@ -20,6 +20,7 @@ import {
 const require = createRequire(import.meta.url);
 const { createCafs, getFilePathByModeInCafs } = require("@pnpm/store.cafs");
 const ssri = require("ssri");
+const fixBin = require("bin-links/lib/fix-bin");
 const { writeWantedLockfile, writeCurrentLockfile } = require("@pnpm/lockfile.fs");
 const { writeModulesManifest } = require("@pnpm/modules-yaml");
 const { getIndexFilePathInCafs } = require("@pnpm/store.cafs");
@@ -348,8 +349,8 @@ for (const [name, mutate] of [
   });
 }
 
-async function buildFixture(t) {
-  const f = archiveFixture(t);
+async function buildFixture(t, manifestExtra = {}) {
+  const f = archiveFixture(t, false, 0o644, manifestExtra);
   const build = path.join(f.directory, "build");
   const source = path.join(build, "prepared/source");
   fs.mkdirSync(path.join(source, "node_modules/.pnpm"), { recursive: true });
@@ -467,6 +468,46 @@ test("capture, final readback and fresh native CAFS restoration preserve literal
   );
 });
 
+test("a later selected package's declared bin can share an earlier package's CAFS inode through complete capture and restore", async (t) => {
+  const f = await buildFixture(t);
+  const other = archiveFixture(t, false, 0o644, { name: "zeta", bin: "index.js" });
+  createCafs(f.store).addFilesFromTarball(other.archive, true);
+  const indexPath = getIndexFilePathInCafs(f.store, other.selected.integrity, "zeta@1.0.0");
+  fs.mkdirSync(path.dirname(indexPath), { recursive: true });
+  fs.writeFileSync(indexPath, JSON.stringify(other.index));
+  const wanted = await require("@pnpm/lockfile.fs").readWantedLockfile(f.source, { ignoreIncompatible: false });
+  wanted.packages["zeta@1.0.0"] = { resolution: { integrity: other.selected.integrity } };
+  wanted.importers["."].dependencies.zeta = "1.0.0";
+  wanted.importers["."].specifiers.zeta = "1.0.0";
+  await writeWantedLockfile(f.source, wanted);
+  await writeCurrentLockfile(path.join(f.source, "node_modules/.pnpm"), wanted);
+  const expectedLock = createHash("sha256")
+    .update(fs.readFileSync(path.join(f.source, "pnpm-lock.yaml")))
+    .digest("hex");
+  const entry = other.index.files["index.js"];
+  assert.equal(entry.integrity, f.index.files["index.js"].integrity);
+  const file = getFilePathByModeInCafs(f.store, entry.integrity, entry.mode);
+  const installed = path.join(f.source, "node_modules/installed-command");
+  fs.linkSync(file, installed);
+  await fixBin(installed, 0o755);
+  const captured = await captureBuild({
+    ...f.options,
+    expectedLock,
+    acquire: async (selected) => (selected.name === "zeta" ? other.archive : f.archive),
+  });
+  assert.equal(captured.packages, 2);
+  const target = path.join(f.directory, "restored");
+  const restored = await verifyCapsule({
+    capsule: f.output,
+    sha256: captured.manifestSha256,
+    scratch: path.join(f.directory, "restore-work"),
+    expectedLock,
+    restore: target,
+  });
+  assert.equal(restored.nativeStoreRestored, true);
+  assert.equal(fs.statSync(getFilePathByModeInCafs(target, entry.integrity, entry.mode)).mode & 0o777, 0o644);
+});
+
 test("capture accounts for native hard links only inside this build installation", async (t) => {
   const f = await buildFixture(t);
   const index = JSON.parse(fs.readFileSync(f.indexPath));
@@ -575,14 +616,14 @@ test("capture refuses output in the prepared source before changing it", async (
   assert.equal(fs.existsSync(nested), false);
 });
 
-function archiveFixture(t, needsBuild = false, archiveMode = 0o644) {
+function archiveFixture(t, needsBuild = false, archiveMode = 0o644, manifestExtra = {}) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "zitadel-pnpm-native-test-")));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const source = path.join(directory, "package");
   fs.mkdirSync(source);
   fs.writeFileSync(
     path.join(source, "package.json"),
-    `${JSON.stringify({ name: "alpha", version: "1.0.0", ...(needsBuild ? { scripts: { postinstall: "node build.js" } } : {}) })}\n`,
+    `${JSON.stringify({ name: "alpha", version: "1.0.0", ...manifestExtra, ...(needsBuild ? { scripts: { postinstall: "node build.js" } } : {}) })}\n`,
     { mode: 0o644 },
   );
   fs.writeFileSync(path.join(source, "index.js"), "export const value = 1;\n", { mode: 0o644 });
@@ -605,24 +646,69 @@ function archiveFixture(t, needsBuild = false, archiveMode = 0o644) {
       },
     ]),
   );
-  const index = { name: "alpha", version: "1.0.0", requiresBuild: false, files };
-  const selected = { name: "alpha", version: "1.0.0", integrity: sri(archive) };
+  const index = { name: manifestExtra.name || "alpha", version: "1.0.0", requiresBuild: false, files };
+  const selected = { name: index.name, version: "1.0.0", integrity: sri(archive) };
   const validation = path.join(directory, "validation");
   fs.mkdirSync(validation, { mode: 0o700 });
   return { directory, archive, store, index, selected, validation };
 }
 
-test("native archive interpretation is joined to every connected CAFS byte and executable mode", (t) => {
+test("native archive interpretation is joined to every connected CAFS byte and executable mode", async (t) => {
   const f = archiveFixture(t);
-  const result = verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation);
+  const result = await verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation);
   assert.equal(result.files, 3);
   assert.equal(result.archiveSha256, createHash("sha256").update(f.archive).digest("hex"));
 });
 
+for (const manifest of [{ bin: "index.js" }, { bin: { alpha: "index.js" } }, { directories: { bin: "." } }]) {
+  test(`native bin linking may make its own hard-linked source executable: ${JSON.stringify(manifest)}`, async (t) => {
+    const f = archiveFixture(t, false, 0o644, manifest);
+    const entry = f.index.files["index.js"];
+    const file = getFilePathByModeInCafs(f.store, entry.integrity, entry.mode);
+    const installed = path.join(f.directory, "installed-index.js");
+    fs.linkSync(file, installed);
+    // This is pnpm's actual fix-bin implementation, not a chmod simulation.
+    await fixBin(installed, 0o755);
+    assert.equal(fs.statSync(file).mode & 0o777, 0o755);
+    const stat = fs.statSync(installed);
+    const owned = new Map([[`${stat.dev}:${stat.ino}`, 1]]);
+    const result = await verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation, owned);
+    assert.equal(result.files, 3);
+    assert.equal(entry.mode, 0o644, "the original source map must not be rewritten");
+  });
+}
+
+for (const name of [
+  "undeclared executable",
+  "unlinked declared executable",
+  "foreign linked bin",
+  "wrong linked bin mode",
+]) {
+  test(`native bin mode admission rejects ${name}`, async (t) => {
+    const f = archiveFixture(t, false, 0o644, name === "undeclared executable" ? {} : { bin: "index.js" });
+    const entry = f.index.files["index.js"];
+    const file = getFilePathByModeInCafs(f.store, entry.integrity, entry.mode);
+    const owned = new Map();
+    if (name !== "unlinked declared executable") {
+      fs.linkSync(file, path.join(f.directory, "installed"));
+      if (name !== "foreign linked bin") {
+        const stat = fs.statSync(file);
+        owned.set(`${stat.dev}:${stat.ino}`, 1);
+      }
+    }
+    await fixBin(file, 0o755);
+    if (name === "wrong linked bin mode") fs.chmodSync(file, 0o777);
+    await assert.rejects(
+      verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation, owned),
+      /invalid native file/,
+    );
+  });
+}
+
 for (const mode of [0o444, 0o640, 0o744, 0o711]) {
-  test(`native CAFS permissions normalize archive mode ${mode.toString(8)}`, (t) => {
+  test(`native CAFS permissions normalize archive mode ${mode.toString(8)}`, async (t) => {
     const f = archiveFixture(t, false, mode);
-    const result = verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation);
+    const result = await verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation);
     assert.equal(result.files, 3);
     const entry = f.index.files["index.js"];
     const physical = getFilePathByModeInCafs(f.store, entry.integrity, entry.mode);
@@ -631,20 +717,20 @@ for (const mode of [0o444, 0o640, 0o744, 0o711]) {
 }
 
 for (const mode of [0o444, 0o744]) {
-  test(`archive mode ${mode.toString(8)} cannot substitute for the exact physical CAFS mode`, (t) => {
+  test(`archive mode ${mode.toString(8)} cannot substitute for the exact physical CAFS mode`, async (t) => {
     const f = archiveFixture(t, false, mode);
     const entry = f.index.files["index.js"];
     fs.chmodSync(getFilePathByModeInCafs(f.store, entry.integrity, entry.mode), mode);
-    assert.throws(
-      () => verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation),
+    await assert.rejects(
+      verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation),
       /invalid native file type, size or mode/,
     );
   });
 }
 
-test("native lifecycle classification cannot be changed from required to false", (t) => {
+test("native lifecycle classification cannot be changed from required to false", async (t) => {
   const f = archiveFixture(t, true);
-  assert.throws(() => verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation));
+  await assert.rejects(verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation));
 });
 
 test("the exact native empty CAFS buckets do not count as unrelated inputs", async (t) => {
@@ -757,10 +843,10 @@ for (const [name, mutate] of [
     },
   ],
 ]) {
-  test(`native archive proof rejects ${name}`, (t) => {
+  test(`native archive proof rejects ${name}`, async (t) => {
     const fixture = archiveFixture(t);
     mutate(fixture);
-    assert.throws(() =>
+    await assert.rejects(
       verifyPackageArchive(fixture.archive, fixture.selected, fixture.index, fixture.store, fixture.validation),
     );
   });

@@ -112,7 +112,11 @@ func TestGeneratorCheckpointRequiresActualNativeExecutables(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer root.Close()
+			t.Cleanup(func() {
+				if err := root.Close(); err != nil {
+					t.Error(err)
+				}
+			})
 			observations, err := observeGeneratorExecutables(root)
 			if err == nil || observations != nil {
 				t.Fatal("unobserved generators produced a checkpoint")

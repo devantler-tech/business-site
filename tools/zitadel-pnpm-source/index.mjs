@@ -15,6 +15,7 @@ const { createCafs, getFilePathByModeInCafs, getIndexFilePathInCafs } = require(
 const { readWantedLockfile, readCurrentLockfile } = require("@pnpm/lockfile.fs");
 const { readModulesManifest } = require("@pnpm/modules-yaml");
 const { pkgRequiresBuild } = require("@pnpm/exec.pkg-requires-build");
+const { getBinsFromPackageManifest } = require("@pnpm/package-bins");
 const ssri = require("ssri");
 const importerIds = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"];
 const included = { dependencies: true, devDependencies: true, optionalDependencies: true };
@@ -257,7 +258,7 @@ function fileMap(files) {
 // A fresh native interpretation of original SRI-verified bytes must match the
 // complete connected index, then every connected CAFS payload. Parsing writes
 // only into the caller's newly reserved, otherwise empty validation store.
-function interpretArchive(archive, selected, index, validationStore) {
+async function interpretArchive(archive, selected, index, validationStore) {
   if (
     !Buffer.isBuffer(archive) ||
     archive.length === 0 ||
@@ -298,23 +299,62 @@ function interpretArchive(archive, selected, index, validationStore) {
     fail("native lifecycle classification differs from original archive");
   if (Object.keys(actual).length === 0 || Object.keys(actual).length > 100000)
     fail("empty or unbounded archive file map");
-  return actual;
+  // Let the exact native package-bins reader classify command targets from the
+  // SRI-verified original manifest. Its directories.bin reader gets a private
+  // filename-only view of the original file map, never the live installation.
+  const binRoot = path.join(validationStore, "original-bin-view");
+  if (!native.manifest.bin && native.manifest.directories?.bin) {
+    fs.mkdirSync(binRoot, { mode: 0o700 });
+    for (const name of Object.keys(actual)) writeNew(binRoot, name, Buffer.alloc(0));
+  }
+  const commands = await getBinsFromPackageManifest(native.manifest, binRoot);
+  const binMembers = new Set();
+  for (const command of commands) {
+    const name = path.relative(binRoot, command.path).split(path.sep).join("/");
+    if (Object.hasOwn(actual, name)) binMembers.add(name);
+  }
+  return { files: actual, binMembers };
 }
 
-export function verifyPackageArchive(archive, selected, index, store, validationStore, ownedLinks = new Map()) {
-  const actual = interpretArchive(archive, selected, index, validationStore);
+// link-bins calls fix-bin(0755). On a hard-link import that changes the CAFS
+// inode too, even when its original archive mode is non-executable. Admit that
+// one native transition only for original declared bins and counted owned links.
+function connectedMode(record, filename, stat, ownedLinks, binaryFiles) {
+  const originalMode = nativeCafsMode(record.mode);
+  return originalMode === 0o644 &&
+    (stat.mode & 0o7777) === 0o755 &&
+    (ownedLinks.get(`${stat.dev}:${stat.ino}`) || 0) > 0 &&
+    binaryFiles.has(filename)
+    ? 0o755
+    : originalMode;
+}
+
+function verifyConnectedPackage(actual, store, ownedLinks, binaryFiles) {
   let bytes = 0;
   for (const record of Object.values(actual)) {
     const filename = getFilePathByModeInCafs(store, record.integrity, record.mode);
     const stat = fs.lstatSync(filename);
     const links = 1 + (ownedLinks.get(`${stat.dev}:${stat.ino}`) || 0);
-    const body = readRegular(filename, record.size, nativeCafsMode(record.mode), links);
+    const body = readRegular(
+      filename,
+      record.size,
+      connectedMode(record, filename, stat, ownedLinks, binaryFiles),
+      links,
+    );
     if (body.length !== record.size || !ssri.checkData(body, record.integrity, { strict: true }))
       fail("connected CAFS content differs");
     bytes += body.length;
     if (bytes > 512 * 1024 * 1024) fail("unbounded package contents");
   }
-  return { archiveSha256: sha256(archive), files: Object.keys(actual).length, bytes };
+  return { files: Object.keys(actual).length, bytes };
+}
+
+export async function verifyPackageArchive(archive, selected, index, store, validationStore, ownedLinks = new Map()) {
+  const { files, binMembers } = await interpretArchive(archive, selected, index, validationStore);
+  const binaries = new Set(
+    [...binMembers].map((name) => getFilePathByModeInCafs(store, files[name].integrity, files[name].mode)),
+  );
+  return { archiveSha256: sha256(archive), ...verifyConnectedPackage(files, store, ownedLinks, binaries) };
 }
 
 // pnpm may import by hard link on filesystems without reflinks. Admit only the
@@ -600,6 +640,8 @@ export async function captureBuild({
   const storeMembers = new Set();
   const payloads = new Map();
   const indexes = new Map();
+  const connectedPackages = [];
+  const binaryFiles = new Set();
   let bytes = 0;
   for (const selected of selection.packages) {
     phase = "connected-index";
@@ -623,7 +665,12 @@ export async function captureBuild({
     const validation = path.join(scratch, `package-${packages.length}`);
     fs.mkdirSync(validation, { mode: 0o700 });
     phase = "original-archive-cafs-join";
-    verifyPackageArchive(original, selected, index, modules.storeDir, validation, ownedLinks);
+    const interpreted = await interpretArchive(original, selected, index, validation);
+    connectedPackages.push(interpreted.files);
+    for (const name of interpreted.binMembers) {
+      const entry = interpreted.files[name];
+      binaryFiles.add(getFilePathByModeInCafs(modules.storeDir, entry.integrity, entry.mode));
+    }
     const retainedIndex = `indexes/${sha256(rawIndex)}.json`;
     if (!files.has(retainedIndex)) {
       writeNew(output, retainedIndex, rawIndex);
@@ -638,12 +685,15 @@ export async function captureBuild({
       payloads.set(filename, f);
     }
   }
+  // A deduplicated CAFS payload can also appear in another selected package's
+  // file map. Finish all original manifest joins before checking shared inodes.
+  for (const files of connectedPackages) verifyConnectedPackage(files, modules.storeDir, ownedLinks, binaryFiles);
   closedMembers(modules.storeDir, storeMembers, false);
   const finalLinks = installedLinks(sourceRoot);
   for (const [filename, f] of payloads) {
     const stat = fs.lstatSync(filename);
     const links = 1 + (finalLinks.get(`${stat.dev}:${stat.ino}`) || 0);
-    const body = readRegular(filename, f.size, nativeCafsMode(f.mode), links);
+    const body = readRegular(filename, f.size, connectedMode(f, filename, stat, finalLinks, binaryFiles), links);
     if (body.length !== f.size || !ssri.checkData(body, f.integrity, { strict: true }))
       fail("connected CAFS changed before finalization");
   }
@@ -817,7 +867,7 @@ export async function verifyCapsule({ capsule, sha256: seal, scratch, expectedLo
     const validation = path.join(scratch, `package-${i}`);
     fs.mkdirSync(validation, { mode: 0o700 });
     const index = json(rawIndex);
-    const members = interpretArchive(original, selected, index, validation);
+    const { files: members } = await interpretArchive(original, selected, index, validation);
     if (target) {
       createCafs(target).addFilesFromTarball(gunzipSync(original, { maxOutputLength: 512 * 1024 * 1024 }), true);
       const indexPath = getIndexFilePathInCafs(target, selected.integrity, selected.pkgId);

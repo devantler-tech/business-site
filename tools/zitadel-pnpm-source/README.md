@@ -52,8 +52,17 @@ capture. Missing, invented or compatible-package skips still fail.
 File refusals additionally report numeric type/mode/size/link metadata, never
 pathnames. Original archive permissions are checked against the complete native
 file map. Physical CAFS permissions follow pnpm's distinct storage normalization:
-0755 for executable content, otherwise 0644 under the required umask 022. An
-archive's other legitimate permissions cannot replace that exact physical check.
+0755 for executable content, otherwise 0644 under the required umask 022.
+pnpm's bin linking can subsequently set an installed command to 0755, changing
+the same CAFS inode when the import uses hard links. The native `package-bins`
+reader derives those command targets from SRI-verified original manifests;
+directory declarations use a private filename-only original view. Only those
+targets with counted links into this build may have that exact transition.
+All original selected manifests are joined before shared CAFS inodes are checked.
+Unrelated executable files, foreign links, changed bytes and other modes still
+fail. Original archive modes and connected index maps remain byte-for-byte
+evidence. Reconstruction starts with normal native storage modes, before a
+future offline install performs its own linking.
 
 The explicit read-only `inspect --build /physical/owned/build` operation runs
 immediately after installation, before expensive generation. It checks the same
