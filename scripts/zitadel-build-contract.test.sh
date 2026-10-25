@@ -90,6 +90,14 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify sealed source snapshots and closed archive controls") < index("Build the complete native Linux service and embedded console")) and
     ([$job.steps[].name] | index("Unpack and verify the actual pre-install source archive") > index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Rebuild the native service from the retained prepared source" and
+      (.run | contains("bash scripts/build-zitadel-linux.sh --build --prepared-source \"$RUNNER_TEMP/zitadel-source-roundtrip\" --prepared-sha256 \"$manifest\" --output \"$RUNNER_TEMP/zitadel-prepared-build\"")) and
+      (.run | contains(".sourceInput.recipeSha256 == .recipeSha256")) and
+      (.run | contains(".sourceInput.manifestSha256 == $original[0].sourceSnapshot.manifestSha256")) and
+      (.run | contains(".sourceInput.nativeOfflineReplayProved == false")) and
+      (.run | contains("cp \"$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json\" \"$RUNNER_TEMP/zitadel-build/prepared-build-receipt.json\"")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Rebuild the native service from the retained prepared source") > index("Unpack and verify the actual pre-install source archive")) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -105,7 +113,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -114,6 +122,30 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+# Execute the native prepared-rebuild receipt predicate, rather than accepting
+# textual mentions of a joined seal or the deliberately false offline claim.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Rebuild the native service from the retained prepared source") | .run |
+  split("jq -e --slurpfile original")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/prepared.jq"
+jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)}}' >"$scratch/original-build.json"
+jq '.sourceInput = (.sourceSnapshot + {recipeSha256:.recipeSha256,nativeOfflineReplayProved:false}) | del(.sourceSnapshot) | .imageAdmission="unknown" | .licenseClosure="unknown"' "$scratch/original-build.json" >"$scratch/prepared-build.json"
+jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/prepared-build.json" >/dev/null
+for mutation in \
+  '.sourceInput.manifestSha256=("e"*64)' \
+  '.sourceInput.preparedProfileSha256=("e"*64)' \
+  '.sourceInput.recipeSha256=("e"*64)' \
+  '.recipeSha256=("e"*64) | .sourceInput.recipeSha256=.recipeSha256' \
+  '.tools.node="other"' \
+  '.upstreamCommit=("e"*40)' \
+  '.preparation.schemaVersion=2' \
+  '.sourceInput.nativeOfflineReplayProved=true' \
+  '.sourceSnapshot={}' \
+  '.imageAdmission="admitted"' \
+  '.licenseClosure="complete"'; do
+  jq "$mutation" "$scratch/prepared-build.json" >"$scratch/changed-prepared-build.json"
+  if jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/changed-prepared-build.json" >/dev/null; then
+    echo "CI accepted an inconsistent prepared-build receipt: $mutation" >&2; exit 1
+  fi
+done
 # Exercise the literal CI replay predicate, including a forged embedded claim.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify actual retained schema inputs and replay") | .run |
   split("jq -e --arg manifest")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/replay.jq"
@@ -126,6 +158,12 @@ if jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scrat
 fi
 controls=0
 for mutation in \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Rebuild the native service from the retained prepared source"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .run=(.run | sub("--prepared-source"; "--source")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .run=(.run | sub("sourceInput.recipeSha256 == .recipeSha256"; "sourceInput.recipeSha256 != .recipeSha256")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("prepared-build-receipt.json") | not)) | join("\n")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/cmd/zitadel-bsr-sources"; "missing/tool") else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected schema source retention"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected schema source retention" then .if="false" else . end)' \

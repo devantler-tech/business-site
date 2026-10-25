@@ -81,7 +81,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Its explicit `--restore-build` operation restores the sealed files and literal
   records into a new native layout. The Linux builder's mutually exclusive
   `--prepared-source`/`--prepared-sha256` mode reuses the existing frozen capture
-  admission before entering the unchanged build phases; source restoration is not
+  admission before entering the unchanged build phases and joins the final recipe
+  hash to that admitted input. CI rebuilds from the unpacked source and retains
+  its joined receipt; this connected rebuild is not
   complete dependency capture or native offline replay. Keep both modes' private
   Go/pnpm acquisition caches, public checksum verification and confined records.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using

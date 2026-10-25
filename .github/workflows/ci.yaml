@@ -397,6 +397,21 @@ jobs:
           archive="$(jq -er '.sourceSnapshot.archiveSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
           go run scripts/zitadel-source-bundle.go --unpack "$RUNNER_TEMP/zitadel-build/prepared-source.tar" "$archive" "$manifest" "$RUNNER_TEMP/zitadel-source-roundtrip" > "$RUNNER_TEMP/zitadel-build/source-roundtrip.json"
           cmp "$RUNNER_TEMP/zitadel-build/source-snapshot/source-manifest.json" "$RUNNER_TEMP/zitadel-source-roundtrip/source-manifest.json"
+      - name: Rebuild the native service from the retained prepared source
+        run: |
+          manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          bash scripts/build-zitadel-linux.sh --build --prepared-source "$RUNNER_TEMP/zitadel-source-roundtrip" --prepared-sha256 "$manifest" --output "$RUNNER_TEMP/zitadel-prepared-build"
+          jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            .sourceInput.manifestSha256 == $original[0].sourceSnapshot.manifestSha256 and
+            .sourceInput.preparedProfileSha256 == $original[0].sourceSnapshot.preparedProfileSha256 and
+            .sourceInput.recipeSha256 == .recipeSha256 and .recipeSha256 == $original[0].recipeSha256 and
+            .upstreamCommit == $original[0].upstreamCommit and .tools == $original[0].tools and
+            .platform == "linux/amd64" and .profile == "api-login-v1-console" and
+            .preparation == $original[0].preparation and
+            .sourceInput.nativeOfflineReplayProved == false and
+            (has("sourceSnapshot") | not) and .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json" >/dev/null
+          cp "$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json" "$RUNNER_TEMP/zitadel-build/prepared-build-receipt.json"
       - name: Copy and verify the actual retained Go module inputs
         run: |
           manifest="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -442,6 +457,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/*.sha256
             ${{ runner.temp }}/zitadel-build/source-snapshot/source-manifest.json
             ${{ runner.temp }}/zitadel-build/source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/prepared-build-receipt.json
             ${{ runner.temp }}/zitadel-build/selected-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json

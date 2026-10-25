@@ -472,6 +472,11 @@ transformation and current-recipe seal to match. It then enters the same native
 install, generation, console, compilation and notice path. Its `sourceInput`
 receipt explicitly keeps `nativeOfflineReplayProved:false`: restoring source
 alone supplies neither dependency inputs nor network-denied compilation.
+The final recipe hash must still equal the admitted source input, including when
+an installation changes the recipe before notice capture. CI rebuilds from the
+actual unpacked archive with fresh acquisition caches and retains the resulting
+receipt beside the original. It checks the source, recipe, toolchain and preparation
+joins without claiming equal binary bytes or complete offline replay.
 
 Both source modes use a fresh private Go module cache, compiler cache and GOPATH,
 including the checksum database's state, plus a build-owned pnpm store and npm

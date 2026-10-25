@@ -287,6 +287,9 @@ shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zita
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
+if [[ -n "$prepared_source" ]]; then
+  jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' <<<"$prepared_input_json" >/dev/null || fail 'prepared source recipe changed during build'
+fi
 if [[ "$capture_source" -eq 1 ]]; then
   # Retain only the complete service-selected graph, after compilation and the
   # final module verification. The command's checksum-bound dependency is

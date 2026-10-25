@@ -72,6 +72,9 @@ if [[ "$1" = install ]]; then
   mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
   cp "$TEST_BUF_STUB" node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin/buf
   if [[ "${TEST_LOCK:-}" = changed ]]; then echo changed >>pnpm-lock.yaml; fi
+  if [[ "${TEST_FAIL:-}" = prepared-recipe ]]; then
+    printf '\n# changed after prepared admission\n' >>"$TEST_RECIPE"
+  fi
 elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
   jq -e '.targets["generate-install"].options.parallel == false' apps/api/project.json >/dev/null
   if [[ "${TEST_FAIL:-}" = generate ]]; then echo 'Successfully ran target generate'; exit 42; fi
@@ -400,6 +403,16 @@ fi
 cmp "$scratch/complete/api-project.original.json" "$scratch/prepared-replay/api-project.original.json"
 cmp "$scratch/complete/api-project.serial.json" "$scratch/prepared-replay/api-project.serial.json"
 jq -e --arg seal "$prepared_sha" '.sourceInput.manifestSha256 == $seal and .sourceInput.nativeOfflineReplayProved == false and (has("sourceSnapshot")|not)' "$scratch/prepared-replay/build-receipt.json" >/dev/null
+: >"$TEST_CALLS"
+# Mutation occurs after prepared-source admission but before the notice snapshot.
+# A final receipt must not join the old admitted recipe with the changed builder.
+if env TEST_FAIL=prepared-recipe TEST_RECIPE="$build" bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-recipe-change" >"$scratch/prepared-recipe-change.log" 2>&1; then
+  echo 'changed admitted prepared recipe produced a success receipt' >&2
+  exit 1
+fi
+test ! -e "$scratch/prepared-recipe-change/build-receipt.json"
+grep -q 'prepared source recipe changed during build' "$scratch/prepared-recipe-change.log"
+cp "$root/scripts/build-zitadel-linux.sh" "$build"
 for fault in unsealed-source both-source-modes capture-with-prepared substituted-prepared-profile; do
   : >"$TEST_CALLS"
   args=(--build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/$fault")
