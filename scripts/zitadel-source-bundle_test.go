@@ -17,6 +17,151 @@ import (
 	"time"
 )
 
+// TestSourceRestoreBuildKeepsLiteralInputs proves the replay seam restores a
+// verified closed snapshot without re-preparing it or replacing its original API
+// record with the serialized source configuration. Frozen-profile admission is
+// separately owned by the native builder, as for the existing unpack operation.
+func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
+	for _, kind := range []string{"valid", "missing-record", "extra-record", "changed-member", "wrong-seal", "existing-output", "output-inside-snapshot", "output-alias-inside-snapshot"} {
+		t.Run(kind, func(t *testing.T) {
+			input := t.TempDir()
+			files := map[string]string{
+				"apps/api/project.json": "serialized API\n",
+				"empty.go":              "",
+				"scripts/generate.sh":   "#!/bin/sh\nexit 0\n",
+			}
+			for name, body := range files {
+				file := filepath.Join(input, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+					t.Fatal(err)
+				}
+				mode := os.FileMode(0644)
+				if strings.HasSuffix(name, ".sh") {
+					mode = 0755
+				}
+				if err := os.WriteFile(file, []byte(body), mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+			snapshot := filepath.Join(t.TempDir(), "snapshot")
+			profile, err := sourceSealTree(input, snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			records := map[string][]byte{
+				"source-preparation.json":              []byte("literal preparation\n"),
+				"api-project.original.json":            []byte("original API\n"),
+				"api-project.serial.json":              []byte("serialized API\n"),
+				"inputs.sha256":                        []byte("literal input hashes\n"),
+				"recipes/prepare-zitadel-source.sh":    []byte("original preparer\n"),
+				"recipes/zitadel-source-inputs.sha256": []byte("original locks\n"),
+				"recipes/build-zitadel-linux.sh":       []byte("native builder\n"),
+				"recipes/zitadel-source-bundle.go":     []byte("source helper\n"),
+				"ZITADEL-SOURCE.md":                    []byte("source description\n"),
+				"modifications.json":                   []byte("dated modification record\n"),
+			}
+			if kind == "missing-record" {
+				delete(records, "api-project.original.json")
+			}
+			if kind == "extra-record" {
+				records["unselected.json"] = []byte("extra")
+			}
+			seal, err := sourceAddRecords(snapshot, profile, records)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(filepath.Join(snapshot, "source-manifest.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "changed-member" {
+				if err := os.WriteFile(filepath.Join(snapshot, "source/empty.go"), []byte("changed"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind == "wrong-seal" {
+				seal = strings.Repeat("0", 64)
+			}
+			output := filepath.Join(t.TempDir(), "build")
+			if kind == "output-inside-snapshot" {
+				output = filepath.Join(snapshot, "build")
+			}
+			if kind == "output-alias-inside-snapshot" {
+				alias := filepath.Join(t.TempDir(), "snapshot-alias")
+				if err := os.Symlink(snapshot, alias); err != nil {
+					t.Fatal(err)
+				}
+				output = filepath.Join(alias, "build")
+			}
+			if kind == "existing-output" {
+				if err := os.Mkdir(output, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(output, "keep"), []byte("keep"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var out, diagnostic bytes.Buffer
+			status := sourceBundleRun([]string{"--restore-build", snapshot, seal, output}, &out, &diagnostic)
+			if kind == "valid" {
+				if status != 0 {
+					t.Fatalf("verified prepared source cannot enter the existing build: %s", diagnostic.String())
+				}
+				var receipt struct {
+					ManifestSHA256, PreparedProfileSHA256 string
+					Files, Records                        int
+				}
+				if json.Unmarshal(out.Bytes(), &receipt) != nil || receipt.ManifestSHA256 != seal || receipt.PreparedProfileSHA256 != profile || receipt.Files != len(files) || receipt.Records != len(records) {
+					t.Fatalf("unbound restoration receipt: %s", out.String())
+				}
+				for name, body := range files {
+					file := filepath.Join(output, "prepared/source", filepath.FromSlash(name))
+					got, err := os.ReadFile(file)
+					if err != nil || string(got) != body {
+						t.Fatalf("restored source differs: %s: %v", name, err)
+					}
+					info, err := os.Stat(file)
+					wantMode := os.FileMode(0644)
+					if strings.HasSuffix(name, ".sh") {
+						wantMode = 0755
+					}
+					if err != nil || info.Mode() != wantMode {
+						t.Fatalf("restored mode differs: %s: %v", name, err)
+					}
+				}
+				for name, want := range records {
+					if name != "inputs.sha256" && name != "source-preparation.json" && !strings.HasPrefix(name, "api-project.") {
+						continue
+					}
+					relative := name
+					if name == "source-preparation.json" {
+						relative = "prepared/" + name
+					}
+					got, err := os.ReadFile(filepath.Join(output, filepath.FromSlash(relative)))
+					if err != nil || !bytes.Equal(got, want) {
+						t.Fatalf("literal build record replaced: %s: %v", name, err)
+					}
+				}
+				after, err := os.ReadFile(filepath.Join(snapshot, "source-manifest.json"))
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatal("restoration modified sealed source")
+				}
+			} else {
+				if status == 0 || out.Len() != 0 {
+					t.Fatal("unsafe replay input emitted a success receipt")
+				}
+				if kind == "existing-output" {
+					if body, err := os.ReadFile(filepath.Join(output, "keep")); err != nil || string(body) != "keep" {
+						t.Fatal("existing output changed")
+					}
+				} else if _, err := os.Lstat(output); !os.IsNotExist(err) {
+					t.Fatal("failed restoration retained a success-shaped output")
+				}
+			}
+		})
+	}
+}
+
 // TestSourceArchiveReplaysOnlyItsCompleteClosedTree rejects altered archive bytes,
 // hidden padding, unsafe metadata and incomplete or additional tree members.
 func TestSourceArchiveReplaysOnlyItsCompleteClosedTree(t *testing.T) {

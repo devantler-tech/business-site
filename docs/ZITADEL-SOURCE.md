@@ -453,6 +453,35 @@ CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
 diagnostics; the source archive, recipe bodies and executable remain excluded.
 
+`--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
+checked source files and their executable modes into the original native layout.
+It retains all ten literal records and places only the four fixed build inputs at
+their original locations. It does not execute retained recipes or record-supplied
+paths. Existing output, an output inside the snapshot, incomplete records and
+changed, missing or extra bytes fail. The snapshot is rechecked after copying.
+This operation authenticates the externally sealed file set, not an arbitrary
+snapshot's suitability for the frozen build; empty directories are not source
+members, while valid empty files remain preserved.
+
+The Linux entrypoint also accepts the mutually exclusive
+`--build --prepared-source <snapshot> --prepared-sha256 <manifest-sha256>
+--output <new-build-root>` mode. It restores those records without rerunning
+preparation or replacing the original API configuration. Before installation it
+uses the existing frozen capture admission and requires the complete source,
+transformation and current-recipe seal to match. It then enters the same native
+install, generation, console, compilation and notice path. Its `sourceInput`
+receipt explicitly keeps `nativeOfflineReplayProved:false`: restoring source
+alone supplies neither dependency inputs nor network-denied compilation.
+
+Both source modes use a fresh private Go module cache, compiler cache and GOPATH,
+including the checksum database's state, plus a build-owned pnpm store and npm
+cache. Inherited npm configuration is discarded; empty user/global configuration,
+the public npm registry and the frozen project's existing configuration apply.
+The build selects the public Go proxy and checksum database explicitly, retaining
+checksum verification and no private/insecure bypass patterns. These boundaries
+prevent an existing host cache or disabled verification setting from silently
+supplying acquisition inputs. They are not captured-dependency or offline proof.
+
 The same explicit flag also retains the selected service's complete Go ZIP and
 go.mod inputs after compilation and final module verification. The otherwise
 inert command in `server/cmd/zitadel-module-sources/` checks the frozen catalogue and locks,

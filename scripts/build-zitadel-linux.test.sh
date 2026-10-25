@@ -57,6 +57,17 @@ printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$NX_NO_CLOUD" = true && "$NX_SKIP_NX_CACHE" = true && "$NX_DAEMON" = false ]]
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
 if [[ "$1" = install ]]; then
+  build_root="${GOCACHE%/go-cache}"
+  [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" ]]
+  [[ "$npm_config_userconfig" = "$build_root/npmrc" && -f "$npm_config_userconfig" && ! -s "$npm_config_userconfig" ]]
+  [[ "$npm_config_cache" = "$build_root/npm-cache" && -d "$npm_config_cache" ]]
+  [[ "$npm_config_store_dir" = "$build_root/pnpm-store" && -d "$npm_config_store_dir" ]]
+  [[ "$npm_config_globalconfig" = "$build_root/npm-globalrc" && -f "$npm_config_globalconfig" && ! -s "$npm_config_globalconfig" ]]
+  [[ "$npm_config_engine_strict" = false && "$npm_config_registry" = https://registry.npmjs.org/ ]]
+  [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
+  [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
+  [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
+  [[ "$2" = --store-dir && "$3" = "$npm_config_store_dir" ]]
   mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
   cp "$TEST_BUF_STUB" node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin/buf
   if [[ "${TEST_LOCK:-}" = changed ]]; then echo changed >>pnpm-lock.yaml; fi
@@ -117,6 +128,14 @@ case "$1 $2" in
     if [[ "$2" == */zitadel-source-bundle.go ]]; then
       if [[ "${TEST_FAIL:-}" = source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
       case "$3" in
+        --restore-build)
+          [[ "$#" -eq 6 && "$4" = "$TEST_PREPARED_BUILD" && "$5" = "$(printf '%064d' 0 | tr 0 a)" && ! -e "$6" ]]
+          mkdir -p "$6/prepared"
+          cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
+          cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
+          for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:10,bytes:261683913,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
           mkdir "$6"
@@ -202,6 +221,10 @@ STUB
 chmod 755 "$scratch/bin/"*
 export PATH="$scratch/bin:$PATH" TEST_CALLS="$scratch/calls"
 export TEST_GOROOT="$scratch/go-distribution"
+# Host acquisition settings are deliberately hostile. The native build must
+# select its declared public sources and retain checksum verification instead.
+export GOSUMDB=off GOPROXY=https://unrelated.invalid GONOSUMDB='*' GONOPROXY='*' GOPRIVATE='*' GOINSECURE='*'
+export NPM_CONFIG_REGISTRY=https://unrelated.invalid NPM_CONFIG_PROXY=https://unrelated.invalid
 export TEST_MODULE_VERIFIER="$scratch/module-source-verifier"
 export TEST_BSR_VERIFIER="$scratch/bsr-source-verifier" TEST_BUF_STUB="$scratch/native-buf"
 cat >"$TEST_BUF_STUB" <<'STUB'
@@ -361,6 +384,36 @@ test -s "$scratch/complete/zitadel-root-license.txt"
 test -s "$scratch/complete/go-module-notices.txt"
 test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
 test ! -e "$scratch/complete/selected-go-sources"
+: >"$TEST_CALLS"
+# A prepared replay enters the same install/generate/compile path with literal
+# original records. This mock is orchestration proof only; the Go suite verifies
+# the actual closed source and the hosted job exercises the native frozen tree.
+TEST_PREPARED_BUILD="$(cd "$scratch/complete" && pwd -P)"
+export TEST_PREPARED_BUILD
+prepared_sha="$(printf '%064d' 0 | tr 0 a)"
+if ! bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-replay" >"$scratch/prepared-replay.log" 2>&1; then
+  cat "$scratch/prepared-replay.log" >&2
+  echo 'verified prepared source could not enter the existing native pipeline' >&2
+  exit 1
+fi
+cmp "$scratch/complete/api-project.original.json" "$scratch/prepared-replay/api-project.original.json"
+cmp "$scratch/complete/api-project.serial.json" "$scratch/prepared-replay/api-project.serial.json"
+jq -e --arg seal "$prepared_sha" '.sourceInput.manifestSha256 == $seal and .sourceInput.nativeOfflineReplayProved == false and (has("sourceSnapshot")|not)' "$scratch/prepared-replay/build-receipt.json" >/dev/null
+for fault in unsealed-source both-source-modes capture-with-prepared substituted-prepared-profile; do
+  : >"$TEST_CALLS"
+  args=(--build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/$fault")
+  case "$fault" in
+    unsealed-source) args=(--build --prepared-source "$TEST_PREPARED_BUILD" --output "$scratch/$fault");;
+    both-source-modes) args+=(--source "$scratch/upstream");;
+    capture-with-prepared) args+=(--capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER");;
+  esac
+  profile=0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d
+  [[ "$fault" != substituted-prepared-profile ]] || profile=wrong
+  if env TEST_REPLAY_PROFILE="$profile" bash "$build" "${args[@]}" >"$scratch/$fault.log" 2>&1; then
+    echo "unsafe prepared source admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
 : >"$TEST_CALLS"
 # Explicit build-tool admission has independent refusals; none may rely on a
 # missing capture opt-in or bypass an older capture/readback failure control.

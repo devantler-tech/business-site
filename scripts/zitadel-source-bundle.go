@@ -45,6 +45,110 @@ type sourceCaptureSummary struct {
 	RecipeSHA256          string `json:"recipeSha256"`
 }
 
+// sourceRestoreBuild restores declared bytes only. Like unpack, it authenticates
+// a closed snapshot against the caller's external seal; the native builder still
+// has to admit its frozen profile and literal recipe/transformation identities.
+// No command or destination supplied by a source record is executed.
+func sourceRestoreBuild(snapshot, seal, output string) (summary sourceCaptureSummary, result error) {
+	manifest, err := sourceVerifyTree(snapshot, seal)
+	if err != nil || manifest.PreparedProfile == "" {
+		return summary, fmt.Errorf("verified prepared build snapshot required")
+	}
+	recordNames := map[string]bool{
+		"source-preparation.json":              true,
+		"api-project.original.json":            true,
+		"api-project.serial.json":              true,
+		"inputs.sha256":                        true,
+		"recipes/prepare-zitadel-source.sh":    true,
+		"recipes/zitadel-source-inputs.sha256": true,
+		"recipes/build-zitadel-linux.sh":       true,
+		"recipes/zitadel-source-bundle.go":     true,
+		"ZITADEL-SOURCE.md":                    true,
+		"modifications.json":                   true,
+	}
+	if len(manifest.Records) != len(recordNames) {
+		return summary, fmt.Errorf("prepared build records are incomplete or unexpected")
+	}
+	for _, member := range manifest.Records {
+		if !recordNames[member.Path] {
+			return summary, fmt.Errorf("unexpected prepared build record")
+		}
+	}
+	physicalInput, err := filepath.EvalSymlinks(snapshot)
+	if err != nil {
+		return summary, err
+	}
+	physicalInput, err = filepath.Abs(physicalInput)
+	if err != nil {
+		return summary, err
+	}
+	output, err = filepath.Abs(output)
+	if err != nil {
+		return summary, err
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(output))
+	if err != nil {
+		return summary, err
+	}
+	output = filepath.Join(parent, filepath.Base(output))
+	if output == physicalInput || strings.HasPrefix(output, physicalInput+string(filepath.Separator)) {
+		return summary, fmt.Errorf("build reservation must be outside the sealed snapshot")
+	}
+	if err := os.Mkdir(output, 0700); err != nil {
+		return summary, err
+	}
+	defer func() {
+		if result != nil {
+			summary = sourceCaptureSummary{}
+			result = errors.Join(result, os.RemoveAll(output))
+		}
+	}()
+	copyMember := func(member sourceMember, inputName, outputName string) error {
+		body, err := sourceReadAt(snapshot, inputName)
+		if err != nil || int64(len(body)) != member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
+			return fmt.Errorf("prepared member changed during restoration: %s", inputName)
+		}
+		name := filepath.Join(output, filepath.FromSlash(outputName))
+		if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+			return err
+		}
+		return sourceWrite(name, body, os.FileMode(member.Mode))
+	}
+	for _, member := range manifest.Files {
+		if err := copyMember(member, "source/"+member.Path, "prepared/source/"+member.Path); err != nil {
+			return summary, err
+		}
+		summary.Bytes += member.Bytes
+	}
+	for _, member := range manifest.Records {
+		// Retain all literal records as audit inputs. Only the four fixed native
+		// build records additionally enter the locations the original path uses.
+		if err := copyMember(member, "records/"+member.Path, "prepared/records/"+member.Path); err != nil {
+			return summary, err
+		}
+		target := ""
+		switch member.Path {
+		case "source-preparation.json":
+			target = "prepared/source-preparation.json"
+		case "api-project.original.json", "api-project.serial.json", "inputs.sha256":
+			target = member.Path
+		case "recipes/build-zitadel-linux.sh":
+			summary.RecipeSHA256 = member.SHA256
+		}
+		if target != "" {
+			if err := copyMember(member, "records/"+member.Path, target); err != nil {
+				return summary, err
+			}
+		}
+	}
+	if _, err := sourceVerifyTree(snapshot, seal); err != nil {
+		return summary, err
+	}
+	summary.ManifestSHA256, summary.PreparedProfileSHA256 = seal, manifest.PreparedProfile
+	summary.Files, summary.Records = len(manifest.Files), len(manifest.Records)
+	return summary, nil
+}
+
 // sourceCaptureBuild seals the pre-install source and its complete literal
 // preparation/build records. Only its caller's fresh reservation is removed.
 func sourceCaptureBuild(build, repository, output string, policy sourceCapturePolicy) (summary sourceCaptureSummary, result error) {
@@ -259,6 +363,8 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 	var value any
 	var err error
 	switch {
+	case len(args) == 4 && args[0] == "--restore-build":
+		value, err = sourceRestoreBuild(args[1], args[2], args[3])
 	case len(args) == 4 && args[0] == "--capture-build":
 		value, err = sourceCaptureBuild(args[1], args[2], args[3], sourceCapturePolicy{
 			sourcePreparedProfile,

@@ -78,6 +78,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   retains ten literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
+  Its explicit `--restore-build` operation restores the sealed files and literal
+  records into a new native layout. The Linux builder's mutually exclusive
+  `--prepared-source`/`--prepared-sha256` mode reuses the existing frozen capture
+  admission before entering the unchanged build phases; source restoration is not
+  complete dependency capture or native offline replay. Keep both modes' private
+  Go/pnpm acquisition caches, public checksum verification and confined records.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI
