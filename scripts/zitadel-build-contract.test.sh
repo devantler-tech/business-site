@@ -18,6 +18,7 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-module-sources/**")) and (.with.filters | contains("server/go.mod")) and (.with.filters | contains("server/go.sum"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-bsr-sources/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
@@ -29,7 +30,7 @@ check() {
     $job.needs == "changes" and
     $job.if == "needs.changes.outputs.zitadel-build == '\''true'\''" and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
-      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
+      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
@@ -52,12 +53,27 @@ check() {
       .["working-directory"] == "server" and
       .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify selected schema source retention" and
+      .["working-directory"] == "server" and
+      .run == "go test -race ./cmd/zitadel-bsr-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-bsr-sources\" ./cmd/zitadel-bsr-sources\n" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Setup the source verifier compiler" and
       (.uses // "" | startswith("actions/setup-go@")) and
       .with["go-version-file"] == "server/go.mod" and .with.cache == false and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Setup the source verifier compiler") < index("Verify selected Go source retention") and
-      index("Verify selected Go source retention") < index("Setup the frozen identity Go compiler")) and
+      index("Verify selected Go source retention") < index("Verify selected schema source retention") and
+      index("Verify selected schema source retention") < index("Setup the frozen identity Go compiler")) and
+    any($job.steps[]; .name == "Verify actual retained schema inputs and replay" and
+      (.run | contains(".sourceSnapshot.bsrSources.manifestSha256")) and
+      (.run | contains("cp -R")) and
+      (.run | contains("\"$RUNNER_TEMP/zitadel-bsr-sources\" verify --package")) and
+      (.run | contains(".schemaOfflineReplayProved == true")) and
+      (.run | contains(". == $build[0].sourceSnapshot.bsrSchemaReplay")) and
+      (.run | contains(".noNewPrivilegesReplay == true")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify actual retained schema inputs and replay") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Copy and verify the actual retained Go module inputs" and
       (.run | contains(".sourceSnapshot.goModules.manifestSha256")) and
       (.run | contains("cp -R")) and
@@ -89,7 +105,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -98,8 +114,28 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+# Exercise the literal CI replay predicate, including a forged embedded claim.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify actual retained schema inputs and replay") | .run |
+  split("jq -e --arg manifest")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/replay.jq"
+jq -n '{schemaVersion:1,platform:"linux/amd64",sourceManifestSha256:("a"*64),bsrManifestSha256:("b"*64),recipeSha256:("c"*64),schemaOfflineReplayProved:true,networkDenialProved:true,nonRootReplay:true,noNewPrivilegesReplay:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false,compilers:(["api","console"]|map({phase:.,version:(if .=="api" then "1.67.0" else "1.72.0" end),descriptorSha256:("d"*64),connectedMatchesOffline:true,emptyCacheRefused:true,missingMemberRefused:true,changedMemberRefused:true}))}' >"$scratch/replay.json"
+jq -n --slurpfile replay "$scratch/replay.json" '{recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),bsrSchemaReplay:$replay[0]}}' >"$scratch/replay-build.json"
+jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scratch/replay-build.json" -f "$scratch/replay.jq" "$scratch/replay.json" >/dev/null
+jq '.sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved=false' "$scratch/replay-build.json" >"$scratch/forged-replay-build.json"
+if jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scratch/forged-replay-build.json" -f "$scratch/replay.jq" "$scratch/replay.json" >/dev/null; then
+  echo 'CI accepted a replay record different from the embedded build receipt' >&2; exit 1
+fi
 controls=0
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/cmd/zitadel-bsr-sources"; "missing/tool") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected schema source retention"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected schema source retention" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected schema source retention" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .run=(.run | sub("--bsr-source-verifier"; "--missing-verifier")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify actual retained schema inputs and replay"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual retained schema inputs and replay" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual retained schema inputs and replay" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("selected-bsr-sources/manifest.json"; "selected-bsr-sources/**")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("bsr-schema-replay.json"; "bsr-tools/**")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/cmd/zitadel-module-sources"; "missing/tool") else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.mod"; "missing/mod") else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.sum"; "missing/sum") else . end)' \

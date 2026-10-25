@@ -3,7 +3,9 @@
 This explicit Go 1.27.3 build tool retains and checks the frozen identity
 profile's three BSR modules. No arguments perform no work. It never acquires
 dependencies, executes retained content, starts identity services or activates
-the portal. Same-build Linux acquisition and native replay remain [#351](https://github.com/devantler-tech/business-site/issues/351).
+the portal. The explicit Linux builder supplies same-build observations and runs
+the separate schema-only replay; this command only verifies and restores bytes.
+Complete dependency/native service replay remains [#343](https://github.com/devantler-tech/business-site/issues/343).
 
 The collector checks all 49 independently exported source/documentation files
 against both native cache representations. It independently recomputes each

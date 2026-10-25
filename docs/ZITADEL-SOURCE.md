@@ -476,10 +476,30 @@ identity/compiler and records its unchanged executable digest in
 `sourceSnapshot.goModuleVerifier`. The native build never downloads or switches
 toolchains to run this verifier.
 
-This is selected service-Go retention, not generator-tool, pnpm/workspace or BSR
+This package is selected service-Go retention, not generator-tool or pnpm/workspace
 source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
 remain false. No ordinary build, publisher, deployed login or customer access is
 enabled by this capture.
+
+The same explicit capture also requires
+`--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
+Before native API generation, the builder creates a private Buf cache. It retains
+the actual API 1.67.0 and console 1.72.0 native commands, checks their original and
+copied byte hashes throughout, and binds those identities to the sealed schema
+package. Literal registry metadata and separate complete exports cover only the
+three immutable references in the frozen v1 lock. Native cache content, exports
+and the prepared-source/recipe identities must pass the schema verifier.
+
+Each compiler then compiles the local proto workspace from the restored sealed
+source archive, with separate connected and network-denied caches. Linux network
+namespaces run as the original non-root UID/GID, with privilege recovery disabled
+and the kernel barrier checked before every invocation. An independent reachable
+control, failed empty-cache compilation and refused missing/changed cache members
+must all pass. Connected and offline descriptor bytes must match. The completed
+receipt embeds `sourceSnapshot.bsrSources`, `bsrVerifier` and `bsrSchemaReplay`;
+CI verifies an actual copied package and equality with the separate replay record.
+Diagnostics retain compact manifests, hashes and results, excluding source payloads
+and native executables. This is schema-only replay, not offline service compilation.
 
 Issue #343 also requires actual selected dependency capture and a clean,
 network-denied native replay before its full acceptance criteria are complete.
