@@ -1,3 +1,5 @@
+// Command zitadel-bsr-sources retains and checks selected schema source packages.
+// It does not acquire dependencies, execute retained inputs or activate services.
 package main
 
 import (

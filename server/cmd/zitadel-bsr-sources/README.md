@@ -51,7 +51,7 @@ zitadel-bsr-sources check-cache --package /absolute/package --sha256 EXTERNAL_PA
 
 The sealed package contains 113 native cache files, 49 exported files, three
 acquisition responses and five build/tool records (170 members plus its manifest).
-Every retained file is private and nonexecuting; directories are private.
+Every retained file is private with no execute permissions; directories are private.
 Membership, complete bytes, metadata and full modes are checked. Linked parents,
 linked/special/multiply linked files, ambiguous JSON, unsafe names, partial I/O
 and oversized inputs fail. Payload reads are bounded to 8 MiB per file and 64 MiB

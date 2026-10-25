@@ -213,7 +213,7 @@ func TestPackageRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 		},
-		"hardlinked file": func(t *testing.T, dir string) {
+		"file with multiple hard links": func(t *testing.T, dir string) {
 			t.Helper()
 			if err := os.Link(filepath.Join(dir, "records/buf.lock"), filepath.Join(t.TempDir(), "alias")); err != nil {
 				t.Fatal(err)
@@ -359,7 +359,7 @@ func TestSharedReadBudget(t *testing.T) {
 
 // TestToolInputRefusals rejects missing executable identity before retaining tool observations.
 func TestToolInputRefusals(t *testing.T) {
-	for _, kind := range []string{"empty", "nonexecutable"} {
+	for _, kind := range []string{"empty", "missing execute permission"} {
 		t.Run(kind, func(t *testing.T) {
 			build, _, p, lock, _ := fixturePackage(t)
 			tool := filepath.Join(build, "bsr-tools/api")

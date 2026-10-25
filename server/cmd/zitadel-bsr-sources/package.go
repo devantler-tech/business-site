@@ -149,7 +149,7 @@ func capture(build, recipe, sourceSeal, output string, profiles []moduleProfile,
 			return result, err
 		}
 		if info.Size() == 0 || info.Mode()&0o111 == 0 {
-			return result, fmt.Errorf("supplied native tool is empty or nonexecutable")
+			return result, fmt.Errorf("supplied native tool is empty or lacks execute permission")
 		}
 		binary, err := readInput(root, "bsr-tools/"+phase, true, 128<<20)
 		if err != nil {
@@ -289,7 +289,7 @@ func inspectPackage(directory, seal string, profiles []moduleProfile, lockHash s
 	}
 	canonicalRaw, err := canonical(m)
 	if err != nil || !bytes.Equal(raw, canonicalRaw) {
-		return result, errors.Join(fmt.Errorf("noncanonical or ambiguous manifest"), err)
+		return result, errors.Join(fmt.Errorf("manifest encoding is ambiguous or not canonical"), err)
 	}
 	files := map[string][]byte{}
 	var total int64

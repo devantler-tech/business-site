@@ -148,7 +148,7 @@ func readTree(root *os.Root, prefix string, remaining *int64) (map[string][]byte
 	return result, err
 }
 
-// writePayload creates private nonexecuting files exclusively inside a new owned root.
+// writePayload creates private files without execute permissions in a new owned root.
 func writePayload(root *os.Root, name string, body []byte) (resultErr error) {
 	if !inputName(name) {
 		return fmt.Errorf("invalid output path")
