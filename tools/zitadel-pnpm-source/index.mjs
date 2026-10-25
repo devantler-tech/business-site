@@ -536,11 +536,15 @@ function closedMembers(root, expected, privateModes = true) {
   const wanted = new Set(expected);
   const directories = new Set(["."]);
   // pnpm's native initStore creates all buckets up front, including empty ones.
-  if (!privateModes)
+  if (!privateModes) {
+    // create-cafs-store uses this exact temporary parent. It contributes no
+    // source inputs: every descendant still fails the closed member check.
+    directories.add("tmp");
     for (const type of ["files", "index"]) {
       directories.add(type);
       for (let i = 0; i < 256; i++) directories.add(`${type}/${i.toString(16).padStart(2, "0")}`);
     }
+  }
   for (const name of wanted)
     for (let p = path.posix.dirname(name); p !== "."; p = path.posix.dirname(p)) directories.add(p);
   function visit(relative) {
@@ -688,6 +692,7 @@ export async function captureBuild({
   // A deduplicated CAFS payload can also appear in another selected package's
   // file map. Finish all original manifest joins before checking shared inodes.
   for (const files of connectedPackages) verifyConnectedPackage(files, modules.storeDir, ownedLinks, binaryFiles);
+  phase = "closed-native-store";
   closedMembers(modules.storeDir, storeMembers, false);
   const finalLinks = installedLinks(sourceRoot);
   for (const [filename, f] of payloads) {

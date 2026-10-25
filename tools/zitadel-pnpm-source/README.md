@@ -37,7 +37,8 @@ entries are rejected.
 Native hard links into this build's own installation are counted explicitly.
 Foreign links, symbolic/special files, nonempty side-effects caches, unselected
 indexes/payloads and unexpected directories are rejected. Only pnpm's exact
-precreated hexadecimal empty buckets are admitted. Capture finishes with complete
+precreated hexadecimal empty buckets and its empty `tmp` parent are admitted;
+every temporary descendant is refused. Capture finishes with complete
 connected and retained readback. A failed operation retains bounded private,
 unsealed diagnosis and emits no success receipt; it never recursively deletes a
 pathname that might have been replaced.

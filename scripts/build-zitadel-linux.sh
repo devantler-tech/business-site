@@ -364,6 +364,13 @@ fi
 if [[ "$capture_source" -eq 1 ]]; then
   "$module_verifier" verify-generator-checkpoint --checkpoint "$output/generator-checkpoint.json" --sha256 "$generator_checkpoint" --source-sha256 "$source_manifest" >"$output/generator-checkpoint-final.json"
   cmp "$output/generator-checkpoint-receipt.json" "$output/generator-checkpoint-final.json" || fail 'native generator checkpoint changed during build'
+  # Authenticate selected generator inputs using only this build's signed
+  # checksum lookup/tile cache. The verifier has no network fallback or key flag.
+  "$module_verifier" capture-generator-sources --build "$output" --checkpoint-sha256 "$generator_checkpoint" --source-sha256 "$source_manifest" --output "$output/selected-generator-go-sources" >"$output/generator-source-capture.pending"
+  jq -e --arg source "$source_manifest" --arg checkpoint "$generator_checkpoint" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .checkpointSha256 == $checkpoint and .modules > 0 and .proofFiles > 0 and .files > 0 and .selectedGeneratorGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/generator-source-capture.pending" >/dev/null || fail 'incomplete selected generator source capture'
+  generator_sources="$(jq -er .manifestSha256 "$output/generator-source-capture.pending")"
+  "$module_verifier" verify-generator-sources --package "$output/selected-generator-go-sources" --sha256 "$generator_sources" --source-sha256 "$source_manifest" >"$output/generator-source-readback.json"
+  cmp "$output/generator-source-capture.pending" "$output/generator-source-readback.json" || fail 'selected generator source readback differs'
   # The source capsule retains original registry archives, not generated install
   # outputs or a global cache. Its native SDK is acquired separately by CI.
   pnpm_tool="$root/tools/zitadel-pnpm-source/index.mjs"
@@ -455,7 +462,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
-  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \

@@ -458,6 +458,20 @@ jobs:
           cp -R "$RUNNER_TEMP/zitadel-build/selected-go-sources" "$RUNNER_TEMP/zitadel-go-sources-roundtrip"
           "$RUNNER_TEMP/zitadel-module-sources" --verify "$RUNNER_TEMP/zitadel-go-sources-roundtrip" --sha256 "$manifest" > "$RUNNER_TEMP/zitadel-build/go-module-source-roundtrip.json"
           cmp "$RUNNER_TEMP/zitadel-build/selected-go-sources/manifest.json" "$RUNNER_TEMP/zitadel-go-sources-roundtrip/manifest.json"
+      - name: Copy and authenticate the actual generator Go source inputs
+        run: |
+          source="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          seal="$(jq -er '.sourceSnapshot.generatorGoSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          cp -R "$RUNNER_TEMP/zitadel-build/selected-generator-go-sources" "$RUNNER_TEMP/zitadel-generator-sources-roundtrip"
+          "$RUNNER_TEMP/zitadel-module-sources" verify-generator-sources --package "$RUNNER_TEMP/zitadel-generator-sources-roundtrip" --sha256 "$seal" --source-sha256 "$source" > "$RUNNER_TEMP/zitadel-build/generator-source-roundtrip.json"
+          jq -e --slurpfile build "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            . == $build[0].sourceSnapshot.generatorGoSources and
+            .schemaVersion == 1 and .sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256 and
+            .checkpointSha256 == $build[0].sourceSnapshot.generatorBuildMetadata.checkpointSha256 and
+            .modules == $build[0].sourceSnapshot.generatorBuildMetadata.modules and
+            .proofFiles > 0 and .files > 0 and .selectedGeneratorGoSourcesCaptured == true and
+            .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
+          ' "$RUNNER_TEMP/zitadel-build/generator-source-roundtrip.json" >/dev/null
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -514,6 +528,9 @@ jobs:
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/generator-checkpoint.json
             ${{ runner.temp }}/zitadel-build/generator-checkpoint-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/selected-generator-go-sources/manifest.json
+            ${{ runner.temp }}/zitadel-build/generator-source-readback.json
+            ${{ runner.temp }}/zitadel-build/generator-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json

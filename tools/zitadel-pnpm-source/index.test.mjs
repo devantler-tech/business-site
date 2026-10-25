@@ -742,6 +742,25 @@ test("the exact native empty CAFS buckets do not count as unrelated inputs", asy
   assert.equal(result.selectedPNPMSourcesCaptured, true);
 });
 
+test("the native empty store temporary root carries no source inputs", async (t) => {
+  const f = await buildFixture(t);
+  fs.mkdirSync(path.join(f.store, "tmp"));
+  const captured = await captureBuild(f.options);
+  assert.equal(captured.selectedPNPMSourcesCaptured, true);
+});
+
+for (const kind of ["file", "directory", "symlink"]) {
+  test(`the native temporary root cannot hide an unrelated ${kind}`, async (t) => {
+    const f = await buildFixture(t);
+    const tmp = path.join(f.store, "tmp");
+    fs.mkdirSync(tmp);
+    if (kind === "directory") fs.mkdirSync(path.join(tmp, "extra"));
+    else if (kind === "symlink") fs.symlinkSync(f.source, path.join(tmp, "extra"));
+    else fs.writeFileSync(path.join(tmp, "extra"), "unrelated");
+    await assert.rejects(captureBuild(f.options));
+  });
+}
+
 for (const [name, mutate] of [
   [
     "changed original archive",

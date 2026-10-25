@@ -534,6 +534,28 @@ build; CI verifies a copied checkpoint and joins its compact result to
 generator source retention or a complete acquisition graph: graph-loading-only
 module inputs and cold native replay still remain under #343.
 
+The explicit capture now also retains the checkpoint's selected generator Go
+sources. The pinned `x/mod/sumdb.Client` authenticates ZIP and separate go.mod
+checksums against Go 1.26.10's fixed official verifier key using only this build's
+owned signed lookup, tile and latest-tree records. Remote reads are denied;
+latest-tree updates remain in memory. The authenticated ZIP line must match the
+original native build metadata. Complete original ZIP and go.mod bytes are then
+independently checked with Go's module ZIP and content-sum implementations.
+The bounded proof set is selected by the maintained client's actual reads, not
+by copying the entire checksum cache. Admission happens before allocating each
+proof read. Literal `.info` bytes retain only a version equality check; their
+timestamp and Origin are not checksum-authenticated facts or execution authority.
+
+The closed capsule retains the checkpoint, originals and exact required proofs.
+Externally sealed readback repeats authentication and payload checks; CI verifies
+a copied capsule and joins it to `sourceSnapshot.generatorGoSources` and the
+original checkpoint. Missing/changed proofs, altered payloads, alternate signing
+keys, extra members and contradictory receipts fail. Failed capture leaves a
+private unsealed reservation and emits no success receipt. This selected component
+does not enumerate graph-loading-only Go metadata or prove full cold native
+compilation. Both overall proof flags stay false. Native Linux validation must
+establish this new path before its source evidence is used for release admission.
+
 The same explicit capture also requires
 `--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
 Before native API generation, the builder creates a private Buf cache. It retains
@@ -629,7 +651,7 @@ reconstructed payloads. Only the compact manifest and source-joined restoration
 receipt are uploaded; originals, old installation metadata and cached payloads
 are not diagnostics. Read the SDK README for exact explicit commands and limits.
 
-This does not capture the remaining generator-Go inputs or complete
+This does not capture the remaining graph-loading-only Go inputs or complete
 network-denied native compilation. Both `dependencyInputsCaptured` and
 `nativeOfflineReplayProved` remain false. CI checks actual copied originals and
 native consumption receipts, but uploads only compact manifests and diagnostics;
