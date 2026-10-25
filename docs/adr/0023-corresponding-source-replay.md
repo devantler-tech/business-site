@@ -23,6 +23,26 @@ unpack; ordinary builds remain inert. Its completed build receipt explicitly
 records `dependencyInputsCaptured: false` and `nativeOfflineReplayProved: false`.
 This increment does not close #343 or admit an image.
 
+The selected service-Go increment retains the actual 231 original/effective
+module selections, their complete ZIP/go.mod inputs and the four literal
+catalogue/lock/compiler records. The exact root command's native `Deps` plus root
+must equal the observed package set; seeing one package per module is insufficient.
+Go's maintained module library validates ZIP structure and full `h1` content sums,
+including replacements. A closed-member verifier rechecks the copied bytes and
+external manifest seal. CI moves the actual retained package to a fresh directory
+and verifies it again before image smoke checks. Its narrow
+`selectedServiceGoSourcesCaptured` field can be true while both overall dependency
+capture and native offline replay remain false.
+
+The verifier is an explicit command in the existing server Go module, covered by
+its standard validation and module/version/checksum acquisition boundary. CI
+builds it using the repository's Go 1.27.3 compiler before selecting the unchanged
+frozen Go 1.26.10 service compiler. The builder takes its explicit executable path,
+checks its command/compiler metadata and binds its unchanged digest to the receipt.
+It does not enter the service's
+231-module graph. No module ZIP, complete retained package or executable is added
+to the compact diagnostic upload; full source publication remains #308.
+
 ## Required complete replay boundary
 
 The complete #343 replay must extend the existing explicit Linux entrypoint with an exclusive verified-prepared

@@ -78,6 +78,19 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   retains ten literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
+- `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
+  checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
+  It belongs to the existing Go 1.27.3 module and its standard validation. CI
+  builds it before selecting the unchanged frozen identity compiler. The Linux
+  builder requires its explicit executable path when source capture is enabled
+  and binds its compiler, command identity and byte digest to the receipt.
+  Explicit capture retains the frozen service's 231 original/effective selections
+  and 466 source/metadata files from that build's private cache. The root command's
+  complete dependency set must equal the compiler stream. External-seal readback
+  rejects changed, missing, extra, linked and wrong-mode inputs; CI verifies an
+  actual fresh copy. Only compact manifests/diagnostics are uploaded. This is
+  selected service-Go retention, not generator-tool/pnpm/BSR capture, complete
+  corresponding-source admission, offline compilation or portal activation.
 - `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
   fonts, decoded statik members and retained notices. It is inactive without
   arguments and is mandatory in the Linux build, not the public website build.
@@ -176,6 +189,7 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
+(cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts
