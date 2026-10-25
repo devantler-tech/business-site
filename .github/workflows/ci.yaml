@@ -48,6 +48,7 @@ jobs:
               - 'third_party/zitadel-go-module-notices/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
+              - 'tools/zitadel-pnpm-source/**'
               - 'server/go.mod'
               - 'server/go.sum'
               - 'docs/ZITADEL-SOURCE.md'
@@ -387,6 +388,10 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.30.3 --activate
           echo "$tools/node-v22.23.3-linux-x64/bin" >> "$GITHUB_PATH"
+      - name: Verify native pnpm source retention
+        run: |
+          npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
+          node --test tools/zitadel-pnpm-source/index.test.mjs
       - name: Fetch the frozen public upstream input
         run: |
           git init "$RUNNER_TEMP/zitadel-upstream"
@@ -442,6 +447,18 @@ jobs:
           cp -R "$RUNNER_TEMP/zitadel-build/selected-go-sources" "$RUNNER_TEMP/zitadel-go-sources-roundtrip"
           "$RUNNER_TEMP/zitadel-module-sources" --verify "$RUNNER_TEMP/zitadel-go-sources-roundtrip" --sha256 "$manifest" > "$RUNNER_TEMP/zitadel-build/go-module-source-roundtrip.json"
           cmp "$RUNNER_TEMP/zitadel-build/selected-go-sources/manifest.json" "$RUNNER_TEMP/zitadel-go-sources-roundtrip/manifest.json"
+      - name: Verify and restore the actual selected pnpm sources
+        run: |
+          seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          cp -R "$RUNNER_TEMP/zitadel-build/selected-pnpm-sources" "$RUNNER_TEMP/zitadel-pnpm-sources-roundtrip"
+          node tools/zitadel-pnpm-source/index.mjs restore --capsule "$RUNNER_TEMP/zitadel-pnpm-sources-roundtrip" --sha256 "$seal" --scratch "$RUNNER_TEMP/zitadel-pnpm-restore-work" --store "$RUNNER_TEMP/zitadel-pnpm-restored-store" > "$RUNNER_TEMP/zitadel-build/pnpm-source-roundtrip.json"
+          jq -e --slurpfile build "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            del(.nativeStoreRestored) == $build[0].sourceSnapshot.pnpmSources and
+            .schemaVersion == 1 and .nativeStoreRestored == true and
+            .sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256 and
+            .packages > 0 and .archives > 0 and .selectedPNPMSourcesCaptured == true and
+            .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
+          ' "$RUNNER_TEMP/zitadel-build/pnpm-source-roundtrip.json" >/dev/null
       - name: Verify actual retained schema inputs and replay
         run: |
           manifest="$(jq -er '.sourceSnapshot.bsrSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -484,6 +501,8 @@ jobs:
             ${{ runner.temp }}/zitadel-build/prepared-build-receipt.json
             ${{ runner.temp }}/zitadel-build/selected-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
+            ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/bsr-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/bsr-schema-replay.json

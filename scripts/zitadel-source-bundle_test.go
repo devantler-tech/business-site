@@ -49,17 +49,20 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				t.Fatal(err)
 			}
 			records := map[string][]byte{
-				"source-preparation.json":              []byte("literal preparation\n"),
-				"api-project.original.json":            []byte("original API\n"),
-				"api-project.serial.json":              []byte("serialized API\n"),
-				"inputs.sha256":                        []byte("literal input hashes\n"),
-				"recipes/prepare-zitadel-source.sh":    []byte("original preparer\n"),
-				"recipes/zitadel-source-inputs.sha256": []byte("original locks\n"),
-				"recipes/build-zitadel-linux.sh":       []byte("native builder\n"),
-				"recipes/zitadel-source-bundle.go":     []byte("source helper\n"),
-				"recipes/zitadel-console-assets.go":    []byte("console download adapter\n"),
-				"ZITADEL-SOURCE.md":                    []byte("source description\n"),
-				"modifications.json":                   []byte("dated modification record\n"),
+				"source-preparation.json":                       []byte("literal preparation\n"),
+				"api-project.original.json":                     []byte("original API\n"),
+				"api-project.serial.json":                       []byte("serialized API\n"),
+				"inputs.sha256":                                 []byte("literal input hashes\n"),
+				"recipes/prepare-zitadel-source.sh":             []byte("original preparer\n"),
+				"recipes/zitadel-source-inputs.sha256":          []byte("original locks\n"),
+				"recipes/build-zitadel-linux.sh":                []byte("native builder\n"),
+				"recipes/zitadel-source-bundle.go":              []byte("source helper\n"),
+				"recipes/zitadel-console-assets.go":             []byte("console download adapter\n"),
+				"recipes/zitadel-pnpm-source/index.mjs":         []byte("native pnpm adapter\n"),
+				"recipes/zitadel-pnpm-source/package.json":      []byte("native pnpm SDK\n"),
+				"recipes/zitadel-pnpm-source/package-lock.json": []byte("native pnpm SDK locks\n"),
+				"ZITADEL-SOURCE.md":                             []byte("source description\n"),
+				"modifications.json":                            []byte("dated modification record\n"),
 			}
 			if kind == "missing-record" {
 				delete(records, "api-project.original.json")
@@ -131,6 +134,10 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 					}
 				}
 				for name, want := range records {
+					gotRecord, err := os.ReadFile(filepath.Join(output, "prepared/records", filepath.FromSlash(name)))
+					if err != nil || !bytes.Equal(gotRecord, want) {
+						t.Fatalf("literal audit record changed: %s: %v", name, err)
+					}
 					if name != "inputs.sha256" && name != "source-preparation.json" && !strings.HasPrefix(name, "api-project.") {
 						continue
 					}
@@ -420,7 +427,7 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
-	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
+	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo := t.TempDir(), t.TempDir()
 			write := func(root, name, body string) {
@@ -448,6 +455,9 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				write(repo, "scripts/"+name, name+"\n")
 			}
 			write(repo, "docs/ZITADEL-SOURCE.md", "Build documentation.\n")
+			for _, name := range []string{"index.mjs", "package.json", "package-lock.json"} {
+				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
+			}
 			preparation := fmt.Sprintf(`{"schemaVersion":1,"upstreamCommit":"8afa5dd37a8e723efb9eace8d09fd5c1cccef694","recipeSha256":"%s","inputManifestSha256":"%s","imageAdmission":"unknown","licenseClosure":"unknown","metadataProfile":"machine-id-no-jsonpath-v1"}`, hash("prepare-zitadel-source.sh\n"), hash("zitadel-source-inputs.sha256\n"))
 			write(build, "prepared/source-preparation.json", preparation)
 			profile, err := sourceSealTree(filepath.Join(build, "prepared/source"), filepath.Join(t.TempDir(), "reference"))
@@ -465,6 +475,10 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				write(repo, "scripts/zitadel-source-inputs.sha256", "changed input manifest\n")
 			case "missing-console-helper":
 				if err := os.Remove(filepath.Join(repo, "scripts/zitadel-console-assets.go")); err != nil {
+					t.Fatal(err)
+				}
+			case "missing-pnpm-helper":
+				if err := os.Remove(filepath.Join(repo, "tools/zitadel-pnpm-source/index.mjs")); err != nil {
 					t.Fatal(err)
 				}
 			case "wrong-original-api":
@@ -504,15 +518,28 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 11 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 14 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 11 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 14 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
 					t.Fatal("console helper source was not retained literally")
+				}
+				archive := filepath.Join(t.TempDir(), "prepared.tar")
+				archiveHash, err := sourcePackTree(output, got.ManifestSHA256, archive)
+				if err != nil {
+					t.Fatal(err)
+				}
+				unpacked := filepath.Join(t.TempDir(), "unpacked")
+				if err := sourceUnpackTree(archive, archiveHash, got.ManifestSHA256, unpacked); err != nil {
+					t.Fatal(err)
+				}
+				restored, err := sourceRestoreBuild(unpacked, got.ManifestSHA256, filepath.Join(t.TempDir(), "restored"))
+				if err != nil || restored.ManifestSHA256 != got.ManifestSHA256 || restored.Records != got.Records {
+					t.Fatalf("actual captured source cannot enter the native restoration: %+v: %v", restored, err)
 				}
 			} else {
 				if err == nil || got.ManifestSHA256 != "" {

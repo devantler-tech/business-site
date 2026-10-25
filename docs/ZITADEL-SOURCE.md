@@ -447,7 +447,7 @@ record. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those eleven records separate from the upstream source. The completed build
+keeps those fourteen records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
@@ -456,7 +456,7 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all eleven literal records and places only the four fixed build inputs at
+It retains all fourteen literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
@@ -592,9 +592,29 @@ combination with original-source capture or failed verification refuses the buil
 The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
-as the eleventh source/build record.
+as a literal source/build record. The native pnpm adapter and both SDK manifests
+are three additional records, making fourteen in total.
 
-This does not capture the remaining generator-Go/pnpm inputs or complete
+### Selected pnpm originals and native cache reconstruction
+
+Explicit source capture now invokes the pinned native SDK in
+`tools/zitadel-pnpm-source/` after the actual filtered installation and compilation.
+Its observed four workspace roots, current/wanted locks and actual optional skips
+must agree with the frozen Linux/x64/glibc graph. Peer instances remain separate;
+original archives are deduplicated only by complete SRI. The collector checks
+original compressed bytes, freshly interpreted native file maps, lifecycle
+classification and every connected CAFS payload, then seals a closed private
+package and rechecks all members. The selected archive count is an observation,
+not a predicted acceptance number.
+
+CI separately acquires the checksum-locked SDK under frozen Node 22.23.3, tests
+its adverse controls, and restores the actual copied capsule into a fresh native
+store. The unchanged verified index bytes accompany independently verified
+reconstructed payloads. Only the compact manifest and source-joined restoration
+receipt are uploaded; originals, old installation metadata and cached payloads
+are not diagnostics. Read the SDK README for exact explicit commands and limits.
+
+This does not capture the remaining generator-Go inputs or complete
 network-denied native compilation. Both `dependencyInputsCaptured` and
 `nativeOfflineReplayProved` remain false. CI checks actual copied originals and
 native consumption receipts, but uploads only compact manifests and diagnostics;

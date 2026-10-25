@@ -15,6 +15,8 @@ cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-assets.go" "$scratch/recipe/scripts/"
+mkdir -p "$scratch/recipe/tools/zitadel-pnpm-source"
+cp "$root/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$scratch/recipe/tools/zitadel-pnpm-source/"
 mkdir -p "$scratch/recipe/server/cmd"
 cp -R "$root/server/cmd/zitadel-module-sources" "$scratch/recipe/server/cmd/"
 cp -R "$root/server/cmd/zitadel-bsr-sources" "$scratch/recipe/server/cmd/"
@@ -44,7 +46,26 @@ case "$1" in -s) echo "${TEST_OS:-Linux}";; -m) echo x86_64;; esac
 STUB
 cat >"$scratch/bin/node" <<'STUB'
 #!/usr/bin/env bash
-echo "${TEST_NODE:-v22.23.3}"
+set -euo pipefail
+if [[ "$1" = --version ]]; then echo "${TEST_NODE:-v22.23.3}"; exit; fi
+[[ "$1" == */tools/zitadel-pnpm-source/index.mjs ]]
+if [[ "$2" = capture ]]; then
+  [[ "$3" = --build && "$5" = --source-sha256 && "$7" = --output && "$9" = --scratch ]]
+  jq -e 'length == 4' "$4/pnpm-selected-projects.json" >/dev/null
+  [[ "${TEST_FAIL:-}" != pnpm-capture ]] || { echo '{"plausible":"partial"}'; exit 42; }
+  mkdir "$8"
+  packages=1
+  if [[ "${TEST_FAIL:-}" = pnpm-incomplete ]]; then packages=0; fi
+  jq -n --arg source "$6" --argjson packages "$packages" \
+    '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,packages:$packages,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$8/receipt.json"
+  cat "$8/receipt.json"
+  if [[ "${TEST_FAIL:-}" = pnpm-tool-changed ]]; then echo changed >>"$1"; fi
+elif [[ "$2" = verify ]]; then
+  [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
+  [[ "${TEST_FAIL:-}" != pnpm-readback ]] || exit 42
+  cat "$4/receipt.json"
+else exit 42
+fi
 STUB
 cat >"$scratch/bin/pnpm" <<'STUB'
 #!/usr/bin/env bash
@@ -56,6 +77,11 @@ if [[ "$1 $2" = 'exec node' ]]; then
   exit
 fi
 if [[ "$1 $2 $3" = 'exec buf --version' ]]; then echo "${TEST_CONSOLE_BUF_VERSION:-1.72.0}"; exit; fi
+if [[ "$*" = '--filter @zitadel/zitadel --filter @zitadel/console... list --depth -1 --json' ]]; then
+  jq -n --arg root "$PWD" '[{name:"@zitadel/zitadel",path:$root},{name:"@zitadel/console",path:($root+"/console")},{name:"client",path:($root+"/packages/zitadel-client")},{name:"proto",path:($root+"/packages/zitadel-proto")}]'
+  [[ "${TEST_FAIL:-}" != pnpm-selection ]] || exit 42
+  exit
+fi
 printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$NX_NO_CLOUD" = true && "$NX_SKIP_NX_CACHE" = true && "$NX_DAEMON" = false ]]
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
@@ -163,14 +189,16 @@ case "$1 $2" in
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
           jq -n --arg profile "${TEST_REPLAY_PROFILE:-0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:11,bytes:261683913,recipeSha256:("b"*64)}';;
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:14,bytes:261683913,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
           mkdir -p "$6/records/recipes" "$6/source/console/scripts"
           cp "$5/scripts/zitadel-console-assets.go" "$6/records/recipes/zitadel-console-assets.go"
+          mkdir -p "$6/records/recipes/zitadel-pnpm-source"
+          cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:11,bytes:261683913,recipeSha256:$recipe}';;
+            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:14,bytes:261683913,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
@@ -542,7 +570,8 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 11 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 14 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -559,10 +588,11 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+for failure in pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
+  if [[ "$failure" = pnpm-tool-changed ]]; then cp "$root/tools/zitadel-pnpm-source/index.mjs" "$scratch/recipe/tools/zitadel-pnpm-source/index.mjs"; fi
 done
 capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi

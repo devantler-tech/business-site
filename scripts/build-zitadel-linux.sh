@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Explicit build evidence only: no image, distribution or activation authority.
 set -euo pipefail
+umask 022
 export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
 # Report a failed build invariant and terminate without a success receipt.
@@ -138,7 +139,7 @@ mkdir "$GOCACHE" "$GOMODCACHE" "$GOPATH" "$npm_config_cache" "$npm_config_store_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 11 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 14 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -151,10 +152,13 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 11 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 14 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
   jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
+  for member in index.mjs package.json package-lock.json; do
+    cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter differs from captured source'
+  done
 fi
 # Run one real phase with its own resource/log records and preserve failure status.
 run_phase() {
@@ -204,6 +208,9 @@ without_network() {
   return "$status"
 }
 run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+if [[ "$capture_source" -eq 1 ]]; then
+  pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
+fi
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 run_phase generate pnpm exec nx run @zitadel/api:generate --parallel=1 --skip-nx-cache --no-cloud
@@ -346,6 +353,17 @@ if [[ -n "$prepared_source" ]]; then
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' <<<"$prepared_input_json" >/dev/null || fail 'prepared source recipe changed during build'
 fi
 if [[ "$capture_source" -eq 1 ]]; then
+  # The source capsule retains original registry archives, not generated install
+  # outputs or a global cache. Its native SDK is acquired separately by CI.
+  pnpm_tool="$root/tools/zitadel-pnpm-source/index.mjs"
+  node "$pnpm_tool" capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
+  jq -e --arg source "$source_manifest" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .packages > 0 and .archives > 0 and .files > 0 and .selectedPNPMSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/pnpm-source-capture.pending" >/dev/null || fail 'incomplete selected pnpm source capture'
+  pnpm_manifest="$(jq -er .manifestSha256 "$output/pnpm-source-capture.pending")"
+  node "$pnpm_tool" verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
+  cmp "$output/pnpm-source-capture.pending" "$output/pnpm-source-readback.pending" || fail 'selected pnpm source readback differs'
+  for member in index.mjs package.json package-lock.json; do
+    cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter changed during build'
+  done
   # Retain only the complete service-selected graph, after compilation and the
   # final module verification. The command's checksum-bound dependency is
   # tooling, not an extra service module or a complete offline-replay closure.
@@ -426,7 +444,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
-  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \

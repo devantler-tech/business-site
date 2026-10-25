@@ -19,6 +19,7 @@ check() {
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-module-sources/**")) and (.with.filters | contains("server/go.mod")) and (.with.filters | contains("server/go.sum"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-bsr-sources/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("tools/zitadel-pnpm-source/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
@@ -53,6 +54,20 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-console-assets.go zitadel-console-assets_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify native pnpm source retention" and
+      .run == "npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts\nnode --test tools/zitadel-pnpm-source/index.test.mjs\n" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Prepare the frozen identity JavaScript toolchain") < index("Verify native pnpm source retention") and
+      index("Verify native pnpm source retention") < index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Verify and restore the actual selected pnpm sources" and
+      (.run | contains(".sourceSnapshot.pnpmSources.manifestSha256")) and
+      (.run | contains("cp -R")) and
+      (.run | contains("node tools/zitadel-pnpm-source/index.mjs restore --capsule")) and
+      (.run | contains("del(.nativeStoreRestored) == $build[0].sourceSnapshot.pnpmSources")) and
+      (.run | contains(".sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify and restore the actual selected pnpm sources") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Verify selected Go source retention" and
       .["working-directory"] == "server" and
       .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
@@ -125,7 +140,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -178,7 +193,29 @@ if jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scrat
   echo 'CI accepted a replay record different from the embedded build receipt' >&2; exit 1
 fi
 controls=0
+# Execute the pnpm restoration predicate on real structured control records;
+# textual mentions alone cannot stand in for the source/receipt correspondence.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify and restore the actual selected pnpm sources") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/pnpm.jq"
+jq -n '{schemaVersion:1,manifestSha256:("a"*64),sourceManifestSha256:("b"*64),packages:1,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/pnpm.json"
+jq -n --slurpfile pnpm "$scratch/pnpm.json" '{sourceSnapshot:{manifestSha256:("b"*64),pnpmSources:$pnpm[0]}}' >"$scratch/pnpm-build.json"
+jq '.nativeStoreRestored=true' "$scratch/pnpm.json" >"$scratch/pnpm-restored.json"
+jq -e --slurpfile build "$scratch/pnpm-build.json" -f "$scratch/pnpm.jq" "$scratch/pnpm-restored.json" >/dev/null
+for mutation in '.nativeStoreRestored=false' '.sourceManifestSha256=("c"*64)' '.packages=0' '.selectedPNPMSourcesCaptured=false' '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true' 'del(.manifestSha256)'; do
+  jq "$mutation" "$scratch/pnpm-restored.json" >"$scratch/pnpm-bad.json"
+  if jq -e --slurpfile build "$scratch/pnpm-build.json" -f "$scratch/pnpm.jq" "$scratch/pnpm-bad.json" >/dev/null; then
+    echo 'CI accepted a contradictory selected pnpm restoration receipt' >&2; exit 1
+  fi
+done
 for mutation in \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("tools/zitadel-pnpm-source"; "missing/tool") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify native pnpm source retention"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify and restore the actual selected pnpm sources"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .run=(.run | sub(" restore --capsule"; " verify --capsule")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("selected-pnpm-sources/manifest.json"; "selected-pnpm-sources/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Rebuild the native service from the retained prepared source"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .["continue-on-error"]=true else . end)' \

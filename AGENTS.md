@@ -75,7 +75,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains eleven literal build/modification records and rechecks the snapshot/archive
+  retains fourteen literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
   Its explicit `--restore-build` operation restores the sealed files and literal
@@ -123,6 +123,14 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   native checksum/unzip/install path and complete post-phase readback. Its source
   is one of the retained build records. Complete dependency capture and service
   replay remain incomplete under #343. Read `docs/ZITADEL-SOURCE.md`.
+- `tools/zitadel-pnpm-source/` supplies the pinned native SDK and explicit private
+  capture/verify/restore boundary for the actual filtered Linux installation.
+  Read its README before changing it. Preserve native peer/optional/workspace
+  selection, complete original archive SRI, independent CAFS byte checks and
+  native lifecycle classification. Restoration preserves verified literal indexes;
+  it never transplants old installation metadata into the application. The
+  adapter and both SDK manifests are retained source/build records. Capture and
+  reconstruction do not establish an offline install or complete native replay.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.

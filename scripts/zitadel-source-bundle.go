@@ -55,17 +55,20 @@ func sourceRestoreBuild(snapshot, seal, output string) (summary sourceCaptureSum
 		return summary, fmt.Errorf("verified prepared build snapshot required")
 	}
 	recordNames := map[string]bool{
-		"source-preparation.json":              true,
-		"api-project.original.json":            true,
-		"api-project.serial.json":              true,
-		"inputs.sha256":                        true,
-		"recipes/prepare-zitadel-source.sh":    true,
-		"recipes/zitadel-source-inputs.sha256": true,
-		"recipes/build-zitadel-linux.sh":       true,
-		"recipes/zitadel-source-bundle.go":     true,
-		"recipes/zitadel-console-assets.go":    true,
-		"ZITADEL-SOURCE.md":                    true,
-		"modifications.json":                   true,
+		"source-preparation.json":                       true,
+		"api-project.original.json":                     true,
+		"api-project.serial.json":                       true,
+		"inputs.sha256":                                 true,
+		"recipes/prepare-zitadel-source.sh":             true,
+		"recipes/zitadel-source-inputs.sha256":          true,
+		"recipes/build-zitadel-linux.sh":                true,
+		"recipes/zitadel-source-bundle.go":              true,
+		"recipes/zitadel-console-assets.go":             true,
+		"recipes/zitadel-pnpm-source/index.mjs":         true,
+		"recipes/zitadel-pnpm-source/package.json":      true,
+		"recipes/zitadel-pnpm-source/package-lock.json": true,
+		"ZITADEL-SOURCE.md":                             true,
+		"modifications.json":                            true,
 	}
 	if len(manifest.Records) != len(recordNames) {
 		return summary, fmt.Errorf("prepared build records are incomplete or unexpected")
@@ -196,6 +199,9 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		{repository, "scripts/build-zitadel-linux.sh", "recipes/build-zitadel-linux.sh"},
 		{repository, "scripts/zitadel-source-bundle.go", "recipes/zitadel-source-bundle.go"},
 		{repository, "scripts/zitadel-console-assets.go", "recipes/zitadel-console-assets.go"},
+		{repository, "tools/zitadel-pnpm-source/index.mjs", "recipes/zitadel-pnpm-source/index.mjs"},
+		{repository, "tools/zitadel-pnpm-source/package.json", "recipes/zitadel-pnpm-source/package.json"},
+		{repository, "tools/zitadel-pnpm-source/package-lock.json", "recipes/zitadel-pnpm-source/package-lock.json"},
 		{repository, "docs/ZITADEL-SOURCE.md", "ZITADEL-SOURCE.md"},
 	} {
 		body, err := sourceReadAt(entry.root, entry.name)
