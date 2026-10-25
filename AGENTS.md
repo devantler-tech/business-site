@@ -98,8 +98,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   command for the frozen three-module schema profile; read its README. It verifies
   native SHAKE256 content, both cache/export representations and a closed externally
   sealed private package, then restores/checks only verified native cache bytes.
-  Normal complete server tests include it. Native acquisition/order, Linux replay
-  and builder integration remain #351; this command grants no deployment authority.
+  Normal complete server tests include it. Explicit Linux source capture requires
+  this command's built path, retains the actual native API/console compiler inputs
+  and proves schema-only replay from fresh restored caches without networking or
+  privilege recovery. Complete dependency/native service replay remains #343;
+  this command grants no deployment authority.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.

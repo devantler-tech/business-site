@@ -15,6 +15,7 @@ cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
 mkdir -p "$scratch/recipe/server/cmd"
 cp -R "$root/server/cmd/zitadel-module-sources" "$scratch/recipe/server/cmd/"
+cp -R "$root/server/cmd/zitadel-bsr-sources" "$scratch/recipe/server/cmd/"
 cp "$root/server/go.mod" "$root/server/go.sum" "$scratch/recipe/server/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
@@ -46,10 +47,18 @@ cat >"$scratch/bin/pnpm" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" = --version ]]; then echo "${TEST_PNPM:-10.30.3}"; exit; fi
+if [[ "$1 $2" = 'exec node' ]]; then
+  [[ "${TEST_FAIL:-}" != bsr-resolution ]] || exit 42
+  realpath ../node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin/buf
+  exit
+fi
+if [[ "$1 $2 $3" = 'exec buf --version' ]]; then echo "${TEST_CONSOLE_BUF_VERSION:-1.72.0}"; exit; fi
 printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$NX_NO_CLOUD" = true && "$NX_SKIP_NX_CACHE" = true && "$NX_DAEMON" = false ]]
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
 if [[ "$1" = install ]]; then
+  mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
+  cp "$TEST_BUF_STUB" node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin/buf
   if [[ "${TEST_LOCK:-}" = changed ]]; then echo changed >>pnpm-lock.yaml; fi
 elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
   jq -e '.targets["generate-install"].options.parallel == false' apps/api/project.json >/dev/null
@@ -58,6 +67,9 @@ elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
     mkdir -p "$(dirname "$f")"; echo generated >"$f"
   done
   [[ "${TEST_MISSING:-}" != statik ]] || rm internal/statik/statik.go
+  mkdir -p .artifacts/bin/linux/amd64
+  cp "$TEST_BUF_STUB" .artifacts/bin/linux/amd64/buf
+  if [[ -n "${BUF_CACHE_DIR:-}" ]]; then mkdir -p "$BUF_CACHE_DIR"; echo ready >"$BUF_CACHE_DIR/cache-ready"; fi
 else
   grep -q '@zitadel/api:generate' "$TEST_CALLS"
   mkdir -p console/dist/console internal/api/ui/console/static
@@ -74,6 +86,8 @@ else
   if [[ "${TEST_FONT:-}" = file ]]; then echo unadmitted >console/dist/console/ailerons.otf; fi
   if [[ "${TEST_FONT:-}" = symlink ]]; then ln -s styles.css console/dist/console/ailerons.otf; fi
   cp -R console/dist/console/* internal/api/ui/console/static/
+  if [[ "${TEST_FAIL:-}" = bsr-tool-changed ]]; then echo changed >>.artifacts/bin/linux/amd64/buf; fi
+  if [[ "${TEST_FAIL:-}" = bsr-copy-changed ]]; then echo '# changed copy' >>"${BUF_CACHE_DIR%/buf-cache}/bsr-tools/api"; fi
 fi
 STUB
 cat >"$scratch/bin/go" <<'STUB'
@@ -83,6 +97,11 @@ case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'env GOROOT') echo "$TEST_GOROOT";;
   'version -m')
+    if [[ "$3" = "$TEST_BSR_VERIFIER" ]]; then
+      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_BSR_VERIFIER_GO:-go1.27.3}" "${TEST_BSR_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-bsr-sources}"
+      if [[ "${TEST_FAIL:-}" = bsr-verifier-metadata ]]; then exit 42; fi
+      exit
+    fi
     if [[ "$3" = "$TEST_MODULE_VERIFIER" ]]; then
       if [[ "${TEST_FAIL:-}" = verifier-metadata ]]; then exit 42; fi
       printf 'fixture: %s\n\tpath\t%s\n' "${TEST_VERIFIER_GO:-go1.27.3}" "${TEST_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources}"
@@ -111,6 +130,11 @@ case "$1 $2" in
           [[ "$#" -eq 5 && -d "$4" ]]
           if [[ "${TEST_FAIL:-}" = source-readback ]]; then echo '{"files":[]}'; exit 42; fi
           echo '{"fixture":"complete source readback"}';;
+        --unpack)
+          [[ "$#" -eq 7 && -s "$4" && ! -e "$7" ]]
+          mkdir -p "$7/source"
+          cp -R "${GOCACHE%/go-cache}/prepared/source/proto" "$7/source/proto"
+          echo '{"fixture":"complete source unpack"}';;
         *) exit 42;;
       esac
     elif [[ "$2" == */zitadel-console-notices.go ]]; then
@@ -179,6 +203,85 @@ chmod 755 "$scratch/bin/"*
 export PATH="$scratch/bin:$PATH" TEST_CALLS="$scratch/calls"
 export TEST_GOROOT="$scratch/go-distribution"
 export TEST_MODULE_VERIFIER="$scratch/module-source-verifier"
+export TEST_BSR_VERIFIER="$scratch/bsr-source-verifier" TEST_BUF_STUB="$scratch/native-buf"
+cat >"$TEST_BUF_STUB" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+role=console
+[[ "$0" != */.artifacts/* && "$0" != */bsr-tools/api ]] || role=api
+if [[ "$1" = --version ]]; then
+  if [[ "$role" = api ]]; then echo "${TEST_API_BUF_VERSION:-1.67.0}"; else echo "${TEST_CONSOLE_BUF_VERSION:-1.72.0}"; fi
+elif [[ "$1 $2 $3 $4" = 'registry module commit info' ]]; then
+  jq -n --arg commit "${5##*:}" '{commit:$commit,create_time:"native fixture"}'
+  [[ "${TEST_FAIL:-}" != bsr-metadata ]] || exit 42
+elif [[ "$1" = export ]]; then
+  while [[ "$1" != --output ]]; do shift; done; shift
+  mkdir -p "$1"; echo 'syntax = "proto3";' >"$1/source.proto"
+  [[ "${TEST_FAIL:-}" != bsr-export ]] || exit 42
+elif [[ "$1" = build ]]; then
+  [[ -s "$BUF_CACHE_DIR/cache-ready" ]] || exit 42
+  while [[ "$1" != --output && "$1" != -o ]]; do shift; done; shift
+  if [[ "${TEST_NETWORK_DENIED:-0}" = 1 && "${TEST_FAIL:-}" = bsr-descriptor ]]; then
+    echo changed >"$1"
+  else printf 'descriptor %s\n' "$role" >"$1"; fi
+else echo 'unexpected native schema command' >&2; exit 42
+fi
+STUB
+cat >"$scratch/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+[[ "${TEST_NETWORK_DENIED:-0}" != 1 || "${TEST_FAIL:-}" = network-leak ]]
+STUB
+cat >"$scratch/bin/sudo" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1 $2 $3 $4 $5" = '-n unshare --net -- setpriv' ]]
+[[ "${TEST_FAIL:-}" != network-isolation ]] || exit 42
+shift 5
+[[ "$1" = --no-new-privs && "$2" = --reuid && "$3" != 0 && "$4" = --regid && "$6 $7" = '--clear-groups --' ]]
+shift 7
+[[ "$1" = env ]]; shift
+while [[ "$1" = -u ]]; do unset "$2"; shift 2; done
+[[ "$1 $2" = 'bash -c' && "$3" = *NoNewPrivs* && "$4" = bash ]]
+# This is an orchestration double; only Linux CI can prove the kernel state.
+[[ "${TEST_FAIL:-}" != no-new-privileges ]] || exit 125
+printf 'verified\n' >"$5"
+shift 5
+export TEST_NETWORK_DENIED=1
+exec "$@"
+STUB
+for tool in unshare setpriv; do printf '#!/usr/bin/env bash\nexit 42\n' >"$scratch/bin/$tool"; done
+chmod 755 "$TEST_BUF_STUB" "$scratch/bin/curl" "$scratch/bin/sudo" "$scratch/bin/unshare" "$scratch/bin/setpriv"
+cat >"$TEST_BSR_VERIFIER" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  capture)
+    [[ "$2" = --build && -s "$3/service/zitadel" && -s "$3/bsr-tools/api.version" && -s "$3/bsr-tools/console.version" ]]
+    [[ "$4" = --recipe && "$6" = --source-sha256 && "$8" = --output && "$#" = 9 ]]
+    [[ "${TEST_FAIL:-}" != bsr-capture ]] || { echo '{"files":170}'; exit 42; }
+    mkdir "$9"
+    api="$(shasum -a 256 "$3/bsr-tools/api" | awk '{print $1}')"
+    console="$(shasum -a 256 "$3/bsr-tools/console" | awk '{print $1}')"
+    [[ "${TEST_FAIL:-}" != bsr-tool-binding ]] || api="$(printf '%064d' 0)"
+    jq -n --arg api "$api" --arg console "$console" '{tools:[{phase:"api",version:"1.67.0",sha256:$api},{phase:"console",version:"1.72.0",sha256:$console}]}' >"$9/manifest.json";;
+  verify)
+    [[ "$2" = --package && -s "$3/manifest.json" && "$4" = --sha256 && "$#" = 5 ]]
+    [[ "${TEST_FAIL:-}" != bsr-readback ]] || { echo '{"files":170}'; exit 42; };;
+  restore)
+    [[ "$2" = --package && -s "$3/manifest.json" && "$4" = --sha256 && "$6" = --output && "$#" = 7 ]]
+    mkdir -p "$7/v3/modules/b5/buf.build/googleapis/googleapis/75b4300737fb4efca0831636be94e517/files/google/api"
+    echo original >"$7/v3/modules/b5/buf.build/googleapis/googleapis/75b4300737fb4efca0831636be94e517/files/google/api/annotations.proto"
+    echo ready >"$7/cache-ready";;
+  check-cache)
+    [[ "$2" = --package && "$4" = --sha256 && "$6" = --cache && "$#" = 7 ]]
+    [[ "${TEST_FAIL:-}" != bsr-cache ]] || exit 42
+    grep -qx original "$7/v3/modules/b5/buf.build/googleapis/googleapis/75b4300737fb4efca0831636be94e517/files/google/api/annotations.proto" || exit 42;;
+  *) exit 42;;
+esac
+[[ "${TEST_FAIL:-}" != bsr-incomplete ]] || { echo '{"modules":2}'; exit; }
+jq -n '{schemaVersion:1,manifestSha256:("c"*64),modules:3,files:170,cacheFiles:113,exportFiles:49,bytes:123,selectedBSRSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+STUB
+chmod 755 "$TEST_BSR_VERIFIER"
 cat >"$TEST_MODULE_VERIFIER" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -264,7 +367,7 @@ test ! -e "$scratch/complete/selected-go-sources"
 capture_reject() {
   local label="$1" verifier="$2"; shift 2
   : >"$TEST_CALLS"
-  if env "$@" bash "$build" --build --capture-source --module-source-verifier "$verifier" --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
+  if env "$@" bash "$build" --build --capture-source --module-source-verifier "$verifier" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
     echo "incorrectly admitted module verifier: $label" >&2; exit 1
   fi
   test ! -e "$scratch/$label/build-receipt.json"
@@ -279,15 +382,41 @@ capture_reject relative-verifier ./module-source-verifier
 capture_reject wrong-verifier-compiler "$TEST_MODULE_VERIFIER" TEST_VERIFIER_GO=go1.26.10
 capture_reject wrong-verifier-command "$TEST_MODULE_VERIFIER" TEST_VERIFIER_PATH=example.invalid/command
 capture_reject partial-verifier-metadata "$TEST_MODULE_VERIFIER" TEST_FAIL=verifier-metadata
+# These carry a valid module verifier so each schema-tool admission is exercised.
+bsr_reject() {
+  local label="$1" verifier="$2"; shift 2
+  : >"$TEST_CALLS"
+  if env "$@" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$verifier" --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
+    echo "incorrectly admitted schema verifier: $label" >&2; exit 1
+  fi
+  test ! -e "$scratch/$label/build-receipt.json"
+}
+ln -s "$TEST_BSR_VERIFIER" "$scratch/linked-bsr-verifier"
+cp "$TEST_BSR_VERIFIER" "$scratch/nonexecutable-bsr-verifier"
+chmod 644 "$scratch/nonexecutable-bsr-verifier"
+bsr_reject linked-bsr-verifier "$scratch/linked-bsr-verifier"
+bsr_reject missing-bsr-verifier "$scratch/absent-bsr-verifier"
+bsr_reject nonexecutable-bsr-verifier "$scratch/nonexecutable-bsr-verifier"
+bsr_reject relative-bsr-verifier ./bsr-source-verifier
+bsr_reject wrong-bsr-verifier-compiler "$TEST_BSR_VERIFIER" TEST_BSR_VERIFIER_GO=go1.26.10
+bsr_reject wrong-bsr-verifier-command "$TEST_BSR_VERIFIER" TEST_BSR_VERIFIER_PATH=example.invalid/command
+bsr_reject partial-bsr-verifier-metadata "$TEST_BSR_VERIFIER" TEST_FAIL=bsr-verifier-metadata
+bsr_reject wrong-api-schema-version "$TEST_BSR_VERIFIER" TEST_API_BUF_VERSION=1.72.0
+bsr_reject wrong-console-schema-version "$TEST_BSR_VERIFIER" TEST_CONSOLE_BUF_VERSION=1.67.0
 if bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/no-verifier" >"$scratch/no-verifier.log" 2>&1; then exit 1; fi
+if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/no-bsr-verifier" >"$scratch/no-bsr-verifier.log" 2>&1; then exit 1; fi
 if bash "$build" --build --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/no-capture" >"$scratch/no-capture.log" 2>&1; then exit 1; fi
-bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
+if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/no-bsr-capture" >"$scratch/no-bsr-capture.log" 2>&1; then exit 1; fi
+if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
+: >"$TEST_CALLS"
+bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
 jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 10 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
-for failure in source-capture source-readback module-source-capture module-source-readback module-source-incomplete; do
+jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+for failure in bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
-  if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted" >&2; exit 1; fi
+  if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
 done
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi

@@ -94,3 +94,33 @@ Ordinary website output and portal-default-off behavior remain unchanged.
 Diagnostics retain only bounded manifests, hashes and replay outcomes, not the
 unadmitted full source archive or service executable. This decision alone grants
 no image distribution, credential, account, customer or deployment authority.
+
+## Selected schema integration
+
+The #351 increment uses one fresh build-owned Buf cache from before native API
+generation. Preserve API Buf 1.67.0 before console Buf 1.72.0. Record and copy the
+actual native executables, check their versions and unchanged byte hashes, and
+acquire only the three immutable references in the frozen v1 lock. Retain literal
+registry replies and separate complete source/documentation exports. The existing
+Go 1.27.3 verifier joins these observations to both native cache representations,
+the prepared-source seal and this complete build recipe. It remains separate from
+the frozen Go 1.26.10 service graph.
+
+After capture/readback, unpack the already sealed prepared source into a new
+workspace. Each actual compiler gets independent verified baseline/offline caches
+and must produce the same descriptor bytes from that local workspace. Linux
+network namespaces enforce denial; an unreachable namespace or failed reachable
+control refuses the build. Execute as the original non-root UID/GID after creating
+the namespace, with `setpriv --no-new-privs` and a fresh kernel `NoNewPrivs` check
+before each command. A failed boundary cannot count as a successful refusal
+control. Recheck both original and retained compiler hashes before acquisition,
+before each compiler's replay and after replay; join the sealed tool identities
+to those initial copies. CI requires its standalone replay diagnostic to equal
+the complete embedded build-receipt record. Empty-cache compilation must fail, altered/missing restored members
+must fail verification, and the sealed package/source must remain unchanged.
+
+These are schema-only input and compilation observations. Retain compact sealed
+manifests and replay diagnostics, never source payloads or tool executables in the
+diagnostic artifact. Overall dependency capture, complete native offline service
+replay, source/image admission and portal activation remain false or unresolved
+until their separate acceptance passes.
