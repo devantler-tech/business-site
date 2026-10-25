@@ -49,6 +49,10 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify original console generator archives" and
+      .["working-directory"] == "scripts" and
+      .run == "go test -race zitadel-console-assets.go zitadel-console-assets_test.go" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify selected Go source retention" and
       .["working-directory"] == "server" and
       .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
@@ -217,6 +221,9 @@ for mutation in \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-toolchain-notices_test.go"; "")) else . end)' \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify original console generator archives"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .["continue-on-error"]=true else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("third_party/zitadel-console-notices/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("console-notices-supplement-inventory.json") | not)) | join("\n")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .if="false" else . end)' \

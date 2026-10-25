@@ -371,6 +371,9 @@ jobs:
       - name: Verify sealed source snapshots and closed archive controls
         working-directory: scripts
         run: go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go
+      - name: Verify original console generator archives
+        working-directory: scripts
+        run: go test -race zitadel-console-assets.go zitadel-console-assets_test.go
       # This isolated upstream profile does not install or build the website's
       # npm application. Its older Node input is exact and checksum-bound.
       - name: Prepare the frozen identity JavaScript toolchain

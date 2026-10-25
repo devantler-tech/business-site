@@ -112,6 +112,14 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and proves schema-only replay from fresh restored caches without networking or
   privilege recovery. Complete dependency/native service replay remains #343;
   this command grants no deployment authority.
+- `scripts/zitadel-console-assets.go` is an explicit, otherwise inert collector
+  and verifier for the frozen Linux console generator's three original release
+  downloads. It preserves their compressed bytes and checksums in a closed,
+  externally sealed private directory. Its fetch mode emits only verified bytes
+  without a downloader; failed captures retain bounded, unsealed diagnostics and
+  never delete a pathname that may have been replaced. It is not yet wired into
+  the native generator; complete dependency capture and service replay remain
+  incomplete under #343. Read `docs/ZITADEL-SOURCE.md`.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.
@@ -207,6 +215,7 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
+(cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources)
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-bsr-sources)
 bash scripts/check-active-projects-drift.test.sh

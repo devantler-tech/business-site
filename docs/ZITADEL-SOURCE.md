@@ -545,6 +545,42 @@ Issue #343 also requires actual selected dependency capture and a clean,
 network-denied native replay before its full acceptance criteria are complete.
 Source/image publication and the recipient's source offer remain #308.
 
+### Original console generator downloads
+
+The explicit `scripts/zitadel-console-assets.go` collector retains the original
+Linux amd64 downloads selected by the frozen console install script: grpc-web
+1.5.0, the protobuf-javascript 4.0.2 release ZIP and OpenAPI 2.22.0. Its hardcoded
+URLs and SHA-256 identities match that immutable source. This console OpenAPI
+version is separate from the earlier API generator's 2.28.0 input; their native
+ordering remains unchanged.
+
+```sh
+go run scripts/zitadel-console-assets.go capture \
+  --capsule /absolute/private-parent/new-console-capsule --curl /absolute/native/curl
+go run scripts/zitadel-console-assets.go verify \
+  --capsule /absolute/private-parent/new-console-capsule --sha256 <manifest-sha256>
+go run scripts/zitadel-console-assets.go fetch \
+  --capsule /absolute/private-parent/new-console-capsule --sha256 <manifest-sha256> \
+  --url <one-exact-frozen-url>
+```
+
+No arguments are inert. Capture requires a new destination beneath an existing
+0700 physical parent, checks all three downloads against independent frozen
+checksums and returns a separate manifest seal. Download sizes and duration are
+bounded. Failed captures remain private diagnostics with no returned success seal;
+they are never removed by pathname, so a replacement destination is preserved.
+Verify and fetch require the external seal and reject changed, missing, extra,
+linked, wrong-mode or differently identified members before emitting bytes. Fetch
+has no downloader and cannot fall back to the network. These operations never
+execute or extract the retained downloads.
+
+This collector is not yet the native install script's download source. It does
+not prove same-build consumption, capture the remaining Go/pnpm inputs or complete
+network-denied native compilation. Both `dependencyInputsCaptured` and
+`nativeOfflineReplayProved` remain false. CI exercises the complete collector's
+local controls but does not upload these original binaries or archives. Binding
+their actual native consumption into the cohesive #343 replay remains unfinished.
+
 ## Local restricted image CLI test
 
 The explicit image test packages the actual successful Linux build and observes
