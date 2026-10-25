@@ -13,8 +13,9 @@ cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
-mkdir "$scratch/recipe/tools"
-cp -R "$root/tools/zitadel-module-sources" "$scratch/recipe/tools/"
+mkdir -p "$scratch/recipe/server/cmd"
+cp -R "$root/server/cmd/zitadel-module-sources" "$scratch/recipe/server/cmd/"
+cp "$root/server/go.mod" "$root/server/go.sum" "$scratch/recipe/server/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
@@ -82,6 +83,11 @@ case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'env GOROOT') echo "$TEST_GOROOT";;
   'version -m')
+    if [[ "$3" = "$TEST_MODULE_VERIFIER" ]]; then
+      if [[ "${TEST_FAIL:-}" = verifier-metadata ]]; then exit 42; fi
+      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_VERIFIER_GO:-go1.27.3}" "${TEST_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources}"
+      exit
+    fi
     printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n'
     if [[ "${TEST_UNADMITTED:-}" = binary ]]; then printf '\tdep\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
@@ -107,17 +113,6 @@ case "$1 $2" in
           echo '{"fixture":"complete source readback"}';;
         *) exit 42;;
       esac
-    elif [[ "$2" = . && "$PWD" = */tools/zitadel-module-sources ]]; then
-      if [[ "$3" = --capture ]]; then
-        [[ "$#" -eq 9 && "$4" = --build && -s "$5/service/zitadel" && "$6" = --catalogue && -s "$7" && "$8" = --output ]]
-        if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
-        mkdir "$9"
-      else
-        [[ "$#" -eq 6 && "$3" = --verify && -d "$4" && "$5" = --sha256 && "$6" = "$(printf '%064d' 0 | tr 0 b)" ]]
-        if [[ "${TEST_FAIL:-}" = module-source-readback ]]; then echo '{"modules":231}'; exit 42; fi
-      fi
-      if [[ "${TEST_FAIL:-}" = module-source-incomplete ]]; then echo '{"modules":230}'; exit; fi
-      jq -n '{schemaVersion:1,manifestSha256:("b"*64),modules:231,files:466,bytes:123,selectedServiceGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
     elif [[ "$2" == */zitadel-console-notices.go ]]; then
       [[ "$4" = --build && "$6" = --recipe && -s "$7" && -s "$5/packages.jsonl" ]]
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
@@ -183,6 +178,22 @@ STUB
 chmod 755 "$scratch/bin/"*
 export PATH="$scratch/bin:$PATH" TEST_CALLS="$scratch/calls"
 export TEST_GOROOT="$scratch/go-distribution"
+export TEST_MODULE_VERIFIER="$scratch/module-source-verifier"
+cat >"$TEST_MODULE_VERIFIER" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = --capture ]]; then
+  [[ "$#" -eq 7 && "$2" = --build && -s "$3/service/zitadel" && "$4" = --catalogue && -s "$5" && "$6" = --output ]]
+  if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
+  mkdir "$7"
+else
+  [[ "$#" -eq 4 && "$1" = --verify && -d "$2" && "$3" = --sha256 && "$4" = "$(printf '%064d' 0 | tr 0 b)" ]]
+  if [[ "${TEST_FAIL:-}" = module-source-readback ]]; then echo '{"modules":231}'; exit 42; fi
+fi
+if [[ "${TEST_FAIL:-}" = module-source-incomplete ]]; then echo '{"modules":230}'; exit; fi
+jq -n '{schemaVersion:1,manifestSha256:("b"*64),modules:231,files:466,bytes:123,selectedServiceGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+STUB
+chmod 755 "$TEST_MODULE_VERIFIER"
 bash "$build"
 test ! -e "$TEST_CALLS"
 # Record all failures so a missing guard cannot hide behind the first rejection.
@@ -248,12 +259,35 @@ test -s "$scratch/complete/go-module-notices.txt"
 test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
 test ! -e "$scratch/complete/selected-go-sources"
 : >"$TEST_CALLS"
-bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/captured"
+# Explicit build-tool admission has independent refusals; none may rely on a
+# missing capture opt-in or bypass an older capture/readback failure control.
+capture_reject() {
+  local label="$1" verifier="$2"; shift 2
+  : >"$TEST_CALLS"
+  if env "$@" bash "$build" --build --capture-source --module-source-verifier "$verifier" --source "$scratch/upstream" --output "$scratch/$label" >"$scratch/$label.log" 2>&1; then
+    echo "incorrectly admitted module verifier: $label" >&2; exit 1
+  fi
+  test ! -e "$scratch/$label/build-receipt.json"
+}
+ln -s "$TEST_MODULE_VERIFIER" "$scratch/linked-verifier"
+cp "$TEST_MODULE_VERIFIER" "$scratch/nonexecutable-verifier"
+chmod 644 "$scratch/nonexecutable-verifier"
+capture_reject linked-verifier "$scratch/linked-verifier"
+capture_reject missing-verifier "$scratch/absent-verifier"
+capture_reject nonexecutable-verifier "$scratch/nonexecutable-verifier"
+capture_reject relative-verifier ./module-source-verifier
+capture_reject wrong-verifier-compiler "$TEST_MODULE_VERIFIER" TEST_VERIFIER_GO=go1.26.10
+capture_reject wrong-verifier-command "$TEST_MODULE_VERIFIER" TEST_VERIFIER_PATH=example.invalid/command
+capture_reject partial-verifier-metadata "$TEST_MODULE_VERIFIER" TEST_FAIL=verifier-metadata
+if bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/no-verifier" >"$scratch/no-verifier.log" 2>&1; then exit 1; fi
+if bash "$build" --build --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/no-capture" >"$scratch/no-capture.log" 2>&1; then exit 1; fi
+bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
 jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 10 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 for failure in source-capture source-readback module-source-capture module-source-readback module-source-incomplete; do
   : >"$TEST_CALLS"
-  if env TEST_FAIL="$failure" bash "$build" --build --capture-source --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted" >&2; exit 1; fi
+  if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
 done
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi

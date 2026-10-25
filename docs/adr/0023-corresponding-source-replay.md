@@ -34,8 +34,12 @@ and verifies it again before image smoke checks. Its narrow
 `selectedServiceGoSourcesCaptured` field can be true while both overall dependency
 capture and native offline replay remain false.
 
-The verifier itself is a separate general-purpose build tool with an explicit
-Go module/version/checksum acquisition boundary. It does not enter the service's
+The verifier is an explicit command in the existing server Go module, covered by
+its standard validation and module/version/checksum acquisition boundary. CI
+builds it using the repository's Go 1.27.3 compiler before selecting the unchanged
+frozen Go 1.26.10 service compiler. The builder takes its explicit executable path,
+checks its command/compiler metadata and binds its unchanged digest to the receipt.
+It does not enter the service's
 231-module graph. No module ZIP, complete retained package or executable is added
 to the compact diagnostic upload; full source publication remains #308.
 

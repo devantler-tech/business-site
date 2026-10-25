@@ -5,17 +5,23 @@ export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
-requested=0 capture_source=0 source_repo='' output=''
+requested=0 capture_source=0 source_repo='' output='' module_verifier=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
     --capture-source) [[ "$capture_source" -eq 0 ]] || fail 'duplicate source capture'; capture_source=1; shift ;;
+    --module-source-verifier) [[ -z "$module_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid module source verifier'; module_verifier="$2"; shift 2 ;;
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
     --output) [[ -z "$output" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid output'; output="$2"; shift 2 ;;
-    *) fail 'expected --build [--capture-source] --source <frozen-git-repository> --output <new-directory>' ;;
+    *) fail 'expected --build [--capture-source --module-source-verifier <built-command>] --source <frozen-git-repository> --output <new-directory>' ;;
   esac
 done
 [[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit build, source and output are required'
+if [[ "$capture_source" -eq 1 ]]; then
+  [[ "$module_verifier" = /* && -f "$module_verifier" && -x "$module_verifier" && ! -L "$module_verifier" ]] || fail 'source capture requires an explicit regular executable module verifier'
+else
+  [[ -z "$module_verifier" ]] || fail 'module verifier requires source capture'
+fi
 for tool in bash git jq shasum node pnpm go time readelf find sort cmp comm diff grep sed awk; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
 done
@@ -43,6 +49,17 @@ mkdir -m 700 -- "$output"
 complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
+module_verifier_hash=''
+if [[ "$capture_source" -eq 1 ]]; then
+  # The reviewed command is built separately with the repository compiler. Do
+  # not switch or auto-download toolchains inside the frozen upstream build.
+  go version -m "$module_verifier" >"$output/go-module-source-verifier.txt"
+  awk 'NR == 1 && $NF == "go1.27.3" {compiler=1}
+    $1 == "path" && $2 == "github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources" {command=1}
+    END {exit !(compiler && command)}' "$output/go-module-source-verifier.txt" || fail 'module verifier command or compiler differs'
+  module_verifier_hash="$(shasum -a 256 "$module_verifier" | awk '{print $1}')"
+  [[ "$module_verifier_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'module verifier digest unavailable'
+fi
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
 version=4.20.0
 source_date=2026-10-22T07:05:44Z
@@ -165,19 +182,20 @@ recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{prin
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
 if [[ "$capture_source" -eq 1 ]]; then
   # Retain only the complete service-selected graph, after compilation and the
-  # final module verification. The separate tool's checksum-bound dependency is
+  # final module verification. The command's checksum-bound dependency is
   # tooling, not an extra service module or a complete offline-replay closure.
-  (cd "$root/tools/zitadel-module-sources" && go run . --capture --build "$output" --catalogue "$root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources") >"$output/go-module-source-capture.pending"
+  "$module_verifier" --capture --build "$output" --catalogue "$root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources" >"$output/go-module-source-capture.pending"
   jq -e '.schemaVersion == 1 and .modules == 231 and .files == 466 and .selectedServiceGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/go-module-source-capture.pending" >/dev/null || fail 'incomplete selected Go source capture'
   go_modules_manifest="$(jq -er .manifestSha256 "$output/go-module-source-capture.pending")"
-  (cd "$root/tools/zitadel-module-sources" && go run . --verify "$output/selected-go-sources" --sha256 "$go_modules_manifest") >"$output/go-module-source-readback.pending"
+  "$module_verifier" --verify "$output/selected-go-sources" --sha256 "$go_modules_manifest" >"$output/go-module-source-readback.pending"
   cmp "$output/go-module-source-capture.pending" "$output/go-module-source-readback.pending" || fail 'selected Go source readback differs'
-  shasum -a 256 "$root/tools/zitadel-module-sources/"*.go "$root/tools/zitadel-module-sources/go.mod" "$root/tools/zitadel-module-sources/go.sum" >"$output/go-module-source-verifier.sha256"
+  [[ "$(shasum -a 256 "$module_verifier" | awk '{print $1}')" = "$module_verifier_hash" ]] || fail 'module verifier changed during build'
+  shasum -a 256 "$module_verifier" "$root/server/cmd/zitadel-module-sources/"*.go "$root/server/go.mod" "$root/server/go.sum" >"$output/go-module-source-verifier.sha256"
   go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/source-snapshot" "$source_manifest" >"$output/source-readback.pending"
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
-  source_snapshot_json="$(jq -n --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" '$capture[0] + $archive[0] + {goModules:$modules[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" \

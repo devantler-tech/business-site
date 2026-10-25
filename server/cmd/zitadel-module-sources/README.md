@@ -1,20 +1,28 @@
 # Selected identity Go source inputs
 
-This Go 1.26 build tool is inactive without arguments. It uses the frozen
+This command in the existing Go 1.27.3 server module is inactive without arguments. It uses the frozen
 231-module service catalogue and `golang.org/x/mod` v0.42.0, pinned through
-`go.mod` and `go.sum`. This separate build-tool dependency is not a service
+the server's `go.mod` and `go.sum`. This build-tool dependency is not an identity service
 dependency. Ordinary website builds never run it.
 
 ```sh
-go test -race ./...
-go vet ./...
-go run . --capture --build /absolute/completed-build \
+# From server/, with the exact repository compiler:
+GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources
+GOTOOLCHAIN=local go vet ./cmd/zitadel-module-sources
+GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
+  -o /absolute/zitadel-module-sources ./cmd/zitadel-module-sources
+/absolute/zitadel-module-sources --capture --build /absolute/completed-build \
   --catalogue /absolute/repository/third_party/zitadel-go-module-notices/catalogue.json \
   --output /absolute/fresh-retained-directory
-go run . --verify /absolute/fresh-retained-directory --sha256 EXTERNAL_MANIFEST_SHA256
+/absolute/zitadel-module-sources --verify /absolute/fresh-retained-directory --sha256 EXTERNAL_MANIFEST_SHA256
 ```
 
-The existing explicit Linux builder invokes these operations after compilation
+The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
+alongside `--capture-source`. It requires the reviewed command identity, exact
+tool compiler and an unchanged executable digest. CI builds that command before
+switching to the identity service's unchanged Go 1.26.10 compiler; the native
+build never switches or auto-downloads a toolchain. The builder invokes capture
+and verification after compilation
 and its final module verification. The complete compiler stream, root command
 dependency closure, reviewed catalogue and frozen locks must agree. Original and
 effective replacement identities are retained. Only the build-owned selected ZIPs

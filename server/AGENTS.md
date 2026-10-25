@@ -1,6 +1,12 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
+Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
+importing portal authority or entering the frozen identity service's graph.
+CI builds the command with this module's exact compiler before selecting the
+unchanged upstream compiler. Preserve its complete tests, external-seal readback
+and narrow evidence fields; it never grants image or portal activation.
 `cmd/customer-identity-config` explicitly prepares dormant native ZITADEL/Dex
 documents with no network, user, secret-value or activation operations. Read
 `CUSTOMER-IDENTITY.md`. Preserve skipped first-instance bootstrap, closed user and

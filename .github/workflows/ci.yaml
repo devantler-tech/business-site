@@ -46,7 +46,9 @@ jobs:
               - 'third_party/zitadel-login-icons/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
-              - 'tools/zitadel-module-sources/**'
+              - 'server/cmd/zitadel-module-sources/**'
+              - 'server/go.mod'
+              - 'server/go.sum'
               - 'docs/ZITADEL-SOURCE.md'
               - '.github/workflows/ci.yaml'
             docs:
@@ -336,6 +338,16 @@ jobs:
         run: |
           test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 12582912
           test "$(awk '/MemTotal:/ {print $2}' /proc/meminfo)" -ge 12582912
+      - name: Setup the source verifier compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: false
+      - name: Verify selected Go source retention
+        working-directory: server
+        run: |
+          go test -race ./cmd/zitadel-module-sources
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-module-sources" ./cmd/zitadel-module-sources
       - name: Setup the frozen identity Go compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -353,9 +365,6 @@ jobs:
       - name: Verify sealed source snapshots and closed archive controls
         working-directory: scripts
         run: go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go
-      - name: Verify selected Go source retention
-        working-directory: tools/zitadel-module-sources
-        run: go test -race ./...
       # This isolated upstream profile does not install or build the website's
       # npm application. Its older Node input is exact and checksum-bound.
       - name: Prepare the frozen identity JavaScript toolchain
@@ -375,7 +384,7 @@ jobs:
           git -C "$RUNNER_TEMP/zitadel-upstream" fetch --no-write-fetch-head --depth=1 https://github.com/zitadel/zitadel.git +refs/tags/v4.20.0:refs/tags/v4.20.0
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
-        run: bash scripts/build-zitadel-linux.sh --build --capture-source --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+        run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -386,7 +395,7 @@ jobs:
         run: |
           manifest="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
           cp -R "$RUNNER_TEMP/zitadel-build/selected-go-sources" "$RUNNER_TEMP/zitadel-go-sources-roundtrip"
-          (cd tools/zitadel-module-sources && go run . --verify "$RUNNER_TEMP/zitadel-go-sources-roundtrip" --sha256 "$manifest") > "$RUNNER_TEMP/zitadel-build/go-module-source-roundtrip.json"
+          "$RUNNER_TEMP/zitadel-module-sources" --verify "$RUNNER_TEMP/zitadel-go-sources-roundtrip" --sha256 "$manifest" > "$RUNNER_TEMP/zitadel-build/go-module-source-roundtrip.json"
           cmp "$RUNNER_TEMP/zitadel-build/selected-go-sources/manifest.json" "$RUNNER_TEMP/zitadel-go-sources-roundtrip/manifest.json"
       - name: Exercise the local restricted identity image
         run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"

@@ -17,7 +17,7 @@ check() {
     any($source.steps[]; .run == "bash scripts/prepare-zitadel-source.test.sh" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
-    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("tools/zitadel-module-sources/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-module-sources/**")) and (.with.filters | contains("server/go.mod")) and (.with.filters | contains("server/go.sum"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
@@ -29,7 +29,7 @@ check() {
     $job.needs == "changes" and
     $job.if == "needs.changes.outputs.zitadel-build == '\''true'\''" and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
-      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
+      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
@@ -49,13 +49,19 @@ check() {
       .run == "go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify selected Go source retention" and
-      .["working-directory"] == "tools/zitadel-module-sources" and
-      .run == "go test -race ./..." and
+      .["working-directory"] == "server" and
+      .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Setup the source verifier compiler" and
+      (.uses // "" | startswith("actions/setup-go@")) and
+      .with["go-version-file"] == "server/go.mod" and .with.cache == false and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Setup the source verifier compiler") < index("Verify selected Go source retention") and
+      index("Verify selected Go source retention") < index("Setup the frozen identity Go compiler")) and
     any($job.steps[]; .name == "Copy and verify the actual retained Go module inputs" and
       (.run | contains(".sourceSnapshot.goModules.manifestSha256")) and
       (.run | contains("cp -R")) and
-      (.run | contains("go run . --verify")) and
+      (.run | contains("\"$RUNNER_TEMP/zitadel-module-sources\" --verify")) and
       (.run | contains("cmp")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify selected Go source retention") < index("Build the complete native Linux service and embedded console")) and
@@ -94,7 +100,16 @@ check() {
 check "$scratch/ci.json"
 controls=0
 for mutation in \
-  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("tools/zitadel-module-sources"; "missing/tool") else . end)' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/cmd/zitadel-module-sources"; "missing/tool") else . end)' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.mod"; "missing/mod") else . end)' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.sum"; "missing/sum") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Setup the source verifier compiler"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .with["go-version-file"]="missing/go.mod" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= sort_by(if .name == "Setup the frozen identity Go compiler" then 0 else 1 end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .run=(.run | sub("CGO_ENABLED=0 go build"; "echo")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .run=(.run | sub("--module-source-verifier"; "--missing-verifier")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected Go source retention"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .["continue-on-error"]=true else . end)' \

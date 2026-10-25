@@ -455,7 +455,7 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 The same explicit flag also retains the selected service's complete Go ZIP and
 go.mod inputs after compilation and final module verification. The otherwise
-inert tool in `tools/zitadel-module-sources/` checks the frozen catalogue and locks,
+inert command in `server/cmd/zitadel-module-sources/` checks the frozen catalogue and locks,
 every original/effective replacement, and equality between the root command's
 dependency list and the complete compiler stream. It copies only the 231 selected
 effective module pairs from this build's private cache. Go's maintained module
@@ -468,7 +468,13 @@ I/O. CI copies the actual retained package into a fresh directory and verifies
 it again. Its manifest and compact round-trip result are diagnostics; source ZIPs
 and go.mod payloads are excluded. The completed binary/recipe receipt binds the
 narrow `sourceSnapshot.goModules` result. The verifier's checksum-pinned module
-library is a separate build-tool acquisition, not a service dependency.
+library is a build-tool acquisition in the existing server Go module, not an
+identity service dependency. CI tests/builds that command with Go 1.27.3 before
+selecting the unchanged upstream Go 1.26.10 compiler. Source capture requires
+`--module-source-verifier /absolute/built-command`; the builder checks its command
+identity/compiler and records its unchanged executable digest in
+`sourceSnapshot.goModuleVerifier`. The native build never downloads or switches
+toolchains to run this verifier.
 
 This is selected service-Go retention, not generator-tool, pnpm/workspace or BSR
 source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
