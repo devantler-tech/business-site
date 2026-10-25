@@ -52,6 +52,17 @@ func materializeSelection(t *testing.T) (selectionFixture, string) {
 	return f, cat
 }
 
+// capturedSelection prepares a complete retained fixture for mutation or mode checks.
+func capturedSelection(t *testing.T) (selectionFixture, string) {
+	t.Helper()
+	f, cat := materializeSelection(t)
+	out := filepath.Join(t.TempDir(), "retained")
+	if _, err := capture(f.build, cat, out, digest(f.cat)); err != nil {
+		t.Fatal(err)
+	}
+	return f, out
+}
+
 // TestCaptureReadback exercises complete bytes, replacement identities and portability.
 func TestCaptureReadback(t *testing.T) {
 	f, cat := materializeSelection(t)

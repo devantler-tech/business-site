@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"iter"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -65,31 +68,38 @@ func uniqueTypedFields(raw []byte, typ reflect.Type) error {
 		if err := json.Unmarshal(raw, &values); err != nil {
 			return err
 		}
-		for _, value := range values {
-			if err := uniqueTypedFields(value, typ.Elem()); err != nil {
-				return err
-			}
-		}
+		return uniqueTypedValues(slices.Values(values), typ.Elem())
 	case reflect.Map:
 		var values map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &values); err != nil {
 			return err
 		}
-		for _, value := range values {
-			if err := uniqueTypedFields(value, typ.Elem()); err != nil {
-				return err
-			}
+		return uniqueTypedValues(maps.Values(values), typ.Elem())
+	}
+	return nil
+}
+
+// uniqueTypedValues checks each collection value against its declared element type.
+func uniqueTypedValues(values iter.Seq[json.RawMessage], typ reflect.Type) error {
+	for value := range values {
+		if err := uniqueTypedFields(value, typ); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// decodeObservation retains native extra fields while refusing ambiguous input.
-func decodeObservation(raw []byte, out any) error {
+// validateJSONFields applies literal-key and consumed-field checks before decoding.
+func validateJSONFields(raw []byte, out any) error {
 	if err := uniqueJSON(raw); err != nil {
 		return err
 	}
-	if err := uniqueTypedFields(raw, reflect.TypeOf(out)); err != nil {
+	return uniqueTypedFields(raw, reflect.TypeOf(out))
+}
+
+// decodeObservation retains native extra fields while refusing ambiguous input.
+func decodeObservation(raw []byte, out any) error {
+	if err := validateJSONFields(raw, out); err != nil {
 		return err
 	}
 	return json.Unmarshal(raw, out)

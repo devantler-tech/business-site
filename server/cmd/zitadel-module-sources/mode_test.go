@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 	"testing"
 )
@@ -20,9 +19,5 @@ func TestCaptureUnderRestrictiveUmask(t *testing.T) {
 	}
 	previous := syscall.Umask(0o077)
 	defer syscall.Umask(previous)
-	f, cat := materializeSelection(t)
-	out := filepath.Join(t.TempDir(), "retained")
-	if _, err := capture(f.build, cat, out, digest(f.cat)); err != nil {
-		t.Fatal(err)
-	}
+	capturedSelection(t)
 }

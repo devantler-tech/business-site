@@ -179,10 +179,7 @@ func contentSum(sum string) bool {
 
 // decodeStrict refuses duplicate fields, unknown schema fields and trailing JSON.
 func decodeStrict(raw []byte, out any) error {
-	if err := uniqueJSON(raw); err != nil {
-		return err
-	}
-	if err := uniqueTypedFields(raw, reflect.TypeOf(out)); err != nil {
+	if err := validateJSONFields(raw, out); err != nil {
 		return err
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))

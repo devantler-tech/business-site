@@ -54,11 +54,7 @@ func TestRetainedManifestRejectsAliasedFields(t *testing.T) {
 		{"nested array identity", `"Path":`, `"path":"example.invalid/wrong","Path":`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f, cat := materializeSelection(t)
-			out := filepath.Join(t.TempDir(), "retained")
-			if _, err := capture(f.build, cat, out, digest(f.cat)); err != nil {
-				t.Fatal(err)
-			}
+			f, out := capturedSelection(t)
 			file := filepath.Join(out, "manifest.json")
 			raw, err := os.ReadFile(file)
 			if err != nil {
