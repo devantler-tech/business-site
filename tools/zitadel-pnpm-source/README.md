@@ -49,6 +49,11 @@ records workspace-wide optional exclusions, including incompatible dependencies
 from unselected roots. That native full-workspace classification is checked
 separately from the four-root source graph; it never adds unselected archives to
 capture. Missing, invented or compatible-package skips still fail.
+File refusals additionally report numeric type/mode/size/link metadata, never
+pathnames. Original archive permissions are checked against the complete native
+file map. Physical CAFS permissions follow pnpm's distinct storage normalization:
+0755 for executable content, otherwise 0644 under the required umask 022. An
+archive's other legitimate permissions cannot replace that exact physical check.
 
 The explicit read-only `inspect --build /physical/owned/build` operation runs
 immediately after installation, before expensive generation. It checks the same

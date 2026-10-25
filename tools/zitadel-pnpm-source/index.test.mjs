@@ -27,6 +27,34 @@ const ids = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"
 const root = "/owned/prepared/source";
 const sri = (body) => ssri.fromData(body, { algorithms: ["sha512"] }).toString();
 const clone = (value) => structuredClone(value);
+test("file refusal diagnostics contain only bounded metadata and no pathname", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "private-file-diagnostic-")));
+  const file = path.join(root, "fictional-sensitive-name");
+  try {
+    fs.writeFileSync(file, "bytes", { mode: 0o644 });
+    let error;
+    try {
+      readRegular(file, 32, 0o600);
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error);
+    const diagnostic = failureDiagnostic(error);
+    assert.deepEqual(diagnostic.fileMetadata, {
+      regular: true,
+      mode: 0o644,
+      expectedMode: 0o600,
+      size: 5,
+      limit: 32,
+      links: 1,
+      expectedLinks: 1,
+    });
+    assert.equal(JSON.stringify(diagnostic).includes(root), false);
+    assert.equal(JSON.stringify(diagnostic).includes("fictional-sensitive-name"), false);
+  } finally {
+    fs.rmSync(root, { recursive: true });
+  }
+});
 test("a FIFO input is refused without waiting for a writer", () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "native-fifo-")));
   const file = path.join(root, "payload");
@@ -547,7 +575,7 @@ test("capture refuses output in the prepared source before changing it", async (
   assert.equal(fs.existsSync(nested), false);
 });
 
-function archiveFixture(t, needsBuild = false) {
+function archiveFixture(t, needsBuild = false, archiveMode = 0o644) {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "zitadel-pnpm-native-test-")));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const source = path.join(directory, "package");
@@ -558,6 +586,7 @@ function archiveFixture(t, needsBuild = false) {
     { mode: 0o644 },
   );
   fs.writeFileSync(path.join(source, "index.js"), "export const value = 1;\n", { mode: 0o644 });
+  fs.chmodSync(path.join(source, "index.js"), archiveMode);
   fs.writeFileSync(path.join(source, "bin"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   const archive = execFileSync("tar", ["-czf", "-", "-C", directory, "package"], {
     env: { ...process.env, COPYFILE_DISABLE: "1" },
@@ -589,6 +618,29 @@ test("native archive interpretation is joined to every connected CAFS byte and e
   assert.equal(result.files, 3);
   assert.equal(result.archiveSha256, createHash("sha256").update(f.archive).digest("hex"));
 });
+
+for (const mode of [0o444, 0o640, 0o744, 0o711]) {
+  test(`native CAFS permissions normalize archive mode ${mode.toString(8)}`, (t) => {
+    const f = archiveFixture(t, false, mode);
+    const result = verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation);
+    assert.equal(result.files, 3);
+    const entry = f.index.files["index.js"];
+    const physical = getFilePathByModeInCafs(f.store, entry.integrity, entry.mode);
+    assert.equal(fs.statSync(physical).mode & 0o777, mode & 0o111 ? 0o755 : 0o644);
+  });
+}
+
+for (const mode of [0o444, 0o744]) {
+  test(`archive mode ${mode.toString(8)} cannot substitute for the exact physical CAFS mode`, (t) => {
+    const f = archiveFixture(t, false, mode);
+    const entry = f.index.files["index.js"];
+    fs.chmodSync(getFilePathByModeInCafs(f.store, entry.integrity, entry.mode), mode);
+    assert.throws(
+      () => verifyPackageArchive(f.archive, f.selected, f.index, f.store, f.validation),
+      /invalid native file type, size or mode/,
+    );
+  });
+}
 
 test("native lifecycle classification cannot be changed from required to false", (t) => {
   const f = archiveFixture(t, true);

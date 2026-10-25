@@ -171,8 +171,19 @@ export function readRegular(filename, limit, mode, links = 1) {
       opened.size > limit ||
       (opened.mode & 0o7000) !== 0 ||
       (mode !== undefined && (opened.mode & 0o7777) !== mode)
-    )
-      fail("invalid native file type, size or mode");
+    ) {
+      const error = new InputFailure("invalid native file type, size or mode");
+      error.fileMetadata = {
+        regular: opened.isFile(),
+        mode: opened.mode & 0o7777,
+        expectedMode: mode ?? null,
+        size: opened.size,
+        limit,
+        links: opened.nlink,
+        expectedLinks: links,
+      };
+      throw error;
+    }
     const before = fs.lstatSync(full);
     if (opened.ino !== before.ino || opened.dev !== before.dev || !before.isFile() || fs.realpathSync(full) !== full)
       fail("native file replaced before read");
@@ -205,6 +216,13 @@ export function readRegular(filename, limit, mode, links = 1) {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+// pnpm's native CAFS stores executable content as 0755 and all other content
+// with the default 0666 creation mode under the required umask 022. The archive's
+// original permissions remain separately checked in its complete file map.
+function nativeCafsMode(mode) {
+  return mode & 0o111 ? 0o755 : 0o644;
 }
 
 function fileMap(files) {
@@ -290,7 +308,7 @@ export function verifyPackageArchive(archive, selected, index, store, validation
     const filename = getFilePathByModeInCafs(store, record.integrity, record.mode);
     const stat = fs.lstatSync(filename);
     const links = 1 + (ownedLinks.get(`${stat.dev}:${stat.ino}`) || 0);
-    const body = readRegular(filename, record.size, record.mode & ~0o022, links);
+    const body = readRegular(filename, record.size, nativeCafsMode(record.mode), links);
     if (body.length !== record.size || !ssri.checkData(body, record.integrity, { strict: true }))
       fail("connected CAFS content differs");
     bytes += body.length;
@@ -625,7 +643,7 @@ export async function captureBuild({
   for (const [filename, f] of payloads) {
     const stat = fs.lstatSync(filename);
     const links = 1 + (finalLinks.get(`${stat.dev}:${stat.ino}`) || 0);
-    const body = readRegular(filename, f.size, f.mode & ~0o022, links);
+    const body = readRegular(filename, f.size, nativeCafsMode(f.mode), links);
     if (body.length !== f.size || !ssri.checkData(body, f.integrity, { strict: true }))
       fail("connected CAFS changed before finalization");
   }
@@ -692,6 +710,7 @@ export function failureDiagnostic(error) {
   return {
     phase,
     ...(error instanceof InputFailure && error.optionalSkips ? { optionalSkips: error.optionalSkips } : {}),
+    ...(error instanceof InputFailure && error.fileMetadata ? { fileMetadata: error.fileMetadata } : {}),
     reason:
       error instanceof InputFailure
         ? error.message
@@ -807,7 +826,7 @@ export async function verifyCapsule({ capsule, sha256: seal, scratch, expectedLo
       storeMembers.add(relative);
       for (const member of Object.values(members)) {
         const filename = getFilePathByModeInCafs(target, member.integrity, member.mode);
-        const body = readRegular(filename, member.size, member.mode & ~0o022);
+        const body = readRegular(filename, member.size, nativeCafsMode(member.mode));
         if (body.length !== member.size || !ssri.checkData(body, member.integrity, { strict: true }))
           fail("restored CAFS bytes differ");
         storeMembers.add(path.relative(target, filename));

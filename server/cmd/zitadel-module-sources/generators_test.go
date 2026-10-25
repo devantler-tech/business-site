@@ -24,7 +24,7 @@ func TestGeneratorCheckpointSealAndCompleteMembership(t *testing.T) {
 	}
 	for _, name := range []string{"changed-seal", "changed-source", "missing-tool", "missing-module", "extra-module", "claimed-offline", "claimed-closure", "unknown-field", "duplicate-field", "incomplete-json"} {
 		t.Run(name, func(t *testing.T) {
-			copy := checkpoint
+			changedCheckpoint := checkpoint
 			candidate := bytes.Clone(body)
 			expected, source := digest(body), checkpoint.SourceManifestSHA256
 			switch name {
@@ -33,20 +33,20 @@ func TestGeneratorCheckpointSealAndCompleteMembership(t *testing.T) {
 			case "changed-source":
 				source = strings.Repeat("b", 64)
 			case "missing-tool":
-				copy.Tools = copy.Tools[1:]
-				candidate = marshal(t, copy)
+				changedCheckpoint.Tools = changedCheckpoint.Tools[1:]
+				candidate = marshal(t, changedCheckpoint)
 			case "missing-module":
-				copy.Modules = copy.Modules[1:]
-				candidate = marshal(t, copy)
+				changedCheckpoint.Modules = changedCheckpoint.Modules[1:]
+				candidate = marshal(t, changedCheckpoint)
 			case "extra-module":
-				copy.Modules = append(slices.Clone(copy.Modules), copy.Modules[0])
-				candidate = marshal(t, copy)
+				changedCheckpoint.Modules = append(slices.Clone(changedCheckpoint.Modules), changedCheckpoint.Modules[0])
+				candidate = marshal(t, changedCheckpoint)
 			case "claimed-offline":
-				copy.NativeOfflineReplayProved = true
-				candidate = marshal(t, copy)
+				changedCheckpoint.NativeOfflineReplayProved = true
+				candidate = marshal(t, changedCheckpoint)
 			case "claimed-closure":
-				copy.DependencyInputsCaptured = true
-				candidate = marshal(t, copy)
+				changedCheckpoint.DependencyInputsCaptured = true
+				candidate = marshal(t, changedCheckpoint)
 			case "unknown-field":
 				candidate = append([]byte(`{"authority":"on",`), body[1:]...)
 			case "duplicate-field":
