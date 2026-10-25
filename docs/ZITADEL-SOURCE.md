@@ -420,6 +420,91 @@ packaging and clean replay remain under #343/#308. This is assessed text/input
 retention, not a legal classifier, full licence closure, image admission,
 reproducibility, restricted-runtime proof or customer-login activation.
 
+## Explicit prepared-source snapshots
+
+`scripts/zitadel-source-bundle.go` admits the complete frozen prepared source
+after the Linux recipe's API serialization change and before installation. Its
+`--seal-prepared <source> <new-snapshot>` operation compares all sorted file names,
+bytes and executable modes with the frozen profile. It preserves empty files and
+maintained protobuf bootstrap sources. A substituted preparation or lock fails.
+No arguments perform no operation.
+
+`--pack <snapshot> <manifest-sha256> <new-tar>` writes a closed USTAR archive and
+reports its separate SHA-256. `--unpack <tar> <archive-sha256> <manifest-sha256>
+<new-snapshot>` rechecks exact ordered regular members, complete bytes and declared
+metadata. The output must be new. Traversal, links, duplicates, missing or extra
+members, changed identities and trailing input fail without publishing a success
+receipt. `--verify <snapshot> <manifest-sha256>` reads the closed snapshot without
+modifying it. The archive digest is external; it never rewrites the manifest.
+
+These operations do not install dependencies or run the upstream build. A
+prepared-source round trip establishes only that source snapshot's correspondence.
+The Linux builder's optional `--capture-source` flag invokes `--capture-build`
+immediately before installation. It retains the preparation receipt, original and
+serialized API configuration, seven-input hash record, four exact recipes/input
+files, build guide and a dated modification record. That date belongs to the frozen
+modification set, not capture time; update it when the declared modifications change.
+Tests recapture identical inputs two simulated days apart to preserve stable seals.
+A complete file manifest
+keeps those ten records separate from the upstream source. The completed build
+receipt binds the preserved source/archive identities to its actual binary and
+recipe, after a full post-build readback. Default invocation omits this capture.
+CI explicitly enables it and unpacks the actual archive into a new reservation.
+Only the compact manifest, round-trip result and completed build receipt enter
+diagnostics; the source archive, recipe bodies and executable remain excluded.
+
+The same explicit flag also retains the selected service's complete Go ZIP and
+go.mod inputs after compilation and final module verification. The otherwise
+inert command in `server/cmd/zitadel-module-sources/` checks the frozen catalogue and locks,
+every original/effective replacement, and equality between the root command's
+dependency list and the complete compiler stream. It copies only the 231 selected
+effective module pairs from this build's private cache. Go's maintained module
+library recomputes full archive/go.mod content sums; `.ziphash` is not trusted.
+
+The retained directory contains 462 source payloads and four literal metadata
+records plus an externally sealed manifest. Readback verifies complete bytes,
+membership, sizes and canonical file modes, rejecting linked inputs and partial
+I/O. CI copies the actual retained package into a fresh directory and verifies
+it again. Its manifest and compact round-trip result are diagnostics; source ZIPs
+and go.mod payloads are excluded. The completed binary/recipe receipt binds the
+narrow `sourceSnapshot.goModules` result. The verifier's checksum-pinned module
+library is a build-tool acquisition in the existing server Go module, not an
+identity service dependency. CI tests/builds that command with Go 1.27.3 before
+selecting the unchanged upstream Go 1.26.10 compiler. Source capture requires
+`--module-source-verifier /absolute/built-command`; the builder checks its command
+identity/compiler and records its unchanged executable digest in
+`sourceSnapshot.goModuleVerifier`. The native build never downloads or switches
+toolchains to run this verifier.
+
+This package is selected service-Go retention, not generator-tool or pnpm/workspace
+source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
+remain false. No ordinary build, publisher, deployed login or customer access is
+enabled by this capture.
+
+The same explicit capture also requires
+`--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
+Before native API generation, the builder creates a private Buf cache. It retains
+the actual API 1.67.0 and console 1.72.0 native commands, checks their original and
+copied byte hashes throughout, and binds those identities to the sealed schema
+package. Literal registry metadata and separate complete exports cover only the
+three immutable references in the frozen v1 lock. Native cache content, exports
+and the prepared-source/recipe identities must pass the schema verifier.
+
+Each compiler then compiles the local proto workspace from the restored sealed
+source archive, with separate connected and network-denied caches. Linux network
+namespaces run as the original non-root UID/GID, with privilege recovery disabled
+and the kernel barrier checked before every invocation. An independent reachable
+control, failed empty-cache compilation and refused missing/changed cache members
+must all pass. Connected and offline descriptor bytes must match. The completed
+receipt embeds `sourceSnapshot.bsrSources`, `bsrVerifier` and `bsrSchemaReplay`;
+CI verifies an actual copied package and equality with the separate replay record.
+Diagnostics retain compact manifests, hashes and results, excluding source payloads
+and native executables. This is schema-only replay, not offline service compilation.
+
+Issue #343 also requires actual selected dependency capture and a clean,
+network-denied native replay before its full acceptance criteria are complete.
+Source/image publication and the recipient's source offer remain #308.
+
 ## Local restricted image CLI test
 
 The explicit image test packages the actual successful Linux build and observes
