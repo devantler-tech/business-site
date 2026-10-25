@@ -1,20 +1,20 @@
-import { FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE, FEATURE_VAT_PRICES } from "$app/env/private";
+import { FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE } from "$app/env/private";
 import { companyFacts } from "../../../src/components/business/company-copy";
 import { createBusinessCopy, guideOffers, linkedInUrl, vatPriceMarker } from "../../../src/components/business/business-copy";
 import { createClientCopy } from "../../../src/components/business/client-copy";
 import { createSupportingCopy } from "../../../src/components/business/supporting-copy";
 
-const company = companyFacts(FEATURE_VAT_PRICES);
+const company = companyFacts();
 
 export const business = {
   companyEnabled: FEATURE_COMPANY_IDENTITY,
   customerScopeEnabled: FEATURE_CUSTOMER_SCOPE,
   inquiryUrl: FEATURE_COMPANY_IDENTITY ? `mailto:${company.email}` : linkedInUrl,
-  copy: createBusinessCopy(FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE, FEATURE_VAT_PRICES),
+  copy: createBusinessCopy(FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE),
   client: createClientCopy(FEATURE_OFFER_COPY),
   supporting: createSupportingCopy(FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE),
-  offers: guideOffers(FEATURE_VAT_PRICES),
-  vatMarker: (locale: "en" | "da") => vatPriceMarker(locale, FEATURE_VAT_PRICES),
+  offers: guideOffers(),
+  vatMarker: (locale: "en" | "da") => vatPriceMarker(locale),
 };
 
 // Only public, rendered footer data crosses the server boundary. In particular,

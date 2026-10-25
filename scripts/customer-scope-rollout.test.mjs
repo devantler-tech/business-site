@@ -5,7 +5,7 @@ import { load } from 'js-yaml';
 
 const workflow = load(readFileSync(new URL('../.github/workflows/ci.yaml', import.meta.url), 'utf8'));
 const flag = 'FEATURE_CUSTOMER_SCOPE';
-const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build';
+const unsetCommand = 'env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build';
 /** Require all release states to succeed before CI uploads the normal artifact. */
 const valid = ci => {
   const job = ci.jobs?.['build-docs'];
@@ -15,7 +15,7 @@ const valid = ci => {
   const enabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'true');
   // The separate current-production probe also pins scope=false. Its complete
   // tuple is guarded by vat-activation.test; retain this independent false case.
-  const disabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'false' && step.env?.FEATURE_VAT_PRICES !== 'true');
+  const disabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'false' && step.name === 'Build');
   const unset = indices(step => step.run === unsetCommand && step.env == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');
   return [enabled, disabled, unset, artifact].every(group => group.length === 1) &&
@@ -33,7 +33,7 @@ for (const mode of ['missing-enabled', 'missing-disabled', 'missing-unset', 'mis
     const ci = structuredClone(workflow), job = ci.jobs['build-docs'], steps = job.steps;
     assert.ok(valid(ci));
     const enabled = steps.find(step => step.env?.[flag] === 'true');
-    const disabled = steps.find(step => step.env?.[flag] === 'false' && step.env?.FEATURE_VAT_PRICES !== 'true');
+    const disabled = steps.find(step => step.env?.[flag] === 'false' && step.name === 'Build');
     const unset = steps.find(step => step.run === unsetCommand);
     const artifact = steps.find(step => step.with?.name === 'business-site-preview');
     if (mode === 'missing-enabled') steps.splice(steps.indexOf(enabled), 1);

@@ -187,16 +187,14 @@ The Go/PostgreSQL portal remains the unchanged authority, independently default-
 There are no private routes, identity integrations, customer records, payment operations or
 new hosted services here. Do not put secrets or private environment values into public output.
 
-The candidate preserves the existing company, offer, customer-scope and VAT settings through
-SvelteKit's typed, build-time, server-only environment module. All four settings retain their
-false default; ambiguous values fail the build. Shared copy/price factories and company data
-remain authoritative. No portal setting is read and no setting authorizes orders or payments.
-The source-owned publisher and production-template package explicitly select company=true,
-VAT=true, revised-offer=false and customer-scope=false after the maintainer's 20 October 2026
-effective-date confirmation. That tuple uses the approved gross prices and ordinary company
-identity in every footer and disclosure. False/unset VAT inputs retain historical PMV comparisons
-only; they are not valid current-production recovery. Astro recovery must also retain VAT=true.
-The separate audience and hosted-offer releases remain closed, as do private portal operations.
+The candidate preserves the three company, offer and customer-scope settings through
+SvelteKit's typed, build-time, server-only environment module. All three retain their false
+default; ambiguous values fail the build. Shared copy/price factories and company data remain
+authoritative. Approved VAT-inclusive prices and ordinary company facts are permanent in every
+configuration; no historical PMV comparison selector remains. The publisher and production-template
+package select company=true, revised-offer=false and customer-scope=false. Astro comparison and
+recovery retain the same current prices. The separate audience and hosted-offer releases remain
+closed, as do private portal operations. No setting authorizes orders or payments.
 
 `FEATURE_COMPANY_IDENTITY=true` adds the native company footer links, verified email contact
 with LinkedIn as an alternative, and `/company/` plus `/da/company/`. Supply an explicitly
@@ -211,7 +209,7 @@ no address even when the company setting is enabled.
 for the Go runtime's escaped substitution, without consuming the configured private address.
 The explicitly selected Go package consumes this same template without changing private authority.
 The company/contact matrix compares actual Astro and Svelte artifacts for unset, explicit-false,
-current production, historical, revised/VAT, independently selected and template configurations in both languages.
+current production, scoped identity, revised offers, independently selected and template configurations in both languages.
 Independent missing-locale, incomplete-disclosure and unrelated-script leak controls must reject
 otherwise healthy real output. It also exercises the framework's invalid settings and address
 diagnostics. Run it with `bash scripts/check-svelte-company.sh`; the complete candidate check

@@ -45,7 +45,7 @@ export const publishedOffer = {
           "boundary": "External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price."
         }
       ],
-      "priceNote": "Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosting capacity, maintenance, backups and support scope are agreed separately. No VAT is charged under the current PMV setup.",
+      "priceNote": "Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosting capacity, maintenance, backups and support scope are agreed separately. Prices include 25% Danish VAT.",
       "hostingText": "Your project can run on the Devantler Tech platform when its needs fit. Traffic, storage and any external services determine the final monthly price. If a new feature increases those costs, you receive a revised quote before it is added.",
       "fitText": "This is an independent business, not an on-call agency. Changes are scheduled and quoted; feature requests are not delivered at a moment’s notice. Emergency response, 24/7 support and large infrastructure projects are not offered.",
       "qualityTitle": "Clear scope. Serious engineering.",
@@ -109,7 +109,7 @@ export const publishedOffer = {
           "boundary": "Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen."
         }
       ],
-      "priceNote": "Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostingkapacitet, vedligeholdelse, backup og support aftales særskilt. Der opkræves ikke moms under den nuværende PMV-ordning.",
+      "priceNote": "Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostingkapacitet, vedligeholdelse, backup og support aftales særskilt. Priserne er inkl. 25 % moms.",
       "hostingText": "Dit projekt kan køre på Devantler Tech-platformen, når behovet passer. Trafik, lagerplads og eventuelle eksterne tjenester afgør den endelige månedspris. Hvis en ny funktion øger udgifterne, får du et revideret tilbud, før den tilføjes.",
       "fitText": "Dette er en uafhængig virksomhed, ikke et bureau på tilkaldevagt. Ændringer planlægges og prissættes; nye funktioner leveres ikke med et øjebliks varsel. Akut beredskab, support døgnet rundt og store infrastrukturprojekter tilbydes ikke.",
       "qualityTitle": "Klart omfang. Solidt håndværk.",

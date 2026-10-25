@@ -175,13 +175,12 @@ jobs:
           FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
           FEATURE_CUSTOMER_SCOPE: "false"
-          FEATURE_VAT_PRICES: "false"
           FEATURE_OFFER_COPY: "false"
           FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u FEATURE_VAT_PRICES npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build
       - name: Verify the published Journal presentation
         working-directory: .
         run: node scripts/check-journal-presentation.mjs dist
@@ -189,10 +188,10 @@ jobs:
         run: node scripts/check-offering-copy.test.mjs dist
       - name: Verify public portal boundary controls
         run: bash scripts/check-portal-artifacts.test.sh
-      - name: Build current VAT production presentation
+      - name: Build current production presentation
+        id: current-production
         working-directory: .
         env:
-          FEATURE_VAT_PRICES: "true"
           FEATURE_COMPANY_IDENTITY: "true"
           FEATURE_SVELTE_FRONTEND: "true"
           FEATURE_OFFER_COPY: "false"

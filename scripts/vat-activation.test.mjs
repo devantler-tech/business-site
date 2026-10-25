@@ -12,14 +12,14 @@ const selected = workflow => workflow.jobs?.build?.steps?.filter(step => step.ru
 const current = workflow => {
   const builds = selected(workflow);
   return builds.length === 1 && builds[0].env?.FEATURE_COMPANY_IDENTITY === 'true' &&
-    builds[0].env.FEATURE_VAT_PRICES === 'true' && builds[0].env.FEATURE_OFFER_COPY === 'false' &&
+    !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') && builds[0].env.FEATURE_OFFER_COPY === 'false' &&
     builds[0].env.FEATURE_CUSTOMER_SCOPE === 'false';
 };
 
 const currentCI = workflow => {
-  const builds = workflow.jobs?.['build-docs']?.steps?.filter(step => step.run === 'npm run build' && step.env?.FEATURE_VAT_PRICES === 'true') ?? [];
+  const builds = workflow.jobs?.['build-docs']?.steps?.filter(step => step.run === 'npm run build' && step.id === 'current-production') ?? [];
   return builds.length === 1 && builds[0]['working-directory'] === '.' && builds[0].if == null &&
-    (builds[0]['continue-on-error'] == null || builds[0]['continue-on-error'] === false) &&
+    (builds[0]['continue-on-error'] == null || builds[0]['continue-on-error'] === false) && !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') &&
     builds[0].env.FEATURE_COMPANY_IDENTITY === 'true' && builds[0].env.FEATURE_SVELTE_FRONTEND === 'true' &&
     builds[0].env.FEATURE_OFFER_COPY === 'false' && builds[0].env.FEATURE_CUSTOMER_SCOPE === 'false' &&
     typeof builds[0].env.COMPANY_POSTAL_ADDRESS === 'string' && builds[0].env.COMPANY_POSTAL_ADDRESS.split('\n').length === 2;
@@ -31,7 +31,7 @@ const productionPreview = workflow => {
   const steps = workflow.jobs?.['build-docs']?.steps ?? [];
   const [build, boundary, upload] = steps.slice(-3);
   const required = step => step && step.if == null && (step['continue-on-error'] == null || step['continue-on-error'] === false);
-  return currentCI(workflow) && build?.run === 'npm run build' && build.env?.FEATURE_VAT_PRICES === 'true' &&
+  return currentCI(workflow) && build?.run === 'npm run build' && build.id === 'current-production' &&
     boundary?.run === 'bash scripts/check-portal-artifacts.sh dist' &&
     /^actions\/upload-artifact@[a-f0-9]{40}$/.test(upload?.uses ?? '') &&
     upload.with?.name === 'business-site-preview' && upload.with.path === 'dist' &&
@@ -43,7 +43,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
   const directory = mkdtempSync(join(tmpdir(), 'vat-preview-order-'));
   try {
     mkdirSync(join(directory, 'bin'));
-    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_VAT_PRICES-}" "${FEATURE_OFFER_COPY-}" "${FEATURE_CUSTOMER_SCOPE-}" "${FEATURE_SVELTE_FRONTEND-}" > dist/presentation\n', { mode: 0o700 });
+    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_OFFER_COPY-}" "${FEATURE_CUSTOMER_SCOPE-}" "${FEATURE_SVELTE_FRONTEND-}" > dist/presentation\n', { mode: 0o700 });
     for (const step of ci.jobs['build-docs'].steps.filter(step => /^(?:npm run build|env .* npm run build)$/.test(step.run ?? ''))) {
       const env = { ...process.env, PATH: `${directory}/bin:${process.env.PATH}` };
       for (const key of Object.keys(env).filter(key => key.startsWith('FEATURE_'))) delete env[key];
@@ -53,7 +53,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
       assert.ifError(result.error);
       assert.equal(result.status, 0, result.stderr);
     }
-    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\ntrue\nfalse\nfalse\ntrue\n');
+    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\nfalse\ntrue\n');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -75,7 +75,7 @@ for (const mode of ['late-overwrite', 'wrong-artifact', 'skipped-upload', 'ignor
 for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 'wrong-directory', 'legacy-vat', 'revised-offer', 'expanded-audience']) {
   test(`current-production CI probe refuses ${mode}`, () => {
     const changed = structuredClone(ci), steps = changed.jobs['build-docs'].steps;
-    const build = steps.find(step => step.env?.FEATURE_VAT_PRICES === 'true');
+    const build = steps.find(step => step.id === 'current-production');
     if (mode === 'missing') steps.splice(steps.indexOf(build), 1);
     if (mode === 'duplicate') steps.push(structuredClone(build));
     if (mode === 'skipped') build.if = 'false';
@@ -90,8 +90,8 @@ for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 
 }
 
 test('the actual publisher selects only the confirmed VAT and identity release', () => assert.ok(current(publisher)));
-for (const flag of ['FEATURE_COMPANY_IDENTITY', 'FEATURE_VAT_PRICES', 'FEATURE_OFFER_COPY', 'FEATURE_CUSTOMER_SCOPE']) {
-  for (const value of [undefined, true, false, 'ambiguous', flag.includes('VAT') || flag.includes('IDENTITY') ? 'false' : 'true']) {
+for (const flag of ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_CUSTOMER_SCOPE']) {
+  for (const value of [undefined, true, false, 'ambiguous', flag.includes('IDENTITY') ? 'false' : 'true']) {
     test(`publisher refuses changed ${flag}=${String(value)}`, () => {
       const changed = structuredClone(publisher), env = selected(changed)[0].env;
       if (value === undefined) delete env[flag];

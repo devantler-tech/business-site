@@ -19,11 +19,26 @@ const links = node => walk(node).filter(item => item.tagName === "a").map(item =
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 
+/** Validate inline text exactly as the rendered paragraph joins its text nodes.
+ * @param {string} candidate @param {string} locale
+ */
+export function assertMonthlyVATSpacing(candidate, locale) {
+  const nodes = load(join(candidate, locale === "da" ? "da/index.html" : "index.html"));
+  const prices = nodes.filter(node => node.tagName === "p" && attr(node,"class")?.split(/\s+/).includes("hosting-price"));
+  assert.equal(prices.length, 3, "all monthly prices remain visible");
+  for (const price of prices) {
+    const inlineText = walk(price).filter(node => node.nodeName === "#text").map(node => node.value).join("");
+    assert.match(inlineText, locale === "da" ? /\/ måned\s+inkl[.] moms/ : /\/ month\s+incl[.] VAT/,
+      "monthly period and VAT label must remain separate words");
+  }
+}
+
 /** Compare real generated artifacts; never import the copy builders under test.
  * @param {string} candidate @param {string} reference
- * @param {{identity:boolean,scope:boolean,vat:boolean,template:boolean,address:string}} options
+ * @param {{identity:boolean,scope:boolean,template:boolean,address:string}} options
  */
-export function assertCompanyOutput(candidate, reference, {identity, scope, vat, template, address}) {
+export function assertCompanyOutput(candidate, reference, {identity, scope, template, address}) {
+  for (const locale of ["en", "da"]) assertMonthlyVATSpacing(candidate, locale);
   const expectedAddress = template ? ["__BUSINESS_ADDRESS_LINE_1__", "__BUSINESS_ADDRESS_LINE_2__"] : address.split("\n");
   const companyPages = new Set([join(candidate,"company/index.html"),join(candidate,"da/company/index.html")]);
   for (const [prefix,locale] of [["","en"],["da/","da"]]) {
@@ -34,7 +49,7 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
       assert.ok(footer && originalFooter, "real shared business footer is required");
       assert.equal(text(footer),text(originalFooter), "complete localized company/footer copy matches Astro");
       assert.deepEqual(links(footer),links(originalFooter), "footer destinations and labels match Astro");
-      if (identity && vat) {
+      if (identity) {
         assert.ok(text(footer).includes(locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship'), 'current ordinary registration is independently required');
         assert.doesNotMatch(text(footer), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current footer cannot retain PMV wording');
       }
@@ -52,7 +67,7 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
         /** @param {MarkupNode[]} nodes */
         const offers = nodes => nodes.filter(node => attr(node,"data-offer") !== undefined).map(node => [attr(node,"data-offer"),attr(node,"data-setup"),attr(node,"data-monthly"),text(node)]);
         assert.deepEqual(offers(actual),offers(original), "complete offers, VAT markers and amounts match the actual Astro artifact");
-        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),vat ? [["website","3750","125"],["app","10000","375"],["service","6250","250"]] : [["website","2995","99"],["app","7995","299"],["service","4995","199"]]);
+        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"]]);
       }
     }
     const path = join(candidate,`${prefix}company/index.html`);
@@ -61,9 +76,9 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
     const disclosure = find(actual,"data-company-disclosure"), oldDisclosure = find(original,"data-company-disclosure");
     assert.ok(disclosure && oldDisclosure,"complete company disclosure is required");
     assert.ok(text(disclosure) === text(oldDisclosure),"all registered facts and escaped address match Astro");
-    const registration = vat ? (locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship') : 'PMV';
+    const registration = locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship';
     for (const fact of ["Devantler Tech","46830385",registration,"Nikolai Emil Damm","ned@devantler.tech"]) assert.ok(text(disclosure).includes(fact),"registered company fact is missing");
-    if (vat) {
+    {
       const document = actual.find(node => node.tagName === 'html');
       assert.ok(document, 'current disclosure has a document element');
       assert.doesNotMatch(text(document), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current disclosure and serialized facts cannot retain PMV wording');
@@ -80,7 +95,7 @@ export function assertCompanyOutput(candidate, reference, {identity, scope, vat,
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);
-    if (identity && vat) {
+    if (identity) {
       assert.ok(text(footer).includes('Sole proprietorship'), 'supporting footer independently identifies the ordinary business');
       assert.doesNotMatch(text(footer), /\bPMV\b/i);
     }
