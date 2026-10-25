@@ -57,6 +57,7 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				"recipes/zitadel-source-inputs.sha256": []byte("original locks\n"),
 				"recipes/build-zitadel-linux.sh":       []byte("native builder\n"),
 				"recipes/zitadel-source-bundle.go":     []byte("source helper\n"),
+				"recipes/zitadel-console-assets.go":    []byte("console download adapter\n"),
 				"ZITADEL-SOURCE.md":                    []byte("source description\n"),
 				"modifications.json":                   []byte("dated modification record\n"),
 			}
@@ -419,7 +420,7 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
-	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
+	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo := t.TempDir(), t.TempDir()
 			write := func(root, name, body string) {
@@ -443,7 +444,7 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				fmt.Fprintf(&inputs, "%s  %s\n", hash(body), name)
 			}
 			write(build, "inputs.sha256", inputs.String())
-			for _, name := range []string{"prepare-zitadel-source.sh", "zitadel-source-inputs.sha256", "build-zitadel-linux.sh", "zitadel-source-bundle.go"} {
+			for _, name := range []string{"prepare-zitadel-source.sh", "zitadel-source-inputs.sha256", "build-zitadel-linux.sh", "zitadel-source-bundle.go", "zitadel-console-assets.go"} {
 				write(repo, "scripts/"+name, name+"\n")
 			}
 			write(repo, "docs/ZITADEL-SOURCE.md", "Build documentation.\n")
@@ -462,6 +463,10 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				write(repo, "scripts/prepare-zitadel-source.sh", "changed preparation\n")
 			case "changed-inputs":
 				write(repo, "scripts/zitadel-source-inputs.sha256", "changed input manifest\n")
+			case "missing-console-helper":
+				if err := os.Remove(filepath.Join(repo, "scripts/zitadel-console-assets.go")); err != nil {
+					t.Fatal(err)
+				}
 			case "wrong-original-api":
 				write(build, "api-project.original.json", "substitute original\n")
 			case "wrong-serial-api":
@@ -499,12 +504,15 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 10 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 11 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 10 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 11 {
 					t.Fatalf("unbound build records: %v", err)
+				}
+				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
+					t.Fatal("console helper source was not retained literally")
 				}
 			} else {
 				if err == nil || got.ManifestSHA256 != "" {

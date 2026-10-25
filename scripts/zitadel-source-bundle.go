@@ -63,6 +63,7 @@ func sourceRestoreBuild(snapshot, seal, output string) (summary sourceCaptureSum
 		"recipes/zitadel-source-inputs.sha256": true,
 		"recipes/build-zitadel-linux.sh":       true,
 		"recipes/zitadel-source-bundle.go":     true,
+		"recipes/zitadel-console-assets.go":    true,
 		"ZITADEL-SOURCE.md":                    true,
 		"modifications.json":                   true,
 	}
@@ -194,6 +195,7 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		{repository, "scripts/zitadel-source-inputs.sha256", "recipes/zitadel-source-inputs.sha256"},
 		{repository, "scripts/build-zitadel-linux.sh", "recipes/build-zitadel-linux.sh"},
 		{repository, "scripts/zitadel-source-bundle.go", "recipes/zitadel-source-bundle.go"},
+		{repository, "scripts/zitadel-console-assets.go", "recipes/zitadel-console-assets.go"},
 		{repository, "docs/ZITADEL-SOURCE.md", "ZITADEL-SOURCE.md"},
 	} {
 		body, err := sourceReadAt(entry.root, entry.name)

@@ -95,13 +95,21 @@ check() {
     ([$job.steps[].name] | index("Verify sealed source snapshots and closed archive controls") < index("Build the complete native Linux service and embedded console")) and
     ([$job.steps[].name] | index("Unpack and verify the actual pre-install source archive") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Rebuild the native service from the retained prepared source" and
-      (.run | contains("bash scripts/build-zitadel-linux.sh --build --prepared-source \"$RUNNER_TEMP/zitadel-source-roundtrip\" --prepared-sha256 \"$manifest\" --output \"$RUNNER_TEMP/zitadel-prepared-build\"")) and
+      (.run | contains("bash scripts/build-zitadel-linux.sh --build --prepared-source \"$RUNNER_TEMP/zitadel-source-roundtrip\" --prepared-sha256 \"$manifest\" --console-inputs \"$RUNNER_TEMP/zitadel-build/selected-console-originals\" --console-sha256 \"$console\" --output \"$RUNNER_TEMP/zitadel-prepared-build\"")) and
       (.run | contains(".sourceInput.recipeSha256 == .recipeSha256")) and
       (.run | contains(".sourceInput.manifestSha256 == $original[0].sourceSnapshot.manifestSha256")) and
       (.run | contains(".sourceInput.nativeOfflineReplayProved == false")) and
       (.run | contains("cp \"$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json\" \"$RUNNER_TEMP/zitadel-build/prepared-build-receipt.json\"")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Rebuild the native service from the retained prepared source") > index("Unpack and verify the actual pre-install source archive")) and
+    any($job.steps[]; .name == "Verify the original console downloads and native consumption" and
+      (.run | contains("cp -R")) and
+      (.run | contains("go run scripts/zitadel-console-assets.go verify --capsule")) and
+      (.run | contains("go run scripts/zitadel-console-assets.go consumption --capsule")) and
+      (.run | contains(".requests == 3")) and
+      (.run | contains(".originalConsoleDownloadsConsumed == true")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -117,7 +125,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -130,7 +138,7 @@ check "$scratch/ci.json"
 # textual mentions of a joined seal or the deliberately false offline claim.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Rebuild the native service from the retained prepared source") | .run |
   split("jq -e --slurpfile original")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/prepared.jq"
-jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)}}' >"$scratch/original-build.json"
+jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)},consoleDownloads:{sourceManifestSha256:("a"*64),manifestSha256:("d"*64),requestsSha256:("e"*64),helperSourceSha256:("f"*64),installerSha256:("1"*64),adapterSha256:("2"*64),launcherSha256:("3"*64),requests:3,originalConsoleDownloadsConsumed:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}}' >"$scratch/original-build.json"
 jq '.sourceInput = (.sourceSnapshot + {recipeSha256:.recipeSha256,nativeOfflineReplayProved:false}) | del(.sourceSnapshot) | .imageAdmission="unknown" | .licenseClosure="unknown"' "$scratch/original-build.json" >"$scratch/prepared-build.json"
 jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/prepared-build.json" >/dev/null
 for mutation in \
@@ -142,6 +150,15 @@ for mutation in \
   '.upstreamCommit=("e"*40)' \
   '.preparation.schemaVersion=2' \
   '.sourceInput.nativeOfflineReplayProved=true' \
+  '.consoleDownloads.manifestSha256=("e"*64)' \
+  '.consoleDownloads.requestsSha256=("d"*64)' \
+  '.consoleDownloads.helperSourceSha256=("e"*64)' \
+  '.consoleDownloads.launcherSha256=("e"*64)' \
+  '.consoleDownloads.installerSha256=("e"*64)' \
+  '.consoleDownloads.sourceManifestSha256=("e"*64)' \
+  '.consoleDownloads.requests=2' \
+  '.consoleDownloads.originalConsoleDownloadsConsumed=false' \
+  '.consoleDownloads.nativeOfflineReplayProved=true' \
   '.sourceSnapshot={}' \
   '.imageAdmission="admitted"' \
   '.licenseClosure="complete"'; do
@@ -221,6 +238,9 @@ for mutation in \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-toolchain-notices_test.go"; "")) else . end)' \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the original console downloads and native consumption"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify original console generator archives"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .["continue-on-error"]=true else . end)' \

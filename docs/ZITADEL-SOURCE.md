@@ -441,12 +441,13 @@ These operations do not install dependencies or run the upstream build. A
 prepared-source round trip establishes only that source snapshot's correspondence.
 The Linux builder's optional `--capture-source` flag invokes `--capture-build`
 immediately before installation. It retains the preparation receipt, original and
-serialized API configuration, seven-input hash record, four exact recipes/input
-files, build guide and a dated modification record. That date belongs to the frozen
+serialized API configuration, seven-input hash record, five exact recipes/input
+files, including the console download helper, build guide and a dated modification
+record. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those ten records separate from the upstream source. The completed build
+keeps those eleven records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
@@ -455,7 +456,7 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all ten literal records and places only the four fixed build inputs at
+It retains all eleven literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
@@ -574,12 +575,30 @@ linked, wrong-mode or differently identified members before emitting bytes. Fetc
 has no downloader and cannot fall back to the network. These operations never
 execute or extract the retained downloads.
 
-This collector is not yet the native install script's download source. It does
-not prove same-build consumption, capture the remaining Go/pnpm inputs or complete
+Explicit source capture acquires this capsule before the console phase. Only that
+phase receives a strict `curl` adapter and a fresh build-owned temporary directory.
+The unchanged upstream installer must make exactly its three ordered
+`curl -fsSL URL -o destination` requests. The adapter serves verified original
+bytes, refuses other flags/URLs, existing or escaped destinations and incomplete
+request records, and never invokes a downloader. The upstream checksum, ZIP
+extraction and installation steps remain active. API OpenAPI 2.28.0 is verified
+before console installation; installed grpc-web and OpenAPI 2.22.0 must match their
+retained originals afterward.
+
+An explicit prepared rebuild accepts the complete `--console-inputs <capsule>
+--console-sha256 <manifest-sha256>` pair. It verifies that capsule and enters the
+same adapter/console path without reacquiring those downloads. A partial pair,
+combination with original-source capture or failed verification refuses the build.
+The capsule is rechecked after console generation; successful ordered request
+records, source manifest, helper source, compiled adapter, launcher and immutable installer
+identities are bound to the completed build receipt. The helper source is retained
+as the eleventh source/build record.
+
+This does not capture the remaining generator-Go/pnpm inputs or complete
 network-denied native compilation. Both `dependencyInputsCaptured` and
-`nativeOfflineReplayProved` remain false. CI exercises the complete collector's
-local controls but does not upload these original binaries or archives. Binding
-their actual native consumption into the cohesive #343 replay remains unfinished.
+`nativeOfflineReplayProved` remain false. CI checks actual copied originals and
+native consumption receipts, but uploads only compact manifests and diagnostics;
+the original binaries and archives remain excluded. Full replay remains #343.
 
 ## Local restricted image CLI test
 

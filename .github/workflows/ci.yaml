@@ -403,7 +403,8 @@ jobs:
       - name: Rebuild the native service from the retained prepared source
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
-          bash scripts/build-zitadel-linux.sh --build --prepared-source "$RUNNER_TEMP/zitadel-source-roundtrip" --prepared-sha256 "$manifest" --output "$RUNNER_TEMP/zitadel-prepared-build"
+          console="$(jq -er '.consoleDownloads.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          bash scripts/build-zitadel-linux.sh --build --prepared-source "$RUNNER_TEMP/zitadel-source-roundtrip" --prepared-sha256 "$manifest" --console-inputs "$RUNNER_TEMP/zitadel-build/selected-console-originals" --console-sha256 "$console" --output "$RUNNER_TEMP/zitadel-prepared-build"
           jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
             .sourceInput.manifestSha256 == $original[0].sourceSnapshot.manifestSha256 and
             .sourceInput.preparedProfileSha256 == $original[0].sourceSnapshot.preparedProfileSha256 and
@@ -412,9 +413,29 @@ jobs:
             .platform == "linux/amd64" and .profile == "api-login-v1-console" and
             .preparation == $original[0].preparation and
             .sourceInput.nativeOfflineReplayProved == false and
+            .consoleDownloads.sourceManifestSha256 == .sourceInput.manifestSha256 and
+            .consoleDownloads.manifestSha256 == $original[0].consoleDownloads.manifestSha256 and
+            .consoleDownloads.requestsSha256 == $original[0].consoleDownloads.requestsSha256 and
+            .consoleDownloads.helperSourceSha256 == $original[0].consoleDownloads.helperSourceSha256 and
+            .consoleDownloads.launcherSha256 == $original[0].consoleDownloads.launcherSha256 and
+            .consoleDownloads.installerSha256 == $original[0].consoleDownloads.installerSha256 and
+            .consoleDownloads.requests == 3 and .consoleDownloads.originalConsoleDownloadsConsumed == true and
+            .consoleDownloads.dependencyInputsCaptured == false and .consoleDownloads.nativeOfflineReplayProved == false and
             (has("sourceSnapshot") | not) and .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json" >/dev/null
           cp "$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json" "$RUNNER_TEMP/zitadel-build/prepared-build-receipt.json"
+      - name: Verify the original console downloads and native consumption
+        run: |
+          seal="$(jq -er '.consoleDownloads.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          cp -R "$RUNNER_TEMP/zitadel-build/selected-console-originals" "$RUNNER_TEMP/zitadel-console-originals-roundtrip"
+          go run scripts/zitadel-console-assets.go verify --capsule "$RUNNER_TEMP/zitadel-console-originals-roundtrip" --sha256 "$seal" > "$RUNNER_TEMP/zitadel-build/console-originals-roundtrip.json"
+          go run scripts/zitadel-console-assets.go consumption --capsule "$RUNNER_TEMP/zitadel-console-originals-roundtrip" --sha256 "$seal" --requests "$RUNNER_TEMP/zitadel-build/console-download-requests" > "$RUNNER_TEMP/zitadel-build/console-consumption-roundtrip.json"
+          cmp "$RUNNER_TEMP/zitadel-build/console-download-consumption.json" "$RUNNER_TEMP/zitadel-build/console-consumption-roundtrip.json"
+          jq -e --slurpfile build "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            . == ($build[0].consoleDownloads | del(.sourceManifestSha256,.helperSourceSha256,.adapterSha256,.launcherSha256,.installerSha256)) and
+            .schemaVersion == 1 and .requests == 3 and .originalConsoleDownloadsConsumed == true and
+            .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
+          ' "$RUNNER_TEMP/zitadel-build/console-consumption-roundtrip.json" >/dev/null
       - name: Copy and verify the actual retained Go module inputs
         run: |
           manifest="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -466,6 +487,10 @@ jobs:
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/bsr-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/bsr-schema-replay.json
+            ${{ runner.temp }}/zitadel-build/selected-console-originals/manifest.json
+            ${{ runner.temp }}/zitadel-build/console-download-consumption.json
+            ${{ runner.temp }}/zitadel-build/console-originals-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
           if-no-files-found: error
           retention-days: 7

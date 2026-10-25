@@ -73,7 +73,7 @@ func consoleDirectory(directory string) error {
 		return fmt.Errorf("linked or unavailable console capsule path")
 	}
 	stat, err := os.Lstat(directory)
-	if err != nil || !stat.IsDir() || stat.Mode().Perm() != 0700 {
+	if err != nil || stat.Mode() != os.ModeDir|0700 {
 		return fmt.Errorf("console capsule must be a private directory")
 	}
 	return nil
@@ -161,15 +161,19 @@ func captureConsoleAssets(directory string, profile []consoleAsset, download ass
 		return "", err
 	}
 	current, err := os.Lstat(directory)
-	if err != nil || !current.IsDir() || current.Mode().Perm() != 0700 || !os.SameFile(reserved, current) {
+	if err != nil || current.Mode() != os.ModeDir|0700 || !os.SameFile(reserved, current) {
 		return "", fmt.Errorf("console capture reservation changed")
 	}
-	return consoleDigest(body), nil
+	seal = consoleDigest(body)
+	if _, err := verifiedConsoleAssets(directory, seal, profile); err != nil {
+		return "", err
+	}
+	return seal, nil
 }
 
 func consoleRead(root *os.Root, name string, limit int64) ([]byte, error) {
 	stat, err := root.Lstat(name)
-	if err != nil || !stat.Mode().IsRegular() || stat.Mode().Perm() != 0600 || stat.Size() < 1 || stat.Size() > limit {
+	if err != nil || stat.Mode() != 0600 || stat.Size() < 1 || stat.Size() > limit {
 		return nil, fmt.Errorf("invalid console capsule member")
 	}
 	if native, ok := stat.Sys().(*syscall.Stat_t); !ok || native.Nlink != 1 {
@@ -278,6 +282,188 @@ func replayConsoleAsset(directory, seal string, profile []consoleAsset, url stri
 	return err
 }
 
+func serveConsoleRequest(directory, seal string, profile []consoleAsset, tempRoot, recordsRoot string, args []string) error {
+	if len(args) != 4 || args[0] != "-fsSL" || args[2] != "-o" {
+		return fmt.Errorf("unsupported native console download arguments")
+	}
+	originals, err := verifiedConsoleAssets(directory, seal, profile)
+	if err != nil {
+		return err
+	}
+	if err := consoleDirectory(tempRoot); err != nil {
+		return err
+	}
+	if err := consoleDirectory(recordsRoot); err != nil {
+		return err
+	}
+	records, err := os.OpenRoot(recordsRoot)
+	if err != nil {
+		return err
+	}
+	defer records.Close()
+	previous, err := consoleRequestRecords(records, profile, originals)
+	if err != nil {
+		return err
+	}
+	index := len(previous)
+	if index >= len(profile) || args[1] != profile[index].URL {
+		return fmt.Errorf("unexpected, repeated or out-of-order console download")
+	}
+	asset := profile[index]
+	name := asset.Name
+	if index == 1 {
+		name = "p.zip"
+	}
+	destination := args[3]
+	parent := filepath.Dir(destination)
+	suffix := strings.TrimPrefix(filepath.Base(parent), "zitadel-console-proto-plugins.")
+	if !filepath.IsAbs(destination) || filepath.Clean(destination) != destination || filepath.Dir(parent) != tempRoot || filepath.Base(destination) != name || !strings.HasPrefix(filepath.Base(parent), "zitadel-console-proto-plugins.") || len(suffix) != 6 {
+		return fmt.Errorf("console destination escaped its native temporary directory")
+	}
+	for _, char := range suffix {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9') {
+			return fmt.Errorf("invalid native console temporary reservation")
+		}
+	}
+	if err := consoleDirectory(parent); err != nil {
+		return err
+	}
+	output, err := os.OpenRoot(parent)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	// Reserve the ordered request before writing. A failed request remains
+	// incomplete and cannot be mistaken for a successful native transaction.
+	record, err := records.OpenFile(fmt.Sprintf("request-%d.json", index+1), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer record.Close()
+	file, err := output.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	body := originals[asset.URL]
+	written, writeErr := file.Write(body)
+	closeErr := file.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if written != len(body) {
+		return io.ErrShortWrite
+	}
+	actual, err := consoleRead(output, name, asset.Limit)
+	if err != nil || !bytes.Equal(body, actual) {
+		return fmt.Errorf("native console destination differs from the sealed original")
+	}
+	if err := consoleSameDirectory(output, parent); err != nil {
+		return err
+	}
+	if err := consoleSameDirectory(records, recordsRoot); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(capturedConsoleAsset{asset.Name, asset.URL, asset.SHA256, int64(len(body))})
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	n, err := record.Write(raw)
+	if err != nil {
+		return err
+	}
+	if n != len(raw) {
+		return io.ErrShortWrite
+	}
+	return record.Close()
+}
+
+func verifyConsoleConsumption(directory, seal string, profile []consoleAsset, recordsRoot string) ([]byte, error) {
+	originals, err := verifiedConsoleAssets(directory, seal, profile)
+	if err != nil {
+		return nil, err
+	}
+	if err := consoleDirectory(recordsRoot); err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(recordsRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	records, err := consoleRequestRecords(root, profile, originals)
+	if err != nil || len(records) != 3 {
+		return nil, fmt.Errorf("native console download set is incomplete or invalid")
+	}
+	if err := consoleSameDirectory(root, recordsRoot); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(records)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"schemaVersion": 1, "manifestSha256": seal, "requests": 3, "requestsSha256": consoleDigest(raw), "originalConsoleDownloadsConsumed": true, "dependencyInputsCaptured": false, "nativeOfflineReplayProved": false})
+}
+
+func consoleSameDirectory(root *os.Root, name string) error {
+	opened, err := root.Stat(".")
+	if err != nil {
+		return err
+	}
+	current, err := os.Lstat(name)
+	if err != nil || current.Mode() != os.ModeDir|0700 || !os.SameFile(opened, current) {
+		return fmt.Errorf("console directory reservation changed")
+	}
+	return nil
+}
+
+func consoleRequestRecords(root *os.Root, profile []consoleAsset, originals map[string][]byte) ([]capturedConsoleAsset, error) {
+	listing, err := root.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	names, err := listing.Readdirnames(5)
+	closeErr := listing.Close()
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if len(names) > 3 {
+		return nil, fmt.Errorf("extra native console request records")
+	}
+	seen := map[string]bool{}
+	for _, name := range names {
+		seen[name] = true
+	}
+	var result []capturedConsoleAsset
+	for i := range names {
+		name := fmt.Sprintf("request-%d.json", i+1)
+		if !seen[name] {
+			return nil, fmt.Errorf("native console request sequence is incomplete")
+		}
+		asset := profile[i]
+		want := capturedConsoleAsset{asset.Name, asset.URL, asset.SHA256, int64(len(originals[asset.URL]))}
+		raw, err := consoleRead(root, name, 2048)
+		if err != nil {
+			return nil, err
+		}
+		expected, err := json.Marshal(want)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(raw, append(expected, '\n')) {
+			return nil, fmt.Errorf("native console request record differs")
+		}
+		result = append(result, want)
+	}
+	return result, nil
+}
+
 func consoleAssetsCommand(args []string, output io.Writer) error {
 	if len(args) == 0 {
 		return nil
@@ -288,8 +474,13 @@ func consoleAssetsCommand(args []string, output io.Writer) error {
 	seal := flags.String("sha256", "", "external seal")
 	curl := flags.String("curl", "", "explicit native downloader")
 	url := flags.String("url", "", "one frozen original")
-	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+	tempRoot := flags.String("temp-root", "", "owned native temporary root")
+	recordsRoot := flags.String("requests", "", "owned native request records")
+	if err := flags.Parse(args[1:]); err != nil || (args[0] != "native-request" && flags.NArg() != 0) {
 		return fmt.Errorf("invalid console archive command")
+	}
+	if args[0] != "native-request" && args[0] != "consumption" && (*tempRoot != "" || *recordsRoot != "") {
+		return fmt.Errorf("native request options require an explicit native operation")
 	}
 	switch args[0] {
 	case "capture":
@@ -329,6 +520,21 @@ func consoleAssetsCommand(args []string, output io.Writer) error {
 			return err
 		}
 		return json.NewEncoder(output).Encode(map[string]any{"manifestSha256": *seal, "originalConsoleAssetsCaptured": true, "dependencyInputsCaptured": false, "nativeOfflineReplayProved": false})
+	case "native-request":
+		if *curl != "" || *url != "" || *tempRoot == "" || *recordsRoot == "" {
+			return fmt.Errorf("native console requests require owned roots and no downloader")
+		}
+		return serveConsoleRequest(*directory, *seal, nativeConsoleAssets, *tempRoot, *recordsRoot, flags.Args())
+	case "consumption":
+		if *curl != "" || *url != "" || *tempRoot != "" || *recordsRoot == "" {
+			return fmt.Errorf("consumption verification requires records and no downloader")
+		}
+		raw, err := verifyConsoleConsumption(*directory, *seal, nativeConsoleAssets, *recordsRoot)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(output, string(raw))
+		return err
 	default:
 		return fmt.Errorf("unsupported console archive command")
 	}
