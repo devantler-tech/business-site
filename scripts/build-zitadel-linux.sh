@@ -120,6 +120,7 @@ export GOCACHE="$output/go-cache" GOMODCACHE="$output/go-modules" GOPATH="$outpu
 export npm_config_userconfig="$output/npmrc" npm_config_globalconfig="$output/npm-globalrc" npm_config_cache="$output/npm-cache"
 export npm_config_store_dir="$output/pnpm-store"
 export npm_config_engine_strict=false npm_config_registry=https://registry.npmjs.org/
+export npm_config_side_effects_cache=false
 mkdir "$GOCACHE" "$GOMODCACHE" "$GOPATH" "$npm_config_cache" "$npm_config_store_dir"
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
@@ -189,7 +190,7 @@ without_network() {
   rm "$marker"
   return "$status"
 }
-run_phase install pnpm install --store-dir "$npm_config_store_dir" --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 run_phase generate pnpm exec nx run @zitadel/api:generate --parallel=1 --skip-nx-cache --no-cloud

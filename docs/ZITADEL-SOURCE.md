@@ -477,6 +477,10 @@ Both source modes use a fresh private Go module cache, compiler cache and GOPATH
 including the checksum database's state, plus a build-owned pnpm store and npm
 cache. Inherited npm configuration is discarded; empty user/global configuration,
 the public npm registry and the frozen project's existing configuration apply.
+Native installation disables only the side-effect cache, preserving lifecycle
+execution and the existing build-approval policy. Capture and cold replay must
+regenerate those outputs; a source package must not substitute cached build outputs
+for their original archive inputs.
 The build selects the public Go proxy and checksum database explicitly, retaining
 checksum verification and no private/insecure bypass patterns. These boundaries
 prevent an existing host cache or disabled verification setting from silently

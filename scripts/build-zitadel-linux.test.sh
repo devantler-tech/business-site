@@ -64,6 +64,7 @@ if [[ "$1" = install ]]; then
   [[ "$npm_config_store_dir" = "$build_root/pnpm-store" && -d "$npm_config_store_dir" ]]
   [[ "$npm_config_globalconfig" = "$build_root/npm-globalrc" && -f "$npm_config_globalconfig" && ! -s "$npm_config_globalconfig" ]]
   [[ "$npm_config_engine_strict" = false && "$npm_config_registry" = https://registry.npmjs.org/ ]]
+  [[ "$npm_config_side_effects_cache" = false && " $* " = *' --side-effects-cache=false '* ]]
   [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
   [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
   [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
