@@ -106,6 +106,12 @@ test('valid Danish copy and project API names pass the real checker', () => {
   assert.equal(result.status, 0, result.output);
 });
 
+test('actual source-retention API and compiler terms pass without excluding their files', () => {
+  const result = check('readback ziphash sumdb dirhash modzip trimpath buildvcs',
+    join(root, 'server/cmd/zitadel-module-sources/payload.go'));
+  assert.equal(result.status, 0, result.output);
+});
+
 test('only the three exact encoded paths pass in their actual refusal fixture', () => {
   const result = check('"/%70ortal/sign-in" "/portal%2fsign-in" "/%2fportal"');
   assert.equal(result.status, 0, result.output);
@@ -119,6 +125,8 @@ for (const [name, text, file] of [
   ['contact build-tag typo', 'contactintegraton', scopedFile],
   ['pipeline option typo', 'pipefial', scopedFile],
   ['coverage option typo', 'coverprofille', scopedFile],
+  ['module content API typo', 'dirhahs', scopedFile],
+  ['module cache suffix typo', 'ziphahs', scopedFile],
   ['unrelated bare fragments', 'fportal fsign ortal', scopedFile],
   ['same URL outside the one scoped fixture', '"/%2fportal"', join(root, 'server/internal/runtimeapp/config_test.go')],
 ]) {
