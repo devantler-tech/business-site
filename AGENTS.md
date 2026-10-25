@@ -94,6 +94,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
   fonts, decoded statik members and retained notices. It is inactive without
   arguments and is mandatory in the Linux build, not the public website build.
+- `server/cmd/zitadel-bsr-sources/` is an otherwise inert, standard-library build
+  command for the frozen three-module schema profile; read its README. It verifies
+  native SHAKE256 content, both cache/export representations and a closed externally
+  sealed private package, then restores/checks only verified native cache bytes.
+  Normal complete server tests include it. Native acquisition/order, Linux replay
+  and builder integration remain #351; this command grants no deployment authority.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.
@@ -190,6 +196,7 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources)
+(cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-bsr-sources)
 bash scripts/check-active-projects-drift.test.sh
 bash scripts/check-cv-drift.test.sh
 node scripts/check-cv-drift.mjs src/content/docs/about.mdx src/data/cv.ts

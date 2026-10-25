@@ -107,7 +107,7 @@ test('valid Danish copy and project API names pass the real checker', () => {
 });
 
 test('actual source-retention API and compiler terms pass without excluding their files', () => {
-  const result = check('readback ziphash sumdb dirhash modzip trimpath buildvcs',
+  const result = check('readback ziphash sumdb dirhash modzip trimpath buildvcs Nlink envoyproxy protoc',
     join(root, 'server/cmd/zitadel-module-sources/payload.go'));
   assert.equal(result.status, 0, result.output);
 });
@@ -127,6 +127,9 @@ for (const [name, text, file] of [
   ['coverage option typo', 'coverprofille', scopedFile],
   ['module content API typo', 'dirhahs', scopedFile],
   ['module cache suffix typo', 'ziphahs', scopedFile],
+  ['native file API typo', 'Nlnk', scopedFile],
+  ['schema registry owner typo', 'envoyprxy', scopedFile],
+  ['schema compiler typo', 'protocc', scopedFile],
   ['unrelated bare fragments', 'fportal fsign ortal', scopedFile],
   ['same URL outside the one scoped fixture', '"/%2fportal"', join(root, 'server/internal/runtimeapp/config_test.go')],
 ]) {

@@ -7,6 +7,11 @@ importing portal authority or entering the frozen identity service's graph.
 CI builds the command with this module's exact compiler before selecting the
 unchanged upstream compiler. Preserve its complete tests, external-seal readback
 and narrow evidence fields; it never grants image or portal activation.
+`cmd/zitadel-bsr-sources` is a separate otherwise inert standard-library source
+package verifier in the same module; read its README. Preserve the frozen BSR
+profile, complete native digest and export joins, external seals, bounded I/O,
+canonical private modes and verified-snapshot restore/cache checks. It does not
+run upstream commands or complete native Linux replay or source admission.
 `cmd/customer-identity-config` explicitly prepares dormant native ZITADEL/Dex
 documents with no network, user, secret-value or activation operations. Read
 `CUSTOMER-IDENTITY.md`. Preserve skipped first-instance bootstrap, closed user and
