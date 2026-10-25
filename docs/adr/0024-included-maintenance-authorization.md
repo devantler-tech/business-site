@@ -40,8 +40,13 @@ Keep three separate records under the Go/PostgreSQL authority:
 
 ### Entitlement states
 
-The **governing version** at database time is the newest recorded version whose
-service period contains that time, so a renewal recorded ahead of its start
+Every new version is one of two kinds. A **correction** (including a scope or
+project change) permanently supersedes the version it corrects: a superseded
+version never governs again, even after the correction's own period ends. A
+**renewal** adds a later service period that starts no earlier than the end of
+the period it renews. The **governing version** at database time is the one
+non-superseded version whose service period contains that time; the no-overlap
+rule for renewals makes it unique, and a renewal recorded ahead of its start
 governs only from that start.
 
 One domain reader returns exactly one state, judged at database time, by taking
@@ -80,10 +85,10 @@ payment-provider event can neither classify a task nor change an entitlement.
 
 A task authorization is valid only while its entitlement version is the
 governing version, that version is active and its bound memberships are still
-the current incarnations. A correction or a scope or project change recorded for
-the current period governs at once. A renewal for a later period governs only
-from its start, so recording it early neither ends current authorizations nor
-pauses the current period. An authorization therefore ends at the earliest of
+the current incarnations. A correction supersedes the governing version at once,
+so authorizations bound to the corrected version end immediately. A renewal
+governs only from its start, so recording it early neither ends current
+authorizations nor pauses the current period. An authorization therefore ends at the earliest of
 revocation, a newer governing version, the end of its version's service period
 or a membership transition. It has no elapsed lifetime of its own and reuses neither
 the paid-scope approval's 168-hour window nor its invoice binding. Restoring
@@ -136,10 +141,11 @@ pages use the retained Go frame and native forms ([ADR 0017](0017-retain-go-priv
 
 Use disposable restricted-role PostgreSQL and fictional data. Cover a covered
 fix authorized without a new invoice; future, active and end-boundary cases; a
-gap between two service periods; a renewal recorded ahead of its start; renewal,
-correction, revocation and restoration; changed project, agreement or scope;
-cross-client access and stale memberships; disputed and unavailable facts;
-bounded and failed history reads; a reached history bound that closes new
+gap between two service periods; a renewal recorded ahead of its start; a
+correction that shortens a period without re-exposing the version it superseded;
+renewal, correction, revocation and restoration; changed project, agreement or
+scope; cross-client access and stale memberships; disputed and unavailable
+facts; bounded and failed history reads; a reached history bound that closes new
 decisions but leaves earlier authorizations valid; concurrent authorizations;
 late SDK and cancellation checks; and English/Danish operator and client
 journeys. Keep every existing gate. A source merge activates nothing: hosting,
