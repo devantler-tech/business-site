@@ -40,19 +40,24 @@ Keep three separate records under the Go/PostgreSQL authority:
 
 ### Entitlement states
 
-One domain reader returns exactly one state, judged at database time. The
-**governing version** at that time is the newest recorded version whose service
-period contains it, so a renewal recorded ahead of its start governs only from
-that start.
+The **governing version** at database time is the newest recorded version whose
+service period contains that time, so a renewal recorded ahead of its start
+governs only from that start.
 
-| State | Meaning | New included-task authorization |
-|---|---|---|
-| active | a governing version exists and is not cancelled or disputed | permitted while that version's authorization history is below its bound |
-| future | no version governs yet: every recorded period starts later | paused |
-| ended | no version governs any more: the latest period has ended | paused |
-| cancelled | operator recorded a cancellation | paused |
-| disputed | operator recorded a dispute | paused |
-| unavailable | missing, unreadable, overflowed or inconsistent facts | paused |
+One domain reader returns exactly one state, judged at database time, by taking
+the first rule in this order that matches:
+
+| Order | State | Matches when | New included-task authorization |
+|---|---|---|---|
+| 1 | unavailable | facts are missing, unreadable, overflowed or inconsistent | paused |
+| 2 | cancelled | the governing version records a cancellation | paused |
+| 3 | disputed | the governing version records a dispute | paused |
+| 4 | active | a governing version exists | permitted while that version's authorization history is below its bound |
+| 5 | future | no version governs and a recorded period starts later, which covers both the time before the first period and a gap between two periods | paused |
+| 6 | ended | no version governs and no recorded period starts later | paused |
+
+Rules 4 to 6 between them cover every readable entitlement, so no reading is
+left unclassified.
 
 Paused stops automated eligibility only. It never terminates a contract, adds a
 payment or grace period, denies a contractual remedy or creates a refund rule;
@@ -129,13 +134,14 @@ pages use the retained Go frame and native forms ([ADR 0017](0017-retain-go-priv
 
 ## Verification
 
-Use disposable restricted-role PostgreSQL and fictional data. Cover a covered fix
-authorized without a new invoice; future, active and end-boundary cases; a
-renewal recorded ahead of its start; renewal, correction, revocation and
-restoration; changed project, agreement or scope; cross-client access and
-stale memberships; disputed and unavailable facts; bounded and failed history
-reads; a reached history bound that closes new decisions but leaves earlier
-authorizations valid; concurrent authorizations; late SDK and
-cancellation checks; and English/Danish operator and client journeys. Keep every
-existing gate. A source merge activates nothing: hosting, identity, privacy,
-legal/consumer and worker activation remain separate decisions.
+Use disposable restricted-role PostgreSQL and fictional data. Cover a covered
+fix authorized without a new invoice; future, active and end-boundary cases; a
+gap between two service periods; a renewal recorded ahead of its start; renewal,
+correction, revocation and restoration; changed project, agreement or scope;
+cross-client access and stale memberships; disputed and unavailable facts;
+bounded and failed history reads; a reached history bound that closes new
+decisions but leaves earlier authorizations valid; concurrent authorizations;
+late SDK and cancellation checks; and English/Danish operator and client
+journeys. Keep every existing gate. A source merge activates nothing: hosting,
+identity, privacy, legal/consumer and worker activation remain separate
+decisions.
