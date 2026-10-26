@@ -159,6 +159,8 @@ func deniedChecksumServer(t *testing.T) (*httptest.Server, *atomic.Int64) {
 	return denied, requests
 }
 
+// restoredNativeGoEnvironment isolates writable Go stores, disables default
+// external resolution and selects the supplied local test checksum authority.
 func restoredNativeGoEnvironment(t *testing.T, output string, policy goRestorePolicy, endpoint string) []string {
 	t.Helper()
 	return append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOROOT=", "GOFLAGS=-modcacherw", "GOPROXY=off",
@@ -177,6 +179,9 @@ func restorationFixtureWithGraphOnlyVersion(t *testing.T, graphOnly bool) (goRes
 	return restorationFixtureOptions(t, graphOnly, false)
 }
 
+// restorationFixtureOptions can add higher graph-only metadata without native
+// lookup evidence, or root requirements that make Go verify both service ZIPs.
+// These variants exercise distinct native consumers of the same retained inputs.
 func restorationFixtureOptions(t *testing.T, graphOnly, requireService bool) (goRestoreInputs, goRestorePolicy) {
 	t.Helper()
 	service, cataloguePath := materializeSelection(t)

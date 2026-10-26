@@ -104,6 +104,8 @@ func TestBuilderConsumesServiceZIPsBeforeNativeVerification(t *testing.T) {
 	}
 }
 
+// nativeServiceCommandFixture writes private executable failure shims for the
+// negative controls. These shims never supply positive native-build evidence.
 func nativeServiceCommandFixture(t *testing.T, name, body string) string {
 	t.Helper()
 	bin := t.TempDir()

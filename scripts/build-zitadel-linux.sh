@@ -224,6 +224,9 @@ run_phase() {
   command time -v -o "$output/$name.resources.txt" "$@" 2>&1 | tee "$output/$name.log"
 }
 # BEGIN native service consumption
+# consume_retained_service_go authenticates the selected ZIPs with native Go,
+# letting Go create its own cache markers against the frozen project checksums.
+# Its readback receipt proves this component only; whole-build flags stay false.
 consume_retained_service_go() {
   local records="$retained_inputs/source/selected-go-sources/records"
   local expected="$output/retained-go-service-expected.json" manifest_seal actual_manifest source_seal

@@ -1008,7 +1008,7 @@ func noticeRun(args []string, out, diagnostic io.Writer) int {
 	return noticeRunWithCatalogues(args, out, diagnostic, supplementCatalogueHash, moduleCatalogueHash)
 }
 
-// noticeRunWithCatalogues exposes only test injection, never a CLI trust override.
+// noticeRunWithCatalogue exposes only test injection, never a CLI trust override.
 func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueHash string) int {
 	return noticeRunWithCatalogues(args, out, diagnostic, catalogueHash, moduleCatalogueHash)
 }
@@ -1045,8 +1045,8 @@ func noticeJoinBuildInfo(info *debug.BuildInfo, expected []*debug.Module) error 
 	return nil
 }
 
-// noticeRunWithCatalogue keeps the curation identity injectable in hermetic
-// tests. The public command always supplies its compiled, reviewed constant.
+// noticeRunWithCatalogues keeps the curation identities injectable in hermetic
+// tests. The public command always supplies its compiled, reviewed constants.
 func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogueHash, moduleHash string) int {
 	if len(args) == 0 {
 		return 0

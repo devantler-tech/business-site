@@ -747,7 +747,7 @@ proof flags true. Inner component receipts retain their narrower false flags.
 Failures retain private diagnosis and no replay success receipt. CI retains only
 compact manifests, receipts and logs, excluding the full archive, caches and
 service executable. Neither a fixture nor an assembled archive proves native
-success. Reproducible binary equality, image admission, complete licence/source
+success. Reproducible binary equality, image admission, complete license/source
 offering, deployed resource measurements and portal activation remain separate.
 
 ## Local restricted image CLI test
