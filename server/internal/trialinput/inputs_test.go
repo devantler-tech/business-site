@@ -221,7 +221,7 @@ func TestConfiguredCleanFilterIsNeverExecuted(t *testing.T) {
 }
 
 func TestMissingPromisorObjectsAreNeverFetched(t *testing.T) {
-	for _, missing := range []string{"commit", "blob"} {
+	for _, missing := range []string{"commit", "blob", "packed-blob"} {
 		t.Run(missing, func(t *testing.T) {
 			dir, p, input := fixture(t)
 			remote := t.TempDir()
@@ -237,11 +237,13 @@ func TestMissingPromisorObjectsAreNeverFetched(t *testing.T) {
 				input.Candidate = gitFixture(t, remote, "rev-parse", "HEAD")
 				absent = input.Candidate
 			} else {
-				absent = gitFixture(t, dir, "rev-parse", "HEAD:plan.md")
-				if err := os.Remove(filepath.Join(dir, ".git", "objects", absent[:2], absent[2:])); err != nil {
-					t.Fatal(err)
+				if missing == "packed-blob" {
+					gitFixture(t, dir, "repack", "-ad")
 				}
+				absent = gitFixture(t, dir, "rev-parse", "HEAD:plan.md")
+				omitFixtureObject(t, dir, absent)
 			}
+			gitFixture(t, remote, "cat-file", "-e", absent)
 			gitFixture(t, dir, "config", "remote.promise.url", remote)
 			gitFixture(t, dir, "config", "remote.promise.promisor", "true")
 			gitFixture(t, dir, "config", "remote.promise.partialclonefilter", "blob:none")
@@ -257,6 +259,36 @@ func TestMissingPromisorObjectsAreNeverFetched(t *testing.T) {
 				t.Fatal("source admission fetched a missing promisor object")
 			}
 		})
+	}
+}
+
+func omitFixtureObject(t *testing.T, dir, absent string) {
+	t.Helper()
+	objects := strings.Fields(gitFixture(t, dir, "rev-list", "--objects", "--all", "--no-object-names"))
+	kept := make([]string, 0, len(objects))
+	for _, object := range objects {
+		if object != absent {
+			kept = append(kept, object)
+		}
+	}
+	if len(kept) != len(objects)-1 {
+		t.Fatal("missing-object fixture did not select exactly one reachable object")
+	}
+	// Build a complete replacement store except for the selected object. Deleting
+	// a loose-object filename cannot remove an object already stored in a pack.
+	// Disable delta reuse so no retained object depends on the omitted object.
+	replacement := filepath.Join(t.TempDir(), "objects")
+	if err := os.MkdirAll(filepath.Join(replacement, "pack"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	gitFixtureInput(t, dir, strings.NewReader(strings.Join(kept, "\n")+"\n"),
+		"pack-objects", "--window=0", "--no-reuse-delta", filepath.Join(replacement, "pack", "fixture"))
+	store := filepath.Join(dir, ".git", "objects")
+	if err := os.Rename(store, filepath.Join(t.TempDir(), "original-objects")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, store); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -375,10 +407,16 @@ func commitFixture(t *testing.T, dir string) {
 
 func gitFixture(t *testing.T, dir string, args ...string) string {
 	t.Helper()
+	return gitFixtureInput(t, dir, nil, args...)
+}
+
+func gitFixtureInput(t *testing.T, dir string, input io.Reader, args ...string) string {
+	t.Helper()
 	// Wait for maintenance as part of each real command, including commits and
 	// clones. A detached descendant can otherwise race t.TempDir's cleanup.
 	prefix := []string{"-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", "-C", dir}
 	cmd := exec.CommandContext(t.Context(), "git", append(prefix, args...)...)
+	cmd.Stdin = input
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
 	data, err := cmd.CombinedOutput()
 	if err != nil {
