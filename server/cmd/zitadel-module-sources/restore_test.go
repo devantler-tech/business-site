@@ -177,9 +177,9 @@ func TestRestoreGoInputsReconstructsOnlyAuthenticatedInputs(t *testing.T) {
 
 // TestRestoredGoInputsServeTheNativeChecksumClient isolates every native Go cache.
 func TestRestoredGoInputsServeTheNativeChecksumClient(t *testing.T) {
+	inputs, policy := restorationFixture(t)
 	for _, missingProof := range []bool{false, true} {
 		t.Run(map[bool]string{false: "complete", true: "missing-lookup"}[missingProof], func(t *testing.T) {
-			inputs, policy := restorationFixture(t)
 			output := filepath.Join(physicalGeneratorTestDirectory(t), "restored")
 			if _, err := restoreGoInputs(inputs, output, policy); err != nil {
 				t.Fatal(err)
@@ -219,18 +219,18 @@ func TestRestoredGoInputsServeTheNativeChecksumClient(t *testing.T) {
 				"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"),
 				"GOSUMDB="+policy.checksumKey+" "+denied.URL)
 			body, err := cmd.CombinedOutput()
+			var got struct{ Path, Version, Sum, GoModSum, Error string }
+			if decodeErr := json.Unmarshal(body, &got); decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
 			if missingProof {
-				if err == nil || requests.Load() == 0 {
+				if err == nil || requests.Load() == 0 || got.Error == "" || got.Path != selected.Path || got.Version != selected.Version {
 					t.Fatalf("incomplete cache was accepted: %s", body)
 				}
 				return
 			}
 			if err != nil || requests.Load() != 0 {
 				t.Fatalf("native Go needed uncaptured inputs: %v %s", err, body)
-			}
-			var got struct{ Path, Version, Sum, GoModSum string }
-			if err := json.Unmarshal(body, &got); err != nil {
-				t.Fatal(err)
 			}
 			if got.Path != selected.Path || got.Version != selected.Version || got.Sum != selected.Sum || got.GoModSum != selected.GoModSum {
 				t.Fatal("native Go did not independently match the selected input checksums")

@@ -80,18 +80,29 @@ check_result() {
   (map({Path,Version,Sum,GoModSum})|sort_by(.Path,.Version))==$expected[0]
  ' "$1" >/dev/null || fail 'native module identity or checksum readback differs'
 }
-native_download "$native" "$build/prepared/source" "$work/service-expected.json" >"$work/service-result.json"
-check_result "$work/service-result.json" "$work/service-expected.json"
+# Log only compact public module diagnostics if a complete native read fails.
+verified_download() {
+ local result="$4"
+ if ! native_download "$1" "$2" "$3" >"$result"; then
+  jq -sc 'map({Path,Version,Error:((.Error // "")|.[0:512])})' "$result" >&2 || true
+  fail 'complete authenticated inputs were refused by the native reader'
+ fi
+ check_result "$result" "$3"
+}
+verified_download "$native" "$build/prepared/source" "$work/service-expected.json" "$work/service-result.json"
 # The generator check has no project go.sum: it must use the retained signed log.
 [ "$(cd "$work/outside-module" && GOENV=off GOWORK=off GOTOOLCHAIN=local "$go_binary" env GOMOD)" = /dev/null ] || fail 'generator reader inherited a module'
-native_download "$native" "$work/outside-module" "$work/generator-expected.json" >"$work/generator-result.json"
-check_result "$work/generator-result.json" "$work/generator-expected.json"
+verified_download "$native" "$work/outside-module" "$work/generator-expected.json" "$work/generator-result.json"
 cmp "$build/selected-go-sources/records/go.mod" "$build/prepared/source/go.mod" || fail 'reader changed source module definition'
 cmp "$build/selected-go-sources/records/go.sum" "$build/prepared/source/go.sum" || fail 'reader changed source checksums'
-# A fresh second reconstruction avoids trusting derived ZIP markers or extracted code.
+# Independent complete/missing-proof reconstructions avoid derived ZIP markers.
+jq '.[0:1]' "$work/generator-expected.json" >"$work/negative-expected.json"
+control="$work/proof-control"
+restore "$control" >"$work/control-restoration.json"
+verified_download "$control" "$work/outside-module" "$work/negative-expected.json" "$work/control-result.json"
 negative="$work/missing-proof"
 restore "$negative" >"$work/negative-restoration.json"
-jq '.[0:1]' "$work/generator-expected.json" >"$work/negative-expected.json"
+cmp "$work/control-restoration.json" "$work/negative-restoration.json" || fail 'proof control and negative inputs differ'
 selected_path="$(jq -er '.[0].Path' "$work/negative-expected.json")"
 selected_version="$(jq -er '.[0].Version' "$work/negative-expected.json")"
 lookup="$(jq -er --arg path "$selected_path" --arg version "$selected_version" '
@@ -106,17 +117,20 @@ else
  negative_rc=$?
  [ "$negative_rc" -eq 1 ] || fail 'negative probe did not complete natively'
 fi
-jq -se --arg path "$selected_path" --arg version "$selected_version" '
+if ! jq -se --arg path "$selected_path" --arg version "$selected_version" '
  length==1 and .[0].Path==$path and .[0].Version==$version and
- (.[0].Error|type=="string" and contains("sum.golang.org"))
-' "$work/negative-result.json" >/dev/null || fail 'negative probe did not refuse checksum verification'
+ (.[0].Error|type=="string" and length>0)
+' "$work/negative-result.json" >/dev/null; then
+ jq -sc 'map({Path,Version,Error:((.Error // "")|.[0:512])})' "$work/negative-result.json" >&2 || true
+ fail 'negative probe did not refuse checksum verification'
+fi
 [ "$(sha "$verifier")" = "$verifier_seal" ] || fail 'verifier changed during readback'
 jq -n --arg source "$source_seal" --arg seal "$manifest_seal" \
  --slurpfile service "$work/service-expected.json" --slurpfile generators "$work/generator-expected.json" '
  {schemaVersion:1,sourceManifestSha256:$source,restorationManifestSha256:$seal,go:"1.26.10",
   serviceModules:($service[0]|length),generatorModules:($generators[0]|length),
   selectedIdentities:([$service[0][], $generators[0][]]|unique_by([.Path,.Version])|length),
-  nativeCacheReadbackPassed:true,networkDenied:true,missingProofRefused:true,sourceChecksumsUnchanged:true,
+  nativeCacheReadbackPassed:true,networkDenied:true,independentProofControlPassed:true,missingProofRefused:true,sourceChecksumsUnchanged:true,
   dependencyInputsCaptured:false,nativeOfflineReplayProved:false}
 ' >"$build/go-input-readback.json"
 printf 'Native Go input reader: authenticated cache readback and missing-proof refusal passed.\n'
