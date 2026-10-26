@@ -532,9 +532,37 @@ export async function inspectBuild({ build, expectedLock = frozenLock }) {
   };
 }
 
-function closedMembers(root, expected, privateModes = true) {
+function checkWorkspaceRegistration(filename, projectRoot) {
+  const before = fs.lstatSync(filename);
+  if (!before.isSymbolicLink() || before.size < 1 || before.size > 4096) fail("invalid native workspace registration");
+  const target = fs.readlinkSync(filename);
+  const after = fs.lstatSync(filename);
+  if (
+    path.resolve(path.dirname(filename), target) !== projectRoot ||
+    before.dev !== after.dev ||
+    before.ino !== after.ino ||
+    before.size !== after.size ||
+    before.mtimeMs !== after.mtimeMs ||
+    before.ctimeMs !== after.ctimeMs ||
+    !after.isSymbolicLink()
+  )
+    fail("native workspace registration changed or escaped");
+}
+
+function closedMembers(root, expected, privateModes = true, projectRoot = undefined) {
   const wanted = new Set(expected);
   const directories = new Set(["."]);
+  // pnpm 10.30.3 get-context registers exactly its lockfileDir using
+  // package-store's projects/<first 32 hex SHA-256 characters> symlink.
+  // Inspect this operational link without following or retaining it. Restored
+  // stores have no workspace registration until the native install creates it.
+  const registration = !privateModes && projectRoot ? `projects/${sha256(projectRoot).slice(0, 32)}` : undefined;
+  let registered = false;
+  if (registration) {
+    if (!path.isAbsolute(projectRoot) || fs.realpathSync(projectRoot) !== projectRoot)
+      fail("physical registered workspace required");
+    directories.add("projects");
+  }
   // pnpm's native initStore creates all buckets up front, including empty ones.
   if (!privateModes) {
     // create-cafs-store uses this exact temporary parent. It contributes no
@@ -579,13 +607,19 @@ function closedMembers(root, expected, privateModes = true) {
       };
       throw error;
     }
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    if (relative === "projects" && entries.length !== 1) fail("native workspace registry differs");
+    for (const entry of entries) {
       const name = relative === "." ? entry.name : `${relative}/${entry.name}`;
-      if (entry.isDirectory()) visit(name);
+      if (name === registration) {
+        checkWorkspaceRegistration(memberPath(root, name), projectRoot);
+        registered = true;
+      } else if (entry.isDirectory()) visit(name);
       else if (!entry.isFile() || !wanted.delete(name)) fail("extra or linked package member");
     }
   }
   visit(".");
+  if (registration && !registered) fail("missing native workspace registration");
   if (wanted.size) fail("missing package members");
 }
 
@@ -715,7 +749,7 @@ export async function captureBuild({
   // file map. Finish all original manifest joins before checking shared inodes.
   for (const files of connectedPackages) verifyConnectedPackage(files, modules.storeDir, ownedLinks, binaryFiles);
   phase = "closed-native-store";
-  closedMembers(modules.storeDir, storeMembers, false);
+  closedMembers(modules.storeDir, storeMembers, false, sourceRoot);
   const finalLinks = installedLinks(sourceRoot);
   for (const [filename, f] of payloads) {
     const stat = fs.lstatSync(filename);
@@ -727,6 +761,7 @@ export async function captureBuild({
   for (const [filename, retained] of indexes)
     if (!readRegular(filename, metadataLimit).equals(readRegular(memberPath(output, retained), metadataLimit, 0o600)))
       fail("connected index changed during capture");
+  closedMembers(modules.storeDir, storeMembers, false, sourceRoot);
   for (const [from, to] of observations)
     if (
       !readRegular(memberPath(build, from), metadataLimit).equals(

@@ -35,13 +35,23 @@ resolve to the public npm registry. Missing, substituted or extra registry
 entries are rejected.
 
 Native hard links into this build's own installation are counted explicitly.
-Foreign links, symbolic/special files, nonempty side-effects caches, unselected
+Foreign payload links, symbolic/special payloads, nonempty side-effects caches, unselected
 indexes/payloads and unexpected directories are rejected. Only pnpm's exact
 precreated hexadecimal empty buckets and its empty `tmp` parent are admitted;
 every temporary descendant is refused. Capture finishes with complete
 connected and retained readback. A failed operation retains bounded private,
 unsealed diagnosis and emits no success receipt; it never recursively deletes a
 pathname that might have been replaced.
+The sole operational-link exception is pnpm's workspace registration:
+[`get-context`](https://github.com/pnpm/pnpm/blob/7ea82ff4545c486f932d226aaa99758f7bd30717/pkg-manager/get-context/src/index.ts)
+registers the actual lockfile directory through
+[`package-store`](https://github.com/pnpm/pnpm/blob/7ea82ff4545c486f932d226aaa99758f7bd30717/store/package-store/src/storeController/projectRegistry.ts).
+Capture checks the exact `projects/` entry name (the native SHA-256 prefix),
+one symlink to this physical prepared workspace, and unchanged link identity.
+It never follows or retains that link. Missing, extra, substituted, foreign or
+nested registrations fail. Reconstructed stores contain no registration; the
+future native installation must create its own. All retained source members
+remain regular files, and final connected readback repeats the store check.
 Failure output contains only a bounded stage and fixed reason/error category;
 native exception messages, stacks and source/configuration records are excluded.
 An optional-skip mismatch additionally reports bounded identities from the checked

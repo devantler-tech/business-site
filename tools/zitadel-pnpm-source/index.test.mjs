@@ -411,7 +411,11 @@ async function buildFixture(t, manifestExtra = {}) {
     expectedLock,
     acquire: async () => f.archive,
   };
-  return { ...f, build, source, store, indexPath, expectedLock, output, options };
+  const fixture = { ...f, build, source, store, indexPath, expectedLock, output, options };
+  const registration = fixtureProjectRegistration(fixture);
+  fs.mkdirSync(registration.directory);
+  fs.symlinkSync(path.relative(registration.directory, source), registration.link, "dir");
+  return fixture;
 }
 
 test("the early installation check reads the real native metadata without creating a capsule or acquiring archives", async (t) => {
@@ -748,6 +752,63 @@ test("the native empty store temporary root carries no source inputs", async (t)
   const captured = await captureBuild(f.options);
   assert.equal(captured.selectedPNPMSourcesCaptured, true);
 });
+
+function fixtureProjectRegistration(f) {
+  const directory = path.join(f.store, "projects");
+  const link = path.join(directory, createHash("sha256").update(f.source).digest("hex").slice(0, 32));
+  return { directory, link };
+}
+
+test("the native workspace registration is checked but never retained as source", async (t) => {
+  const f = await buildFixture(t);
+  const captured = await captureBuild(f.options);
+  assert.equal(captured.selectedPNPMSourcesCaptured, true);
+  const manifest = JSON.parse(fs.readFileSync(path.join(f.output, "manifest.json")));
+  assert.equal(
+    manifest.files.some((file) => file.path.startsWith("projects/")),
+    false,
+  );
+});
+
+test("a replaced workspace registration fails even when its target still matches", async (t) => {
+  const f = await buildFixture(t);
+  const { link } = fixtureProjectRegistration(f);
+  const readlink = fs.readlinkSync;
+  try {
+    fs.readlinkSync = (filename, ...args) => {
+      const target = readlink(filename, ...args);
+      if (filename === link) {
+        fs.renameSync(link, `${link}.old`);
+        fs.symlinkSync(target, link, "dir");
+      }
+      return target;
+    };
+    await assert.rejects(captureBuild(f.options), /native workspace registration changed or escaped/);
+    assert.equal(fs.existsSync(path.join(f.output, "manifest.json")), false);
+  } finally {
+    fs.readlinkSync = readlink;
+  }
+});
+
+for (const [name, remove, change] of [
+  ["a wrong registration hash", false, (f, r) => fs.renameSync(r.link, path.join(r.directory, "0".repeat(32)))],
+  ["a foreign target", true, (f, r) => fs.symlinkSync(f.directory, r.link, "dir")],
+  ["a nested workspace target", true, (f, r) => fs.symlinkSync(path.join(f.source, "console"), r.link, "dir")],
+  ["a file in place of the link", true, (f, r) => fs.writeFileSync(r.link, "not a registration")],
+  ["an additional registration", false, (f, r) => fs.symlinkSync(f.source, path.join(r.directory, "extra"), "dir")],
+  ["an empty registry", true, () => {}],
+  ["a missing registry", false, (f, r) => fs.rmSync(r.directory, { recursive: true })],
+  ["a nested registry directory", false, (f, r) => fs.mkdirSync(path.join(r.directory, "extra"))],
+]) {
+  test(`the native workspace registry refuses ${name}`, async (t) => {
+    const f = await buildFixture(t);
+    const registration = fixtureProjectRegistration(f);
+    if (remove) fs.unlinkSync(registration.link);
+    change(f, registration);
+    await assert.rejects(captureBuild(f.options));
+    assert.equal(fs.existsSync(path.join(f.output, "manifest.json")), false);
+  });
+}
 
 test("a directory refusal exposes only a fixed location category and numeric layout metadata", async (t) => {
   const f = await buildFixture(t);
