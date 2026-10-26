@@ -393,7 +393,7 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 		ReadyMilliseconds   int64            `json:"readyMilliseconds"`
 		Processes           []serviceProcess `json:"processSamples"`
 		ReadOnlyRoot        bool             `json:"readOnlyRoot"`
-		WritablePaths       []string         `json:"writablePaths"`
+		WritablePaths       []string         `json:"configuredTmpfsPaths"`
 		Network             string           `json:"network"`
 		HTTP                string           `json:"transport"`
 		Discovery           bool             `json:"oidcDiscovery"`

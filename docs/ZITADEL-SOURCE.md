@@ -819,8 +819,10 @@ policy. No real credentials, mail, invitations, accounts or remote services ente
 this test. It does not change the dormant configuration preparer.
 
 The service has a read-only root, UID/GID 65532, dropped capabilities,
-no-new-privileges and built-in seccomp. Its only writable mount is a 16 MiB
-non-executable `/tmp` tmpfs. The fixture limits it to 128 PIDs, 1 GiB and two CPUs;
+no-new-privileges and built-in seccomp. Its one explicitly configured application
+mount is a 16 MiB non-executable `/tmp` tmpfs. Docker's ordinary managed kernel
+mounts remain separate; this is not a complete writable-filesystem audit.
+The fixture limits it to 128 PIDs, 1 GiB and two CPUs;
 these ceilings are not measured production sizing. The test requires actual
 readiness, issuer-bound OIDC discovery and embedded Console HTTP delivery, then
 reads three actual native Linux process samples. Those samples must show the

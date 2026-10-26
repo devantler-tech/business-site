@@ -522,7 +522,36 @@ jobs:
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
       - name: Exercise the local restricted identity image
-        run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go zitadel-service-smoke.go --service-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+        run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go --service-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+      - name: Verify actual identity service evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            def positiveInt: if type == "number" then . == floor and . > 0 else false end;
+            $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
+            .schemaVersion == 1 and .profile == "isolated-service-smoke" and
+            .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and
+            .serviceSourceSha256 == $source and
+            .databaseImage == "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826" and
+            (.readyMilliseconds | positiveInt) and .readyMilliseconds < 240000 and
+            (.processSamples | length) == 3 and
+            all(.processSamples[]; .pid | positiveInt) and
+            (.processSamples | map(.pid) | unique | length) == 1 and
+            all(.processSamples[];
+              .name == "zitadel" and .uid == 65532 and .gid == 65532 and
+              (.rssKiB | positiveInt) and (.peakRssKiB | positiveInt) and
+              .peakRssKiB >= .rssKiB and .peakRssKiB < 1048576 and
+              (.threads | positiveInt) and .threads <= 128 and
+              .effectiveCapabilities == "0000000000000000" and
+              .boundingCapabilities == "0000000000000000" and
+              .noNewPrivileges == true and .seccompMode == 2) and
+            .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
+            .network == "internal-two-container-loopback" and .transport == "fictional-http-only" and
+            .oidcDiscovery == true and .embeddedConsoleHTTP == true and
+            .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/service-smoke.json" >/dev/null
       - name: Preserve build diagnostics, not unadmitted service distribution
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
