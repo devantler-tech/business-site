@@ -180,11 +180,13 @@ if [[ -n "$retained_inputs" ]]; then
     --generators "$retained_inputs/source/selected-generator-go-sources" --generators-sha256 "$generators" \
     --metadata "$retained_inputs/source/go-graph-metadata" --metadata-sha256 "$metadata" --source-sha256 "$prepared_sha" \
     --output "$output/go-input-native" >"$output/retained-go-restoration.json"
-  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .moduleProxyScope=="retained-snapshot" and (.moduleProxyURL|startswith("file:///") and (test("[,|]")|not)) and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
+  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .moduleProxyScope=="retained-snapshot" and (has("moduleProxyURL")|not) and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
   export GOMODCACHE="$output/go-input-native/go-modules" GOPATH="$output/go-input-native/go-path"
   # Native pinned installs still query deprecation metadata. Resolve only the
   # closed retained file snapshot, without any HTTP/direct proxy alternative.
-  GOPROXY="$(jq -er .moduleProxyURL "$output/retained-go-restoration.json")"
+  # Keep local transport location out of the portable receipt. Encode each path
+  # component, including GOPROXY separators, before rejoining directory slashes.
+  GOPROXY="$(jq -nr --arg target "$output/go-input-native/go-proxy" '$target|split("/")|map(@uri)|join("/")|"file://"+.')"
   export GOPROXY
   bsr_seal="$(jq -er '.sourceSnapshot.bsrSources.manifestSha256' "$retained_receipt")"
   "$bsr_verifier" verify --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" >"$output/retained-bsr-verification.json"

@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,7 +24,6 @@ type goRestoreReceipt struct {
 	SourceManifestSHA256      string `json:"sourceManifestSha256"`
 	Modules                   int    `json:"modules"`
 	ObservedModules           int    `json:"observedModules"`
-	ModuleProxyURL            string `json:"moduleProxyURL"`
 	ModuleProxyScope          string `json:"moduleProxyScope"`
 	Files                     int    `json:"files"`
 	Bytes                     int64  `json:"bytes"`
@@ -354,10 +352,7 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 	if err := verifyClosedSourceMembers(outputRoot, wanted); err != nil {
 		return result, err
 	}
-	proxy := (&url.URL{Scheme: "file", Path: filepath.Join(output, "go-proxy")}).String()
-	// GOPROXY parses separators before URL decoding, including inside file paths.
-	proxy = strings.NewReplacer(",", "%2C", "|", "%7C").Replace(proxy)
 	return goRestoreReceipt{SchemaVersion: 1, ManifestSHA256: seal, SourceManifestSHA256: inputs.SourceSHA256, Modules: len(selected),
-		ModuleProxyURL: proxy, ModuleProxyScope: "retained-snapshot",
-		ObservedModules: len(metadata.Modules), Files: len(restored.Files), Bytes: copied, SelectedGoInputsRestored: true}, nil
+		ModuleProxyScope: "retained-snapshot",
+		ObservedModules:  len(metadata.Modules), Files: len(restored.Files), Bytes: copied, SelectedGoInputsRestored: true}, nil
 }

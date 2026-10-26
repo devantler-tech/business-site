@@ -101,7 +101,7 @@ if [[ "$1" = install ]]; then
   build_root="${GOCACHE%/go-cache}"
   if [[ "${npm_config_offline:-false}" = true ]]; then
     [[ "$GOPATH" = "$build_root/go-input-native/go-path" && -d "$GOPATH" && "$GOMODCACHE" = "$build_root/go-input-native/go-modules" ]]
-    [[ "$GOPROXY" = "file://$build_root/go-input-native/go-proxy" && "$GOVCS" = '*:off' && "$2" = --offline ]]
+    [[ "$GOPROXY" = "$TEST_RETAINED_PROXY_URL" && "$GOVCS" = '*:off' && "$2" = --offline ]]
     [[ -s "$npm_config_store_dir/v10/native-restore-control" ]]
     set -- "$1" "${@:3}"
   else
@@ -486,7 +486,7 @@ if [[ "$1" = restore-go-inputs ]]; then
     retained-go-fallback) proxy="$proxy,direct" ;;
     retained-go-scope) scope=upstream-latest ;;
   esac
-  jq -n --arg source "${15}" --arg proxy "$proxy" --arg scope "$scope" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyURL:$proxy,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  jq -n --arg source "${15}" --arg proxy "$proxy" --arg scope "$scope" --arg fault "${TEST_FAIL:-}" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false} + (if $fault=="retained-go-remote" or $fault=="retained-go-fallback" then {moduleProxyURL:$proxy} else {} end)'
   exit
 fi
 if [[ "$1" = --capture ]]; then
@@ -704,15 +704,17 @@ done
 cp "$scratch/captured/build-receipt.json" "$retained/source/build-receipt.json"
 TEST_PREPARED_BUILD="$retained/source/source-snapshot"
 export TEST_PREPARED_BUILD
+retained_output="$scratch/retained-replay unsafe,|%#"
+export TEST_RETAINED_PROXY_URL="file://$scratch/retained-replay%20unsafe%2C%7C%25%23/go-input-native/go-proxy"
 : >"$TEST_CALLS"
-if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/retained-replay" >"$scratch/retained-replay.log" 2>&1; then
+if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$retained_output" >"$scratch/retained-replay.log" 2>&1; then
   cat "$scratch/retained-replay.log" >&2
   echo 'retained inputs cannot enter the existing native pipeline' >&2
   exit 1
 fi
-jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$scratch/retained-replay/build-receipt.json" >/dev/null
-test -d "$scratch/retained-replay/go-input-native/go-modules"
-test -d "$scratch/retained-replay/pnpm-store"
+jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
+test -d "$retained_output/go-input-native/go-modules"
+test -d "$retained_output/pnpm-store"
 for fault in retained-go retained-pnpm retained-go-remote retained-go-fallback retained-go-scope; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then

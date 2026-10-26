@@ -15,6 +15,23 @@ import (
 	"testing"
 )
 
+// Location is transport configuration, never part of a portable source receipt.
+func TestGoRestorationReceiptIsIndependentOfScratchLocation(t *testing.T) {
+	inputs, policy := restorationFixture(t)
+	parent := physicalGeneratorTestDirectory(t)
+	first, err := restoreGoInputs(inputs, filepath.Join(parent, "first"), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := restoreGoInputs(inputs, filepath.Join(parent, "second"), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("identical retained sources produced location-dependent receipts")
+	}
+}
+
 // A pinned install still performs Go's native deprecation/latest metadata query.
 // The finite file proxy must answer it without a network or checksum bypass.
 func TestRestoredGoInputsSupportPinnedNativeInstall(t *testing.T) {
@@ -40,7 +57,8 @@ func TestRestoredGoInputsSupportPinnedNativeInstall(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			proxy := receipt.ModuleProxyURL
+			proxy := (&url.URL{Scheme: "file", Path: filepath.Join(output, "go-proxy")}).String()
+			proxy = strings.NewReplacer(",", "%2C", "|", "%7C").Replace(proxy)
 			parsed, err := url.Parse(proxy)
 			if err != nil || parsed.Scheme != "file" || parsed.Host != "" || parsed.Path != filepath.Join(output, "go-proxy") || strings.ContainsAny(proxy, ",|") || receipt.ModuleProxyScope != "retained-snapshot" {
 				t.Fatal("proxy URI or snapshot boundary differs", err)
