@@ -65,6 +65,13 @@ check() {
       (.run | contains(".tools == 14")) and (.run | contains(".nativeOfflineReplayProved == false")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify the actual native API generator checkpoint") > index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Copy and authenticate the native Go graph metadata" and
+      (.run | contains("cp -R \"$RUNNER_TEMP/zitadel-build/go-graph-metadata\"")) and
+      (.run | contains("verify-graph-metadata --package")) and
+      (.run | contains(". == $build[0].sourceSnapshot.goGraphMetadata")) and
+      (.run | contains(".goGraphMetadataCaptured == true")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Copy and authenticate the actual generator Go source inputs" and
       (.run | contains(".sourceSnapshot.generatorGoSources.manifestSha256")) and
       (.run | contains("cp -R \"$RUNNER_TEMP/zitadel-build/selected-generator-go-sources\"")) and
@@ -158,7 +165,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and

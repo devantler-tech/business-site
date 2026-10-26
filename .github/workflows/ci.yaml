@@ -472,6 +472,18 @@ jobs:
             .proofFiles > 0 and .files > 0 and .selectedGeneratorGoSourcesCaptured == true and
             .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
           ' "$RUNNER_TEMP/zitadel-build/generator-source-roundtrip.json" >/dev/null
+      - name: Copy and authenticate the native Go graph metadata
+        run: |
+          source="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          seal="$(jq -er '.sourceSnapshot.goGraphMetadata.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
+          cp -R "$RUNNER_TEMP/zitadel-build/go-graph-metadata" "$RUNNER_TEMP/zitadel-go-graph-metadata-roundtrip"
+          "$RUNNER_TEMP/zitadel-module-sources" verify-graph-metadata --package "$RUNNER_TEMP/zitadel-go-graph-metadata-roundtrip" --sha256 "$seal" --source-sha256 "$source" > "$RUNNER_TEMP/zitadel-build/go-graph-metadata-roundtrip.json"
+          jq -e --slurpfile build "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            . == $build[0].sourceSnapshot.goGraphMetadata and .schemaVersion == 1 and
+            .sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256 and
+            .modules > 0 and .metadataFiles >= .modules and .goGraphMetadataCaptured == true and
+            .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
+          ' "$RUNNER_TEMP/zitadel-build/go-graph-metadata-roundtrip.json" >/dev/null
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -531,6 +543,9 @@ jobs:
             ${{ runner.temp }}/zitadel-build/selected-generator-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/generator-source-readback.json
             ${{ runner.temp }}/zitadel-build/generator-source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/go-graph-metadata/manifest.json
+            ${{ runner.temp }}/zitadel-build/go-graph-metadata-readback.json
+            ${{ runner.temp }}/zitadel-build/go-graph-metadata-roundtrip.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json
