@@ -123,11 +123,9 @@ func generatorSourceFixture(t *testing.T) (build, checkpointSeal, sourceSeal, ve
 func capturedGeneratorSourceFixture(t *testing.T) (string, generatorSourceReceipt, string, string) {
 	t.Helper()
 	build, checkpoint, source, key := generatorSourceFixture(t)
-	out := filepath.Join(physicalGeneratorTestDirectory(t), "captured")
-	got, err := captureGeneratorSources(build, checkpoint, source, out, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, got := successfulSourceCapture(t, func(out string) (generatorSourceReceipt, error) {
+		return captureGeneratorSources(build, checkpoint, source, out, key)
+	})
 	return out, got, source, key
 }
 
@@ -136,10 +134,7 @@ func TestGeneratorSourceCaptureUsesAuthenticatedChecksumsAndPortableProofs(t *te
 	if !got.SelectedGeneratorGoSourcesCaptured || got.Modules != 12 || got.DependencyInputsCaptured || got.NativeOfflineReplayProved {
 		t.Fatalf("wrong receipt: %+v", got)
 	}
-	copyRoot := filepath.Join(physicalGeneratorTestDirectory(t), "moved")
-	if err := os.CopyFS(copyRoot, os.DirFS(out)); err != nil {
-		t.Fatal(err)
-	}
+	copyRoot := copiedSourceFixture(t, out)
 	checked, err := verifyGeneratorSources(copyRoot, got.ManifestSHA256, source, key)
 	if err != nil || got != checked {
 		t.Fatalf("portable proof: %+v %v", checked, err)

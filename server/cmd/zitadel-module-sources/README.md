@@ -21,6 +21,12 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
 /absolute/zitadel-module-sources verify-generator-sources \
   --package /absolute/fresh-generator-sources --sha256 GENERATOR_SOURCES_SEAL \
   --source-sha256 SOURCE_SEAL
+/absolute/zitadel-module-sources capture-graph-metadata \
+  --build /absolute/completed-build --source-sha256 SOURCE_SEAL \
+  --output /absolute/fresh-graph-metadata
+/absolute/zitadel-module-sources verify-graph-metadata \
+  --package /absolute/fresh-graph-metadata --sha256 GRAPH_METADATA_SEAL \
+  --source-sha256 SOURCE_SEAL
 ```
 
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
@@ -82,9 +88,19 @@ match the original native build metadata. Complete ZIP/go.mod content validation
 and externally sealed copied-package readback repeat these checks. Literal info
 metadata supplies version equality, not authenticated timestamps or origins.
 
-These operations retain selected service and generator-Go sources, metadata and
-checksum proofs. Graph-loading-only Go metadata and clean network-denied full
-compilation remain #343. Companion commands handle selected pnpm, BSR and console
+The graph-metadata operations retain observed `.mod` and optional `.info` files
+from the same build's fresh download cache, including resolver-only versions
+without adding their source ZIPs. They authenticate complete go.mod content
+against the frozen service checksum file or the fixed official checksum verifier,
+with only the needed same-build signed-log evidence. Literal info bytes must name
+the matching version; their timestamps and origins are not authenticated authority.
+The portable capsule has closed membership, bounded reads and an external seal.
+It contains no compiled cache, `.ziphash` marker or unrelated global cache.
+
+These operations retain selected service and generator-Go sources and observed
+resolver metadata. They do not prove every input needed by a cold build was
+observed. Cache restoration and clean network-denied full compilation remain
+tracked in issue #343. Companion commands handle selected pnpm, BSR and console
 inputs; their capsules do not establish complete dependency closure. Full
 source/image admission and public retrieval remain #308. Daemon resources, deployed
 login and invited-customer acceptance remain #305/#302. No activation is implied.

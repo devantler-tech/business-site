@@ -442,6 +442,24 @@ if [[ "$1" = capture-generator-sources || "$1" = verify-generator-sources ]]; th
   jq -n --arg checkpoint "$checkpoint" --arg source "$source" --argjson proved "$proved" '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,checkpointSha256:$checkpoint,modules:123,proofFiles:2,files:373,bytes:123,selectedGeneratorGoSourcesCaptured:$proved,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
   exit
 fi
+if [[ "$1" = capture-graph-metadata || "$1" = verify-graph-metadata ]]; then
+  [[ "$#" -eq 7 ]]
+  if [[ "$1" = capture-graph-metadata ]]; then
+    [[ "$2" = --build && -s "$3/service/zitadel" && "$4" = --source-sha256 && "$6" = --output ]]
+    [[ "${TEST_FAIL:-}" != graph-metadata-capture ]] || { echo '{"modules":123}'; exit 42; }
+    mkdir "$7"
+    source="$5"
+  else
+    [[ "$2" = --package && -d "$3" && "$4" = --sha256 && "$6" = --source-sha256 ]]
+    [[ "$5" = "$(printf '%064d' 0 | tr 0 f)" ]]
+    [[ "${TEST_FAIL:-}" != graph-metadata-readback ]] || exit 42
+    source="$7"
+  fi
+  proved=true
+  [[ "${TEST_FAIL:-}" != graph-metadata-incomplete ]] || proved=false
+  jq -n --arg source "$source" --argjson proved "$proved" '{schemaVersion:1,manifestSha256:("f"*64),sourceManifestSha256:$source,modules:400,metadataFiles:500,proofFiles:2,files:504,bytes:123,goGraphMetadataCaptured:$proved,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
 if [[ "$1" = --capture ]]; then
   [[ "$#" -eq 7 && "$2" = --build && -s "$3/service/zitadel" && "$4" = --catalogue && -s "$5" && "$6" = --output ]]
   if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
@@ -631,7 +649,7 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+for failure in graph-metadata-capture graph-metadata-readback graph-metadata-incomplete pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
