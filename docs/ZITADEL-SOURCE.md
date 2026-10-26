@@ -711,7 +711,9 @@ enabled. There is no fallback to the network or an old compiled cache.
 
 Pinned Go installs still query module deprecation metadata. The restored native
 file-only proxy supplies exact verified ZIP/mod/info bytes and deterministic
-lists of retained versions, separately from writable acquisition caches. Go keeps
+lists of complete generator-source versions with native checksum evidence,
+separately from writable acquisition caches. Graph-only metadata is retained for
+exact graph reads and is not advertised as an install candidate. Go keeps
 its native deprecation/retraction ordering and checksum checks. The resolver scope
 is the retained snapshot, not authenticated original/current upstream latest;
 no `@latest` response or timestamp-based authority is synthesized.

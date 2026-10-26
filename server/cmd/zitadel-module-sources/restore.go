@@ -259,19 +259,18 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 			}
 		}
 	}
-	// This proxy enumerates only the verified retained snapshot. Go itself orders
-	// its versions and performs deprecation/retraction/checksum checks. No @latest
-	// response, current upstream version or unauthenticated timestamp is invented.
+	// Advertise only complete generator sources with verified native checksum
+	// evidence. Graph-only metadata remains available for exact graph reads, but
+	// cannot nominate a version for an outside-module install's deprecation query.
+	// Go still orders retained versions and checks deprecation/retraction/checksums;
+	// no @latest response or current upstream version is invented.
 	lists := map[string][]string{}
-	for _, id := range metadata.Modules {
-		if !id.HasInfo {
-			continue
-		}
-		prefix, err := modulePrefix(identity{Path: id.Path, Version: id.Version})
+	for _, id := range generators.Modules {
+		prefix, err := modulePrefix(id)
 		if err != nil {
 			return result, err
 		}
-		for _, extension := range []string{".mod", ".info"} {
+		for _, extension := range []string{".zip", ".mod", ".info"} {
 			if _, ok := plan["go-proxy/"+prefix+extension]; !ok {
 				return result, fmt.Errorf("retained proxy metadata missing")
 			}

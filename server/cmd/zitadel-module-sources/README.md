@@ -111,8 +111,10 @@ service checksums or official checksum key. Failed restoration clears its receip
 and removes only its new output, preserving existing paths and input capsules.
 
 It also creates a separate sealed `go-proxy` from the exact verified ZIP/mod/info
-bytes. Its deterministic version lists enumerate only retained identities with
-validated info and authenticated module definitions. Native Go performs its own
+bytes. Its deterministic version lists enumerate only complete retained generator
+sources with authenticated native checksum evidence. Graph-only metadata remains
+available for exact graph reads, but cannot nominate a version for outside-module
+installation. Native Go performs its own
 version ordering, deprecation/retraction and checksum checks against this finite
 file-only snapshot. This is not proof of the original or current upstream latest
 resolver result. No `@latest` response or timestamp-based selection is invented.
