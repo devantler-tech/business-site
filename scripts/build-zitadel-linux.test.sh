@@ -715,3 +715,42 @@ for fault in retained-go retained-pnpm; do
   test ! -e "$scratch/$fault/generate.log"
   test ! -e "$scratch/$fault/build-receipt.json"
 done
+
+# Exercise the actual receipt footer's I/O boundary without pretending to run
+# its native build prerequisites. Linux CI separately executes the full entrypoint.
+receipt_anchor="go run \"\$root/scripts/zitadel-source-bundle.go\" --verify \"\$output/roundtrip\" \"\$seal\""
+[[ "$(grep -cF "$receipt_anchor" "$root/scripts/replay-zitadel-inputs.sh")" = 1 ]]
+cat >"$scratch/receipt-footer.sh" <<'PREFIX'
+set -euo pipefail
+output="$1"
+native="$output/native.json"
+seal="$(printf 'a%.0s' {1..64})"
+archive="$(printf 'b%.0s' {1..64})"
+complete=0
+PREFIX
+awk -v anchor="$receipt_anchor" 'found {print} index($0,anchor)==1 {found=1}' "$root/scripts/replay-zitadel-inputs.sh" >>"$scratch/receipt-footer.sh"
+for control in complete jq-partial hash-partial; do
+  receipt_output="$scratch/receipt-$control"
+  mkdir -p "$receipt_output/native" "$receipt_output/bin"
+  for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json; do
+    printf 'fictional inventory\n' >"$receipt_output/native/$notice"
+  done
+  jq -n '{sourceInput:{manifestSha256:("a"*64)},recipeSha256:("c"*64),binarySha256:("d"*64)}' >"$receipt_output/native.json"
+  case "$control" in
+    jq-partial)
+      printf '#!/usr/bin/env bash\nprintf "{\\\"schemaVersion\\\":1"\nexit 42\n' >"$receipt_output/bin/jq"
+      chmod 700 "$receipt_output/bin/jq" ;;
+    hash-partial)
+      printf '#!/usr/bin/env bash\nprintf "a%%.0s" {1..64}\nprintf "  fictional\\n"\nexit 42\n' >"$receipt_output/bin/shasum"
+      chmod 700 "$receipt_output/bin/shasum" ;;
+  esac
+  status=0
+  PATH="$receipt_output/bin:$PATH" bash "$scratch/receipt-footer.sh" "$receipt_output" >"$receipt_output/log" 2>&1 || status=$?
+  if [[ "$control" = complete ]]; then
+    [[ "$status" = 0 ]]
+    jq -e '.nativeOfflineReplayProved==true and .dependencyInputsCaptured==true' "$receipt_output/replay-receipt.json" >/dev/null
+  else
+    [[ "$status" = 42 && ! -e "$receipt_output/replay-receipt.json" ]]
+  fi
+done
+printf 'Receipt I/O controls: actual footer success and both partial-failure refusals passed.\n'
