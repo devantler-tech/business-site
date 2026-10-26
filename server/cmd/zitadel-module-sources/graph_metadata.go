@@ -237,7 +237,12 @@ func authenticateGraphMetadata(ids []graphMetadataModule, sums, latest []byte, k
 }
 
 // captureGoGraphMetadata retains only observed resolver metadata in a new private capsule.
-func captureGoGraphMetadata(build, source, output, key, sumsHash string) (result graphMetadataReceipt, resultErr error) {
+func captureGoGraphMetadata(build, source, output, key, sumsHash string) (graphMetadataReceipt, error) {
+	return captureGoGraphMetadataWithWriter(build, source, output, key, sumsHash, writeNew)
+}
+
+// captureGoGraphMetadataWithWriter keeps the file-write failure seam internal to this package.
+func captureGoGraphMetadataWithWriter(build, source, output, key, sumsHash string, write func(string, string, []byte) error) (result graphMetadataReceipt, resultErr error) {
 	if !generatorDigest(source) || physicalGeneratorDirectory(build) != nil || physicalGeneratorDirectory(filepath.Dir(output)) != nil || !filepath.IsAbs(output) || filepath.Clean(output) != output || output == build || strings.HasPrefix(build, output+string(filepath.Separator)) || strings.HasPrefix(output, filepath.Join(build, "go-modules")+string(filepath.Separator)) || strings.HasPrefix(output, filepath.Join(build, "go-path")+string(filepath.Separator)) || strings.HasPrefix(output, filepath.Join(build, "prepared")+string(filepath.Separator)) {
 		return result, fmt.Errorf("distinct owned metadata paths and source seal required")
 	}
@@ -245,10 +250,14 @@ func captureGoGraphMetadata(build, source, output, key, sumsHash string) (result
 	if err != nil {
 		return result, err
 	}
+	reserved := false
 	defer func() {
 		resultErr = errors.Join(resultErr, root.Close())
 		if resultErr != nil {
 			result = graphMetadataReceipt{}
+			if reserved {
+				resultErr = errors.Join(resultErr, os.RemoveAll(output))
+			}
 		}
 	}()
 	ids, err := graphMetadataInventory(root)
@@ -279,13 +288,14 @@ func captureGoGraphMetadata(build, source, output, key, sumsHash string) (result
 	if err := os.Mkdir(output, 0o700); err != nil {
 		return result, err
 	}
+	reserved = true
 	m := graphMetadataManifest{SchemaVersion: 1, Profile: "identity-go-graph-metadata-v1", SourceManifestSHA256: source, Modules: ids}
 	var total int64
 	appendFile := func(name string, body []byte) error {
 		if int64(len(body)) > graphMetadataLimit-total {
 			return fmt.Errorf("graph metadata capsule exceeds limit")
 		}
-		if err := writeNew(output, name, body); err != nil {
+		if err := write(output, name, body); err != nil {
 			return err
 		}
 		total += int64(len(body))

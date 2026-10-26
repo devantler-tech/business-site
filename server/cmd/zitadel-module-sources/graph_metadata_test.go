@@ -2,10 +2,14 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/module"
 )
 
 // TestGraphMetadataCLIRejectsArtifactAuthority prevents selecting a checksum key through retained data.
@@ -15,6 +19,30 @@ func TestGraphMetadataCLIRejectsArtifactAuthority(t *testing.T) {
 	err := run([]string{"verify-graph-metadata", "--package", out, "--sha256", got.ManifestSHA256, "--source-sha256", source}, &output)
 	if err == nil || output.Len() != 0 {
 		t.Fatalf("artifact authority accepted: %q %v", output.String(), err)
+	}
+}
+
+// TestGraphMetadataFailedWriteRemovesOnlyItsReservation exercises a real late capture failure.
+func TestGraphMetadataFailedWriteRemovesOnlyItsReservation(t *testing.T) {
+	build, source, key, sums := graphMetadataFixture(t)
+	out := filepath.Join(physicalGeneratorTestDirectory(t), "metadata")
+	failure := errors.New("injected write failure")
+	writes := 0
+	got, err := captureGoGraphMetadataWithWriter(build, source, out, key, sums, func(directory, name string, body []byte) error {
+		if err := writeNew(directory, name, body); err != nil {
+			return err
+		}
+		writes++
+		if writes == 3 {
+			return failure
+		}
+		return nil
+	})
+	if !errors.Is(err, failure) || writes != 3 || got.ManifestSHA256 != "" {
+		t.Fatalf("late failure did not run: %+v, writes=%d, err=%v", got, writes, err)
+	}
+	if _, err := os.Lstat(out); !os.IsNotExist(err) {
+		t.Fatalf("partial capture remains: %v", err)
 	}
 }
 
@@ -83,25 +111,40 @@ func TestGraphMetadataIncludesResolverOnlyMod(t *testing.T) {
 
 // TestGraphMetadataRejectsAmbiguousOrOversizedInfo pins the actual metadata read boundary.
 func TestGraphMetadataRejectsAmbiguousOrOversizedInfo(t *testing.T) {
-	for _, body := range []string{`{"Version":"v1.0.0"} {}`, `{"Version":"v1.0.0","Version":"v2.0.0"}`, `{"Version":"v1.0.0","Origin":{"URL":"a","URL":"b"}}`, strings.Repeat("x", (64<<10)+1)} {
-		build, source, key, sums := graphMetadataFixture(t)
-		changed := false
-		err := filepath.WalkDir(build, func(name string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
+	for _, kind := range []string{"trailing", "duplicate", "origin", "oversized"} {
+		t.Run(kind, func(t *testing.T) {
+			build, source, key, sums := graphMetadataFixture(t)
+			changed := false
+			err := filepath.WalkDir(build, func(name string, entry os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !changed && !entry.IsDir() && strings.HasSuffix(name, ".info") {
+					changed = true
+					version, err := module.UnescapeVersion(strings.TrimSuffix(filepath.Base(name), ".info"))
+					if err != nil {
+						return err
+					}
+					body := fmt.Sprintf(`{"Version":%q} {}`, version)
+					switch kind {
+					case "duplicate":
+						body = fmt.Sprintf(`{"Version":"v0.0.0-wrong","Version":%q}`, version)
+					case "origin":
+						body = fmt.Sprintf(`{"Version":%q,"Origin":{"URL":"a","URL":"b"}}`, version)
+					case "oversized":
+						body = strings.Repeat("x", (64<<10)+1)
+					}
+					return os.WriteFile(name, []byte(body), 0o600)
+				}
+				return nil
+			})
+			if err != nil || !changed {
+				t.Fatal("fixture not changed", err)
 			}
-			if !changed && !entry.IsDir() && strings.HasSuffix(name, ".info") {
-				changed = true
-				return os.WriteFile(name, []byte(body), 0o600)
+			if _, err := captureGoGraphMetadata(build, source, filepath.Join(physicalGeneratorTestDirectory(t), "metadata"), key, sums); err == nil {
+				t.Fatal("unsafe info admitted")
 			}
-			return nil
 		})
-		if err != nil || !changed {
-			t.Fatal("fixture not changed", err)
-		}
-		if _, err := captureGoGraphMetadata(build, source, filepath.Join(physicalGeneratorTestDirectory(t), "metadata"), key, sums); err == nil {
-			t.Fatal("unsafe info admitted")
-		}
 	}
 }
 
@@ -138,7 +181,11 @@ func TestGraphMetadataCaptureRefusesUnverifiableInput(t *testing.T) {
 					}
 					body := []byte("altered")
 					if kind == "duplicate" {
-						body = []byte(`{"Version":"v1.0.0","version":"v2.0.0"}`)
+						version, err := module.UnescapeVersion(strings.TrimSuffix(filepath.Base(name), ".info"))
+						if err != nil {
+							return err
+						}
+						body = []byte(fmt.Sprintf(`{"version":"v0.0.0-wrong","Version":%q}`, version))
 					}
 					return os.WriteFile(name, body, 0o600)
 				})
