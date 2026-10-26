@@ -556,6 +556,18 @@ does not enumerate graph-loading-only Go metadata or prove full cold native
 compilation. Both overall proof flags stay false. Native Linux validation must
 establish this new path before its source evidence is used for release admission.
 
+The selected Go input restoration authenticates the service, generator and graph
+metadata capsules before reserving a fresh output. It joins identities, refuses
+literal conflicts and reconstructs only documented native download/checksum paths.
+It never copies an extracted module tree, `.ziphash` or compiled cache. The fixed
+catalogue, service locks and official checksum key cannot be replaced by CLI data.
+CI reads these inputs with the frozen Go 1.26.10 client in a network namespace as
+the original non-root user, with fresh caches and remote module acquisition off.
+It compares all selected service/generator checksums, checks unchanged source locks
+and requires a missing signed proof to fail in a separately reconstructed cache.
+This is native input readback, not generation or compilation from those inputs.
+The two whole-build proof flags remain false; issue #343 retains full cold replay.
+
 The same explicit capture also requires
 `--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
 Before native API generation, the builder creates a private Buf cache. It retains
