@@ -749,6 +749,31 @@ test("the native empty store temporary root carries no source inputs", async (t)
   assert.equal(captured.selectedPNPMSourcesCaptured, true);
 });
 
+test("a directory refusal exposes only a fixed location category and numeric layout metadata", async (t) => {
+  const f = await buildFixture(t);
+  const name = path.join(f.store, "fictional-private-directory");
+  fs.mkdirSync(name);
+  let caught;
+  try {
+    await captureBuild(f.options);
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught);
+  const diagnostic = failureDiagnostic(caught);
+  assert.equal(diagnostic.phase, "closed-native-store");
+  assert.deepEqual(diagnostic.directoryMetadata, {
+    location: "unrecognised",
+    expected: false,
+    directory: true,
+    mode: fs.statSync(name).mode & 0o7777,
+    entries: 0,
+  });
+  assert.equal(JSON.stringify(diagnostic).includes(f.directory), false);
+  assert.equal(JSON.stringify(diagnostic).includes("fictional-private-directory"), false);
+  assert.equal(fs.existsSync(path.join(f.output, "manifest.json")), false);
+});
+
 for (const kind of ["file", "directory", "symlink"]) {
   test(`the native temporary root cannot hide an unrelated ${kind}`, async (t) => {
     const f = await buildFixture(t);

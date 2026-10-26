@@ -555,8 +555,30 @@ function closedMembers(root, expected, privateModes = true) {
       !stat.isDirectory() ||
       (stat.mode & 0o7000) !== 0 ||
       (privateModes && (stat.mode & 0o7777) !== 0o700)
-    )
-      fail("unexpected or unsafe directory");
+    ) {
+      const error = new InputFailure("unexpected or unsafe directory");
+      const location = privateModes
+        ? "retained-directory"
+        : relative === "."
+          ? "store-root"
+          : ["files", "index", "tmp"].includes(relative)
+            ? relative
+            : /^files\/[a-f0-9]{2}$/.test(relative)
+              ? "file-bucket"
+              : /^index\/[a-f0-9]{2}$/.test(relative)
+                ? "index-bucket"
+                : relative.startsWith("tmp/")
+                  ? "temporary-descendant"
+                  : "unrecognised";
+      error.directoryMetadata = {
+        location,
+        expected: directories.has(relative),
+        directory: stat.isDirectory(),
+        mode: stat.mode & 0o7777,
+        entries: stat.isDirectory() ? fs.readdirSync(directory).length : null,
+      };
+      throw error;
+    }
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const name = relative === "." ? entry.name : `${relative}/${entry.name}`;
       if (entry.isDirectory()) visit(name);
@@ -766,6 +788,7 @@ export function failureDiagnostic(error) {
     phase,
     ...(error instanceof InputFailure && error.optionalSkips ? { optionalSkips: error.optionalSkips } : {}),
     ...(error instanceof InputFailure && error.fileMetadata ? { fileMetadata: error.fileMetadata } : {}),
+    ...(error instanceof InputFailure && error.directoryMetadata ? { directoryMetadata: error.directoryMetadata } : {}),
     reason:
       error instanceof InputFailure
         ? error.message

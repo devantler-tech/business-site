@@ -51,7 +51,9 @@ from unselected roots. That native full-workspace classification is checked
 separately from the four-root source graph; it never adds unselected archives to
 capture. Missing, invented or compatible-package skips still fail.
 File refusals additionally report numeric type/mode/size/link metadata, never
-pathnames. Original archive permissions are checked against the complete native
+pathnames. Directory refusals use only fixed location categories and numeric
+layout metadata; unknown member names are never emitted. Original archive
+permissions are checked against the complete native
 file map. Physical CAFS permissions follow pnpm's distinct storage normalization:
 0755 for executable content, otherwise 0644 under the required umask 022.
 pnpm's bin linking can subsequently set an installed command to 0755, changing
