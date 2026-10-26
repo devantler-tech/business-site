@@ -18,13 +18,14 @@ import (
 type primingChecksumOps struct {
 	*generatorProofOps
 	server *sumdb.Server
+	test   *testing.T
 	mu     sync.Mutex
 	cache  map[string][]byte
 }
 
 func (o *primingChecksumOps) ReadRemote(name string) ([]byte, error) {
 	w := httptest.NewRecorder()
-	o.server.ServeHTTP(w, httptest.NewRequest("GET", name, nil))
+	o.server.ServeHTTP(w, httptest.NewRequestWithContext(o.test.Context(), "GET", name, nil))
 	if w.Code != 200 {
 		return nil, fmt.Errorf("fixture checksum request failed")
 	}
@@ -82,7 +83,7 @@ func generatorSourceFixture(t *testing.T) (build, checkpointSeal, sourceSeal, ve
 		t.Fatal(err)
 	}
 	verifier = key
-	priming := &primingChecksumOps{cache: map[string][]byte{}, server: sumdb.NewServer(sumdb.NewTestServer(signer, func(p, v string) ([]byte, error) {
+	priming := &primingChecksumOps{test: t, cache: map[string][]byte{}, server: sumdb.NewServer(sumdb.NewTestServer(signer, func(p, v string) ([]byte, error) {
 		id, ok := payloads[p+"@"+v]
 		if !ok {
 			return nil, fmt.Errorf("unexpected module")

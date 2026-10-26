@@ -15,6 +15,12 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
   --catalogue /absolute/repository/third_party/zitadel-go-module-notices/catalogue.json \
   --output /absolute/fresh-retained-directory
 /absolute/zitadel-module-sources --verify /absolute/fresh-retained-directory --sha256 EXTERNAL_MANIFEST_SHA256
+/absolute/zitadel-module-sources capture-generator-sources \
+  --build /absolute/completed-build --checkpoint-sha256 CHECKPOINT_SEAL \
+  --source-sha256 SOURCE_SEAL --output /absolute/fresh-generator-sources
+/absolute/zitadel-module-sources verify-generator-sources \
+  --package /absolute/fresh-generator-sources --sha256 GENERATOR_SOURCES_SEAL \
+  --source-sha256 SOURCE_SEAL
 ```
 
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
@@ -66,7 +72,19 @@ build receipt. This validates build metadata; it does **not** retain generator
 module archives, authenticate a binary signature, or enumerate graph-loading-only
 inputs. `dependencyInputsCaptured` and `nativeOfflineReplayProved` stay false.
 
-This is service-Go source retention plus a generator metadata checkpoint. Generator-tool sources, filtered pnpm inputs,
-BSR schema sources and clean network-denied full compilation remain #343. Full
+The explicit generator-source operations retain the checkpoint's selected Go
+module ZIP, go.mod and literal info bytes, plus the required checksum proofs.
+The maintained checksum client uses Go 1.26.10's fixed official `sum.golang.org`
+verifier key; the CLI and retained data cannot select another key. It reads only
+this build's owned lookup, tile and signed latest-tree records, with remote reads
+denied and latest-tree updates confined to memory. Each ZIP checksum must also
+match the original native build metadata. Complete ZIP/go.mod content validation
+and externally sealed copied-package readback repeat these checks. Literal info
+metadata supplies version equality, not authenticated timestamps or origins.
+
+These operations retain selected service and generator-Go sources, metadata and
+checksum proofs. Graph-loading-only Go metadata and clean network-denied full
+compilation remain #343. Companion commands handle selected pnpm, BSR and console
+inputs; their capsules do not establish complete dependency closure. Full
 source/image admission and public retrieval remain #308. Daemon resources, deployed
 login and invited-customer acceptance remain #305/#302. No activation is implied.

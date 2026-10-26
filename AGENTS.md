@@ -227,6 +227,8 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
+npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
+node --test tools/zitadel-pnpm-source/index.test.mjs
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources)
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-bsr-sources)
 bash scripts/check-active-projects-drift.test.sh
