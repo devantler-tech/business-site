@@ -36,6 +36,9 @@ check() {
     any($job.steps[]; .name == "Read back restored Go inputs without networking" and
       .run == "bash scripts/readback-zitadel-go-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Replay the complete retained identity build without networking" and
+      .run == "bash scripts/replay-zitadel-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --output \"$RUNNER_TEMP/zitadel-offline-replay\"" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
       .["working-directory"] == "scripts" and
@@ -169,7 +172,7 @@ check() {
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
         sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "go-input-restoration.json", "go-input-readback.json", "go-input-native/manifest.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
-          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
+          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] + (["replay-receipt.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
     any(.jobs.validation.steps[]; (.with["job-results"] // "" | contains("needs.build-zitadel-linux.result"))) and
@@ -177,6 +180,30 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+# Exercise the outer replay's actual service-consumption predicate. A component
+# readback must remain source-bound and must not promote itself to whole replay.
+sed -n '/^jq -e --slurpfile original.*--slurpfile restored /,/retained-go-service-readback.json/p' \
+  "$root/scripts/replay-zitadel-inputs.sh" | sed '1,2d;$d' >"$scratch/native-service.jq"
+test -s "$scratch/native-service.jq"
+jq -n '{sourceSnapshot:{manifestSha256:("a"*64)}}' >"$scratch/native-service-original.json"
+jq -n '{manifestSha256:("b"*64)}' >"$scratch/native-service-restored.json"
+jq -n '{modules:[{effective:{Path:"one",Version:"v1"}},{effective:{Path:"two",Version:"v1"}},{effective:{Path:"one",Version:"v1"}}]}' >"$scratch/native-service-selection.json"
+jq -n '{schemaVersion:1,sourceManifestSha256:("a"*64),restorationManifestSha256:("b"*64),serviceModules:2,nativeCacheReadbackPassed:true,sourceChecksumsUnchanged:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/native-service-positive.json"
+check_native_service() {
+  jq -e --slurpfile original "$scratch/native-service-original.json" \
+    --slurpfile restored "$scratch/native-service-restored.json" \
+    --slurpfile service "$scratch/native-service-selection.json" \
+    -f "$scratch/native-service.jq" "$1" >/dev/null
+}
+check_native_service "$scratch/native-service-positive.json"
+for mutation in '.schemaVersion=2' '.sourceManifestSha256=("c"*64)' '.restorationManifestSha256=("c"*64)' \
+  '.serviceModules=1' '.serviceModules=0' '.nativeCacheReadbackPassed=false' '.sourceChecksumsUnchanged=false' \
+  '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true'; do
+  jq "$mutation" "$scratch/native-service-positive.json" >"$scratch/native-service-negative.json"
+  if check_native_service "$scratch/native-service-negative.json"; then
+    echo "invalid native service component admitted: $mutation" >&2; exit 1
+  fi
+done
 # Execute the native prepared-rebuild receipt predicate, rather than accepting
 # textual mentions of a joined seal or the deliberately false offline claim.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Rebuild the native service from the retained prepared source") | .run |
@@ -372,6 +399,9 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("console-notices-inventory.json") | not)) | join("\n")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("/zitadel-build/console-notices-inventory.json"; "/zitadel-build/unrelated.json")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.name="other-evidence" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Replay the complete retained identity build without networking"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Replay the complete retained identity build without networking" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Replay the complete retained identity build without networking" then .["continue-on-error"]=true else . end)' \
   '.jobs.validation.needs |= map(select(. != "build-zitadel-linux"))' \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"

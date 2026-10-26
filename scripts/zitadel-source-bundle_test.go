@@ -17,6 +17,93 @@ import (
 	"time"
 )
 
+// TestRetainedInputsArchive exercises the actual closed archive with private
+// capsule modes. Compiled output and ambient caches must never enter it.
+func TestRetainedInputsArchive(t *testing.T) {
+	for _, kind := range []string{"valid", "missing-component", "linked-member", "unsupported-mode"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals"}
+			modes := []os.FileMode{0600, 0444, 0644, 0755}
+			for i, component := range components {
+				if kind == "missing-component" && i == 0 {
+					continue
+				}
+				dir := filepath.Join(root, component)
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+				file := filepath.Join(dir, "manifest.json")
+				if err := os.WriteFile(file, []byte(component+"\n"), modes[i%len(modes)]); err != nil {
+					t.Fatal(err)
+				}
+				if kind == "linked-member" && i == 0 {
+					if err := os.Symlink(file, filepath.Join(dir, "linked")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if kind == "unsupported-mode" && i == 0 {
+					if err := os.Chmod(file, 0666); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for _, name := range []string{"build-receipt.json", "service-binary", "ambient-cache"} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(name+"\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			output := filepath.Join(t.TempDir(), "retained")
+			var out, diagnostic bytes.Buffer
+			status := sourceBundleRun([]string{"--seal-inputs", root, output}, &out, &diagnostic)
+			if kind != "valid" {
+				if status == 0 || out.Len() != 0 {
+					t.Fatalf("invalid retained input published a receipt: %s", kind)
+				}
+				if _, err := os.Lstat(output); !os.IsNotExist(err) {
+					t.Fatalf("failed retention left a sealed output: %v", err)
+				}
+				return
+			}
+			if status != 0 {
+				t.Fatalf("private retained inputs cannot enter the archive: %s", diagnostic.String())
+			}
+			var receipt struct{ ManifestSHA256 string }
+			if err := json.Unmarshal(out.Bytes(), &receipt); err != nil {
+				t.Fatal(err)
+			}
+			manifest, err := sourceVerifyTree(output, receipt.ManifestSHA256)
+			if err != nil || manifest.Phase != "retained-build-inputs" || manifest.PreparedProfile != "" || len(manifest.Records) != 0 || len(manifest.Files) != len(components)+1 {
+				t.Fatalf("retained inputs impersonate prepared source or include ambient output: %v", err)
+			}
+			archive := filepath.Join(t.TempDir(), "inputs.tar")
+			digest, err := sourcePackTree(output, receipt.ManifestSHA256, archive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored := filepath.Join(t.TempDir(), "restored")
+			if err := sourceUnpackTree(archive, digest, receipt.ManifestSHA256, restored); err != nil {
+				t.Fatal(err)
+			}
+			for i, component := range components {
+				for _, tree := range []string{output, restored} {
+					directory, err := os.Stat(filepath.Join(tree, "source", component))
+					if err != nil || directory.Mode() != os.ModeDir|0700 {
+						t.Fatalf("private native capsule directory mode changed: %s: %v", component, err)
+					}
+				}
+				info, err := os.Stat(filepath.Join(restored, "source", component, "manifest.json"))
+				if err != nil || info.Mode() != modes[i%len(modes)] {
+					t.Fatalf("native capsule mode changed: %s: %v", component, err)
+				}
+			}
+			if _, err := sourceRestoreBuild(restored, receipt.ManifestSHA256, filepath.Join(t.TempDir(), "build")); err == nil {
+				t.Fatal("input transport impersonated a prepared source snapshot")
+			}
+		})
+	}
+}
+
 // TestSourceRestoreBuildKeepsLiteralInputs proves the replay seam restores a
 // verified closed snapshot without re-preparing it or replacing its original API
 // record with the serialized source configuration. Frozen-profile admission is

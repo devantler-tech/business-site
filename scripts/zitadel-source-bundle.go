@@ -373,6 +373,12 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 	switch {
 	case len(args) == 4 && args[0] == "--restore-build":
 		value, err = sourceRestoreBuild(args[1], args[2], args[3])
+	case len(args) == 3 && args[0] == "--seal-inputs":
+		var seal string
+		seal, err = sourceSealTreePhase(args[1], args[2], "retained-build-inputs")
+		value = struct {
+			ManifestSHA256 string `json:"manifestSha256"`
+		}{seal}
 	case len(args) == 4 && args[0] == "--capture-build":
 		value, err = sourceCaptureBuild(args[1], args[2], args[3], sourceCapturePolicy{
 			sourcePreparedProfile,
@@ -601,7 +607,7 @@ func sourceUnpackTree(archive, digest, seal, output string) (result error) {
 			return errors.Join(fmt.Errorf("incomplete canonical source member"), err)
 		}
 		destination := filepath.Join(output, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(destination), sourceDirectoryMode(manifest.Phase)); err != nil {
 			return err
 		}
 		if err := sourceWrite(destination, body, os.FileMode(member.Mode)); err != nil {
@@ -691,6 +697,9 @@ func sourceVerifyTree(root, seal string) (verified sourceManifest, result error)
 			return err
 		}
 		if info.IsDir() && directories[name] {
+			if manifest.Phase == "retained-build-inputs" && info.Mode() != os.ModeDir|0700 {
+				return fmt.Errorf("retained input directory is not private")
+			}
 			return nil
 		}
 		if name == "source-manifest.json" {
@@ -733,9 +742,14 @@ func sourceDecodeManifest(raw []byte) (sourceManifest, error) {
 		return sourceManifest{}, fmt.Errorf("source manifest has trailing input")
 	}
 	canonical, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil || !bytes.Equal(append(canonical, '\n'), raw) || manifest.SchemaVersion != 1 || manifest.Phase != "prepared-before-install" || len(manifest.Files) == 0 || len(manifest.Files) > sourceMemberCount {
+	retained := manifest.Phase == "retained-build-inputs"
+	if err != nil || !bytes.Equal(append(canonical, '\n'), raw) || manifest.SchemaVersion != 1 || (!retained && manifest.Phase != "prepared-before-install") || len(manifest.Files) == 0 || len(manifest.Files) > sourceMemberCount {
 		return sourceManifest{}, fmt.Errorf("noncanonical or unsupported source manifest")
 	}
+	if retained && (len(manifest.Records) != 0 || manifest.PreparedProfile != "") {
+		return sourceManifest{}, fmt.Errorf("input transport cannot declare prepared build records")
+	}
+	components := sourceInputComponents()
 	previous := ""
 	var total int64
 	if len(manifest.Records) > 64 || (len(manifest.Records) == 0 && manifest.PreparedProfile != "") {
@@ -757,13 +771,48 @@ func sourceDecodeManifest(raw []byte) (sourceManifest, error) {
 		if strings.HasPrefix(member.Path, "records/") && member.Mode != 0644 {
 			return sourceManifest{}, fmt.Errorf("executable build record is unsupported")
 		}
-		if !sourcePath(member.Path) || member.Path <= previous || member.Bytes < 0 || member.Bytes > sourceMemberLimit || member.Bytes > sourceTreeLimit-total || !sourceDigest(member.SHA256) || (member.Mode != 0644 && member.Mode != 0755) {
+		mode := member.Mode == 0644 || member.Mode == 0755 || (retained && (member.Mode == 0600 || member.Mode == 0444))
+		if !sourcePath(member.Path) || member.Path <= previous || member.Bytes < 0 || member.Bytes > sourceMemberLimit || member.Bytes > sourceTreeLimit-total || !sourceDigest(member.SHA256) || !mode {
 			return sourceManifest{}, fmt.Errorf("invalid or unordered source member")
+		}
+		if retained {
+			name, nested, _ := strings.Cut(strings.TrimPrefix(member.Path, "source/"), "/")
+			if _, found := components[name]; !found || (name == "build-receipt.json") != (nested == "") {
+				return sourceManifest{}, fmt.Errorf("unexpected retained input component")
+			}
+			components[name] = true
 		}
 		previous = member.Path
 		total += member.Bytes
 	}
+	if retained {
+		for _, found := range components {
+			if !found {
+				return sourceManifest{}, fmt.Errorf("retained input component is missing")
+			}
+		}
+	}
 	return manifest, nil
+}
+
+// sourceInputComponents is the transport allow-list, not dependency admission.
+// Each sealed capsule still requires its maintained native verifier before use.
+func sourceInputComponents() map[string]bool {
+	return map[string]bool{
+		"build-receipt.json": false, "source-snapshot": false,
+		"selected-go-sources": false, "selected-generator-go-sources": false,
+		"go-graph-metadata": false, "selected-pnpm-sources": false,
+		"selected-bsr-sources": false, "selected-console-originals": false,
+	}
+}
+
+// sourceDirectoryMode reconstructs the native private capsule layout without
+// changing the existing prepared-source profile or its executable file modes.
+func sourceDirectoryMode(phase string) fs.FileMode {
+	if phase == "retained-build-inputs" {
+		return 0700
+	}
+	return 0755
 }
 
 // sourcePath admits a canonical archive-relative identity without interpreting it.
@@ -839,6 +888,12 @@ func sourceWriteComplete(output sourceOutput, body []byte, mode os.FileMode) err
 // Its manifest seals tree membership, original bytes and executable modes; the
 // caller separately binds this mechanism to the frozen preparation profile.
 func sourceSealTree(root, output string) (seal string, result error) {
+	return sourceSealTreePhase(root, output, "prepared-before-install")
+}
+
+// sourceSealTreePhase shares the closed archive engine while keeping retained
+// capsule modes separate from the immutable prepared-source profile.
+func sourceSealTreePhase(root, output, phase string) (seal string, result error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return "", err
@@ -886,6 +941,7 @@ func sourceSealTree(root, output string) (seal string, result error) {
 		return "", fmt.Errorf("source root changed")
 	}
 	members := map[string]fs.FileInfo{}
+	components := sourceInputComponents()
 	var total int64
 	if err := fs.WalkDir(r.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -893,6 +949,15 @@ func sourceSealTree(root, output string) (seal string, result error) {
 		}
 		if name == "." {
 			return nil
+		}
+		if phase == "retained-build-inputs" {
+			component, _, _ := strings.Cut(name, "/")
+			if _, selected := components[component]; !selected {
+				if entry.IsDir() {
+					return fs.SkipDir
+				}
+				return nil
+			}
 		}
 		if !sourcePath(name) {
 			return fmt.Errorf("unclean source path")
@@ -904,7 +969,8 @@ func sourceSealTree(root, output string) (seal string, result error) {
 		if info.IsDir() {
 			return nil
 		}
-		if !info.Mode().IsRegular() || (info.Mode() != 0644 && info.Mode() != 0755) || info.Size() < 0 || info.Size() > sourceMemberLimit || len(members) >= sourceMemberCount || info.Size() > sourceTreeLimit-total {
+		mode := info.Mode() == 0644 || info.Mode() == 0755 || (phase == "retained-build-inputs" && (info.Mode() == 0600 || info.Mode() == 0444))
+		if !info.Mode().IsRegular() || !mode || info.Size() < 0 || info.Size() > sourceMemberLimit || len(members) >= sourceMemberCount || info.Size() > sourceTreeLimit-total {
 			return fmt.Errorf("unsupported source member or tree size: %s", name)
 		}
 		members[name] = info
@@ -921,14 +987,14 @@ func sourceSealTree(root, output string) (seal string, result error) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	manifest := sourceManifest{SchemaVersion: 1, Phase: "prepared-before-install"}
+	manifest := sourceManifest{SchemaVersion: 1, Phase: phase}
 	for _, name := range names {
 		body, err := sourceRead(r, name, members[name])
 		if err != nil {
 			return "", err
 		}
 		destination := filepath.Join(output, "source", filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(destination), sourceDirectoryMode(phase)); err != nil {
 			return "", err
 		}
 		mode := members[name].Mode()
@@ -944,6 +1010,9 @@ func sourceSealTree(root, output string) (seal string, result error) {
 	encoded = append(encoded, '\n')
 	if len(encoded) > sourceManifestLimit {
 		return "", fmt.Errorf("source manifest exceeds limit")
+	}
+	if _, err := sourceDecodeManifest(encoded); err != nil {
+		return "", err
 	}
 	if err := sourceWrite(filepath.Join(output, "source-manifest.json"), encoded, 0444); err != nil {
 		return "", err

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,13 +15,217 @@ import (
 	"testing"
 )
 
+// Location is transport configuration, never part of a portable source receipt.
+func TestGoRestorationReceiptIsIndependentOfScratchLocation(t *testing.T) {
+	inputs, policy := restorationFixture(t)
+	parent := physicalGeneratorTestDirectory(t)
+	first, err := restoreGoInputs(inputs, filepath.Join(parent, "first"), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := restoreGoInputs(inputs, filepath.Join(parent, "second"), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("identical retained sources produced location-dependent receipts")
+	}
+}
+
+// A pinned install still performs Go's native deprecation/latest metadata query.
+// The finite file proxy must answer it without a network or checksum bypass.
+func TestRestoredGoInputsSupportPinnedNativeInstall(t *testing.T) {
+	inputs, policy := restorationFixtureWithGraphOnlyVersion(t, true)
+	sources := restorationGenerators(t, inputs)
+	selected := sources.Modules[0]
+	prefix, err := modulePrefix(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"complete", "proxy-off", "missing-list", "missing-lookup", "advertise-graph-only"} {
+		t.Run(fault, func(t *testing.T) {
+			output := filepath.Join(physicalGeneratorTestDirectory(t), "restored space,|%#")
+			receipt, err := restoreGoInputs(inputs, output, policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proxy := (&url.URL{Scheme: "file", Path: filepath.Join(output, "go-proxy")}).String()
+			proxy = strings.NewReplacer(",", "%2C", "|", "%7C").Replace(proxy)
+			parsed, err := url.Parse(proxy)
+			if err != nil || parsed.Scheme != "file" || parsed.Host != "" || parsed.Path != filepath.Join(output, "go-proxy") || strings.ContainsAny(proxy, ",|") || receipt.ModuleProxyScope != "retained-snapshot" {
+				t.Fatal("proxy URI or snapshot boundary differs", err)
+			}
+			if fault == "proxy-off" {
+				proxy = "off"
+			}
+			if fault == "missing-list" {
+				if err := os.Remove(filepath.Join(output, "go-proxy", filepath.Dir(prefix), "list")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if fault == "missing-lookup" {
+				removeRestoredLookup(t, output, selected)
+			}
+			if fault == "complete" || fault == "advertise-graph-only" {
+				listPath := filepath.Join(output, "go-proxy", filepath.Dir(prefix), "list")
+				list, err := os.ReadFile(listPath)
+				if err != nil || string(list) != selected.Version+"\n" {
+					t.Fatal("proxy advertised a graph-only version", err, string(list))
+				}
+				graphPrefix, err := modulePrefix(identity{Path: selected.Path, Version: "v1.999.0"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, extension := range []string{".mod", ".info"} {
+					if _, err := os.Stat(filepath.Join(output, "go-proxy", graphPrefix+extension)); err != nil {
+						t.Fatal("exact graph metadata was lost", err)
+					}
+				}
+				if fault == "advertise-graph-only" {
+					if err := os.WriteFile(listPath, append(list, []byte("v1.999.0\n")...), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			denied, requests := deniedChecksumServer(t)
+			bin := filepath.Join(t.TempDir(), "bin")
+			cmd := exec.CommandContext(t.Context(), "go", "install", selected.Path+"@"+selected.Version)
+			cmd.Dir = physicalGeneratorTestDirectory(t)
+			cmd.Env = append(restoredNativeGoEnvironment(t, output, policy, denied.URL), "GOPROXY="+proxy, "GOBIN="+bin)
+			body, err := cmd.CombinedOutput()
+			if fault != "complete" {
+				if err == nil {
+					t.Fatal("incomplete native resolver input was accepted")
+				}
+				if fault == "proxy-off" && !bytes.Contains(body, []byte("loading deprecation")) {
+					t.Fatalf("original deprecation failure was not reproduced: %s", body)
+				}
+				if fault == "missing-list" && !bytes.Contains(body, []byte("/@v/list")) {
+					t.Fatalf("missing proxy index did not cause refusal: %s", body)
+				}
+				if fault == "missing-lookup" && requests.Load() == 0 {
+					t.Fatalf("checksum refusal did not attempt its unavailable proof: %s", body)
+				}
+				if fault == "advertise-graph-only" && (!bytes.Contains(body, []byte("loading deprecation")) || !bytes.Contains(body, []byte("v1.999.0/go.mod")) || requests.Load() == 0) {
+					t.Fatalf("graph-only version did not reproduce its missing native proof: %s", body)
+				}
+				return
+			}
+			if err != nil || requests.Load() != 0 {
+				t.Fatalf("pinned native install required uncaptured resolver inputs: %v %s", err, body)
+			}
+			program := filepath.Join(bin, filepath.Base(selected.Path))
+			if err := exec.CommandContext(t.Context(), program).Run(); err != nil {
+				t.Fatal("native generator fixture did not run", err)
+			}
+		})
+	}
+}
+
+func restorationGenerators(t *testing.T, inputs goRestoreInputs) generatorSourceManifest {
+	t.Helper()
+	root, err := openRoot(inputs.Generators)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sources generatorSourceManifest
+	err = loadGoRestoreManifest(root, inputs.GeneratorsSHA256, &sources)
+	if closeErr := root.Close(); err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	return sources
+}
+
+func removeRestoredLookup(t *testing.T, output string, selected identity) {
+	t.Helper()
+	prefix, err := modulePrefix(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := "go-modules/cache/download/sumdb/sum.golang.org/lookup/" + strings.Replace(prefix, "/@v/", "@", 1)
+	if err := os.Remove(filepath.Join(output, lookup)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func deniedChecksumServer(t *testing.T) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
+	requests := new(atomic.Int64)
+	denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		http.Error(w, "offline fixture", http.StatusForbidden)
+	}))
+	t.Cleanup(denied.Close)
+	return denied, requests
+}
+
+// restoredNativeGoEnvironment isolates writable Go stores, disables default
+// external resolution and selects the supplied local test checksum authority.
+func restoredNativeGoEnvironment(t *testing.T, output string, policy goRestorePolicy, endpoint string) []string {
+	t.Helper()
+	return append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOROOT=", "GOFLAGS=-modcacherw", "GOPROXY=off",
+		"GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(),
+		"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"), "GOSUMDB="+policy.checksumKey+" "+endpoint)
+}
+
 // restorationFixture joins real source capsules through one fictional native build.
 func restorationFixture(t *testing.T) (goRestoreInputs, goRestorePolicy) {
 	t.Helper()
-	service, catalogue := materializeSelection(t)
+	return restorationFixtureWithGraphOnlyVersion(t, false)
+}
+
+func restorationFixtureWithGraphOnlyVersion(t *testing.T, graphOnly bool) (goRestoreInputs, goRestorePolicy) {
+	t.Helper()
+	return restorationFixtureOptions(t, graphOnly, false)
+}
+
+// restorationFixtureOptions can add higher graph-only metadata without native
+// lookup evidence, or root requirements that make Go verify both service ZIPs.
+// These variants exercise distinct native consumers of the same retained inputs.
+func restorationFixtureOptions(t *testing.T, graphOnly, requireService bool) (goRestoreInputs, goRestorePolicy) {
+	t.Helper()
+	service, cataloguePath := materializeSelection(t)
+	if requireService {
+		service.mod = append(service.mod, []byte("\nrequire (\n example.com/Example v1.2.3\n example.com/original v1.0.0\n)\nreplace example.com/original v1.0.0 => gopkg.in/ini.v1 v1.2.3\n")...)
+		var catalog catalogue
+		if err := json.Unmarshal(service.cat, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		catalog.GoModSHA256 = hash(service.mod)
+		service.cat = marshal(t, catalog)
+		writeFixture(t, cataloguePath, service.cat)
+	}
 	build, checkpoint, source, key := generatorSourceFixture(t)
 	if err := os.CopyFS(filepath.Join(build, "go-modules"), os.DirFS(filepath.Join(service.build, "go-modules"))); err != nil {
 		t.Fatal(err)
+	}
+	if graphOnly {
+		body, err := os.ReadFile(filepath.Join(build, "generator-checkpoint.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var observed generatorCheckpoint
+		if err := json.Unmarshal(body, &observed); err != nil || len(observed.Modules) == 0 {
+			t.Fatal("missing fixture generator identity", err)
+		}
+		id := identity{Path: observed.Modules[0].Path, Version: "v1.999.0"}
+		_, mod, _, modSum := modulePayload(t, id.Path, id.Version, []string{"go.mod", "main.go"})
+		prefix, err := modulePrefix(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Original graph metadata is valid against the frozen project go.sum,
+		// but no source ZIP, generator checkpoint entry or signed lookup exists.
+		writeFixture(t, filepath.Join(build, "go-modules/cache/download", prefix+".mod"), mod)
+		writeFixture(t, filepath.Join(build, "go-modules/cache/download", prefix+".info"), marshal(t, map[string]string{"Version": id.Version}))
+		service.sums = fmt.Appendf(service.sums, "%s %s/go.mod %s\n", id.Path, id.Version, modSum)
+		var catalog catalogue
+		if err := json.Unmarshal(service.cat, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		catalog.GoSumSHA256 = hash(service.sums)
+		service.cat = marshal(t, catalog)
+		writeFixture(t, cataloguePath, service.cat)
 	}
 	packages := bytes.ReplaceAll(service.packages, []byte(service.build), []byte(build))
 	writeFixture(t, filepath.Join(build, "prepared/source/go.mod"), service.mod)
@@ -33,7 +238,7 @@ func restorationFixture(t *testing.T) (goRestoreInputs, goRestorePolicy) {
 		}
 		writeFixture(t, filepath.Join(build, "go-modules/cache/download", prefix+".info"), marshal(t, map[string]string{"Version": selected.Effective.Version}))
 	}
-	serviceRoot, serviceReceipt := successfulSourceCapture(t, func(out string) (receipt, error) { return capture(build, catalogue, out, hash(service.cat)) })
+	serviceRoot, serviceReceipt := successfulSourceCapture(t, func(out string) (receipt, error) { return capture(build, cataloguePath, out, hash(service.cat)) })
 	generatorRoot, generatorReceipt := successfulSourceCapture(t, func(out string) (generatorSourceReceipt, error) {
 		return captureGeneratorSources(build, checkpoint, source, out, key)
 	})
@@ -184,40 +389,17 @@ func TestRestoredGoInputsServeTheNativeChecksumClient(t *testing.T) {
 			if _, err := restoreGoInputs(inputs, output, policy); err != nil {
 				t.Fatal(err)
 			}
-			root, err := openRoot(inputs.Generators)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var sources generatorSourceManifest
-			err = loadGoRestoreManifest(root, inputs.GeneratorsSHA256, &sources)
-			if closeErr := root.Close(); err != nil || closeErr != nil {
-				t.Fatal(err, closeErr)
-			}
+			sources := restorationGenerators(t, inputs)
 			selected := sources.Modules[0]
 			if missingProof {
-				prefix, err := modulePrefix(selected)
-				if err != nil {
-					t.Fatal(err)
-				}
-				lookup := "go-modules/cache/download/sumdb/sum.golang.org/lookup/" + strings.Replace(prefix, "/@v/", "@", 1)
-				if err := os.Remove(filepath.Join(output, lookup)); err != nil {
-					t.Fatal(err)
-				}
+				removeRestoredLookup(t, output, selected)
 			}
-			var requests atomic.Int64
-			denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				requests.Add(1)
-				http.Error(w, "offline fixture", http.StatusForbidden)
-			}))
-			defer denied.Close()
+			denied, requests := deniedChecksumServer(t)
 			cmd := exec.CommandContext(t.Context(), "go", "mod", "download", "-json", selected.Path+"@"+selected.Version)
 			cmd.Dir = physicalGeneratorTestDirectory(t)
 			// The standard writable-cache flag permits this fixture's own TempDir
 			// cleanup after native extraction; checksum verification is unchanged.
-			cmd.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS=-modcacherw", "GOPROXY=off",
-				"GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(),
-				"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"),
-				"GOSUMDB="+policy.checksumKey+" "+denied.URL)
+			cmd.Env = restoredNativeGoEnvironment(t, output, policy, denied.URL)
 			body, err := cmd.CombinedOutput()
 			var got struct{ Path, Version, Sum, GoModSum, Error string }
 			if decodeErr := json.Unmarshal(body, &got); decodeErr != nil {

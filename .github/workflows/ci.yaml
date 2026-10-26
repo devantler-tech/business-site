@@ -486,6 +486,8 @@ jobs:
           ' "$RUNNER_TEMP/zitadel-build/go-graph-metadata-roundtrip.json" >/dev/null
       - name: Read back restored Go inputs without networking
         run: bash scripts/readback-zitadel-go-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources"
+      - name: Replay the complete retained identity build without networking
+        run: bash scripts/replay-zitadel-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --output "$RUNNER_TEMP/zitadel-offline-replay"
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -562,6 +564,21 @@ jobs:
             ${{ runner.temp }}/zitadel-build/console-originals-roundtrip.json
             ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
+            ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-archive.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-roundtrip.json
+            ${{ runner.temp }}/zitadel-offline-replay/roundtrip/source-manifest.json
+            ${{ runner.temp }}/zitadel-offline-replay/native-replay.log
+            ${{ runner.temp }}/zitadel-offline-replay/native/build-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-service-readback.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-bsr-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-pnpm-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-supplement-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/login-icons-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/build-info.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -871,7 +888,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@7bf35c4fb0c2ccd8d1c08585e6ec5979a819d18e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@f5d078cc4b04ecb15432ed4e34cba1142a6279d4
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -907,7 +924,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@7bf35c4fb0c2ccd8d1c08585e6ec5979a819d18e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@f5d078cc4b04ecb15432ed4e34cba1142a6279d4
         with:
           job-results: >-
             ${{ needs.changes.result }}
