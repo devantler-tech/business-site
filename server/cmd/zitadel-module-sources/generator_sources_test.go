@@ -119,13 +119,19 @@ func generatorSourceFixture(t *testing.T) (build, checkpointSeal, sourceSeal, ve
 	return
 }
 
-func TestGeneratorSourceCaptureUsesAuthenticatedChecksumsAndPortableProofs(t *testing.T) {
+func capturedGeneratorSourceFixture(t *testing.T) (string, generatorSourceReceipt, string, string) {
+	t.Helper()
 	build, checkpoint, source, key := generatorSourceFixture(t)
 	out := filepath.Join(physicalGeneratorTestDirectory(t), "captured")
 	got, err := captureGeneratorSources(build, checkpoint, source, out, key)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return out, got, source, key
+}
+
+func TestGeneratorSourceCaptureUsesAuthenticatedChecksumsAndPortableProofs(t *testing.T) {
+	out, got, source, key := capturedGeneratorSourceFixture(t)
 	if !got.SelectedGeneratorGoSourcesCaptured || got.Modules != 12 || got.DependencyInputsCaptured || got.NativeOfflineReplayProved {
 		t.Fatalf("wrong receipt: %+v", got)
 	}
@@ -194,12 +200,7 @@ func TestGeneratorSourceProductionKeyCannotBeSelectedByArtifacts(t *testing.T) {
 }
 
 func TestGeneratorSourceRetainedMembershipIsClosed(t *testing.T) {
-	build, checkpoint, source, key := generatorSourceFixture(t)
-	out := filepath.Join(physicalGeneratorTestDirectory(t), "captured")
-	got, err := captureGeneratorSources(build, checkpoint, source, out, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, got, source, key := capturedGeneratorSourceFixture(t)
 	writeFixture(t, filepath.Join(out, "proofs/sum.golang.org/lookup/extra@v1.0.0"), []byte("extra"))
 	if _, err := verifyGeneratorSources(out, got.ManifestSHA256, source, key); err == nil {
 		t.Fatal("extra retained proof accepted")

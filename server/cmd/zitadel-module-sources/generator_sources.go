@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -182,6 +181,31 @@ func selectedGeneratorCheckpoint(body []byte, seal, source string) ([]identity, 
 	return c.Modules, nil
 }
 
+type generatorSourceEvidence struct {
+	checkpoint, latest []byte
+	modules            []identity
+	proofs             map[string][]byte
+}
+
+// readGeneratorEvidence shares the same authenticated observation on both sides
+// of capture. These locations are fixed by code, never by the manifest.
+func readGeneratorEvidence(root *os.Root, checkpointPath, latestPath, proofPrefix, seal, source, key string) (e generatorSourceEvidence, err error) {
+	e.checkpoint, err = readAt(root, checkpointPath, inputLimit)
+	if err != nil {
+		return e, err
+	}
+	selected, err := selectedGeneratorCheckpoint(e.checkpoint, seal, source)
+	if err != nil {
+		return e, err
+	}
+	e.latest, err = readAt(root, latestPath, inputLimit)
+	if err != nil {
+		return e, err
+	}
+	e.modules, e.proofs, err = authenticateGeneratorSources(selected, e.latest, key, func(name string, limit int64) ([]byte, error) { return readAt(root, proofPrefix+"/"+name, limit) })
+	return e, err
+}
+
 func physicalGeneratorDirectory(name string) error {
 	actual, err := filepath.EvalSymlinks(name)
 	if err != nil || !filepath.IsAbs(name) || filepath.Clean(name) != name || actual != name {
@@ -218,21 +242,7 @@ func captureGeneratorSources(build, checkpointSeal, source, output, key string) 
 			result = generatorSourceReceipt{}
 		}
 	}()
-	checkpoint, err := readAt(root, "generator-checkpoint.json", inputLimit)
-	if err != nil {
-		return result, err
-	}
-	selected, err := selectedGeneratorCheckpoint(checkpoint, checkpointSeal, source)
-	if err != nil {
-		return result, err
-	}
-	latest, err := readAt(root, "go-path/pkg/sumdb/sum.golang.org/latest", inputLimit)
-	if err != nil {
-		return result, err
-	}
-	modules, proofs, err := authenticateGeneratorSources(selected, latest, key, func(name string, limit int64) ([]byte, error) {
-		return readAt(root, "go-modules/cache/download/sumdb/"+name, limit)
-	})
+	evidence, err := readGeneratorEvidence(root, "generator-checkpoint.json", "go-path/pkg/sumdb/sum.golang.org/latest", "go-modules/cache/download/sumdb", checkpointSeal, source, key)
 	if err != nil {
 		return result, err
 	}
@@ -241,7 +251,7 @@ func captureGeneratorSources(build, checkpointSeal, source, output, key string) 
 	}
 	// A failed reservation remains private and unsealed; never recursively remove
 	// a pathname that another process could have replaced.
-	m := generatorSourceManifest{SchemaVersion: 1, Profile: "selected-generator-go-sources-v1", SourceManifestSHA256: source, CheckpointSHA256: checkpointSeal, Modules: modules}
+	m := generatorSourceManifest{SchemaVersion: 1, Profile: "selected-generator-go-sources-v1", SourceManifestSHA256: source, CheckpointSHA256: checkpointSeal, Modules: evidence.modules}
 	appendRecord := func(name string, body []byte) error {
 		if err := writeNew(output, name, body); err != nil {
 			return err
@@ -249,13 +259,13 @@ func captureGeneratorSources(build, checkpointSeal, source, output, key string) 
 		m.Files = append(m.Files, fileRecord{name, int64(len(body)), hash(body)})
 		return nil
 	}
-	if err := appendRecord("records/checkpoint.json", checkpoint); err != nil {
+	if err := appendRecord("records/checkpoint.json", evidence.checkpoint); err != nil {
 		return result, err
 	}
-	if err := appendRecord("records/sumdb-latest", latest); err != nil {
+	if err := appendRecord("records/sumdb-latest", evidence.latest); err != nil {
 		return result, err
 	}
-	for name, body := range proofs {
+	for name, body := range evidence.proofs {
 		if err := appendRecord("proofs/"+name, body); err != nil {
 			return result, err
 		}
@@ -264,33 +274,27 @@ func captureGeneratorSources(build, checkpointSeal, source, output, key string) 
 	for _, record := range m.Files {
 		total += record.Bytes
 	}
-	for _, id := range modules {
-		prefix, err := modulePrefix(id)
-		if err != nil {
-			return result, err
-		}
-		for _, extension := range []string{".zip", ".mod", ".info"} {
-			record, err := copyAt(root, "go-modules/cache/download/"+prefix+extension, output, "modules/"+prefix+extension, totalLimit-total)
-			if err != nil {
-				return result, err
-			}
-			m.Files = append(m.Files, record)
-			total += record.Bytes
-		}
-		if err := verifyGeneratorPayload(output, id, prefix); err != nil {
-			return result, err
-		}
-	}
-	slices.SortFunc(m.Files, func(a, b fileRecord) int { return strings.Compare(a.Path, b.Path) })
-	body, err := json.MarshalIndent(m, "", "  ")
+	payloadFiles, err := generatorPayloadFiles(evidence.modules)
 	if err != nil {
 		return result, err
 	}
-	body = append(body, '\n')
-	if err := writeNew(output, "manifest.json", body); err != nil {
+	for _, name := range payloadFiles {
+		record, err := copyAt(root, "go-modules/cache/download/"+strings.TrimPrefix(name, "modules/"), output, name, totalLimit-total)
+		if err != nil {
+			return result, err
+		}
+		m.Files = append(m.Files, record)
+		total += record.Bytes
+	}
+	if err := verifyGeneratorPayloadSet(output, evidence.modules); err != nil {
 		return result, err
 	}
-	return verifyGeneratorSources(output, hash(body), source, key)
+	slices.SortFunc(m.Files, func(a, b fileRecord) int { return strings.Compare(a.Path, b.Path) })
+	seal, err := writeSourceManifest(output, m)
+	if err != nil {
+		return result, err
+	}
+	return verifyGeneratorSources(output, seal, source, key)
 }
 
 func verifyGeneratorPayload(directory string, id identity, prefix string) (resultErr error) {
@@ -331,6 +335,36 @@ func verifyGeneratorPayload(directory string, id identity, prefix string) (resul
 	return nil
 }
 
+// generatorPayloadFiles defines the exact cache-input plan for this profile.
+func generatorPayloadFiles(modules []identity) ([]string, error) {
+	var names []string
+	for _, id := range modules {
+		prefix, err := modulePrefix(id)
+		if err != nil {
+			return nil, err
+		}
+		for _, extension := range []string{".zip", ".mod", ".info"} {
+			names = append(names, "modules/"+prefix+extension)
+		}
+	}
+	return names, nil
+}
+
+// verifyGeneratorPayloadSet applies the same full-byte checks before sealing
+// and after a retained package has moved to a different physical root.
+func verifyGeneratorPayloadSet(directory string, modules []identity) error {
+	for _, id := range modules {
+		prefix, err := modulePrefix(id)
+		if err != nil {
+			return err
+		}
+		if err := verifyGeneratorPayload(directory, id, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func verifyGeneratorSources(directory, seal, source, key string) (result generatorSourceReceipt, resultErr error) {
 	if !generatorDigest(seal) || !generatorDigest(source) {
 		return result, fmt.Errorf("complete external generator-source seals required")
@@ -356,44 +390,30 @@ func verifyGeneratorSources(directory, seal, source, key string) (result generat
 	if err := decodeStrict(body, &m); err != nil {
 		return result, err
 	}
-	canonical, err := json.MarshalIndent(m, "", "  ")
-	if err != nil || !bytes.Equal(body, append(canonical, '\n')) {
+	canonical, err := sourceManifestBytes(m)
+	if err != nil || !bytes.Equal(body, canonical) {
 		return result, fmt.Errorf("generator-source manifest is not canonical")
 	}
 	if m.SchemaVersion != 1 || m.Profile != "selected-generator-go-sources-v1" || m.SourceManifestSHA256 != source || !generatorDigest(m.CheckpointSHA256) || len(m.Files) < 5 || len(m.Files) > 20000 {
 		return result, fmt.Errorf("generator-source profile differs")
 	}
-	checkpoint, err := readAt(root, "records/checkpoint.json", inputLimit)
+	evidence, err := readGeneratorEvidence(root, "records/checkpoint.json", "records/sumdb-latest", "proofs", m.CheckpointSHA256, source, key)
 	if err != nil {
 		return result, err
 	}
-	selected, err := selectedGeneratorCheckpoint(checkpoint, m.CheckpointSHA256, source)
-	if err != nil {
-		return result, err
-	}
-	latest, err := readAt(root, "records/sumdb-latest", inputLimit)
-	if err != nil {
-		return result, err
-	}
-	modules, proofs, err := authenticateGeneratorSources(selected, latest, key, func(name string, limit int64) ([]byte, error) { return readAt(root, "proofs/"+name, limit) })
-	if err != nil {
-		return result, err
-	}
-	if !reflect.DeepEqual(modules, m.Modules) {
+	if !reflect.DeepEqual(evidence.modules, m.Modules) {
 		return result, fmt.Errorf("authenticated generator membership differs")
 	}
 	wanted := map[string]bool{"records/checkpoint.json": true, "records/sumdb-latest": true}
-	for name := range proofs {
+	for name := range evidence.proofs {
 		wanted["proofs/"+name] = true
 	}
-	for _, id := range modules {
-		prefix, err := modulePrefix(id)
-		if err != nil {
-			return result, err
-		}
-		for _, extension := range []string{".zip", ".mod", ".info"} {
-			wanted["modules/"+prefix+extension] = true
-		}
+	payloadFiles, err := generatorPayloadFiles(evidence.modules)
+	if err != nil {
+		return result, err
+	}
+	for _, name := range payloadFiles {
+		wanted[name] = true
 	}
 	if len(m.Files) != len(wanted) {
 		return result, fmt.Errorf("generator-source file membership differs")
@@ -422,41 +442,11 @@ func verifyGeneratorSources(directory, seal, source, key string) (result generat
 		}
 	}
 	wanted["manifest.json"] = true
-	directories := map[string]bool{".": true}
-	for name := range wanted {
-		for d := path.Dir(name); d != "."; d = path.Dir(d) {
-			directories[d] = true
-		}
-	}
-	if err := fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if !directories[name] {
-				return fmt.Errorf("extra generator-source directory")
-			}
-			return nil
-		}
-		if !wanted[name] || !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
-			return fmt.Errorf("extra, linked or unsafe generator-source member")
-		}
-		return nil
-	}); err != nil {
+	if err := verifyClosedSourceMembers(root, wanted); err != nil {
 		return result, err
 	}
-	for _, id := range modules {
-		prefix, err := modulePrefix(id)
-		if err != nil {
-			return result, err
-		}
-		if err := verifyGeneratorPayload(directory, id, prefix); err != nil {
-			return result, err
-		}
+	if err := verifyGeneratorPayloadSet(directory, evidence.modules); err != nil {
+		return result, err
 	}
-	return generatorSourceReceipt{SchemaVersion: 1, ManifestSHA256: seal, SourceManifestSHA256: source, CheckpointSHA256: m.CheckpointSHA256, Modules: len(modules), ProofFiles: len(proofs), Files: len(m.Files), Bytes: total, SelectedGeneratorGoSourcesCaptured: true}, nil
+	return generatorSourceReceipt{SchemaVersion: 1, ManifestSHA256: seal, SourceManifestSHA256: source, CheckpointSHA256: m.CheckpointSHA256, Modules: len(evidence.modules), ProofFiles: len(evidence.proofs), Files: len(m.Files), Bytes: total, SelectedGeneratorGoSourcesCaptured: true}, nil
 }

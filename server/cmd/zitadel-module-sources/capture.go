@@ -143,15 +143,11 @@ func capture(build, cataloguePath, output, expected string) (result receipt, res
 	if result.Bytes > totalLimit {
 		return result, fmt.Errorf("selected module package exceeds limit")
 	}
-	body, err := json.MarshalIndent(m, "", "  ")
+	result.ManifestSHA256, err = writeSourceManifest(output, m)
 	if err != nil {
 		return result, err
 	}
-	body = append(body, '\n')
-	if err := writeNew(output, "manifest.json", body); err != nil {
-		return result, err
-	}
-	result.ManifestSHA256, result.Modules, result.Files = hash(body), len(m.Modules), len(m.Files)
+	result.Modules, result.Files = len(m.Modules), len(m.Files)
 	return verify(output, result.ManifestSHA256, expected)
 }
 
@@ -207,32 +203,8 @@ func verify(directory, expected, catalogueHash string) (result receipt, resultEr
 	if !reflect.DeepEqual(m.Modules, modules) || len(m.Files) != len(wanted) {
 		return receipt{}, fmt.Errorf("retained module membership differs")
 	}
-	wantedDirectories := map[string]bool{".": true}
-	for name := range wanted {
-		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
-			wantedDirectories[dir] = true
-		}
-	}
 	wanted["manifest.json"] = true
-	if err := fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if !wantedDirectories[name] {
-				return fmt.Errorf("extra retained directory")
-			}
-			return nil
-		}
-		if !wanted[name] || !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
-			return fmt.Errorf("extra, linked, special or wrong-mode retained file")
-		}
-		return nil
-	}); err != nil {
+	if err := verifyClosedSourceMembers(root, wanted); err != nil {
 		return receipt{}, err
 	}
 	result = receipt{SchemaVersion: 1, ManifestSHA256: expected, Modules: len(modules), Files: len(m.Files), SelectedServiceGoSourcesCaptured: true}
@@ -402,4 +374,66 @@ func writeNew(output, name string, body []byte) error {
 	}
 	_, _, writeErr := copyStream(f, strings.NewReader(string(body)), inputLimit)
 	return errors.Join(writeErr, f.Chmod(0o644), f.Close())
+}
+
+// writeSourceManifest uses the same canonical sealed encoding for source profiles.
+func writeSourceManifest(output string, value any) (string, error) {
+	body, err := sourceManifestBytes(value)
+	if err != nil {
+		return "", err
+	}
+	if err := writeNew(output, "manifest.json", body); err != nil {
+		return "", err
+	}
+	return hash(body), nil
+}
+
+// sourceManifestBytes is shared by writing and canonical readback checks.
+func sourceManifestBytes(value any) ([]byte, error) {
+	body, err := json.MarshalIndent(value, "", "  ")
+	return append(body, '\n'), err
+}
+
+// verifyClosedSourceMembers enforces exact files and their implied directories.
+// Profile-specific selection and full byte/hash validation stay with the caller.
+func verifyClosedSourceMembers(root *os.Root, wanted map[string]bool) error {
+	directories := map[string]bool{".": true}
+	for name := range wanted {
+		if !fs.ValidPath(name) || name == "." || strings.Contains(name, "\\") {
+			return fmt.Errorf("invalid retained source member plan")
+		}
+		// Shared parent chains need to be visited only once, even for a large
+		// selected graph. The root is already present and terminates the walk.
+		for dir := path.Dir(name); !directories[dir]; dir = path.Dir(dir) {
+			directories[dir] = true
+		}
+	}
+	observed := 0
+	err := fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if !directories[name] {
+				return fmt.Errorf("extra retained source directory")
+			}
+			return nil
+		}
+		if !wanted[name] || !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
+			return fmt.Errorf("extra, linked, special or wrong-mode retained source file")
+		}
+		observed++
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if observed != len(wanted) {
+		return fmt.Errorf("missing retained source member")
+	}
+	return nil
 }
