@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,90 @@ import (
 	"sync/atomic"
 	"testing"
 )
+
+// A pinned install still performs Go's native deprecation/latest metadata query.
+// The finite file proxy must answer it without a network or checksum bypass.
+func TestRestoredGoInputsSupportPinnedNativeInstall(t *testing.T) {
+	inputs, policy := restorationFixture(t)
+	root, err := openRoot(inputs.Generators)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sources generatorSourceManifest
+	err = loadGoRestoreManifest(root, inputs.GeneratorsSHA256, &sources)
+	if closeErr := root.Close(); err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	selected := sources.Modules[0]
+	prefix, err := modulePrefix(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"complete", "proxy-off", "missing-list", "missing-lookup"} {
+		t.Run(fault, func(t *testing.T) {
+			output := filepath.Join(physicalGeneratorTestDirectory(t), "restored space,|%#")
+			receipt, err := restoreGoInputs(inputs, output, policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proxy := receipt.ModuleProxyURL
+			parsed, err := url.Parse(proxy)
+			if err != nil || parsed.Scheme != "file" || parsed.Host != "" || parsed.Path != filepath.Join(output, "go-proxy") || strings.ContainsAny(proxy, ",|") || receipt.ModuleProxyScope != "retained-snapshot" {
+				t.Fatal("proxy URI or snapshot boundary differs", err)
+			}
+			if fault == "proxy-off" {
+				proxy = "off"
+			}
+			if fault == "missing-list" {
+				if err := os.Remove(filepath.Join(output, "go-proxy", filepath.Dir(prefix), "list")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if fault == "missing-lookup" {
+				lookup := "go-modules/cache/download/sumdb/sum.golang.org/lookup/" + strings.Replace(prefix, "/@v/", "@", 1)
+				if err := os.Remove(filepath.Join(output, lookup)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var requests atomic.Int64
+			denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				http.Error(w, "offline fixture", http.StatusForbidden)
+			}))
+			defer denied.Close()
+			bin := filepath.Join(t.TempDir(), "bin")
+			cmd := exec.CommandContext(t.Context(), "go", "install", selected.Path+"@"+selected.Version)
+			cmd.Dir = physicalGeneratorTestDirectory(t)
+			cmd.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOROOT=", "GOFLAGS=-modcacherw",
+				"GOPROXY="+proxy, "GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(), "GOBIN="+bin,
+				"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"),
+				"GOSUMDB="+policy.checksumKey+" "+denied.URL)
+			body, err := cmd.CombinedOutput()
+			if fault != "complete" {
+				if err == nil {
+					t.Fatal("incomplete native resolver input was accepted")
+				}
+				if fault == "proxy-off" && !bytes.Contains(body, []byte("loading deprecation")) {
+					t.Fatalf("original deprecation failure was not reproduced: %s", body)
+				}
+				if fault == "missing-list" && !bytes.Contains(body, []byte("/@v/list")) {
+					t.Fatalf("missing proxy index did not cause refusal: %s", body)
+				}
+				if fault == "missing-lookup" && requests.Load() == 0 {
+					t.Fatalf("checksum refusal did not attempt its unavailable proof: %s", body)
+				}
+				return
+			}
+			if err != nil || requests.Load() != 0 {
+				t.Fatalf("pinned native install required uncaptured resolver inputs: %v %s", err, body)
+			}
+			program := filepath.Join(bin, filepath.Base(selected.Path))
+			if err := exec.CommandContext(t.Context(), program).Run(); err != nil {
+				t.Fatal("native generator fixture did not run", err)
+			}
+		})
+	}
+}
 
 // restorationFixture joins real source capsules through one fictional native build.
 func restorationFixture(t *testing.T) (goRestoreInputs, goRestorePolicy) {

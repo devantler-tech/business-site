@@ -6,7 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -23,6 +25,8 @@ type goRestoreReceipt struct {
 	SourceManifestSHA256      string `json:"sourceManifestSha256"`
 	Modules                   int    `json:"modules"`
 	ObservedModules           int    `json:"observedModules"`
+	ModuleProxyURL            string `json:"moduleProxyURL"`
+	ModuleProxyScope          string `json:"moduleProxyScope"`
 	Files                     int    `json:"files"`
 	Bytes                     int64  `json:"bytes"`
 	SelectedGoInputsRestored  bool   `json:"selectedGoInputsRestored"`
@@ -36,6 +40,7 @@ type goRestoreManifest struct {
 	ServiceSHA256        string            `json:"serviceSha256"`
 	GeneratorsSHA256     string            `json:"generatorsSha256"`
 	MetadataSHA256       string            `json:"metadataSha256"`
+	ModuleProxyScope     string            `json:"moduleProxyScope"`
 	Modules              []goRestoreModule `json:"modules"`
 	Files                []fileRecord      `json:"files"`
 }
@@ -235,20 +240,46 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 			if target == "" {
 				continue
 			}
-			if old, exists := plan[target]; exists {
-				if old.record.Bytes != record.Bytes || old.record.SHA256 != record.SHA256 {
-					return result, fmt.Errorf("native Go input contents conflict")
+			targets := []string{target}
+			if relative, ok := strings.CutPrefix(target, "go-modules/cache/download/"); ok && !strings.HasPrefix(relative, "sumdb/") {
+				targets = append(targets, "go-proxy/"+relative)
+			}
+			for _, target := range targets {
+				if old, exists := plan[target]; exists {
+					if old.record.Bytes != record.Bytes || old.record.SHA256 != record.SHA256 {
+						return result, fmt.Errorf("native Go input contents conflict")
+					}
+					continue
 				}
-				continue
+				if record.Bytes < 0 || record.Bytes > totalLimit-total {
+					return result, fmt.Errorf("native Go input size limit exceeded")
+				}
+				total += record.Bytes
+				copyRecord := record
+				copyRecord.Path = target
+				plan[target] = goRestoreFile{component.root, record.Path, copyRecord}
 			}
-			if record.Bytes < 0 || record.Bytes > totalLimit-total {
-				return result, fmt.Errorf("native Go input size limit exceeded")
-			}
-			total += record.Bytes
-			source := record.Path
-			record.Path = target
-			plan[target] = goRestoreFile{component.root, source, record}
 		}
+	}
+	// This proxy enumerates only the verified retained snapshot. Go itself orders
+	// its versions and performs deprecation/retraction/checksum checks. No @latest
+	// response, current upstream version or unauthenticated timestamp is invented.
+	lists := map[string][]string{}
+	for _, id := range metadata.Modules {
+		if !id.HasInfo {
+			continue
+		}
+		prefix, err := modulePrefix(identity{Path: id.Path, Version: id.Version})
+		if err != nil {
+			return result, err
+		}
+		for _, extension := range []string{".mod", ".info"} {
+			if _, ok := plan["go-proxy/"+prefix+extension]; !ok {
+				return result, fmt.Errorf("retained proxy metadata missing")
+			}
+		}
+		name := "go-proxy/" + path.Dir(prefix) + "/list"
+		lists[name] = append(lists[name], id.Version)
 	}
 	var modules []goRestoreModule
 	for _, id := range selected {
@@ -274,7 +305,8 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 	}
 	slices.Sort(names)
 	restored := goRestoreManifest{SchemaVersion: 1, Profile: "identity-go-inputs-v1", SourceManifestSHA256: inputs.SourceSHA256,
-		ServiceSHA256: inputs.ServiceSHA256, GeneratorsSHA256: inputs.GeneratorsSHA256, MetadataSHA256: inputs.MetadataSHA256, Modules: modules}
+		ServiceSHA256: inputs.ServiceSHA256, GeneratorsSHA256: inputs.GeneratorsSHA256, MetadataSHA256: inputs.MetadataSHA256,
+		ModuleProxyScope: "retained-snapshot", Modules: modules}
 	var copied int64
 	for _, name := range names {
 		file := plan[name]
@@ -287,6 +319,18 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 		}
 		copied += record.Bytes
 		restored.Files = append(restored.Files, record)
+	}
+	for name, versions := range lists {
+		slices.Sort(versions)
+		body := []byte(strings.Join(versions, "\n") + "\n")
+		if int64(len(body)) > totalLimit-copied {
+			return result, fmt.Errorf("retained proxy index exceeds size bound")
+		}
+		if err := writeNew(output, name, body); err != nil {
+			return result, err
+		}
+		copied += int64(len(body))
+		restored.Files = append(restored.Files, fileRecord{name, int64(len(body)), hash(body)})
 	}
 	seal, err := writeOrderedSourceManifest(output, restored.Files, restored)
 	if err != nil {
@@ -310,6 +354,10 @@ func restoreGoInputsWithCopier(inputs goRestoreInputs, output string, policy goR
 	if err := verifyClosedSourceMembers(outputRoot, wanted); err != nil {
 		return result, err
 	}
+	proxy := (&url.URL{Scheme: "file", Path: filepath.Join(output, "go-proxy")}).String()
+	// GOPROXY parses separators before URL decoding, including inside file paths.
+	proxy = strings.NewReplacer(",", "%2C", "|", "%7C").Replace(proxy)
 	return goRestoreReceipt{SchemaVersion: 1, ManifestSHA256: seal, SourceManifestSHA256: inputs.SourceSHA256, Modules: len(selected),
+		ModuleProxyURL: proxy, ModuleProxyScope: "retained-snapshot",
 		ObservedModules: len(metadata.Modules), Files: len(restored.Files), Bytes: copied, SelectedGoInputsRestored: true}, nil
 }

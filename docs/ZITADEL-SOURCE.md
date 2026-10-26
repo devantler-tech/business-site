@@ -709,6 +709,13 @@ ambient configuration. pnpm explicitly uses offline installation, Go remote
 proxy/VCS acquisition is disabled and its public checksum verification remains
 enabled. There is no fallback to the network or an old compiled cache.
 
+Pinned Go installs still query module deprecation metadata. The restored native
+file-only proxy supplies exact verified ZIP/mod/info bytes and deterministic
+lists of retained versions, separately from writable acquisition caches. Go keeps
+its native deprecation/retraction ordering and checksum checks. The resolver scope
+is the retained snapshot, not authenticated original/current upstream latest;
+no `@latest` response or timestamp-based authority is synthesized.
+
 Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
 and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside

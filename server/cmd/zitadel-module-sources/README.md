@@ -110,6 +110,15 @@ module tree or `.ziphash` is trusted. The CLI cannot override the frozen catalog
 service checksums or official checksum key. Failed restoration clears its receipt
 and removes only its new output, preserving existing paths and input capsules.
 
+It also creates a separate sealed `go-proxy` from the exact verified ZIP/mod/info
+bytes. Its deterministic version lists enumerate only retained identities with
+validated info and authenticated module definitions. Native Go performs its own
+version ordering, deprecation/retraction and checksum checks against this finite
+file-only snapshot. This is not proof of the original or current upstream latest
+resolver result. No `@latest` response or timestamp-based selection is invented.
+The receipt identifies `moduleProxyScope: retained-snapshot` and an encoded file
+URL with no HTTP/direct fallback; writable native caches stay separate.
+
 CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.10 inside a network
 namespace, dropping root privileges before native module reads. It compares every
 service/generator checksum, preserves the source locks and requires a fresh

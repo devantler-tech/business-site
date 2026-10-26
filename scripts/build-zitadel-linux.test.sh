@@ -101,7 +101,7 @@ if [[ "$1" = install ]]; then
   build_root="${GOCACHE%/go-cache}"
   if [[ "${npm_config_offline:-false}" = true ]]; then
     [[ "$GOPATH" = "$build_root/go-input-native/go-path" && -d "$GOPATH" && "$GOMODCACHE" = "$build_root/go-input-native/go-modules" ]]
-    [[ "$GOPROXY" = off && "$GOVCS" = '*:off' && "$2" = --offline ]]
+    [[ "$GOPROXY" = "file://$build_root/go-input-native/go-proxy" && "$GOVCS" = '*:off' && "$2" = --offline ]]
     [[ -s "$npm_config_store_dir/v10/native-restore-control" ]]
     set -- "$1" "${@:3}"
   else
@@ -479,8 +479,14 @@ if [[ "$1" = restore-go-inputs ]]; then
   [[ "$#" -eq 17 && "$2" = --service && "$4" = --service-sha256 && "$6" = --generators && "$8" = --generators-sha256 && "${10}" = --metadata && "${12}" = --metadata-sha256 && "${14}" = --source-sha256 && "${16}" = --output ]]
   [[ "$5" = "$(printf '%064d' 0 | tr 0 b)" && "$9" = "$(printf '%064d' 0 | tr 0 e)" && "${13}" = "$(printf '%064d' 0 | tr 0 f)" && "${15}" = "$(printf '%064d' 0 | tr 0 a)" ]]
   [[ "${TEST_FAIL:-}" != retained-go ]] || exit 42
-  mkdir -p "${17}/go-modules" "${17}/go-path"
-  jq -n --arg source "${15}" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  mkdir -p "${17}/go-modules" "${17}/go-path" "${17}/go-proxy"
+  proxy="file://${17}/go-proxy" scope=retained-snapshot
+  case "${TEST_FAIL:-}" in
+    retained-go-remote) proxy=https://unrelated.invalid ;;
+    retained-go-fallback) proxy="$proxy,direct" ;;
+    retained-go-scope) scope=upstream-latest ;;
+  esac
+  jq -n --arg source "${15}" --arg proxy "$proxy" --arg scope "$scope" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyURL:$proxy,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
   exit
 fi
 if [[ "$1" = --capture ]]; then
@@ -707,7 +713,7 @@ fi
 jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$scratch/retained-replay/build-receipt.json" >/dev/null
 test -d "$scratch/retained-replay/go-input-native/go-modules"
 test -d "$scratch/retained-replay/pnpm-store"
-for fault in retained-go retained-pnpm; do
+for fault in retained-go retained-pnpm retained-go-remote retained-go-fallback retained-go-scope; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
     echo "failed retained restoration admitted: $fault" >&2; exit 1

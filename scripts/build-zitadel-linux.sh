@@ -180,8 +180,12 @@ if [[ -n "$retained_inputs" ]]; then
     --generators "$retained_inputs/source/selected-generator-go-sources" --generators-sha256 "$generators" \
     --metadata "$retained_inputs/source/go-graph-metadata" --metadata-sha256 "$metadata" --source-sha256 "$prepared_sha" \
     --output "$output/go-input-native" >"$output/retained-go-restoration.json"
-  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
+  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .moduleProxyScope=="retained-snapshot" and (.moduleProxyURL|startswith("file:///") and (test("[,|]")|not)) and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
   export GOMODCACHE="$output/go-input-native/go-modules" GOPATH="$output/go-input-native/go-path"
+  # Native pinned installs still query deprecation metadata. Resolve only the
+  # closed retained file snapshot, without any HTTP/direct proxy alternative.
+  GOPROXY="$(jq -er .moduleProxyURL "$output/retained-go-restoration.json")"
+  export GOPROXY
   bsr_seal="$(jq -er '.sourceSnapshot.bsrSources.manifestSha256' "$retained_receipt")"
   "$bsr_verifier" verify --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" >"$output/retained-bsr-verification.json"
   jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.bsrSources' "$output/retained-bsr-verification.json" >/dev/null || fail 'retained schema source join differs'
@@ -196,7 +200,7 @@ if [[ -n "$retained_inputs" ]]; then
     --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir/v10" >"$output/retained-pnpm-restoration.json"
   jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
     '.nativeStoreRestored==true and .sourceManifestSha256==$source and del(.nativeStoreRestored)==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-restoration.json" >/dev/null || fail 'retained pnpm source join differs'
-  export GOPROXY=off GOVCS='*:off' npm_config_offline=true
+  export GOVCS='*:off' npm_config_offline=true
 fi
 source_snapshot_json=null
 if [[ "$capture_source" -eq 1 ]]; then
