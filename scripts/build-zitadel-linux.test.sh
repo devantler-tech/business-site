@@ -70,6 +70,7 @@ elif [[ "$2" = restore ]]; then
   [[ "$#" -eq 10 && "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch && "$9" = --store ]]
   [[ "${TEST_FAIL:-}" != retained-pnpm ]] || exit 42
   mkdir "${10}"
+  printf 'restored native CAFS\n' >"${10}/native-restore-control"
   jq '. + {nativeStoreRestored:true}' "$4/receipt.json"
 elif [[ "$2" = verify ]]; then
   [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
@@ -101,6 +102,7 @@ if [[ "$1" = install ]]; then
   if [[ "${npm_config_offline:-false}" = true ]]; then
     [[ "$GOPATH" = "$build_root/go-input-native/go-path" && -d "$GOPATH" && "$GOMODCACHE" = "$build_root/go-input-native/go-modules" ]]
     [[ "$GOPROXY" = off && "$GOVCS" = '*:off' && "$2" = --offline ]]
+    [[ -s "$npm_config_store_dir/v10/native-restore-control" ]]
     set -- "$1" "${@:3}"
   else
     [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" && "$GOPROXY" = https://proxy.golang.org ]]

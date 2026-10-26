@@ -189,8 +189,11 @@ if [[ -n "$retained_inputs" ]]; then
   "$bsr_verifier" restore --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --output "$BUF_CACHE_DIR" >"$output/retained-bsr-restoration.json"
   "$bsr_verifier" check-cache --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --cache "$BUF_CACHE_DIR" >/dev/null
   pnpm_seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$retained_receipt")"
+  # The SDK consumes the versioned CAFS root; native pnpm appends v10 to its
+  # configured store base. Preserve that native boundary in both directions.
+  mkdir -m 700 "$npm_config_store_dir"
   node "$root/tools/zitadel-pnpm-source/index.mjs" restore --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
-    --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir" >"$output/retained-pnpm-restoration.json"
+    --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir/v10" >"$output/retained-pnpm-restoration.json"
   jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
     '.nativeStoreRestored==true and .sourceManifestSha256==$source and del(.nativeStoreRestored)==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-restoration.json" >/dev/null || fail 'retained pnpm source join differs'
   export GOPROXY=off GOVCS='*:off' npm_config_offline=true
