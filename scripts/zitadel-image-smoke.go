@@ -43,6 +43,7 @@ func imageExecute(duration time.Duration, name string, args ...string) ([]byte, 
 type imageConfig struct {
 	User, Image, WorkingDir string
 	Entrypoint, Cmd         []string
+	Env                     []string
 	Labels                  map[string]string
 }
 type imageInspect struct {
@@ -58,12 +59,17 @@ type imageContainer struct {
 		NetworkMode, PidMode, IpcMode string
 		PidsLimit, Memory, NanoCpus   int64
 		Binds, Devices                []json.RawMessage
+		Tmpfs                         map[string]string
 		PortBindings                  map[string]json.RawMessage
 	}
 	State struct {
 		Status                   string
 		Running, Dead, OOMKilled bool
 		ExitCode                 int
+		Pid                      int
+	}
+	NetworkSettings struct {
+		Networks map[string]struct{ NetworkID string }
 	}
 	Mounts []json.RawMessage
 }
@@ -84,7 +90,7 @@ func imageInspectContainer(raw []byte, id, image, status string) (imageContainer
 	return c, nil
 }
 
-func imageSmoke(build, repo, output string, run imageCommand) (result error) {
+func imageSmoke(build, repo, output string, run imageCommand, probes ...func(string, string) error) (result error) {
 	var err error
 	output, err = imageOutputPath(build, repo, output)
 	if err != nil {
@@ -271,6 +277,11 @@ func imageSmoke(build, repo, output string, run imageCommand) (result error) {
 	afterRecipe, err := imageRead(repo, "Dockerfile.zitadel", 65536)
 	if err != nil || !bytes.Equal(recipe, afterRecipe) {
 		return fmt.Errorf("image recipe changed during build")
+	}
+	for _, probe := range probes {
+		if err = probe(i.ID, owner); err != nil {
+			return err
+		}
 	}
 	cleaned = true
 	if err = cleanup(); err != nil {
