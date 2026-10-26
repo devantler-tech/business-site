@@ -7,6 +7,11 @@ importing portal authority or entering the frozen identity service's graph.
 CI builds the command with this module's exact compiler before selecting the
 unchanged upstream compiler. Preserve its complete tests, external-seal readback
 and narrow evidence fields; it never grants image or portal activation.
+The explicit `restore-go-inputs` operation admits only the three sealed source
+capsules and fixed trust policy into a new owned native cache. Preserve literal
+conflict refusal, physical input/output separation and failed-write cleanup.
+Its network-denied native Go reader is not full generation/compilation replay;
+both overall proof flags must remain false until issue #343's full acceptance.
 Its separate native generator checkpoint reads fourteen actual executables before
 the console overwrites API OpenAPI 2.28. Preserve exact compiler/platform/command
 joins, complete original build metadata, path-and-version effective unions and

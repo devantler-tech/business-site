@@ -27,6 +27,11 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
 /absolute/zitadel-module-sources verify-graph-metadata \
   --package /absolute/fresh-graph-metadata --sha256 GRAPH_METADATA_SEAL \
   --source-sha256 SOURCE_SEAL
+/absolute/zitadel-module-sources restore-go-inputs \
+  --service /absolute/selected-go-sources --service-sha256 SERVICE_SEAL \
+  --generators /absolute/selected-generator-go-sources --generators-sha256 GENERATOR_SEAL \
+  --metadata /absolute/go-graph-metadata --metadata-sha256 GRAPH_METADATA_SEAL \
+  --source-sha256 SOURCE_SEAL --output /absolute/fresh-native-inputs
 ```
 
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
@@ -97,10 +102,21 @@ the matching version; their timestamps and origins are not authenticated authori
 The portable capsule has closed membership, bounded reads and an external seal.
 It contains no compiled cache, `.ziphash` marker or unrelated global cache.
 
-These operations retain selected service and generator-Go sources and observed
-resolver metadata. They do not prove every input needed by a cold build was
-observed. Cache restoration and clean network-denied full compilation remain
-tracked in issue #343. Companion commands handle selected pnpm, BSR and console
+`restore-go-inputs` authenticates all three capsules before reserving a fresh
+private output. It joins compiled identities to observed metadata and refuses
+conflicting literal files. Only selected ZIP/mod/info and signed checksum records
+are mapped into explicit native Go cache paths; no compiled cache, extracted
+module tree or `.ziphash` is trusted. The CLI cannot override the frozen catalogue,
+service checksums or official checksum key. Failed restoration clears its receipt
+and removes only its new output, preserving existing paths and input capsules.
+
+CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.10 inside a network
+namespace, dropping root privileges before native module reads. It compares every
+service/generator checksum, preserves the source locks and requires a fresh
+missing-proof read to fail. Only compact manifests and reader results are uploaded.
+This validates native cache reads; it does not run generation or compilation from
+those caches. Complete dependency capture and cold native replay remain issue #343,
+and both overall proof flags stay false. Companion commands handle pnpm, BSR and console
 inputs; their capsules do not establish complete dependency closure. Full
 source/image admission and public retrieval remain #308. Daemon resources, deployed
 login and invited-customer acceptance remain #305/#302. No activation is implied.

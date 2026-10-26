@@ -484,6 +484,8 @@ jobs:
             .modules > 0 and .metadataFiles >= .modules and .goGraphMetadataCaptured == true and
             .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false
           ' "$RUNNER_TEMP/zitadel-build/go-graph-metadata-roundtrip.json" >/dev/null
+      - name: Read back restored Go inputs without networking
+        run: bash scripts/readback-zitadel-go-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources"
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -546,6 +548,9 @@ jobs:
             ${{ runner.temp }}/zitadel-build/go-graph-metadata/manifest.json
             ${{ runner.temp }}/zitadel-build/go-graph-metadata-readback.json
             ${{ runner.temp }}/zitadel-build/go-graph-metadata-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/go-input-restoration.json
+            ${{ runner.temp }}/zitadel-build/go-input-readback.json
+            ${{ runner.temp }}/zitadel-build/go-input-native/manifest.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json
