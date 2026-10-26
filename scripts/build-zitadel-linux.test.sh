@@ -66,6 +66,12 @@ elif [[ "$2" = capture ]]; then
     '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,packages:$packages,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$8/receipt.json"
   cat "$8/receipt.json"
   if [[ "${TEST_FAIL:-}" = pnpm-tool-changed ]]; then echo changed >>"$1"; fi
+elif [[ "$2" = restore ]]; then
+  [[ "$#" -eq 10 && "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch && "$9" = --store ]]
+  [[ "${TEST_FAIL:-}" != retained-pnpm ]] || exit 42
+  mkdir "${10}"
+  printf 'restored native CAFS\n' >"${10}/native-restore-control"
+  jq '. + {nativeStoreRestored:true}' "$4/receipt.json"
 elif [[ "$2" = verify ]]; then
   [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
   [[ "${TEST_FAIL:-}" != pnpm-readback ]] || exit 42
@@ -93,7 +99,14 @@ printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
 if [[ "$1" = install ]]; then
   build_root="${GOCACHE%/go-cache}"
-  [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" ]]
+  if [[ "${npm_config_offline:-false}" = true ]]; then
+    [[ "$GOPATH" = "$build_root/go-input-native/go-path" && -d "$GOPATH" && "$GOMODCACHE" = "$build_root/go-input-native/go-modules" ]]
+    [[ "$GOPROXY" = "$TEST_RETAINED_PROXY_URL" && "$GOVCS" = '*:off' && "$2" = --offline ]]
+    [[ -s "$npm_config_store_dir/v10/native-restore-control" ]]
+    set -- "$1" "${@:3}"
+  else
+    [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" && "$GOPROXY" = https://proxy.golang.org ]]
+  fi
   [[ "$npm_config_userconfig" = "$build_root/npmrc" && -f "$npm_config_userconfig" && ! -s "$npm_config_userconfig" ]]
   [[ "$npm_config_cache" = "$build_root/npm-cache" && -d "$npm_config_cache" ]]
   [[ "$npm_config_store_dir" = "$build_root/pnpm-store" && -d "$npm_config_store_dir" ]]
@@ -103,7 +116,7 @@ if [[ "$1" = install ]]; then
   [[ "${BUF_CACHE_DIR:-}" = "$build_root/buf-cache" && -d "$BUF_CACHE_DIR" ]]
   [[ "${XDG_CONFIG_HOME:-}" = "$build_root/bsr-config" && -d "$XDG_CONFIG_HOME" && ! -v BUF_TOKEN ]]
   [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
-  [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
+  [[ "$GOSUMDB" = sum.golang.org ]]
   [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
   [[ "$2" = --store-dir && "$3" = "$npm_config_store_dir" ]]
   mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
@@ -184,7 +197,14 @@ case "$1 $2" in
     if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_FAIL:-}" = binary-metadata ]]; then exit 42; fi;;
   'mod verify')
+    if [[ "$GOMODCACHE" == */go-input-native/go-modules ]]; then test -f "$GOMODCACHE/service-consumed"; fi
     if [[ "${TEST_FAIL:-}" = module-integrity && -s "${GOCACHE%/go-cache}/service/zitadel" ]]; then echo 'plausible module verification followed by failure'; exit 42; fi;;
+  'mod download')
+    [[ "$#" -eq 4 && "$3" = -json && "$4" = example.com/fixture@v1.0.0 && "$GOMODCACHE" == */go-input-native/go-modules ]]
+    [[ "${TEST_FAIL:-}" != retained-go-consumption ]] || { echo '{}'; exit 42; }
+    if [[ "${TEST_FAIL:-}" = retained-go-consumption-partial ]]; then echo '{}'; exit; fi
+    printf 'native service consumption\n' >"$GOMODCACHE/service-consumed"
+    jq -n --arg sum "${TEST_NATIVE_SUM:-h1:fixture}" '{Path:"example.com/fixture",Version:"v1.0.0",Sum:$sum,GoModSum:"h1:mod"}';;
   'run '*)
     if [[ "$2" == */zitadel-source-bundle.go ]]; then
       if [[ "${TEST_FAIL:-}" = source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
@@ -213,7 +233,9 @@ case "$1 $2" in
         --verify)
           [[ "$#" -eq 5 && -d "$4" ]]
           if [[ "${TEST_FAIL:-}" = source-readback ]]; then echo '{"files":[]}'; exit 42; fi
-          echo '{"fixture":"complete source readback"}';;
+          if [[ "$4" == */retained-fixture ]]; then
+            printf '{"phase":"%s"}\n' "${TEST_INPUT_PHASE:-retained-build-inputs}"
+          else echo '{"fixture":"complete source readback"}'; fi;;
         --unpack)
           [[ "$#" -eq 7 && -s "$4" && ! -e "$7" ]]
           mkdir -p "$7/source"
@@ -226,12 +248,14 @@ case "$1 $2" in
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
       [[ "${12:-}" = --source-license ]] || { echo 'prepared root licence capture not required' >&2; exit 42; }
-      [[ "${13:-}" = --modules && "$#" -eq 14 && -s "${14:-}/catalogue.json" ]] || { echo 'selected Go module root retention not required' >&2; exit 42; }
+      [[ "${13:-}" = --modules && -s "${14:-}/catalogue.json" ]] || { echo 'selected Go module root retention not required' >&2; exit 42; }
+      [[ ( "$#" -eq 14 && "$GOMODCACHE" = "$5/go-modules" ) || ( "$#" -eq 15 && "${15:-}" = --retained-go-cache && "$GOMODCACHE" = "$5/go-input-native/go-modules" ) ]] || { echo 'notice reader cache differs from native compiler' >&2; exit 42; }
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
       else
         [[ "$3" = --inventory && -s "$5/console-notices.before.json" && -s "$5/service/zitadel" && -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+        shasum -a 256 "$5/build-receipt.pending" | awk '{print $1}' >"$5/fixture-console-receipt.sha256"
         if [[ "${TEST_FAIL:-}" = notice-capture ]]; then echo 'plausible partial capture'; exit 42; fi
         printf 'raw notice fixture\n' >"$5/console-third-party-notices.txt"
         printf 'verbatim supplement fixture\n' >"$5/console-notices-supplement.txt"
@@ -248,6 +272,7 @@ case "$1 $2" in
     else
       [[ "$*" == *'zitadel-login-icons.go --inventory --build '* && "$*" == *' --notices '* ]]
       [[ -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+      shasum -a 256 "$5/build-receipt.pending" | awk '{print $1}' >"$5/fixture-icons-receipt.sha256"
       if [[ "${TEST_FAIL:-}" = inventory ]]; then echo 'plausible partial inventory'; exit 42; fi
       echo '{"fixture":"orchestration only"}'
     fi;;
@@ -386,7 +411,7 @@ case "$1" in
     api="$(shasum -a 256 "$3/bsr-tools/api" | awk '{print $1}')"
     console="$(shasum -a 256 "$3/bsr-tools/console" | awk '{print $1}')"
     [[ "${TEST_FAIL:-}" != bsr-tool-binding ]] || api="$(printf '%064d' 0)"
-    jq -n --arg api "$api" --arg console "$console" '{tools:[{phase:"api",version:"1.67.0",sha256:$api},{phase:"console",version:"1.72.0",sha256:$console}]}' >"$9/manifest.json";;
+    jq -n --arg api "$api" --arg console "$console" --arg source "$7" --arg recipe "$(shasum -a 256 "$5" | awk '{print $1}')" '{sourceManifestSha256:$source,recipeSha256:$recipe,tools:[{phase:"api",version:"1.67.0",sha256:$api},{phase:"console",version:"1.72.0",sha256:$console}]}' >"$9/manifest.json";;
   verify)
     [[ "$2" = --package && -s "$3/manifest.json" && "$4" = --sha256 && "$#" = 5 ]]
     [[ "${TEST_FAIL:-}" != bsr-readback ]] || { echo '{"files":170}'; exit 42; };;
@@ -458,6 +483,22 @@ if [[ "$1" = capture-graph-metadata || "$1" = verify-graph-metadata ]]; then
   proved=true
   [[ "${TEST_FAIL:-}" != graph-metadata-incomplete ]] || proved=false
   jq -n --arg source "$source" --argjson proved "$proved" '{schemaVersion:1,manifestSha256:("f"*64),sourceManifestSha256:$source,modules:400,metadataFiles:500,proofFiles:2,files:504,bytes:123,goGraphMetadataCaptured:$proved,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
+if [[ "$1" = restore-go-inputs ]]; then
+  [[ "$#" -eq 17 && "$2" = --service && "$4" = --service-sha256 && "$6" = --generators && "$8" = --generators-sha256 && "${10}" = --metadata && "${12}" = --metadata-sha256 && "${14}" = --source-sha256 && "${16}" = --output ]]
+  [[ "$5" = "$(printf '%064d' 0 | tr 0 b)" && "$9" = "$(printf '%064d' 0 | tr 0 e)" && "${13}" = "$(printf '%064d' 0 | tr 0 f)" && "${15}" = "$(printf '%064d' 0 | tr 0 a)" ]]
+  [[ "${TEST_FAIL:-}" != retained-go ]] || exit 42
+  mkdir -p "${17}/go-modules" "${17}/go-path" "${17}/go-proxy"
+  jq -n '{schemaVersion:1,modules:[{Path:"example.com/fixture",Version:"v1.0.0"}]}' >"${17}/manifest.json"
+  native_manifest="$(shasum -a 256 "${17}/manifest.json" | awk '{print $1}')"
+  proxy="file://${17}/go-proxy" scope=retained-snapshot
+  case "${TEST_FAIL:-}" in
+    retained-go-remote) proxy=https://unrelated.invalid ;;
+    retained-go-fallback) proxy="$proxy,direct" ;;
+    retained-go-scope) scope=upstream-latest ;;
+  esac
+  jq -n --arg source "${15}" --arg manifest "$native_manifest" --arg proxy "$proxy" --arg scope "$scope" --arg fault "${TEST_FAIL:-}" '{schemaVersion:1,manifestSha256:$manifest,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false} + (if $fault=="retained-go-remote" or $fault=="retained-go-fallback" then {moduleProxyURL:$proxy} else {} end)'
   exit
 fi
 if [[ "$1" = --capture ]]; then
@@ -659,3 +700,97 @@ done
 capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'
+
+# The retained mode must join every independent capsule to the original source
+# and enter the same pipeline with fresh restored stores. This remains process
+# orchestration proof; only the real Linux job can prove a network-denied build.
+retained="$scratch/retained-fixture"
+mkdir -p "$retained/source/source-snapshot"
+cp -R "$scratch/complete/prepared" "$retained/source/source-snapshot/"
+for record in api-project.original.json api-project.serial.json inputs.sha256; do
+  cp "$scratch/complete/$record" "$retained/source/source-snapshot/$record"
+done
+for component in selected-go-sources selected-generator-go-sources go-graph-metadata selected-pnpm-sources selected-bsr-sources selected-console-originals; do
+  cp -R "$scratch/captured/$component" "$retained/source/"
+done
+mkdir -p "$retained/source/selected-go-sources/records"
+cp "$scratch/complete/prepared/source/go.mod" "$retained/source/selected-go-sources/records/go.mod"
+cp "$scratch/complete/prepared/source/go.sum" "$retained/source/selected-go-sources/records/go.sum"
+jq -n '{modules:[{effective:{Path:"example.com/fixture",Version:"v1.0.0",Sum:"h1:fixture",GoModSum:"h1:mod"}}]}' >"$retained/source/selected-go-sources/manifest.json"
+cp "$scratch/captured/build-receipt.json" "$retained/source/build-receipt.json"
+TEST_PREPARED_BUILD="$retained/source/source-snapshot"
+export TEST_PREPARED_BUILD
+retained_output="$scratch/retained-replay unsafe,|%#"
+export TEST_RETAINED_PROXY_URL="file://$scratch/retained-replay%20unsafe%2C%7C%25%23/go-input-native/go-proxy"
+: >"$TEST_CALLS"
+if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$retained_output" >"$scratch/retained-replay.log" 2>&1; then
+  cat "$scratch/retained-replay.log" >&2
+  echo 'retained inputs cannot enter the existing native pipeline' >&2
+  exit 1
+fi
+jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
+final_receipt="$(shasum -a 256 "$retained_output/build-receipt.json" | awk '{print $1}')"
+for phase in console icons; do
+  [[ "$(cat "$retained_output/fixture-$phase-receipt.sha256")" == "$final_receipt" ]] || { echo "final receipt differs from $phase inventory binding" >&2; exit 1; }
+done
+test -d "$retained_output/go-input-native/go-modules"
+test -d "$retained_output/pnpm-store"
+for fault in retained-go retained-pnpm retained-go-remote retained-go-fallback retained-go-scope; do
+  : >"$TEST_CALLS"
+  if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
+    echo "failed retained restoration admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/generate.log"
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
+
+for fault in retained-go-consumption retained-go-consumption-partial; do
+  if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
+    echo "incomplete native service consumption admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/retained-go-service-readback.json"
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
+if env TEST_NATIVE_SUM=h1:changed bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/retained-go-consumption-identity" >"$scratch/retained-go-consumption-identity.log" 2>&1; then
+  echo 'changed native service checksum admitted' >&2; exit 1
+fi
+test ! -e "$scratch/retained-go-consumption-identity/build-receipt.json"
+
+# Exercise the actual receipt footer's I/O boundary without pretending to run
+# its native build prerequisites. Linux CI separately executes the full entrypoint.
+receipt_anchor="go run \"\$root/scripts/zitadel-source-bundle.go\" --verify \"\$output/roundtrip\" \"\$seal\""
+[[ "$(grep -cF "$receipt_anchor" "$root/scripts/replay-zitadel-inputs.sh")" = 1 ]]
+cat >"$scratch/receipt-footer.sh" <<'PREFIX'
+set -euo pipefail
+output="$1"
+native="$output/native.json"
+seal="$(printf 'a%.0s' {1..64})"
+archive="$(printf 'b%.0s' {1..64})"
+complete=0
+PREFIX
+awk -v anchor="$receipt_anchor" 'found {print} index($0,anchor)==1 {found=1}' "$root/scripts/replay-zitadel-inputs.sh" >>"$scratch/receipt-footer.sh"
+for control in complete jq-partial hash-partial; do
+  receipt_output="$scratch/receipt-$control"
+  mkdir -p "$receipt_output/native" "$receipt_output/bin"
+  for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json; do
+    printf 'fictional inventory\n' >"$receipt_output/native/$notice"
+  done
+  jq -n '{sourceInput:{manifestSha256:("a"*64)},recipeSha256:("c"*64),binarySha256:("d"*64)}' >"$receipt_output/native.json"
+  case "$control" in
+    jq-partial)
+      printf '#!/usr/bin/env bash\nprintf "{\\\"schemaVersion\\\":1"\nexit 42\n' >"$receipt_output/bin/jq"
+      chmod 700 "$receipt_output/bin/jq" ;;
+    hash-partial)
+      printf '#!/usr/bin/env bash\nprintf "a%%.0s" {1..64}\nprintf "  fictional\\n"\nexit 42\n' >"$receipt_output/bin/shasum"
+      chmod 700 "$receipt_output/bin/shasum" ;;
+  esac
+  status=0
+  PATH="$receipt_output/bin:$PATH" bash "$scratch/receipt-footer.sh" "$receipt_output" >"$receipt_output/log" 2>&1 || status=$?
+  if [[ "$control" = complete ]]; then
+    [[ "$status" = 0 ]]
+    jq -e '.nativeOfflineReplayProved==true and .dependencyInputsCaptured==true' "$receipt_output/replay-receipt.json" >/dev/null
+  else
+    [[ "$status" = 42 && ! -e "$receipt_output/replay-receipt.json" ]]
+  fi
+done
+printf 'Receipt I/O controls: actual footer success and both partial-failure refusals passed.\n'

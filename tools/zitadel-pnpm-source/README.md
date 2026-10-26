@@ -93,16 +93,22 @@ node tools/zitadel-pnpm-source/index.mjs verify \
   --capsule /physical/owned/selected-pnpm-sources --sha256 '<pnpm-seal>' \
   --scratch /physical/owned/new-verify-work
 
+mkdir -m 700 /physical/owned/new-native-store
 node tools/zitadel-pnpm-source/index.mjs restore \
   --capsule /physical/owned/selected-pnpm-sources --sha256 '<pnpm-seal>' \
   --scratch /physical/owned/new-restore-work \
-  --store /physical/owned/new-native-store
+  --store /physical/owned/new-native-store/v10
 ```
 
 Verification reinterprets originals with the same SDK. Restoration writes a new
 native CAFS store and byte-identical verified indexes, then independently checks
 its complete contents. Old `node_modules`, current-lock or modules files are
 evidence only; they are never transplanted into the replayed application.
+The SDK's store argument is the versioned CAFS root. Native pnpm's `--store-dir`
+argument is its parent base; pnpm 10.30.3 appends `v10`. The full retained-input
+builder restores into that versioned child while configuring pnpm with the fresh
+parent. Pointing both operations at the same directory leaves the native
+consumer looking in an empty nested store and fails offline installation.
 
 Source/build records retain this adapter and both SDK manifests. CI tests the
 native SDK under the frozen Linux Node version, captures from the actual build,

@@ -10,6 +10,9 @@ and narrow evidence fields; it never grants image or portal activation.
 The explicit `restore-go-inputs` operation admits only the three sealed source
 capsules and fixed trust policy into a new owned native cache. Preserve literal
 conflict refusal, physical input/output separation and failed-write cleanup.
+Its separate sealed file proxy enumerates only verified retained versions, never
+claims upstream latest, and preserves native deprecation/retraction/checksum
+checks. Keep writable native caches separate and prohibit network/direct fallbacks.
 Its network-denied native Go reader is not full generation/compilation replay;
 both overall proof flags must remain false until issue #343's full acceptance.
 Its separate native generator checkpoint reads fourteen actual executables before

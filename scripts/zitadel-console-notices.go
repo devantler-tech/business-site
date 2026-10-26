@@ -328,6 +328,7 @@ type noticeSupplementConfig struct {
 	Directory, CatalogueHash, ToolchainRoot string
 	SourceLicense                           bool
 	ModuleDirectory, ModuleCatalogueHash    string
+	RetainedGoCache                         bool
 }
 
 type noticeModuleIdentity struct {
@@ -480,7 +481,7 @@ func noticeModuleRelativePath(value string) bool {
 
 // noticeModuleSnapshot joins the whole compiler graph to one checked catalogue,
 // this build's frozen lock and resolved cache, then retains its complete bytes.
-func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byte, read noticeReader) (*noticeModules, error) {
+func noticeModuleSnapshot(build, directory, catalogueHash, cacheDirectory string, packages []byte, read noticeReader) (*noticeModules, error) {
 	data, err := read(directory, "catalogue.json", 1<<20)
 	if err != nil || noticeDigest(data) != catalogueHash || !noticeDigestPattern.MatchString(catalogueHash) {
 		return nil, fmt.Errorf("module catalogue unavailable or changed")
@@ -585,8 +586,8 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 			return nil, fmt.Errorf("selected module identity differs from catalogue")
 		}
 		effective := entry.Effective
-		cacheRoot := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version)
-		cacheMod := "go-modules/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version) + ".mod"
+		cacheRoot := cacheDirectory + "/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version)
+		cacheMod := cacheDirectory + "/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version) + ".mod"
 		if module["Dir"] != filepath.Join(build, cacheRoot) || module["GoMod"] != filepath.Join(build, cacheMod) {
 			return nil, fmt.Errorf("selected module is outside this build cache")
 		}
@@ -645,7 +646,7 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 	externalPurposes := map[string]bool{}
 	for _, entry := range catalogue.Modules {
 		effective := entry.Effective
-		cache := "go-modules/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version)
+		cache := cacheDirectory + "/cache/download/" + noticeModuleEscape(effective.Path) + "/@v/" + noticeModuleEscape(effective.Version)
 		mod, e := read(build, cache+".mod", 1<<20)
 		if e != nil {
 			return nil, fmt.Errorf("selected module go.mod unavailable")
@@ -675,7 +676,7 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 				}
 			}
 			previousFile = component.File
-			source := "go-modules/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version) + "/" + component.File
+			source := cacheDirectory + "/" + noticeModuleEscape(effective.Path) + "@" + noticeModuleEscape(effective.Version) + "/" + component.File
 			text, e := read(build, source, 64<<10)
 			if e != nil || len(text) != component.Bytes || noticeDigest(text) != component.SHA256 || !utf8.Valid(text) || bytes.ContainsRune(text, 0) {
 				return nil, fmt.Errorf("selected module terms differ or are unavailable")
@@ -688,7 +689,7 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 				return nil, fmt.Errorf("module notice output exceeds limit")
 			}
 		}
-		if err := noticeRetainOrigins(build, directory, entry, wanted, selectedSources[entry.Original.Path], externalPurposes, read, result, &record); err != nil {
+		if err := noticeRetainOrigins(build, directory, cacheDirectory, entry, wanted, selectedSources[entry.Original.Path], externalPurposes, read, result, &record); err != nil {
 			return nil, err
 		}
 		result.Evidence.Modules = append(result.Evidence.Modules, record)
@@ -701,8 +702,8 @@ func noticeModuleSnapshot(build, directory, catalogueHash string, packages []byt
 // Origins are a closed, reviewed set of selected source spans, not a filename
 // discovery rule. Source-input and ignored-generator bytes are checked, never
 // emitted or executed. Complete corresponding-source delivery is separate.
-func noticeRetainOrigins(build, directory string, entry noticeModuleEntry, catalogue map[string]noticeModuleEntry, selected noticeSelectedSources, externalPurposes map[string]bool, read noticeReader, result *noticeModules, record *noticeModuleRecord) error {
-	cache := "go-modules/" + noticeModuleEscape(entry.Effective.Path) + "@" + noticeModuleEscape(entry.Effective.Version) + "/"
+func noticeRetainOrigins(build, directory, cacheDirectory string, entry noticeModuleEntry, catalogue map[string]noticeModuleEntry, selected noticeSelectedSources, externalPurposes map[string]bool, read noticeReader, result *noticeModules, record *noticeModuleRecord) error {
+	cache := cacheDirectory + "/" + noticeModuleEscape(entry.Effective.Path) + "@" + noticeModuleEscape(entry.Effective.Version) + "/"
 	previous := ""
 	for _, origin := range entry.Origins {
 		if origin.File <= previous || !noticeModuleRelativePath(origin.File) || origin.Bytes < 1 || origin.Bytes > 1<<20 || !noticeDigestPattern.MatchString(origin.SHA256) || len(origin.Spans) == 0 || len(origin.Spans) > 32 || len(origin.Terms)+len(origin.Notices) == 0 {
@@ -1007,7 +1008,7 @@ func noticeRun(args []string, out, diagnostic io.Writer) int {
 	return noticeRunWithCatalogues(args, out, diagnostic, supplementCatalogueHash, moduleCatalogueHash)
 }
 
-// noticeRunWithCatalogues exposes only test injection, never a CLI trust override.
+// noticeRunWithCatalogue exposes only test injection, never a CLI trust override.
 func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueHash string) int {
 	return noticeRunWithCatalogues(args, out, diagnostic, catalogueHash, moduleCatalogueHash)
 }
@@ -1044,8 +1045,8 @@ func noticeJoinBuildInfo(info *debug.BuildInfo, expected []*debug.Module) error 
 	return nil
 }
 
-// noticeRunWithCatalogue keeps the curation identity injectable in hermetic
-// tests. The public command always supplies its compiled, reviewed constant.
+// noticeRunWithCatalogues keeps the curation identities injectable in hermetic
+// tests. The public command always supplies its compiled, reviewed constants.
 func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogueHash, moduleHash string) int {
 	if len(args) == 0 {
 		return 0
@@ -1058,7 +1059,7 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch key {
-		case "--snapshot", "--inventory", "--verify", "--source-license":
+		case "--snapshot", "--inventory", "--verify", "--source-license", "--retained-go-cache":
 			values[key] = "true"
 		case "--build", "--recipe", "--supplement", "--toolchain", "--modules":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -1081,6 +1082,12 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 		optional++
 	}
 	if values["--modules"] != "" {
+		optional++
+	}
+	if values["--retained-go-cache"] != "" {
+		if values["--modules"] == "" {
+			return fail(fmt.Errorf("retained cache requires module retention"))
+		}
 		optional++
 	}
 	validCount := len(values) == 3+optional
@@ -1112,7 +1119,7 @@ func noticeRunWithCatalogues(args []string, out, diagnostic io.Writer, catalogue
 	var result any
 	options := []noticeSupplementConfig{}
 	if optional > 0 {
-		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"], SourceLicense: values["--source-license"] != "", ModuleDirectory: values["--modules"], ModuleCatalogueHash: moduleHash})
+		options = append(options, noticeSupplementConfig{Directory: values["--supplement"], CatalogueHash: catalogueHash, ToolchainRoot: values["--toolchain"], SourceLicense: values["--source-license"] != "", ModuleDirectory: values["--modules"], ModuleCatalogueHash: moduleHash, RetainedGoCache: values["--retained-go-cache"] != ""})
 	}
 	var captured *noticeInventory
 	if values["--snapshot"] != "" {
@@ -1508,7 +1515,11 @@ func noticeSnapshot(build, recipe string, read noticeReader, options ...noticeSu
 			if obj["metadataProfile"] != "machine-id-no-jsonpath-v1" {
 				return result, fmt.Errorf("unsupported module preparation profile")
 			}
-			result.Modules, err = noticeModuleSnapshot(build, options[0].ModuleDirectory, options[0].ModuleCatalogueHash, packages, read)
+			cacheDirectory := "go-modules"
+			if options[0].RetainedGoCache {
+				cacheDirectory = "go-input-native/go-modules"
+			}
+			result.Modules, err = noticeModuleSnapshot(build, options[0].ModuleDirectory, options[0].ModuleCatalogueHash, cacheDirectory, packages, read)
 			if err != nil {
 				return result, err
 			}
