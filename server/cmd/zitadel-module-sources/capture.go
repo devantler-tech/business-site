@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -386,6 +387,31 @@ func writeSourceManifest(output string, value any) (string, error) {
 		return "", err
 	}
 	return hash(body), nil
+}
+
+// writeOrderedSourceManifest gives retained capsules one canonical file ordering.
+func writeOrderedSourceManifest(output string, files []fileRecord, value any) (string, error) {
+	slices.SortFunc(files, func(a, b fileRecord) int { return strings.Compare(a.Path, b.Path) })
+	return writeSourceManifest(output, value)
+}
+
+// verifySourceRecord checks the complete confined file through the opened descriptor.
+func verifySourceRecord(root *os.Root, record fileRecord) error {
+	if record.Bytes < 0 || record.Bytes > payloadLimit || !generatorDigest(record.SHA256) {
+		return fmt.Errorf("invalid retained file record")
+	}
+	f, err := openAt(root, record.Path)
+	if err != nil {
+		return err
+	}
+	size, sha, readErr := copyStream(io.Discard, f, record.Bytes)
+	if err := errors.Join(readErr, f.Close()); err != nil {
+		return err
+	}
+	if size != record.Bytes || sha != record.SHA256 {
+		return fmt.Errorf("retained source file changed")
+	}
+	return nil
 }
 
 // sourceManifestBytes is shared by writing and canonical readback checks.

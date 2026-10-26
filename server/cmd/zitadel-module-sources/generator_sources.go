@@ -289,8 +289,7 @@ func captureGeneratorSources(build, checkpointSeal, source, output, key string) 
 	if err := verifyGeneratorPayloadSet(output, evidence.modules); err != nil {
 		return result, err
 	}
-	slices.SortFunc(m.Files, func(a, b fileRecord) int { return strings.Compare(a.Path, b.Path) })
-	seal, err := writeSourceManifest(output, m)
+	seal, err := writeOrderedSourceManifest(output, m.Files, m)
 	if err != nil {
 		return result, err
 	}
@@ -429,16 +428,8 @@ func verifyGeneratorSources(directory, seal, source, key string) (result generat
 		if total > totalLimit {
 			return result, fmt.Errorf("generator-source package exceeds limit")
 		}
-		f, err := openAt(root, record.Path)
-		if err != nil {
+		if err := verifySourceRecord(root, record); err != nil {
 			return result, err
-		}
-		size, sha, readErr := copyStream(io.Discard, f, record.Bytes)
-		if err := errors.Join(readErr, f.Close()); err != nil {
-			return result, err
-		}
-		if size != record.Bytes || sha != record.SHA256 {
-			return result, fmt.Errorf("generator-source file changed")
 		}
 	}
 	wanted["manifest.json"] = true

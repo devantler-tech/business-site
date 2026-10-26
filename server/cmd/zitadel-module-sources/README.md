@@ -100,7 +100,7 @@ It contains no compiled cache, `.ziphash` marker or unrelated global cache.
 These operations retain selected service and generator-Go sources and observed
 resolver metadata. They do not prove every input needed by a cold build was
 observed. Cache restoration and clean network-denied full compilation remain
-#343. Companion commands handle selected pnpm, BSR and console
+tracked in issue #343. Companion commands handle selected pnpm, BSR and console
 inputs; their capsules do not establish complete dependency closure. Full
 source/image admission and public retrieval remain #308. Daemon resources, deployed
 login and invited-customer acceptance remain #305/#302. No activation is implied.

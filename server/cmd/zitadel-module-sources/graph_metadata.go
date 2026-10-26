@@ -308,8 +308,7 @@ func captureGoGraphMetadata(build, source, output, key, sumsHash string) (result
 			return result, err
 		}
 	}
-	slices.SortFunc(m.Files, func(a, b fileRecord) int { return strings.Compare(a.Path, b.Path) })
-	seal, err := writeSourceManifest(output, m)
+	seal, err := writeOrderedSourceManifest(output, m.Files, m)
 	if err != nil {
 		return result, err
 	}
@@ -392,16 +391,8 @@ func verifyGoGraphMetadata(directory, seal, source, key, sumsHash string) (resul
 		}
 		previous = record.Path
 		total += record.Bytes
-		f, err := openAt(root, record.Path)
-		if err != nil {
+		if err := verifySourceRecord(root, record); err != nil {
 			return result, err
-		}
-		size, sha, readErr := copyStream(io.Discard, f, record.Bytes)
-		if err := errors.Join(readErr, f.Close()); err != nil {
-			return result, err
-		}
-		if size != record.Bytes || sha != record.SHA256 {
-			return result, fmt.Errorf("graph metadata member changed")
 		}
 	}
 	wanted["manifest.json"] = true

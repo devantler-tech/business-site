@@ -10,14 +10,9 @@ import (
 
 // TestGraphMetadataCLIRejectsArtifactAuthority prevents selecting a checksum key through retained data.
 func TestGraphMetadataCLIRejectsArtifactAuthority(t *testing.T) {
-	build, source, key, sums := graphMetadataFixture(t)
-	out := filepath.Join(physicalGeneratorTestDirectory(t), "metadata")
-	got, err := captureGoGraphMetadata(build, source, out, key, sums)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, got, source, _, _ := capturedGraphMetadataFixture(t)
 	var output bytes.Buffer
-	err = run([]string{"verify-graph-metadata", "--package", out, "--sha256", got.ManifestSHA256, "--source-sha256", source}, &output)
+	err := run([]string{"verify-graph-metadata", "--package", out, "--sha256", got.ManifestSHA256, "--source-sha256", source}, &output)
 	if err == nil || output.Len() != 0 {
 		t.Fatalf("artifact authority accepted: %q %v", output.String(), err)
 	}
@@ -43,21 +38,23 @@ func graphMetadataFixture(t *testing.T) (string, string, string, string) {
 	return build, source, key, hash(nil)
 }
 
+// capturedGraphMetadataFixture supplies one verified package to the readback controls.
+func capturedGraphMetadataFixture(t *testing.T) (string, graphMetadataReceipt, string, string, string) {
+	t.Helper()
+	build, source, key, sums := graphMetadataFixture(t)
+	out, got := successfulSourceCapture(t, func(out string) (graphMetadataReceipt, error) {
+		return captureGoGraphMetadata(build, source, out, key, sums)
+	})
+	return out, got, source, key, sums
+}
+
 // TestGraphMetadataPortableReadback prevents losing resolver inputs outside ZIP capture.
 func TestGraphMetadataPortableReadback(t *testing.T) {
-	build, source, key, sums := graphMetadataFixture(t)
-	out := filepath.Join(physicalGeneratorTestDirectory(t), "metadata")
-	got, err := captureGoGraphMetadata(build, source, out, key, sums)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, got, source, key, sums := capturedGraphMetadataFixture(t)
 	if got.Modules != 12 || got.MetadataFiles != 24 || !got.GoGraphMetadataCaptured || got.DependencyInputsCaptured || got.NativeOfflineReplayProved {
 		t.Fatalf("incorrect scope: %+v", got)
 	}
-	copyRoot := filepath.Join(physicalGeneratorTestDirectory(t), "moved")
-	if err := os.CopyFS(copyRoot, os.DirFS(out)); err != nil {
-		t.Fatal(err)
-	}
+	copyRoot := copiedSourceFixture(t, out)
 	checked, err := verifyGoGraphMetadata(copyRoot, got.ManifestSHA256, source, key, sums)
 	if err != nil || checked != got {
 		t.Fatalf("portable metadata: %+v %v", checked, err)
@@ -162,12 +159,7 @@ func TestGraphMetadataCaptureRefusesUnverifiableInput(t *testing.T) {
 func TestGraphMetadataReadbackRequiresClosedMembership(t *testing.T) {
 	for _, kind := range []string{"changed", "missing", "extra", "seal", "source"} {
 		t.Run(kind, func(t *testing.T) {
-			build, source, key, sums := graphMetadataFixture(t)
-			out := filepath.Join(physicalGeneratorTestDirectory(t), "metadata")
-			got, err := captureGoGraphMetadata(build, source, out, key, sums)
-			if err != nil {
-				t.Fatal(err)
-			}
+			out, got, source, key, sums := capturedGraphMetadataFixture(t)
 			seal := got.ManifestSHA256
 			switch kind {
 			case "changed":
