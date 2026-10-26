@@ -425,7 +425,7 @@ while IFS= read -r reference; do
   while [[ "$reference" == ./* ]]; do reference="${reference#./}"; done
   grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
 done <"$output/console-references.txt"
-go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices.before.json"
+go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices.before.json"
 shasum -a 256 internal/api/ui/login/statik/statik.go >"$output/login-statik.before.sha256"
 mkdir "$output/service"
 binary="$output/service/zitadel"
@@ -568,16 +568,19 @@ jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg 
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
     '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
+if [[ -n "$retained_inputs" ]]; then
+  jq '. + {retainedInputsRestored:true}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
+  mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
+fi
+# Both inventories bind these final bytes. After capture, only rename the receipt.
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
-go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices-inventory.pending"
+go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
 mv "$output/login-icons-inventory.pending" "$output/login-icons-inventory.json"
 mv "$output/console-notices-inventory.pending" "$output/console-notices-inventory.json"
 mv "$output/console-notices-supplement-inventory.pending" "$output/console-notices-supplement-inventory.json"
 if [[ -n "$retained_inputs" ]]; then
   go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" >/dev/null || fail 'retained inputs changed during build'
-  jq '. + {retainedInputsRestored:true}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
-  mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
 fi
 mv "$output/build-receipt.pending" "$output/build-receipt.json"
 complete=1

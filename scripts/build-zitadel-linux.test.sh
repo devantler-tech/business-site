@@ -248,12 +248,14 @@ case "$1 $2" in
       [[ "$8" = --supplement && -s "$9/catalogue.json" ]]
       [[ "${10:-}" = --toolchain && "${11:-}" = "$TEST_GOROOT" ]] || { echo 'selected compiler distribution not passed' >&2; exit 42; }
       [[ "${12:-}" = --source-license ]] || { echo 'prepared root licence capture not required' >&2; exit 42; }
-      [[ "${13:-}" = --modules && "$#" -eq 14 && -s "${14:-}/catalogue.json" ]] || { echo 'selected Go module root retention not required' >&2; exit 42; }
+      [[ "${13:-}" = --modules && -s "${14:-}/catalogue.json" ]] || { echo 'selected Go module root retention not required' >&2; exit 42; }
+      [[ ( "$#" -eq 14 && "$GOMODCACHE" = "$5/go-modules" ) || ( "$#" -eq 15 && "${15:-}" = --retained-go-cache && "$GOMODCACHE" = "$5/go-input-native/go-modules" ) ]] || { echo 'notice reader cache differs from native compiler' >&2; exit 42; }
       if [[ "$3" = --snapshot ]]; then
         [[ ! -e "$5/service" && ! -e "$5/build-receipt.pending" ]]
         if [[ "${TEST_FAIL:-}" = notice-snapshot ]]; then echo 'plausible partial snapshot'; exit 42; fi
       else
         [[ "$3" = --inventory && -s "$5/console-notices.before.json" && -s "$5/service/zitadel" && -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+        shasum -a 256 "$5/build-receipt.pending" | awk '{print $1}' >"$5/fixture-console-receipt.sha256"
         if [[ "${TEST_FAIL:-}" = notice-capture ]]; then echo 'plausible partial capture'; exit 42; fi
         printf 'raw notice fixture\n' >"$5/console-third-party-notices.txt"
         printf 'verbatim supplement fixture\n' >"$5/console-notices-supplement.txt"
@@ -270,6 +272,7 @@ case "$1 $2" in
     else
       [[ "$*" == *'zitadel-login-icons.go --inventory --build '* && "$*" == *' --notices '* ]]
       [[ -s "$5/build-receipt.pending" && -s "$5/generated.sha256" ]]
+      shasum -a 256 "$5/build-receipt.pending" | awk '{print $1}' >"$5/fixture-icons-receipt.sha256"
       if [[ "${TEST_FAIL:-}" = inventory ]]; then echo 'plausible partial inventory'; exit 42; fi
       echo '{"fixture":"orchestration only"}'
     fi;;
@@ -726,6 +729,10 @@ if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$pre
   exit 1
 fi
 jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
+final_receipt="$(shasum -a 256 "$retained_output/build-receipt.json" | awk '{print $1}')"
+for phase in console icons; do
+  [[ "$(cat "$retained_output/fixture-$phase-receipt.sha256")" == "$final_receipt" ]] || { echo "final receipt differs from $phase inventory binding" >&2; exit 1; }
+done
 test -d "$retained_output/go-input-native/go-modules"
 test -d "$retained_output/pnpm-store"
 for fault in retained-go retained-pnpm retained-go-remote retained-go-fallback retained-go-scope; do

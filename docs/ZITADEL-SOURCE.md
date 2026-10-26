@@ -725,6 +725,13 @@ creates its own derived cache markers. No `.ziphash` is copied or synthesized.
 This project-checksum read is separate from generator reads outside the project,
 which require their retained signed-log evidence.
 
+Both notice phases explicitly select the reconstructed `go-input-native/go-modules`
+cache with `--retained-go-cache`; ordinary builds retain their `go-modules` layout.
+Neither mode accepts an arbitrary cache root or falls back to the other layout.
+Module/package paths, checksums, complete terms and origin inputs remain checked.
+The retained marker enters the final build receipt before either notice inventory
+binds its bytes; completion only renames that unchanged receipt.
+
 Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
 and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside
