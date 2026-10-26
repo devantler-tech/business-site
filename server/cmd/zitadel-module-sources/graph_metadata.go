@@ -124,7 +124,7 @@ func graphMetadataInventory(root *os.Root) ([]graphMetadataModule, error) {
 		}
 		canonical, err := modulePrefix(identity{Path: p, Version: v})
 		if err != nil || rel != canonical+ext {
-			return fmt.Errorf("noncanonical metadata identity")
+			return fmt.Errorf("metadata identity is not canonical")
 		}
 		id := entries[canonical]
 		id.Path, id.Version = p, v
