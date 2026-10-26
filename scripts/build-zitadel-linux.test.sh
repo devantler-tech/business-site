@@ -66,6 +66,11 @@ elif [[ "$2" = capture ]]; then
     '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,packages:$packages,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$8/receipt.json"
   cat "$8/receipt.json"
   if [[ "${TEST_FAIL:-}" = pnpm-tool-changed ]]; then echo changed >>"$1"; fi
+elif [[ "$2" = restore ]]; then
+  [[ "$#" -eq 10 && "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch && "$9" = --store ]]
+  [[ "${TEST_FAIL:-}" != retained-pnpm ]] || exit 42
+  mkdir "${10}"
+  jq '. + {nativeStoreRestored:true}' "$4/receipt.json"
 elif [[ "$2" = verify ]]; then
   [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
   [[ "${TEST_FAIL:-}" != pnpm-readback ]] || exit 42
@@ -93,7 +98,13 @@ printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
 if [[ "$1" = install ]]; then
   build_root="${GOCACHE%/go-cache}"
-  [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" ]]
+  if [[ "${npm_config_offline:-false}" = true ]]; then
+    [[ "$GOPATH" = "$build_root/go-input-native/go-path" && -d "$GOPATH" && "$GOMODCACHE" = "$build_root/go-input-native/go-modules" ]]
+    [[ "$GOPROXY" = off && "$GOVCS" = '*:off' && "$2" = --offline ]]
+    set -- "$1" "${@:3}"
+  else
+    [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" && "$GOPROXY" = https://proxy.golang.org ]]
+  fi
   [[ "$npm_config_userconfig" = "$build_root/npmrc" && -f "$npm_config_userconfig" && ! -s "$npm_config_userconfig" ]]
   [[ "$npm_config_cache" = "$build_root/npm-cache" && -d "$npm_config_cache" ]]
   [[ "$npm_config_store_dir" = "$build_root/pnpm-store" && -d "$npm_config_store_dir" ]]
@@ -103,7 +114,7 @@ if [[ "$1" = install ]]; then
   [[ "${BUF_CACHE_DIR:-}" = "$build_root/buf-cache" && -d "$BUF_CACHE_DIR" ]]
   [[ "${XDG_CONFIG_HOME:-}" = "$build_root/bsr-config" && -d "$XDG_CONFIG_HOME" && ! -v BUF_TOKEN ]]
   [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
-  [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
+  [[ "$GOSUMDB" = sum.golang.org ]]
   [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
   [[ "$2" = --store-dir && "$3" = "$npm_config_store_dir" ]]
   mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
@@ -213,7 +224,9 @@ case "$1 $2" in
         --verify)
           [[ "$#" -eq 5 && -d "$4" ]]
           if [[ "${TEST_FAIL:-}" = source-readback ]]; then echo '{"files":[]}'; exit 42; fi
-          echo '{"fixture":"complete source readback"}';;
+          if [[ "$4" == */retained-fixture ]]; then
+            printf '{"phase":"%s"}\n' "${TEST_INPUT_PHASE:-retained-build-inputs}"
+          else echo '{"fixture":"complete source readback"}'; fi;;
         --unpack)
           [[ "$#" -eq 7 && -s "$4" && ! -e "$7" ]]
           mkdir -p "$7/source"
@@ -386,7 +399,7 @@ case "$1" in
     api="$(shasum -a 256 "$3/bsr-tools/api" | awk '{print $1}')"
     console="$(shasum -a 256 "$3/bsr-tools/console" | awk '{print $1}')"
     [[ "${TEST_FAIL:-}" != bsr-tool-binding ]] || api="$(printf '%064d' 0)"
-    jq -n --arg api "$api" --arg console "$console" '{tools:[{phase:"api",version:"1.67.0",sha256:$api},{phase:"console",version:"1.72.0",sha256:$console}]}' >"$9/manifest.json";;
+    jq -n --arg api "$api" --arg console "$console" --arg source "$7" --arg recipe "$(shasum -a 256 "$5" | awk '{print $1}')" '{sourceManifestSha256:$source,recipeSha256:$recipe,tools:[{phase:"api",version:"1.67.0",sha256:$api},{phase:"console",version:"1.72.0",sha256:$console}]}' >"$9/manifest.json";;
   verify)
     [[ "$2" = --package && -s "$3/manifest.json" && "$4" = --sha256 && "$#" = 5 ]]
     [[ "${TEST_FAIL:-}" != bsr-readback ]] || { echo '{"files":170}'; exit 42; };;
@@ -458,6 +471,14 @@ if [[ "$1" = capture-graph-metadata || "$1" = verify-graph-metadata ]]; then
   proved=true
   [[ "${TEST_FAIL:-}" != graph-metadata-incomplete ]] || proved=false
   jq -n --arg source "$source" --argjson proved "$proved" '{schemaVersion:1,manifestSha256:("f"*64),sourceManifestSha256:$source,modules:400,metadataFiles:500,proofFiles:2,files:504,bytes:123,goGraphMetadataCaptured:$proved,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
+if [[ "$1" = restore-go-inputs ]]; then
+  [[ "$#" -eq 17 && "$2" = --service && "$4" = --service-sha256 && "$6" = --generators && "$8" = --generators-sha256 && "${10}" = --metadata && "${12}" = --metadata-sha256 && "${14}" = --source-sha256 && "${16}" = --output ]]
+  [[ "$5" = "$(printf '%064d' 0 | tr 0 b)" && "$9" = "$(printf '%064d' 0 | tr 0 e)" && "${13}" = "$(printf '%064d' 0 | tr 0 f)" && "${15}" = "$(printf '%064d' 0 | tr 0 a)" ]]
+  [[ "${TEST_FAIL:-}" != retained-go ]] || exit 42
+  mkdir -p "${17}/go-modules" "${17}/go-path"
+  jq -n --arg source "${15}" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
   exit
 fi
 if [[ "$1" = --capture ]]; then
@@ -659,3 +680,36 @@ done
 capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'
+
+# The retained mode must join every independent capsule to the original source
+# and enter the same pipeline with fresh restored stores. This remains process
+# orchestration proof; only the real Linux job can prove a network-denied build.
+retained="$scratch/retained-fixture"
+mkdir -p "$retained/source/source-snapshot"
+cp -R "$scratch/complete/prepared" "$retained/source/source-snapshot/"
+for record in api-project.original.json api-project.serial.json inputs.sha256; do
+  cp "$scratch/complete/$record" "$retained/source/source-snapshot/$record"
+done
+for component in selected-go-sources selected-generator-go-sources go-graph-metadata selected-pnpm-sources selected-bsr-sources selected-console-originals; do
+  cp -R "$scratch/captured/$component" "$retained/source/"
+done
+cp "$scratch/captured/build-receipt.json" "$retained/source/build-receipt.json"
+TEST_PREPARED_BUILD="$retained/source/source-snapshot"
+export TEST_PREPARED_BUILD
+: >"$TEST_CALLS"
+if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/retained-replay" >"$scratch/retained-replay.log" 2>&1; then
+  cat "$scratch/retained-replay.log" >&2
+  echo 'retained inputs cannot enter the existing native pipeline' >&2
+  exit 1
+fi
+jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$scratch/retained-replay/build-receipt.json" >/dev/null
+test -d "$scratch/retained-replay/go-input-native/go-modules"
+test -d "$scratch/retained-replay/pnpm-store"
+for fault in retained-go retained-pnpm; do
+  : >"$TEST_CALLS"
+  if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
+    echo "failed retained restoration admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/generate.log"
+  test ! -e "$scratch/$fault/build-receipt.json"
+done

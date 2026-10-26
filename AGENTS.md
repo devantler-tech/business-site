@@ -87,6 +87,17 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   complete dependency capture or native offline replay. Keep both modes' private
   Go/pnpm/schema acquisition caches, empty schema credentials/configuration,
   public checksum verification and confined records.
+- `scripts/replay-zitadel-inputs.sh` explicitly assembles only the seven sealed
+  input components and their original build receipt using the archive engine's
+  distinct retained-input profile. That profile preserves private capsule modes
+  and cannot impersonate prepared source. The Linux builder's exclusive
+  `--retained-inputs`/`--retained-sha256` mode authenticates and reconstructs native
+  Go, pnpm and schema stores before the existing full pipeline. Only the outer
+  replay command may emit a whole-build success receipt, after that pipeline and
+  same-build notices finish in a separate network namespace as the original
+  nonroot user, with no new privileges and all capabilities dropped. Component
+  receipts remain scoped and false for whole-build proof. CI retains compact
+  evidence only; image/source-offer admission and portal activation stay separate.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI

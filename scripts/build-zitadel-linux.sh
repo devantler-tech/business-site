@@ -7,6 +7,7 @@ export LC_ALL=C
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
 requested=0 capture_source=0 source_repo='' output='' module_verifier='' bsr_verifier='' prepared_source='' prepared_sha='' console_inputs='' console_sha='' source_manifest=''
+retained_inputs='' retained_sha=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
@@ -16,6 +17,8 @@ while [[ "$#" -gt 0 ]]; do
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
     --prepared-source) [[ -z "$prepared_source" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid prepared source'; prepared_source="$2"; shift 2 ;;
     --prepared-sha256) [[ -z "$prepared_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid prepared source seal'; prepared_sha="$2"; shift 2 ;;
+    --retained-inputs) [[ -z "$retained_inputs" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid retained inputs'; retained_inputs="$2"; shift 2 ;;
+    --retained-sha256) [[ -z "$retained_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid retained input seal'; retained_sha="$2"; shift 2 ;;
     --console-inputs) [[ -z "$console_inputs" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid console inputs'; console_inputs="$2"; shift 2 ;;
     --console-sha256) [[ -z "$console_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid console input seal'; console_sha="$2"; shift 2 ;;
     --output) [[ -z "$output" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid output'; output="$2"; shift 2 ;;
@@ -23,7 +26,9 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 [[ "$requested" -eq 1 && -n "$output" ]] || fail 'explicit build and output are required'
-if [[ -n "$prepared_source" ]]; then
+if [[ -n "$retained_inputs$retained_sha" ]]; then
+  [[ -n "$retained_inputs" && -n "$retained_sha" && -z "$source_repo$prepared_source$prepared_sha$console_inputs$console_sha" && "$capture_source" -eq 0 ]] || fail 'retained inputs require a complete exclusive capsule/seal pair'
+elif [[ -n "$prepared_source" ]]; then
   [[ -z "$source_repo" && -n "$prepared_sha" && "$capture_source" -eq 0 ]] || fail 'prepared source requires its seal and excludes original source or capture'
 else
   [[ -n "$source_repo" && -z "$prepared_sha" ]] || fail 'exactly one complete source mode is required'
@@ -31,12 +36,12 @@ fi
 if [[ -n "$console_inputs$console_sha" ]]; then
   [[ -n "$prepared_source" && -n "$console_inputs" && -n "$console_sha" && "$capture_source" -eq 0 ]] || fail 'console replay requires a complete capsule/seal pair with prepared source'
 fi
-if [[ "$capture_source" -eq 1 ]]; then
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   [[ "$module_verifier" = /* && -f "$module_verifier" && -x "$module_verifier" && ! -L "$module_verifier" ]] || fail 'source capture requires an explicit regular executable module verifier'
   [[ "$bsr_verifier" = /* && -f "$bsr_verifier" && -x "$bsr_verifier" && ! -L "$bsr_verifier" ]] || fail 'source capture requires an explicit regular executable schema verifier'
   for tool in curl sudo unshare setpriv id realpath; do command -v "$tool" >/dev/null || fail "missing source capture tool: $tool"; done
 else
-  [[ -z "$module_verifier" && -z "$bsr_verifier" ]] || fail 'source verifiers require source capture'
+  [[ -z "$module_verifier" && -z "$bsr_verifier" ]] || fail 'source verifiers require source capture or retained inputs'
 fi
 for tool in bash git jq shasum node pnpm go time readelf find sort cmp comm diff grep sed awk; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
@@ -60,9 +65,20 @@ go_root="$(go env GOROOT)"
 [[ "$go_root" = /* && -d "$go_root" && ! -L "$go_root" ]] || fail 'selected Go distribution is unavailable'
 [[ "$(node --version)" = v22.23.3 ]] || fail 'Node 22.23.3 is required'
 [[ "$(pnpm --version)" = 10.30.3 ]] || fail 'pnpm 10.30.3 is required'
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+retained_receipt=''
+if [[ -n "$retained_inputs" ]]; then
+  [[ "$retained_inputs" = /* && -d "$retained_inputs" && ! -L "$retained_inputs" && "$retained_inputs" = "$(cd "$retained_inputs" && pwd -P)" ]] || fail 'retained inputs must be a physical absolute directory'
+  go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" | jq -e '.phase == "retained-build-inputs"' >/dev/null || fail 'complete sealed retained inputs are required'
+  retained_receipt="$retained_inputs/source/build-receipt.json"
+  jq -e '.schemaVersion==1 and .platform=="linux/amd64" and .profile=="api-login-v1-console" and .sourceSnapshot.dependencyInputsCaptured==false and .sourceSnapshot.nativeOfflineReplayProved==false' "$retained_receipt" >/dev/null || fail 'retained build profile differs'
+  prepared_source="$retained_inputs/source/source-snapshot"
+  prepared_sha="$(jq -er '.sourceSnapshot.manifestSha256' "$retained_receipt")"
+  console_inputs="$retained_inputs/source/selected-console-originals"
+  console_sha="$(jq -er '.consoleDownloads.manifestSha256' "$retained_receipt")"
+fi
 input_root="${source_repo:-$prepared_source}"
 [[ -d "$input_root" && ! -e "$output" && ! -L "$output" ]] || fail 'input must exist and output must be new'
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 input_root="$(cd "$input_root" && pwd -P)"
 if [[ -n "$source_repo" ]]; then source_repo="$input_root"; else prepared_source="$input_root"; fi
 parent="$(cd "$(dirname "$output")" && pwd -P)"
@@ -70,6 +86,7 @@ name="$(basename "$output")"
 [[ "$name" != . && "$name" != .. ]] || fail 'invalid output name'
 output="$parent/$name"
 [[ "$output" != "$input_root/"* ]] || fail 'output must be outside input source'
+[[ -z "$retained_inputs" || ( "$output" != "$retained_inputs" && "$output" != "$retained_inputs/"* ) ]] || fail 'output must be outside retained inputs'
 if [[ -n "$console_inputs" ]]; then
   [[ "$console_inputs" = /* && -d "$console_inputs" && ! -L "$console_inputs" ]] || fail 'console capsule must be an existing physical absolute directory'
   [[ "$console_inputs" = "$(cd "$console_inputs" && pwd -P)" ]] || fail 'console capsule path must be physical and clean'
@@ -90,7 +107,8 @@ module_verifier_hash='' bsr_verifier_hash=''
 # source restoration must not inherit a host cache or an account's credentials.
 export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
 unset BUF_TOKEN
-mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME"
+mkdir -m 700 "$XDG_CONFIG_HOME"
+if [[ -z "$retained_inputs" ]]; then mkdir -m 700 "$BUF_CACHE_DIR"; fi
 # Check the separately compiled command without changing the service compiler.
 verifier_digest() {
   local name="$1" executable="$2" command="$3"
@@ -101,13 +119,17 @@ verifier_digest() {
     END {exit !(compiler && command)}' "$output/$name-source-verifier.txt" || fail 'verifier command or compiler differs'
   shasum -a 256 "$executable" | awk '{print $1}'
 }
-if [[ "$capture_source" -eq 1 ]]; then
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   # The reviewed command is built separately with the repository compiler. Do
   # not switch or auto-download toolchains inside the frozen upstream build.
   module_verifier_hash="$(verifier_digest go-module "$module_verifier" zitadel-module-sources)"
   bsr_verifier_hash="$(verifier_digest bsr "$bsr_verifier" zitadel-bsr-sources)"
   [[ "$module_verifier_hash" =~ ^[0-9a-f]{64}$ && "$bsr_verifier_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'verifier digest unavailable'
-  mkdir -m 700 "$output/bsr-tools"
+  if [[ "$capture_source" -eq 1 ]]; then mkdir -m 700 "$output/bsr-tools"; fi
+  if [[ -n "$retained_inputs" ]]; then
+    jq -e --arg module "$module_verifier_hash" --arg bsr "$bsr_verifier_hash" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
+      '.sourceSnapshot.goModuleVerifier.sha256==$module and .sourceSnapshot.bsrVerifier.sha256==$bsr and .recipeSha256==$recipe' "$retained_receipt" >/dev/null || fail 'retained verifier or recipe identity differs'
+  fi
 fi
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
 version=4.20.0
@@ -135,7 +157,8 @@ export npm_config_userconfig="$output/npmrc" npm_config_globalconfig="$output/np
 export npm_config_store_dir="$output/pnpm-store"
 export npm_config_engine_strict=false npm_config_registry=https://registry.npmjs.org/
 export npm_config_side_effects_cache=false
-mkdir "$GOCACHE" "$GOMODCACHE" "$GOPATH" "$npm_config_cache" "$npm_config_store_dir"
+mkdir "$GOCACHE" "$npm_config_cache"
+if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_store_dir"; fi
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
@@ -146,6 +169,31 @@ if [[ -n "$prepared_source" ]]; then
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/prepared-input-check" >"$output/prepared-input.pending"
   jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal' "$output/prepared-input.pending" >/dev/null || fail 'prepared source or retained recipes differ from this native builder'
   prepared_input_json="$(jq '. + {nativeOfflineReplayProved:false}' "$output/prepared-input.pending")"
+fi
+# Restore only authenticated originals. No extracted module tree, ZIP hash,
+# compiled cache, installed workspace or prior side-effects cache is trusted.
+if [[ -n "$retained_inputs" ]]; then
+  service="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$retained_receipt")"
+  generators="$(jq -er '.sourceSnapshot.generatorGoSources.manifestSha256' "$retained_receipt")"
+  metadata="$(jq -er '.sourceSnapshot.goGraphMetadata.manifestSha256' "$retained_receipt")"
+  "$module_verifier" restore-go-inputs --service "$retained_inputs/source/selected-go-sources" --service-sha256 "$service" \
+    --generators "$retained_inputs/source/selected-generator-go-sources" --generators-sha256 "$generators" \
+    --metadata "$retained_inputs/source/go-graph-metadata" --metadata-sha256 "$metadata" --source-sha256 "$prepared_sha" \
+    --output "$output/go-input-native" >"$output/retained-go-restoration.json"
+  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
+  export GOMODCACHE="$output/go-input-native/go-modules" GOPATH="$output/go-input-native/go-path"
+  bsr_seal="$(jq -er '.sourceSnapshot.bsrSources.manifestSha256' "$retained_receipt")"
+  "$bsr_verifier" verify --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" >"$output/retained-bsr-verification.json"
+  jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.bsrSources' "$output/retained-bsr-verification.json" >/dev/null || fail 'retained schema source join differs'
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" '.sourceManifestSha256==$source and .recipeSha256==$original[0].recipeSha256' "$retained_inputs/source/selected-bsr-sources/manifest.json" >/dev/null || fail 'schema capsule belongs to another source or recipe'
+  "$bsr_verifier" restore --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --output "$BUF_CACHE_DIR" >"$output/retained-bsr-restoration.json"
+  "$bsr_verifier" check-cache --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --cache "$BUF_CACHE_DIR" >/dev/null
+  pnpm_seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$retained_receipt")"
+  node "$root/tools/zitadel-pnpm-source/index.mjs" restore --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
+    --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir" >"$output/retained-pnpm-restoration.json"
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
+    '.nativeStoreRestored==true and .sourceManifestSha256==$source and del(.nativeStoreRestored)==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-restoration.json" >/dev/null || fail 'retained pnpm source join differs'
+  export GOPROXY=off GOVCS='*:off' npm_config_offline=true
 fi
 source_snapshot_json=null
 if [[ "$capture_source" -eq 1 ]]; then
@@ -207,7 +255,9 @@ without_network() {
   rm "$marker"
   return "$status"
 }
-run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+install_options=()
+if [[ -n "$retained_inputs" ]]; then install_options+=(--offline); fi
+run_phase install pnpm install "${install_options[@]}" --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
 if [[ "$capture_source" -eq 1 ]]; then
   pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
   node "$root/tools/zitadel-pnpm-source/index.mjs" inspect --build "$output" >"$output/pnpm-installation-check.json"
@@ -479,6 +529,11 @@ go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --no
 mv "$output/login-icons-inventory.pending" "$output/login-icons-inventory.json"
 mv "$output/console-notices-inventory.pending" "$output/console-notices-inventory.json"
 mv "$output/console-notices-supplement-inventory.pending" "$output/console-notices-supplement-inventory.json"
+if [[ -n "$retained_inputs" ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" >/dev/null || fail 'retained inputs changed during build'
+  jq '. + {retainedInputsRestored:true}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
+  mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
+fi
 mv "$output/build-receipt.pending" "$output/build-receipt.json"
 complete=1
 printf 'Complete native build evidence only: %s\n' "$output"

@@ -669,6 +669,64 @@ network-denied native compilation. Both `dependencyInputsCaptured` and
 native consumption receipts, but uploads only compact manifests and diagnostics;
 the original binaries and archives remain excluded. Full replay remains #343.
 
+## Complete native retained-input replay
+
+The explicit replay command assembles this build's prepared source, selected
+service and generator Go originals, authenticated graph metadata, pnpm originals,
+schema originals and console originals, plus their original build receipt. It
+selects those fixed components rather than archiving the build directory. Prior
+compiled output, installed workspaces, side-effect caches and ambient stores are
+excluded. The same closed archive engine uses a distinct `retained-build-inputs`
+profile, preserving private/read-only capsule modes. That transport profile
+cannot declare prepared build records or enter prepared-source restoration.
+External manifest/archive seals bind the actual pack/unpack round trip.
+
+```sh
+bash scripts/replay-zitadel-inputs.sh \
+  --build /physical/owned/original-build \
+  --module-source-verifier /physical/owned/zitadel-module-sources \
+  --bsr-source-verifier /physical/owned/zitadel-bsr-sources \
+  --output /physical/owned/new-offline-replay
+```
+
+The existing builder's exclusive `--retained-inputs`/`--retained-sha256` mode
+reuses prepared-source and recipe admission. The original receipt binds the
+separately supplied verifier executables; their known command/compiler metadata
+and byte digests must agree. Maintained native verifiers authenticate every
+capsule and its source/recipe joins before reconstruction. Go receives original
+ZIP/mod/info and signed checksum records, never extracted trees or trusted ZIP
+hash markers. pnpm receives original archives and verified native indexes, never
+an installed workspace. Schema restoration receives the checked original cache.
+Console installation still consumes the retained three original downloads.
+
+The outer command checks an independently reachable network control, creates a
+new network namespace and verifies different namespace identity, the original
+nonroot UID/GID, no new privileges and zero effective/bounding capabilities.
+It also observes the network control fail there. The complete existing native
+install, generation, console, service compilation and notice pipeline then runs
+inside that namespace with fresh owned compiler/acquisition stores and empty
+ambient configuration. pnpm explicitly uses offline installation, Go remote
+proxy/VCS acquisition is disabled and its public checksum verification remains
+enabled. There is no fallback to the network or an old compiled cache.
+
+Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
+and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
+pnpm SDK remain explicit build-tool boundaries, not application payloads inside
+the input archive. This does not claim a hermetic OS/toolchain distribution.
+The builder still reads this checkout's maintained notice collectors/catalogues.
+Source-offer assembly must include the applicable custom tooling and their terms;
+that distribution admission remains #308.
+
+Only after successful full native compilation, complete same-build notice
+inventories, source/recipe/toolchain joins and final unchanged-input readback does
+the outer command emit `native-retained-input-replay-v1`, with both whole-build
+proof flags true. Inner component receipts retain their narrower false flags.
+Failures retain private diagnosis and no replay success receipt. CI retains only
+compact manifests, receipts and logs, excluding the full archive, caches and
+service executable. Neither a fixture nor an assembled archive proves native
+success. Reproducible binary equality, image admission, complete licence/source
+offering, deployed resource measurements and portal activation remain separate.
+
 ## Local restricted image CLI test
 
 The explicit image test packages the actual successful Linux build and observes
