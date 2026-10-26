@@ -223,6 +223,41 @@ run_phase() {
   # pipefail preserves a failing process even when its final log says success.
   command time -v -o "$output/$name.resources.txt" "$@" 2>&1 | tee "$output/$name.log"
 }
+# BEGIN native service consumption
+consume_retained_service_go() {
+  local records="$retained_inputs/source/selected-go-sources/records"
+  local expected="$output/retained-go-service-expected.json" manifest_seal actual_manifest source_seal
+  local native_result="$output/retained-go-service-download.jsonl" id
+  local service_ids=()
+  manifest_seal="$(jq -er '.manifestSha256|select(test("^[0-9a-f]{64}$"))' "$output/retained-go-restoration.json")"
+  actual_manifest="$(shasum -a 256 "$output/go-input-native/manifest.json" | awk '{print $1}')" || fail 'restored native module manifest read failed'
+  [[ "$actual_manifest" =~ ^[0-9a-f]{64}$ && "$actual_manifest" = "$manifest_seal" ]] || fail 'restored native module manifest changed'
+  source_seal="$(jq -er '.sourceManifestSha256|select(test("^[0-9a-f]{64}$"))' "$output/retained-go-restoration.json")"
+  jq '[.modules[].effective|{Path,Version,Sum,GoModSum}]|unique_by([.Path,.Version])|sort_by(.Path,.Version)' \
+    "$retained_inputs/source/selected-go-sources/manifest.json" >"$expected"
+  jq -er '.[]|.Path+"@"+.Version' "$expected" >"$output/retained-go-service-identities.txt"
+  while IFS= read -r id; do service_ids+=("$id"); done <"$output/retained-go-service-identities.txt"
+  [[ "${#service_ids[@]}" -gt 0 ]] || fail 'empty retained service module set'
+  if ! cmp "$records/go.mod" go.mod || ! cmp "$records/go.sum" go.sum; then fail 'frozen service module records changed'; fi
+  # Go authenticates the exact original ZIPs against this project's frozen
+  # checksums and creates its own derived cache markers. Never copy or invent
+  # .ziphash, and never replace the subsequent native go mod verify command.
+  if ! go mod download -json "${service_ids[@]}" >"$native_result"; then
+    fail 'native service module consumption failed'
+  fi
+  jq -se --slurpfile expected "$expected" '
+    all(.[];has("Error")|not) and
+    (map({Path,Version,Sum,GoModSum})|sort_by(.Path,.Version))==$expected[0]
+  ' "$native_result" >/dev/null || fail 'native service module readback differs'
+  if ! cmp "$records/go.mod" go.mod || ! cmp "$records/go.sum" go.sum; then fail 'native reader changed frozen service module records'; fi
+  jq -n --arg source "$source_seal" --arg manifest "$manifest_seal" --slurpfile modules "$expected" '
+    {schemaVersion:1,sourceManifestSha256:$source,restorationManifestSha256:$manifest,
+     serviceModules:($modules[0]|length),nativeCacheReadbackPassed:true,sourceChecksumsUnchanged:true,
+     dependencyInputsCaptured:false,nativeOfflineReplayProved:false}
+  ' >"$output/retained-go-service-readback.pending"
+  mv "$output/retained-go-service-readback.pending" "$output/retained-go-service-readback.json"
+}
+# END native service consumption
 # Retain the actual native executables, never a package-manager launcher.
 save_bsr_tool() {
   local phase="$1" input="$2" expected="$3" resolved
@@ -361,6 +396,7 @@ find console/src internal/api/ui/login/static "$console" "$embedded" \( -type f 
 font_status=0
 grep -riE 'aileron' "$console" "$embedded" internal/api/ui/login/static/resources/themes/zitadel/css >"$output/font-references.txt" || font_status=$?
 [[ "$font_status" -eq 1 ]] || fail 'font reference survived or scan failed'
+if [[ -n "$retained_inputs" ]]; then consume_retained_service_go; fi
 go mod verify
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 go list -deps -json . >"$output/packages.jsonl"

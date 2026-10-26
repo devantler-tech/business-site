@@ -123,6 +123,14 @@ no host-specific URL. The native consumer encodes its own fixed `go-proxy` path
 with no HTTP/direct fallback; writable native caches stay separate. Identical
 inputs must retain byte-identical receipts across different scratch locations.
 
+Restoration never copies or synthesizes `.ziphash`. Before its existing native
+`go mod verify`, the retained builder consumes the exact selected service set
+with native Go inside the prepared project. It checks the complete returned
+identities/checksums and unchanged frozen `go.mod`/`go.sum`, allowing Go to create
+its own derived cache markers. This project-checksum read does not establish
+standalone signed-log availability for service-only modules; generator reads
+outside the project retain their separate signed-log proof.
+
 CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.10 inside a network
 namespace, dropping root privileges before native module reads. It compares every
 service/generator checksum, preserves the source locks and requires a fresh

@@ -718,6 +718,13 @@ its native deprecation/retraction ordering and checksum checks. The resolver sco
 is the retained snapshot, not authenticated original/current upstream latest;
 no `@latest` response or timestamp-based authority is synthesized.
 
+Before the existing `go mod verify`, native Go consumes the exact selected
+service modules against the prepared project's unchanged frozen checksums. The
+complete returned identities/checksums must match the retained selection; Go
+creates its own derived cache markers. No `.ziphash` is copied or synthesized.
+This project-checksum read is separate from generator reads outside the project,
+which require their retained signed-log evidence.
+
 Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
 and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside

@@ -76,6 +76,14 @@ jq -e --slurpfile original "$original" '
  .consoleDownloads.originalConsoleDownloadsConsumed==true and
  .imageAdmission=="unknown" and .licenseClosure=="unknown" and .reproducible==false
 ' "$native" >/dev/null || fail 'native replay source or recipe join differs'
+jq -e --slurpfile original "$original" --slurpfile restored "$output/native/retained-go-restoration.json" \
+  --slurpfile service "$output/roundtrip/source/selected-go-sources/manifest.json" '
+  .schemaVersion==1 and .sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+  .restorationManifestSha256==$restored[0].manifestSha256 and
+  .serviceModules==([$service[0].modules[].effective|[.Path,.Version]]|unique|length) and .serviceModules>0 and
+  .nativeCacheReadbackPassed==true and .sourceChecksumsUnchanged==true and
+  .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false
+' "$output/native/retained-go-service-readback.json" >/dev/null || fail 'native service checksum readback differs'
 for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json; do
   [[ -s "$output/native/$notice" && ! -L "$output/native/$notice" ]] || fail 'complete same-build notice inventory missing'
 done

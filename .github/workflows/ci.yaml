@@ -572,6 +572,7 @@ jobs:
             ${{ runner.temp }}/zitadel-offline-replay/native-replay.log
             ${{ runner.temp }}/zitadel-offline-replay/native/build-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-service-readback.json
             ${{ runner.temp }}/zitadel-offline-replay/native/retained-bsr-restoration.json
             ${{ runner.temp }}/zitadel-offline-replay/native/retained-pnpm-restoration.json
             ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-inventory.json

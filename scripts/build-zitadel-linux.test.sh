@@ -197,7 +197,14 @@ case "$1 $2" in
     if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_FAIL:-}" = binary-metadata ]]; then exit 42; fi;;
   'mod verify')
+    if [[ "$GOMODCACHE" == */go-input-native/go-modules ]]; then test -f "$GOMODCACHE/service-consumed"; fi
     if [[ "${TEST_FAIL:-}" = module-integrity && -s "${GOCACHE%/go-cache}/service/zitadel" ]]; then echo 'plausible module verification followed by failure'; exit 42; fi;;
+  'mod download')
+    [[ "$#" -eq 4 && "$3" = -json && "$4" = example.com/fixture@v1.0.0 && "$GOMODCACHE" == */go-input-native/go-modules ]]
+    [[ "${TEST_FAIL:-}" != retained-go-consumption ]] || { echo '{}'; exit 42; }
+    if [[ "${TEST_FAIL:-}" = retained-go-consumption-partial ]]; then echo '{}'; exit; fi
+    printf 'native service consumption\n' >"$GOMODCACHE/service-consumed"
+    jq -n --arg sum "${TEST_NATIVE_SUM:-h1:fixture}" '{Path:"example.com/fixture",Version:"v1.0.0",Sum:$sum,GoModSum:"h1:mod"}';;
   'run '*)
     if [[ "$2" == */zitadel-source-bundle.go ]]; then
       if [[ "${TEST_FAIL:-}" = source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
@@ -480,13 +487,15 @@ if [[ "$1" = restore-go-inputs ]]; then
   [[ "$5" = "$(printf '%064d' 0 | tr 0 b)" && "$9" = "$(printf '%064d' 0 | tr 0 e)" && "${13}" = "$(printf '%064d' 0 | tr 0 f)" && "${15}" = "$(printf '%064d' 0 | tr 0 a)" ]]
   [[ "${TEST_FAIL:-}" != retained-go ]] || exit 42
   mkdir -p "${17}/go-modules" "${17}/go-path" "${17}/go-proxy"
+  jq -n '{schemaVersion:1,modules:[{Path:"example.com/fixture",Version:"v1.0.0"}]}' >"${17}/manifest.json"
+  native_manifest="$(shasum -a 256 "${17}/manifest.json" | awk '{print $1}')"
   proxy="file://${17}/go-proxy" scope=retained-snapshot
   case "${TEST_FAIL:-}" in
     retained-go-remote) proxy=https://unrelated.invalid ;;
     retained-go-fallback) proxy="$proxy,direct" ;;
     retained-go-scope) scope=upstream-latest ;;
   esac
-  jq -n --arg source "${15}" --arg proxy "$proxy" --arg scope "$scope" --arg fault "${TEST_FAIL:-}" '{schemaVersion:1,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false} + (if $fault=="retained-go-remote" or $fault=="retained-go-fallback" then {moduleProxyURL:$proxy} else {} end)'
+  jq -n --arg source "${15}" --arg manifest "$native_manifest" --arg proxy "$proxy" --arg scope "$scope" --arg fault "${TEST_FAIL:-}" '{schemaVersion:1,manifestSha256:$manifest,sourceManifestSha256:$source,selectedGoInputsRestored:true,modules:340,moduleProxyScope:$scope,dependencyInputsCaptured:false,nativeOfflineReplayProved:false} + (if $fault=="retained-go-remote" or $fault=="retained-go-fallback" then {moduleProxyURL:$proxy} else {} end)'
   exit
 fi
 if [[ "$1" = --capture ]]; then
@@ -701,6 +710,10 @@ done
 for component in selected-go-sources selected-generator-go-sources go-graph-metadata selected-pnpm-sources selected-bsr-sources selected-console-originals; do
   cp -R "$scratch/captured/$component" "$retained/source/"
 done
+mkdir -p "$retained/source/selected-go-sources/records"
+cp "$scratch/complete/prepared/source/go.mod" "$retained/source/selected-go-sources/records/go.mod"
+cp "$scratch/complete/prepared/source/go.sum" "$retained/source/selected-go-sources/records/go.sum"
+jq -n '{modules:[{effective:{Path:"example.com/fixture",Version:"v1.0.0",Sum:"h1:fixture",GoModSum:"h1:mod"}}]}' >"$retained/source/selected-go-sources/manifest.json"
 cp "$scratch/captured/build-receipt.json" "$retained/source/build-receipt.json"
 TEST_PREPARED_BUILD="$retained/source/source-snapshot"
 export TEST_PREPARED_BUILD
@@ -723,6 +736,18 @@ for fault in retained-go retained-pnpm retained-go-remote retained-go-fallback r
   test ! -e "$scratch/$fault/generate.log"
   test ! -e "$scratch/$fault/build-receipt.json"
 done
+
+for fault in retained-go-consumption retained-go-consumption-partial; do
+  if env TEST_FAIL="$fault" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
+    echo "incomplete native service consumption admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/retained-go-service-readback.json"
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
+if env TEST_NATIVE_SUM=h1:changed bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/retained-go-consumption-identity" >"$scratch/retained-go-consumption-identity.log" 2>&1; then
+  echo 'changed native service checksum admitted' >&2; exit 1
+fi
+test ! -e "$scratch/retained-go-consumption-identity/build-receipt.json"
 
 # Exercise the actual receipt footer's I/O boundary without pretending to run
 # its native build prerequisites. Linux CI separately executes the full entrypoint.

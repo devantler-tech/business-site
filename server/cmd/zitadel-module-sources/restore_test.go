@@ -91,10 +91,7 @@ func TestRestoredGoInputsSupportPinnedNativeInstall(t *testing.T) {
 			bin := filepath.Join(t.TempDir(), "bin")
 			cmd := exec.CommandContext(t.Context(), "go", "install", selected.Path+"@"+selected.Version)
 			cmd.Dir = physicalGeneratorTestDirectory(t)
-			cmd.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOROOT=", "GOFLAGS=-modcacherw",
-				"GOPROXY="+proxy, "GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(), "GOBIN="+bin,
-				"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"),
-				"GOSUMDB="+policy.checksumKey+" "+denied.URL)
+			cmd.Env = append(restoredNativeGoEnvironment(t, output, policy, denied.URL), "GOPROXY="+proxy, "GOBIN="+bin)
 			body, err := cmd.CombinedOutput()
 			if fault != "complete" {
 				if err == nil {
@@ -162,6 +159,13 @@ func deniedChecksumServer(t *testing.T) (*httptest.Server, *atomic.Int64) {
 	return denied, requests
 }
 
+func restoredNativeGoEnvironment(t *testing.T, output string, policy goRestorePolicy, endpoint string) []string {
+	t.Helper()
+	return append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOROOT=", "GOFLAGS=-modcacherw", "GOPROXY=off",
+		"GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(),
+		"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"), "GOSUMDB="+policy.checksumKey+" "+endpoint)
+}
+
 // restorationFixture joins real source capsules through one fictional native build.
 func restorationFixture(t *testing.T) (goRestoreInputs, goRestorePolicy) {
 	t.Helper()
@@ -170,7 +174,22 @@ func restorationFixture(t *testing.T) (goRestoreInputs, goRestorePolicy) {
 
 func restorationFixtureWithGraphOnlyVersion(t *testing.T, graphOnly bool) (goRestoreInputs, goRestorePolicy) {
 	t.Helper()
+	return restorationFixtureOptions(t, graphOnly, false)
+}
+
+func restorationFixtureOptions(t *testing.T, graphOnly, requireService bool) (goRestoreInputs, goRestorePolicy) {
+	t.Helper()
 	service, cataloguePath := materializeSelection(t)
+	if requireService {
+		service.mod = append(service.mod, []byte("\nrequire (\n example.com/Example v1.2.3\n example.com/original v1.0.0\n)\nreplace example.com/original v1.0.0 => gopkg.in/ini.v1 v1.2.3\n")...)
+		var catalog catalogue
+		if err := json.Unmarshal(service.cat, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		catalog.GoModSHA256 = hash(service.mod)
+		service.cat = marshal(t, catalog)
+		writeFixture(t, cataloguePath, service.cat)
+	}
 	build, checkpoint, source, key := generatorSourceFixture(t)
 	if err := os.CopyFS(filepath.Join(build, "go-modules"), os.DirFS(filepath.Join(service.build, "go-modules"))); err != nil {
 		t.Fatal(err)
@@ -375,10 +394,7 @@ func TestRestoredGoInputsServeTheNativeChecksumClient(t *testing.T) {
 			cmd.Dir = physicalGeneratorTestDirectory(t)
 			// The standard writable-cache flag permits this fixture's own TempDir
 			// cleanup after native extraction; checksum verification is unchanged.
-			cmd.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOFLAGS=-modcacherw", "GOPROXY=off",
-				"GOVCS=*:off", "GONOSUMDB=", "GONOPROXY=", "GOPRIVATE=", "GOCACHE="+t.TempDir(),
-				"GOPATH="+filepath.Join(output, "go-path"), "GOMODCACHE="+filepath.Join(output, "go-modules"),
-				"GOSUMDB="+policy.checksumKey+" "+denied.URL)
+			cmd.Env = restoredNativeGoEnvironment(t, output, policy, denied.URL)
 			body, err := cmd.CombinedOutput()
 			var got struct{ Path, Version, Sum, GoModSum, Error string }
 			if decodeErr := json.Unmarshal(body, &got); decodeErr != nil {
