@@ -75,9 +75,18 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains ten literal build/modification records and rechecks the snapshot/archive
+  retains fourteen literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
+  Its explicit `--restore-build` operation restores the sealed files and literal
+  records into a new native layout. The Linux builder's mutually exclusive
+  `--prepared-source`/`--prepared-sha256` mode reuses the existing frozen capture
+  admission before entering the unchanged build phases and joins the final recipe
+  hash to that admitted input. CI rebuilds from the unpacked source and retains
+  its joined receipt; this connected rebuild is not
+  complete dependency capture or native offline replay. Keep both modes' private
+  Go/pnpm/schema acquisition caches, empty schema credentials/configuration,
+  public checksum verification and confined records.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI
@@ -103,6 +112,25 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and proves schema-only replay from fresh restored caches without networking or
   privilege recovery. Complete dependency/native service replay remains #343;
   this command grants no deployment authority.
+- `scripts/zitadel-console-assets.go` is an explicit, otherwise inert collector
+  and verifier for the frozen Linux console generator's three original release
+  downloads. It preserves their compressed bytes and checksums in a closed,
+  externally sealed private directory. Its fetch mode emits only verified bytes
+  without a downloader; failed captures retain bounded, unsealed diagnostics and
+  never delete a pathname that may have been replaced. Explicit source capture and
+  prepared replay with a sealed console input use its console-only native request
+  adapter. Preserve the exact ordered three requests, private new destinations,
+  native checksum/unzip/install path and complete post-phase readback. Its source
+  is one of the retained build records. Complete dependency capture and service
+  replay remain incomplete under #343. Read `docs/ZITADEL-SOURCE.md`.
+- `tools/zitadel-pnpm-source/` supplies the pinned native SDK and explicit private
+  capture/verify/restore boundary for the actual filtered Linux installation.
+  Read its README before changing it. Preserve native peer/optional/workspace
+  selection, complete original archive SRI, independent CAFS byte checks and
+  native lifecycle classification. Restoration preserves verified literal indexes;
+  it never transplants old installation metadata into the application. The
+  adapter and both SDK manifests are retained source/build records. Capture and
+  reconstruction do not establish an offline install or complete native replay.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.
@@ -198,6 +226,9 @@ bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
+(cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
+npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
+node --test tools/zitadel-pnpm-source/index.test.mjs
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-module-sources)
 (cd server && GOTOOLCHAIN=local go test -race ./cmd/zitadel-bsr-sources)
 bash scripts/check-active-projects-drift.test.sh

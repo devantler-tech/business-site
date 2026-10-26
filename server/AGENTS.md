@@ -7,6 +7,11 @@ importing portal authority or entering the frozen identity service's graph.
 CI builds the command with this module's exact compiler before selecting the
 unchanged upstream compiler. Preserve its complete tests, external-seal readback
 and narrow evidence fields; it never grants image or portal activation.
+Its separate native generator checkpoint reads fourteen actual executables before
+the console overwrites API OpenAPI 2.28. Preserve exact compiler/platform/command
+joins, complete original build metadata, path-and-version effective unions and
+external-seal readback. Metadata observation is not generator source retention or
+complete cold-build replay; both overall proof flags remain false.
 `cmd/zitadel-bsr-sources` is a separate otherwise inert standard-library source
 package verifier in the same module; read its README. Preserve the frozen BSR
 profile, complete native digest and export joins, external seals, bounded I/O,

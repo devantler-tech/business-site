@@ -441,17 +441,58 @@ These operations do not install dependencies or run the upstream build. A
 prepared-source round trip establishes only that source snapshot's correspondence.
 The Linux builder's optional `--capture-source` flag invokes `--capture-build`
 immediately before installation. It retains the preparation receipt, original and
-serialized API configuration, seven-input hash record, four exact recipes/input
-files, build guide and a dated modification record. That date belongs to the frozen
+serialized API configuration, seven-input hash record, five exact recipes/input
+files, including the console download helper, build guide and a dated modification
+record. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those ten records separate from the upstream source. The completed build
+keeps those fourteen records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
 diagnostics; the source archive, recipe bodies and executable remain excluded.
+
+`--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
+checked source files and their executable modes into the original native layout.
+It retains all fourteen literal records and places only the four fixed build inputs at
+their original locations. It does not execute retained recipes or record-supplied
+paths. Existing output, an output inside the snapshot, incomplete records and
+changed, missing or extra bytes fail. The snapshot is rechecked after copying.
+This operation authenticates the externally sealed file set, not an arbitrary
+snapshot's suitability for the frozen build; empty directories are not source
+members, while valid empty files remain preserved.
+
+The Linux entrypoint also accepts the mutually exclusive
+`--build --prepared-source <snapshot> --prepared-sha256 <manifest-sha256>
+--output <new-build-root>` mode. It restores those records without rerunning
+preparation or replacing the original API configuration. Before installation it
+uses the existing frozen capture admission and requires the complete source,
+transformation and current-recipe seal to match. It then enters the same native
+install, generation, console, compilation and notice path. Its `sourceInput`
+receipt explicitly keeps `nativeOfflineReplayProved:false`: restoring source
+alone supplies neither dependency inputs nor network-denied compilation.
+The final recipe hash must still equal the admitted source input, including when
+an installation changes the recipe before notice capture. CI rebuilds from the
+actual unpacked archive with fresh acquisition caches and retains the resulting
+receipt beside the original. It checks the source, recipe, toolchain and preparation
+joins without claiming equal binary bytes or complete offline replay.
+
+Both source modes use a fresh private Go module cache, compiler cache and GOPATH,
+including the checksum database's state, plus a build-owned pnpm store and npm
+cache. Their schema cache and configuration directory are also build-owned, and
+an inherited schema-service token is discarded. Inherited npm configuration is
+discarded; empty user/global configuration,
+the public npm registry and the frozen project's existing configuration apply.
+Native installation disables only the side-effect cache, preserving lifecycle
+execution and the existing build-approval policy. Capture and cold replay must
+regenerate those outputs; a source package must not substitute cached build outputs
+for their original archive inputs.
+The build selects the public Go proxy and checksum database explicitly, retaining
+checksum verification and no private/insecure bypass patterns. These boundaries
+prevent an existing host cache or disabled verification setting from silently
+supplying acquisition inputs. They are not captured-dependency or offline proof.
 
 The same explicit flag also retains the selected service's complete Go ZIP and
 go.mod inputs after compilation and final module verification. The otherwise
@@ -481,6 +522,40 @@ source capture. Both `dependencyInputsCaptured` and `nativeOfflineReplayProved`
 remain false. No ordinary build, publisher, deployed login or customer access is
 enabled by this capture.
 
+The separate generator checkpoint reads all fourteen real API generator binaries
+immediately after generation, before console installation replaces OpenAPI 2.28
+with 2.22. It preserves complete native Go main/dependency/replacement/settings
+records and before/after byte hashes, requires the exact frozen tool identities,
+compiler and platform, and constructs an effective union by path **and version**.
+This includes gci despite its omission from upstream's output list, and the nested
+gRPC generator module. The builder checks the sealed checkpoint again after the
+build; CI verifies a copied checkpoint and joins its compact result to
+`sourceSnapshot.generatorBuildMetadata`. Generator metadata validation is not
+generator source retention or a complete acquisition graph: graph-loading-only
+module inputs and cold native replay still remain under #343.
+
+The explicit capture now also retains the checkpoint's selected generator Go
+sources. The pinned `x/mod/sumdb.Client` authenticates ZIP and separate go.mod
+checksums against Go 1.26.10's fixed official verifier key using only this build's
+owned signed lookup, tile and latest-tree records. Remote reads are denied;
+latest-tree updates remain in memory. The authenticated ZIP line must match the
+original native build metadata. Complete original ZIP and go.mod bytes are then
+independently checked with Go's module ZIP and content-sum implementations.
+The bounded proof set is selected by the maintained client's actual reads, not
+by copying the entire checksum cache. Admission happens before allocating each
+proof read. Literal `.info` bytes retain only a version equality check; their
+timestamp and Origin are not checksum-authenticated facts or execution authority.
+
+The closed capsule retains the checkpoint, originals and exact required proofs.
+Externally sealed readback repeats authentication and payload checks; CI verifies
+a copied capsule and joins it to `sourceSnapshot.generatorGoSources` and the
+original checkpoint. Missing/changed proofs, altered payloads, alternate signing
+keys, extra members and contradictory receipts fail. Failed capture leaves a
+private unsealed reservation and emits no success receipt. This selected component
+does not enumerate graph-loading-only Go metadata or prove full cold native
+compilation. Both overall proof flags stay false. Native Linux validation must
+establish this new path before its source evidence is used for release admission.
+
 The same explicit capture also requires
 `--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
 Before native API generation, the builder creates a private Buf cache. It retains
@@ -504,6 +579,83 @@ and native executables. This is schema-only replay, not offline service compilat
 Issue #343 also requires actual selected dependency capture and a clean,
 network-denied native replay before its full acceptance criteria are complete.
 Source/image publication and the recipient's source offer remain #308.
+
+### Original console generator downloads
+
+The explicit `scripts/zitadel-console-assets.go` collector retains the original
+Linux amd64 downloads selected by the frozen console install script: grpc-web
+1.5.0, the protobuf-javascript 4.0.2 release ZIP and OpenAPI 2.22.0. Its hardcoded
+URLs and SHA-256 identities match that immutable source. This console OpenAPI
+version is separate from the earlier API generator's 2.28.0 input; their native
+ordering remains unchanged.
+
+```sh
+go run scripts/zitadel-console-assets.go capture \
+  --capsule /absolute/private-parent/new-console-capsule --curl /absolute/native/curl
+go run scripts/zitadel-console-assets.go verify \
+  --capsule /absolute/private-parent/new-console-capsule --sha256 <manifest-sha256>
+go run scripts/zitadel-console-assets.go fetch \
+  --capsule /absolute/private-parent/new-console-capsule --sha256 <manifest-sha256> \
+  --url <one-exact-frozen-url>
+```
+
+No arguments are inert. Capture requires a new destination beneath an existing
+0700 physical parent, checks all three downloads against independent frozen
+checksums and returns a separate manifest seal. Download sizes and duration are
+bounded. Failed captures remain private diagnostics with no returned success seal;
+they are never removed by pathname, so a replacement destination is preserved.
+Verify and fetch require the external seal and reject changed, missing, extra,
+linked, wrong-mode or differently identified members before emitting bytes. Fetch
+has no downloader and cannot fall back to the network. These operations never
+execute or extract the retained downloads.
+
+Explicit source capture acquires this capsule before the console phase. Only that
+phase receives a strict `curl` adapter and a fresh build-owned temporary directory.
+The unchanged upstream installer must make exactly its three ordered
+`curl -fsSL URL -o destination` requests. The adapter serves verified original
+bytes, refuses other flags/URLs, existing or escaped destinations and incomplete
+request records, and never invokes a downloader. The upstream checksum, ZIP
+extraction and installation steps remain active. API OpenAPI 2.28.0 is verified
+before console installation; installed grpc-web and OpenAPI 2.22.0 must match their
+retained originals afterward.
+
+An explicit prepared rebuild accepts the complete `--console-inputs <capsule>
+--console-sha256 <manifest-sha256>` pair. It verifies that capsule and enters the
+same adapter/console path without reacquiring those downloads. A partial pair,
+combination with original-source capture or failed verification refuses the build.
+The capsule is rechecked after console generation; successful ordered request
+records, source manifest, helper source, compiled adapter, launcher and immutable installer
+identities are bound to the completed build receipt. The helper source is retained
+as a literal source/build record. The native pnpm adapter and both SDK manifests
+are three additional records, making fourteen in total.
+
+### Selected pnpm originals and native cache reconstruction
+
+Explicit source capture now invokes the pinned native SDK in
+`tools/zitadel-pnpm-source/` after the actual filtered installation and compilation.
+Its observed four workspace roots, current/wanted locks and actual optional skips
+must agree with the frozen Linux/x64/glibc graph. The installation's complete
+workspace-wide skip metadata is checked separately, without acquiring sources
+from unselected roots. An early read-only metadata check runs before generation;
+final capture repeats the joins after compilation. Peer instances remain separate;
+original archives are deduplicated only by complete SRI. The collector checks
+original compressed bytes, freshly interpreted native file maps, lifecycle
+classification and every connected CAFS payload, then seals a closed private
+package and rechecks all members. The selected archive count is an observation,
+not a predicted acceptance number.
+
+CI separately acquires the checksum-locked SDK under frozen Node 22.23.3, tests
+its adverse controls, and restores the actual copied capsule into a fresh native
+store. The unchanged verified index bytes accompany independently verified
+reconstructed payloads. Only the compact manifest and source-joined restoration
+receipt are uploaded; originals, old installation metadata and cached payloads
+are not diagnostics. Read the SDK README for exact explicit commands and limits.
+
+This does not capture the remaining graph-loading-only Go inputs or complete
+network-denied native compilation. Both `dependencyInputsCaptured` and
+`nativeOfflineReplayProved` remain false. CI checks actual copied originals and
+native consumption receipts, but uploads only compact manifests and diagnostics;
+the original binaries and archives remain excluded. Full replay remains #343.
 
 ## Local restricted image CLI test
 

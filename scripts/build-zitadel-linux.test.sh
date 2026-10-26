@@ -4,6 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
+scratch="$(cd "$scratch" && pwd -P)"
 trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/recipe/scripts" "$scratch/bin" "$scratch/upstream"
 mkdir "$scratch/go-distribution"
@@ -13,6 +14,9 @@ cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-console-assets.go" "$scratch/recipe/scripts/"
+mkdir -p "$scratch/recipe/tools/zitadel-pnpm-source"
+cp "$root/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$scratch/recipe/tools/zitadel-pnpm-source/"
 mkdir -p "$scratch/recipe/server/cmd"
 cp -R "$root/server/cmd/zitadel-module-sources" "$scratch/recipe/server/cmd/"
 cp -R "$root/server/cmd/zitadel-bsr-sources" "$scratch/recipe/server/cmd/"
@@ -27,7 +31,8 @@ cat >"$scratch/recipe/scripts/prepare-zitadel-source.sh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 out="$5"
-mkdir -p "$out/source/console/src" "$out/source/apps/api" "$out/source/proto" "$out/source/internal/api/ui/login/static/resources/fonts/ailerons"
+mkdir -p "$out/source/console/src" "$out/source/console/scripts" "$out/source/apps/api" "$out/source/proto" "$out/source/internal/api/ui/login/static/resources/fonts/ailerons"
+printf 'native installer fixture\n' >"$out/source/console/scripts/install-proto-plugins.sh"
 for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock; do
   printf 'frozen input\n' >"$out/source/$f"
 done
@@ -41,7 +46,32 @@ case "$1" in -s) echo "${TEST_OS:-Linux}";; -m) echo x86_64;; esac
 STUB
 cat >"$scratch/bin/node" <<'STUB'
 #!/usr/bin/env bash
-echo "${TEST_NODE:-v22.23.3}"
+set -euo pipefail
+if [[ "$1" = --version ]]; then echo "${TEST_NODE:-v22.23.3}"; exit; fi
+[[ "$1" == */tools/zitadel-pnpm-source/index.mjs ]]
+if [[ "$2" = inspect ]]; then
+  [[ "$#" -eq 4 && "$3" = --build && -s "$4/pnpm-selected-projects.json" && ! -e "$4/generate.log" ]]
+  [[ "${TEST_FAIL:-}" != pnpm-early-check ]] || exit 42
+  packages=1
+  [[ "${TEST_FAIL:-}" != pnpm-early-incomplete ]] || packages=0
+  jq -n --argjson packages "$packages" '{schemaVersion:1,profile:"native-installation-selection-v1",packages:$packages,optionalSkips:0,selectedPNPMSourcesCaptured:false,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+elif [[ "$2" = capture ]]; then
+  [[ "$3" = --build && "$5" = --source-sha256 && "$7" = --output && "$9" = --scratch ]]
+  jq -e 'length == 4' "$4/pnpm-selected-projects.json" >/dev/null
+  [[ "${TEST_FAIL:-}" != pnpm-capture ]] || { echo '{"plausible":"partial"}'; exit 42; }
+  mkdir "$8"
+  packages=1
+  if [[ "${TEST_FAIL:-}" = pnpm-incomplete ]]; then packages=0; fi
+  jq -n --arg source "$6" --argjson packages "$packages" \
+    '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,packages:$packages,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$8/receipt.json"
+  cat "$8/receipt.json"
+  if [[ "${TEST_FAIL:-}" = pnpm-tool-changed ]]; then echo changed >>"$1"; fi
+elif [[ "$2" = verify ]]; then
+  [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
+  [[ "${TEST_FAIL:-}" != pnpm-readback ]] || exit 42
+  cat "$4/receipt.json"
+else exit 42
+fi
 STUB
 cat >"$scratch/bin/pnpm" <<'STUB'
 #!/usr/bin/env bash
@@ -53,13 +83,35 @@ if [[ "$1 $2" = 'exec node' ]]; then
   exit
 fi
 if [[ "$1 $2 $3" = 'exec buf --version' ]]; then echo "${TEST_CONSOLE_BUF_VERSION:-1.72.0}"; exit; fi
+if [[ "$*" = '--filter @zitadel/zitadel --filter @zitadel/console... list --depth -1 --json' ]]; then
+  jq -n --arg root "$PWD" '[{name:"@zitadel/zitadel",path:$root},{name:"@zitadel/console",path:($root+"/console")},{name:"client",path:($root+"/packages/zitadel-client")},{name:"proto",path:($root+"/packages/zitadel-proto")}]'
+  [[ "${TEST_FAIL:-}" != pnpm-selection ]] || exit 42
+  exit
+fi
 printf '%s\n' "$*" >>"$TEST_CALLS"
 [[ "$NX_NO_CLOUD" = true && "$NX_SKIP_NX_CACHE" = true && "$NX_DAEMON" = false ]]
 [[ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 && "$npm_config_manage_package_manager_versions" = false ]]
 if [[ "$1" = install ]]; then
+  build_root="${GOCACHE%/go-cache}"
+  [[ "$GOPATH" = "$build_root/go-path" && -d "$GOPATH" ]]
+  [[ "$npm_config_userconfig" = "$build_root/npmrc" && -f "$npm_config_userconfig" && ! -s "$npm_config_userconfig" ]]
+  [[ "$npm_config_cache" = "$build_root/npm-cache" && -d "$npm_config_cache" ]]
+  [[ "$npm_config_store_dir" = "$build_root/pnpm-store" && -d "$npm_config_store_dir" ]]
+  [[ "$npm_config_globalconfig" = "$build_root/npm-globalrc" && -f "$npm_config_globalconfig" && ! -s "$npm_config_globalconfig" ]]
+  [[ "$npm_config_engine_strict" = false && "$npm_config_registry" = https://registry.npmjs.org/ ]]
+  [[ "$npm_config_side_effects_cache" = false && " $* " = *' --side-effects-cache=false '* ]]
+  [[ "${BUF_CACHE_DIR:-}" = "$build_root/buf-cache" && -d "$BUF_CACHE_DIR" ]]
+  [[ "${XDG_CONFIG_HOME:-}" = "$build_root/bsr-config" && -d "$XDG_CONFIG_HOME" && ! -v BUF_TOKEN ]]
+  [[ ! -v NPM_CONFIG_REGISTRY && ! -v NPM_CONFIG_PROXY ]]
+  [[ "$GOSUMDB" = sum.golang.org && "$GOPROXY" = https://proxy.golang.org ]]
+  [[ -z "$GONOSUMDB" && -z "$GONOPROXY" && -z "$GOPRIVATE" && -z "$GOINSECURE" ]]
+  [[ "$2" = --store-dir && "$3" = "$npm_config_store_dir" ]]
   mkdir -p node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin
   cp "$TEST_BUF_STUB" node_modules/.pnpm/@bufbuild+buf@1.72.0/node_modules/@bufbuild/buf-linux-x64/bin/buf
   if [[ "${TEST_LOCK:-}" = changed ]]; then echo changed >>pnpm-lock.yaml; fi
+  if [[ "${TEST_FAIL:-}" = prepared-recipe ]]; then
+    printf '\n# changed after prepared admission\n' >>"$TEST_RECIPE"
+  fi
 elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
   jq -e '.targets["generate-install"].options.parallel == false' apps/api/project.json >/dev/null
   if [[ "${TEST_FAIL:-}" = generate ]]; then echo 'Successfully ran target generate'; exit 42; fi
@@ -69,9 +121,25 @@ elif [[ "$*" = *'@zitadel/api:generate '* ]]; then
   [[ "${TEST_MISSING:-}" != statik ]] || rm internal/statik/statik.go
   mkdir -p .artifacts/bin/linux/amd64
   cp "$TEST_BUF_STUB" .artifacts/bin/linux/amd64/buf
+  printf 'API OpenAPI 2.28.0 fixture\n' >.artifacts/bin/linux/amd64/protoc-gen-openapiv2
   if [[ -n "${BUF_CACHE_DIR:-}" ]]; then mkdir -p "$BUF_CACHE_DIR"; echo ready >"$BUF_CACHE_DIR/cache-ready"; fi
 else
   grep -q '@zitadel/api:generate' "$TEST_CALLS"
+  if [[ "${TEST_FAIL:-}" = generator-checkpoint-changed ]]; then echo changed >>"${GOCACHE%/go-cache}/generator-checkpoint.json"; fi
+  if [[ -n "${CONSOLE_ORIGINALS_TOOL:-}" ]]; then
+    [[ "$TMPDIR" = "${GOCACHE%/go-cache}/console-download-tmp" ]]
+    [[ "$(command -v curl)" = "${GOCACHE%/go-cache}/console-download-adapter/curl" ]]
+    native_tmp="$(mktemp -d "$TMPDIR/zitadel-console-proto-plugins.XXXXXX")"
+    curl -fsSL https://github.com/grpc/grpc-web/releases/download/1.5.0/protoc-gen-grpc-web-1.5.0-linux-x86_64 -o "$native_tmp/protoc-gen-grpc-web"
+    curl -fsSL https://github.com/protocolbuffers/protobuf-javascript/releases/download/v4.0.2/protobuf-javascript-4.0.2-linux-x86_64.zip -o "$native_tmp/p.zip"
+    if [[ "${TEST_FAIL:-}" != console-request-incomplete ]]; then
+      curl -fsSL https://github.com/grpc-ecosystem/grpc-gateway/releases/download/v2.22.0/protoc-gen-openapiv2-v2.22.0-linux-x86_64 -o "$native_tmp/protoc-gen-openapiv2"
+    fi
+    cp "$CONSOLE_ORIGINALS_CAPSULE/protoc-gen-grpc-web" .artifacts/bin/linux/amd64/protoc-gen-grpc-web
+    cp "$CONSOLE_ORIGINALS_CAPSULE/protoc-gen-openapiv2" .artifacts/bin/linux/amd64/protoc-gen-openapiv2
+    if [[ "${TEST_FAIL:-}" = console-tool-changed ]]; then echo changed >>"$CONSOLE_ORIGINALS_TOOL"; fi
+    if [[ "${TEST_FAIL:-}" = console-launcher-changed ]]; then echo '# changed launcher' >>"$(command -v curl)"; fi
+  fi
   mkdir -p console/dist/console internal/api/ui/console/static
   printf '<base href="/ui/console/"><script src="./main.js"></script><link rel="stylesheet" href="./styles.css">' >console/dist/console/index.html
   for f in main.js styles.css 3rdpartylicenses.txt; do echo generated >"console/dist/console/$f"; done
@@ -97,6 +165,10 @@ case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'env GOROOT') echo "$TEST_GOROOT";;
   'version -m')
+    if [[ "$3" == *.artifacts/bin/linux/amd64/protoc-gen-openapiv2 ]]; then
+      printf 'fixture: go1.26.10\n\tmod\tgithub.com/grpc-ecosystem/grpc-gateway/v2\t%s\n' "${TEST_API_OPENAPI_VERSION:-v2.28.0}"
+      exit
+    fi
     if [[ "$3" = "$TEST_BSR_VERIFIER" ]]; then
       printf 'fixture: %s\n\tpath\t%s\n' "${TEST_BSR_VERIFIER_GO:-go1.27.3}" "${TEST_BSR_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-bsr-sources}"
       if [[ "${TEST_FAIL:-}" = bsr-verifier-metadata ]]; then exit 42; fi
@@ -117,11 +189,23 @@ case "$1 $2" in
     if [[ "$2" == */zitadel-source-bundle.go ]]; then
       if [[ "${TEST_FAIL:-}" = source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
       case "$3" in
+        --restore-build)
+          [[ "$#" -eq 6 && "$4" = "$TEST_PREPARED_BUILD" && "$5" = "$(printf '%064d' 0 | tr 0 a)" && ! -e "$6" ]]
+          mkdir -p "$6/prepared"
+          cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
+          cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
+          for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:14,bytes:261683913,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
-          mkdir "$6"
+          mkdir -p "$6/records/recipes" "$6/source/console/scripts"
+          cp "$5/scripts/zitadel-console-assets.go" "$6/records/recipes/zitadel-console-assets.go"
+          mkdir -p "$6/records/recipes/zitadel-pnpm-source"
+          cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
+          cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:10,bytes:261683913,recipeSha256:$recipe}';;
+            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:14,bytes:261683913,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
@@ -182,6 +266,9 @@ case "$1 $2" in
     if [[ "${TEST_FAIL:-}" = package-graph ]]; then exit 42; fi;;
   'build '*)
     while [[ "$1" != -o ]]; do shift; done; shift
+    if [[ "$1" == */console-originals-tool ]]; then
+      cp "$TEST_CONSOLE_TOOL_STUB" "$1"; chmod 755 "$1"; exit
+    fi
     if [[ "${TEST_FAIL:-}" = compile ]]; then echo 'Successfully ran target build'; exit 42; fi
     printf '#!/usr/bin/env bash\necho "zitadel version 4.20.0"\n' >"$1"
     [[ "${TEST_MISSING:-}" != binary ]] || : >"$1"
@@ -202,8 +289,44 @@ STUB
 chmod 755 "$scratch/bin/"*
 export PATH="$scratch/bin:$PATH" TEST_CALLS="$scratch/calls"
 export TEST_GOROOT="$scratch/go-distribution"
+# Host acquisition settings are deliberately hostile. The native build must
+# select its declared public sources and retain checksum verification instead.
+export GOSUMDB=off GOPROXY=https://unrelated.invalid GONOSUMDB='*' GONOPROXY='*' GOPRIVATE='*' GOINSECURE='*'
+export NPM_CONFIG_REGISTRY=https://unrelated.invalid NPM_CONFIG_PROXY=https://unrelated.invalid
 export TEST_MODULE_VERIFIER="$scratch/module-source-verifier"
 export TEST_BSR_VERIFIER="$scratch/bsr-source-verifier" TEST_BUF_STUB="$scratch/native-buf"
+export TEST_CONSOLE_TOOL_STUB="$scratch/console-tool-stub"
+cat >"$TEST_CONSOLE_TOOL_STUB" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+operation="$1"; shift
+capsule='' seal='' requests=''
+while [[ "$#" -gt 0 && "$1" != -- ]]; do
+  case "$1" in
+    --capsule) capsule="$2";; --sha256) seal="$2";; --requests) requests="$2";;
+    --curl|--temp-root) :;; *) exit 42;;
+  esac
+  shift 2
+done
+case "$operation" in
+  capture)
+    [[ "${TEST_FAIL:-}" != console-capture ]] || exit 42
+    mkdir -m 700 "$capsule"
+    for name in protoc-gen-grpc-web protobuf-javascript.zip protoc-gen-openapiv2; do printf 'original %s\n' "$name" >"$capsule/$name"; done
+    jq -n '{manifestSha256:("d"*64),originalConsoleAssetsCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}';;
+  verify)
+    [[ -d "$capsule" && "$seal" = "$(printf '%064d' 0 | tr 0 d)" && "${TEST_FAIL:-}" != console-verify ]] || exit 42
+    jq -n '{manifestSha256:("d"*64),originalConsoleAssetsCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}';;
+  native-request)
+    shift; [[ "$#" = 4 && "$1" = -fsSL && "$3" = -o ]]
+    printf 'served\n' >"$4"
+    printf '%s\n' "$2" >>"$requests/observed";;
+  consumption)
+    [[ "$(wc -l <"$requests/observed" | tr -d ' ')" = 3 ]] || exit 42
+    jq -n '{schemaVersion:1,manifestSha256:("d"*64),requests:3,requestsSha256:("e"*64),originalConsoleDownloadsConsumed:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}';;
+  *) exit 42;;
+esac
+STUB
 cat >"$TEST_BUF_STUB" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -285,6 +408,40 @@ chmod 755 "$TEST_BSR_VERIFIER"
 cat >"$TEST_MODULE_VERIFIER" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "$1" = observe-generators ]]; then
+  [[ "$#" -eq 5 && "$2" = --build && -e "$3/generate.log" && ! -e "$3/console.log" && "$4" = --source-sha256 ]]
+  [[ "${TEST_FAIL:-}" != generator-observation ]] || exit 42
+  printf 'native generator checkpoint\n'
+  exit
+fi
+if [[ "$1" = verify-generator-checkpoint ]]; then
+  [[ "$#" -eq 7 && "$2" = --checkpoint && -s "$3" && "$4" = --sha256 && "$6" = --source-sha256 ]]
+  [[ "$5" = "$(shasum -a 256 "$3" | awk '{print $1}')" ]]
+  [[ "${TEST_FAIL:-}" != generator-readback ]] || exit 42
+  tools=14
+  [[ "${TEST_FAIL:-}" != generator-incomplete ]] || tools=13
+  jq -n --arg seal "$5" --arg source "$7" --argjson tools "$tools" '{schemaVersion:1,sourceManifestSha256:$source,checkpointSha256:$seal,tools:$tools,modules:123,generatorBuildMetadataValidated:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
+if [[ "$1" = capture-generator-sources || "$1" = verify-generator-sources ]]; then
+  if [[ "$1" = capture-generator-sources ]]; then
+    [[ "$#" -eq 9 && "$2" = --build && -s "$3/service/zitadel" && "$4" = --checkpoint-sha256 && "$6" = --source-sha256 && "$8" = --output ]]
+    [[ "$5" = "$(shasum -a 256 "$3/generator-checkpoint.json" | awk '{print $1}')" ]]
+    [[ "${TEST_FAIL:-}" != generator-source-capture ]] || { echo '{"modules":123}'; exit 42; }
+    mkdir "$9"
+    printf '%s' "$5" >"$9/checkpoint-seal"
+    checkpoint="$5"; source="$7"
+  else
+    [[ "$#" -eq 7 && "$2" = --package && -d "$3" && "$4" = --sha256 && "$6" = --source-sha256 ]]
+    [[ "$5" = "$(printf '%064d' 0 | tr 0 e)" ]]
+    [[ "${TEST_FAIL:-}" != generator-source-readback ]] || exit 42
+    checkpoint="$(cat "$3/checkpoint-seal")"; source="$7"
+  fi
+  proved=true
+  [[ "${TEST_FAIL:-}" != generator-source-incomplete ]] || proved=false
+  jq -n --arg checkpoint "$checkpoint" --arg source "$source" --argjson proved "$proved" '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,checkpointSha256:$checkpoint,modules:123,proofFiles:2,files:373,bytes:123,selectedGeneratorGoSourcesCaptured:$proved,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+  exit
+fi
 if [[ "$1" = --capture ]]; then
   [[ "$#" -eq 7 && "$2" = --build && -s "$3/service/zitadel" && "$4" = --catalogue && -s "$5" && "$6" = --output ]]
   if [[ "${TEST_FAIL:-}" = module-source-capture ]]; then echo '{"manifestSha256":"plausible partial capture"}'; exit 42; fi
@@ -349,7 +506,8 @@ reject partial-package-graph TEST_FAIL=package-graph
 reject partial-binary-metadata TEST_FAIL=binary-metadata
 test "$failures" -eq 0
 : >"$TEST_CALLS"
-bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
+env BUF_TOKEN=unrelated-fixture-token BUF_CACHE_DIR="$scratch/ambient-buf-cache" XDG_CONFIG_HOME="$scratch/ambient-buf-config" \
+  bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"
 jq -e '.platform == "linux/amd64" and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .reproducible == false' "$scratch/complete/build-receipt.json"
 test -s "$scratch/complete/console-notices-inventory.json"
 test -s "$scratch/complete/console-third-party-notices.txt"
@@ -361,6 +519,49 @@ test -s "$scratch/complete/zitadel-root-license.txt"
 test -s "$scratch/complete/go-module-notices.txt"
 test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
 test ! -e "$scratch/complete/selected-go-sources"
+: >"$TEST_CALLS"
+# A prepared replay enters the same install/generate/compile path with literal
+# original records. This mock is orchestration proof only; the Go suite verifies
+# the actual closed source and the hosted job exercises the native frozen tree.
+TEST_PREPARED_BUILD="$(cd "$scratch/complete" && pwd -P)"
+export TEST_PREPARED_BUILD
+prepared_sha="$(printf '%064d' 0 | tr 0 a)"
+if ! bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-replay" >"$scratch/prepared-replay.log" 2>&1; then
+  cat "$scratch/prepared-replay.log" >&2
+  echo 'verified prepared source could not enter the existing native pipeline' >&2
+  exit 1
+fi
+cmp "$scratch/complete/api-project.original.json" "$scratch/prepared-replay/api-project.original.json"
+cmp "$scratch/complete/api-project.serial.json" "$scratch/prepared-replay/api-project.serial.json"
+jq -e --arg seal "$prepared_sha" '.sourceInput.manifestSha256 == $seal and .sourceInput.nativeOfflineReplayProved == false and (has("sourceSnapshot")|not)' "$scratch/prepared-replay/build-receipt.json" >/dev/null
+: >"$TEST_CALLS"
+# Mutation occurs after prepared-source admission but before the notice snapshot.
+# A final receipt must not join the old admitted recipe with the changed builder.
+if env TEST_FAIL=prepared-recipe TEST_RECIPE="$build" bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-recipe-change" >"$scratch/prepared-recipe-change.log" 2>&1; then
+  echo 'changed admitted prepared recipe produced a success receipt' >&2
+  exit 1
+fi
+test ! -e "$scratch/prepared-recipe-change/build-receipt.json"
+grep -q 'prepared source recipe changed during build' "$scratch/prepared-recipe-change.log"
+cp "$root/scripts/build-zitadel-linux.sh" "$build"
+for fault in unsealed-source both-source-modes capture-with-prepared substituted-prepared-profile console-input-only console-seal-only console-duplicate-seal; do
+  : >"$TEST_CALLS"
+  args=(--build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/$fault")
+  case "$fault" in
+    unsealed-source) args=(--build --prepared-source "$TEST_PREPARED_BUILD" --output "$scratch/$fault");;
+    both-source-modes) args+=(--source "$scratch/upstream");;
+    capture-with-prepared) args+=(--capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER");;
+    console-input-only) args+=(--console-inputs "$scratch/unavailable-capsule");;
+    console-seal-only) args+=(--console-sha256 "$prepared_sha");;
+    console-duplicate-seal) args+=(--console-inputs "$scratch/unavailable-capsule" --console-sha256 "$prepared_sha" --console-sha256 "$prepared_sha");;
+  esac
+  profile=0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d
+  [[ "$fault" != substituted-prepared-profile ]] || profile=wrong
+  if env TEST_REPLAY_PROFILE="$profile" bash "$build" "${args[@]}" >"$scratch/$fault.log" 2>&1; then
+    echo "unsafe prepared source admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
 : >"$TEST_CALLS"
 # Explicit build-tool admission has independent refusals; none may rely on a
 # missing capture opt-in or bypass an older capture/readback failure control.
@@ -410,14 +611,33 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 10 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 14 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
-for failure in bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+jq -e '.consoleDownloads.originalConsoleDownloadsConsumed == true and .consoleDownloads.requests == 3 and .consoleDownloads.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .consoleDownloads.dependencyInputsCaptured == false and .consoleDownloads.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null || { echo 'native console consumption was not bound to the captured source' >&2; exit 1; }
+: >"$TEST_CALLS"
+bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" \
+  --console-inputs "$scratch/captured/selected-console-originals" --console-sha256 "$(printf '%064d' 0 | tr 0 d)" \
+  --output "$scratch/prepared-console-replay" >"$scratch/prepared-console-replay.log" 2>&1 || { cat "$scratch/prepared-console-replay.log" >&2; exit 1; }
+jq -e --slurpfile original "$scratch/captured/build-receipt.json" '.consoleDownloads == $original[0].consoleDownloads and .sourceInput.manifestSha256 == .consoleDownloads.sourceManifestSha256' "$scratch/prepared-console-replay/build-receipt.json" >/dev/null
+: >"$TEST_CALLS"
+if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" \
+  --console-inputs "$scratch/captured/selected-console-originals" --console-sha256 "$(printf '%064d' 0 | tr 0 d)" \
+  --output "$scratch/captured/selected-console-originals/nested-build" >"$scratch/nested-console-output.log" 2>&1; then
+  echo 'build output was allowed inside the sealed console input' >&2; exit 1
+fi
+test ! -e "$scratch/captured/selected-console-originals/nested-build"
+for failure in pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
+  if [[ "$failure" = pnpm-early-* ]]; then test ! -e "$scratch/$failure/generate.log"; fi
+  if [[ "$failure" = pnpm-tool-changed ]]; then cp "$root/tools/zitadel-pnpm-source/index.mjs" "$scratch/recipe/tools/zitadel-pnpm-source/index.mjs"; fi
 done
+capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

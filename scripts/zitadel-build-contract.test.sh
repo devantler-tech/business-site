@@ -19,6 +19,7 @@ check() {
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-module-sources/**")) and (.with.filters | contains("server/go.mod")) and (.with.filters | contains("server/go.sum"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-bsr-sources/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("tools/zitadel-pnpm-source/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-go-module-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/go1.26.10/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("scripts/testdata/zitadel-source/**"))) and
@@ -49,6 +50,42 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify original console generator archives" and
+      .["working-directory"] == "scripts" and
+      .run == "go test -race zitadel-console-assets.go zitadel-console-assets_test.go" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify native pnpm source retention" and
+      .run == "npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts\nnode --test tools/zitadel-pnpm-source/index.test.mjs\n" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Verify the actual native API generator checkpoint" and
+      (.run | contains(".sourceSnapshot.generatorBuildMetadata.checkpointSha256")) and
+      (.run | contains("cp \"$RUNNER_TEMP/zitadel-build/generator-checkpoint.json\" \"$RUNNER_TEMP/zitadel-generator-checkpoint.json\"")) and
+      (.run | contains("verify-generator-checkpoint --checkpoint \"$RUNNER_TEMP/zitadel-generator-checkpoint.json\" --sha256 \"$seal\" --source-sha256 \"$source\"")) and
+      (.run | contains(". == $build[0].sourceSnapshot.generatorBuildMetadata")) and
+      (.run | contains(".tools == 14")) and (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify the actual native API generator checkpoint") > index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Copy and authenticate the actual generator Go source inputs" and
+      (.run | contains(".sourceSnapshot.generatorGoSources.manifestSha256")) and
+      (.run | contains("cp -R \"$RUNNER_TEMP/zitadel-build/selected-generator-go-sources\"")) and
+      (.run | contains("verify-generator-sources --package \"$RUNNER_TEMP/zitadel-generator-sources-roundtrip\" --sha256 \"$seal\" --source-sha256 \"$source\"")) and
+      (.run | contains(". == $build[0].sourceSnapshot.generatorGoSources")) and
+      (.run | contains(".selectedGeneratorGoSourcesCaptured == true")) and
+      (.run | contains(".checkpointSha256 == $build[0].sourceSnapshot.generatorBuildMetadata.checkpointSha256")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Copy and authenticate the actual generator Go source inputs") > index("Build the complete native Linux service and embedded console")) and
+    ([$job.steps[].name] | index("Prepare the frozen identity JavaScript toolchain") < index("Verify native pnpm source retention") and
+      index("Verify native pnpm source retention") < index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Verify and restore the actual selected pnpm sources" and
+      (.run | contains(".sourceSnapshot.pnpmSources.manifestSha256")) and
+      (.run | contains("cp -R")) and
+      (.run | contains("node tools/zitadel-pnpm-source/index.mjs restore --capsule")) and
+      (.run | contains("del(.nativeStoreRestored) == $build[0].sourceSnapshot.pnpmSources")) and
+      (.run | contains(".sourceManifestSha256 == $build[0].sourceSnapshot.manifestSha256")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify and restore the actual selected pnpm sources") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Verify selected Go source retention" and
       .["working-directory"] == "server" and
       .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
@@ -90,6 +127,22 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify sealed source snapshots and closed archive controls") < index("Build the complete native Linux service and embedded console")) and
     ([$job.steps[].name] | index("Unpack and verify the actual pre-install source archive") > index("Build the complete native Linux service and embedded console")) and
+    any($job.steps[]; .name == "Rebuild the native service from the retained prepared source" and
+      (.run | contains("bash scripts/build-zitadel-linux.sh --build --prepared-source \"$RUNNER_TEMP/zitadel-source-roundtrip\" --prepared-sha256 \"$manifest\" --console-inputs \"$RUNNER_TEMP/zitadel-build/selected-console-originals\" --console-sha256 \"$console\" --output \"$RUNNER_TEMP/zitadel-prepared-build\"")) and
+      (.run | contains(".sourceInput.recipeSha256 == .recipeSha256")) and
+      (.run | contains(".sourceInput.manifestSha256 == $original[0].sourceSnapshot.manifestSha256")) and
+      (.run | contains(".sourceInput.nativeOfflineReplayProved == false")) and
+      (.run | contains("cp \"$RUNNER_TEMP/zitadel-prepared-build/build-receipt.json\" \"$RUNNER_TEMP/zitadel-build/prepared-build-receipt.json\"")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Rebuild the native service from the retained prepared source") > index("Unpack and verify the actual pre-install source archive")) and
+    any($job.steps[]; .name == "Verify the original console downloads and native consumption" and
+      (.run | contains("cp -R")) and
+      (.run | contains("go run scripts/zitadel-console-assets.go verify --capsule")) and
+      (.run | contains("go run scripts/zitadel-console-assets.go consumption --capsule")) and
+      (.run | contains(".requests == 3")) and
+      (.run | contains(".originalConsoleDownloadsConsumed == true")) and
+      (.run | contains(".nativeOfflineReplayProved == false")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -105,7 +158,7 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json"] |
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
           map("$" + "{{ runner.temp }}/zitadel-build/" + .) + ["$" + "{{ runner.temp }}/zitadel-image/image-smoke.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
@@ -114,6 +167,56 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+# Execute the native prepared-rebuild receipt predicate, rather than accepting
+# textual mentions of a joined seal or the deliberately false offline claim.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Rebuild the native service from the retained prepared source") | .run |
+  split("jq -e --slurpfile original")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/prepared.jq"
+jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)},consoleDownloads:{sourceManifestSha256:("a"*64),manifestSha256:("d"*64),requestsSha256:("e"*64),helperSourceSha256:("f"*64),installerSha256:("1"*64),adapterSha256:("2"*64),launcherSha256:("3"*64),requests:3,originalConsoleDownloadsConsumed:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}}' >"$scratch/original-build.json"
+jq '.sourceInput = (.sourceSnapshot + {recipeSha256:.recipeSha256,nativeOfflineReplayProved:false}) | del(.sourceSnapshot) | .imageAdmission="unknown" | .licenseClosure="unknown"' "$scratch/original-build.json" >"$scratch/prepared-build.json"
+jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/prepared-build.json" >/dev/null
+for mutation in \
+  '.sourceInput.manifestSha256=("e"*64)' \
+  '.sourceInput.preparedProfileSha256=("e"*64)' \
+  '.sourceInput.recipeSha256=("e"*64)' \
+  '.recipeSha256=("e"*64) | .sourceInput.recipeSha256=.recipeSha256' \
+  '.tools.node="other"' \
+  '.upstreamCommit=("e"*40)' \
+  '.preparation.schemaVersion=2' \
+  '.sourceInput.nativeOfflineReplayProved=true' \
+  '.consoleDownloads.manifestSha256=("e"*64)' \
+  '.consoleDownloads.requestsSha256=("d"*64)' \
+  '.consoleDownloads.helperSourceSha256=("e"*64)' \
+  '.consoleDownloads.launcherSha256=("e"*64)' \
+  '.consoleDownloads.installerSha256=("e"*64)' \
+  '.consoleDownloads.sourceManifestSha256=("e"*64)' \
+  '.consoleDownloads.requests=2' \
+  '.consoleDownloads.originalConsoleDownloadsConsumed=false' \
+  '.consoleDownloads.nativeOfflineReplayProved=true' \
+  '.sourceSnapshot={}' \
+  '.imageAdmission="admitted"' \
+  '.licenseClosure="complete"'; do
+  jq "$mutation" "$scratch/prepared-build.json" >"$scratch/changed-prepared-build.json"
+  if jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/changed-prepared-build.json" >/dev/null; then
+    echo "CI accepted an inconsistent prepared-build receipt: $mutation" >&2; exit 1
+  fi
+done
+# Exercise the actual copied generator-source receipt predicate, including a
+# coherently altered embedded row that disagrees with the native checkpoint.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Copy and authenticate the actual generator Go source inputs") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/generator-sources.jq"
+jq -n '{schemaVersion:1,manifestSha256:("c"*64),sourceManifestSha256:("a"*64),checkpointSha256:("b"*64),modules:123,proofFiles:2,files:373,bytes:123,selectedGeneratorGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/generator-sources.json"
+jq -n --slurpfile receipt "$scratch/generator-sources.json" '{sourceSnapshot:{manifestSha256:("a"*64),generatorBuildMetadata:{checkpointSha256:("b"*64),modules:123},generatorGoSources:$receipt[0]}}' >"$scratch/generator-sources-build.json"
+jq -e --slurpfile build "$scratch/generator-sources-build.json" -f "$scratch/generator-sources.jq" "$scratch/generator-sources.json" >/dev/null
+for mutation in '.modules=0' '.proofFiles=0' '.files=0' '.sourceManifestSha256=("c"*64)' '.checkpointSha256=("c"*64)' '.selectedGeneratorGoSourcesCaptured=false' '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true' 'del(.manifestSha256)'; do
+  jq "$mutation" "$scratch/generator-sources.json" >"$scratch/bad-generator-sources.json"
+  if jq -e --slurpfile build "$scratch/generator-sources-build.json" -f "$scratch/generator-sources.jq" "$scratch/bad-generator-sources.json" >/dev/null; then
+    echo 'CI accepted a contradictory generator-source receipt' >&2; exit 1
+  fi
+done
+jq '.sourceSnapshot.generatorGoSources.modules=122' "$scratch/generator-sources-build.json" >"$scratch/wrong-generator-sources-build.json"
+jq '.modules=122' "$scratch/generator-sources.json" >"$scratch/wrong-generator-sources.json"
+if jq -e --slurpfile build "$scratch/wrong-generator-sources-build.json" -f "$scratch/generator-sources.jq" "$scratch/wrong-generator-sources.json" >/dev/null; then
+  echo 'CI accepted a generator-source set different from its checkpoint' >&2; exit 1
+fi
 # Exercise the literal CI replay predicate, including a forged embedded claim.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify actual retained schema inputs and replay") | .run |
   split("jq -e --arg manifest")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/replay.jq"
@@ -125,7 +228,51 @@ if jq -e --arg manifest "$(printf '%064d' 0 | tr 0 b)" --slurpfile build "$scrat
   echo 'CI accepted a replay record different from the embedded build receipt' >&2; exit 1
 fi
 controls=0
+# Execute the actual generator readback predicate on structured contradictory
+# records; an embedded claim cannot replace the independently verified copy.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify the actual native API generator checkpoint") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/generators.jq"
+jq -n '{schemaVersion:1,sourceManifestSha256:("a"*64),checkpointSha256:("b"*64),tools:14,modules:123,generatorBuildMetadataValidated:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/generators.json"
+jq -n --slurpfile receipt "$scratch/generators.json" '{sourceSnapshot:{manifestSha256:("a"*64),generatorBuildMetadata:$receipt[0]}}' >"$scratch/generator-build.json"
+jq -e --slurpfile build "$scratch/generator-build.json" -f "$scratch/generators.jq" "$scratch/generators.json" >/dev/null
+for mutation in '.tools=13' '.modules=0' '.generatorBuildMetadataValidated=false' '.sourceManifestSha256=("c"*64)' '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true' 'del(.checkpointSha256)'; do
+  jq "$mutation" "$scratch/generators.json" >"$scratch/bad-generators.json"
+  if jq -e --slurpfile build "$scratch/generator-build.json" -f "$scratch/generators.jq" "$scratch/bad-generators.json" >/dev/null; then
+    echo 'CI accepted a contradictory generator checkpoint receipt' >&2; exit 1
+  fi
+done
+# Execute the pnpm restoration predicate on real structured control records;
+# textual mentions alone cannot stand in for the source/receipt correspondence.
+jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify and restore the actual selected pnpm sources") | .run | split("jq -e --slurpfile build")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/pnpm.jq"
+jq -n '{schemaVersion:1,manifestSha256:("a"*64),sourceManifestSha256:("b"*64),packages:1,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$scratch/pnpm.json"
+jq -n --slurpfile pnpm "$scratch/pnpm.json" '{sourceSnapshot:{manifestSha256:("b"*64),pnpmSources:$pnpm[0]}}' >"$scratch/pnpm-build.json"
+jq '.nativeStoreRestored=true' "$scratch/pnpm.json" >"$scratch/pnpm-restored.json"
+jq -e --slurpfile build "$scratch/pnpm-build.json" -f "$scratch/pnpm.jq" "$scratch/pnpm-restored.json" >/dev/null
+for mutation in '.nativeStoreRestored=false' '.sourceManifestSha256=("c"*64)' '.packages=0' '.selectedPNPMSourcesCaptured=false' '.dependencyInputsCaptured=true' '.nativeOfflineReplayProved=true' 'del(.manifestSha256)'; do
+  jq "$mutation" "$scratch/pnpm-restored.json" >"$scratch/pnpm-bad.json"
+  if jq -e --slurpfile build "$scratch/pnpm-build.json" -f "$scratch/pnpm.jq" "$scratch/pnpm-bad.json" >/dev/null; then
+    echo 'CI accepted a contradictory selected pnpm restoration receipt' >&2; exit 1
+  fi
+done
 for mutation in \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Copy and authenticate the actual generator Go source inputs"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Copy and authenticate the actual generator Go source inputs" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Copy and authenticate the actual generator Go source inputs" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Copy and authenticate the actual generator Go source inputs" then .run=(.run | sub("verify-generator-sources"; "missing-verifier")) else . end)' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("tools/zitadel-pnpm-source"; "missing/tool") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify native pnpm source retention"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify and restore the actual selected pnpm sources"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify and restore the actual selected pnpm sources" then .run=(.run | sub(" restore --capsule"; " verify --capsule")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("selected-pnpm-sources/manifest.json"; "selected-pnpm-sources/**")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Rebuild the native service from the retained prepared source"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .run=(.run | sub("--prepared-source"; "--source")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Rebuild the native service from the retained prepared source" then .run=(.run | sub("sourceInput.recipeSha256 == .recipeSha256"; "sourceInput.recipeSha256 != .recipeSha256")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("prepared-build-receipt.json") | not)) | join("\n")) else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/cmd/zitadel-bsr-sources"; "missing/tool") else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected schema source retention"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected schema source retention" then .if="false" else . end)' \
@@ -179,6 +326,16 @@ for mutation in \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("scripts/testdata/go1.26.10/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .run=(.run | sub(" zitadel-toolchain-notices_test.go"; "")) else . end)' \
   '.jobs["build-zitadel-linux"].permissions.packages="write"' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the actual native API generator checkpoint"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the actual native API generator checkpoint" then .run=(.run | sub("verify-generator-checkpoint"; "observe-generators")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the original console downloads and native consumption"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the original console downloads and native consumption" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify original console generator archives"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify original console generator archives" then .["continue-on-error"]=true else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("third_party/zitadel-console-notices/\\*\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("console-notices-supplement-inventory.json") | not)) | join("\n")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .if="false" else . end)' \

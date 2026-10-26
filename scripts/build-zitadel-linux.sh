@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Explicit build evidence only: no image, distribution or activation authority.
 set -euo pipefail
+umask 022
 export LC_ALL=C
 [[ "$#" -gt 0 ]] || exit 0
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
-requested=0 capture_source=0 source_repo='' output='' module_verifier='' bsr_verifier=''
+requested=0 capture_source=0 source_repo='' output='' module_verifier='' bsr_verifier='' prepared_source='' prepared_sha='' console_inputs='' console_sha='' source_manifest=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
@@ -13,11 +14,23 @@ while [[ "$#" -gt 0 ]]; do
     --module-source-verifier) [[ -z "$module_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid module source verifier'; module_verifier="$2"; shift 2 ;;
     --bsr-source-verifier) [[ -z "$bsr_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid schema source verifier'; bsr_verifier="$2"; shift 2 ;;
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
+    --prepared-source) [[ -z "$prepared_source" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid prepared source'; prepared_source="$2"; shift 2 ;;
+    --prepared-sha256) [[ -z "$prepared_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid prepared source seal'; prepared_sha="$2"; shift 2 ;;
+    --console-inputs) [[ -z "$console_inputs" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid console inputs'; console_inputs="$2"; shift 2 ;;
+    --console-sha256) [[ -z "$console_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid console input seal'; console_sha="$2"; shift 2 ;;
     --output) [[ -z "$output" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid output'; output="$2"; shift 2 ;;
-    *) fail 'expected --build [--capture-source --module-source-verifier <built-command> --bsr-source-verifier <built-command>] --source <frozen-git-repository> --output <new-directory>' ;;
+    *) fail 'expected --build and exactly one original --source or sealed --prepared-source/--prepared-sha256 input, with --output <new-directory>' ;;
   esac
 done
-[[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit build, source and output are required'
+[[ "$requested" -eq 1 && -n "$output" ]] || fail 'explicit build and output are required'
+if [[ -n "$prepared_source" ]]; then
+  [[ -z "$source_repo" && -n "$prepared_sha" && "$capture_source" -eq 0 ]] || fail 'prepared source requires its seal and excludes original source or capture'
+else
+  [[ -n "$source_repo" && -z "$prepared_sha" ]] || fail 'exactly one complete source mode is required'
+fi
+if [[ -n "$console_inputs$console_sha" ]]; then
+  [[ -n "$prepared_source" && -n "$console_inputs" && -n "$console_sha" && "$capture_source" -eq 0 ]] || fail 'console replay requires a complete capsule/seal pair with prepared source'
+fi
 if [[ "$capture_source" -eq 1 ]]; then
   [[ "$module_verifier" = /* && -f "$module_verifier" && -x "$module_verifier" && ! -L "$module_verifier" ]] || fail 'source capture requires an explicit regular executable module verifier'
   [[ "$bsr_verifier" = /* && -f "$bsr_verifier" && -x "$bsr_verifier" && ! -L "$bsr_verifier" ]] || fail 'source capture requires an explicit regular executable schema verifier'
@@ -31,28 +44,53 @@ done
 [[ "$(uname -s)" = Linux && "$(uname -m)" = x86_64 ]] || fail 'only native Linux amd64 is admitted'
 export GOTOOLCHAIN=local GOENV=off GOWORK=off GOFIPS140=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 export GOMAXPROCS=2 GOFLAGS=-p=2 GOEXPERIMENT=''
+export GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
+export GONOPROXY='' GONOSUMDB='' GOPRIVATE='' GOINSECURE=''
 export NX_NO_CLOUD=true NX_SKIP_NX_CACHE=true NX_DAEMON=false NX_TUI=false NX_PARALLEL=1
 export NX_TASKS_RUNNER_DYNAMIC_OUTPUT=false COREPACK_ENABLE_PROJECT_SPEC=0 COREPACK_DEFAULT_TO_LATEST=0
+# Environment keys are names only; never print or retain an inherited registry,
+# token or proxy configuration as build diagnostics. The frozen project config
+# remains active; host user/global configuration is replaced below.
+while IFS= read -r config_key; do
+  case "$config_key" in [Nn][Pp][Mm]_[Cc][Oo][Nn][Ff][Ii][Gg]_*) unset "$config_key";; esac
+done < <(compgen -e)
 export npm_config_manage_package_manager_versions=false
 [[ "$(go env GOVERSION)" = go1.26.10 ]] || fail 'Go 1.26.10 is required'
 go_root="$(go env GOROOT)"
 [[ "$go_root" = /* && -d "$go_root" && ! -L "$go_root" ]] || fail 'selected Go distribution is unavailable'
 [[ "$(node --version)" = v22.23.3 ]] || fail 'Node 22.23.3 is required'
 [[ "$(pnpm --version)" = 10.30.3 ]] || fail 'pnpm 10.30.3 is required'
-[[ -d "$source_repo" && ! -e "$output" && ! -L "$output" ]] || fail 'input must exist and output must be new'
+input_root="${source_repo:-$prepared_source}"
+[[ -d "$input_root" && ! -e "$output" && ! -L "$output" ]] || fail 'input must exist and output must be new'
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-source_repo="$(cd "$source_repo" && pwd -P)"
+input_root="$(cd "$input_root" && pwd -P)"
+if [[ -n "$source_repo" ]]; then source_repo="$input_root"; else prepared_source="$input_root"; fi
 parent="$(cd "$(dirname "$output")" && pwd -P)"
 name="$(basename "$output")"
 [[ "$name" != . && "$name" != .. ]] || fail 'invalid output name'
 output="$parent/$name"
-[[ "$output" != "$source_repo/"* ]] || fail 'output must be outside input repository'
+[[ "$output" != "$input_root/"* ]] || fail 'output must be outside input source'
+if [[ -n "$console_inputs" ]]; then
+  [[ "$console_inputs" = /* && -d "$console_inputs" && ! -L "$console_inputs" ]] || fail 'console capsule must be an existing physical absolute directory'
+  [[ "$console_inputs" = "$(cd "$console_inputs" && pwd -P)" ]] || fail 'console capsule path must be physical and clean'
+  [[ "$output" != "$console_inputs" && "$output" != "$console_inputs/"* ]] || fail 'output must be outside the sealed console capsule'
+fi
 # A fresh reservation owns all generated output. Failed builds have no success receipt.
-mkdir -m 700 -- "$output"
+prepared_input_json=null
+if [[ -n "$prepared_source" ]]; then
+  prepared_input_json="$(go run "$root/scripts/zitadel-source-bundle.go" --restore-build "$prepared_source" "$prepared_sha" "$output")" || fail 'sealed prepared source restoration failed'
+else
+  mkdir -m 700 -- "$output"
+fi
 complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
 module_verifier_hash='' bsr_verifier_hash=''
+# Both source modes acquire schemas from an owned cache and empty configuration;
+# source restoration must not inherit a host cache or an account's credentials.
+export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
+unset BUF_TOKEN
+mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME"
 # Check the separately compiled command without changing the service compiler.
 verifier_digest() {
   local name="$1" executable="$2" command="$3"
@@ -69,35 +107,58 @@ if [[ "$capture_source" -eq 1 ]]; then
   module_verifier_hash="$(verifier_digest go-module "$module_verifier" zitadel-module-sources)"
   bsr_verifier_hash="$(verifier_digest bsr "$bsr_verifier" zitadel-bsr-sources)"
   [[ "$module_verifier_hash" =~ ^[0-9a-f]{64}$ && "$bsr_verifier_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'verifier digest unavailable'
-  export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
-  unset BUF_TOKEN
-  mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME" "$output/bsr-tools"
+  mkdir -m 700 "$output/bsr-tools"
 fi
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
 version=4.20.0
 source_date=2026-10-22T07:05:44Z
 started="$(date -u +%s)"
-bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
+if [[ -z "$prepared_source" ]]; then
+  bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
+fi
 jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
-shasum -a 256 "${inputs[@]}" >"$output/inputs.sha256"
-cp apps/api/project.json "$output/api-project.original.json"
-# Preserve every native command/dependency; bound the otherwise parallel 14 Go
-# installs inside nx:run-commands as well as Nx's outer task scheduler.
-jq '.targets["generate-install"].options.parallel = false' apps/api/project.json >"$output/api-project.serial.json"
-cp "$output/api-project.serial.json" apps/api/project.json
-export GOCACHE="$output/go-cache" GOMODCACHE="$output/go-modules"
-mkdir "$GOCACHE" "$GOMODCACHE"
+if [[ -z "$prepared_source" ]]; then
+  shasum -a 256 "${inputs[@]}" >"$output/inputs.sha256"
+  cp apps/api/project.json "$output/api-project.original.json"
+  # Preserve every native command/dependency; bound the otherwise parallel 14 Go
+  # installs inside nx:run-commands as well as Nx's outer task scheduler.
+  jq '.targets["generate-install"].options.parallel = false' apps/api/project.json >"$output/api-project.serial.json"
+  cp "$output/api-project.serial.json" apps/api/project.json
+fi
+export GOCACHE="$output/go-cache" GOMODCACHE="$output/go-modules" GOPATH="$output/go-path"
+# This build's acquisition closure must not read a user's pnpm store or Go
+# checksum-database state. Keep every writable acquisition location owned here;
+# the frozen source's project configuration remains part of the sealed input.
+export npm_config_userconfig="$output/npmrc" npm_config_globalconfig="$output/npm-globalrc" npm_config_cache="$output/npm-cache"
+export npm_config_store_dir="$output/pnpm-store"
+export npm_config_engine_strict=false npm_config_registry=https://registry.npmjs.org/
+export npm_config_side_effects_cache=false
+mkdir "$GOCACHE" "$GOMODCACHE" "$GOPATH" "$npm_config_cache" "$npm_config_store_dir"
+: >"$npm_config_userconfig"
+: >"$npm_config_globalconfig"
+if [[ -n "$prepared_source" ]]; then
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 14 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  # Reuse capture's exact source/recipe/transformation admission before install.
+  # Equality also binds the retained modification record and original API bytes;
+  # neither preparation nor the API serialization transform is rerun here.
+  go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/prepared-input-check" >"$output/prepared-input.pending"
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal' "$output/prepared-input.pending" >/dev/null || fail 'prepared source or retained recipes differ from this native builder'
+  prepared_input_json="$(jq '. + {nativeOfflineReplayProved:false}' "$output/prepared-input.pending")"
+fi
 source_snapshot_json=null
 if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 10 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 14 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
   jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
+  for member in index.mjs package.json package-lock.json; do
+    cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter differs from captured source'
+  done
 fi
 # Run one real phase with its own resource/log records and preserve failure status.
 run_phase() {
@@ -146,7 +207,12 @@ without_network() {
   rm "$marker"
   return "$status"
 }
-run_phase install pnpm install --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+if [[ "$capture_source" -eq 1 ]]; then
+  pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
+  node "$root/tools/zitadel-pnpm-source/index.mjs" inspect --build "$output" >"$output/pnpm-installation-check.json"
+  jq -e '.schemaVersion == 1 and .profile == "native-installation-selection-v1" and .packages > 0 and .selectedPNPMSourcesCaptured == false and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false' "$output/pnpm-installation-check.json" >/dev/null || fail 'incomplete early native installation check'
+fi
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 run_phase generate pnpm exec nx run @zitadel/api:generate --parallel=1 --skip-nx-cache --no-cloud
@@ -156,6 +222,13 @@ done
 find pkg/grpc -name '*.pb.go' -type f -size +0c | grep . >/dev/null || fail 'protobuf output missing'
 find openapi/v2/zitadel -name '*.json' -type f -size +0c | grep . >/dev/null || fail 'OpenAPI output missing'
 if [[ "$capture_source" -eq 1 ]]; then
+  # Observe all fourteen actual API generators before the console overwrites
+  # protoc-gen-openapiv2 2.28.0 with its distinct 2.22.0 original download.
+  "$module_verifier" observe-generators --build "$output" --source-sha256 "$source_manifest" >"$output/generator-checkpoint.json"
+  generator_checkpoint="$(shasum -a 256 "$output/generator-checkpoint.json" | awk '{print $1}')"
+  "$module_verifier" verify-generator-checkpoint --checkpoint "$output/generator-checkpoint.json" --sha256 "$generator_checkpoint" --source-sha256 "$source_manifest" >"$output/generator-checkpoint-receipt.json"
+  jq -e --arg source "$source_manifest" --arg seal "$generator_checkpoint" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .checkpointSha256 == $seal and .tools == 14 and .modules > 0 and .generatorBuildMetadataValidated == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false' "$output/generator-checkpoint-receipt.json" >/dev/null || fail 'incomplete native generator checkpoint'
+  [[ "$(shasum -a 256 "$module_verifier" | awk '{print $1}')" = "$module_verifier_hash" ]] || fail 'module verifier changed during native generator observation'
   save_bsr_tool api "$PWD/.artifacts/bin/linux/amd64/buf" 1.67.0
   # Resolve the optional native package from the same root wrapper used by
   # console's pnpm command. Resolution reads metadata, not a retained command.
@@ -165,7 +238,49 @@ if [[ "$capture_source" -eq 1 ]]; then
   save_bsr_tool console "$console_buf" 1.72.0
 fi
 # The console installs OpenAPI 2.22 after API generation used 2.28. Never overlap.
-run_phase console pnpm exec nx run @zitadel/api:build-console --parallel=1 --skip-nx-cache --no-cloud
+console_downloads_json=null
+if [[ "$capture_source" -eq 1 || -n "$console_inputs" ]]; then
+  console_checkpoint="$output/source-snapshot"
+  [[ "$capture_source" -eq 1 ]] || console_checkpoint="$output/prepared-input-check"
+  cmp "$root/scripts/zitadel-console-assets.go" "$console_checkpoint/records/recipes/zitadel-console-assets.go" || fail 'console helper differs from admitted source records'
+  cmp console/scripts/install-proto-plugins.sh "$console_checkpoint/source/console/scripts/install-proto-plugins.sh" || fail 'native console installer differs from admitted source'
+  console_tool="$output/console-originals-tool"
+  run_phase console-input-tool go build -trimpath -buildvcs=false -o "$console_tool" "$root/scripts/zitadel-console-assets.go"
+  if [[ "$capture_source" -eq 1 ]]; then
+    console_inputs="$output/selected-console-originals"
+    "$console_tool" capture --capsule "$console_inputs" --curl "$(command -v curl)" >"$output/console-originals-capture.json"
+    console_sha="$(jq -er .manifestSha256 "$output/console-originals-capture.json")"
+  fi
+  "$console_tool" verify --capsule "$console_inputs" --sha256 "$console_sha" >"$output/console-originals.before.json"
+  go version -m .artifacts/bin/linux/amd64/protoc-gen-openapiv2 >"$output/api-openapi-version.txt"
+  awk '$1 == "mod" && $2 == "github.com/grpc-ecosystem/grpc-gateway/v2" && $3 == "v2.28.0" {found=1} END {exit !found}' "$output/api-openapi-version.txt" || fail 'API generation did not retain OpenAPI 2.28.0 before console installation'
+  mkdir -m 700 "$output/console-download-adapter" "$output/console-download-tmp" "$output/console-download-requests"
+  cat >"$output/console-download-adapter/curl" <<'ADAPTER'
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$CONSOLE_ORIGINALS_TOOL" native-request --capsule "$CONSOLE_ORIGINALS_CAPSULE" --sha256 "$CONSOLE_ORIGINALS_SHA256" --temp-root "$CONSOLE_ORIGINALS_TMP" --requests "$CONSOLE_ORIGINALS_REQUESTS" -- "$@"
+ADAPTER
+  chmod 700 "$output/console-download-adapter/curl"
+  shasum -a 256 "$console_tool" "$output/console-download-adapter/curl" "$root/scripts/zitadel-console-assets.go" console/scripts/install-proto-plugins.sh >"$output/console-download-tools.sha256"
+  run_phase console env PATH="$output/console-download-adapter:$PATH" TMPDIR="$output/console-download-tmp" \
+    CONSOLE_ORIGINALS_TOOL="$console_tool" CONSOLE_ORIGINALS_CAPSULE="$console_inputs" CONSOLE_ORIGINALS_SHA256="$console_sha" \
+    CONSOLE_ORIGINALS_TMP="$output/console-download-tmp" CONSOLE_ORIGINALS_REQUESTS="$output/console-download-requests" \
+    pnpm exec nx run @zitadel/api:build-console --parallel=1 --skip-nx-cache --no-cloud
+  shasum -a 256 -c "$output/console-download-tools.sha256" >/dev/null || fail 'console source or compiled adapter changed during native consumption'
+  "$console_tool" verify --capsule "$console_inputs" --sha256 "$console_sha" >"$output/console-originals.after.json"
+  cmp "$output/console-originals.before.json" "$output/console-originals.after.json" || fail 'console original inputs changed during native consumption'
+  "$console_tool" consumption --capsule "$console_inputs" --sha256 "$console_sha" --requests "$output/console-download-requests" >"$output/console-download-consumption.json"
+  cmp "$console_inputs/protoc-gen-grpc-web" .artifacts/bin/linux/amd64/protoc-gen-grpc-web || fail 'installed grpc-web differs from the retained original'
+  cmp "$console_inputs/protoc-gen-openapiv2" .artifacts/bin/linux/amd64/protoc-gen-openapiv2 || fail 'console did not install the retained OpenAPI 2.22.0 original'
+  console_downloads_json="$(jq --arg source "${source_manifest:-$prepared_sha}" \
+    --arg helper "$(shasum -a 256 "$root/scripts/zitadel-console-assets.go" | awk '{print $1}')" \
+    --arg adapter "$(shasum -a 256 "$console_tool" | awk '{print $1}')" \
+    --arg launcher "$(shasum -a 256 "$output/console-download-adapter/curl" | awk '{print $1}')" \
+    --arg installer "$(shasum -a 256 console/scripts/install-proto-plugins.sh | awk '{print $1}')" \
+    '. + {sourceManifestSha256:$source,helperSourceSha256:$helper,adapterSha256:$adapter,launcherSha256:$launcher,installerSha256:$installer}' "$output/console-download-consumption.json")"
+else
+  run_phase console pnpm exec nx run @zitadel/api:build-console --parallel=1 --skip-nx-cache --no-cloud
+fi
 console=console/dist/console
 embedded=internal/api/ui/console/static
 for path in index.html 3rdpartylicenses.txt; do
@@ -243,7 +358,30 @@ shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zita
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
+if [[ -n "$prepared_source" ]]; then
+  jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' <<<"$prepared_input_json" >/dev/null || fail 'prepared source recipe changed during build'
+fi
 if [[ "$capture_source" -eq 1 ]]; then
+  "$module_verifier" verify-generator-checkpoint --checkpoint "$output/generator-checkpoint.json" --sha256 "$generator_checkpoint" --source-sha256 "$source_manifest" >"$output/generator-checkpoint-final.json"
+  cmp "$output/generator-checkpoint-receipt.json" "$output/generator-checkpoint-final.json" || fail 'native generator checkpoint changed during build'
+  # Authenticate selected generator inputs using only this build's signed
+  # checksum lookup/tile cache. The verifier has no network fallback or key flag.
+  "$module_verifier" capture-generator-sources --build "$output" --checkpoint-sha256 "$generator_checkpoint" --source-sha256 "$source_manifest" --output "$output/selected-generator-go-sources" >"$output/generator-source-capture.pending"
+  jq -e --arg source "$source_manifest" --arg checkpoint "$generator_checkpoint" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .checkpointSha256 == $checkpoint and .modules > 0 and .proofFiles > 0 and .files > 0 and .selectedGeneratorGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/generator-source-capture.pending" >/dev/null || fail 'incomplete selected generator source capture'
+  generator_sources="$(jq -er .manifestSha256 "$output/generator-source-capture.pending")"
+  "$module_verifier" verify-generator-sources --package "$output/selected-generator-go-sources" --sha256 "$generator_sources" --source-sha256 "$source_manifest" >"$output/generator-source-readback.json"
+  cmp "$output/generator-source-capture.pending" "$output/generator-source-readback.json" || fail 'selected generator source readback differs'
+  # The source capsule retains original registry archives, not generated install
+  # outputs or a global cache. Its native SDK is acquired separately by CI.
+  pnpm_tool="$root/tools/zitadel-pnpm-source/index.mjs"
+  node "$pnpm_tool" capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
+  jq -e --arg source "$source_manifest" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .packages > 0 and .archives > 0 and .files > 0 and .selectedPNPMSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/pnpm-source-capture.pending" >/dev/null || fail 'incomplete selected pnpm source capture'
+  pnpm_manifest="$(jq -er .manifestSha256 "$output/pnpm-source-capture.pending")"
+  node "$pnpm_tool" verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
+  cmp "$output/pnpm-source-capture.pending" "$output/pnpm-source-readback.pending" || fail 'selected pnpm source readback differs'
+  for member in index.mjs package.json package-lock.json; do
+    cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter changed during build'
+  done
   # Retain only the complete service-selected graph, after compilation and the
   # final module verification. The command's checksum-bound dependency is
   # tooling, not an extra service module or a complete offline-replay closure.
@@ -324,12 +462,12 @@ if [[ "$capture_source" -eq 1 ]]; then
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
-  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
-  --argjson snapshot "$source_snapshot_json" \
+  --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
-    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end)' >"$output/build-receipt.pending"
+    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
 go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
