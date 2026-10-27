@@ -521,6 +521,11 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
+      - name: Setup Node.js for the identity browser
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: false
       - name: Exercise the local restricted identity image
         run: |
           node --test scripts/zitadel-browser.test.mjs
@@ -543,7 +548,7 @@ jobs:
             .browserSandboxDisabled == false and .cleanup == "complete" and
             .portalFederation == false and .productionTLS == false and .invitationProof == false and
             (.pages | map(.kind)) == ["login","password","console"] and
-            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true) and
+            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
       - name: Verify actual identity service evidence

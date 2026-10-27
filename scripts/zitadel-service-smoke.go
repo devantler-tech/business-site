@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const serviceAuthority = "fixture.invalid:8080"
+const serviceAuthority = "fixture.localhost:8080"
 
 // Docker does not publish ports for an internal-only network. Native Linux
 // can reach its bridge directly; bind that connection to the inspected owned
@@ -383,7 +383,7 @@ func imageService(image, owner, repo, output string, run imageCommand, browser b
 	}
 	args := []string{"--pull=never", "--platform=linux/amd64", "--network=" + network, "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=1g", "--cpus=2", "--tmpfs=/tmp:" + serviceTmpfs}
 	environment := []string{
-		"ZITADEL_MASTERKEY=00000000000000000000000000000000", "ZITADEL_EXTERNALDOMAIN=fixture.invalid", "ZITADEL_EXTERNALPORT=8080", "ZITADEL_EXTERNALSECURE=false", "ZITADEL_TLS_ENABLED=false",
+		"ZITADEL_MASTERKEY=00000000000000000000000000000000", "ZITADEL_EXTERNALDOMAIN=fixture.localhost", "ZITADEL_EXTERNALPORT=8080", "ZITADEL_EXTERNALSECURE=false", "ZITADEL_TLS_ENABLED=false",
 		"ZITADEL_DATABASE_POSTGRES_HOST=database", "ZITADEL_DATABASE_POSTGRES_DATABASE=zitadel", "ZITADEL_DATABASE_POSTGRES_USER_USERNAME=zitadel", "ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=FictionalServiceOnly1!", "ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=FictionalDatabaseOnly1!", "ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=disable", "ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=disable",
 		"ZITADEL_FIRSTINSTANCE_SKIP=false", "ZITADEL_FIRSTINSTANCE_INSTANCENAME=Fictional Local Fixture", "ZITADEL_FIRSTINSTANCE_ORG_NAME=Fixture", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=operator@example.invalid", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS=operator@example.invalid", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED=true", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=FictionalOperatorOnly1!", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED=false",
 		"ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED=false", "ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER=false", "ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWEXTERNALIDP=false", "ZITADEL_DEFAULTINSTANCE_DOMAINPOLICY_USERLOGINMUSTBEDOMAIN=false", "ZITADEL_TELEMETRY_ENABLED=false", "ZITADEL_SERVICEPING_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_WEBHOOK_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_PRIVATEIP_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_HOSTNAME_ENABLED=true",
@@ -632,12 +632,14 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		Namespace       string `json:"networkNamespace"`
 		SandboxDisabled bool   `json:"browserSandboxDisabled"`
 		Pages           []struct {
-			Kind       string `json:"kind"`
-			Font       string `json:"font"`
-			Loaded     bool   `json:"loaded"`
-			SameOrigin bool   `json:"sameOriginResources"`
-			FontAbsent bool   `json:"unadmittedFontAbsent"`
-			Screenshot struct {
+			Kind          string `json:"kind"`
+			Font          string `json:"font"`
+			Loaded        bool   `json:"loaded"`
+			SameOrigin    bool   `json:"sameOriginResources"`
+			FontAbsent    bool   `json:"unadmittedFontAbsent"`
+			SecureContext bool   `json:"secureContext"`
+			WebCrypto     bool   `json:"webCrypto"`
+			Screenshot    struct {
 				Path   string `json:"path"`
 				Bytes  int    `json:"bytes"`
 				SHA256 string `json:"sha256"`
@@ -655,7 +657,7 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 	}
 	for i, kind := range []string{"login", "password", "console"} {
 		page := receipt.Pages[i]
-		if page.Kind != kind || page.Font == "" || strings.Contains(strings.ToLower(page.Font), "ailerons") || !page.Loaded || !page.SameOrigin || !page.FontAbsent || page.Screenshot.Path != kind+".png" {
+		if page.Kind != kind || page.Font == "" || strings.Contains(strings.ToLower(page.Font), "ailerons") || !page.Loaded || !page.SameOrigin || !page.FontAbsent || !page.SecureContext || !page.WebCrypto || page.Screenshot.Path != kind+".png" {
 			return fmt.Errorf("browser page observation incomplete")
 		}
 		png, e := imageRead(output, kind+".png", 4<<20)

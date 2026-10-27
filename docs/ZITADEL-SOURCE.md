@@ -816,7 +816,7 @@ checks and cold-starts that same immutable local image against a digest-pinned
 PostgreSQL 17 fixture. Both containers use fictional, disposable state. The
 network is internal and neither container publishes a host port. The native Linux
 probe connects directly to the inspected service's private IPv4 endpoint on that
-owned network. It retains `fixture.invalid:8080` as the HTTP/OIDC authority without
+owned network. It retains `fixture.localhost:8080` as the HTTP/OIDC authority without
 DNS resolution; other authorities, ports and redirect destinations are refused.
 Docker can retain a requested host mapping without publishing it on an internal-only
 network ([upstream report](https://github.com/moby/moby/discussions/53256)); the probe
@@ -861,7 +861,8 @@ under #308/#305/#302, alongside independent image/source publication and admissi
 
 `--browser-smoke` adds a real Chrome/WebDriver journey to the same restricted
 service fixture. The hosted Ubuntu runner provides Chrome and its matching
-driver; the receipt records the actual browser version. No browser automation
+driver; the receipt records the actual browser version. The browser fixture uses
+the site's Node 24 after all frozen Node 22 build/replay phases finish. No browser automation
 package is installed into the identity distribution. The explicit Node runner
 uses WebDriver's native form controls and screenshots, not a projected HTML
 fixture or modified upstream page.
@@ -869,8 +870,12 @@ fixture or modified upstream page.
 The browser and driver run as the invoking non-root user, with no-new-privileges,
 inside the inspected identity service's internal network namespace. Only the
 network namespace changes. Native Chrome sandbox protections remain enabled;
-no certificate-warning or sandbox bypass is used. The fictional authority maps
-to that namespace's loopback interface. No host port or external network is added.
+no certificate-warning or sandbox bypass is used. The `fixture.localhost` authority
+maps to that namespace's loopback interface. The browser must independently report
+a secure context and available WebCrypto. The
+[standard local-origin exception](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts#potentially_trustworthy_origins)
+supplies this development-only property without pretending that HTTP is verified
+production TLS. No host port or external network is added.
 
 The journey starts at Console, observes the actual Login V1 username form,
 submits the fictional fixture operator through the native password form, then

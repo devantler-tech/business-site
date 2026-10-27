@@ -156,6 +156,12 @@ check() {
       (.run | contains(".originalConsoleDownloadsConsumed == true")) and
       (.run | contains(".nativeOfflineReplayProved == false")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Setup Node.js for the identity browser" and
+      (.uses // "" | startswith("actions/setup-node@")) and .with["node-version-file"] == ".node-version" and
+      .with["node-version"] == null and .with.cache == false and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Setup Node.js for the identity browser") > index("Replay the complete retained identity build without networking")) and
+    ([$job.steps[].name] | index("Exercise the local restricted identity image") > index("Setup Node.js for the identity browser")) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "node --test scripts/zitadel-browser.test.mjs\ncommand -v google-chrome\ncommand -v chromedriver\ngo run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go --browser-smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and

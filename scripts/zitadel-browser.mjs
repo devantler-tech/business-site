@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const origin = 'http://fixture.invalid:8080';
+const origin = 'http://fixture.localhost:8080';
 let phase = 'admission';
 let category = 'observation';
 
@@ -18,7 +18,7 @@ export function admitPage(page, kind) {
   try { url = new URL(page.url); } catch { return false; }
   if (url.origin !== origin || url.username || url.password || page.ready !== 'complete' || typeof page.text !== 'string' || !page.text.trim() ||
       typeof page.font !== 'string' || !page.font.trim() || /ailerons/i.test(page.font) || page.fontsReady !== true ||
-      page.selectedFaceLoaded !== true || !Array.isArray(page.failedFonts) || page.failedFonts.length || !Array.isArray(page.resources) || !page.resources.length ||
+      page.secureContext !== true || page.webCrypto !== true || page.selectedFaceLoaded !== true || !Array.isArray(page.failedFonts) || page.failedFonts.length || !Array.isArray(page.resources) || !page.resources.length ||
       page.resources.some((s) => { try { return new URL(s).origin !== origin || /ailerons/i.test(s); } catch { return true; } })) return false;
   if (kind === 'console') return url.pathname.startsWith('/ui/console/') && page.console === true && page.text.trim().length > 40;
   return url.pathname.startsWith('/ui/login/') && (kind === 'password' ? page.password === true : page.username === true);
@@ -31,6 +31,7 @@ const observationScript = `
   const sample = document.querySelector('h1') || document.body;
   const font = getComputedStyle(sample).fontFamily;
   return {url:location.href, ready:document.readyState, title:document.title, text,
+    secureContext:window.isSecureContext, webCrypto:typeof crypto.subtle?.digest === 'function',
     username:shown('#loginName'), password:shown('#password'),
     console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
     font, fontsReady:document.fonts.status === 'loaded',
@@ -96,7 +97,7 @@ async function run(output, expectedNamespace) {
     session = await api('/session', {capabilities:{alwaysMatch:{browserName:'chrome',
       'goog:chromeOptions':{args:['--headless=new', '--no-first-run', '--no-default-browser-check',
         '--disable-background-networking', '--window-size=1280,900', '--user-data-dir='+profile,
-        '--host-resolver-rules=MAP fixture.invalid 127.0.0.1']}}}});
+        '--host-resolver-rules=MAP fixture.localhost 127.0.0.1']}}}});
     id = session.sessionId;
     if (typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id) || typeof session.capabilities?.browserVersion !== 'string') throw new Error('invalid browser session');
     await call('/timeouts', {implicit:0, pageLoad:20000, script:10000});
@@ -121,7 +122,7 @@ async function run(output, expectedNamespace) {
     const consolePage = await waitPage('console');
     const consoleImage = await capture('console');
     pages = [login,password,consolePage].map((page,i) => ({kind:['login','password','console'][i],
-      font:page.font, loaded:true, sameOriginResources:true, unadmittedFontAbsent:true,
+      font:page.font, loaded:true, sameOriginResources:true, unadmittedFontAbsent:true, secureContext:page.secureContext, webCrypto:page.webCrypto,
       screenshot:[loginImage,passwordImage,consoleImage][i]}));
   } finally {
     if (id && !exited) { try { await call('', undefined, 'DELETE'); sessionClosed=true; } catch { /* unsuccessful closure is never success */ } }

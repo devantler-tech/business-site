@@ -61,7 +61,7 @@ func TestServiceTargetUsesOnlyOwnedPrivateEndpoint(t *testing.T) {
 func TestServiceTransportRefusesUnrelatedAuthority(t *testing.T) {
 	transport := serviceTransport("172.18.0.2:8080")
 	defer transport.CloseIdleConnections()
-	for _, address := range []string{"elsewhere.invalid:8080", "fixture.invalid:80", "127.0.0.1:8080", "169.254.169.254:80"} {
+	for _, address := range []string{"elsewhere.invalid:8080", "fixture.localhost:80", "127.0.0.1:8080", "169.254.169.254:80"} {
 		if connection, err := transport.DialContext(context.Background(), "tcp", address); err == nil || connection != nil {
 			t.Fatalf("unrelated authority admitted: %q", address)
 		}
