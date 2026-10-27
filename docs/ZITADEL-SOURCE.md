@@ -172,7 +172,7 @@ substituted, linked, malformed or incomplete selected evidence fails with no
 success inventory. The ordinary website build never invokes this tool.
 
 ```sh
-(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-login-icons_test.go zitadel-text-fonts_test.go)
+(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)
 ```
 
 These local tests use frozen public font/vector fixtures, real ZIP/Go-syntax
@@ -225,7 +225,7 @@ Lato OFL is already part of the complete prepared source.
 ```sh
 go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go \
   --text-fonts --verify --build /private/build \
-  --recipe scripts/build-zitadel-linux.sh --notices third_party/zitadel-text-fonts
+  --recipe "$PWD/scripts/build-zitadel-linux.sh" --notices "$PWD/third_party/zitadel-text-fonts"
 ```
 
 Verification is read-only and requires completed evidence. No-argument operation
@@ -235,6 +235,57 @@ hosted native output supplies actual build evidence. This increment preserves
 It does not establish a distribution-wide grant, public source retrieval,
 signed image release, production federation or portal activation. See
 [ADR 0025](adr/0025-output-bound-text-font-notices.md).
+
+## Copied Console icons and flags
+
+The explicit `--copied-assets` companion retains the complete 1,561-member Line
+Awesome subtree, four Material Icons formats and 271 flag SVGs. Its frozen
+catalogue closes 1,836 original identities, 3,672 generated paths and 1,836
+selected Console embeds. This includes the 32 icon-font outputs that the
+text-font collector records separately; combining the inventories preserves
+their existing byte identities and adds their original attribution.
+
+The three original grants are retained verbatim: the complete Icons8 license
+with MIT selected, Material Icons' original Apache-2.0 text, and the flag-icons
+MIT text and copyright. Both original Line Awesome CSS files are retained
+beside their differing frozen ZITADEL identities. Available selected copyright,
+identity, version and license name records from the four TTF inputs retain
+their source spans and complete strings; absent icon-font records are not
+invented. The five-record requirement for the separate text-font profile stays
+unchanged. See [the frozen provenance](../third_party/zitadel-copied-assets/README.md).
+
+Before compilation, the snapshot checks the actual connected pnpm aliases,
+exact package metadata, frozen lock, original license and asset bytes, paired
+generated files and compiler selection. Package links allow only the selected
+single-hop pnpm destinations, and are checked again after observation. Full
+original-archive capture and integrity verification remain the existing
+selected-pnpm source adapter's later boundary; this collector does not replace
+that adapter or reinterpret its archives.
+
+After compilation, capture requires the unchanged snapshot and generated
+manifest, and independently repeats the text-font collector's completed
+preparation/toolchain/recipe/binary/receipt join. The retained font inventory
+and notice must also agree exactly. Pending-only capture creates the copied
+notice exclusively. Completed `--verify` compares both retained notice and
+inventory, emits nothing on failure, and makes no repair.
+
+```sh
+go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go scripts/zitadel-copied-assets.go \
+  --copied-assets --verify --build /private/build \
+  --recipe "$PWD/scripts/build-zitadel-linux.sh" --notices "$PWD/third_party/zitadel-copied-assets"
+```
+
+The copied notice and inventory enter the closed 17-file restricted image
+payload; the retained-input replay receipt binds the new inventory. The helper,
+catalogue, three grants and two original CSS files are seven of the 25 literal
+source/build records. The complete prepared upstream profile stays unchanged.
+Fixture controls and a full frozen-byte/compiler-record replay are diagnostic
+checks; only the hosted build observes actual compilation and native execution.
+
+This scope does not clear other graphics/provider marks, complete distribution
+licensing, durable public corresponding-source retrieval, signed image release,
+production federation or portal activation. `licenseClosure`, `imageAdmission`
+and reproducibility remain unchanged. See [ADR 0026](adr/0026-output-bound-copied-console-assets.md).
 
 ## Same-build Angular notice capture
 
@@ -503,7 +554,7 @@ record. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those eighteen records separate from the upstream source. The completed build
+keeps those twenty-five records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
@@ -512,7 +563,7 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all eighteen literal records and places only the four fixed build inputs at
+It retains all twenty-five literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
@@ -695,7 +746,7 @@ The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
 as a literal source/build record. The native pnpm adapter and both SDK manifests
-are three of the eighteen literal records. The text-font entrypoint, its
+are three of the twenty-five literal records. The text-font entrypoint, its
 companion, frozen catalogue and Apache text are four further records; the
 original Lato OFL is already retained in the complete prepared source.
 
@@ -833,12 +884,12 @@ The notice collector's read-only `--verify` mode repeats the actual completed
 build capture, compares every retained diagnostic and final inventory, and
 emits the unchanged inventory only when every check passes. It requires the
 final build receipt; pending or ambiguous evidence is refused. The image test
-uses that mode, the existing login-icon verifier and read-only text-font
-verification before packaging.
+uses that mode, the existing login-icon verifier, read-only text-font verification
+and read-only copied-asset verification before packaging.
 
 The closed context contains the checked executable, unchanged build receipt,
-four notice inventories, six complete retained notice outputs and three
-retained login-icon materials. Its manifest binds all fifteen payload files,
+five notice inventories, seven complete retained notice outputs and three
+retained login-icon materials. Its manifest binds all seventeen payload files,
 sizes, modes and digests. A dedicated Dockerfile uses the existing immutable
 distroless static base and UID/GID 65532. The actual image payload is copied back
 from the owned stopped container and compared with that sealed context; matching

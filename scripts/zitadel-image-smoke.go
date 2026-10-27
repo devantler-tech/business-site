@@ -127,6 +127,14 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 	if err != nil || !bytes.Equal(fonts, stored) {
 		return fmt.Errorf("completed text-font inventory differs")
 	}
+	copied, err := run(2*time.Minute, "go", "run", filepath.Join(repo, "scripts/zitadel-login-icons.go"), filepath.Join(repo, "scripts/zitadel-text-fonts.go"), filepath.Join(repo, "scripts/zitadel-copied-assets.go"), "--copied-assets", "--verify", "--build", build, "--recipe", filepath.Join(repo, "scripts/build-zitadel-linux.sh"), "--notices", filepath.Join(repo, "third_party/zitadel-copied-assets"))
+	if err != nil {
+		return fmt.Errorf("completed copied-asset verification failed: %w", err)
+	}
+	stored, err = imageRead(build, "copied-asset-notices-inventory.json", 4<<20)
+	if err != nil || !bytes.Equal(copied, stored) {
+		return fmt.Errorf("completed copied-asset inventory differs")
+	}
 	contextDir := filepath.Join(output, "context")
 	seal, err := imagePackage(build, repo, contextDir)
 	if err != nil {

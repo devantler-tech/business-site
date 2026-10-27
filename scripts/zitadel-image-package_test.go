@@ -81,6 +81,12 @@ func imageTestFixture(t *testing.T) (string, string, string) {
 		fonts[k] = v
 	}
 	imageTestWrite(t, build, "text-font-notices-inventory.json", imageTestJSON(t, fonts))
+	copied := map[string]any{"schemaVersion": 1, "profile": "api-login-v1-console", "upstreamCommit": imagePin, "imageAdmission": "unknown", "licenseClosure": "unknown", "reproducible": false, "binarySha256": imageTestHash(binary), "inputs": []any{map[string]any{"path": "build-receipt.json", "sha256": imageTestHash(receipt)}}}
+	for k, v := range meta("copied-asset-notices.txt") {
+		copied[k] = v
+	}
+	imageTestWrite(t, build, "copied-asset-notices-inventory.json", imageTestJSON(t, copied))
+	imageTestWrite(t, build, "copied-asset-notices.txt", text)
 	for _, name := range []string{"go-toolchain-notices.txt", "zitadel-root-license.txt", "go-module-notices.txt", "console-third-party-notices.txt", "console-notices-supplement.txt", "text-font-notices.txt"} {
 		imageTestWrite(t, build, name, text)
 	}
@@ -99,7 +105,7 @@ func TestImagePackageRetainsClosedCheckedContext(t *testing.T) {
 	if err := imageVerifyContext(output, seal); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"zitadel", "build-receipt.json", "notices/go-module-notices.txt", "notices/login-icons/NOTICE.md", "notices/text-font-notices.txt", "notices/text-font-notices-inventory.json"} {
+	for _, name := range []string{"zitadel", "build-receipt.json", "notices/go-module-notices.txt", "notices/login-icons/NOTICE.md", "notices/text-font-notices.txt", "notices/text-font-notices-inventory.json", "notices/copied-asset-notices.txt", "notices/copied-asset-notices-inventory.json"} {
 		if _, err := os.Stat(filepath.Join(output, name)); err != nil {
 			t.Fatal(err)
 		}
@@ -110,10 +116,27 @@ func TestImagePackageRetainsClosedCheckedContext(t *testing.T) {
 }
 
 func TestImagePackageRejectsChangedInputs(t *testing.T) {
-	for _, kind := range []string{"binary", "notice", "inventory", "receipt", "linked-file", "linked-parent", "missing", "pending", "icon", "font notice", "font inventory", "font receipt", "font binary", "font pending"} {
+	for _, kind := range []string{"binary", "notice", "inventory", "receipt", "linked-file", "linked-parent", "missing", "pending", "icon", "font notice", "font inventory", "font receipt", "font binary", "font pending", "copied notice", "copied inventory", "copied receipt", "copied binary", "copied pending"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo, output := imageTestFixture(t)
 			switch kind {
+			case "copied notice":
+				imageTestWrite(t, build, "copied-asset-notices.txt", []byte("replacement"))
+			case "copied inventory":
+				imageTestWrite(t, build, "copied-asset-notices-inventory.json", []byte("{}"))
+			case "copied pending":
+				imageTestWrite(t, build, "copied-asset-notices-inventory.pending", []byte("{}"))
+			case "copied receipt", "copied binary":
+				var v map[string]any
+				if e := json.Unmarshal(mustImageTestRead(t, build, "copied-asset-notices-inventory.json"), &v); e != nil {
+					t.Fatal(e)
+				}
+				if kind == "copied receipt" {
+					v["inputs"] = []any{}
+				} else {
+					v["binarySha256"] = imageTestHash([]byte("other"))
+				}
+				imageTestWrite(t, build, "copied-asset-notices-inventory.json", imageTestJSON(t, v))
 			case "font notice":
 				imageTestWrite(t, build, "text-font-notices.txt", []byte("replacement"))
 			case "font inventory":

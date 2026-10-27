@@ -75,7 +75,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains eighteen literal build/modification records and rechecks the snapshot/archive
+  retains twenty-five literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
   Its explicit `--restore-build` operation restores the sealed files and literal
@@ -254,7 +254,7 @@ bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
-(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-login-icons_test.go zitadel-text-fonts_test.go)
+(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)

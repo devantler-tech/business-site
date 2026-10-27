@@ -219,14 +219,14 @@ func imagePackage(build, repo, output string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, pending := range []string{"build-receipt.pending", "console-notices-inventory.pending", "console-notices-supplement-inventory.pending", "login-icons-inventory.pending", "text-font-notices-inventory.pending"} {
+	for _, pending := range []string{"build-receipt.pending", "console-notices-inventory.pending", "console-notices-supplement-inventory.pending", "login-icons-inventory.pending", "text-font-notices-inventory.pending", "copied-asset-notices-inventory.pending"} {
 		if _, err := os.Lstat(filepath.Join(build, pending)); !os.IsNotExist(err) {
 			return "", fmt.Errorf("pending or unavailable build evidence")
 		}
 	}
 	data := map[string][]byte{}
 	evidence := map[string]imageEvidence{}
-	for _, name := range []string{"build-receipt.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "login-icons-inventory.json", "text-font-notices-inventory.json"} {
+	for _, name := range []string{"build-receipt.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json"} {
 		b, err := imageRead(build, name, 4<<20)
 		if err != nil {
 			return "", err
@@ -255,11 +255,15 @@ func imagePackage(build, repo, output string) (string, error) {
 	console := evidence["console-notices-inventory.json"]
 	icons := evidence["login-icons-inventory.json"]
 	fonts := evidence["text-font-notices-inventory.json"]
+	copied := evidence["copied-asset-notices-inventory.json"]
 	supplement := evidence["console-notices-supplement-inventory.json"]
 	if !imageBound(console.Inputs, "build-receipt.json", rh) || !imageBound(icons.Inputs, "build-receipt.json", rh) || !imageBound(fonts.Inputs, "build-receipt.json", rh) || fonts.BinarySHA256 != receipt.BinarySHA256 || supplement.NoticeInventorySHA256 != imageHash(data["notices/console-notices-inventory.json"]) {
 		return "", fmt.Errorf("unbound notice inventory")
 	}
-	for name, meta := range map[string]*imageText{"console-third-party-notices.txt": &console.imageText, "console-notices-supplement.txt": &supplement.imageText, "go-toolchain-notices.txt": console.Toolchain, "zitadel-root-license.txt": console.SourceLicense, "go-module-notices.txt": console.Modules, "text-font-notices.txt": &fonts.imageText} {
+	if !imageBound(copied.Inputs, "build-receipt.json", rh) || copied.BinarySHA256 != receipt.BinarySHA256 {
+		return "", fmt.Errorf("unbound copied-asset inventory")
+	}
+	for name, meta := range map[string]*imageText{"console-third-party-notices.txt": &console.imageText, "console-notices-supplement.txt": &supplement.imageText, "go-toolchain-notices.txt": console.Toolchain, "zitadel-root-license.txt": console.SourceLicense, "go-module-notices.txt": console.Modules, "text-font-notices.txt": &fonts.imageText, "copied-asset-notices.txt": &copied.imageText} {
 		if meta == nil || meta.RawDiagnostic != name || meta.Bytes < 1 {
 			return "", fmt.Errorf("missing required notice identity: %s", name)
 		}
@@ -316,7 +320,7 @@ func imageVerifyContext(root, seal string) error {
 		return fmt.Errorf("package manifest changed")
 	}
 	var m imageManifest
-	if err = imageDecode(b, &m); err != nil || m.SchemaVersion != 1 || m.UpstreamCommit != imagePin || m.Profile != "cli-version-smoke" || m.Base != imageBase || m.ImageAdmission != "unknown" || m.LicenseClosure != "unknown" || m.Reproducible || len(m.Files) != 15 {
+	if err = imageDecode(b, &m); err != nil || m.SchemaVersion != 1 || m.UpstreamCommit != imagePin || m.Profile != "cli-version-smoke" || m.Base != imageBase || m.ImageAdmission != "unknown" || m.LicenseClosure != "unknown" || m.Reproducible || len(m.Files) != 17 {
 		return fmt.Errorf("invalid package manifest")
 	}
 	want := map[string]bool{"package-manifest.json": true}

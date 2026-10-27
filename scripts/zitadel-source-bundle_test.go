@@ -136,24 +136,31 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				t.Fatal(err)
 			}
 			records := map[string][]byte{
-				"source-preparation.json":                       []byte("literal preparation\n"),
-				"api-project.original.json":                     []byte("original API\n"),
-				"api-project.serial.json":                       []byte("serialized API\n"),
-				"inputs.sha256":                                 []byte("literal input hashes\n"),
-				"recipes/prepare-zitadel-source.sh":             []byte("original preparer\n"),
-				"recipes/zitadel-source-inputs.sha256":          []byte("original locks\n"),
-				"recipes/build-zitadel-linux.sh":                []byte("native builder\n"),
-				"recipes/zitadel-source-bundle.go":              []byte("source helper\n"),
-				"recipes/zitadel-console-assets.go":             []byte("console download adapter\n"),
-				"recipes/zitadel-login-icons.go":                []byte("strict statik decoder\n"),
-				"recipes/zitadel-text-fonts.go":                 []byte("font notice collector\n"),
-				"third_party/zitadel-text-fonts/catalogue.json": []byte("frozen font catalogue\n"),
-				"third_party/zitadel-text-fonts/Apache-2.0.txt": []byte("complete Apache terms\n"),
-				"recipes/zitadel-pnpm-source/index.mjs":         []byte("native pnpm adapter\n"),
-				"recipes/zitadel-pnpm-source/package.json":      []byte("native pnpm SDK\n"),
-				"recipes/zitadel-pnpm-source/package-lock.json": []byte("native pnpm SDK locks\n"),
-				"ZITADEL-SOURCE.md":                             []byte("source description\n"),
-				"modifications.json":                            []byte("dated modification record\n"),
+				"source-preparation.json":                                         []byte("literal preparation\n"),
+				"api-project.original.json":                                       []byte("original API\n"),
+				"api-project.serial.json":                                         []byte("serialized API\n"),
+				"inputs.sha256":                                                   []byte("literal input hashes\n"),
+				"recipes/prepare-zitadel-source.sh":                               []byte("original preparer\n"),
+				"recipes/zitadel-source-inputs.sha256":                            []byte("original locks\n"),
+				"recipes/build-zitadel-linux.sh":                                  []byte("native builder\n"),
+				"recipes/zitadel-source-bundle.go":                                []byte("source helper\n"),
+				"recipes/zitadel-console-assets.go":                               []byte("console download adapter\n"),
+				"recipes/zitadel-login-icons.go":                                  []byte("strict statik decoder\n"),
+				"recipes/zitadel-text-fonts.go":                                   []byte("font notice collector\n"),
+				"recipes/zitadel-copied-assets.go":                                []byte("copied asset collector\n"),
+				"third_party/zitadel-copied-assets/catalogue.json":                []byte("copied asset catalogue\n"),
+				"third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md":       []byte("complete Icons8 terms\n"),
+				"third_party/zitadel-copied-assets/Material-Icons-LICENSE":        []byte("complete Material terms\n"),
+				"third_party/zitadel-copied-assets/Flag-Icons-LICENSE":            []byte("complete flags terms\n"),
+				"third_party/zitadel-copied-assets/original-line-awesome.css":     []byte("original CSS\n"),
+				"third_party/zitadel-copied-assets/original-line-awesome.min.css": []byte("original minified CSS\n"),
+				"third_party/zitadel-text-fonts/catalogue.json":                   []byte("frozen font catalogue\n"),
+				"third_party/zitadel-text-fonts/Apache-2.0.txt":                   []byte("complete Apache terms\n"),
+				"recipes/zitadel-pnpm-source/index.mjs":                           []byte("native pnpm adapter\n"),
+				"recipes/zitadel-pnpm-source/package.json":                        []byte("native pnpm SDK\n"),
+				"recipes/zitadel-pnpm-source/package-lock.json":                   []byte("native pnpm SDK locks\n"),
+				"ZITADEL-SOURCE.md":                                               []byte("source description\n"),
+				"modifications.json":                                              []byte("dated modification record\n"),
 			}
 			if kind == "missing-record" {
 				delete(records, "api-project.original.json")
@@ -518,7 +525,7 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
-	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text"} {
+	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo := t.TempDir(), t.TempDir()
 			write := func(root, name, body string) {
@@ -548,6 +555,10 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 			write(repo, "docs/ZITADEL-SOURCE.md", "Build documentation.\n")
 			write(repo, "third_party/zitadel-text-fonts/catalogue.json", "frozen font catalogue\n")
 			write(repo, "third_party/zitadel-text-fonts/Apache-2.0.txt", "complete Apache terms\n")
+			write(repo, "scripts/zitadel-copied-assets.go", "copied asset collector\n")
+			for _, name := range []string{"catalogue.json", "Line-Awesome-LICENSE.md", "Material-Icons-LICENSE", "Flag-Icons-LICENSE", "original-line-awesome.css", "original-line-awesome.min.css"} {
+				write(repo, "third_party/zitadel-copied-assets/"+name, name+" original complete bytes\n")
+			}
 			for _, name := range []string{"index.mjs", "package.json", "package-lock.json"} {
 				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
 			}
@@ -560,6 +571,10 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 			policy := sourceCapturePolicy{profile, hash("original API\n"), hash("serial API\n"), hash(preparation)}
 			output := filepath.Join(t.TempDir(), "captured")
 			newInputs := map[string]string{"font collector": "scripts/zitadel-text-fonts.go", "statik decoder": "scripts/zitadel-login-icons.go", "font catalogue": "third_party/zitadel-text-fonts/catalogue.json", "Apache text": "third_party/zitadel-text-fonts/Apache-2.0.txt"}
+			newInputs["copied collector"] = "scripts/zitadel-copied-assets.go"
+			newInputs["copied catalogue"] = "third_party/zitadel-copied-assets/catalogue.json"
+			newInputs["original CSS"] = "third_party/zitadel-copied-assets/original-line-awesome.css"
+			newInputs["flags grant"] = "third_party/zitadel-copied-assets/Flag-Icons-LICENSE"
 			for label, name := range newInputs {
 				if kind == "missing "+label || kind == "linked "+label {
 					if e := os.Remove(filepath.Join(repo, name)); e != nil {
@@ -624,11 +639,11 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 18 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 25 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 18 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 25 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
