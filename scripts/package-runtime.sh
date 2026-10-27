@@ -31,13 +31,13 @@ cleanup_inputs() {
   if [[ -n "$inputs" ]]; then rm -f -- "$inputs/stars.json"; rmdir -- "$inputs"; fi
 }
 trap cleanup_inputs EXIT
-build_env=(env -u FEATURE_SVELTE_FRONTEND -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
+build_env=(env -u FEATURE_SVELTE_FRONTEND -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u COMPANY_POSTAL_ADDRESS -u PUBLIC_STARS_SNAPSHOT -u PUBLIC_CONTENT_PROFILE)
 build_env+=("FEATURE_SVELTE_FRONTEND=$selected")
-build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CUSTOMER_SCOPE=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
+build_env+=("PUBLIC_CONTENT_PROFILE=$profile" "FEATURE_COMPANY_IDENTITY=false" "COMPANY_POSTAL_ADDRESS=" "FEATURE_PREVIEW_BANNER=false" "FEATURE_OFFER_COPY=false" "FEATURE_CLIENT_PORTFOLIO=true" "FEATURE_FEATURED_PORTFOLIO=true")
 if [[ "$profile" == production-template ]]; then
   inputs="$(mktemp -d "$output/public-inputs.XXXXXX")"
   bash scripts/refresh-public-stars.sh "$inputs/stars.json"
-  build_env+=("PUBLIC_CONTENT_PROFILE=production-template" "FEATURE_COMPANY_IDENTITY=true" "FEATURE_CUSTOMER_SCOPE=true" "PUBLIC_STARS_SNAPSHOT=$PWD/$inputs/stars.json")
+  build_env+=("PUBLIC_CONTENT_PROFILE=production-template" "FEATURE_COMPANY_IDENTITY=true" "PUBLIC_STARS_SNAPSHOT=$PWD/$inputs/stars.json")
 fi
 "${build_env[@]}" npm run build
 bash scripts/check-portal-artifacts.sh dist

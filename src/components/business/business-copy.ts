@@ -33,8 +33,8 @@ export function vatPriceMarker(locale: Locale): string {
 }
 
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
-/** Homepage copy for the independent identity, offer and customer-scope decisions. */
-function createScopedCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled: boolean) {
+/** Permanent customer invitation with independent identity and offer choices. */
+export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean) {
 const previewCopy = {
   en: {
     title: 'Websites & software for businesses | Devantler Tech',
@@ -181,7 +181,6 @@ const selected = revisedOffer ? previewCopy : {
   da: { ...previewCopy.da, ...publishedOffer.copy.da },
 } as const;
 
-if (!customerScopeEnabled) return selected;
 return {
   en: {
     ...selected.en,
@@ -196,9 +195,4 @@ return {
     steps: selected.da.steps.map((step, index) => index === 0 ? { ...step, text: customerScopeCopy.da.firstStep } : step),
   },
 };
-}
-
-/** Build shared bilingual copy without reading framework or private company inputs. */
-export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false) {
-  return createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
 }

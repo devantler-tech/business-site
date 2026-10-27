@@ -1,15 +1,14 @@
 ---
 import { customerScope } from './customer-scope';
-import { FEATURE_CUSTOMER_SCOPE } from 'astro:env/server';
 import type { Locale } from './business-copy';
 interface Props { locale: Locale; heading?: 'h2' | 'h3' }
 const t = customerScope[Astro.props.locale];
 const Heading = Astro.props.heading ?? 'h2';
 ---
-{FEATURE_CUSTOMER_SCOPE ? <div class="customer-scope" data-customer-scope>
+<div class="customer-scope" data-customer-scope>
   <Heading>{t.title}</Heading><p>{t.audience}</p><p class="boundary">{t.boundary}</p>
   <slot />
-</div> : <slot />}
+</div>
 <style>
   .customer-scope { max-width: 700px; margin-block: 2rem; }
   h2, h3 { font-size: 1.1rem; }

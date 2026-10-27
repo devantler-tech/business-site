@@ -39,8 +39,8 @@ bash scripts/journal-history.test.sh dist
 node --test scripts/company-disclosure.test.mjs
 node scripts/check-offer-rollout.mjs dist
 node scripts/check-business-site.mjs dist
-node scripts/check-customer-scope.mjs dist "${FEATURE_CUSTOMER_SCOPE:-false}"
-node scripts/customer-scope.test.mjs dist "${FEATURE_CUSTOMER_SCOPE:-false}"
+node scripts/check-customer-scope.mjs dist true
+node scripts/customer-scope.test.mjs dist true
 node scripts/check-client-facing.mjs dist
 node scripts/check-featured-portfolio.mjs dist
 node scripts/check-journal-presentation.mjs dist
