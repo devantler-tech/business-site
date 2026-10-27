@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	imagepng "image/png"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -92,11 +94,18 @@ type browserDriver struct {
 	session, category string
 	mfaDeferred       bool
 	lastPage          browserPage
+	sessionIDLength   int
+	versionPresent    bool
+}
+
+func browserHTTPClient() *http.Client {
+	return &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("WebDriver redirect refused") }}
 }
 
 // request consumes a bounded complete WebDriver response before decoding it.
 // Driver messages and page content never become public diagnostics.
 func (d *browserDriver) request(method, path string, body any, result any) error {
+	d.category = "observation"
 	var data io.Reader
 	if body != nil {
 		b, e := json.Marshal(body)
@@ -105,24 +114,37 @@ func (d *browserDriver) request(method, path string, body any, result any) error
 		}
 		data = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(d.ctx, method, "http://127.0.0.1:9515"+path, data)
+	ctx := d.ctx
+	if path == "/status" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Second)
+		defer cancel()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, "http://127.0.0.1:9515"+path, data)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	response, err := d.client.Do(req)
 	if err != nil {
+		d.category = "transport"
+		var timeout net.Error
+		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()) {
+			d.category = "transport-timeout"
+		}
 		return fmt.Errorf("WebDriver transport failed")
 	}
 	b, readErr := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil || len(b) == 4<<20 {
+		d.category = "incomplete-response"
 		return fmt.Errorf("WebDriver response incomplete")
 	}
 	var envelope struct {
 		Value json.RawMessage `json:"value"`
 	}
 	if imageDecode(b, &envelope) != nil || len(envelope.Value) == 0 {
+		d.category = "invalid-envelope"
 		return fmt.Errorf("WebDriver response invalid")
 	}
 	var failure struct {
@@ -146,7 +168,11 @@ func (d *browserDriver) request(method, path string, body any, result any) error
 	if result == nil {
 		return nil
 	}
-	return imageDecode(envelope.Value, result)
+	if err := imageDecode(envelope.Value, result); err != nil {
+		d.category = "invalid-result"
+		return err
+	}
+	return nil
 }
 
 // call confines a command to the one browser session created by this worker.
@@ -248,13 +274,14 @@ func (d *browserDriver) capture(output, kind string, page browserPage) (browserO
 func browserWorker(output, namespace, sourceSHA string) (result error) {
 	phase := "admission"
 	d := browserDriver{category: "observation"}
+	admitted := false
 	defer func() {
 		if result != nil {
-			if d.lastPage.Ready != "" {
-				// Only fixed labels and booleans survive a failed observation. Never
+			if admitted {
+				// Only fixed labels, counts and booleans survive a failed observation. Never
 				// retain DOM text, URLs, form values or driver diagnostics.
 				page := d.lastPage
-				b, err := json.MarshalIndent(map[string]any{"result": "incomplete", "stage": phase, "category": d.category, "usernameForm": page.Username, "passwordForm": page.Password, "authenticatedConsole": page.Console, "optionalMFAOffered": page.OptionalMFA, "optionalMFADeferred": d.mfaDeferred, "selectedFontLoaded": page.FaceLoaded, "fontsReady": page.FontsReady, "failedFontCount": len(page.FailedFonts), "secureContext": page.SecureContext, "webCrypto": page.WebCrypto}, "", "  ")
+				b, err := json.MarshalIndent(map[string]any{"result": "incomplete", "stage": phase, "category": d.category, "sessionIdLength": d.sessionIDLength, "browserVersionPresent": d.versionPresent, "usernameForm": page.Username, "passwordForm": page.Password, "authenticatedConsole": page.Console, "optionalMFAOffered": page.OptionalMFA, "optionalMFADeferred": d.mfaDeferred, "selectedFontLoaded": page.FaceLoaded, "fontsReady": page.FontsReady, "failedFontCount": len(page.FailedFonts), "secureContext": page.SecureContext, "webCrypto": page.WebCrypto}, "", "  ")
 				if err == nil {
 					err = imageWrite(output, "browser-incomplete.json", append(b, '\n'), 0600)
 				}
@@ -278,6 +305,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 	if err != nil {
 		return err
 	}
+	admitted = true
 	profile, err := os.MkdirTemp("", "zitadel-browser-")
 	if err != nil {
 		return err
@@ -308,7 +336,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 	d.ctx = ctx
-	d.client = &http.Client{Timeout: 8 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("WebDriver redirect refused") }}
+	d.client = browserHTTPClient()
 	defer d.client.CloseIdleConnections()
 	phase = "driver"
 	command := exec.Command("chromedriver", "--port=9515", "--allowed-ips=127.0.0.1")
@@ -320,6 +348,8 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 	go func() { wait <- command.Wait() }()
 	sessionClosed, exited := false, false
 	defer func() {
+		category := d.category
+		defer func() { d.category = category }()
 		if d.session != "" {
 			sessionClosed = d.call("DELETE", "", nil, nil) == nil
 		}
@@ -379,10 +409,16 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 	if err = d.request("POST", "/session", options, &session); err != nil {
 		return err
 	}
-	if !regexp.MustCompile(`^[a-f0-9]{32}$`).MatchString(session.ID) || session.Capabilities.Version == "" {
+	d.sessionIDLength, d.versionPresent = len(session.ID), session.Capabilities.Version != ""
+	if !regexp.MustCompile(`^[a-f0-9]{32}$`).MatchString(session.ID) {
+		d.category = "invalid-session"
 		return fmt.Errorf("invalid session")
 	}
 	d.session = session.ID
+	if !d.versionPresent {
+		d.category = "missing-browser-version"
+		return fmt.Errorf("browser version absent")
+	}
 	if err = d.call("POST", "/timeouts", map[string]int{"implicit": 0, "pageLoad": 20000, "script": 10000}, nil); err != nil {
 		return err
 	}

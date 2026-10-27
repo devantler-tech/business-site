@@ -887,7 +887,10 @@ may use its explicit deferral button once. The unchanged native form and its exa
 same-origin enrollment action must be observed first; mandatory or repeated
 enrollment is refused. The receipt records that choice and keeps `mfaProof` false.
 Production MFA requirements are unchanged. An incomplete journey may retain only
-fixed stage labels and observation booleans, never DOM text, URLs or form values.
+fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
+form values. Requests have a 30-second budget covering the 20-second navigation
+limit; readiness polls use one second. The complete worker remains bounded to
+100 seconds.
 Driver session closure, process exit and private profile cleanup are mandatory.
 The outer Go harness rechecks the runner source, screenshot bytes and receipt,
 then binds the browser result to the inspected local image and upstream source.

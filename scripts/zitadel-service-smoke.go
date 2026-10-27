@@ -619,7 +619,7 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		"env", "-i", "PATH="+os.Getenv("PATH"), "HOME="+os.Getenv("HOME"), "LANG=C", "LC_ALL=C",
 		exe, "--browser-worker", output, namespace, imageHash(source))
 	if err != nil {
-		if stage := regexp.MustCompile(`browser stage=(admission|driver|session|login|password|console|cleanup|receipt) category=(observation|session-not-created|timeout|no-such-element|invalid-argument|javascript-error|webdriver)`).Find(diagnostic); stage != nil {
+		if stage := regexp.MustCompile(`browser stage=(admission|driver|session|login|password|console|cleanup|receipt) category=(observation|session-not-created|timeout|no-such-element|invalid-argument|javascript-error|webdriver|transport-timeout|transport|incomplete-response|invalid-envelope|invalid-result|invalid-session|missing-browser-version)`).Find(diagnostic); stage != nil {
 			return fmt.Errorf("native browser journey failed: %s", stage)
 		}
 		return fmt.Errorf("native browser journey failed")

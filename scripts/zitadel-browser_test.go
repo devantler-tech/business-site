@@ -218,3 +218,26 @@ func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
 		})
 	}
 }
+
+func TestBrowserDriverAllowsBoundedSessionStartup(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(8500 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"value":{"sessionId":"00000000000000000000000000000000","capabilities":{"browserVersion":"fixture"}}}`))
+	}))
+	defer server.Close()
+	client := browserHTTPClient()
+	transport := client.Transport.(*http.Transport)
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+	}
+	defer transport.CloseIdleConnections()
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	d := browserDriver{ctx: ctx, client: client}
+	var session struct {
+		ID string `json:"sessionId"`
+	}
+	if err := d.request("POST", "/session", map[string]any{}, &session); err != nil || session.ID == "" {
+		t.Fatalf("bounded browser startup refused: %v", err)
+	}
+}
