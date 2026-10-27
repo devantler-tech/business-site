@@ -72,13 +72,13 @@ Reintroducing JSONPath support requires a separately admitted implementation and
 compatibility validation, not removal of these exclusion checks. This restriction
 does not change the portal → customer Dex → ZITADEL login architecture.
 
-The separate `go-jose-4.1.6-v1` dependency profile applies the exact `go.mod` change
-and two added checksums generated with native Go 1.26.10 and
-`go get github.com/go-jose/go-jose/v4@v4.1.6`. Complete original and resulting hashes are
-checked offline; the preparer never downloads or executes Go. Other dependency
-selections and the upstream 4096-bit RSA key limit are preserved. Original unused
-4.1.4 checksum entries remain as produced by that command, while the selected
-module, compiler metadata and notice catalogue must agree on 4.1.6. Dirty input
+The `go-jose-4.1.6-x-net-0.62.0-v1` dependency profile applies the exact native Go
+1.26.10 metadata for `go-jose/v4` 4.1.6 and `golang.org/x/net` 0.62.0: two module
+lines and four added checksums. Complete original and resulting hashes are checked
+offline; the preparer never downloads or executes Go. Other dependency selections,
+the compiler and the upstream 4096-bit RSA key limit are preserved. Original unused
+checksum entries remain as produced by the native updates. The selected modules,
+compiler metadata and notice catalogue must agree on both patched versions. Dirty input
 checkout metadata is ignored and preserved, just like other working-copy files.
 
 Native CI builds pinned `govulncheck` 1.8.0 with the separate verifier compiler,

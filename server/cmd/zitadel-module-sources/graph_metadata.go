@@ -20,7 +20,7 @@ import (
 )
 
 const graphMetadataLimit int64 = 64 << 20
-const frozenIdentityGoSum = "c84a989a66d0601e904a45de992d02a14de784624247e4755ec9b510f178d344"
+const frozenIdentityGoSum = "ecb0f1cc67843b22a16c3e7a5fee39a5ec930acd787051a8d697e119282b0646"
 
 type graphMetadataModule struct {
 	Path, Version, GoModSum string

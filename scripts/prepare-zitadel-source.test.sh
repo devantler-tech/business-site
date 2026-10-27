@@ -58,12 +58,12 @@ shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after
 cmp "$scratch/input-before" "$scratch/input-after"
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
 cmp "$scratch/modules-before" "$scratch/modules-after"
-# Independently collected from the real frozen tree with Go 1.26.10 go get
-# github.com/go-jose/go-jose/v4@v4.1.6: one module line and two added checksums.
+# Independently collected with native Go 1.26.10 for both selected security patches:
+# two module lines and four added checksums, without a toolchain or graph change.
 test "$(shasum -a 256 "$scratch/prepared source/source/go.mod" | awk '{print $1}')" = \
-  40b712c3f3394042ef1602c0cfb89d6802873a3374f21bf42a3d07fd685d79c6
+  d3646d619621042fb5039f534df32350380c7640620f58086a67e7d6c6fb23b5
 test "$(shasum -a 256 "$scratch/prepared source/source/go.sum" | awk '{print $1}')" = \
-  c84a989a66d0601e904a45de992d02a14de784624247e4755ec9b510f178d344
+  ecb0f1cc67843b22a16c3e7a5fee39a5ec930acd787051a8d697e119282b0646
 test -f "$scratch/upstream/local-only.txt"
 test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
@@ -103,7 +103,7 @@ jq -e --arg pin "$pin" '
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
   (.removedFiles | length) == 4 and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
-  .dependencyProfile == "go-jose-4.1.6-v1" and
+  .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-v1" and
   .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","go.mod","go.sum"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 

@@ -13,6 +13,17 @@ import (
 	"testing"
 )
 
+// The selected-module catalogue and production reader policy ship together.
+func TestFrozenGoModuleCatalogueSeal(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "third_party", "zitadel-go-module-notices", "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := noticeDigest(body); got != moduleCatalogueHash {
+		t.Fatalf("checked-in module catalogue is not admitted by the production reader: got %s, policy %s", got, moduleCatalogueHash)
+	}
+}
+
 // sourceLicenseFixture adds the immutable root terms to the normal build fixture.
 func sourceLicenseFixture(t *testing.T) (noticeFixture, []byte) {
 	t.Helper()

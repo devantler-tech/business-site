@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
   "metadataProfile": "machine-id-no-jsonpath-v1",
-  "goModSha256": "40b712c3f3394042ef1602c0cfb89d6802873a3374f21bf42a3d07fd685d79c6",
-  "goSumSha256": "c84a989a66d0601e904a45de992d02a14de784624247e4755ec9b510f178d344",
+  "goModSha256": "d3646d619621042fb5039f534df32350380c7640620f58086a67e7d6c6fb23b5",
+  "goSumSha256": "ecb0f1cc67843b22a16c3e7a5fee39a5ec930acd787051a8d697e119282b0646",
   "modules": [
     {
       "original": {
@@ -5834,16 +5834,16 @@
     {
       "original": {
         "Path": "golang.org/x/net",
-        "Version": "v0.61.0",
-        "Sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+        "Version": "v0.62.0",
+        "Sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
         "GoModSum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "golang.org/x/net",
-        "Version": "v0.61.0",
-        "Sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+        "Version": "v0.62.0",
+        "Sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
         "GoModSum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
         "Main": false,
         "Replace": null
