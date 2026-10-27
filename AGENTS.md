@@ -54,6 +54,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   excluding redirects and noindex disclosures; never copy publisher CNAME or publication receipts.
   All discovery assets and endpoints are absent when the candidate is false or unset.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
+- `third_party/zitadel-build-tools/scope.json` defines the exact 37 authored
+  identity-build files and three license documents granted under AGPL-3.0-only.
+  No directory-wide, whole-module or other application license is implied.
+  Preserve its closed scope, private SDK metadata and literal terms; source capture
+  and distribution admission remain separate. The CI-only scope checker and tests
+  are outside that grant and never activate or publish an identity.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
@@ -252,6 +258,7 @@ node --test scripts/identity-cohorts.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
+bash scripts/scan-go-source.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
 bash scripts/runtime-release.test.sh
@@ -262,6 +269,7 @@ node --test scripts/tenant-package.test.mjs
 node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
+bash scripts/zitadel-build-tools-license.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)

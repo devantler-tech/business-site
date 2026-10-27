@@ -46,6 +46,7 @@ jobs:
               - 'third_party/zitadel-login-icons/**'
               - 'third_party/zitadel-text-fonts/**'
               - 'third_party/zitadel-copied-assets/**'
+              - 'third_party/zitadel-build-tools/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
               - 'server/cmd/zitadel-module-sources/**'
@@ -334,6 +335,8 @@ jobs:
         run: |
           test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 12582912
           test "$(awk '/MemTotal:/ {print $2}' /proc/meminfo)" -ge 12582912
+      - name: Verify the exact identity build-tool license scope
+        run: bash scripts/zitadel-build-tools-license.test.sh
       - name: Setup the source verifier compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -666,6 +669,8 @@ jobs:
           bash scripts/publishing-contract.test.sh
           bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
+      - name: Verify Go source scanner compiler selection
+        run: bash scripts/scan-go-source.test.sh
       - name: Verify source, current original CI and unextracted archive admission
         env:
           GOTOOLCHAIN: local

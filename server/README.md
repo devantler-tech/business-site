@@ -511,7 +511,9 @@ exercise the real HTTPS boundary directly. No browser security warning is bypass
 
 Review locked dependencies and their upstream licenses before every update.
 The current compiled-module inventory is in [DEPENDENCIES.md](DEPENDENCIES.md).
-The source repository has not introduced a new license grant for its own code.
-Dependency notices do not license Devantler Tech's application source. Include
+Only Devantler Tech's authored material in the exact file list and license documents
+in [the identity build-tool scope](../third_party/zitadel-build-tools/README.md)
+is granted under AGPL-3.0-only. This does not license the whole Go module or any
+other application source. Dependency notices do not expand that grant. Include
 the required upstream license/notice texts when distributing a binary; the runtime
 packager carries the actually linked Go graph and Go standard-library notices.

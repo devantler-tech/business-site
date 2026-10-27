@@ -19,6 +19,7 @@ check() {
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-console-notices/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-text-fonts/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-copied-assets/**"))) and
+    any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("third_party/zitadel-build-tools/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-module-sources/**")) and (.with.filters | contains("server/go.mod")) and (.with.filters | contains("server/go.sum"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("server/cmd/zitadel-bsr-sources/**"))) and
     any(.jobs.changes.steps[]; .id == "filter" and (.with.filters | contains("tools/zitadel-pnpm-source/**"))) and
@@ -41,6 +42,11 @@ check() {
     ([$job.steps[].name] | index("Setup the source verifier compiler") < index("Build the pinned identity vulnerability checker") and
       index("Build the pinned identity vulnerability checker") < index("Setup the frozen identity Go compiler") and
       index("Build the complete native Linux service and embedded console") < index("Scan the actual frozen identity executable")) and
+    ([$job.steps[] | select(.name == "Verify the exact identity build-tool license scope")] | length) == 1 and
+    any($job.steps[]; .name == "Verify the exact identity build-tool license scope" and
+      .run == "bash scripts/zitadel-build-tools-license.test.sh" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify the exact identity build-tool license scope") < index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
       .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -355,6 +361,10 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run += " -json" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run=(.run | sub("service/zitadel"; "service/other")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the exact identity build-tool license scope"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the exact identity build-tool license scope" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the exact identity build-tool license scope" then .["continue-on-error"]=true else . end)' \
+  '.jobs.changes.steps |= map(if .id == "filter" then .with.filters=(.with.filters | gsub("third_party/zitadel-build-tools/\\\\*\\\\*"; "other-input/**")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Read back restored Go inputs without networking"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Read back restored Go inputs without networking" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Read back restored Go inputs without networking" then .["continue-on-error"]=true else . end)' \

@@ -874,8 +874,12 @@ and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside
 the input archive. This does not claim a hermetic OS/toolchain distribution.
 The builder still reads this checkout's maintained notice collectors/catalogues.
-Source-offer assembly must include the applicable custom tooling and their terms;
-that distribution admission remains #308.
+The [identity build-tool scope](../third_party/zitadel-build-tools/README.md) grants
+AGPL-3.0-only for its exact authored file list and terms, without licensing the
+remaining application. Check it with `bash scripts/check-zitadel-build-tools-license.sh`.
+Complete custom-tool capture, bootstrap-dependency treatment and reconstruction
+remain #387; a grant does not supply those missing source inputs. Durable source-offer
+assembly and distribution admission remain #308.
 
 Only after successful full native compilation, complete same-build notice
 inventories, source/recipe/toolchain joins and final unchanged-input readback does
