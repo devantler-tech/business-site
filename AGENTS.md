@@ -168,12 +168,22 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
   The opentype.js component checks one exact decoded source-map notice; logical
   source identifiers are inert data, never paths to read or URLs to fetch.
-- `Dockerfile.zitadel` and `scripts/zitadel-image-{package,smoke}.go` assemble an
-  explicit local identity image and exercise only its real version command. CI
+- `Dockerfile.zitadel` and `scripts/zitadel-{image-package,image-smoke,service-smoke}.go` assemble an
+  explicit local identity image and exercise its real version command. CI
   checks a closed package, the copied-back image payload and inspected container
   restrictions, then removes only its owner-bound container and local image. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
-  This grants no image publication, daemon/database/login acceptance or activation.
+  The separate explicit service profile also cold-starts the same image with an
+  ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes
+  no host ports and reads actual Linux process restrictions and RSS/peak
+  measurements. Preserve its closed network, writable-path and owner-bound cleanup
+  controls. HTTP connects only to the inspected owned private endpoint; its fictional
+  authority is never resolved through DNS and redirects cannot leave that authority.
+  Read the actual process mount table too; Docker's legacy tmpfs option is not
+  guaranteed to appear among regular mount points. Keep the kernel read-only
+  root and bounded, non-executable, owner-bound tmpfs admission mandatory.
+  HTTP discovery/console availability is not browser, invitation, MFA, production
+  TLS, complete-stack acceptance or activation. No image is published.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses
@@ -235,7 +245,7 @@ bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
-(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
+(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
 npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts

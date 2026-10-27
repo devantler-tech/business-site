@@ -370,7 +370,7 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch k {
-		case "--smoke":
+		case "--smoke", "--service-smoke":
 			values[k] = "true"
 		case "--build", "--repository", "--output":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -382,11 +382,17 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("unexpected argument"))
 		}
 	}
-	if values["--smoke"] != "" && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
+	if (values["--smoke"] != "" || values["--service-smoke"] != "") && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
 		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
 			return fail(fmt.Errorf("native Linux amd64 Go 1.26.10 required"))
 		}
-		if err := imageSmoke(values["--build"], values["--repository"], values["--output"], imageExecute); err != nil {
+		var probes []func(string, string) error
+		if values["--service-smoke"] != "" {
+			probes = append(probes, func(id, owner string) error {
+				return imageService(id, owner, values["--repository"], values["--output"], imageExecute)
+			})
+		}
+		if err := imageSmoke(values["--build"], values["--repository"], values["--output"], imageExecute, probes...); err != nil {
 			return fail(err)
 		}
 		return 0

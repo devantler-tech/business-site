@@ -757,7 +757,7 @@ its version command inside a restricted container. Run it on native Linux amd64
 with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
 
 ```sh
-go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go \
+go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go \
   --smoke --build "$work/linux-build" --repository "$PWD" \
   --output "$work/local-image-test"
 ```
@@ -765,8 +765,9 @@ go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go \
 The output must be new and outside both input trees. A parent-directory alias
 does not permit output inside them. No arguments perform no work. Ordinary
 website builds and publishers do not invoke this entrypoint. The selected Linux
-CI job invokes it after its actual native build and retains only the compact
-`image-smoke.json` diagnostic alongside the existing build evidence.
+CI job invokes the stronger `--service-smoke` profile after its actual native
+build and retains the compact `image-smoke.json` and `service-smoke.json`
+diagnostics alongside the existing build evidence.
 
 The notice collector's read-only `--verify` mode repeats the actual completed
 build capture, compares every retained diagnostic and final inventory, and
@@ -805,3 +806,51 @@ by this test. No customer credentials or configuration are supplied.
 false. Remaining terms and corresponding source remain #326/#308; complete
 restricted services and actual invitation/login acceptance remain #305/#302.
 The portal and identity publication remain off.
+
+## Isolated service process test
+
+Replacing `--smoke` with `--service-smoke` retains the complete CLI/package
+checks and cold-starts that same immutable local image against a digest-pinned
+PostgreSQL 17 fixture. Both containers use fictional, disposable state. The
+network is internal and neither container publishes a host port. The native Linux
+probe connects directly to the inspected service's private IPv4 endpoint on that
+owned network. It retains `fixture.invalid:8080` as the HTTP/OIDC authority without
+DNS resolution; other authorities, ports and redirect destinations are refused.
+Docker can retain a requested host mapping without publishing it on an internal-only
+network ([upstream report](https://github.com/moby/moby/discussions/53256)); the probe
+does not rely on that mapping or add an externally connected network.
+HTTP and a pre-verified fictional administrator
+are deliberate local fixture choices, not the maintained production identity
+policy. No real credentials, mail, invitations, accounts or remote services enter
+this test. It does not change the dormant configuration preparer.
+
+The service has a read-only root, UID/GID 65532, dropped capabilities,
+no-new-privileges and built-in seccomp. Its one explicitly configured application
+mount is a 16 MiB non-executable `/tmp` tmpfs. Docker's ordinary managed kernel
+mounts remain separate; this is not a complete writable-filesystem audit.
+The fixture limits it to 128 PIDs, 1 GiB and two CPUs;
+these ceilings are not measured production sizing. The test requires actual
+readiness, issuer-bound OIDC discovery and embedded Console HTTP delivery, then
+reads three actual native Linux process samples. Those samples must show the
+single service process, all four UID/GID slots, empty capability sets,
+no-new-privileges, seccomp filter mode, RSS, peak RSS and thread count. Each sample
+also reads that process's actual Linux mount table: the root must be read-only,
+and `/tmp` must be a 16 MiB tmpfs owned by 65532:65532, mode 0700, with noexec,
+nosuid and nodev. Missing or ambiguous entries, a hidden child mount or failed
+kernel reads refuse the result. Docker's legacy `--tmpfs` can appear only in
+`HostConfig.Tmpfs`, rather than the regular `Mounts` list; either representation
+retains this mandatory independent kernel check. Raw mount tables stay private
+and are not retained in the diagnostic. These are
+container-process measurements, not build RSS or whole-stack consumption.
+
+The diagnostic binds the inspected image, upstream revision and harness source.
+It records startup time, process measurements and cleanup without raw container
+configuration, environment values, database contents, authentication tokens or
+service logs. The test requires normal service shutdown and removes only its
+verified owner-bound service, database and network; the outer image test removes
+its own image. A failure is never converted to a successful receipt.
+
+`browserProof` and `authenticationProof` stay false. Console HTTP delivery does
+not prove fallback font appearance, a successful browser login, invitation/MFA/
+recovery, Dex, verified TLS, backups or production resource sizing. Those remain
+under #308/#305/#302, alongside independent image/source publication and admission.

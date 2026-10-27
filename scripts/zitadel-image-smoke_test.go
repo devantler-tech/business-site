@@ -167,6 +167,26 @@ func TestRestrictedImageSmokeCompletesOnlyAfterObservedSuccess(t *testing.T) {
 	}
 }
 
+func TestServiceProbeFailureCannotEmitSuccessfulImageReceipt(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	called := 0
+	err := imageSmoke(build, repo, out, imageSmokeDouble(t, build, ""), func(id, owner string) error {
+		called++
+		if id != "sha256:"+strings.Repeat("b", 64) || len(owner) != 32 {
+			t.Fatal("service probe received unbound identity")
+		}
+		return fmt.Errorf("fixture service refused")
+	})
+	if err == nil || called != 1 || !strings.Contains(err.Error(), "fixture service refused") {
+		t.Fatalf("failed service was ignored: calls=%d err=%v", called, err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+		t.Fatal("failed service emitted successful image receipt")
+	}
+}
+
 func TestRestrictedImageSmokeRejectsFailedOrWeakenedExecution(t *testing.T) {
 	for _, kind := range []string{"verification-error", "seccomp", "build-error", "image-user", "architecture", "container-user", "writable", "privileged", "capability", "network", "no-limits", "mount", "oom", "exit", "run-error", "version", "copied-binary", "cleanup"} {
 		t.Run(kind, func(t *testing.T) {
