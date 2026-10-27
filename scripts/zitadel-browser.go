@@ -118,8 +118,13 @@ func (d *browserDriver) request(method, path string, body any, result any) error
 	var failure struct {
 		Error string `json:"error"`
 	}
-	_ = json.Unmarshal(envelope.Value, &failure)
-	if response.StatusCode != http.StatusOK || failure.Error != "" {
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(envelope.Value, &fields)
+	_, hasError := fields["error"]
+	if hasError {
+		_ = json.Unmarshal(envelope.Value, &failure)
+	}
+	if response.StatusCode != http.StatusOK || hasError {
 		switch failure.Error {
 		case "session not created", "timeout", "no such element", "invalid argument", "javascript error":
 			d.category = strings.ReplaceAll(failure.Error, " ", "-")

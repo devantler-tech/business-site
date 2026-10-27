@@ -111,3 +111,21 @@ func TestBrowserDriverRequiresCompleteResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestBrowserDriverRejectsMalformedErrorValue(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"value":{"ready":true,"error":false}}`))
+	}))
+	defer server.Close()
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+	}}
+	defer transport.CloseIdleConnections()
+	d := browserDriver{ctx: context.Background(), client: &http.Client{Timeout: time.Second, Transport: transport}}
+	var value struct {
+		Ready bool `json:"ready"`
+	}
+	if err := d.request("GET", "/status", nil, &value); err == nil || value.Ready {
+		t.Fatal("malformed WebDriver error admitted as success")
+	}
+}
