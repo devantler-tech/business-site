@@ -26,6 +26,8 @@ type browserPage struct {
 	Username      bool     `json:"username"`
 	Password      bool     `json:"password"`
 	Console       bool     `json:"console"`
+	OptionalMFA   bool     `json:"optionalMFA"`
+	MFAAction     string   `json:"mfaAction"`
 	Font          string   `json:"font"`
 	FontsReady    bool     `json:"fontsReady"`
 	FaceLoaded    bool     `json:"selectedFaceLoaded"`
@@ -57,6 +59,10 @@ func browserAdmit(page browserPage, kind string) bool {
 	if !strings.HasPrefix(u.Path, "/ui/login/") {
 		return false
 	}
+	if kind == "optional-mfa" {
+		action, err := url.Parse(page.MFAAction)
+		return err == nil && page.OptionalMFA && action.Scheme == "http" && action.Host == serviceAuthority && action.User == nil && action.Opaque == "" && action.Path == "/ui/login/mfa/prompt"
+	}
 	return (kind == "login" && page.Username) || (kind == "password" && page.Password)
 }
 
@@ -66,12 +72,14 @@ const browserObservation = `
 if (!document.body) return null;
 const root = document.querySelector('cnsl-root');
 const shown = selector => [...document.querySelectorAll(selector)].some(e => e.getClientRects().length);
+const skip = [...document.querySelectorAll('button[name="skip"][value="true"][formnovalidate]')].find(e=>e.getClientRects().length && e.form?.method==='post');
 const sample = document.querySelector('h1') || document.body;
 const font = getComputedStyle(sample).fontFamily;
 return {url:location.href, ready:document.readyState, text:document.body.innerText,
   secureContext:window.isSecureContext, webCrypto:typeof crypto.subtle?.digest === 'function',
   username:shown('#loginName'), password:shown('#password'),
   console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
+  optionalMFA:!!skip, mfaAction:skip?.form?.action || '',
   font, fontsReady:document.fonts.status === 'loaded',
   selectedFaceLoaded:[...document.fonts].some(f=>f.status==='loaded' &&
     f.family.replaceAll('"','').replaceAll("'",'')===font.split(',')[0].trim().replaceAll('"','').replaceAll("'",'')),
@@ -82,6 +90,8 @@ type browserDriver struct {
 	ctx               context.Context
 	client            *http.Client
 	session, category string
+	mfaDeferred       bool
+	lastPage          browserPage
 }
 
 // request consumes a bounded complete WebDriver response before decoding it.
@@ -151,8 +161,23 @@ func (d *browserDriver) waitPage(kind string) (browserPage, error) {
 		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserObservation, "args": []any{}}, &page); err != nil {
 			return page, err
 		}
+		d.lastPage = page
 		if browserAdmit(page, kind) {
 			return page, nil
+		}
+		if kind == "console" && browserAdmit(page, "optional-mfa") {
+			if d.mfaDeferred {
+				return page, fmt.Errorf("optional enrollment repeated")
+			}
+			button, err := d.element(`button[name="skip"][value="true"][formnovalidate]`)
+			if err != nil {
+				return page, err
+			}
+			if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+				return page, err
+			}
+			d.mfaDeferred = true
+			continue
 		}
 		select {
 		case <-d.ctx.Done():
@@ -225,6 +250,19 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 	d := browserDriver{category: "observation"}
 	defer func() {
 		if result != nil {
+			if d.lastPage.Ready != "" {
+				// Only fixed labels and booleans survive a failed observation. Never
+				// retain DOM text, URLs, form values or driver diagnostics.
+				page := d.lastPage
+				b, err := json.MarshalIndent(map[string]any{"result": "incomplete", "stage": phase, "category": d.category, "usernameForm": page.Username, "passwordForm": page.Password, "authenticatedConsole": page.Console, "optionalMFAOffered": page.OptionalMFA, "optionalMFADeferred": d.mfaDeferred, "selectedFontLoaded": page.FaceLoaded, "fontsReady": page.FontsReady, "failedFontCount": len(page.FailedFonts), "secureContext": page.SecureContext, "webCrypto": page.WebCrypto}, "", "  ")
+				if err == nil {
+					err = imageWrite(output, "browser-incomplete.json", append(b, '\n'), 0600)
+				}
+				if err != nil {
+					result = fmt.Errorf("browser stage=%s category=%s; incomplete observation diagnostic unavailable", phase, d.category)
+					return
+				}
+			}
 			result = fmt.Errorf("browser stage=%s category=%s", phase, d.category)
 		}
 	}()
@@ -404,7 +442,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 		return err
 	}
 	phase = "receipt"
-	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err

@@ -882,6 +882,12 @@ requires the authenticated Console header and navigation. Each page must finish
 rendering with its selected font face actually loaded, no failed font faces or
 Ailerons resources, and resources confined to the fictional origin. Three
 screenshots and their byte hashes make the presentation independently inspectable.
+If the native form offers optional MFA enrollment, this presentation-only fixture
+may use its explicit deferral button once. The unchanged native form and its exact
+same-origin enrollment action must be observed first; mandatory or repeated
+enrollment is refused. The receipt records that choice and keeps `mfaProof` false.
+Production MFA requirements are unchanged. An incomplete journey may retain only
+fixed stage labels and observation booleans, never DOM text, URLs or form values.
 Driver session closure, process exit and private profile cleanup are mandatory.
 The outer Go harness rechecks the runner source, screenshot bytes and receipt,
 then binds the browser result to the inspected local image and upstream source.

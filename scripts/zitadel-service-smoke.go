@@ -658,10 +658,11 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		Portal     bool   `json:"portalFederation"`
 		TLS        bool   `json:"productionTLS"`
 		Invitation bool   `json:"invitationProof"`
+		MFA        bool   `json:"mfaProof"`
 		Admission  string `json:"imageAdmission"`
 		License    string `json:"licenseClosure"`
 	}
-	if err = imageDecode(raw, &receipt); err != nil || receipt.SchemaVersion != 1 || receipt.Profile != "fictional-native-browser" || receipt.Source != imageHash(source) || receipt.Executable != imageHash(binary) || receipt.Version == "" || receipt.Namespace != namespace || receipt.SandboxDisabled || len(receipt.Pages) != 3 || receipt.Cleanup != "complete" || receipt.Portal || receipt.TLS || receipt.Invitation || receipt.Admission != "unknown" || receipt.License != "unknown" {
+	if err = imageDecode(raw, &receipt); err != nil || receipt.SchemaVersion != 1 || receipt.Profile != "fictional-native-browser" || receipt.Source != imageHash(source) || receipt.Executable != imageHash(binary) || receipt.Version == "" || receipt.Namespace != namespace || receipt.SandboxDisabled || len(receipt.Pages) != 3 || receipt.Cleanup != "complete" || receipt.Portal || receipt.TLS || receipt.Invitation || receipt.MFA || receipt.Admission != "unknown" || receipt.License != "unknown" {
 		return fmt.Errorf("browser observation binding differs")
 	}
 	for i, kind := range []string{"login", "password", "console"} {

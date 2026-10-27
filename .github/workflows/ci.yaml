@@ -541,6 +541,7 @@ jobs:
             .browserSourceSha256 == $source and (.browserVersion | type == "string" and length > 0) and
             .browserSandboxDisabled == false and .cleanup == "complete" and
             .portalFederation == false and .productionTLS == false and .invitationProof == false and
+            .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
             (.pages | map(.kind)) == ["login","password","console"] and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
@@ -621,6 +622,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/service-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-binding.json
+            ${{ runner.temp }}/zitadel-image/browser-incomplete.json
             ${{ runner.temp }}/zitadel-image/login.png
             ${{ runner.temp }}/zitadel-image/password.png
             ${{ runner.temp }}/zitadel-image/console.png

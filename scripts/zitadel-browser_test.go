@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -127,5 +128,93 @@ func TestBrowserDriverRejectsMalformedErrorValue(t *testing.T) {
 	}
 	if err := d.request("GET", "/status", nil, &value); err == nil || value.Ready {
 		t.Fatal("malformed WebDriver error admitted as success")
+	}
+}
+
+func TestBrowserOptionalMFARequiresNativeDeferral(t *testing.T) {
+	page := browserPage{URL: "http://fixture.localhost:8080/ui/login/password", Ready: "complete", Text: "Set up two-factor authentication", Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/font.ttf"}, OptionalMFA: true, MFAAction: "http://fixture.localhost:8080/ui/login/mfa/prompt"}
+	if !browserAdmit(page, "optional-mfa") {
+		t.Fatal("native optional enrollment form refused")
+	}
+	for name, change := range map[string]func(*browserPage){
+		"mandatory enrollment": func(p *browserPage) { p.OptionalMFA = false },
+		"absent action":        func(p *browserPage) { p.MFAAction = "" },
+		"external action":      func(p *browserPage) { p.MFAAction = "https://external.invalid/ui/login/mfa/prompt" },
+		"other action":         func(p *browserPage) { p.MFAAction = "http://fixture.localhost:8080/ui/login/mfa/verify" },
+		"credential action":    func(p *browserPage) { p.MFAAction = "http://user@fixture.localhost:8080/ui/login/mfa/prompt" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := page
+			change(&bad)
+			if browserAdmit(bad, "optional-mfa") {
+				t.Fatal("non-optional or unrelated action admitted")
+			}
+		})
+	}
+}
+
+// The driver must use the explicit optional native action once, never clear a
+// mandatory prompt or infer that submitting it authenticated the user.
+func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
+	for _, scenario := range []string{"optional", "repeated", "mandatory", "external", "failed click"} {
+		t.Run(scenario, func(t *testing.T) {
+			page := browserPage{URL: "http://fixture.localhost:8080/ui/login/password", Ready: "complete", Text: "Set up two-factor authentication", Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/font.ttf"}, OptionalMFA: scenario != "mandatory", MFAAction: "http://fixture.localhost:8080/ui/login/mfa/prompt"}
+			if scenario == "external" {
+				page.MFAAction = "https://external.invalid/ui/login/mfa/prompt"
+			}
+			clicks := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				var value any
+				switch r.URL.Path {
+				case "/session/fixture/execute/sync":
+					value = page
+				case "/session/fixture/element":
+					value = map[string]string{"element-6066-11e4-a52e-4f735466cecf": "optional-control"}
+				case "/session/fixture/element/optional-control/click":
+					clicks++
+					if scenario == "failed click" {
+						w.WriteHeader(http.StatusInternalServerError)
+						value = map[string]string{"error": "unknown error"}
+					} else if scenario == "optional" {
+						page.URL = "http://fixture.localhost:8080/ui/console/"
+						page.OptionalMFA = false
+						page.Console = true
+						page.Text = "Welcome to the authenticated management console. Users Projects Organizations"
+					}
+				default:
+					t.Error("unexpected driver operation")
+					w.WriteHeader(http.StatusNotFound)
+				}
+				if err := json.NewEncoder(w).Encode(map[string]any{"value": value}); err != nil {
+					t.Error(err)
+				}
+			}))
+			defer server.Close()
+			transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+			}}
+			defer transport.CloseIdleConnections()
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			d := browserDriver{ctx: ctx, client: &http.Client{Timeout: time.Second, Transport: transport}, session: "fixture"}
+			observed, err := d.waitPage("console")
+			if scenario == "optional" {
+				if err != nil || !observed.Console || !d.mfaDeferred || clicks != 1 {
+					t.Fatalf("optional enrollment journey failed: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("incomplete authentication admitted")
+				}
+				wantClicks := 0
+				if scenario == "repeated" || scenario == "failed click" {
+					wantClicks = 1
+				}
+				if clicks != wantClicks {
+					t.Fatal("unrelated or repeated prompt submitted")
+				}
+			}
+		})
 	}
 }
