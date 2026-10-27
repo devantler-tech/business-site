@@ -81,7 +81,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains twenty-five literal build/modification records and rechecks the snapshot/archive
+  retains twenty-eight literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
   Its explicit `--restore-build` operation restores the sealed files and literal
@@ -125,6 +125,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   84 actual copies and original attribution; its raw text and inventory enter
   image packaging and retained-input replay. This does not admit an image or
   activate the portal; read ADR 0025 and the source guide before changing it.
+  The `--copied-assets` companion also closes 1,858 icon/flag/translation originals,
+  3,716 generated copies and their actual Console embeds. Translation admission
+  retains the complete frozen license, licensing scope and contribution context,
+  checks strict UTF-8 JSON objects and keeps the full translation bodies in source,
+  rather than duplicating them into notice text. Read ADR 0026 before changing it.
 - `server/cmd/zitadel-bsr-sources/` is an otherwise inert, standard-library build
   command for the frozen three-module schema profile; read its README. It verifies
   native SHAKE256 content, both cache/export representations and a closed externally

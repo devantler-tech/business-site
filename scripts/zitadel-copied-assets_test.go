@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,9 +16,136 @@ import (
 	"testing"
 )
 
+// An undeclared translation must not disappear from the closed copied-asset
+// selection merely because the original collector recognized only icon paths.
+func TestCopiedTranslationsRejectUndeclaredSourceOutputAndCompilerMembers(t *testing.T) {
+	for _, member := range []string{"source", "console-output", "embedded-output", "compiler"} {
+		t.Run(member, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			if _, err := copiedObserve(b, n, r, readAt, p); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			if member == "compiler" {
+				appendTranslationCompilerMember(t, b)
+			} else {
+				name := map[string]string{
+					"source":          "console/src/assets/i18n/zz.json",
+					"console-output":  "console/dist/console/assets/i18n/zz.json",
+					"embedded-output": "internal/api/ui/console/static/assets/i18n/zz.json",
+				}[member]
+				filename := filepath.Join(b, "prepared/source", name)
+				if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filename, []byte(`{"HELLO":"Undeclared translation"}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := copiedObserve(b, n, r, readAt, p); err == nil {
+				t.Fatal("undeclared translation was omitted from asset admission")
+			}
+		})
+	}
+}
+
+func appendTranslationCompilerMember(t *testing.T, build string) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(mustTextRead(t, build, "packages.jsonl")))
+	var stream bytes.Buffer
+	for {
+		var record map[string]any
+		if err := decoder.Decode(&record); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if record["ImportPath"] == "github.com/zitadel/zitadel/internal/api/ui/console" {
+			record["EmbedFiles"] = append(record["EmbedFiles"].([]any), "static/assets/i18n/zz.json")
+		}
+		if err := json.NewEncoder(&stream).Encode(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(build, "packages.jsonl"), stream.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCopiedTranslationsRejectChangedMissingLinkedMalformedAndUncompiledInputs(t *testing.T) {
+	for _, mode := range []string{"changed-source", "missing-source", "linked-source", "changed-output", "missing-output", "uncompiled", "changed-scope", "missing-contribution", "malformed", "duplicate", "non-object", "invalid-utf8"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			if _, err := copiedObserve(b, n, r, readAt, p); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			source := filepath.Join(b, "prepared/source/console/src/assets/i18n/en.json")
+			output := filepath.Join(b, "prepared/source/internal/api/ui/console/static/assets/i18n/en.json")
+			var err error
+			switch mode {
+			case "changed-source":
+				err = os.WriteFile(source, []byte(`{"HELLO":"Substituted"}`), 0600)
+			case "missing-source":
+				err = os.Remove(source)
+			case "linked-source":
+				if err = os.Remove(source); err == nil {
+					err = os.Symlink(output, source)
+				}
+			case "changed-output":
+				err = os.WriteFile(output, []byte(`{"HELLO":"Substituted"}`), 0600)
+			case "missing-output":
+				err = os.Remove(output)
+			case "uncompiled":
+				raw := mustTextRead(t, b, "packages.jsonl")
+				err = os.WriteFile(filepath.Join(b, "packages.jsonl"), bytes.ReplaceAll(raw, []byte("static/assets/i18n/en.json"), []byte("static/unselected.json")), 0600)
+			case "changed-scope":
+				err = os.WriteFile(filepath.Join(b, "prepared/source/LICENSING.md"), []byte("Different scope"), 0600)
+			case "missing-contribution":
+				err = os.Remove(filepath.Join(b, "prepared/source/CONTRIBUTING.md"))
+			default:
+				payload := map[string][]byte{
+					"malformed":    []byte(`{"HELLO":`),
+					"duplicate":    []byte(`{"GREETING":{"HELLO":"one","HELLO":"two"}}`),
+					"non-object":   []byte(`["not a translation object"]`),
+					"invalid-utf8": {'{', '"', 'X', '"', ':', '"', 0xff, '"', '}'},
+				}[mode]
+				// Deliberately re-seal this synthetic catalogue and both outputs so
+				// only structural validation can reject the malformed translation.
+				var cat copiedCatalogue
+				if err = json.Unmarshal(mustTextRead(t, n, "catalogue.json"), &cat); err != nil {
+					t.Fatal(err)
+				}
+				for i := range cat.Assets {
+					a := &cat.Assets[i]
+					if a.Family != "translations" {
+						continue
+					}
+					a.Bytes, a.SHA256, a.GitBlob = len(payload), digest(payload), blob(payload)
+					for _, name := range append([]string{a.Path}, a.Outputs...) {
+						if err = os.WriteFile(filepath.Join(b, "prepared/source", name), payload, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				encoded, encodeErr := json.Marshal(cat)
+				if encodeErr != nil {
+					t.Fatal(encodeErr)
+				}
+				err = os.WriteFile(filepath.Join(n, "catalogue.json"), encoded, 0600)
+				p.CatalogueHash = digest(encoded)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := copiedObserve(b, n, r, readAt, p); err == nil {
+				t.Fatal("incomplete translation admission succeeded")
+			}
+		})
+	}
+}
+
 // This miniature distribution exercises original archives, actual filesystem
 // copies and compiler observations. Native CI separately exercises the frozen
-// 1,836-member distribution; these are deliberately not native-font fixtures.
+// 1,858-member distribution; these are deliberately not native-font fixtures.
 func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	t.Helper()
 	b, fonts, recipe, fontPolicy := textFixture(t)
@@ -38,6 +166,15 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	terms := []byte("Original complete MIT grant\nCopyright fixture author\n")
 	put(n, "MIT.txt", terms)
 	cat.Notices = []inputRecord{{"MIT.txt", digest(terms)}}
+	for _, context := range []struct{ source, notice, body string }{
+		{"LICENSE", "ZITADEL-LICENSE", "Complete fixture source license\n"},
+		{"LICENSING.md", "ZITADEL-LICENSING.md", "Complete fixture licensing scope\n"},
+		{"CONTRIBUTING.md", "ZITADEL-CONTRIBUTING.md", "Complete fixture translation contribution context\n"},
+	} {
+		put(b, "prepared/source/"+context.source, []byte(context.body))
+		put(n, context.notice, []byte(context.body))
+		cat.Notices = append(cat.Notices, inputRecord{context.notice, digest([]byte(context.body))})
+	}
 	packages := mustTextRead(t, b, "packages.jsonl")
 	var compiler []map[string]any
 	for _, line := range strings.Split(strings.TrimSpace(string(packages)), "\n") {
@@ -47,14 +184,19 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 		}
 		compiler = append(compiler, p)
 	}
-	for _, family := range []string{"line-awesome", "material-icons", "flag-icons"} {
+	for _, family := range []string{"line-awesome", "material-icons", "flag-icons", "translations"} {
 		body := []byte("original " + family)
-		name := map[string]string{"line-awesome": "console/src/assets/icons/line-awesome/css/example.css", "material-icons": "package/dist/fonts/MaterialIcons-Regular.woff2", "flag-icons": "package/flags/4x3/dk.svg"}[family]
-		out := map[string]string{"line-awesome": "assets/icons/line-awesome/css/example.css", "material-icons": "media/MaterialIcons-Regular-EXAMPLE.woff2", "flag-icons": "media/dk-EXAMPLE.svg"}[family]
+		if family == "translations" {
+			body = []byte(`{"GREETING":{"HELLO":"Hello, fixture"}}`)
+		}
+		name := map[string]string{"line-awesome": "console/src/assets/icons/line-awesome/css/example.css", "material-icons": "package/dist/fonts/MaterialIcons-Regular.woff2", "flag-icons": "package/flags/4x3/dk.svg", "translations": "console/src/assets/i18n/en.json"}[family]
+		out := map[string]string{"line-awesome": "assets/icons/line-awesome/css/example.css", "material-icons": "media/MaterialIcons-Regular-EXAMPLE.woff2", "flag-icons": "media/dk-EXAMPLE.svg", "translations": "assets/i18n/en.json"}[family]
 		a := copiedAsset{Family: family, Path: name, Bytes: len(body), SHA256: digest(body), Outputs: []string{"console/dist/console/" + out, "internal/api/ui/console/static/" + out}}
-		if family == "line-awesome" {
+		if family == "line-awesome" || family == "translations" {
 			a.GitBlob = blob(body)
-			a.OriginalBlob = a.GitBlob
+			if family == "line-awesome" {
+				a.OriginalBlob = a.GitBlob
+			}
 			put(b, "prepared/source/"+name, body)
 		} else {
 			packageName, version := "flag-icons", "7.5.0"
@@ -134,7 +276,7 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	put(b, "zitadel-copied-assets.go", []byte("selected copied-asset verifier"))
 	encoded, _ := json.Marshal(cat)
 	put(n, "catalogue.json", encoded)
-	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 3, Outputs: 6, TextNotices: fonts, TextPolicy: fontPolicy}
+	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy}
 }
 
 func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
@@ -143,7 +285,7 @@ func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(state.Assets) != 3 || !bytes.Contains(state.Raw, []byte("Copyright fixture author")) || !bytes.Contains(state.Raw, []byte("Original complete MIT grant")) {
+	if len(state.Assets) != 4 || !bytes.Contains(state.Raw, []byte("Copyright fixture author")) || !bytes.Contains(state.Raw, []byte("Original complete MIT grant")) || !bytes.Contains(state.Raw, []byte("Complete fixture translation contribution context")) || bytes.Contains(state.Raw, []byte("Hello, fixture")) {
 		t.Fatal("selected original attribution was lost")
 	}
 	if state.ImageAdmission != "unknown" || state.LicenseClosure != "unknown" {
@@ -257,7 +399,7 @@ func TestCopiedCaptureBindsCompletedSourceAndBinary(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if inv.BinarySHA256 != digest([]byte("compiled binary")) || len(inv.Assets) != 3 || !bytes.Contains(raw, []byte("Original complete MIT grant")) {
+	if inv.BinarySHA256 != digest([]byte("compiled binary")) || len(inv.Assets) != 4 || !bytes.Contains(raw, []byte("Original complete MIT grant")) {
 		t.Fatal("capture lost original terms or final binary identity")
 	}
 	if inv.ImageAdmission != "unknown" || inv.LicenseClosure != "unknown" || inv.Reproducible {

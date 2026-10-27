@@ -1,4 +1,4 @@
-// Output-bound provenance for the frozen Console's copied icon and flag assets.
+// Output-bound provenance for the frozen Console's copied icons, flags and translations.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 type copiedAsset struct {
@@ -49,7 +50,7 @@ type copiedPolicy struct {
 	TextPolicy      textPolicy
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "5060c209ca988e7fe494be46c32d33031df1d2747773b2f5e78b68e6311a4867", Assets: 1836, Outputs: 3672}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -338,7 +339,29 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 		}
 		seen[key] = true
 		var original []byte
-		if a.Family == "line-awesome" {
+		if a.Family == "translations" {
+			if !strings.HasPrefix(a.Path, "console/src/assets/i18n/") || !strings.HasSuffix(a.Path, ".json") || !textHex(a.GitBlob, 40) || a.OriginalBlob != "" || a.OriginalPath != "" {
+				return fail(fmt.Errorf("incomplete unmodified translation source identity"))
+			}
+			original, e = get(build, "prepared/source/"+a.Path, "source/"+a.Path, 4<<20)
+			if e != nil || blob(original) != a.GitBlob || !utf8.Valid(original) {
+				return fail(fmt.Errorf("original translation bytes differ"))
+			}
+			if _, e = jsonObject(original); e != nil {
+				return fail(fmt.Errorf("invalid translation object: %w", e))
+			}
+			for _, context := range []struct{ source, notice string }{
+				{"LICENSE", "ZITADEL-LICENSE"},
+				{"LICENSING.md", "ZITADEL-LICENSING.md"},
+				{"CONTRIBUTING.md", "ZITADEL-CONTRIBUTING.md"},
+			} {
+				body, e := get(build, "prepared/source/"+context.source, "source/"+context.source, 1<<20)
+				if e != nil || terms[context.notice] == nil || !bytes.Equal(body, terms[context.notice]) {
+					return fail(fmt.Errorf("original translation licensing context differs"))
+				}
+			}
+			sourceNames[a.Path] = true
+		} else if a.Family == "line-awesome" {
 			if !strings.HasPrefix(a.Path, "console/src/assets/icons/line-awesome/") || !textHex(a.GitBlob, 40) || !textHex(a.OriginalBlob, 40) {
 				return fail(fmt.Errorf("incomplete Line Awesome source identity"))
 			}
@@ -434,11 +457,11 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 // These are the complete observed output families, not catalogue-driven globs:
 // an additional asset in one of these classes must receive a new frozen review.
 func copiedSelected(name string) bool {
-	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
 }
 
 func copiedFilesystemSet(source string, expected, sourceNames map[string]bool) error {
-	for _, prefix := range []string{"console/src/assets/icons/line-awesome", "console/dist/console", "internal/api/ui/console/static"} {
+	for _, prefix := range []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"} {
 		e := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, e error) error {
 			if e != nil {
 				return e

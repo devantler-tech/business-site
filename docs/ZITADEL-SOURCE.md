@@ -236,11 +236,11 @@ It does not establish a distribution-wide grant, public source retrieval,
 signed image release, production federation or portal activation. See
 [ADR 0025](adr/0025-output-bound-text-font-notices.md).
 
-## Copied Console icons and flags
+## Copied Console icons, flags and translations
 
 The explicit `--copied-assets` companion retains the complete 1,561-member Line
-Awesome subtree, four Material Icons formats and 271 flag SVGs. Its frozen
-catalogue closes 1,836 original identities, 3,672 generated paths and 1,836
+Awesome subtree, four Material Icons formats, 271 flag SVGs and 22 translation
+JSON files. Its frozen catalogue closes 1,858 original identities, 3,716 generated paths and 1,858
 selected Console embeds. This includes the 32 icon-font outputs that the
 text-font collector records separately; combining the inventories preserves
 their existing byte identities and adds their original attribution.
@@ -253,6 +253,14 @@ identity, version and license name records from the four TTF inputs retain
 their source spans and complete strings; absent icon-font records are not
 invented. The five-record requirement for the separate text-font profile stays
 unchanged. See [the frozen provenance](../third_party/zitadel-copied-assets/README.md).
+
+The translations contribute 3,281,240 unchanged original bytes. Each strict UTF-8
+JSON object has a frozen Git-blob and byte identity, two exact generated copies
+and a selected Console embed. The complete frozen source LICENSE, LICENSING.md
+and CONTRIBUTING.md are retained and compared with the prepared source. These
+describe the source's default license, exceptions and contribution context;
+they are not independent certification of every contributor's rights. The
+complete JSON bodies stay in corresponding source, rather than notice text.
 
 Before compilation, the snapshot checks the actual connected pnpm aliases,
 exact package metadata, frozen lock, original license and asset bytes, paired
@@ -277,7 +285,7 @@ go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go scripts/zita
 
 The copied notice and inventory enter the closed 17-file restricted image
 payload; the retained-input replay receipt binds the new inventory. The helper,
-catalogue, three grants and two original CSS files are seven of the 25 literal
+catalogue, three grants, two original CSS files and three source contexts are ten of the 28 literal
 source/build records. The complete prepared upstream profile stays unchanged.
 Fixture controls and a full frozen-byte/compiler-record replay are diagnostic
 checks; only the hosted build observes actual compilation and native execution.
@@ -554,7 +562,7 @@ record. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those twenty-five records separate from the upstream source. The completed build
+keeps those twenty-eight records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
@@ -563,7 +571,7 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all twenty-five literal records and places only the four fixed build inputs at
+It retains all twenty-eight literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
@@ -746,7 +754,7 @@ The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
 as a literal source/build record. The native pnpm adapter and both SDK manifests
-are three of the twenty-five literal records. The text-font entrypoint, its
+are three of the twenty-eight literal records. The text-font entrypoint, its
 companion, frozen catalogue and Apache text are four further records; the
 original Lato OFL is already retained in the complete prepared source.
 

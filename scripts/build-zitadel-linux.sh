@@ -162,7 +162,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 25 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 28 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -213,7 +213,7 @@ check_text_notice_records() {
   for member in catalogue.json Apache-2.0.txt; do
     cmp "$root/third_party/zitadel-text-fonts/$member" "$records/third_party/zitadel-text-fonts/$member" || fail 'font catalogue or terms differ from retained source'
   done
-  for member in catalogue.json Line-Awesome-LICENSE.md Material-Icons-LICENSE Flag-Icons-LICENSE original-line-awesome.css original-line-awesome.min.css; do
+  for member in catalogue.json Line-Awesome-LICENSE.md Material-Icons-LICENSE Flag-Icons-LICENSE original-line-awesome.css original-line-awesome.min.css ZITADEL-LICENSE ZITADEL-LICENSING.md ZITADEL-CONTRIBUTING.md; do
     cmp "$root/third_party/zitadel-copied-assets/$member" "$records/third_party/zitadel-copied-assets/$member" || fail 'copied asset catalogue, original CSS or terms differ from retained source'
   done
 }
@@ -221,7 +221,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 25 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
@@ -466,7 +466,7 @@ shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 # Recheck the same private module cache after compilation, before final capture.
 go mod verify
 find "$console" "$embedded" internal/api/ui/login/static internal/api/ui/login/statik internal/notification/statik internal/statik -type f -exec shasum -a 256 {} + | sort >"$output/generated.sha256"
-shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" "$root/third_party/zitadel-login-icons/"* "$root/third_party/zitadel-text-fonts/"* "$root/third_party/zitadel-copied-assets/"{catalogue.json,Line-Awesome-LICENSE.md,Material-Icons-LICENSE,Flag-Icons-LICENSE,original-line-awesome.css,original-line-awesome.min.css} >"$output/login-icon-verifier.sha256"
+shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" "$root/third_party/zitadel-login-icons/"* "$root/third_party/zitadel-text-fonts/"* "$root/third_party/zitadel-copied-assets/"{catalogue.json,Line-Awesome-LICENSE.md,Material-Icons-LICENSE,Flag-Icons-LICENSE,original-line-awesome.css,original-line-awesome.min.css,ZITADEL-LICENSE,ZITADEL-LICENSING.md,ZITADEL-CONTRIBUTING.md} >"$output/login-icon-verifier.sha256"
 shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zitadel-console-notices/"* "$root/third_party/zitadel-go-module-notices/catalogue.json" >"$output/console-notice-verifier.sha256"
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
