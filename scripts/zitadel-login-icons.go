@@ -89,6 +89,10 @@ type inventory struct {
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
+// Companion modes are available only in explicit source-file compositions.
+// Existing icon/text-font commands do not acquire an implicit new dependency.
+var iconExtensions = map[string]func([]string, io.Writer, io.Writer) int{}
+
 // run emits nothing in the inactive state, and emits JSON only after a complete check.
 func run(args []string, out, diagnostic io.Writer) int {
 	if len(args) == 0 {
@@ -96,6 +100,9 @@ func run(args []string, out, diagnostic io.Writer) int {
 	}
 	if args[0] == "--text-fonts" {
 		return runTextFonts(args[1:], out, diagnostic)
+	}
+	if extension, ok := iconExtensions[args[0]]; ok {
+		return extension(args[1:], out, diagnostic)
 	}
 	fail := func(err error) int {
 		if _, e := fmt.Fprintln(diagnostic, "login-icons:", err); e != nil {

@@ -28,6 +28,12 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			if strings.Contains(strings.Join(args, " "), "--text-fonts") {
 				p = "text-font-notices-inventory.json"
 			}
+			if strings.Contains(strings.Join(args, " "), "--copied-assets") {
+				if kind == "copied-verification-error" {
+					return []byte(`{"plausible":true}`), fmt.Errorf("copied verification failed after output")
+				}
+				p = "copied-asset-notices-inventory.json"
+			}
 			b, err := os.ReadFile(filepath.Join(build, p))
 			if kind == "verification-error" {
 				return b, fmt.Errorf("failed after plausible inventory")
@@ -191,7 +197,7 @@ func TestServiceProbeFailureCannotEmitSuccessfulImageReceipt(t *testing.T) {
 }
 
 func TestRestrictedImageSmokeRejectsFailedOrWeakenedExecution(t *testing.T) {
-	for _, kind := range []string{"verification-error", "seccomp", "build-error", "image-user", "architecture", "container-user", "writable", "privileged", "capability", "network", "no-limits", "mount", "oom", "exit", "run-error", "version", "copied-binary", "cleanup"} {
+	for _, kind := range []string{"verification-error", "copied-verification-error", "seccomp", "build-error", "image-user", "architecture", "container-user", "writable", "privileged", "capability", "network", "no-limits", "mount", "oom", "exit", "run-error", "version", "copied-binary", "cleanup"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo, _ := imageTestFixture(t)
 			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))

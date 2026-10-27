@@ -13,6 +13,7 @@ printf 'go1.26.10\n' >"$scratch/go-distribution/VERSION"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-text-fonts.go" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-copied-assets.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-assets.go" "$scratch/recipe/scripts/"
@@ -25,6 +26,7 @@ cp "$root/server/go.mod" "$root/server/go.sum" "$scratch/recipe/server/"
 mkdir "$scratch/recipe/third_party"
 cp -R "$root/third_party/zitadel-login-icons" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-text-fonts" "$scratch/recipe/third_party/"
+cp -R "$root/third_party/zitadel-copied-assets" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-console-notices" "$scratch/recipe/third_party/"
 cp -R "$root/third_party/zitadel-go-module-notices" "$scratch/recipe/third_party/"
 build="$scratch/recipe/scripts/build-zitadel-linux.sh"
@@ -218,19 +220,21 @@ case "$1 $2" in
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
           jq -n --arg profile "${TEST_REPLAY_PROFILE:-0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:18,bytes:261683913,recipeSha256:("b"*64)}';;
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:25,bytes:261683913,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
           mkdir -p "$6/records/recipes" "$6/source/console/scripts"
           cp "$5/scripts/zitadel-console-assets.go" "$6/records/recipes/zitadel-console-assets.go"
-          cp "$5/scripts/"{zitadel-login-icons.go,zitadel-text-fonts.go} "$6/records/recipes/"
+          cp "$5/scripts/"{zitadel-login-icons.go,zitadel-text-fonts.go,zitadel-copied-assets.go} "$6/records/recipes/"
           mkdir -p "$6/records/third_party/zitadel-text-fonts"
           cp "$5/third_party/zitadel-text-fonts/"{catalogue.json,Apache-2.0.txt} "$6/records/third_party/zitadel-text-fonts/"
+          mkdir -p "$6/records/third_party/zitadel-copied-assets"
+          cp "$5/third_party/zitadel-copied-assets/"{catalogue.json,Line-Awesome-LICENSE.md,Material-Icons-LICENSE,Flag-Icons-LICENSE,original-line-awesome.css,original-line-awesome.min.css} "$6/records/third_party/zitadel-copied-assets/"
           mkdir -p "$6/records/recipes/zitadel-pnpm-source"
           cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:18,bytes:261683913,recipeSha256:$recipe}';;
+            '{manifestSha256:("a"*64),preparedProfileSha256:"0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d",files:9599,records:25,bytes:261683913,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
@@ -274,6 +278,21 @@ case "$1 $2" in
         if [[ "${TEST_FAIL:-}" = modules ]]; then echo 'plausible partial module retention'; exit 42; fi
       fi
       echo '{"fixture":"orchestration only"}'
+    elif [[ "$*" == *' --copied-assets '* ]]; then
+      [[ "$*" == *'zitadel-login-icons.go '* && "$*" == *'zitadel-text-fonts.go '* && "$*" == *'zitadel-copied-assets.go --copied-assets '* && "$*" == *' --recipe '* && "$*" == *' --notices '* ]]
+      args=("$@"); copied_build=''
+      for ((i=0;i<${#args[@]}-1;i++));do if [[ "${args[$i]}" = --build ]];then copied_build="${args[$((i+1))]}";fi;done
+      [[ -n "$copied_build" && -s "$copied_build/packages.jsonl" ]]
+      if [[ "$*" == *' --snapshot '* ]];then
+        [[ ! -e "$copied_build/service" ]]
+        if [[ "${TEST_FAIL:-}" = copied-snapshot ]];then echo 'plausible partial copied snapshot';exit 42;fi
+      else
+        [[ "$*" == *' --inventory '* && -s "$copied_build/copied-assets.before.json" && -s "$copied_build/build-receipt.pending" && -s "$copied_build/text-font-notices-inventory.json" ]]
+        shasum -a 256 "$copied_build/build-receipt.pending" | awk '{print $1}' >"$copied_build/fixture-copied-assets-receipt.sha256"
+        if [[ "${TEST_FAIL:-}" = copied-capture ]];then echo 'plausible partial copied capture';exit 42;fi
+        printf 'complete original icon and flag terms fixture\n' >"$copied_build/copied-asset-notices.txt"
+      fi
+      echo '{"fixture":"copied asset orchestration only"}'
     elif [[ "$*" == *' --text-fonts '* ]]; then
       [[ "$*" == *'zitadel-login-icons.go '* && "$*" == *'zitadel-text-fonts.go --text-fonts '* && "$*" == *' --recipe '* && "$*" == *' --notices '* ]]
       args=("$@"); text_build=''
@@ -571,6 +590,8 @@ reject empty-binary TEST_MISSING=binary
 reject failed-icon-inventory TEST_FAIL=inventory
 reject failed-text-font-snapshot TEST_FAIL=text-snapshot
 reject failed-text-font-capture TEST_FAIL=text-capture
+reject failed-copied-asset-snapshot TEST_FAIL=copied-snapshot
+reject failed-copied-asset-capture TEST_FAIL=copied-capture
 reject failed-notice-snapshot TEST_FAIL=notice-snapshot
 reject failed-notice-capture TEST_FAIL=notice-capture
 reject failed-supplement TEST_FAIL=supplement
@@ -600,6 +621,8 @@ test -s "$scratch/complete/zitadel-root-license.txt"
 test -s "$scratch/complete/go-module-notices.txt"
 test -s "$scratch/complete/text-font-notices.txt"
 test -s "$scratch/complete/text-font-notices-inventory.json"
+test -s "$scratch/complete/copied-asset-notices.txt"
+test -s "$scratch/complete/copied-asset-notices-inventory.json"
 test "$(jq -r 'has("sourceSnapshot")' "$scratch/complete/build-receipt.json")" = false
 test ! -e "$scratch/complete/selected-go-sources"
 : >"$TEST_CALLS"
@@ -694,7 +717,7 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 18 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .sourceSnapshot.files == 9599 and .sourceSnapshot.records == 25 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -754,7 +777,7 @@ if ! bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$pre
 fi
 jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
 final_receipt="$(shasum -a 256 "$retained_output/build-receipt.json" | awk '{print $1}')"
-for phase in console icons text-fonts; do
+for phase in console icons text-fonts copied-assets; do
   [[ "$(cat "$retained_output/fixture-$phase-receipt.sha256")" == "$final_receipt" ]] || { echo "final receipt differs from $phase inventory binding" >&2; exit 1; }
 done
 test -d "$retained_output/go-input-native/go-modules"
@@ -796,7 +819,7 @@ awk -v anchor="$receipt_anchor" 'found {print} index($0,anchor)==1 {found=1}' "$
 for control in complete jq-partial hash-partial; do
   receipt_output="$scratch/receipt-$control"
   mkdir -p "$receipt_output/native" "$receipt_output/bin"
-  for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json text-font-notices-inventory.json; do
+  for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json text-font-notices-inventory.json copied-asset-notices-inventory.json; do
     printf 'fictional inventory\n' >"$receipt_output/native/$notice"
   done
   jq -n '{sourceInput:{manifestSha256:("a"*64)},recipeSha256:("c"*64),binarySha256:("d"*64)}' >"$receipt_output/native.json"
@@ -812,7 +835,7 @@ for control in complete jq-partial hash-partial; do
   PATH="$receipt_output/bin:$PATH" bash "$scratch/receipt-footer.sh" "$receipt_output" >"$receipt_output/log" 2>&1 || status=$?
   if [[ "$control" = complete ]]; then
     [[ "$status" = 0 ]]
-    jq -e '.nativeOfflineReplayProved==true and .dependencyInputsCaptured==true and (.noticeInventories.textFonts|test("^[0-9a-f]{64}$"))' "$receipt_output/replay-receipt.json" >/dev/null
+    jq -e '.nativeOfflineReplayProved==true and .dependencyInputsCaptured==true and (.noticeInventories.textFonts|test("^[0-9a-f]{64}$")) and (.noticeInventories.copiedAssets|test("^[0-9a-f]{64}$"))' "$receipt_output/replay-receipt.json" >/dev/null
   else
     [[ "$status" = 42 && ! -e "$receipt_output/replay-receipt.json" ]]
   fi

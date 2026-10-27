@@ -575,6 +575,13 @@ type textFontName struct {
 
 // textFontNames reads selected attribution records without interpreting glyphs.
 func textFontNames(font []byte) ([]textFontName, error) {
+	return fontAttributionNames(font, true)
+}
+
+// Icon fonts may omit the text-font profile's five required records. Preserve
+// every available selected original string without inventing absent grants;
+// their complete family license is retained separately.
+func fontAttributionNames(font []byte, requireComplete bool) ([]textFontName, error) {
 	if len(font) < 12 || len(font) > 1<<20 || binary.BigEndian.Uint32(font) != 0x00010000 {
 		return nil, fmt.Errorf("unsupported or incomplete text-font source")
 	}
@@ -645,7 +652,7 @@ func textFontNames(font []byte) ([]textFontName, error) {
 		}
 		result = append(result, textFontName{key[0], key[1], key[2], key[3], nameOffset + offset, size, fmt.Sprintf("%x", sha256.Sum256(raw)), text})
 	}
-	if len(result) != 5 {
+	if requireComplete && len(result) != 5 || !requireComplete && len(result) == 0 {
 		return nil, fmt.Errorf("complete selected copyright, version and license records required")
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
