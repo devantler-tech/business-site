@@ -12,9 +12,9 @@ const valid = ci => {
   if (ci.env?.[flag] != null || job?.env?.[flag] != null) return false;
   const steps = job?.steps ?? [];
   const indices = predicate => steps.flatMap((step, i) => predicate(step) ? [i] : []);
-  const enabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'true');
-  // The separate current-production probe also pins scope=false. Its complete
-  // tuple is guarded by vat-activation.test; retain this independent false case.
+  const enabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'true' && step.name === 'Build customer-scope preview');
+  // The current-production probe selects the separately reviewed activation.
+  // Its complete tuple is guarded by vat-activation.test; retain this false case.
   const disabled = indices(step => step.run === 'npm run build' && step.env?.[flag] === 'false' && step.name === 'Build');
   const unset = indices(step => step.run === unsetCommand && step.env == null);
   const artifact = indices(step => step.with?.name === 'business-site-preview' && step.with.path === 'dist');

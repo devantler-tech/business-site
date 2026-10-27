@@ -222,14 +222,15 @@ writing retains its own context. The generated Home, About and Projects checks c
 sharing metadata. The offer-release check distinguishes actual maintenance terms, not app labels
 or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
 
-The public customer invitation covers private customers in Denmark and the rest of the EU
-and businesses in Denmark. The contact section explains that businesses in other EU countries
-are not currently served while the applicable requirements are being confirmed, and outside-EU work is not open pending
-confirmation. `customer-scope.ts` supplies this boundary to Astro and the isolated Svelte
+The public customer invitation covers private customers and businesses in Denmark and the rest
+of the EU. Scope, price and applicable VAT are confirmed before an agreement. Projects outside
+the EU need a separate eligibility assessment before an offer; this is not automatic worldwide
+availability. `customer-scope.ts` supplies this boundary to Astro and the Svelte
 candidate independently of offer and identity release flags. Astro requires the default-off
-`FEATURE_CUSTOMER_SCOPE=true` release preview; false and entirely unset builds retain the
-published invitation and metadata. The already default-off Svelte candidate preserves the
-same default-off customer-scope setting. Every build checks all six English/Danish Home, About and Projects routes,
+`FEATURE_CUSTOMER_SCOPE=true` setting; the source-owned publisher and production-template packager
+select it explicitly. False and entirely unset local builds retain the generic comparison invitation
+and metadata. Both frontends preserve the same default-off source setting until verified activation
+and cleanup. Every build checks all six English/Danish Home, About and Projects routes,
 including emitted metadata and deliberate output mutations in enabled and disabled states.
 Activation and subsequent flag removal require reviewed publication and live proof.
 This copy is not order authorization: tax confirmations remain under #147,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertCompanyOutput } from "./company-output.mjs";
 
-const options = {identity:true,scope:false,template:false,address:process.env.COMPANY_POSTAL_ADDRESS ?? ""};
+const options = {identity:true,scope:true,template:false,address:process.env.COMPANY_POSTAL_ADDRESS ?? ""};
 assertCompanyOutput("web/build","dist",options);
 for (const kind of ["missing-locale", "missing-address", "unrelated-script-leak", "second-line-leak", "stale-registration", "stale-footer"]) {
   const scratch = mkdtempSync(join(tmpdir(),"company-output-187-"));

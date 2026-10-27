@@ -11,7 +11,7 @@ for mode in false scoped published preview independent template unset; do
   case "$mode" in
     false) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false ;;
     scoped) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=true ;;
-    published) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=false ;;
+    published) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false FEATURE_CUSTOMER_SCOPE=true ;;
     preview|template) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=true ;;
     independent) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=true FEATURE_CUSTOMER_SCOPE=false ;;
   esac

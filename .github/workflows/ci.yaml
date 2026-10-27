@@ -196,7 +196,7 @@ jobs:
           FEATURE_COMPANY_IDENTITY: "true"
           FEATURE_SVELTE_FRONTEND: "true"
           FEATURE_OFFER_COPY: "false"
-          FEATURE_CUSTOMER_SCOPE: "false"
+          FEATURE_CUSTOMER_SCOPE: "true"
           COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
         run: npm run build
       - name: Verify the actual public artifact excludes portal identity

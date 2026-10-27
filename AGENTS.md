@@ -317,9 +317,11 @@ net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
 VAT-inclusive prices and current company facts are permanent in both frontends and every package
 profile. The source-owned publisher and production-template packager enable company identity and
-keep revised-offer/customer-scope releases disabled. The ordinary Astro comparison and explicit
+the reviewed private/business customer invitation for Denmark and the EU; revised-offer copy stays
+disabled. Scope, price and applicable VAT are confirmed before agreement, and outside-EU projects
+require a separate assessment before any offer. The ordinary Astro comparison and explicit
 Astro recovery use the same approved price state; no historical no-VAT setting remains.
-This does not activate portal orders or expand eligible customer countries.
+This public invitation does not authorize portal orders or change server-side country eligibility.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects

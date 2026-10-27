@@ -48,6 +48,6 @@ exit 42
     assert.equal(production.status, 42, 'The production boundary double stops at the real build invocation');
     const released = JSON.parse(readFileSync(capture));
     assert.deepEqual(released, { profile: 'production-template', company: 'true', address: '', preview: 'false',
-      offer: 'false', customer: 'false', frontend: 'true' });
+      offer: 'false', customer: 'true', frontend: 'true' });
   } finally { rmSync(root, { recursive: true }); }
 });
