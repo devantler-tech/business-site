@@ -521,6 +521,9 @@ func TestTextCLIIsExplicitAndVerificationReadOnly(t *testing.T) {
 		t.Fatal(diag.String())
 	}
 	inventory := append([]byte(nil), out.Bytes()...)
+	if e := os.WriteFile(filepath.Join(b, "text-font-notices-inventory.json"), inventory, 0600); e != nil {
+		t.Fatal(e)
+	}
 	if run(args, &out, &diag) == 0 {
 		t.Fatal("existing retained notice overwritten")
 	}
@@ -545,6 +548,70 @@ func TestTextCLIIsExplicitAndVerificationReadOnly(t *testing.T) {
 	}
 	if run(args, &out, &diag) == 0 {
 		t.Fatal("changed retained notice accepted")
+	}
+}
+
+func TestTextCompletedVerificationRequiresRetainedInventory(t *testing.T) {
+	for _, kind := range []string{"missing", "malformed", "changed-binding", "extra-bytes", "symlink", "fifo"} {
+		t.Run(kind, func(t *testing.T) {
+			b, n, r, p := textFixture(t)
+			old := textFrozen
+			textFrozen = p
+			defer func() { textFrozen = old }()
+			args := []string{"--text-fonts", "--snapshot", "--build", b, "--notices", n, "--recipe", r}
+			var out, diag bytes.Buffer
+			if run(args, &out, &diag) != 0 {
+				t.Fatal(diag.String())
+			}
+			if e := os.WriteFile(filepath.Join(b, textBefore), out.Bytes(), 0600); e != nil {
+				t.Fatal(e)
+			}
+			args[1] = "--inventory"
+			out.Reset()
+			if run(args, &out, &diag) != 0 {
+				t.Fatal(diag.String())
+			}
+			inventory := append([]byte(nil), out.Bytes()...)
+			if e := os.Rename(filepath.Join(b, "build-receipt.pending"), filepath.Join(b, "build-receipt.json")); e != nil {
+				t.Fatal(e)
+			}
+			name := filepath.Join(b, "text-font-notices-inventory.json")
+			var e error
+			switch kind {
+			case "missing":
+			case "malformed":
+				e = os.WriteFile(name, []byte("{"), 0600)
+			case "changed-binding":
+				changed := bytes.Replace(inventory, []byte(digest([]byte("compiled binary"))), []byte(strings.Repeat("0", 64)), 1)
+				if bytes.Equal(changed, inventory) {
+					t.Fatal("binding mutation did not change inventory")
+				}
+				e = os.WriteFile(name, changed, 0600)
+			case "extra-bytes":
+				e = os.WriteFile(name, append(inventory, '\n'), 0600)
+			case "symlink":
+				target := filepath.Join(t.TempDir(), "inventory.json")
+				if e = os.WriteFile(target, inventory, 0600); e == nil {
+					e = os.Symlink(target, name)
+				}
+			case "fifo":
+				e = syscall.Mkfifo(name, 0600)
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			args[1] = "--verify"
+			out.Reset()
+			diag.Reset()
+			if run(args, &out, &diag) == 0 || out.Len() != 0 {
+				t.Fatal("invalid retained inventory verified or emitted a success inventory", diag.String())
+			}
+			if kind == "missing" {
+				if _, e := os.Lstat(name); !os.IsNotExist(e) {
+					t.Fatal("verification created retained inventory")
+				}
+			}
+		})
 	}
 }
 

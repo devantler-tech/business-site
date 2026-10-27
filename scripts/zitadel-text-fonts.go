@@ -549,6 +549,12 @@ func runTextFonts(args []string, out, diagnostic io.Writer) int {
 		return fail(e)
 	}
 	encoded := append(b, '\n')
+	if mode == "--verify" {
+		retained, e := readAt(values["--build"], "text-font-notices-inventory.json", 2<<20)
+		if e != nil || !bytes.Equal(retained, encoded) {
+			return fail(fmt.Errorf("retained font inventory differs"))
+		}
+	}
 	if n, e := out.Write(encoded); e != nil || n != len(encoded) {
 		return fail(fmt.Errorf("incomplete inventory output"))
 	}
