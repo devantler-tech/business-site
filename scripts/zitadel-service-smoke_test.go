@@ -58,10 +58,12 @@ func TestServiceTargetUsesOnlyOwnedPrivateEndpoint(t *testing.T) {
 	}
 }
 
+// TestServiceTransportRefusesUnrelatedAuthority rejects alternate authorities,
+// ports and raw endpoints before the fixture transport can reach them.
 func TestServiceTransportRefusesUnrelatedAuthority(t *testing.T) {
 	transport := serviceTransport("172.18.0.2:8080")
 	defer transport.CloseIdleConnections()
-	for _, address := range []string{"elsewhere.invalid:8080", "fixture.invalid:80", "127.0.0.1:8080", "169.254.169.254:80"} {
+	for _, address := range []string{"elsewhere.invalid:8080", "fixture.localhost:80", "127.0.0.1:8080", "169.254.169.254:80"} {
 		if connection, err := transport.DialContext(context.Background(), "tcp", address); err == nil || connection != nil {
 			t.Fatalf("unrelated authority admitted: %q", address)
 		}
@@ -99,6 +101,17 @@ func TestExplicitIdentityServiceProfile(t *testing.T) {
 	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.10"
 	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required")) {
 		t.Fatalf("service request did not reach native admission: status=%d diagnostic=%q", status, diagnostic.String())
+	}
+}
+
+// TestExplicitIdentityBrowserProfile verifies that the opt-in browser request
+// reaches native-platform admission rather than an unknown-argument shortcut.
+func TestExplicitIdentityBrowserProfile(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	status := imageRun([]string{"--browser-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic)
+	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.10"
+	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required")) {
+		t.Fatalf("browser request did not reach native admission: status=%d diagnostic=%q", status, diagnostic.String())
 	}
 }
 

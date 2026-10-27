@@ -358,11 +358,22 @@ func imageVerifyContext(root, seal string) error {
 	})
 }
 
+// imageRun keeps invocation inert without arguments and admits only explicit
+// native smoke profiles or the namespace-bound internal browser worker.
 func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0
 	}
 	fail := func(err error) int { _, _ = fmt.Fprintln(diagnostic, "identity-image:", err); return 1 }
+	if args[0] == "--browser-worker" {
+		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+			return fail(fmt.Errorf("explicit native browser worker required"))
+		}
+		if err := browserWorker(args[1], args[2], args[3]); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	values := map[string]string{}
 	for i := 0; i < len(args); i++ {
 		k := args[i]
@@ -370,7 +381,7 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch k {
-		case "--smoke", "--service-smoke":
+		case "--smoke", "--service-smoke", "--browser-smoke":
 			values[k] = "true"
 		case "--build", "--repository", "--output":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -382,14 +393,14 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("unexpected argument"))
 		}
 	}
-	if (values["--smoke"] != "" || values["--service-smoke"] != "") && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
+	if (values["--smoke"] != "" || values["--service-smoke"] != "" || values["--browser-smoke"] != "") && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
 		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
 			return fail(fmt.Errorf("native Linux amd64 Go 1.26.10 required"))
 		}
 		var probes []func(string, string) error
-		if values["--service-smoke"] != "" {
+		if values["--service-smoke"] != "" || values["--browser-smoke"] != "" {
 			probes = append(probes, func(id, owner string) error {
-				return imageService(id, owner, values["--repository"], values["--output"], imageExecute)
+				return imageService(id, owner, values["--repository"], values["--output"], imageExecute, values["--browser-smoke"] != "")
 			})
 		}
 		if err := imageSmoke(values["--build"], values["--repository"], values["--output"], imageExecute, probes...); err != nil {

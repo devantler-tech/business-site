@@ -757,7 +757,7 @@ its version command inside a restricted container. Run it on native Linux amd64
 with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
 
 ```sh
-go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go \
+go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go \
   --smoke --build "$work/linux-build" --repository "$PWD" \
   --output "$work/local-image-test"
 ```
@@ -765,9 +765,11 @@ go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/z
 The output must be new and outside both input trees. A parent-directory alias
 does not permit output inside them. No arguments perform no work. Ordinary
 website builds and publishers do not invoke this entrypoint. The selected Linux
-CI job invokes the stronger `--service-smoke` profile after its actual native
-build and retains the compact `image-smoke.json` and `service-smoke.json`
-diagnostics alongside the existing build evidence.
+CI job invokes the stronger `--browser-smoke` profile after its actual native
+build. It retains the existing image/service diagnostics, separate browser
+receipt and binding, and three fictional-fixture screenshots alongside the
+existing build evidence. The CLI-only and HTTP-only profiles remain explicit
+alternatives; neither reports browser acceptance.
 
 The notice collector's read-only `--verify` mode repeats the actual completed
 build capture, compares every retained diagnostic and final inventory, and
@@ -814,7 +816,7 @@ checks and cold-starts that same immutable local image against a digest-pinned
 PostgreSQL 17 fixture. Both containers use fictional, disposable state. The
 network is internal and neither container publishes a host port. The native Linux
 probe connects directly to the inspected service's private IPv4 endpoint on that
-owned network. It retains `fixture.invalid:8080` as the HTTP/OIDC authority without
+owned network. It retains `fixture.localhost:8080` as the HTTP/OIDC authority without
 DNS resolution; other authorities, ports and redirect destinations are refused.
 Docker can retain a requested host mapping without publishing it on an internal-only
 network ([upstream report](https://github.com/moby/moby/discussions/53256)); the probe
@@ -854,3 +856,54 @@ its own image. A failure is never converted to a successful receipt.
 not prove fallback font appearance, a successful browser login, invitation/MFA/
 recovery, Dex, verified TLS, backups or production resource sizing. Those remain
 under #308/#305/#302, alongside independent image/source publication and admission.
+
+## Native browser presentation
+
+`--browser-smoke` adds a real Chrome/WebDriver journey to the same restricted
+service fixture. The hosted Ubuntu runner provides Chrome and its matching
+driver; the receipt records the actual browser version. No browser automation
+package is installed into the identity distribution. The explicit Go worker
+uses WebDriver's native form controls and screenshots, not a projected HTML
+fixture or modified upstream page.
+
+The browser and driver run as the invoking non-root user, with no-new-privileges,
+inside the inspected identity service's internal network namespace. Only the
+network namespace changes. Native Chrome sandbox protections remain enabled;
+no certificate-warning or sandbox bypass is used. The `fixture.localhost` authority
+maps to that namespace's loopback interface. The browser must independently report
+a secure context and available WebCrypto. The
+[standard local-origin exception](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts#potentially_trustworthy_origins)
+supplies this development-only property without pretending that HTTP is verified
+production TLS. No host port or external network is added.
+
+The journey starts at Console, observes the actual Login V1 username form,
+submits the fictional fixture operator through the native password form, then
+requires the authenticated Console header and navigation. Each page must finish
+rendering with its selected font face actually loaded, no failed font faces or
+Ailerons resources, and resources confined to the fictional origin. Three
+screenshots and their byte hashes make the presentation independently inspectable.
+Console capture additionally waits for its native navigation animations to settle
+and a full-sized navigation link to be visible, within the viewport and unobstructed
+at its center. Mere authenticated component presence cannot admit a clipped first frame.
+If the native form offers optional MFA enrollment, this presentation-only fixture
+may use its explicit deferral button once. The unchanged native form and its exact
+same-origin enrollment action must be observed first. Mandatory enrollment is
+never deferred, and the optional action is never submitted twice. The harness
+waits for the native transition and still requires the authenticated Console
+within the worker deadline. The receipt records that choice and keeps `mfaProof` false.
+Production MFA requirements are unchanged. An incomplete journey may retain only
+fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
+form values. Requests have a 30-second budget covering the 20-second navigation
+limit; readiness polls use one second. The complete worker remains bounded to
+100 seconds.
+Driver session closure, process exit and private profile cleanup are mandatory.
+The outer Go harness rechecks the runner source, screenshot bytes and receipt,
+then binds the browser result to the inspected local image and upstream source.
+
+This is English Login V1/Console presentation with an ephemeral fictional
+administrator. It does not prove portal federation, invitation delivery, MFA,
+recovery, production TLS, durable storage or full-stack sizing. The separate
+HTTP/process receipt keeps `browserProof` and `authenticationProof` false;
+the browser receipt carries only its own observed journey. Image admission,
+complete notice closure, durable corresponding source and signed image/source
+publication remain required before runtime distribution and activation.
