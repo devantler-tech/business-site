@@ -138,7 +138,7 @@ started="$(date -u +%s)"
 if [[ -z "$prepared_source" ]]; then
   bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
 fi
-jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1"' "$output/prepared/source-preparation.json" >/dev/null
+jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
 if [[ -z "$prepared_source" ]]; then

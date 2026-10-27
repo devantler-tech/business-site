@@ -29,11 +29,11 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d"
+const sourcePreparedProfile = "7449046b66227f32e1d79b0635b04ba6b32d6e63cfd966a2293a4cad34a13e87"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
-const sourceModifiedOn = "2026-10-24"
+const sourceModifiedOn = "2026-10-27"
 
 type sourceCapturePolicy struct{ Prepared, OriginalAPI, SerialAPI, Preparation string }
 type sourceCaptureSummary struct {
@@ -263,6 +263,7 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		"Remove the four Ailerons font/style paths and their two imports.",
 		"Refuse the optional JSONPath machine-ID metadata selector; preserve raw response and host/IP identification.",
 		"Set apps/api/project.json generate-install.options.parallel to false; preserve all fourteen native install commands.",
+		"Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -412,7 +413,7 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			sourcePreparedProfile,
 			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			"2ca8257ddee934a97d72793ade409cbe9eb14b9824fc610710c0485ed86beca2",
+			"6d105467cb9616a2b4985d0190a43c9cdfbc9ddcef9e8cf15ccfa29b776d4752",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string

@@ -637,9 +637,10 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					}
 					raw, readErr := os.ReadFile(filepath.Join(output, "records/modifications.json"))
 					var record struct {
-						ModifiedOn string `json:"modifiedOn"`
+						ModifiedOn    string   `json:"modifiedOn"`
+						Modifications []string `json:"modifications"`
 					}
-					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-24" {
+					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-27" || len(record.Modifications) != 4 || record.Modifications[3] != "Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit." {
 						t.Fatalf("modification date does not describe the frozen changes: %s: %v", raw, readErr)
 					}
 				}

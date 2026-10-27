@@ -7,6 +7,12 @@ checks whole-file hashes, actual package/GoFiles membership, complete terms
 references and all external input bytes before retaining any output. Ordinary
 website builds and no-argument invocations remain inactive.
 
+The pinned dependency profile selects go-jose/v4 4.1.6. Its original/effective
+version and checksum are updated together with the complete prepared module-file
+hashes; both retained root and nested license texts are byte-equal to 4.1.4.
+This policy update still requires actual native compiler/binary validation and
+does not turn the catalogue into a vulnerability or distribution verdict.
+
 ## Source relationships
 
 | Selected material | Retained relationship |

@@ -32,6 +32,15 @@ check() {
     $job["continue-on-error"] == null and
     $job.needs == "changes" and
     $job.if == "needs.changes.outputs.zitadel-build == '\''true'\''" and
+    any($job.steps[]; .name == "Build the pinned identity vulnerability checker" and
+      .run == "GOBIN=\"$RUNNER_TEMP/identity-analysis\" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($job.steps[]; .name == "Scan the actual frozen identity executable" and
+      .run == "\"$RUNNER_TEMP/identity-analysis/govulncheck\" -mode=binary -db=https://vuln.go.dev \"$RUNNER_TEMP/zitadel-build/service/zitadel\" > \"$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt\"" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Setup the source verifier compiler") < index("Build the pinned identity vulnerability checker") and
+      index("Build the pinned identity vulnerability checker") < index("Setup the frozen identity Go compiler") and
+      index("Build the complete native Linux service and embedded console") < index("Scan the actual frozen identity executable")) and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
       .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -339,6 +348,13 @@ for mutation in '.nativeStoreRestored=false' '.sourceManifestSha256=("c"*64)' '.
   fi
 done
 for mutation in \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Build the pinned identity vulnerability checker"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the pinned identity vulnerability checker" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Scan the actual frozen identity executable"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run += " -json" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run=(.run | sub("service/zitadel"; "service/other")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Read back restored Go inputs without networking"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Read back restored Go inputs without networking" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Read back restored Go inputs without networking" then .["continue-on-error"]=true else . end)' \

@@ -5,3 +5,5 @@
 c5f710f6e5b536b16e4a42d62c7e05cf47fde943d8433a238244aff675eaec15  internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss
 d4c9cef378f7ed31373ee45e10ab159c609cf999180b40fca44678d513ab6af8  internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 273abacde7191a2965b8cb0998891e830eff90b8a612dfa8d7cce1c22d8a5440  internal/id/sonyflake.go
+e67d24ece452f947049ecf12bfa19542881d02c41686ce6f26e10a64fa0bea5a  go.mod
+48c0e5066bb716329885e25c059123814499b79220fd8d04ae7545121517a79a  go.sum

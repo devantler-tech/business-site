@@ -42,7 +42,9 @@ for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/p
 done
 printf '{"targets":{"generate-install":{"options":{"commands":["native generator"]}}}}\n' >"$out/source/apps/api/project.json"
 jq -n --arg pin "${TEST_PIN:-8afa5dd37a8e723efb9eace8d09fd5c1cccef694}" --arg profile "${TEST_METADATA_PROFILE:-machine-id-no-jsonpath-v1}" \
-  '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:$profile}' >"$out/source-preparation.json"
+  --arg dependency "${TEST_DEPENDENCY_PROFILE:-go-jose-4.1.6-v1}" \
+  '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:$profile,dependencyProfile:$dependency} |
+    if $dependency == "missing" then del(.dependencyProfile) else . end' >"$out/source-preparation.json"
 STUB
 cat >"$scratch/bin/uname" <<'STUB'
 #!/usr/bin/env bash
@@ -600,6 +602,8 @@ reject failed-source-license TEST_FAIL=source-license
 reject failed-module-retention TEST_FAIL=modules
 reject changed-module-cache TEST_FAIL=module-integrity
 reject unsupported-metadata-profile TEST_METADATA_PROFILE=other
+reject missing-dependency-profile TEST_DEPENDENCY_PROFILE=missing
+reject unpatched-dependency-profile TEST_DEPENDENCY_PROFILE=go-jose-4.1.4-v1
 reject unadmitted-metadata-graph TEST_UNADMITTED=graph
 reject unadmitted-metadata-binary TEST_UNADMITTED=binary
 reject unadmitted-metadata-replacement-graph TEST_UNADMITTED=graph-replacement

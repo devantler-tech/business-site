@@ -2,6 +2,7 @@
 
 The explicit offline preparer produces the frozen ZITADEL 4.20.0 source without
 the unadmitted Ailerons font assets or the JSONPath machine-ID metadata selector.
+It also applies the exact pinned go-jose/v4 4.1.6 dependency update described below.
 It does not fetch, compile, publish an image,
 configure an account or activate the portal. Ordinary builds never invoke it.
 
@@ -32,7 +33,7 @@ The result contains:
 
 - `source/`: committed source with two font files, two font-face sources and their
   two imports removed, plus the narrowly modified machine-ID function described
-  below. Every unrelated source file is preserved, including the
+  below, and the two pinned dependency metadata files. Every unrelated source file is preserved, including the
   native API, protobuf, assets, statik, console and pack build graph.
 - `source-preparation.json`: the upstream revision, preparation recipe/input
   hashes and exact modified paths. Overall license closure and image admission
@@ -64,12 +65,31 @@ back to a different machine ID. Metadata responses without a selector retain the
 exact raw bytes; hostname, private-IP and configured machine-ID behavior is unchanged.
 
 The transform checks the complete original and resulting `internal/id/sonyflake.go`
-bytes. Upstream `go.mod` and `go.sum` remain unchanged; a declaration there is not
+bytes. The JSONPath module remains declared in `go.mod` and `go.sum`; a declaration there is not
 evidence of linkage. The actual Linux compiler graph and final binary build metadata
 must both exclude the module, including replacements, before a success receipt.
 Reintroducing JSONPath support requires a separately admitted implementation and
 compatibility validation, not removal of these exclusion checks. This restriction
 does not change the portal → customer Dex → ZITADEL login architecture.
+
+The separate `go-jose-4.1.6-v1` dependency profile applies the exact `go.mod` change
+and two added checksums generated with native Go 1.26.10 and
+`go get github.com/go-jose/go-jose/v4@v4.1.6`. Complete original and resulting hashes are
+checked offline; the preparer never downloads or executes Go. Other dependency
+selections and the upstream 4096-bit RSA key limit are preserved. Original unused
+4.1.4 checksum entries remain as produced by that command, while the selected
+module, compiler metadata and notice catalogue must agree on 4.1.6. Dirty input
+checkout metadata is ignored and preserved, just like other working-copy files.
+
+Native CI builds pinned `govulncheck` 1.8.0 with the separate verifier compiler,
+then analyzes the actual frozen Linux executable in binary mode against
+`https://vuln.go.dev`. Findings and analysis errors fail the job before later
+image/replay proof; the ordinary text diagnostic is retained in the existing
+compact evidence. Do not use JSON mode as a success gate or suppress a finding.
+Binary symbol analysis is scoped to the executable's build configuration and
+cannot establish exploitability, complete source reachability or admission;
+the selected-version checks remain independent. See the
+[official checker documentation](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
 
 Retain the upstream root and component licenses and this modification recipe in
 corresponding source. Before distributing an image, #308 still requires a clean

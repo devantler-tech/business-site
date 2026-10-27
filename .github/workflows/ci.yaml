@@ -339,6 +339,8 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache: false
+      - name: Build the pinned identity vulnerability checker
+        run: GOBIN="$RUNNER_TEMP/identity-analysis" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Verify selected Go source retention
         working-directory: server
         run: |
@@ -393,6 +395,8 @@ jobs:
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
         run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+      - name: Scan the actual frozen identity executable
+        run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt"'
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
