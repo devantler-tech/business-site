@@ -367,7 +367,7 @@ jobs:
         run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go
       - name: Verify local identity image packaging and execution controls
         working-directory: scripts
-        run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go
+        run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go
       - name: Verify sealed source snapshots and closed archive controls
         working-directory: scripts
         run: go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go
@@ -521,20 +521,14 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
-      - name: Setup Node.js for the identity browser
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-          cache: false
       - name: Exercise the local restricted identity image
         run: |
-          node --test scripts/zitadel-browser.test.mjs
           command -v google-chrome
           command -v chromedriver
-          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
       - name: Verify actual identity browser evidence
         run: |
-          source="$(sha256sum scripts/zitadel-browser.mjs | cut -d ' ' -f 1)"
+          source="$(sha256sum scripts/zitadel-browser.go | cut -d ' ' -f 1)"
           receipt="$(sha256sum "$RUNNER_TEMP/zitadel-image/browser-smoke.json" | cut -d ' ' -f 1)"
           jq -e --arg source "$source" --arg receipt "$receipt" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
             .schemaVersion == 1 and .upstreamCommit == $image[0].upstreamCommit and

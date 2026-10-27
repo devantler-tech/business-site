@@ -757,7 +757,7 @@ its version command inside a restricted container. Run it on native Linux amd64
 with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
 
 ```sh
-go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go \
+go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go \
   --smoke --build "$work/linux-build" --repository "$PWD" \
   --output "$work/local-image-test"
 ```
@@ -861,9 +861,8 @@ under #308/#305/#302, alongside independent image/source publication and admissi
 
 `--browser-smoke` adds a real Chrome/WebDriver journey to the same restricted
 service fixture. The hosted Ubuntu runner provides Chrome and its matching
-driver; the receipt records the actual browser version. The browser fixture uses
-the site's Node 24 after all frozen Node 22 build/replay phases finish. No browser automation
-package is installed into the identity distribution. The explicit Node runner
+driver; the receipt records the actual browser version. No browser automation
+package is installed into the identity distribution. The explicit Go worker
 uses WebDriver's native form controls and screenshots, not a projected HTML
 fixture or modified upstream page.
 

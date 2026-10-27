@@ -363,6 +363,15 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 		return 0
 	}
 	fail := func(err error) int { _, _ = fmt.Fprintln(diagnostic, "identity-image:", err); return 1 }
+	if args[0] == "--browser-worker" {
+		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+			return fail(fmt.Errorf("explicit native browser worker required"))
+		}
+		if err := browserWorker(args[1], args[2], args[3]); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	values := map[string]string{}
 	for i := 0; i < len(args); i++ {
 		k := args[i]

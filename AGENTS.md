@@ -189,7 +189,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   user. Its native browser sandbox remains enabled. It exercises only fictional
   Login V1 and authenticated Console presentation, with source/image-bound receipts
   and screenshots; it grants no production login, mail, invitation or activation
-  clearance. `scripts/zitadel-browser.mjs` is inert without explicit arguments.
+  clearance. The Go browser worker is reachable only through the explicit profile.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses
@@ -249,10 +249,9 @@ bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
-node --test scripts/zitadel-browser.test.mjs
 (cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
-(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go)
+(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
 npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts

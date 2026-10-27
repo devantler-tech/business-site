@@ -302,19 +302,7 @@ reset_fixture() {
 
 output="$(check "${repo_root}/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
 
-# The native SDK refusal controls need an SDK-only baseline. The actual workflow
-# above is independently checked, including its later Node 24 browser setup.
-reset_native_fixture() {
-  reset_fixture
-  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" | jq '
-    .jobs["build-zitadel-linux"].steps |= map(select(
-      ((.uses // "" | startswith("actions/setup-node@")) | not) and
-      .name != "Exercise the local restricted identity image"))
-  ' >"${fixture}/native-only.json"
-  yq -P '.' "${fixture}/native-only.json" >"${fixture}/.github/workflows/ci.yaml"
-}
-
-reset_native_fixture
+reset_fixture
 yq -i '.jobs["build-zitadel-linux"].steps =
   [{"uses":"actions/setup-node@fixture","with":{"node-version-file":".node-version"}}] +
   .jobs["build-zitadel-linux"].steps + [{"run":"npm ci"}]' "${fixture}/.github/workflows/ci.yaml"
@@ -336,22 +324,10 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Prepare the frozen identity JavaScript toolchain"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= sort_by(if .name == "Verify native pnpm source retention" then 0 else 1 end)'; do
-  reset_native_fixture
+  reset_fixture
   yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" | jq "$mutation" >"${fixture}/native-broken.json"
   yq -P '.' "${fixture}/native-broken.json" >"${fixture}/.github/workflows/ci.yaml"
   expect_failure "native SDK must not hide a website/unchecked toolchain command" "ci.yaml:build-zitadel-linux works in docs/ but has 0"
-done
-
-# Real browser commands use the website's Node authority after the frozen native
-# build. Preserve refusal of absent, conditional and error-tolerant setup.
-for mutation in \
-  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Setup Node.js for the identity browser"))' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup Node.js for the identity browser" then .if="false" else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup Node.js for the identity browser" then .["continue-on-error"]=true else . end)'; do
-  reset_fixture
-  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" | jq "$mutation" >"${fixture}/browser-broken.json"
-  yq -P '.' "${fixture}/browser-broken.json" >"${fixture}/.github/workflows/ci.yaml"
-  output="$(check "${fixture}/package.json" "${fixture}/.github/workflows")" && fail 'browser toolchain setup was not mandatory'
 done
 
 # A version-file consumer must fail closed on absent or conflicting authority,
