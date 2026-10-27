@@ -102,6 +102,15 @@ func TestExplicitIdentityServiceProfile(t *testing.T) {
 	}
 }
 
+func TestExplicitIdentityBrowserProfile(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	status := imageRun([]string{"--browser-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic)
+	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.10"
+	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required")) {
+		t.Fatalf("browser request did not reach native admission: status=%d diagnostic=%q", status, diagnostic.String())
+	}
+}
+
 // A running service has a separate closed profile. These literal Docker fields
 // must not weaken the existing network-none, no-mount version-command profile.
 func TestServiceContainerAdmission(t *testing.T) {

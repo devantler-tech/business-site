@@ -184,6 +184,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   root and bounded, non-executable, owner-bound tmpfs admission mandatory.
   HTTP discovery/console availability is not browser, invitation, MFA, production
   TLS, complete-stack acceptance or activation. No image is published.
+  The separately explicit `--browser-smoke` profile also uses the runner's Chrome
+  and matching WebDriver inside the owned service network namespace as a non-root
+  user. Its native browser sandbox remains enabled. It exercises only fictional
+  Login V1 and authenticated Console presentation, with source/image-bound receipts
+  and screenshots; it grants no production login, mail, invitation or activation
+  clearance. `scripts/zitadel-browser.mjs` is inert without explicit arguments.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses

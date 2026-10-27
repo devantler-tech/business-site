@@ -278,7 +278,7 @@ func serviceInspect(raw []byte, id, image, owner, network, status string) (image
 
 // This is an isolated HTTP fixture, not the production TLS/authentication
 // profile. All database/master/bootstrap values are fictional and short-lived.
-func imageService(image, owner, repo, output string, run imageCommand) (result error) {
+func imageService(image, owner, repo, output string, run imageCommand, browser bool) (result error) {
 	source, err := imageRead(repo, "scripts/zitadel-service-smoke.go", 1<<20)
 	if err != nil {
 		return err
@@ -529,6 +529,15 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 			time.Sleep(time.Second)
 		}
 	}
+	if browser {
+		c, e := inspect("running")
+		if e != nil {
+			return e
+		}
+		if e = serviceBrowser(c.State.Pid, image, repo, output, run); e != nil {
+			return e
+		}
+	}
 	b, err = run(30*time.Second, "docker", "network", "inspect", network)
 	if err != nil {
 		return err
@@ -576,4 +585,87 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 		return err
 	}
 	return imageWrite(output, "service-smoke.json", append(b, '\n'), 0444)
+}
+
+// Chrome and its matching WebDriver run as the invoking non-root CI user inside
+// the already-inspected service network namespace. The fixture has no host ports
+// or external network; the browser's native sandbox remains enabled.
+func serviceBrowser(pid int, image, repo, output string, run imageCommand) error {
+	if pid <= 1 || os.Getuid() <= 0 || os.Getgid() <= 0 {
+		return fmt.Errorf("non-root browser fixture user required")
+	}
+	source, err := imageRead(repo, "scripts/zitadel-browser.mjs", 1<<20)
+	if err != nil {
+		return err
+	}
+	observed, err := run(30*time.Second, "sudo", "-n", "readlink", fmt.Sprintf("/proc/%d/ns/net", pid))
+	namespace := strings.TrimSpace(string(observed))
+	hostNamespace, hostErr := os.Readlink("/proc/self/ns/net")
+	if err != nil || hostErr != nil || namespace == hostNamespace || !regexp.MustCompile(`^net:\[\d+\]$`).MatchString(namespace) {
+		return fmt.Errorf("service network namespace unavailable")
+	}
+	// Only the network namespace changes; no container binary, filesystem,
+	// bootstrap token or real account is exposed to the browser process.
+	diagnostic, err := run(3*time.Minute, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
+		"setpriv", "--reuid="+strconv.Itoa(os.Getuid()), "--regid="+strconv.Itoa(os.Getgid()), "--clear-groups", "--no-new-privs",
+		"env", "-i", "PATH="+os.Getenv("PATH"), "HOME="+os.Getenv("HOME"), "LANG=C", "LC_ALL=C",
+		"node", filepath.Join(repo, "scripts/zitadel-browser.mjs"), "--run", output, namespace)
+	if err != nil {
+		if stage := regexp.MustCompile(`identity browser fixture failed stage=(admission|driver|session|login|password|console|receipt) category=(observation|session-not-created|timeout|no-such-element|invalid-argument|javascript-error|webdriver)`).Find(diagnostic); stage != nil {
+			return fmt.Errorf("native browser journey failed: %s", stage)
+		}
+		return fmt.Errorf("native browser journey failed")
+	}
+	after, err := imageRead(repo, "scripts/zitadel-browser.mjs", 1<<20)
+	if err != nil || imageHash(after) != imageHash(source) {
+		return fmt.Errorf("browser source changed")
+	}
+	raw, err := imageRead(output, "browser-smoke.json", 65536)
+	if err != nil {
+		return err
+	}
+	var receipt struct {
+		SchemaVersion   int    `json:"schemaVersion"`
+		Profile         string `json:"profile"`
+		Source          string `json:"browserSourceSha256"`
+		Version         string `json:"browserVersion"`
+		Namespace       string `json:"networkNamespace"`
+		SandboxDisabled bool   `json:"browserSandboxDisabled"`
+		Pages           []struct {
+			Kind       string `json:"kind"`
+			Font       string `json:"font"`
+			Loaded     bool   `json:"loaded"`
+			SameOrigin bool   `json:"sameOriginResources"`
+			FontAbsent bool   `json:"unadmittedFontAbsent"`
+			Screenshot struct {
+				Path   string `json:"path"`
+				Bytes  int    `json:"bytes"`
+				SHA256 string `json:"sha256"`
+			} `json:"screenshot"`
+		} `json:"pages"`
+		Cleanup    string `json:"cleanup"`
+		Portal     bool   `json:"portalFederation"`
+		TLS        bool   `json:"productionTLS"`
+		Invitation bool   `json:"invitationProof"`
+		Admission  string `json:"imageAdmission"`
+		License    string `json:"licenseClosure"`
+	}
+	if err = imageDecode(raw, &receipt); err != nil || receipt.SchemaVersion != 1 || receipt.Profile != "fictional-native-browser" || receipt.Source != imageHash(source) || receipt.Version == "" || receipt.Namespace != namespace || receipt.SandboxDisabled || len(receipt.Pages) != 3 || receipt.Cleanup != "complete" || receipt.Portal || receipt.TLS || receipt.Invitation || receipt.Admission != "unknown" || receipt.License != "unknown" {
+		return fmt.Errorf("browser observation binding differs")
+	}
+	for i, kind := range []string{"login", "password", "console"} {
+		page := receipt.Pages[i]
+		if page.Kind != kind || page.Font == "" || strings.Contains(strings.ToLower(page.Font), "ailerons") || !page.Loaded || !page.SameOrigin || !page.FontAbsent || page.Screenshot.Path != kind+".png" {
+			return fmt.Errorf("browser page observation incomplete")
+		}
+		png, e := imageRead(output, kind+".png", 4<<20)
+		if e != nil || len(png) != page.Screenshot.Bytes || imageHash(png) != page.Screenshot.SHA256 {
+			return fmt.Errorf("browser screenshot binding differs")
+		}
+	}
+	bound, err := json.MarshalIndent(map[string]any{"schemaVersion": 1, "upstreamCommit": imagePin, "localImageId": image, "browserReceiptSha256": imageHash(raw), "browserSourceSha256": imageHash(source), "cleanup": "complete", "imageAdmission": "unknown", "licenseClosure": "unknown"}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return imageWrite(output, "browser-binding.json", append(bound, '\n'), 0444)
 }

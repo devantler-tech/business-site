@@ -765,9 +765,11 @@ go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/z
 The output must be new and outside both input trees. A parent-directory alias
 does not permit output inside them. No arguments perform no work. Ordinary
 website builds and publishers do not invoke this entrypoint. The selected Linux
-CI job invokes the stronger `--service-smoke` profile after its actual native
-build and retains the compact `image-smoke.json` and `service-smoke.json`
-diagnostics alongside the existing build evidence.
+CI job invokes the stronger `--browser-smoke` profile after its actual native
+build. It retains the existing image/service diagnostics, separate browser
+receipt and binding, and three fictional-fixture screenshots alongside the
+existing build evidence. The CLI-only and HTTP-only profiles remain explicit
+alternatives; neither reports browser acceptance.
 
 The notice collector's read-only `--verify` mode repeats the actual completed
 build capture, compares every retained diagnostic and final inventory, and
@@ -854,3 +856,36 @@ its own image. A failure is never converted to a successful receipt.
 not prove fallback font appearance, a successful browser login, invitation/MFA/
 recovery, Dex, verified TLS, backups or production resource sizing. Those remain
 under #308/#305/#302, alongside independent image/source publication and admission.
+
+## Native browser presentation
+
+`--browser-smoke` adds a real Chrome/WebDriver journey to the same restricted
+service fixture. The hosted Ubuntu runner provides Chrome and its matching
+driver; the receipt records the actual browser version. No browser automation
+package is installed into the identity distribution. The explicit Node runner
+uses WebDriver's native form controls and screenshots, not a projected HTML
+fixture or modified upstream page.
+
+The browser and driver run as the invoking non-root user, with no-new-privileges,
+inside the inspected identity service's internal network namespace. Only the
+network namespace changes. Native Chrome sandbox protections remain enabled;
+no certificate-warning or sandbox bypass is used. The fictional authority maps
+to that namespace's loopback interface. No host port or external network is added.
+
+The journey starts at Console, observes the actual Login V1 username form,
+submits the fictional fixture operator through the native password form, then
+requires the authenticated Console header and navigation. Each page must finish
+rendering with its selected font face actually loaded, no failed font faces or
+Ailerons resources, and resources confined to the fictional origin. Three
+screenshots and their byte hashes make the presentation independently inspectable.
+Driver session closure, process exit and private profile cleanup are mandatory.
+The outer Go harness rechecks the runner source, screenshot bytes and receipt,
+then binds the browser result to the inspected local image and upstream source.
+
+This is English Login V1/Console presentation with an ephemeral fictional
+administrator. It does not prove portal federation, invitation delivery, MFA,
+recovery, production TLS, durable storage or full-stack sizing. The separate
+HTTP/process receipt keeps `browserProof` and `authenticationProof` false;
+the browser receipt carries only its own observed journey. Image admission,
+complete notice closure, durable corresponding source and signed image/source
+publication remain required before runtime distribution and activation.

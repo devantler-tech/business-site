@@ -522,7 +522,30 @@ jobs:
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
       - name: Exercise the local restricted identity image
-        run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go --service-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+        run: |
+          node --test scripts/zitadel-browser.test.mjs
+          command -v google-chrome
+          command -v chromedriver
+          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+      - name: Verify actual identity browser evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-browser.mjs | cut -d ' ' -f 1)"
+          receipt="$(sha256sum "$RUNNER_TEMP/zitadel-image/browser-smoke.json" | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --arg receipt "$receipt" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            .schemaVersion == 1 and .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and .browserReceiptSha256 == $receipt and
+            .browserSourceSha256 == $source and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-binding.json" >/dev/null
+          jq -e --arg source "$source" '
+            .schemaVersion == 1 and .profile == "fictional-native-browser" and
+            .browserSourceSha256 == $source and (.browserVersion | type == "string" and length > 0) and
+            .browserSandboxDisabled == false and .cleanup == "complete" and
+            .portalFederation == false and .productionTLS == false and .invitationProof == false and
+            (.pages | map(.kind)) == ["login","password","console"] and
+            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true) and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
       - name: Verify actual identity service evidence
         run: |
           source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
@@ -597,6 +620,11 @@ jobs:
             ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
             ${{ runner.temp }}/zitadel-image/service-smoke.json
+            ${{ runner.temp }}/zitadel-image/browser-smoke.json
+            ${{ runner.temp }}/zitadel-image/browser-binding.json
+            ${{ runner.temp }}/zitadel-image/login.png
+            ${{ runner.temp }}/zitadel-image/password.png
+            ${{ runner.temp }}/zitadel-image/console.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
             ${{ runner.temp }}/zitadel-offline-replay/input-archive.json
