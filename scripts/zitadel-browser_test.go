@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// TestBrowserRenderedPageAdmission rejects incomplete forms, fonts, navigation
+// and resource confinement instead of accepting a merely plausible page URL.
 func TestBrowserRenderedPageAdmission(t *testing.T) {
 	good := browserPage{URL: "http://fixture.localhost:8080/ui/login/login?authRequest=fictional", Ready: "complete", Text: "Sign in", Username: true,
 		Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/Roboto.woff2"}}
@@ -71,6 +73,8 @@ func TestBrowserRenderedPageAdmission(t *testing.T) {
 	}
 }
 
+// TestBrowserWorkerRefusesUnownedNamespaceWithoutSideEffects verifies that a
+// caller outside the admitted service namespace cannot create browser evidence.
 func TestBrowserWorkerRefusesUnownedNamespaceWithoutSideEffects(t *testing.T) {
 	output := t.TempDir()
 	if err := browserWorker(output, "net:[0]", strings.Repeat("a", 64)); err == nil {
@@ -119,6 +123,8 @@ func TestBrowserDriverRequiresCompleteResponse(t *testing.T) {
 	}
 }
 
+// TestBrowserDriverRejectsMalformedErrorValue treats any error field as failure,
+// including malformed values that otherwise resemble successful driver output.
 func TestBrowserDriverRejectsMalformedErrorValue(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"value":{"ready":true,"error":false}}`))
@@ -137,6 +143,8 @@ func TestBrowserDriverRejectsMalformedErrorValue(t *testing.T) {
 	}
 }
 
+// TestBrowserOptionalMFARequiresNativeDeferral admits only the native optional
+// action on the confined prompt; arbitrary controls cannot defer enrollment.
 func TestBrowserOptionalMFARequiresNativeDeferral(t *testing.T) {
 	page := browserPage{URL: "http://fixture.localhost:8080/ui/login/password", Ready: "complete", Text: "Set up two-factor authentication", Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/font.ttf"}, OptionalMFA: true, MFAAction: "http://fixture.localhost:8080/ui/login/mfa/prompt"}
 	if !browserAdmit(page, "optional-mfa") {
@@ -236,6 +244,8 @@ func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
 	}
 }
 
+// TestBrowserDriverAllowsBoundedSessionStartup exercises an actual delayed HTTP
+// response beyond eight seconds while preserving the finite request deadline.
 func TestBrowserDriverAllowsBoundedSessionStartup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(8500 * time.Millisecond)

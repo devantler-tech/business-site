@@ -358,6 +358,8 @@ func imageVerifyContext(root, seal string) error {
 	})
 }
 
+// imageRun keeps invocation inert without arguments and admits only explicit
+// native smoke profiles or the namespace-bound internal browser worker.
 func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0

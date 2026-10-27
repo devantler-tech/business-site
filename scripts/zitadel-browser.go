@@ -107,6 +107,8 @@ type browserDriver struct {
 	versionPresent    bool
 }
 
+// browserHTTPClient bounds driver requests beyond the configured page-load
+// deadline and refuses proxies and redirects outside the local driver endpoint.
 func browserHTTPClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("WebDriver redirect refused") }}
 }

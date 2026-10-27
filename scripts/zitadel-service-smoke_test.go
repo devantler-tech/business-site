@@ -58,6 +58,8 @@ func TestServiceTargetUsesOnlyOwnedPrivateEndpoint(t *testing.T) {
 	}
 }
 
+// TestServiceTransportRefusesUnrelatedAuthority rejects alternate authorities,
+// ports and raw endpoints before the fixture transport can reach them.
 func TestServiceTransportRefusesUnrelatedAuthority(t *testing.T) {
 	transport := serviceTransport("172.18.0.2:8080")
 	defer transport.CloseIdleConnections()
@@ -102,6 +104,8 @@ func TestExplicitIdentityServiceProfile(t *testing.T) {
 	}
 }
 
+// TestExplicitIdentityBrowserProfile verifies that the opt-in browser request
+// reaches native-platform admission rather than an unknown-argument shortcut.
 func TestExplicitIdentityBrowserProfile(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	status := imageRun([]string{"--browser-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic)
