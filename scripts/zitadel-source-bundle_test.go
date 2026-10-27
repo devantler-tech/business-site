@@ -145,6 +145,10 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				"recipes/build-zitadel-linux.sh":                []byte("native builder\n"),
 				"recipes/zitadel-source-bundle.go":              []byte("source helper\n"),
 				"recipes/zitadel-console-assets.go":             []byte("console download adapter\n"),
+				"recipes/zitadel-login-icons.go":                []byte("strict statik decoder\n"),
+				"recipes/zitadel-text-fonts.go":                 []byte("font notice collector\n"),
+				"third_party/zitadel-text-fonts/catalogue.json": []byte("frozen font catalogue\n"),
+				"third_party/zitadel-text-fonts/Apache-2.0.txt": []byte("complete Apache terms\n"),
 				"recipes/zitadel-pnpm-source/index.mjs":         []byte("native pnpm adapter\n"),
 				"recipes/zitadel-pnpm-source/package.json":      []byte("native pnpm SDK\n"),
 				"recipes/zitadel-pnpm-source/package-lock.json": []byte("native pnpm SDK locks\n"),
@@ -514,7 +518,7 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
-	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output"} {
+	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo := t.TempDir(), t.TempDir()
 			write := func(root, name, body string) {
@@ -538,10 +542,12 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				fmt.Fprintf(&inputs, "%s  %s\n", hash(body), name)
 			}
 			write(build, "inputs.sha256", inputs.String())
-			for _, name := range []string{"prepare-zitadel-source.sh", "zitadel-source-inputs.sha256", "build-zitadel-linux.sh", "zitadel-source-bundle.go", "zitadel-console-assets.go"} {
+			for _, name := range []string{"prepare-zitadel-source.sh", "zitadel-source-inputs.sha256", "build-zitadel-linux.sh", "zitadel-source-bundle.go", "zitadel-console-assets.go", "zitadel-login-icons.go", "zitadel-text-fonts.go"} {
 				write(repo, "scripts/"+name, name+"\n")
 			}
 			write(repo, "docs/ZITADEL-SOURCE.md", "Build documentation.\n")
+			write(repo, "third_party/zitadel-text-fonts/catalogue.json", "frozen font catalogue\n")
+			write(repo, "third_party/zitadel-text-fonts/Apache-2.0.txt", "complete Apache terms\n")
 			for _, name := range []string{"index.mjs", "package.json", "package-lock.json"} {
 				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
 			}
@@ -553,6 +559,19 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 			}
 			policy := sourceCapturePolicy{profile, hash("original API\n"), hash("serial API\n"), hash(preparation)}
 			output := filepath.Join(t.TempDir(), "captured")
+			newInputs := map[string]string{"font collector": "scripts/zitadel-text-fonts.go", "statik decoder": "scripts/zitadel-login-icons.go", "font catalogue": "third_party/zitadel-text-fonts/catalogue.json", "Apache text": "third_party/zitadel-text-fonts/Apache-2.0.txt"}
+			for label, name := range newInputs {
+				if kind == "missing "+label || kind == "linked "+label {
+					if e := os.Remove(filepath.Join(repo, name)); e != nil {
+						t.Fatal(e)
+					}
+					if kind == "linked "+label {
+						if e := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), filepath.Join(repo, name)); e != nil {
+							t.Fatal(e)
+						}
+					}
+				}
+			}
 			switch kind {
 			case "changed-source":
 				write(build, "prepared/source/source.go", "package other!\n")
@@ -605,15 +624,20 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 14 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 18 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 14 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 18 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
 					t.Fatal("console helper source was not retained literally")
+				}
+				for _, entry := range []struct{ name, body string }{{"recipes/zitadel-login-icons.go", "zitadel-login-icons.go\n"}, {"recipes/zitadel-text-fonts.go", "zitadel-text-fonts.go\n"}, {"third_party/zitadel-text-fonts/catalogue.json", "frozen font catalogue\n"}, {"third_party/zitadel-text-fonts/Apache-2.0.txt", "complete Apache terms\n"}} {
+					if b, e := sourceReadAt(output, "records/"+entry.name); e != nil || string(b) != entry.body {
+						t.Fatal("font verifier input was not retained literally", entry.name, e)
+					}
 				}
 				archive := filepath.Join(t.TempDir(), "prepared.tar")
 				archiveHash, err := sourcePackTree(output, got.ManifestSHA256, archive)

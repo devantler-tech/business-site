@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 const upstream = "8afa5dd37a8e723efb9eace8d09fd5c1cccef694"
@@ -92,6 +93,9 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 func run(args []string, out, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0
+	}
+	if args[0] == "--text-fonts" {
+		return runTextFonts(args[1:], out, diagnostic)
 	}
 	fail := func(err error) int {
 		if _, e := fmt.Fprintln(diagnostic, "login-icons:", err); e != nil {
@@ -166,7 +170,7 @@ func readAt(root, relative string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := confined.Open(relative)
+	f, err := confined.OpenFile(relative, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	rootErr := confined.Close()
 	if err != nil {
 		return nil, err

@@ -75,7 +75,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains fourteen literal build/modification records and rechecks the snapshot/archive
+  retains eighteen literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
   Its explicit `--restore-build` operation restores the sealed files and literal
@@ -114,6 +114,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
   fonts, decoded statik members and retained notices. It is inactive without
   arguments and is mandatory in the Linux build, not the public website build.
+  Compile its `zitadel-text-fonts.go` companion too. Explicit `--text-fonts`
+  snapshot/capture/read-only verification preserves the 54 frozen text fonts,
+  84 actual copies and original attribution; its raw text and inventory enter
+  image packaging and retained-input replay. This does not admit an image or
+  activate the portal; read ADR 0025 and the source guide before changing it.
 - `server/cmd/zitadel-bsr-sources/` is an otherwise inert, standard-library build
   command for the frozen three-module schema profile; read its README. It verifies
   native SHAKE256 content, both cache/export representations and a closed externally
@@ -249,7 +254,7 @@ bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
-(cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
+(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-login-icons_test.go zitadel-text-fonts_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)

@@ -25,6 +25,9 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			if strings.Contains(strings.Join(args, " "), "zitadel-login-icons.go") {
 				p = "login-icons-inventory.json"
 			}
+			if strings.Contains(strings.Join(args, " "), "--text-fonts") {
+				p = "text-font-notices-inventory.json"
+			}
 			b, err := os.ReadFile(filepath.Join(build, p))
 			if kind == "verification-error" {
 				return b, fmt.Errorf("failed after plausible inventory")

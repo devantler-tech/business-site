@@ -76,7 +76,12 @@ func imageTestFixture(t *testing.T) (string, string, string) {
 		inputs = append(inputs, map[string]any{"path": name, "sha256": imageTestHash(b)})
 	}
 	imageTestWrite(t, build, "login-icons-inventory.json", imageTestJSON(t, map[string]any{"schemaVersion": 1, "profile": "api-login-v1-console", "upstreamCommit": imagePin, "imageAdmission": "unknown", "licenseClosure": "unknown", "reproducible": false, "inputs": inputs}))
-	for _, name := range []string{"go-toolchain-notices.txt", "zitadel-root-license.txt", "go-module-notices.txt", "console-third-party-notices.txt", "console-notices-supplement.txt"} {
+	fonts := map[string]any{"schemaVersion": 1, "profile": "api-login-v1-console", "upstreamCommit": imagePin, "imageAdmission": "unknown", "licenseClosure": "unknown", "reproducible": false, "binarySha256": imageTestHash(binary), "inputs": []any{map[string]any{"path": "build-receipt.json", "sha256": imageTestHash(receipt)}}}
+	for k, v := range meta("text-font-notices.txt") {
+		fonts[k] = v
+	}
+	imageTestWrite(t, build, "text-font-notices-inventory.json", imageTestJSON(t, fonts))
+	for _, name := range []string{"go-toolchain-notices.txt", "zitadel-root-license.txt", "go-module-notices.txt", "console-third-party-notices.txt", "console-notices-supplement.txt", "text-font-notices.txt"} {
 		imageTestWrite(t, build, name, text)
 	}
 	return build, repo, filepath.Join(t.TempDir(), "package")
@@ -94,7 +99,7 @@ func TestImagePackageRetainsClosedCheckedContext(t *testing.T) {
 	if err := imageVerifyContext(output, seal); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"zitadel", "build-receipt.json", "notices/go-module-notices.txt", "notices/login-icons/NOTICE.md"} {
+	for _, name := range []string{"zitadel", "build-receipt.json", "notices/go-module-notices.txt", "notices/login-icons/NOTICE.md", "notices/text-font-notices.txt", "notices/text-font-notices-inventory.json"} {
 		if _, err := os.Stat(filepath.Join(output, name)); err != nil {
 			t.Fatal(err)
 		}
@@ -105,10 +110,27 @@ func TestImagePackageRetainsClosedCheckedContext(t *testing.T) {
 }
 
 func TestImagePackageRejectsChangedInputs(t *testing.T) {
-	for _, kind := range []string{"binary", "notice", "inventory", "receipt", "linked-file", "linked-parent", "missing", "pending", "icon"} {
+	for _, kind := range []string{"binary", "notice", "inventory", "receipt", "linked-file", "linked-parent", "missing", "pending", "icon", "font notice", "font inventory", "font receipt", "font binary", "font pending"} {
 		t.Run(kind, func(t *testing.T) {
 			build, repo, output := imageTestFixture(t)
 			switch kind {
+			case "font notice":
+				imageTestWrite(t, build, "text-font-notices.txt", []byte("replacement"))
+			case "font inventory":
+				imageTestWrite(t, build, "text-font-notices-inventory.json", []byte("{}"))
+			case "font receipt", "font binary":
+				var v map[string]any
+				if err := json.Unmarshal(mustImageTestRead(t, build, "text-font-notices-inventory.json"), &v); err != nil {
+					t.Fatal(err)
+				}
+				if kind == "font receipt" {
+					v["inputs"] = []any{}
+				} else {
+					v["binarySha256"] = imageTestHash([]byte("other"))
+				}
+				imageTestWrite(t, build, "text-font-notices-inventory.json", imageTestJSON(t, v))
+			case "font pending":
+				imageTestWrite(t, build, "text-font-notices-inventory.pending", []byte("{}"))
 			case "binary":
 				imageTestWrite(t, build, "service/zitadel", []byte("other binary\n"))
 			case "notice":
@@ -150,6 +172,15 @@ func TestImagePackageRejectsChangedInputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustImageTestRead(t *testing.T, root, name string) []byte {
+	t.Helper()
+	b, e := os.ReadFile(filepath.Join(root, name))
+	if e != nil {
+		t.Fatal(e)
+	}
+	return b
 }
 
 func TestImageContextRejectsSubstitutionAndExtraMembers(t *testing.T) {

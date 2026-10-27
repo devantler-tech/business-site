@@ -111,13 +111,21 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 	if err != nil || !bytes.Equal(console, stored) {
 		return fmt.Errorf("completed console inventory differs")
 	}
-	icons, err := run(2*time.Minute, "go", "run", filepath.Join(repo, "scripts/zitadel-login-icons.go"), "--inventory", "--build", build, "--notices", filepath.Join(repo, "third_party/zitadel-login-icons"))
+	icons, err := run(2*time.Minute, "go", "run", filepath.Join(repo, "scripts/zitadel-login-icons.go"), filepath.Join(repo, "scripts/zitadel-text-fonts.go"), "--inventory", "--build", build, "--notices", filepath.Join(repo, "third_party/zitadel-login-icons"))
 	if err != nil {
 		return fmt.Errorf("completed icon verification failed: %w", err)
 	}
 	stored, err = imageRead(build, "login-icons-inventory.json", 4<<20)
 	if err != nil || !bytes.Equal(icons, stored) {
 		return fmt.Errorf("completed icon inventory differs")
+	}
+	fonts, err := run(2*time.Minute, "go", "run", filepath.Join(repo, "scripts/zitadel-login-icons.go"), filepath.Join(repo, "scripts/zitadel-text-fonts.go"), "--text-fonts", "--verify", "--build", build, "--recipe", filepath.Join(repo, "scripts/build-zitadel-linux.sh"), "--notices", filepath.Join(repo, "third_party/zitadel-text-fonts"))
+	if err != nil {
+		return fmt.Errorf("completed text-font verification failed: %w", err)
+	}
+	stored, err = imageRead(build, "text-font-notices-inventory.json", 4<<20)
+	if err != nil || !bytes.Equal(fonts, stored) {
+		return fmt.Errorf("completed text-font inventory differs")
 	}
 	contextDir := filepath.Join(output, "context")
 	seal, err := imagePackage(build, repo, contextDir)

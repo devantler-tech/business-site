@@ -44,6 +44,7 @@ jobs:
               - 'scripts/testdata/zitadel-source/**'
               - 'scripts/testdata/zitadel-metadata-profile/**'
               - 'third_party/zitadel-login-icons/**'
+              - 'third_party/zitadel-text-fonts/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
               - 'server/cmd/zitadel-module-sources/**'
@@ -361,7 +362,7 @@ jobs:
           cache: false
       - name: Verify the bounded login icon inventory
         working-directory: scripts
-        run: go test -race zitadel-login-icons.go zitadel-login-icons_test.go
+        run: go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-login-icons_test.go zitadel-text-fonts_test.go
       - name: Verify the bounded console notice capture
         working-directory: scripts
         run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go
@@ -587,6 +588,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/build-receipt.json
             ${{ runner.temp }}/zitadel-build/packages.jsonl
             ${{ runner.temp }}/zitadel-build/login-icons-inventory.json
+            ${{ runner.temp }}/zitadel-build/text-font-notices-inventory.json
             ${{ runner.temp }}/zitadel-build/console-notices-inventory.json
             ${{ runner.temp }}/zitadel-build/console-notices-supplement-inventory.json
             ${{ runner.temp }}/zitadel-build/*.txt
@@ -640,6 +642,7 @@ jobs:
             ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-inventory.json
             ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-supplement-inventory.json
             ${{ runner.temp }}/zitadel-offline-replay/native/login-icons-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/text-font-notices-inventory.json
             ${{ runner.temp }}/zitadel-offline-replay/native/build-info.txt
           if-no-files-found: error
           retention-days: 7
