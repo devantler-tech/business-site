@@ -884,8 +884,10 @@ Ailerons resources, and resources confined to the fictional origin. Three
 screenshots and their byte hashes make the presentation independently inspectable.
 If the native form offers optional MFA enrollment, this presentation-only fixture
 may use its explicit deferral button once. The unchanged native form and its exact
-same-origin enrollment action must be observed first; mandatory or repeated
-enrollment is refused. The receipt records that choice and keeps `mfaProof` false.
+same-origin enrollment action must be observed first. Mandatory enrollment is
+never deferred, and the optional action is never submitted twice. The harness
+waits for the native transition and still requires the authenticated Console
+within the worker deadline. The receipt records that choice and keeps `mfaProof` false.
 Production MFA requirements are unchanged. An incomplete journey may retain only
 fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
 form values. Requests have a 30-second budget covering the 20-second navigation

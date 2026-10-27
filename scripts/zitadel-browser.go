@@ -191,10 +191,7 @@ func (d *browserDriver) waitPage(kind string) (browserPage, error) {
 		if browserAdmit(page, kind) {
 			return page, nil
 		}
-		if kind == "console" && browserAdmit(page, "optional-mfa") {
-			if d.mfaDeferred {
-				return page, fmt.Errorf("optional enrollment repeated")
-			}
+		if kind == "console" && !d.mfaDeferred && browserAdmit(page, "optional-mfa") {
 			button, err := d.element(`button[name="skip"][value="true"][formnovalidate]`)
 			if err != nil {
 				return page, err

@@ -156,23 +156,32 @@ func TestBrowserOptionalMFARequiresNativeDeferral(t *testing.T) {
 // The driver must use the explicit optional native action once, never clear a
 // mandatory prompt or infer that submitting it authenticated the user.
 func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
-	for _, scenario := range []string{"optional", "repeated", "mandatory", "external", "failed click"} {
+	for _, scenario := range []string{"optional", "delayed", "repeated", "mandatory", "external", "failed click"} {
 		t.Run(scenario, func(t *testing.T) {
 			page := browserPage{URL: "http://fixture.localhost:8080/ui/login/password", Ready: "complete", Text: "Set up two-factor authentication", Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/font.ttf"}, OptionalMFA: scenario != "mandatory", MFAAction: "http://fixture.localhost:8080/ui/login/mfa/prompt"}
 			if scenario == "external" {
 				page.MFAAction = "https://external.invalid/ui/login/mfa/prompt"
 			}
 			clicks := 0
+			var clickedAt time.Time
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				var value any
 				switch r.URL.Path {
 				case "/session/fixture/execute/sync":
-					value = page
+					current := page
+					if scenario == "delayed" && clicks == 1 && time.Since(clickedAt) >= 200*time.Millisecond {
+						current.URL = "http://fixture.localhost:8080/ui/console/"
+						current.OptionalMFA = false
+						current.Console = true
+						current.Text = "Welcome to the authenticated management console. Users Projects Organizations"
+					}
+					value = current
 				case "/session/fixture/element":
 					value = map[string]string{"element-6066-11e4-a52e-4f735466cecf": "optional-control"}
 				case "/session/fixture/element/optional-control/click":
 					clicks++
+					clickedAt = time.Now()
 					if scenario == "failed click" {
 						w.WriteHeader(http.StatusInternalServerError)
 						value = map[string]string{"error": "unknown error"}
@@ -199,7 +208,7 @@ func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
 			defer cancel()
 			d := browserDriver{ctx: ctx, client: &http.Client{Timeout: time.Second, Transport: transport}, session: "fixture"}
 			observed, err := d.waitPage("console")
-			if scenario == "optional" {
+			if scenario == "optional" || scenario == "delayed" {
 				if err != nil || !observed.Console || !d.mfaDeferred || clicks != 1 {
 					t.Fatalf("optional enrollment journey failed: %v", err)
 				}
