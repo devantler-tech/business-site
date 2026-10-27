@@ -162,7 +162,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 28 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "7449046b66227f32e1d79b0635b04ba6b32d6e63cfd966a2293a4cad34a13e87" and .files == 9599 and .records == 28 and .bytes == 261684090' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -221,7 +221,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "7449046b66227f32e1d79b0635b04ba6b32d6e63cfd966a2293a4cad34a13e87" and .files == 9599 and .bytes == 261684090 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
