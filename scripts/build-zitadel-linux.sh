@@ -162,7 +162,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 14 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 18 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -205,12 +205,22 @@ if [[ -n "$retained_inputs" ]]; then
   export GOVCS='*:off' npm_config_offline=true
 fi
 source_snapshot_json=null
+check_text_notice_records() {
+  local records="$1" member
+  for member in zitadel-login-icons.go zitadel-text-fonts.go; do
+    cmp "$root/scripts/$member" "$records/recipes/$member" || fail 'font verifier differs from retained source'
+  done
+  for member in catalogue.json Apache-2.0.txt; do
+    cmp "$root/third_party/zitadel-text-fonts/$member" "$records/third_party/zitadel-text-fonts/$member" || fail 'font catalogue or terms differ from retained source'
+  done
+}
 if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 14 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 18 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
+  check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
   jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
   for member in index.mjs package.json package-lock.json; do
@@ -429,6 +439,7 @@ while IFS= read -r reference; do
   grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
 done <"$output/console-references.txt"
 go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices.before.json"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --text-fonts --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$root/third_party/zitadel-text-fonts" >"$output/text-fonts.before.json"
 shasum -a 256 internal/api/ui/login/statik/statik.go >"$output/login-statik.before.sha256"
 mkdir "$output/service"
 binary="$output/service/zitadel"
@@ -451,7 +462,7 @@ shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 # Recheck the same private module cache after compilation, before final capture.
 go mod verify
 find "$console" "$embedded" internal/api/ui/login/static internal/api/ui/login/statik internal/notification/statik internal/statik -type f -exec shasum -a 256 {} + | sort >"$output/generated.sha256"
-shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/third_party/zitadel-login-icons/"* >"$output/login-icon-verifier.sha256"
+shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/third_party/zitadel-login-icons/"* "$root/third_party/zitadel-text-fonts/"* >"$output/login-icon-verifier.sha256"
 shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zitadel-console-notices/"* "$root/third_party/zitadel-go-module-notices/catalogue.json" >"$output/console-notice-verifier.sha256"
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
@@ -565,6 +576,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
+  check_text_notice_records "$output/source-snapshot/records"
   source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
@@ -578,7 +590,9 @@ fi
 # Both inventories bind these final bytes. After capture, only rename the receipt.
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
 go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices-inventory.pending"
-go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --text-fonts --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$root/third_party/zitadel-text-fonts" >"$output/text-font-notices-inventory.pending"
+mv "$output/text-font-notices-inventory.pending" "$output/text-font-notices-inventory.json"
 mv "$output/login-icons-inventory.pending" "$output/login-icons-inventory.json"
 mv "$output/console-notices-inventory.pending" "$output/console-notices-inventory.json"
 mv "$output/console-notices-supplement-inventory.pending" "$output/console-notices-supplement-inventory.json"

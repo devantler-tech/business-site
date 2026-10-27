@@ -84,23 +84,24 @@ jq -e --slurpfile original "$original" --slurpfile restored "$output/native/reta
   .nativeCacheReadbackPassed==true and .sourceChecksumsUnchanged==true and
   .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false
 ' "$output/native/retained-go-service-readback.json" >/dev/null || fail 'native service checksum readback differs'
-for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json; do
+for notice in console-notices-inventory.json console-notices-supplement-inventory.json login-icons-inventory.json text-font-notices-inventory.json; do
   [[ -s "$output/native/$notice" && ! -L "$output/native/$notice" ]] || fail 'complete same-build notice inventory missing'
 done
 go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/roundtrip" "$seal" >/dev/null || fail 'input archive changed during replay'
 console_notice_sha="$(shasum -a 256 "$output/native/console-notices-inventory.json" | awk '{print $1}')"
 supplement_notice_sha="$(shasum -a 256 "$output/native/console-notices-supplement-inventory.json" | awk '{print $1}')"
 login_notice_sha="$(shasum -a 256 "$output/native/login-icons-inventory.json" | awk '{print $1}')"
-for notice_sha in "$console_notice_sha" "$supplement_notice_sha" "$login_notice_sha"; do
+font_notice_sha="$(shasum -a 256 "$output/native/text-font-notices-inventory.json" | awk '{print $1}')"
+for notice_sha in "$console_notice_sha" "$supplement_notice_sha" "$login_notice_sha" "$font_notice_sha"; do
   [[ "$notice_sha" =~ ^[0-9a-f]{64}$ ]] || fail 'complete notice inventory digest required'
 done
 # A failed read/write leaves only private, unsealed diagnosis. The uploader does
 # not admit pending output; publish the receipt name only after the writer closes.
 jq -n --arg input "$seal" --arg archive "$archive" --slurpfile native "$native" \
-  --arg console "$console_notice_sha" --arg supplement "$supplement_notice_sha" --arg login "$login_notice_sha" '
+  --arg console "$console_notice_sha" --arg supplement "$supplement_notice_sha" --arg login "$login_notice_sha" --arg fonts "$font_notice_sha" '
  {schemaVersion:1,profile:"native-retained-input-replay-v1",platform:"linux/amd64",inputManifestSha256:$input,inputArchiveSha256:$archive,
  sourceManifestSha256:$native[0].sourceInput.manifestSha256,recipeSha256:$native[0].recipeSha256,binarySha256:$native[0].binarySha256,
- noticeInventories:{console:$console,supplement:$supplement,login:$login},
+ noticeInventories:{console:$console,supplement:$supplement,login:$login,textFonts:$fonts},
  networkDenied:true,nonRoot:true,noNewPrivileges:true,capabilitiesDropped:true,
  dependencyInputsCaptured:true,nativeOfflineReplayProved:true,reproducible:false,imageAdmission:"unknown",licenseClosure:"unknown"}
 ' >"$output/replay-receipt.pending"
