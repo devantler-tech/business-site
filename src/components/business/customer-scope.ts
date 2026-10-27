@@ -13,7 +13,7 @@ export const customerScope = {
   },
 } as const;
 
-// Only selected by an explicitly enabled release preview or activation.
+// Permanent invitation after verified source-owned publication (#149).
 export const customerScopeCopy = {
   en: {
     title: 'Websites & useful software | Devantler Tech',

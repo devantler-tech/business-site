@@ -16,7 +16,7 @@ test('actual default packager pins safe presentation inputs rather than inheriti
     writeFileSync(path.join(root, 'bin/go'), '#!/bin/sh\nprintf "go version go1.27.3 linux/amd64\\n"\n', { mode: 0o700 });
     writeFileSync(path.join(root, 'bin/npm'), `#!/bin/bash
 if [[ "$1" == --version ]]; then printf '11.19.1\\n'; exit 0; fi
-"${process.execPath}" -e 'require("node:fs").writeFileSync(process.env.CAPTURE, JSON.stringify({profile:process.env.PUBLIC_CONTENT_PROFILE,company:process.env.FEATURE_COMPANY_IDENTITY,address:process.env.COMPANY_POSTAL_ADDRESS,preview:process.env.FEATURE_PREVIEW_BANNER,offer:process.env.FEATURE_OFFER_COPY,customer:process.env.FEATURE_CUSTOMER_SCOPE,frontend:process.env.FEATURE_SVELTE_FRONTEND}))'
+"${process.execPath}" -e 'require("node:fs").writeFileSync(process.env.CAPTURE, JSON.stringify({profile:process.env.PUBLIC_CONTENT_PROFILE,company:process.env.FEATURE_COMPANY_IDENTITY,address:process.env.COMPANY_POSTAL_ADDRESS,preview:process.env.FEATURE_PREVIEW_BANNER,offer:process.env.FEATURE_OFFER_COPY,frontend:process.env.FEATURE_SVELTE_FRONTEND}))'
 exit 42
 `, { mode: 0o700 });
     const capture = path.join(root, 'captured.json');
@@ -34,10 +34,10 @@ exit 42
     const result = spawnSync('bash', ['scripts/package-runtime.sh', '--development'], {
       cwd: root, timeout: 10000,
       env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, CAPTURE: capture,
-        COMPANY_POSTAL_ADDRESS: 'Fictional private input', PUBLIC_CONTENT_PROFILE: 'production-template', FEATURE_COMPANY_IDENTITY: 'true', FEATURE_OFFER_COPY: 'true', FEATURE_PREVIEW_BANNER: 'true', FEATURE_CUSTOMER_SCOPE: 'true', FEATURE_SVELTE_FRONTEND: 'true' },
+        COMPANY_POSTAL_ADDRESS: 'Fictional private input', PUBLIC_CONTENT_PROFILE: 'production-template', FEATURE_COMPANY_IDENTITY: 'true', FEATURE_OFFER_COPY: 'true', FEATURE_PREVIEW_BANNER: 'true', FEATURE_SVELTE_FRONTEND: 'true' },
     });
     assert.equal(result.status, 42, 'The boundary double stops immediately after capturing the actual build invocation');
-    assert.deepEqual(JSON.parse(readFileSync(capture)), { profile: 'default', company: 'false', address: '', preview: 'false', offer: 'false', customer: 'false', frontend:'false' });
+    assert.deepEqual(JSON.parse(readFileSync(capture)), { profile: 'default', company: 'false', address: '', preview: 'false', offer: 'false', frontend:'false' });
     const selected = spawnSync('bash',['scripts/package-runtime.sh','--development','--default','--svelte'], {cwd:root,timeout:10000,env:boundaryEnv});
     assert.equal(selected.status,42);
     assert.equal(JSON.parse(readFileSync(capture)).frontend,'true','Only the explicit package option selects Svelte');
@@ -48,6 +48,6 @@ exit 42
     assert.equal(production.status, 42, 'The production boundary double stops at the real build invocation');
     const released = JSON.parse(readFileSync(capture));
     assert.deepEqual(released, { profile: 'production-template', company: 'true', address: '', preview: 'false',
-      offer: 'false', customer: 'true', frontend: 'true' });
+      offer: 'false', frontend: 'true' });
   } finally { rmSync(root, { recursive: true }); }
 });

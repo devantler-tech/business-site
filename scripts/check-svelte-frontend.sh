@@ -5,12 +5,12 @@ cd "$repo"
 npm --prefix web audit
 npm --prefix web test
 npm --prefix web run check
-FEATURE_CUSTOMER_SCOPE=true bash scripts/build-journal-reference.sh
+bash scripts/build-journal-reference.sh
 node web/tests/check-reading-reference.mjs
 node web/tests/check-feed-reference.mjs
 node web/tests/check-discovery-reference.mjs
 node web/tests/check-discovery-capture.mjs
-FEATURE_CUSTOMER_SCOPE=true FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
+FEATURE_SVELTE_FRONTEND=true npm --prefix web run build
 node scripts/check-customer-scope.mjs web/build
 node scripts/customer-scope.test.mjs web/build
 node web/tests/check-output.mjs enabled

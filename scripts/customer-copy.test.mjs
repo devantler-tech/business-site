@@ -1,38 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBusinessCopy } from '../src/components/business/business-copy.ts';
-import { createSupportingCopy } from '../src/components/business/supporting-copy.ts';
+import { createSupportingCopy, previewSupporting } from '../src/components/business/supporting-copy.ts';
+import { publishedOffer } from '../src/components/business/published-offer.ts';
 
 for (const identity of [false, true]) for (const offer of [false, true]) {
-  test(`customer copy preserves default-off wording independently of identity=${identity}, offer=${offer}`, () => {
-    const baseline = createBusinessCopy(identity, offer);
-    assert.deepEqual(createBusinessCopy(identity, offer, false), baseline);
-    const selected = createBusinessCopy(identity, offer, true);
+  test(`permanent customer invitation is independent of identity=${identity}, offer=${offer}`, () => {
+    const selected = createBusinessCopy(identity, offer);
     for (const locale of ['en', 'da']) {
-      assert.match(baseline[locale].title, locale === 'da' ? /til virksomheder/ : /for businesses/);
-      assert.match(baseline[locale].intro, locale === 'da' ? /til virksomheder—/ : /for businesses—and/);
-      assert.match(baseline[locale].contactText, locale === 'da' ? /din virksomhed/ : /your business/);
-      assert.match(baseline[locale].steps[0].text, locale === 'da' ? /din virksomhed/ : /your business/);
-      assert.match(baseline[locale].offerCopy[0].description, locale === 'da' ? /din virksomhed/ : /your business/);
-      assert.doesNotMatch(JSON.stringify(baseline[locale]), /private customers|privatkunder/iu);
       assert.match(selected[locale].description, locale === 'da' ? /privatkunder og virksomheder i Danmark og EU/ : /private customers and businesses in Denmark and the EU/);
       assert.match(selected[locale].intro, locale === 'da' ? /privatkunder og virksomheder i Danmark og resten af EU/ : /private customers and businesses across Denmark and the EU/);
       assert.doesNotMatch(selected[locale].title, /for businesses|til virksomheder/);
       assert.doesNotMatch(selected[locale].steps[0].text + selected[locale].contactText + selected[locale].offerCopy[0].description, /your business|din virksomhed/);
-      for (const key of ['priceNote', 'hostingText', 'fitText', 'contactAction', 'contactNote', 'availability']) assert.equal(selected[locale][key], baseline[locale][key], `${key} is not activated by customer-scope release`);
-      assert.deepEqual(selected[locale].steps.slice(1), baseline[locale].steps.slice(1));
-      assert.deepEqual(selected[locale].offerCopy.slice(1), baseline[locale].offerCopy.slice(1));
+      assert.equal(selected[locale].contactAction, locale === 'da' ? identity ? 'Skriv en email til mig' : 'Skriv til mig på LinkedIn' : identity ? 'Email me' : 'Message me on LinkedIn');
+      assert.match(selected[locale].priceNote, locale === 'da' ? /inkl\. 25 % moms/ : /include 25% (?:Danish )?VAT/);
     }
   });
 }
-for (const offer of [false, true]) test(`supporting copy changes only the neutral principle, offer=${offer}`, () => {
-  const baseline = createSupportingCopy(offer);
-  assert.deepEqual(createSupportingCopy(offer, false), baseline);
-  const selected = createSupportingCopy(offer, true);
+for (const offer of [false, true]) test(`permanent supporting invitation is independent of offer=${offer}`, () => {
+  const selected = createSupportingCopy(offer);
   for (const locale of ['en', 'da']) {
-    assert.match(baseline[locale].principles[2].text, locale === 'da' ? /din virksomhed/ : /your business/);
     assert.doesNotMatch(selected[locale].principles[2].text, /your business|din virksomhed/);
-    assert.deepEqual(selected[locale].principles.slice(0, 2), baseline[locale].principles.slice(0, 2));
-    assert.equal(selected[locale].engineeringScope, baseline[locale].engineeringScope);
+    assert.equal(selected[locale].engineeringScope, (offer ? previewSupporting[locale] : publishedOffer.supporting[locale]).engineeringScope);
   }
 });

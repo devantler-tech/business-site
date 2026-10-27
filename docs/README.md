@@ -45,7 +45,7 @@ and `/da/` (Danish). Its offer amounts and translated copy live together in
 `src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
 Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
 These framework-neutral sources are also used by the isolated Svelte Home candidate; its matching
-server-only company/offer/customer-scope configuration is documented in `web/README.md`.
+server-only company/offer configuration and permanent customer invitation are documented in `web/README.md`.
 The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
 the existing ranking implementation and complete dated snapshot with Astro. It preserves
 the curated six-tool output, compact public website example, research disclosure and old bookmarks
@@ -76,9 +76,9 @@ guards the exact approved totals, net floors and no double VAT. Current ordinary
 are shared by both frontends and every package profile. The temporary VAT gate and historical
 comparison inputs are removed in source. Reviewed publication and fresh bilingual live verification
 remain tracked in #346 until their completion is recorded.
-The publisher and production-template packager retain company identity enabled with revised-offer
-and customer-scope releases disabled. The ordinary Astro comparison and explicit recovery also
-retain current prices. This does not activate orders, payments or additional customer eligibility.
+The publisher and production-template packager retain company identity enabled and the
+revised-offer release disabled. The customer invitation is permanent. The ordinary Astro comparison
+and explicit recovery also retain current prices. This does not activate orders, payments or additional customer eligibility.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
@@ -226,13 +226,11 @@ The public customer invitation covers private customers and businesses in Denmar
 of the EU. Scope, price and applicable VAT are confirmed before an agreement. Projects outside
 the EU need a separate eligibility assessment before an offer; this is not automatic worldwide
 availability. `customer-scope.ts` supplies this boundary to Astro and the Svelte
-candidate independently of offer and identity release flags. Astro requires the default-off
-`FEATURE_CUSTOMER_SCOPE=true` setting; the source-owned publisher and production-template packager
-select it explicitly. False and entirely unset local builds retain the generic comparison invitation
-and metadata. Both frontends preserve the same default-off source setting until verified activation
-and cleanup. Every build checks all six English/Danish Home, About and Projects routes,
-including emitted metadata and deliberate output mutations in enabled and disabled states.
-Activation and subsequent flag removal require reviewed publication and live proof.
+candidate independently of offer and identity release flags. Following verified source-owned
+publication and English/Danish live visits, the invitation is permanent in ordinary, explicitly
+false and entirely unset builds. The temporary customer-scope release setting has been removed
+from both frontends, publication and packaging. Every build checks all six English/Danish
+Home, About and Projects routes, including emitted metadata and deliberate output mutations.
 This copy is not order authorization: tax confirmations remain under #147,
 server-side eligibility under #146, and the separate hosted-offer assessment under #18.
 

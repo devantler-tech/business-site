@@ -30,7 +30,7 @@ layout_valid() {
     $steps[$build[0]].env.FEATURE_COMPANY_IDENTITY == "true" and
     ($steps[$build[0]].env | has("FEATURE_VAT_PRICES") | not) and
     $steps[$build[0]].env.FEATURE_OFFER_COPY == "false" and
-    $steps[$build[0]].env.FEATURE_CUSTOMER_SCOPE == "true" and
+    ($steps[$build[0]].env | has("FEATURE_CUSTOMER_SCOPE") | not) and
     $steps[$build[0]].env.COMPANY_POSTAL_ADDRESS == "\u0024{{ secrets.COMPANY_POSTAL_ADDRESS }}" and
     $steps[$upload[0]].with.path == "dist" and
     .jobs.deploy.needs == "build" and .jobs.deploy.environment.name == "github-pages" and
