@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,8 +13,26 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
+
+// Keep failure diagnostics structural: never return response bodies, URLs,
+// container output or configuration from this fictional fixture.
+func serviceGet(client *http.Client, base, path string) ([]byte, error) {
+	response, err := client.Get(base + path)
+	if err != nil {
+		var networkError net.Error
+		timedOut := errors.As(err, &networkError) && networkError.Timeout()
+		return nil, fmt.Errorf("fixture HTTP transport failed (timeout=%t connectionRefused=%t connectionReset=%t)", timedOut, errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ECONNRESET))
+	}
+	defer response.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	if err != nil || len(b) == 2<<20 || response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fixture HTTP response invalid (status=%d bodyReadFailed=%t oversized=%t)", response.StatusCode, err != nil, len(b) == 2<<20)
+	}
+	return b, nil
+}
 
 type serviceProcess struct {
 	PID                   int           `json:"pid"`
@@ -412,16 +431,7 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 	}}
 	defer client.CloseIdleConnections()
 	get := func(path string) ([]byte, error) {
-		response, e := client.Get(base + path)
-		if e != nil {
-			return nil, fmt.Errorf("fixture HTTP request failed")
-		}
-		defer response.Body.Close()
-		b, e := io.ReadAll(io.LimitReader(response.Body, 2<<20))
-		if e != nil || len(b) == 2<<20 || response.StatusCode != 200 {
-			return nil, fmt.Errorf("fixture HTTP response invalid")
-		}
-		return b, nil
+		return serviceGet(client, base, path)
 	}
 	deadline = time.Now().Add(3 * time.Minute)
 	for {
@@ -432,7 +442,11 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 			return fmt.Errorf("service readiness inspection failed: %w", e)
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("identity service did not become ready")
+			// This diagnostic is never an alternate success path. It separates
+			// application readiness from the host's published-port path, and
+			// discards all command output before reporting a boolean.
+			_, insideErr := run(10*time.Second, "docker", "exec", service, "/app/zitadel", "ready")
+			return fmt.Errorf("identity service did not become ready: %w (inContainerReady=%t)", err, insideErr == nil)
 		}
 		time.Sleep(2 * time.Second)
 	}

@@ -3,10 +3,30 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestServiceHTTPDiagnosticDoesNotExposeResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		_, _ = io.WriteString(w, "fictional private response must not appear in diagnostic")
+	}))
+	defer server.Close()
+	_, err := serviceGet(server.Client(), server.URL, "/debug/ready")
+	if err == nil || !strings.Contains(err.Error(), "status=412") || strings.Contains(err.Error(), "fictional") || strings.Contains(err.Error(), server.URL) {
+		t.Fatalf("response diagnostic was missing status or exposed body/URL: %v", err)
+	}
+	server.Close()
+	_, err = serviceGet(server.Client(), server.URL, "/debug/ready")
+	if err == nil || !strings.Contains(err.Error(), "connectionRefused=true") || strings.Contains(err.Error(), server.URL) {
+		t.Fatalf("transport diagnostic was missing category or exposed URL: %v", err)
+	}
+}
 
 // A service request must reach native-platform admission, rather than being
 // mistaken for the existing version-only profile. Actual service acceptance is
