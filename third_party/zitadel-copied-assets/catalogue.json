@@ -21486,6 +21486,248 @@
         "console/dist/console/media/MaterialIcons-Regular-2G4ZMI5K.woff2",
         "internal/api/ui/console/static/media/MaterialIcons-Regular-2G4ZMI5K.woff2"
       ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/ar.json",
+      "bytes": 164485,
+      "sha256": "02a481a8d0abb2eef692759a15a2dc60ff14cb0388404bb1d0b214ae95a7544a",
+      "gitBlob": "2aa14bd5f927982f9d55d09a80a621234f77cda0",
+      "outputs": [
+        "console/dist/console/assets/i18n/ar.json",
+        "internal/api/ui/console/static/assets/i18n/ar.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/bg.json",
+      "bytes": 192889,
+      "sha256": "e7c98186bc4f7c0ff099a432208d3efbc54345816f3fcba865383671c2f21860",
+      "gitBlob": "a789e693464a314956f11204c40f3f55fb81bdc9",
+      "outputs": [
+        "console/dist/console/assets/i18n/bg.json",
+        "internal/api/ui/console/static/assets/i18n/bg.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/cs.json",
+      "bytes": 135308,
+      "sha256": "5b3b5f07cfd45df7bc0958700203c7e863ccbdcce3933ef22add41d3a70e0075",
+      "gitBlob": "7442e727ab66ebc8d5db623f2ef3178675ab69f8",
+      "outputs": [
+        "console/dist/console/assets/i18n/cs.json",
+        "internal/api/ui/console/static/assets/i18n/cs.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/de.json",
+      "bytes": 137935,
+      "sha256": "1f3ddc1afff099ca8fb989b970ae36223cd314555bd3c463228488587f572045",
+      "gitBlob": "fef1147d012827d44fed0572c9ad115de0817ce2",
+      "outputs": [
+        "console/dist/console/assets/i18n/de.json",
+        "internal/api/ui/console/static/assets/i18n/de.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/en.json",
+      "bytes": 126661,
+      "sha256": "11e31266789029f8418c37e5e4802a0b4952dbea3ac9849dbf31783df272254f",
+      "gitBlob": "a0804e5bb66bbcc9001969f1ec53529eac9dee18",
+      "outputs": [
+        "console/dist/console/assets/i18n/en.json",
+        "internal/api/ui/console/static/assets/i18n/en.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/es.json",
+      "bytes": 139388,
+      "sha256": "031ca298d1acf6e27127289ccde99474aa761988476e7c74cc4c36ec34d6e67d",
+      "gitBlob": "e7a414c4f47bdf0e1d8af9e2a18a5bf12766f64a",
+      "outputs": [
+        "console/dist/console/assets/i18n/es.json",
+        "internal/api/ui/console/static/assets/i18n/es.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/fr.json",
+      "bytes": 143553,
+      "sha256": "187d467341c860cbdd21944886fe432acf0d3957ff7bd9efd2fa9cfcd87eb2fa",
+      "gitBlob": "9932107339eb987cf6bb4a2527feae53c448a65e",
+      "outputs": [
+        "console/dist/console/assets/i18n/fr.json",
+        "internal/api/ui/console/static/assets/i18n/fr.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/hu.json",
+      "bytes": 143559,
+      "sha256": "7a8f5a472f0071e0269ee452a860068339372d0d3a16e14afaec5d699a6529ae",
+      "gitBlob": "c4a990e3af0b13fe1bb972c6fdffffa5db90d3bc",
+      "outputs": [
+        "console/dist/console/assets/i18n/hu.json",
+        "internal/api/ui/console/static/assets/i18n/hu.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/id.json",
+      "bytes": 131628,
+      "sha256": "43c7024d086a693d930974401824c64dcff538cb5cfd33881e96527e5acaa29e",
+      "gitBlob": "0bc970b4d2b1ac84e2825a599d0ffc99a81cf0d5",
+      "outputs": [
+        "console/dist/console/assets/i18n/id.json",
+        "internal/api/ui/console/static/assets/i18n/id.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/it.json",
+      "bytes": 135380,
+      "sha256": "3ab6be808133664886ad6b54e83b0e082d1d6db8e477da060d837973b313f5d1",
+      "gitBlob": "939ecbbee13ecfe26890bbaddf9524c4c6495907",
+      "outputs": [
+        "console/dist/console/assets/i18n/it.json",
+        "internal/api/ui/console/static/assets/i18n/it.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/ja.json",
+      "bytes": 156578,
+      "sha256": "cbc70ca3c440ddd59fcf4f5c76048edb6584a550ed2c752989174f6b8bc7179e",
+      "gitBlob": "32e5b74ae4feb1938de77d2c6c03112e52185ccb",
+      "outputs": [
+        "console/dist/console/assets/i18n/ja.json",
+        "internal/api/ui/console/static/assets/i18n/ja.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/ko.json",
+      "bytes": 139388,
+      "sha256": "940e2e829858037f0d428e7c14ba23f2f10a66312778334f5eeaef9cbbb3e2f3",
+      "gitBlob": "df2c6c9e0ebf803d282781f847b542ee969883e9",
+      "outputs": [
+        "console/dist/console/assets/i18n/ko.json",
+        "internal/api/ui/console/static/assets/i18n/ko.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/mk.json",
+      "bytes": 194450,
+      "sha256": "eee0d719e41f28621391fe787618cd4c57ae77e58a4cfc041a3f8d986821b227",
+      "gitBlob": "68382ef690eab695acc550511704e45956dede12",
+      "outputs": [
+        "console/dist/console/assets/i18n/mk.json",
+        "internal/api/ui/console/static/assets/i18n/mk.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/nl.json",
+      "bytes": 134812,
+      "sha256": "9b5d6c69c6e3fef1d82171e3bb91e36e74a01c2a472a3f2210f7a0e56e102500",
+      "gitBlob": "9aafbd6acd0478a628321e08a503ee8d33652538",
+      "outputs": [
+        "console/dist/console/assets/i18n/nl.json",
+        "internal/api/ui/console/static/assets/i18n/nl.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/pl.json",
+      "bytes": 136315,
+      "sha256": "ea5193cd65e4d997c7cdb8d0fe23ce4d194e23469d4aeec4cf06689e3c009c33",
+      "gitBlob": "a370ad335c21a22182c074d469533d4653510db9",
+      "outputs": [
+        "console/dist/console/assets/i18n/pl.json",
+        "internal/api/ui/console/static/assets/i18n/pl.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/pt.json",
+      "bytes": 137560,
+      "sha256": "233adec1876aa32d76212693d2e4a54435046e5bfd3b4cf110be98673fe25485",
+      "gitBlob": "7c5ff0ed88b632708cf92c7048cd35ece6034700",
+      "outputs": [
+        "console/dist/console/assets/i18n/pt.json",
+        "internal/api/ui/console/static/assets/i18n/pt.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/ro.json",
+      "bytes": 141092,
+      "sha256": "278ebebbd098c8d55819b18d27763b56a813a8c4851995405e7cf8aa686636da",
+      "gitBlob": "d3343e0f2825e1f3a39d6fa66ff8d1bade682441",
+      "outputs": [
+        "console/dist/console/assets/i18n/ro.json",
+        "internal/api/ui/console/static/assets/i18n/ro.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/ru.json",
+      "bytes": 205926,
+      "sha256": "89e57c31430d51141f85c6b51458ccc725b5f93778d8ad1ed4b489eb9eb97b82",
+      "gitBlob": "42030ff435b2cb6936e22df32ce9f306171cc51e",
+      "outputs": [
+        "console/dist/console/assets/i18n/ru.json",
+        "internal/api/ui/console/static/assets/i18n/ru.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/sv.json",
+      "bytes": 133970,
+      "sha256": "3d80728c35fe91c0e1f6f14bb0102890e67b703a8def4b222626379311b57b8f",
+      "gitBlob": "3094492fbe6df206975d648a95b41f2a947765cf",
+      "outputs": [
+        "console/dist/console/assets/i18n/sv.json",
+        "internal/api/ui/console/static/assets/i18n/sv.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/tr.json",
+      "bytes": 137661,
+      "sha256": "9f3ed2c73f9be2d2accbb8d75c32671d0a2a2d95eb809650edf8f6f493c32d2e",
+      "gitBlob": "fa01ab8fe84e12ba75bd6708be884c698b7a8005",
+      "outputs": [
+        "console/dist/console/assets/i18n/tr.json",
+        "internal/api/ui/console/static/assets/i18n/tr.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/uk.json",
+      "bytes": 192824,
+      "sha256": "f0a49447ffb44b6dc261823a18e76420af7e01819c6d5db4fbb1ae3a7a69f188",
+      "gitBlob": "b206918663bb4a2036671fd62b2d52055a832542",
+      "outputs": [
+        "console/dist/console/assets/i18n/uk.json",
+        "internal/api/ui/console/static/assets/i18n/uk.json"
+      ]
+    },
+    {
+      "family": "translations",
+      "path": "console/src/assets/i18n/zh.json",
+      "bytes": 119878,
+      "sha256": "19cfc5cd877539d1111e841ce3f6f1f8e191a02173c2181056535108cf03bd9c",
+      "gitBlob": "821928393cbf8ae590626664bbaa26695220a411",
+      "outputs": [
+        "console/dist/console/assets/i18n/zh.json",
+        "internal/api/ui/console/static/assets/i18n/zh.json"
+      ]
     }
   ],
   "archives": [
@@ -21520,6 +21762,18 @@
     {
       "path": "Material-Icons-LICENSE",
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "ZITADEL-CONTRIBUTING.md",
+      "sha256": "9ffa1bda0bca61af695a8de5c4f24410b731a2561584b8a0c5d1c209f1e4d5cc"
+    },
+    {
+      "path": "ZITADEL-LICENSE",
+      "sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
+    },
+    {
+      "path": "ZITADEL-LICENSING.md",
+      "sha256": "97a02685ee62bfd02b2e696580189807a193b81fcc37909818f9d19cef45394e"
     },
     {
       "path": "original-line-awesome.css",
