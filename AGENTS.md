@@ -248,6 +248,7 @@ node --test scripts/identity-cohorts.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
+bash scripts/scan-go-source.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
 bash scripts/runtime-release.test.sh

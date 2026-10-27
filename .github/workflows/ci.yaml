@@ -665,6 +665,8 @@ jobs:
           bash scripts/publishing-contract.test.sh
           bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
+      - name: Verify Go source scanner compiler selection
+        run: bash scripts/scan-go-source.test.sh
       - name: Verify source, current original CI and unextracted archive admission
         env:
           GOTOOLCHAIN: local
