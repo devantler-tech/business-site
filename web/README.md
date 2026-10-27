@@ -192,9 +192,11 @@ SvelteKit's typed, build-time, server-only environment module. All three retain 
 default; ambiguous values fail the build. Shared copy/price factories and company data remain
 authoritative. Approved VAT-inclusive prices and ordinary company facts are permanent in every
 configuration; no historical PMV comparison selector remains. The publisher and production-template
-package select company=true, revised-offer=false and customer-scope=false. Astro comparison and
-recovery retain the same current prices. The separate audience and hosted-offer releases remain
-closed, as do private portal operations. No setting authorizes orders or payments.
+package select company=true, revised-offer=false and customer-scope=true. The public invitation
+covers private customers and businesses in Denmark and the EU, with scope, price and applicable
+VAT confirmed before agreement and outside-EU projects assessed before an offer. Astro comparison
+and recovery retain the same current prices. Revised hosting-offer copy and private portal
+operations remain closed. The public invitation does not authorize orders or payments.
 
 `FEATURE_COMPANY_IDENTITY=true` adds the native company footer links, verified email contact
 with LinkedIn as an alternative, and `/company/` plus `/da/company/`. Supply an explicitly

@@ -85,7 +85,7 @@ jobs:
           FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend != 'astro' && 'true' || 'false' }}
           FEATURE_COMPANY_IDENTITY: "true"
           FEATURE_OFFER_COPY: "false"
-          FEATURE_CUSTOMER_SCOPE: "false"
+          FEATURE_CUSTOMER_SCOPE: "true"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}
         run: npm run build
       - name: Record source-owned identity

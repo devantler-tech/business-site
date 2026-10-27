@@ -21,7 +21,7 @@ node --test scripts/featured-rollout.test.mjs
 node --test scripts/fresh-publication.test.mjs
 node --test scripts/client-rollout.test.mjs
 node --test scripts/company-rollout.test.mjs
-node --test scripts/customer-scope-rollout.test.mjs
+node --test scripts/customer-scope-rollout.test.mjs scripts/customer-scope-vat.test.mjs
 node --test scripts/vat-prices-retirement.test.mjs
 node --test scripts/vat-prices.test.mjs
 node --test scripts/vat-activation.test.mjs

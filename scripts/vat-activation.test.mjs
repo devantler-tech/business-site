@@ -13,7 +13,7 @@ const current = workflow => {
   const builds = selected(workflow);
   return builds.length === 1 && builds[0].env?.FEATURE_COMPANY_IDENTITY === 'true' &&
     !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') && builds[0].env.FEATURE_OFFER_COPY === 'false' &&
-    builds[0].env.FEATURE_CUSTOMER_SCOPE === 'false';
+    builds[0].env.FEATURE_CUSTOMER_SCOPE === 'true';
 };
 
 const currentCI = workflow => {
@@ -21,7 +21,7 @@ const currentCI = workflow => {
   return builds.length === 1 && builds[0]['working-directory'] === '.' && builds[0].if == null &&
     (builds[0]['continue-on-error'] == null || builds[0]['continue-on-error'] === false) && !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') &&
     builds[0].env.FEATURE_COMPANY_IDENTITY === 'true' && builds[0].env.FEATURE_SVELTE_FRONTEND === 'true' &&
-    builds[0].env.FEATURE_OFFER_COPY === 'false' && builds[0].env.FEATURE_CUSTOMER_SCOPE === 'false' &&
+    builds[0].env.FEATURE_OFFER_COPY === 'false' && builds[0].env.FEATURE_CUSTOMER_SCOPE === 'true' &&
     typeof builds[0].env.COMPANY_POSTAL_ADDRESS === 'string' && builds[0].env.COMPANY_POSTAL_ADDRESS.split('\n').length === 2;
 };
 
@@ -53,7 +53,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
       assert.ifError(result.error);
       assert.equal(result.status, 0, result.stderr);
     }
-    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\nfalse\ntrue\n');
+    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\ntrue\ntrue\n');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -72,7 +72,7 @@ for (const mode of ['late-overwrite', 'wrong-artifact', 'skipped-upload', 'ignor
     assert.equal(productionPreview(changed), false);
   });
 }
-for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 'wrong-directory', 'legacy-vat', 'revised-offer', 'expanded-audience']) {
+for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 'wrong-directory', 'legacy-vat', 'revised-offer', 'stale-audience']) {
   test(`current-production CI probe refuses ${mode}`, () => {
     const changed = structuredClone(ci), steps = changed.jobs['build-docs'].steps;
     const build = steps.find(step => step.id === 'current-production');
@@ -84,14 +84,14 @@ for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 
     if (mode === 'wrong-directory') build['working-directory'] = 'web';
     if (mode === 'legacy-vat') build.env.FEATURE_VAT_PRICES = 'false';
     if (mode === 'revised-offer') build.env.FEATURE_OFFER_COPY = 'true';
-    if (mode === 'expanded-audience') build.env.FEATURE_CUSTOMER_SCOPE = 'true';
+    if (mode === 'stale-audience') build.env.FEATURE_CUSTOMER_SCOPE = 'false';
     assert.equal(currentCI(changed), false);
   });
 }
 
-test('the actual publisher selects only the confirmed VAT and identity release', () => assert.ok(current(publisher)));
+test('the actual publisher selects confirmed VAT, identity and customer invitation', () => assert.ok(current(publisher)));
 for (const flag of ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_CUSTOMER_SCOPE']) {
-  for (const value of [undefined, true, false, 'ambiguous', flag.includes('IDENTITY') ? 'false' : 'true']) {
+  for (const value of [undefined, true, false, 'ambiguous', flag === 'FEATURE_OFFER_COPY' ? 'true' : 'false']) {
     test(`publisher refuses changed ${flag}=${String(value)}`, () => {
       const changed = structuredClone(publisher), env = selected(changed)[0].env;
       if (value === undefined) delete env[flag];

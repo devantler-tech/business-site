@@ -8,17 +8,23 @@ import { readerText } from './reader-text.mjs';
 // Independent visitor expectations, not strings imported from the copy under test.
 const expected = {
   en: [
-    'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
-    'I cannot currently take on projects for businesses in other EU countries while the requirements are being confirmed.',
-    'Work outside the EU is not open while its requirements are being confirmed.',
+    'Private customers and businesses in Denmark and the rest of the EU.',
+    'We confirm the scope, price and applicable VAT before agreeing a project.',
+    'Projects outside the EU need a separate assessment before I can make an offer.',
   ],
   da: [
-    'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
-    'Jeg kan foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande, mens kravene afklares.',
-    'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
+    'Privatkunder og virksomheder i Danmark og resten af EU.',
+    'Vi afklarer opgavens omfang, pris og momsbehandling, før vi aftaler et projekt.',
+    'Projekter uden for EU kræver en særskilt vurdering, før jeg kan give et tilbud.',
   ],
 };
 const historicalScope = [
+  'Private customers in Denmark and the rest of the EU, and businesses in Denmark.',
+  'Privatkunder i Danmark og resten af EU samt virksomheder i Danmark.',
+  'I cannot currently take on projects for businesses in other EU countries while the requirements are being confirmed.',
+  'Jeg kan foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande, mens kravene afklares.',
+  'Work outside the EU is not open while its requirements are being confirmed.',
+  'Opgaver uden for EU er ikke åbne, mens kravene afklares.',
   'I cannot currently take on projects for businesses in other EU countries under the PMV setup.',
   'Under PMV-ordningen kan jeg foreløbig ikke påtage mig projekter for virksomheder i andre EU-lande.',
 ];
@@ -54,11 +60,13 @@ export function assertCustomerScope(html, locale, home = false) {
   };
   const metadata = [...descriptions.normal, ...descriptions.sharing];
   const marketing = [readerText(html), ...metadata].join(' ');
+  for (const sentence of historicalScope) assert.ok(!marketing.includes(sentence), 'former PMV-era audience restriction is absent');
+  assert.doesNotMatch(marketing, /(?:all countries(?: are)?|every country(?: is)?) (?:welcome|eligible)|worldwide eligibility|alle lande er (?:velkomne|godkendte)|ethvert land er (?:velkomment|godkendt)/iu, 'no automatic worldwide eligibility claim');
   assert.doesNotMatch(marketing, /for (?:Danish )?businesses(?:[.—]|\s*[|<])|til (?:danske )?virksomheder(?:[.—]|\s*[|<])/iu, 'no unrestricted business invitation remains');
   if (home) {
     assert.equal(descriptions.normal.length, 1, 'Home has exactly one normal description');
     assert.equal(descriptions.sharing.length, 1, 'Home has exactly one sharing description');
-    for (const description of metadata) assert.match(description, locale === 'da' ? /privatkunder i EU og virksomheder i Danmark/ : /private customers in the EU and businesses in Denmark/, 'Home metadata includes the confirmed audience');
+    for (const description of metadata) assert.match(description, locale === 'da' ? /privatkunder og virksomheder i Danmark og EU/ : /private customers and businesses in Denmark and the EU/, 'Home metadata includes the confirmed audience');
   }
 }
 

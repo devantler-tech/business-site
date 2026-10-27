@@ -15,8 +15,8 @@ for (const identity of [false, true]) for (const offer of [false, true]) {
       assert.match(baseline[locale].steps[0].text, locale === 'da' ? /din virksomhed/ : /your business/);
       assert.match(baseline[locale].offerCopy[0].description, locale === 'da' ? /din virksomhed/ : /your business/);
       assert.doesNotMatch(JSON.stringify(baseline[locale]), /private customers|privatkunder/iu);
-      assert.match(selected[locale].description, locale === 'da' ? /privatkunder i EU og virksomheder i Danmark/ : /private customers in the EU and businesses in Denmark/);
-      assert.match(selected[locale].intro, locale === 'da' ? /privatkunder og danske virksomheder/ : /private customers and Danish businesses/);
+      assert.match(selected[locale].description, locale === 'da' ? /privatkunder og virksomheder i Danmark og EU/ : /private customers and businesses in Denmark and the EU/);
+      assert.match(selected[locale].intro, locale === 'da' ? /privatkunder og virksomheder i Danmark og resten af EU/ : /private customers and businesses across Denmark and the EU/);
       assert.doesNotMatch(selected[locale].title, /for businesses|til virksomheder/);
       assert.doesNotMatch(selected[locale].steps[0].text + selected[locale].contactText + selected[locale].offerCopy[0].description, /your business|din virksomhed/);
       for (const key of ['priceNote', 'hostingText', 'fitText', 'contactAction', 'contactNote', 'availability']) assert.equal(selected[locale][key], baseline[locale][key], `${key} is not activated by customer-scope release`);
