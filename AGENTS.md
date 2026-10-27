@@ -174,10 +174,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   restrictions, then removes only its owner-bound container and local image. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
   The separate explicit service profile also cold-starts the same image with an
-  ephemeral fictional PostgreSQL fixture on an internal Docker network, exposes
-  HTTP only on loopback and reads actual Linux process restrictions and RSS/peak
+  ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes
+  no host ports and reads actual Linux process restrictions and RSS/peak
   measurements. Preserve its closed network, writable-path and owner-bound cleanup
-  controls. Read the actual process mount table too; Docker's legacy tmpfs option is not
+  controls. HTTP connects only to the inspected owned private endpoint; its fictional
+  authority is never resolved through DNS and redirects cannot leave that authority.
+  Read the actual process mount table too; Docker's legacy tmpfs option is not
   guaranteed to appear among regular mount points. Keep the kernel read-only
   root and bounded, non-executable, owner-bound tmpfs admission mandatory.
   HTTP discovery/console availability is not browser, invitation, MFA, production

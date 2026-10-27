@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,32 @@ import (
 	"syscall"
 	"time"
 )
+
+const serviceAuthority = "fixture.invalid:8080"
+
+// Docker does not publish ports for an internal-only network. Native Linux
+// can reach its bridge directly; bind that connection to the inspected owned
+// container without resolving the fictional HTTP authority through DNS.
+func serviceTarget(c imageContainer, network string) (string, error) {
+	if network != "" && len(c.NetworkSettings.Networks) == 1 {
+		for _, endpoint := range c.NetworkSettings.Networks {
+			ip := net.ParseIP(endpoint.IPAddress)
+			if endpoint.NetworkID == network && ip != nil && ip.To4() != nil && ip.IsPrivate() && ip.String() == endpoint.IPAddress {
+				return net.JoinHostPort(endpoint.IPAddress, "8080"), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("owned internal service endpoint unavailable")
+}
+
+func serviceTransport(target string) *http.Transport {
+	return &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != serviceAuthority {
+			return nil, fmt.Errorf("fixture connection escaped")
+		}
+		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp4", target)
+	}}
+}
 
 // Keep failure diagnostics structural: never return response bodies, URLs,
 // container output or configuration from this fictional fixture.
@@ -206,7 +233,7 @@ const serviceDatabaseImage = "postgres:17.11-bookworm@sha256:3645570cccdfa447589
 
 var serviceArgs = []string{"start-from-init", "--masterkeyFromEnv", "--tlsMode", "disabled"}
 
-func serviceInspect(raw []byte, id, image, owner, network, port, status string) (imageContainer, error) {
+func serviceInspect(raw []byte, id, image, owner, network, status string) (imageContainer, error) {
 	var all []imageContainer
 	bad := func() (imageContainer, error) {
 		state, exit, mounts := "unknown", 0, 0
@@ -226,11 +253,7 @@ func serviceInspect(raw []byte, id, image, owner, network, port, status string) 
 	}
 	c := all[0]
 	h := c.HostConfig
-	if c.ID != id || c.Image != image || c.Config.Image != image || c.Config.Labels["org.devantler-tech.identity-smoke-owner"] != owner || c.Config.User != "65532:65532" || c.Config.WorkingDir != "/app" || !reflect.DeepEqual(c.Config.Entrypoint, []string{"/app/zitadel"}) || !reflect.DeepEqual(c.Config.Cmd, serviceArgs) || !h.ReadonlyRootfs || h.Privileged || !reflect.DeepEqual(h.CapDrop, []string{"ALL"}) || len(h.CapAdd) != 0 || !reflect.DeepEqual(h.SecurityOpt, []string{"no-new-privileges"}) || h.NetworkMode != network || h.PidMode != "" || h.IpcMode != "private" || h.PidsLimit != 128 || h.Memory != 1073741824 || h.NanoCpus != 2000000000 || len(h.Binds) != 0 || len(h.Devices) != 0 || len(h.Tmpfs) != 1 || h.Tmpfs["/tmp"] != serviceTmpfs || len(h.PortBindings) != 1 || len(c.Mounts) > 1 || len(c.NetworkSettings.Networks) > 1 || c.State.Status != status || c.State.Dead || c.State.OOMKilled || c.State.ExitCode != 0 {
-		return bad()
-	}
-	var bindings []struct{ HostIP, HostPort string }
-	if err := json.Unmarshal(h.PortBindings["8080/tcp"], &bindings); err != nil || len(bindings) != 1 || bindings[0].HostIP != "127.0.0.1" || bindings[0].HostPort != port {
+	if c.ID != id || c.Image != image || c.Config.Image != image || c.Config.Labels["org.devantler-tech.identity-smoke-owner"] != owner || c.Config.User != "65532:65532" || c.Config.WorkingDir != "/app" || !reflect.DeepEqual(c.Config.Entrypoint, []string{"/app/zitadel"}) || !reflect.DeepEqual(c.Config.Cmd, serviceArgs) || !h.ReadonlyRootfs || h.Privileged || h.PublishAllPorts || !reflect.DeepEqual(h.CapDrop, []string{"ALL"}) || len(h.CapAdd) != 0 || !reflect.DeepEqual(h.SecurityOpt, []string{"no-new-privileges"}) || h.NetworkMode != network || h.PidMode != "" || h.IpcMode != "private" || h.PidsLimit != 128 || h.Memory != 1073741824 || h.NanoCpus != 2000000000 || len(h.Binds) != 0 || len(h.Devices) != 0 || len(h.Tmpfs) != 1 || h.Tmpfs["/tmp"] != serviceTmpfs || len(h.PortBindings) != 0 || len(c.Mounts) > 1 || len(c.NetworkSettings.Networks) > 1 || c.State.Status != status || c.State.Dead || c.State.OOMKilled || c.State.ExitCode != 0 {
 		return bad()
 	}
 	var mount struct {
@@ -358,17 +381,9 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 		}
 		time.Sleep(time.Second)
 	}
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
-	if err = listener.Close(); err != nil {
-		return err
-	}
-	args := []string{"--pull=never", "--platform=linux/amd64", "--network=" + network, "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=1g", "--cpus=2", "--tmpfs=/tmp:" + serviceTmpfs, "--publish=127.0.0.1:" + port + ":8080"}
+	args := []string{"--pull=never", "--platform=linux/amd64", "--network=" + network, "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=1g", "--cpus=2", "--tmpfs=/tmp:" + serviceTmpfs}
 	environment := []string{
-		"ZITADEL_MASTERKEY=00000000000000000000000000000000", "ZITADEL_EXTERNALDOMAIN=127.0.0.1", "ZITADEL_EXTERNALPORT=" + port, "ZITADEL_EXTERNALSECURE=false", "ZITADEL_TLS_ENABLED=false",
+		"ZITADEL_MASTERKEY=00000000000000000000000000000000", "ZITADEL_EXTERNALDOMAIN=fixture.invalid", "ZITADEL_EXTERNALPORT=8080", "ZITADEL_EXTERNALSECURE=false", "ZITADEL_TLS_ENABLED=false",
 		"ZITADEL_DATABASE_POSTGRES_HOST=database", "ZITADEL_DATABASE_POSTGRES_DATABASE=zitadel", "ZITADEL_DATABASE_POSTGRES_USER_USERNAME=zitadel", "ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=FictionalServiceOnly1!", "ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=FictionalDatabaseOnly1!", "ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=disable", "ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=disable",
 		"ZITADEL_FIRSTINSTANCE_SKIP=false", "ZITADEL_FIRSTINSTANCE_INSTANCENAME=Fictional Local Fixture", "ZITADEL_FIRSTINSTANCE_ORG_NAME=Fixture", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=operator@example.invalid", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS=operator@example.invalid", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED=true", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=FictionalOperatorOnly1!", "ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED=false",
 		"ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED=false", "ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWREGISTER=false", "ZITADEL_DEFAULTINSTANCE_LOGINPOLICY_ALLOWEXTERNALIDP=false", "ZITADEL_DEFAULTINSTANCE_DOMAINPOLICY_USERLOGINMUSTBEDOMAIN=false", "ZITADEL_TELEMETRY_ENABLED=false", "ZITADEL_SERVICEPING_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_WEBHOOK_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_PRIVATEIP_ENABLED=false", "ZITADEL_MACHINE_IDENTIFICATION_HOSTNAME_ENABLED=true",
@@ -387,7 +402,7 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 		if e != nil {
 			return imageContainer{}, e
 		}
-		c, e := serviceInspect(b, service, image, owner, network, port, status)
+		c, e := serviceInspect(b, service, image, owner, network, status)
 		if e != nil {
 			return c, e
 		}
@@ -422,9 +437,17 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 	if _, err = run(30*time.Second, "docker", "start", service); err != nil {
 		return fmt.Errorf("identity service start failed")
 	}
-	base := "http://127.0.0.1:" + port
-	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{}, CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) > 5 || req.URL.Scheme != "http" || req.URL.Host != "127.0.0.1:"+port {
+	c, err := inspect("running")
+	if err != nil {
+		return err
+	}
+	target, err := serviceTarget(c, network)
+	if err != nil {
+		return err
+	}
+	base := "http://" + serviceAuthority
+	client := &http.Client{Timeout: 5 * time.Second, Transport: serviceTransport(target), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) > 5 || req.URL.Scheme != "http" || req.URL.Host != serviceAuthority {
 			return fmt.Errorf("fixture redirect escaped")
 		}
 		return nil
@@ -547,7 +570,7 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 		Cleanup             string           `json:"cleanup"`
 		ImageAdmission      string           `json:"imageAdmission"`
 		LicenseClosure      string           `json:"licenseClosure"`
-	}{1, "isolated-service-smoke", imagePin, image, imageHash(source), serviceDatabaseImage, readyMs, processes, true, []string{"/tmp"}, "internal-two-container-loopback", "fictional-http-only", true, true, false, false, "complete", "unknown", "unknown"}
+	}{1, "isolated-service-smoke", imagePin, image, imageHash(source), serviceDatabaseImage, readyMs, processes, true, []string{"/tmp"}, "internal-two-container-direct", "fictional-http-only", true, true, false, false, "complete", "unknown", "unknown"}
 	b, err = json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err

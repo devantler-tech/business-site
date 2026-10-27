@@ -550,7 +550,7 @@ jobs:
               .mounts.uid == 65532 and .mounts.gid == 65532 and .mounts.mode == "0700" and
               .mounts.noExec == true and .mounts.noSuid == true and .mounts.noDev == true) and
             .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
-            .network == "internal-two-container-loopback" and .transport == "fictional-http-only" and
+            .network == "internal-two-container-direct" and .transport == "fictional-http-only" and
             .oidcDiscovery == true and .embeddedConsoleHTTP == true and
             .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"

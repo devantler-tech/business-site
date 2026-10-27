@@ -812,8 +812,14 @@ The portal and identity publication remain off.
 Replacing `--smoke` with `--service-smoke` retains the complete CLI/package
 checks and cold-starts that same immutable local image against a digest-pinned
 PostgreSQL 17 fixture. Both containers use fictional, disposable state. The
-network is internal, the database publishes no port, and the service publishes
-only on a fresh `127.0.0.1` port. HTTP and a pre-verified fictional administrator
+network is internal and neither container publishes a host port. The native Linux
+probe connects directly to the inspected service's private IPv4 endpoint on that
+owned network. It retains `fixture.invalid:8080` as the HTTP/OIDC authority without
+DNS resolution; other authorities, ports and redirect destinations are refused.
+Docker can retain a requested host mapping without publishing it on an internal-only
+network ([upstream report](https://github.com/moby/moby/discussions/53256)); the probe
+does not rely on that mapping or add an externally connected network.
+HTTP and a pre-verified fictional administrator
 are deliberate local fixture choices, not the maintained production identity
 policy. No real credentials, mail, invitations, accounts or remote services enter
 this test. It does not change the dormant configuration preparer.

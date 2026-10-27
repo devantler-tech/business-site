@@ -54,13 +54,13 @@ type imageContainer struct {
 	ID, Image  string
 	Config     imageConfig
 	HostConfig struct {
-		ReadonlyRootfs, Privileged    bool
-		CapDrop, CapAdd, SecurityOpt  []string
-		NetworkMode, PidMode, IpcMode string
-		PidsLimit, Memory, NanoCpus   int64
-		Binds, Devices                []json.RawMessage
-		Tmpfs                         map[string]string
-		PortBindings                  map[string]json.RawMessage
+		ReadonlyRootfs, Privileged, PublishAllPorts bool
+		CapDrop, CapAdd, SecurityOpt                []string
+		NetworkMode, PidMode, IpcMode               string
+		PidsLimit, Memory, NanoCpus                 int64
+		Binds, Devices                              []json.RawMessage
+		Tmpfs                                       map[string]string
+		PortBindings                                map[string]json.RawMessage
 	}
 	State struct {
 		Status                   string
@@ -69,7 +69,7 @@ type imageContainer struct {
 		Pid                      int
 	}
 	NetworkSettings struct {
-		Networks map[string]struct{ NetworkID string }
+		Networks map[string]struct{ NetworkID, IPAddress string }
 	}
 	Mounts []json.RawMessage
 }

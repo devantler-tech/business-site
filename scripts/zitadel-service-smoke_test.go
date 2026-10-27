@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,6 +29,67 @@ func TestServiceHTTPDiagnosticDoesNotExposeResponse(t *testing.T) {
 	}
 }
 
+func TestServiceTargetUsesOnlyOwnedPrivateEndpoint(t *testing.T) {
+	check := func(raw string) (string, error) {
+		var container imageContainer
+		if err := json.Unmarshal([]byte(raw), &container); err != nil {
+			t.Fatal(err)
+		}
+		return serviceTarget(container, "owned-network")
+	}
+	const good = `{"NetworkSettings":{"Networks":{"fixture":{"NetworkID":"owned-network","IPAddress":"172.18.0.2"}}}}`
+	if target, err := check(good); err != nil || target != "172.18.0.2:8080" {
+		t.Fatalf("owned internal address refused: %q %v", target, err)
+	}
+	for _, raw := range []string{
+		`{}`, strings.Replace(good, "owned-network", "foreign-network", 1),
+		strings.Replace(good, "172.18.0.2", "", 1),
+		strings.Replace(good, "172.18.0.2", "127.0.0.1", 1),
+		strings.Replace(good, "172.18.0.2", "169.254.169.254", 1),
+		strings.Replace(good, "172.18.0.2", "8.8.8.8", 1),
+		strings.Replace(good, "172.18.0.2", "172.18.0.2:80", 1),
+		strings.Replace(good, "172.18.0.2", "::1", 1),
+		strings.Replace(good, "172.18.0.2", "service.example.invalid", 1),
+		`{"NetworkSettings":{"Networks":{"a":{"NetworkID":"owned-network","IPAddress":"172.18.0.2"},"b":{"NetworkID":"other","IPAddress":"172.19.0.2"}}}}`,
+	} {
+		if target, err := check(raw); err == nil || target != "" {
+			t.Fatalf("unsafe fixture endpoint admitted: %q", target)
+		}
+	}
+}
+
+func TestServiceTransportRefusesUnrelatedAuthority(t *testing.T) {
+	transport := serviceTransport("172.18.0.2:8080")
+	defer transport.CloseIdleConnections()
+	for _, address := range []string{"elsewhere.invalid:8080", "fixture.invalid:80", "127.0.0.1:8080", "169.254.169.254:80"} {
+		if connection, err := transport.DialContext(context.Background(), "tcp", address); err == nil || connection != nil {
+			t.Fatalf("unrelated authority admitted: %q", address)
+		}
+	}
+	if connection, err := transport.DialContext(context.Background(), "udp", serviceAuthority); err == nil || connection != nil {
+		t.Fatal("non-HTTP transport admitted")
+	}
+}
+
+func TestServiceTransportKeepsAuthorityWithoutDNS(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != serviceAuthority || r.URL.Path != "/debug/ready" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, _ = io.WriteString(w, "ready")
+	}))
+	defer server.Close()
+	// The loopback endpoint belongs only to this unit test; the runtime obtains
+	// its private endpoint through the separate owned-network admission above.
+	transport := serviceTransport(strings.TrimPrefix(server.URL, "http://"))
+	defer transport.CloseIdleConnections()
+	b, err := serviceGet(&http.Client{Transport: transport}, "http://"+serviceAuthority, "/debug/ready")
+	if err != nil || string(b) != "ready" {
+		t.Fatalf("fixed connection lost the fictional HTTP authority: %q %v", b, err)
+	}
+}
+
 // A service request must reach native-platform admission, rather than being
 // mistaken for the existing version-only profile. Actual service acceptance is
 // a separate mandatory native Linux CI invocation.
@@ -43,9 +105,9 @@ func TestExplicitIdentityServiceProfile(t *testing.T) {
 // A running service has a separate closed profile. These literal Docker fields
 // must not weaken the existing network-none, no-mount version-command profile.
 func TestServiceContainerAdmission(t *testing.T) {
-	const raw = `[{"Id":"service-id","Image":"sha256:image","Config":{"Image":"sha256:image","User":"65532:65532","Entrypoint":["/app/zitadel"],"Cmd":["start-from-init","--masterkeyFromEnv","--tlsMode","disabled"],"WorkingDir":"/app","Labels":{"org.devantler-tech.identity-smoke-owner":"fixture-owner"}},"HostConfig":{"ReadonlyRootfs":true,"Privileged":false,"CapDrop":["ALL"],"SecurityOpt":["no-new-privileges"],"NetworkMode":"network-id","IpcMode":"private","PidsLimit":128,"Memory":1073741824,"NanoCpus":2000000000,"Tmpfs":{"/tmp":"rw,noexec,nosuid,nodev,size=16777216,uid=65532,gid=65532,mode=0700"},"PortBindings":{"8080/tcp":[{"HostIp":"127.0.0.1","HostPort":"12345"}]}},"State":{"Status":"running","Running":true,"Pid":4321},"Mounts":[{"Type":"tmpfs","Destination":"/tmp","RW":true}],"NetworkSettings":{"Networks":{"fixture":{"NetworkID":"network-id"}}}}]`
+	const raw = `[{"Id":"service-id","Image":"sha256:image","Config":{"Image":"sha256:image","User":"65532:65532","Entrypoint":["/app/zitadel"],"Cmd":["start-from-init","--masterkeyFromEnv","--tlsMode","disabled"],"WorkingDir":"/app","Labels":{"org.devantler-tech.identity-smoke-owner":"fixture-owner"}},"HostConfig":{"ReadonlyRootfs":true,"Privileged":false,"CapDrop":["ALL"],"SecurityOpt":["no-new-privileges"],"NetworkMode":"network-id","IpcMode":"private","PidsLimit":128,"Memory":1073741824,"NanoCpus":2000000000,"Tmpfs":{"/tmp":"rw,noexec,nosuid,nodev,size=16777216,uid=65532,gid=65532,mode=0700"}},"State":{"Status":"running","Running":true,"Pid":4321},"Mounts":[{"Type":"tmpfs","Destination":"/tmp","RW":true}],"NetworkSettings":{"Networks":{"fixture":{"NetworkID":"network-id"}}}}]`
 	check := func(b []byte) error {
-		_, err := serviceInspect(b, "service-id", "sha256:image", "fixture-owner", "network-id", "12345", "running")
+		_, err := serviceInspect(b, "service-id", "sha256:image", "fixture-owner", "network-id", "running")
 		return err
 	}
 	if err := check([]byte(raw)); err != nil {
@@ -77,7 +139,7 @@ func TestServiceContainerAdmission(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := serviceInspect(b, "service-id", "sha256:image", "fixture-owner", "network-id", "12345", status); err != nil {
+		if _, err := serviceInspect(b, "service-id", "sha256:image", "fixture-owner", "network-id", status); err != nil {
 			t.Fatalf("inactive container incorrectly required active kernel resources: %v", err)
 		}
 	}
@@ -88,6 +150,7 @@ func TestServiceContainerAdmission(t *testing.T) {
 		"version only":  func(c map[string]any) { c["Config"].(map[string]any)["Cmd"] = []string{"--version"} },
 		"writable root": func(c map[string]any) { c["HostConfig"].(map[string]any)["ReadonlyRootfs"] = false },
 		"privileged":    func(c map[string]any) { c["HostConfig"].(map[string]any)["Privileged"] = true },
+		"publish all":   func(c map[string]any) { c["HostConfig"].(map[string]any)["PublishAllPorts"] = true },
 		"unconfined": func(c map[string]any) {
 			c["HostConfig"].(map[string]any)["SecurityOpt"] = []string{"no-new-privileges", "seccomp=unconfined"}
 		},
