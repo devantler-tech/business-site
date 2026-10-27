@@ -543,7 +543,7 @@ jobs:
             .portalFederation == false and .productionTLS == false and .invitationProof == false and
             .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
             (.pages | map(.kind)) == ["login","password","console"] and
-            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true) and
+            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
       - name: Verify actual identity service evidence

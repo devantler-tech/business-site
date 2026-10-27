@@ -28,6 +28,7 @@ type browserPage struct {
 	Username      bool     `json:"username"`
 	Password      bool     `json:"password"`
 	Console       bool     `json:"console"`
+	Presented     bool     `json:"consolePresented"`
 	OptionalMFA   bool     `json:"optionalMFA"`
 	MFAAction     string   `json:"mfaAction"`
 	Font          string   `json:"font"`
@@ -56,7 +57,7 @@ func browserAdmit(page browserPage, kind string) bool {
 		}
 	}
 	if kind == "console" {
-		return strings.HasPrefix(u.Path, "/ui/console/") && page.Console && len(strings.TrimSpace(page.Text)) > 40
+		return strings.HasPrefix(u.Path, "/ui/console/") && page.Console && page.Presented && len(strings.TrimSpace(page.Text)) > 40
 	}
 	if !strings.HasPrefix(u.Path, "/ui/login/") {
 		return false
@@ -73,6 +74,13 @@ func browserAdmit(page browserPage, kind string) bool {
 const browserObservation = `
 if (!document.body) return null;
 const root = document.querySelector('cnsl-root');
+const nav = root?.querySelector('cnsl-nav');
+const settled = !!nav && nav.getAnimations({subtree:true}).every(a=>!a.pending && (a.playState==='finished' || a.playState==='idle'));
+const navigationVisible = !!nav && [...nav.querySelectorAll('a.nav-item')].some(a=>{
+  const r=a.getBoundingClientRect();
+  return r.width>0 && r.height>=20 && r.top>=0 && r.bottom<=innerHeight && r.left>=0 && r.right<=innerWidth &&
+    document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')===a;
+});
 const shown = selector => [...document.querySelectorAll(selector)].some(e => e.getClientRects().length);
 const skip = [...document.querySelectorAll('button[name="skip"][value="true"][formnovalidate]')].find(e=>e.getClientRects().length && e.form?.method==='post');
 const sample = document.querySelector('h1') || document.body;
@@ -81,6 +89,7 @@ return {url:location.href, ready:document.readyState, text:document.body.innerTe
   secureContext:window.isSecureContext, webCrypto:typeof crypto.subtle?.digest === 'function',
   username:shown('#loginName'), password:shown('#password'),
   console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
+  consolePresented:settled && navigationVisible,
   optionalMFA:!!skip, mfaAction:skip?.form?.action || '',
   font, fontsReady:document.fonts.status === 'loaded',
   selectedFaceLoaded:[...document.fonts].some(f=>f.status==='loaded' &&
@@ -236,6 +245,7 @@ type browserObserved struct {
 	FontAbsent    bool          `json:"unadmittedFontAbsent"`
 	SecureContext bool          `json:"secureContext"`
 	WebCrypto     bool          `json:"webCrypto"`
+	Presented     bool          `json:"presentationReady"`
 	Screenshot    browserScreen `json:"screenshot"`
 }
 
@@ -262,7 +272,7 @@ func (d *browserDriver) capture(output, kind string, page browserPage) (browserO
 	if err = imageWrite(output, kind+".png", png, 0600); err != nil {
 		return browserObserved{}, err
 	}
-	return browserObserved{kind, page.Font, true, true, true, page.SecureContext, page.WebCrypto, browserScreen{kind + ".png", len(png), imageHash(png)}}, nil
+	return browserObserved{Kind: kind, Font: page.Font, Loaded: true, SameOrigin: true, FontAbsent: true, SecureContext: page.SecureContext, WebCrypto: page.WebCrypto, Presented: kind != "console" || page.Presented, Screenshot: browserScreen{kind + ".png", len(png), imageHash(png)}}, nil
 }
 
 // This internal worker runs only in the already-admitted service network

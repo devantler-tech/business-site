@@ -648,6 +648,7 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 			FontAbsent    bool   `json:"unadmittedFontAbsent"`
 			SecureContext bool   `json:"secureContext"`
 			WebCrypto     bool   `json:"webCrypto"`
+			Presented     bool   `json:"presentationReady"`
 			Screenshot    struct {
 				Path   string `json:"path"`
 				Bytes  int    `json:"bytes"`
@@ -667,7 +668,7 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 	}
 	for i, kind := range []string{"login", "password", "console"} {
 		page := receipt.Pages[i]
-		if page.Kind != kind || page.Font == "" || strings.Contains(strings.ToLower(page.Font), "ailerons") || !page.Loaded || !page.SameOrigin || !page.FontAbsent || !page.SecureContext || !page.WebCrypto || page.Screenshot.Path != kind+".png" {
+		if page.Kind != kind || page.Font == "" || strings.Contains(strings.ToLower(page.Font), "ailerons") || !page.Loaded || !page.SameOrigin || !page.FontAbsent || !page.SecureContext || !page.WebCrypto || !page.Presented || page.Screenshot.Path != kind+".png" {
 			return fmt.Errorf("browser page observation incomplete")
 		}
 		png, e := imageRead(output, kind+".png", 4<<20)

@@ -29,6 +29,7 @@ func TestBrowserRenderedPageAdmission(t *testing.T) {
 	console.URL = "http://fixture.localhost:8080/ui/console/"
 	console.Username = false
 	console.Console = true
+	console.Presented = true
 	console.Text = "Welcome to the management console. Users Projects Organizations"
 	if !browserAdmit(console, "console") {
 		t.Fatal("authenticated console refused")
@@ -59,6 +60,11 @@ func TestBrowserRenderedPageAdmission(t *testing.T) {
 			}
 		})
 	}
+	console.Presented = false
+	if browserAdmit(console, "console") {
+		t.Fatal("clipped or animating console navigation admitted")
+	}
+	console.Presented = true
 	console.Console = false
 	if browserAdmit(console, "console") || browserAdmit(good, "unknown") {
 		t.Fatal("empty console or unknown page admitted")
@@ -174,6 +180,7 @@ func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
 						current.URL = "http://fixture.localhost:8080/ui/console/"
 						current.OptionalMFA = false
 						current.Console = true
+						current.Presented = true
 						current.Text = "Welcome to the authenticated management console. Users Projects Organizations"
 					}
 					value = current
@@ -189,6 +196,7 @@ func TestBrowserConsoleWaitHandlesOptionalEnrollment(t *testing.T) {
 						page.URL = "http://fixture.localhost:8080/ui/console/"
 						page.OptionalMFA = false
 						page.Console = true
+						page.Presented = true
 						page.Text = "Welcome to the authenticated management console. Users Projects Organizations"
 					}
 				default:

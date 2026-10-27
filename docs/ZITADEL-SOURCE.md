@@ -882,6 +882,9 @@ requires the authenticated Console header and navigation. Each page must finish
 rendering with its selected font face actually loaded, no failed font faces or
 Ailerons resources, and resources confined to the fictional origin. Three
 screenshots and their byte hashes make the presentation independently inspectable.
+Console capture additionally waits for its native navigation animations to settle
+and a full-sized navigation link to be visible, within the viewport and unobstructed
+at its center. Mere authenticated component presence cannot admit a clipped first frame.
 If the native form offers optional MFA enrollment, this presentation-only fixture
 may use its explicit deferral button once. The unchanged native form and its exact
 same-origin enrollment action must be observed first. Mandatory enrollment is
