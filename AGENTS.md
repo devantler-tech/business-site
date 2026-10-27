@@ -27,7 +27,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ordinary Astro comparison. Both ignore ambient frontend settings.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
   under `src/components/business/`; the existing Astro adapters retain its release configuration.
-  The Svelte candidate preserves the three default-off company/offer/customer-scope settings
+  The Svelte candidate preserves the two default-off company/offer settings
   through its native server-only configuration. Shared layout/load data never carries the address;
   the company-page HTML transform retains escaped text and the runtime's template placeholders.
 - Framework-neutral portfolio descriptions, presentation and bookmark aliases live in

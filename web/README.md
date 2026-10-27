@@ -187,12 +187,12 @@ The Go/PostgreSQL portal remains the unchanged authority, independently default-
 There are no private routes, identity integrations, customer records, payment operations or
 new hosted services here. Do not put secrets or private environment values into public output.
 
-The candidate preserves the three company, offer and customer-scope settings through
-SvelteKit's typed, build-time, server-only environment module. All three retain their false
-default; ambiguous values fail the build. Shared copy/price factories and company data remain
-authoritative. Approved VAT-inclusive prices and ordinary company facts are permanent in every
+The candidate preserves the company and offer settings through
+SvelteKit's typed, build-time, server-only environment module. Both retain their false
+default; ambiguous values fail the build. The published customer invitation is permanent. Shared
+copy/price factories and company data remain authoritative. Approved VAT-inclusive prices and ordinary company facts are permanent in every
 configuration; no historical PMV comparison selector remains. The publisher and production-template
-package select company=true, revised-offer=false and customer-scope=true. The public invitation
+package select company=true and revised-offer=false. The public invitation
 covers private customers and businesses in Denmark and the EU, with scope, price and applicable
 VAT confirmed before agreement and outside-EU projects assessed before an offer. Astro comparison
 and recovery retain the same current prices. Revised hosting-offer copy and private portal

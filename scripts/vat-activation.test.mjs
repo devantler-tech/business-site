@@ -13,7 +13,7 @@ const current = workflow => {
   const builds = selected(workflow);
   return builds.length === 1 && builds[0].env?.FEATURE_COMPANY_IDENTITY === 'true' &&
     !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') && builds[0].env.FEATURE_OFFER_COPY === 'false' &&
-    builds[0].env.FEATURE_CUSTOMER_SCOPE === 'true';
+    !Object.hasOwn(builds[0].env, 'FEATURE_CUSTOMER_SCOPE');
 };
 
 const currentCI = workflow => {
@@ -21,7 +21,7 @@ const currentCI = workflow => {
   return builds.length === 1 && builds[0]['working-directory'] === '.' && builds[0].if == null &&
     (builds[0]['continue-on-error'] == null || builds[0]['continue-on-error'] === false) && !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') &&
     builds[0].env.FEATURE_COMPANY_IDENTITY === 'true' && builds[0].env.FEATURE_SVELTE_FRONTEND === 'true' &&
-    builds[0].env.FEATURE_OFFER_COPY === 'false' && builds[0].env.FEATURE_CUSTOMER_SCOPE === 'true' &&
+    builds[0].env.FEATURE_OFFER_COPY === 'false' && !Object.hasOwn(builds[0].env, 'FEATURE_CUSTOMER_SCOPE') &&
     typeof builds[0].env.COMPANY_POSTAL_ADDRESS === 'string' && builds[0].env.COMPANY_POSTAL_ADDRESS.split('\n').length === 2;
 };
 
@@ -43,7 +43,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
   const directory = mkdtempSync(join(tmpdir(), 'vat-preview-order-'));
   try {
     mkdirSync(join(directory, 'bin'));
-    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_OFFER_COPY-}" "${FEATURE_CUSTOMER_SCOPE-}" "${FEATURE_SVELTE_FRONTEND-}" > dist/presentation\n', { mode: 0o700 });
+    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_OFFER_COPY-}" "${FEATURE_SVELTE_FRONTEND-}" > dist/presentation\n', { mode: 0o700 });
     for (const step of ci.jobs['build-docs'].steps.filter(step => /^(?:npm run build|env .* npm run build)$/.test(step.run ?? ''))) {
       const env = { ...process.env, PATH: `${directory}/bin:${process.env.PATH}` };
       for (const key of Object.keys(env).filter(key => key.startsWith('FEATURE_'))) delete env[key];
@@ -53,7 +53,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
       assert.ifError(result.error);
       assert.equal(result.status, 0, result.stderr);
     }
-    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\ntrue\ntrue\n');
+    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\ntrue\n');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -90,7 +90,7 @@ for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 
 }
 
 test('the actual publisher selects confirmed VAT, identity and customer invitation', () => assert.ok(current(publisher)));
-for (const flag of ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_CUSTOMER_SCOPE']) {
+for (const flag of ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY']) {
   for (const value of [undefined, true, false, 'ambiguous', flag === 'FEATURE_OFFER_COPY' ? 'true' : 'false']) {
     test(`publisher refuses changed ${flag}=${String(value)}`, () => {
       const changed = structuredClone(publisher), env = selected(changed)[0].env;
