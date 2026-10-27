@@ -177,8 +177,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ephemeral fictional PostgreSQL fixture on an internal Docker network, exposes
   HTTP only on loopback and reads actual Linux process restrictions and RSS/peak
   measurements. Preserve its closed network, writable-path and owner-bound cleanup
-  controls. HTTP discovery/console availability is not browser, invitation, MFA,
-  production TLS, complete-stack acceptance or activation. No image is published.
+  controls. Read the actual process mount table too; Docker's legacy tmpfs option is not
+  guaranteed to appear among regular mount points. Keep the kernel read-only
+  root and bounded, non-executable, owner-bound tmpfs admission mandatory.
+  HTTP discovery/console availability is not browser, invitation, MFA, production
+  TLS, complete-stack acceptance or activation. No image is published.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses

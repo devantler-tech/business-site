@@ -31,6 +31,20 @@ func TestServiceContainerAdmission(t *testing.T) {
 	if err := check([]byte(raw)); err != nil {
 		t.Fatalf("valid service profile refused: %v", err)
 	}
+	// Legacy --tmpfs uses HostConfig.Tmpfs rather than MountPoints. The live
+	// kernel mount must independently pass before service success is possible.
+	var legacy []map[string]any
+	if err := json.Unmarshal([]byte(raw), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy[0]["Mounts"] = nil
+	legacyBytes, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := check(legacyBytes); err != nil {
+		t.Fatalf("legacy Docker tmpfs metadata refused: %v", err)
+	}
 	for _, status := range []string{"created", "exited"} {
 		var all []map[string]any
 		if err := json.Unmarshal([]byte(raw), &all); err != nil {
@@ -65,7 +79,7 @@ func TestServiceContainerAdmission(t *testing.T) {
 		"extra mount": func(c map[string]any) {
 			c["Mounts"] = append(c["Mounts"].([]any), map[string]any{"Type": "bind", "Destination": "/etc", "RW": false})
 		},
-		"missing active mount":   func(c map[string]any) { c["Mounts"] = nil },
+		"missing declared tmpfs": func(c map[string]any) { c["HostConfig"].(map[string]any)["Tmpfs"] = nil },
 		"missing active network": func(c map[string]any) { c["NetworkSettings"] = map[string]any{} },
 		"oom":                    func(c map[string]any) { c["State"].(map[string]any)["OOMKilled"] = true },
 		"extra network": func(c map[string]any) {
@@ -108,6 +122,47 @@ CapAmb:	0000000000000000
 NoNewPrivs:	1
 Seccomp:	2
 `
+
+const serviceMountFixture = `100 99 0:101 / / ro,relatime - overlay overlay rw,lowerdir=/fictional/image
+101 100 0:102 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+102 100 0:103 / /tmp rw,nosuid,nodev,noexec,relatime - tmpfs tmpfs rw,size=16384k,mode=700,uid=65532,gid=65532
+`
+
+func TestActualKernelRootAndApplicationTmpfs(t *testing.T) {
+	m, err := serviceMountStatus([]byte(serviceMountFixture))
+	if err != nil || !m.RootReadOnly || m.TmpfsBytes != 16777216 || m.UID != 65532 || m.GID != 65532 || m.Mode != "0700" || !m.NoExec || !m.NoSuid || !m.NoDev {
+		t.Fatalf("valid kernel mount proof refused: %#v %v", m, err)
+	}
+	for name, change := range map[string][2]string{
+		"writable root":         {"/ / ro,relatime", "/ / rw,relatime"},
+		"missing tmpfs":         {"102 100 0:103 / /tmp", "102 100 0:103 / /elsewhere"},
+		"bind instead of tmpfs": {"- tmpfs tmpfs", "- ext4 /dev/fixture"},
+		"executable":            {"rw,nosuid,nodev,noexec,relatime - tmpfs", "rw,nosuid,nodev,relatime - tmpfs"},
+		"suid":                  {"rw,nosuid,nodev,noexec,relatime - tmpfs", "rw,nodev,noexec,relatime - tmpfs"},
+		"devices":               {"rw,nosuid,nodev,noexec,relatime - tmpfs", "rw,nosuid,noexec,relatime - tmpfs"},
+		"wrong limit":           {"size=16384k", "size=32m"},
+		"root-owned tmpfs":      {"uid=65532", "uid=0"},
+		"wrong group":           {"gid=65532", "gid=0"},
+		"world writable":        {"mode=700", "mode=777"},
+		"missing uid":           {"uid=65532,", ""},
+		"duplicate option":      {"uid=65532", "uid=65532,uid=0"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b := strings.Replace(serviceMountFixture, change[0], change[1], 1)
+			if b == serviceMountFixture {
+				t.Fatal("unchanged mutation")
+			}
+			if _, err := serviceMountStatus([]byte(b)); err == nil {
+				t.Fatal("unsafe kernel mount accepted")
+			}
+		})
+	}
+	for _, extra := range []string{"malformed\n", "103 100 0:104 / /tmp rw - tmpfs tmpfs rw\n", "103 102 0:104 / /tmp/hidden rw - ext4 /dev/fixture rw\n"} {
+		if _, err := serviceMountStatus([]byte(serviceMountFixture + extra)); err == nil {
+			t.Fatal("ambiguous or masked kernel mount accepted")
+		}
+	}
+}
 
 func TestActualProcessRestrictionsAndMeasuredMemory(t *testing.T) {
 	p, err := serviceProcessStatus([]byte(serviceStatusFixture), 12345)

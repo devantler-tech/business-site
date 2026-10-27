@@ -545,7 +545,10 @@ jobs:
               (.threads | positiveInt) and .threads <= 128 and
               .effectiveCapabilities == "0000000000000000" and
               .boundingCapabilities == "0000000000000000" and
-              .noNewPrivileges == true and .seccompMode == 2) and
+              .noNewPrivileges == true and .seccompMode == 2 and
+              .mounts.rootReadOnly == true and .mounts.tmpfsBytes == 16777216 and
+              .mounts.uid == 65532 and .mounts.gid == 65532 and .mounts.mode == "0700" and
+              .mounts.noExec == true and .mounts.noSuid == true and .mounts.noDev == true) and
             .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
             .network == "internal-two-container-loopback" and .transport == "fictional-http-only" and
             .oidcDiscovery == true and .embeddedConsoleHTTP == true and

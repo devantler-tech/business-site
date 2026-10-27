@@ -16,17 +16,129 @@ import (
 )
 
 type serviceProcess struct {
-	PID                   int    `json:"pid"`
-	Name                  string `json:"name"`
-	UID                   int    `json:"uid"`
-	GID                   int    `json:"gid"`
-	RSSKiB                int64  `json:"rssKiB"`
-	PeakRSSKiB            int64  `json:"peakRssKiB"`
-	Threads               int64  `json:"threads"`
-	EffectiveCapabilities string `json:"effectiveCapabilities"`
-	BoundingCapabilities  string `json:"boundingCapabilities"`
-	NoNewPrivileges       bool   `json:"noNewPrivileges"`
-	SeccompMode           int    `json:"seccompMode"`
+	PID                   int           `json:"pid"`
+	Name                  string        `json:"name"`
+	UID                   int           `json:"uid"`
+	GID                   int           `json:"gid"`
+	RSSKiB                int64         `json:"rssKiB"`
+	PeakRSSKiB            int64         `json:"peakRssKiB"`
+	Threads               int64         `json:"threads"`
+	EffectiveCapabilities string        `json:"effectiveCapabilities"`
+	BoundingCapabilities  string        `json:"boundingCapabilities"`
+	NoNewPrivileges       bool          `json:"noNewPrivileges"`
+	SeccompMode           int           `json:"seccompMode"`
+	Mounts                serviceMounts `json:"mounts"`
+}
+
+type serviceMounts struct {
+	RootReadOnly bool   `json:"rootReadOnly"`
+	TmpfsBytes   int64  `json:"tmpfsBytes"`
+	UID          int    `json:"uid"`
+	GID          int    `json:"gid"`
+	Mode         string `json:"mode"`
+	NoExec       bool   `json:"noExec"`
+	NoSuid       bool   `json:"noSuid"`
+	NoDev        bool   `json:"noDev"`
+}
+
+func serviceMountStatus(b []byte) (serviceMounts, error) {
+	bad := func() (serviceMounts, error) {
+		return serviceMounts{}, fmt.Errorf("actual kernel root or application tmpfs differs")
+	}
+	if len(b) == 0 || len(b) > 1<<20 {
+		return bad()
+	}
+	options := func(raw string) (map[string]string, bool) {
+		out := map[string]string{}
+		for _, option := range strings.Split(raw, ",") {
+			key, value, _ := strings.Cut(option, "=")
+			if key == "" {
+				return nil, false
+			}
+			if _, exists := out[key]; exists {
+				return nil, false
+			}
+			out[key] = value
+		}
+		return out, true
+	}
+	has := func(m map[string]string, key string) bool { _, ok := m[key]; return ok }
+	root, tmp := false, false
+	for _, line := range strings.Split(strings.TrimSuffix(string(b), "\n"), "\n") {
+		f := strings.Fields(line)
+		sep := -1
+		for i, field := range f {
+			if field == "-" {
+				sep = i
+				break
+			}
+		}
+		if len(f) < 10 || sep < 6 || len(f) != sep+4 {
+			return bad()
+		}
+		if strings.HasPrefix(f[4], "/tmp/") {
+			return bad()
+		}
+		if f[4] != "/" && f[4] != "/tmp" {
+			continue
+		}
+		mount, ok := options(f[5])
+		if !ok {
+			return bad()
+		}
+		if f[4] == "/" {
+			if root || !has(mount, "ro") || has(mount, "rw") {
+				return bad()
+			}
+			root = true
+			continue
+		}
+		if tmp || f[3] != "/" || f[sep+1] != "tmpfs" || f[sep+2] != "tmpfs" {
+			return bad()
+		}
+		for _, required := range []string{"rw", "nosuid", "nodev", "noexec"} {
+			if !has(mount, required) {
+				return bad()
+			}
+		}
+		for _, unsafe := range []string{"ro", "suid", "dev", "exec"} {
+			if has(mount, unsafe) {
+				return bad()
+			}
+		}
+		super, ok := options(f[sep+3])
+		if !ok || !has(super, "rw") || super["uid"] != "65532" || super["gid"] != "65532" {
+			return bad()
+		}
+		mode, e := strconv.ParseUint(super["mode"], 8, 32)
+		if e != nil || mode != 0700 {
+			return bad()
+		}
+		size := super["size"]
+		multiplier := int64(1)
+		if len(size) > 0 {
+			switch size[len(size)-1] {
+			case 'k':
+				multiplier = 1024
+				size = size[:len(size)-1]
+			case 'm':
+				multiplier = 1024 * 1024
+				size = size[:len(size)-1]
+			case 'g':
+				multiplier = 1024 * 1024 * 1024
+				size = size[:len(size)-1]
+			}
+		}
+		n, e := strconv.ParseInt(size, 10, 64)
+		if e != nil || n <= 0 || n > 16777216 || n*multiplier != 16777216 {
+			return bad()
+		}
+		tmp = true
+	}
+	if !root || !tmp {
+		return bad()
+	}
+	return serviceMounts{RootReadOnly: true, TmpfsBytes: 16777216, UID: 65532, GID: 65532, Mode: "0700", NoExec: true, NoSuid: true, NoDev: true}, nil
 }
 
 func serviceProcessStatus(b []byte, pid int) (serviceProcess, error) {
@@ -76,10 +188,20 @@ const serviceDatabaseImage = "postgres:17.11-bookworm@sha256:3645570cccdfa447589
 var serviceArgs = []string{"start-from-init", "--masterkeyFromEnv", "--tlsMode", "disabled"}
 
 func serviceInspect(raw []byte, id, image, owner, network, port, status string) (imageContainer, error) {
-	bad := func() (imageContainer, error) {
-		return imageContainer{}, fmt.Errorf("service container restrictions or state differ")
-	}
 	var all []imageContainer
+	bad := func() (imageContainer, error) {
+		state, exit, mounts := "unknown", 0, 0
+		if len(all) == 1 {
+			c := all[0]
+			switch c.State.Status {
+			case "created", "running", "exited", "dead", "paused", "restarting":
+				state = c.State.Status
+			}
+			exit = c.State.ExitCode
+			mounts = len(c.Mounts)
+		}
+		return imageContainer{}, fmt.Errorf("service container restrictions or state differ (state=%s exit=%d mountEntries=%d)", state, exit, mounts)
+	}
 	if err := imageDecode(raw, &all); err != nil || len(all) != 1 {
 		return bad()
 	}
@@ -106,7 +228,7 @@ func serviceInspect(raw []byte, id, image, owner, network, port, status string) 
 			return bad()
 		}
 	}
-	if (status != "running" && status != "created" && status != "exited") || (status == "running" && (!c.State.Running || c.State.Pid <= 1 || len(c.Mounts) != 1 || len(c.NetworkSettings.Networks) != 1)) || (status == "created" && (c.State.Running || c.State.Pid != 0)) || (status == "exited" && (c.State.Running || c.State.Pid != 0)) {
+	if (status != "running" && status != "created" && status != "exited") || (status == "running" && (!c.State.Running || c.State.Pid <= 1 || len(c.NetworkSettings.Networks) != 1)) || (status == "created" && (c.State.Running || c.State.Pid != 0)) || (status == "exited" && (c.State.Running || c.State.Pid != 0)) {
 		return bad()
 	}
 	return c, nil
@@ -307,7 +429,7 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 			break
 		}
 		if _, e := inspect("running"); e != nil {
-			return fmt.Errorf("identity service did not stay running")
+			return fmt.Errorf("service readiness inspection failed: %w", e)
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("identity service did not become ready")
@@ -354,6 +476,14 @@ func imageService(image, owner, repo, output string, run imageCommand) (result e
 			return fmt.Errorf("native Linux process evidence unavailable")
 		}
 		process, e := serviceProcessStatus(b, c.State.Pid)
+		if e != nil {
+			return e
+		}
+		mountInfo, e := os.ReadFile(filepath.Join("/proc", strconv.Itoa(c.State.Pid), "mountinfo"))
+		if e != nil {
+			return fmt.Errorf("native Linux mount evidence unavailable")
+		}
+		process.Mounts, e = serviceMountStatus(mountInfo)
 		if e != nil {
 			return e
 		}

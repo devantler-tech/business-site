@@ -827,7 +827,14 @@ these ceilings are not measured production sizing. The test requires actual
 readiness, issuer-bound OIDC discovery and embedded Console HTTP delivery, then
 reads three actual native Linux process samples. Those samples must show the
 single service process, all four UID/GID slots, empty capability sets,
-no-new-privileges, seccomp filter mode, RSS, peak RSS and thread count. They are
+no-new-privileges, seccomp filter mode, RSS, peak RSS and thread count. Each sample
+also reads that process's actual Linux mount table: the root must be read-only,
+and `/tmp` must be a 16 MiB tmpfs owned by 65532:65532, mode 0700, with noexec,
+nosuid and nodev. Missing or ambiguous entries, a hidden child mount or failed
+kernel reads refuse the result. Docker's legacy `--tmpfs` can appear only in
+`HostConfig.Tmpfs`, rather than the regular `Mounts` list; either representation
+retains this mandatory independent kernel check. Raw mount tables stay private
+and are not retained in the diagnostic. These are
 container-process measurements, not build RSS or whole-stack consumption.
 
 The diagnostic binds the inspected image, upstream revision and harness source.
