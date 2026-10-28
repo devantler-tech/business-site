@@ -41,6 +41,10 @@ the installed source and complete terms, and exercises the formerly failing
 prototype cases as well as normal configuration merging. The full registry audit
 remains enabled.
 
+The retained Svelte comparison fixture uses this same package source and runs
+the same controls through its own installed Svelte consumer. It keeps a separate
+native lockfile; a passing public frontend does not clear that comparison graph.
+
 Remove this temporary package and override once a supported upstream release
 corrects the finding and passes those same consumer-level controls and the
 complete frontend release checks. Do not replace it with an audit exception or
