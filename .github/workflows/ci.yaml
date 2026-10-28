@@ -984,7 +984,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@b03d137ac25ef4299d4bc4ebee08928e1e57708e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@8e2dfbd3f9249b76b58234189ccbbae98d11b32b
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -1022,7 +1022,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@b03d137ac25ef4299d4bc4ebee08928e1e57708e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@8e2dfbd3f9249b76b58234189ccbbae98d11b32b
         with:
           job-results: >-
             ${{ needs.changes.result }}
