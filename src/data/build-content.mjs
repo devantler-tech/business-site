@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { cv } from "./cv.ts";
 import { renderCvPdf } from "../lib/cv-pdf.ts";
-import { readJournal, journalPaths } from "./journal.mjs";
+import { readJournal } from "./journal.mjs";
 import { articleSource, guideMetadata, guidePaths, readingFingerprint, prepareReadingReference, captureReadingReference } from "./journal-reading.mjs";
 import { parseFrontmatter } from "./frontmatter.mjs";
 import { renderMarkdownBody, escapeHtml as e } from "./markdown.mjs";
