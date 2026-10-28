@@ -162,7 +162,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .records == 28 and .bytes == 261684474' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .records == 56 and .bytes == 261684474' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -221,7 +221,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .bytes == 261684474 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .bytes == 261684474 and .records == 56 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
@@ -580,7 +580,7 @@ if [[ "$capture_source" -eq 1 ]]; then
     if length == 2 and map(.phase) == ["api","console"]
     then {schemaVersion:1,platform:"linux/amd64",sourceManifestSha256:$source,bsrManifestSha256:$package,recipeSha256:$recipe,compilers:.,networkDenialProved:true,nonRootReplay:true,noNewPrivilegesReplay:true,schemaOfflineReplayProved:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}
     else error("incomplete schema compiler replay") end' "$output/bsr-replay-compilers.pending" >"$output/bsr-schema-replay.json"
-  go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/source-snapshot" "$source_manifest" >"$output/source-readback.pending"
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$output/source-snapshot" "$source_manifest" "$root" >"$output/source-readback.pending"
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
@@ -608,6 +608,11 @@ mv "$output/console-notices-inventory.pending" "$output/console-notices-inventor
 mv "$output/console-notices-supplement-inventory.pending" "$output/console-notices-supplement-inventory.json"
 if [[ -n "$retained_inputs" ]]; then
   go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" >/dev/null || fail 'retained inputs changed during build'
+fi
+if [[ "$capture_source" -eq 1 ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$output/source-snapshot" "$source_manifest" "$root" >/dev/null || fail 'repository source differs from the captured build records'
+elif [[ -n "$prepared_source" ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$prepared_source" "$prepared_sha" "$root" >/dev/null || fail 'repository source differs from the restored build records'
 fi
 mv "$output/build-receipt.pending" "$output/build-receipt.json"
 complete=1
