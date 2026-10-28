@@ -34,6 +34,21 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
   --source-sha256 SOURCE_SEAL --output /absolute/fresh-native-inputs
 ```
 
+The separate `capture-verifier-bootstrap` operation takes `--tool-source`,
+`--source-sha256`, `--tool-source-sha256`, `--cache`, `--composition` and `--output`.
+It retains only the original x/mod 0.42.0 ZIP/mod/info and the successful native
+Go package observation. The restored module and checksum file must admit the
+fixed version and complete checksums, without replacements. The two exact
+command paths and thirteen original Go files must match; captured fields cannot
+choose another package or destination. The archive retains complete LICENSE
+and PATENTS bodies, with native ZIP/h1 and closed-file verification.
+`verify-verifier-bootstrap` instead takes `--package` and external `--sha256`,
+plus the same tool-source/source seals. `restore-verifier-bootstrap` adds a fresh
+`--output`, populated only at fixed native download-cache paths. Copied bytes
+must equal the original authenticated records, even if an input changes and is
+subsequently restored. These component receipts keep `goVerifiersRebuilt:false`.
+Only the outer Linux replay can prove reconstruction and actual service use.
+
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
 alongside `--capture-source`. It requires the reviewed command identity, exact
 tool compiler and an unchanged executable digest. CI builds that command before
