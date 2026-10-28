@@ -57,7 +57,7 @@ for (const locale of ['en', 'da']) {
     assert.ok(featured ? tools < examples : examples < tools);
     const index = projects.match(/<nav[^>]*class="project-index[^>]*>([\s\S]*?)<\/nav>/)?.[1];
     assert.ok(index);
-    assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id), featured ? ['open-title', 'family-title', 'research'] : ['family-title', 'open-title', 'research']);
+    assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id), featured ? ['open-title', 'family-title'] : ['family-title', 'open-title']);
     if (!featured) assert.ok(projects.includes(locale === 'da' ? 'ikke betalte kundeopgaver' : 'not paid client commissions'));
     for (const id of featured ? ['coaching'] : ['coaching', 'wedding']) assert.match(projects, new RegExp(`data-work-example="${id}"`));
     assert.ok(projects.includes('href="https://ascoachingogvaner.dk/"'));
@@ -96,7 +96,12 @@ for (const locale of ['en', 'da']) {
     const bridge = projects.match(/<aside[^>]*id="engineering-checks"[^>]*>([\s\S]*?)<\/aside>/)?.[1];
     assert.ok(bridge?.includes(`href="/${prefix}#quality"`));
   });
-  test(`${locale}: research, hosting and earlier bookmarks remain real destinations`, () => {
+  test(`${locale}: historical links stay closed without replacing their real destinations`, () => {
+    const archive = projects.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
+    assert.ok(archive, 'Historical bookmarks retain a native disclosure');
+    assert.doesNotMatch(archive[1], /\bopen(?:\s|=|$)/, 'Historical material is not promoted on ordinary visits');
+    assert.ok(archive[2].includes(locale === 'da' ? 'Tidligere projektlinks' : 'Earlier project links'));
+    assert.doesNotMatch(projects, /<section\b[^>]*aria-labelledby="research-title"/);
     assert.ok(projects.includes('data-hosting-project'));
     assert.ok(projects.includes(locale === 'da' ? 'ikke en hostinggaranti' : 'not a hosting guarantee'));
     for (const id of ['technical-title', 'technical-projects', 'more-public-products', '️-platform---', '-self-hosted-personal-apps', '-data-product-', '-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces']) {

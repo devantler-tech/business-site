@@ -44,7 +44,7 @@ export async function readJournalCovers(repository) {
   return covers;
 }
 
-/** Validate the complete Journal inventory against site imports and the two research subjects. */
+/** Validate the complete Journal inventory against site imports and historical reference visuals. */
 export async function checkEditorialAssets(repository) {
   const covers = await readJournalCovers(repository);
   const otherImages = [];
@@ -59,7 +59,7 @@ export async function checkEditorialAssets(repository) {
   assertUniqueIllustrations(covers, otherImages);
   const researchSubjects = [];
   for (const [slug, file, variable] of [
-    ['data-space-research', 'components/business/BusinessProjects.astro', 'research'],
+    ['data-space-diagram', 'components/business/ClientPortfolio.astro', 'diagram'],
     ['historical-data-product', 'content/docs/projects/completed.mdx', 'dataProductImg'],
   ]) {
     const filePath = join(source, file);
@@ -70,7 +70,7 @@ export async function checkEditorialAssets(repository) {
   }
   assertUniqueIllustrations(researchSubjects, [], 'research illustration');
   for (const cover of covers) assert.match(cover.alt, /^Illustration of /, `${cover.slug}: honest descriptive illustration alt text`);
-  console.log(`Editorial uniqueness: ${covers.length} distinct Journal covers; no reuse among ${otherImages.length} other site image references; both research subjects distinct.`);
+  console.log(`Editorial uniqueness: ${covers.length} distinct Journal covers; no reuse among ${otherImages.length} other site image references; both historical reference visuals distinct.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

@@ -1,7 +1,6 @@
 ---
 import { Image, getImage } from 'astro:assets';
 import workflows from '../../assets/editorial/workflows.webp';
-import research from '../../assets/editorial/data-research.webp';
 import diagram from '../../assets/data-space-as-a-data-mesh.png';
 import ksailCapture from '../../assets/ksail-cli-dark.png';
 import ksailDesktop from '../../assets/ksail-desktop.png';
@@ -32,7 +31,6 @@ for (const product of publicProducts) {
 <div data-client-portfolio data-featured-portfolio={featured || undefined}>
   <nav class="project-index" aria-label={s.projectIndex}>
     {featured ? <><a href="#open-title">{text.tools}</a><a href="#family-title">{text.work}</a></> : <><a href="#family-title">{s.familyTitle}</a><a href="#open-title">{s.currentLabel}</a></>}
-    <a href="#research">{s.researchTitle}</a>
   </nav>
   {!featured && <PortfolioExamples locale={locale} featured={featured} />}
   <section aria-labelledby="open-title">
@@ -57,13 +55,12 @@ for (const product of publicProducts) {
   </section>
   {featured && <PortfolioExamples locale={locale} featured={featured} />}
   <aside id="engineering-checks" class="quality-bridge"><p>{t.qualityBridge}</p><a href={`${home}#quality`}>{t.qualityAction}<span aria-hidden="true">↗</span></a></aside>
-  <section id="research" aria-labelledby="research-title">
-    <div class="research-heading"><div class="section-heading"><p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{s.researchTitle}</h2><p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{s.thesis} <span aria-hidden="true">↗</span></a></div><Image src={research} alt="" width={760} format="webp" /></div>
-    <details><summary>{t.details}</summary><div class="research-detail" lang="en">
-      <h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p>
-      <h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><Image src={diagram} alt="Data Space as a Data Mesh" width={960} format="webp" />
-    </div></details>
-  </section>
+  <details id="research"><summary>{text.earlierLinks}</summary><div class="research-detail">
+      <span class="legacy-anchor" id="research-title" aria-hidden="true"></span>
+      <p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{s.thesis} <span aria-hidden="true">↗</span></a>
+      <div lang="en"><h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p>
+      <h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><Image src={diagram} alt="Data Space as a Data Mesh" width={960} format="webp" /></div>
+  </div></details>
 </div>
 <script is:inline data-project-reveal set:html={projectReveal}></script>
 <style>
@@ -101,8 +98,6 @@ for (const product of publicProducts) {
   .scope { margin-top: 1rem; max-width: 900px; }
   .quality-bridge { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem 2rem; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 4rem; scroll-margin-top: 2rem; }
   .quality-bridge p { color: var(--ink); font-weight: 600; }
-  .research-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: center; }
-  .research-heading > img { width: 100%; height: auto; border-radius: 8px; }
   details { margin-top: 2rem; border-block: 1px solid var(--line); }
   summary { min-height: 44px; padding-block: 1rem; cursor: pointer; font-weight: 600; }
   summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
@@ -110,6 +105,6 @@ for (const product of publicProducts) {
   .research-detail h3 { margin-block: 1.5rem 1rem; scroll-margin-top: 2rem; }
   .research-detail img { width: 100%; height: auto; margin-top: 1rem; background: white; border-radius: 5px; }
   .legacy-anchor { display: block; scroll-margin-top: 1.5rem; }
-  @media (max-width: 760px) { section { padding-block: 2.5rem; } .collection, .featured, .research-heading { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading > img { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 1rem; } }
+  @media (max-width: 760px) { section { padding-block: 2.5rem; } .collection, .featured { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading > img { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 1rem; } }
   @media (max-width: 760px) { .featured[data-ksail-presentation] { grid-template-columns: 1fr; gap: 2rem; padding-block: 2rem; } .ksail-story { padding-left: 1.25rem; } }
 </style>

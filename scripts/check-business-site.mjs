@@ -172,8 +172,12 @@ for (const locale of ['en', 'da']) {
       }
       const index = page.match(/<nav[^>]*class="project-index(?: [^"]*)?"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
       assert.ok(index, 'Projects have a compact section index');
-      assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]), ['open-title', 'family-title', 'research'], 'The section index leads to one public catalogue, family examples and research');
-      assert.deepEqual([...page.matchAll(/<section\b[^>]*aria-labelledby="([^"]+)"/g)].map((match) => match[1]), ['open-title', 'family-title', 'research-title'], 'The public shelf is the only current technical catalogue');
+      assert.deepEqual([...index.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]), ['open-title', 'family-title'], 'The section index leads to tools and website examples');
+      assert.deepEqual([...page.matchAll(/<section\b[^>]*aria-labelledby="([^"]+)"/g)].map((match) => match[1]), ['open-title', 'family-title'], 'Research is not a promoted portfolio section');
+      const archive = page.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
+      assert.ok(archive, 'Old research bookmarks retain their factual destination');
+      assert.doesNotMatch(archive[1], /\bopen(?:\s|=|$)/);
+      assert.ok(archive[2].includes(locale === 'da' ? 'Tidligere projektlinks' : 'Earlier project links'));
       assert.ok(!page.includes(locale === 'da' ? 'Værktøjer, platforme og eksperimenter' : 'Tools, platforms &amp; experiments'), 'Visitors are not offered a competing technical catalogue');
       assert.ok(!page.includes('href="/projects/active/"') && !page.includes('href="/projects/completed/"'), 'Projects stay on one canonical page');
       assert.ok(!page.includes('sidebar-pane'), 'Projects use the business layout, not a floating documentation sidebar');
@@ -213,7 +217,7 @@ for (const locale of ['en', 'da']) {
       for (const id of ['technical-title', 'technical-projects']) assert.ok(shelf.includes(`id="${id}"`), `The former ${id} section bookmark lands on the public catalogue`);
       const reveal = page.match(/<script\b[^>]*data-project-reveal[^>]*>([\s\S]*?)<\/script>/)?.[1];
       assert.ok(reveal, 'Bookmarks can reveal products and research inside native disclosures');
-      const researchDetails = page.match(/<section\b[^>]*id="research"[^>]*>[\s\S]*?<details[^>]*>([\s\S]*?)<\/details>/)?.[1];
+      const researchDetails = archive[2];
       for (const [hash, disclosure] of [
         ['#-data-product-controller--', overflow[1]],
         ['#%EF%B8%8F-kyverno-policies--', overflow[1]],
