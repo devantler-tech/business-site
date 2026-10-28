@@ -16,6 +16,7 @@ cp "$root/scripts/zitadel-text-fonts.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-copied-assets.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-notices.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-source-bundle.go" "$scratch/recipe/scripts/"
+cp "$root/scripts/zitadel-browser.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-console-assets.go" "$scratch/recipe/scripts/"
 mkdir -p "$scratch/recipe/tools/zitadel-pnpm-source"
 cp "$root/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$scratch/recipe/tools/zitadel-pnpm-source/"
@@ -228,11 +229,12 @@ case "$1 $2" in
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
           jq -n --arg profile "${TEST_REPLAY_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
-            --argjson bytes "${TEST_REPLAY_BYTES:-261684474}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:28,bytes:$bytes,recipeSha256:("b"*64)}';;
+            --argjson bytes "${TEST_REPLAY_BYTES:-261684474}" --argjson records "${TEST_REPLAY_RECORDS:-56}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
-          mkdir -p "$6/records/recipes" "$6/source/console/scripts"
+          mkdir -p "$6/records/recipes" "$6/records/scripts" "$6/source/console/scripts"
+          cp "$5/scripts/zitadel-browser.go" "$6/records/scripts/zitadel-browser.go"
           cp "$5/scripts/zitadel-console-assets.go" "$6/records/recipes/zitadel-console-assets.go"
           cp "$5/scripts/"{zitadel-login-icons.go,zitadel-text-fonts.go,zitadel-copied-assets.go} "$6/records/recipes/"
           mkdir -p "$6/records/third_party/zitadel-text-fonts"
@@ -244,12 +246,17 @@ case "$1 $2" in
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
             --arg profile "${TEST_CAPTURE_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
-            --argjson bytes "${TEST_CAPTURE_BYTES:-261684474}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:28,bytes:$bytes,recipeSha256:$recipe}';;
+            --argjson bytes "${TEST_CAPTURE_BYTES:-261684474}" --argjson records "${TEST_CAPTURE_RECORDS:-56}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
           jq -n --arg archive "$(shasum -a 256 "$6" | awk '{print $1}')" '{archiveSha256:$archive,manifestSha256:("a"*64)}';;
+        --verify-build-records)
+          [[ "$#" -eq 6 && -d "$4" && "$6" = "${2%/scripts/zitadel-source-bundle.go}" ]]
+          [[ "${TEST_FAIL:-}" != authored-source-readback && "${TEST_FAIL:-}" != source-readback ]] || { echo '{"plausible":"partial readback"}'; exit 42; }
+          if [[ -f "$4/records/scripts/zitadel-browser.go" ]]; then cmp "$6/scripts/zitadel-browser.go" "$4/records/scripts/zitadel-browser.go" || exit 42; fi
+          echo '{"fixture":"complete literal build-record readback"}';;
         --verify)
           [[ "$#" -eq 5 && -d "$4" ]]
           if [[ "${TEST_FAIL:-}" = source-readback ]]; then echo '{"files":[]}'; exit 42; fi
@@ -302,6 +309,7 @@ case "$1 $2" in
         shasum -a 256 "$copied_build/build-receipt.pending" | awk '{print $1}' >"$copied_build/fixture-copied-assets-receipt.sha256"
         if [[ "${TEST_FAIL:-}" = copied-capture ]];then echo 'plausible partial copied capture';exit 42;fi
         printf 'complete original icon and flag terms fixture\n' >"$copied_build/copied-asset-notices.txt"
+        if [[ "${TEST_FAIL:-}" = late-authored-record ]]; then printf 'changed after the early record check\n' >>"${2%/scripts/zitadel-login-icons.go}/scripts/zitadel-browser.go"; fi
       fi
       echo '{"fixture":"copied asset orchestration only"}'
     elif [[ "$*" == *' --text-fonts '* ]]; then
@@ -658,6 +666,11 @@ cmp "$scratch/complete/api-project.original.json" "$scratch/prepared-replay/api-
 cmp "$scratch/complete/api-project.serial.json" "$scratch/prepared-replay/api-project.serial.json"
 jq -e --arg seal "$prepared_sha" '.sourceInput.manifestSha256 == $seal and .sourceInput.nativeOfflineReplayProved == false and (has("sourceSnapshot")|not)' "$scratch/prepared-replay/build-receipt.json" >/dev/null
 : >"$TEST_CALLS"
+if env TEST_FAIL=authored-source-readback bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-authored-change" >"$scratch/prepared-authored-change.log" 2>&1; then
+  echo 'changed prepared authored source produced a success receipt' >&2; exit 1
+fi
+test ! -e "$scratch/prepared-authored-change/build-receipt.json"
+: >"$TEST_CALLS"
 # Mutation occurs after prepared-source admission but before the notice snapshot.
 # A final receipt must not join the old admitted recipe with the changed builder.
 if env TEST_FAIL=prepared-recipe TEST_RECIPE="$build" bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/prepared-recipe-change" >"$scratch/prepared-recipe-change.log" 2>&1; then
@@ -667,7 +680,7 @@ fi
 test ! -e "$scratch/prepared-recipe-change/build-receipt.json"
 grep -q 'prepared source recipe changed during build' "$scratch/prepared-recipe-change.log"
 cp "$root/scripts/build-zitadel-linux.sh" "$build"
-for fault in unsealed-source both-source-modes capture-with-prepared substituted-prepared-profile retired-prepared-profile retired-prepared-bytes prior-security-profile prior-security-bytes console-input-only console-seal-only console-duplicate-seal; do
+for fault in unsealed-source both-source-modes capture-with-prepared substituted-prepared-profile retired-prepared-profile retired-prepared-bytes prior-security-profile prior-security-bytes console-input-only console-seal-only console-duplicate-seal incomplete-authored-records extra-authored-records; do
   : >"$TEST_CALLS"
   args=(--build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha256 "$prepared_sha" --output "$scratch/$fault")
   case "$fault" in
@@ -680,12 +693,15 @@ for fault in unsealed-source both-source-modes capture-with-prepared substituted
   esac
   profile=10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555
   bytes=261684474
+  records=56
+  [[ "$fault" != incomplete-authored-records ]] || records=28
+  [[ "$fault" != extra-authored-records ]] || records=57
   [[ "$fault" != substituted-prepared-profile ]] || profile=wrong
   [[ "$fault" != retired-prepared-profile ]] || profile=0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d
   [[ "$fault" != retired-prepared-bytes ]] || bytes=261683913
   [[ "$fault" != prior-security-profile ]] || profile=7449046b66227f32e1d79b0635b04ba6b32d6e63cfd966a2293a4cad34a13e87
   [[ "$fault" != prior-security-bytes ]] || bytes=261684090
-  if env TEST_REPLAY_PROFILE="$profile" TEST_REPLAY_BYTES="$bytes" bash "$build" "${args[@]}" >"$scratch/$fault.log" 2>&1; then
+  if env TEST_REPLAY_PROFILE="$profile" TEST_REPLAY_BYTES="$bytes" TEST_REPLAY_RECORDS="$records" bash "$build" "${args[@]}" >"$scratch/$fault.log" 2>&1; then
     echo "unsafe prepared source admitted: $fault" >&2; exit 1
   fi
   test ! -e "$scratch/$fault/build-receipt.json"
@@ -745,7 +761,7 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .sourceSnapshot.files == 9599 and .sourceSnapshot.bytes == 261684474 and .sourceSnapshot.records == 28 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .sourceSnapshot.files == 9599 and .sourceSnapshot.bytes == 261684474 and .sourceSnapshot.records == 56 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -765,13 +781,16 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in graph-metadata-capture graph-metadata-readback graph-metadata-incomplete pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
+for failure in graph-metadata-capture graph-metadata-readback graph-metadata-incomplete pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback authored-source-readback late-authored-record module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
   if [[ "$failure" = pnpm-early-* ]]; then test ! -e "$scratch/$failure/generate.log"; fi
+  if [[ "$failure" = late-authored-record ]]; then cp "$root/scripts/zitadel-browser.go" "$scratch/recipe/scripts/zitadel-browser.go"; fi
   if [[ "$failure" = pnpm-tool-changed ]]; then cp "$root/tools/zitadel-pnpm-source/index.mjs" "$scratch/recipe/tools/zitadel-pnpm-source/index.mjs"; fi
 done
+capture_reject incomplete-authored-records "$TEST_MODULE_VERIFIER" TEST_CAPTURE_RECORDS=28
+capture_reject extra-authored-records "$TEST_MODULE_VERIFIER" TEST_CAPTURE_RECORDS=57
 capture_reject wrong-api-openapi-version "$TEST_MODULE_VERIFIER" TEST_API_OPENAPI_VERSION=v2.22.0
 if bash "$build" --build --source "$scratch/upstream" --output "$scratch/complete"; then exit 1; fi
 printf 'Linux build orchestration controls passed (process doubles, not upstream-build proof).\n'

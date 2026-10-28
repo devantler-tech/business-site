@@ -17,6 +17,87 @@ import (
 	"time"
 )
 
+// sourceApprovedExtraRecordsForTest supplies distinct bodies for the 25 missing
+// authored files and three terms documents, independently of the production map.
+func sourceApprovedExtraRecordsForTest() map[string][]byte {
+	return map[string][]byte{
+		"scripts/replay-zitadel-inputs.sh":                       []byte("approved fixture scripts/replay-zitadel-inputs.sh\n"),
+		"scripts/zitadel-console-notices.go":                     []byte("approved fixture scripts/zitadel-console-notices.go\n"),
+		"server/go.mod":                                          []byte("approved fixture server/go.mod\n"),
+		"server/go.sum":                                          []byte("approved fixture server/go.sum\n"),
+		"server/cmd/zitadel-module-sources/capture.go":           []byte("approved fixture server/cmd/zitadel-module-sources/capture.go\n"),
+		"server/cmd/zitadel-module-sources/generator_sources.go": []byte("approved fixture server/cmd/zitadel-module-sources/generator_sources.go\n"),
+		"server/cmd/zitadel-module-sources/generators.go":        []byte("approved fixture server/cmd/zitadel-module-sources/generators.go\n"),
+		"server/cmd/zitadel-module-sources/graph_metadata.go":    []byte("approved fixture server/cmd/zitadel-module-sources/graph_metadata.go\n"),
+		"server/cmd/zitadel-module-sources/json_fields.go":       []byte("approved fixture server/cmd/zitadel-module-sources/json_fields.go\n"),
+		"server/cmd/zitadel-module-sources/main.go":              []byte("approved fixture server/cmd/zitadel-module-sources/main.go\n"),
+		"server/cmd/zitadel-module-sources/payload.go":           []byte("approved fixture server/cmd/zitadel-module-sources/payload.go\n"),
+		"server/cmd/zitadel-module-sources/restore.go":           []byte("approved fixture server/cmd/zitadel-module-sources/restore.go\n"),
+		"server/cmd/zitadel-module-sources/selection.go":         []byte("approved fixture server/cmd/zitadel-module-sources/selection.go\n"),
+		"server/cmd/zitadel-bsr-sources/files.go":                []byte("approved fixture server/cmd/zitadel-bsr-sources/files.go\n"),
+		"server/cmd/zitadel-bsr-sources/main.go":                 []byte("approved fixture server/cmd/zitadel-bsr-sources/main.go\n"),
+		"server/cmd/zitadel-bsr-sources/package.go":              []byte("approved fixture server/cmd/zitadel-bsr-sources/package.go\n"),
+		"server/cmd/zitadel-bsr-sources/validation.go":           []byte("approved fixture server/cmd/zitadel-bsr-sources/validation.go\n"),
+		"Dockerfile.zitadel":                                     []byte("approved fixture Dockerfile.zitadel\n"),
+		"scripts/zitadel-image-package.go":                       []byte("approved fixture scripts/zitadel-image-package.go\n"),
+		"scripts/zitadel-image-smoke.go":                         []byte("approved fixture scripts/zitadel-image-smoke.go\n"),
+		"scripts/zitadel-service-smoke.go":                       []byte("approved fixture scripts/zitadel-service-smoke.go\n"),
+		"scripts/zitadel-browser.go":                             []byte("approved fixture scripts/zitadel-browser.go\n"),
+		"server/cmd/zitadel-module-sources/README.md":            []byte("approved fixture server/cmd/zitadel-module-sources/README.md\n"),
+		"server/cmd/zitadel-bsr-sources/README.md":               []byte("approved fixture server/cmd/zitadel-bsr-sources/README.md\n"),
+		"tools/zitadel-pnpm-source/README.md":                    []byte("approved fixture tools/zitadel-pnpm-source/README.md\n"),
+		"third_party/zitadel-build-tools/COPYING":                []byte("approved fixture third_party/zitadel-build-tools/COPYING\n"),
+		"third_party/zitadel-build-tools/README.md":              []byte("approved fixture third_party/zitadel-build-tools/README.md\n"),
+		"third_party/zitadel-build-tools/scope.json":             []byte("approved fixture third_party/zitadel-build-tools/scope.json\n"),
+	}
+}
+
+// sourceApprovedAliasesForTest independently names the complete approved grant.
+func sourceApprovedAliasesForTest() map[string]string {
+	return map[string]string{
+		"scripts/build-zitadel-linux.sh":                         "recipes/build-zitadel-linux.sh",
+		"scripts/prepare-zitadel-source.sh":                      "recipes/prepare-zitadel-source.sh",
+		"scripts/zitadel-source-inputs.sha256":                   "recipes/zitadel-source-inputs.sha256",
+		"scripts/zitadel-source-bundle.go":                       "recipes/zitadel-source-bundle.go",
+		"scripts/zitadel-console-assets.go":                      "recipes/zitadel-console-assets.go",
+		"scripts/zitadel-login-icons.go":                         "recipes/zitadel-login-icons.go",
+		"scripts/zitadel-text-fonts.go":                          "recipes/zitadel-text-fonts.go",
+		"scripts/zitadel-copied-assets.go":                       "recipes/zitadel-copied-assets.go",
+		"tools/zitadel-pnpm-source/index.mjs":                    "recipes/zitadel-pnpm-source/index.mjs",
+		"tools/zitadel-pnpm-source/package.json":                 "recipes/zitadel-pnpm-source/package.json",
+		"tools/zitadel-pnpm-source/package-lock.json":            "recipes/zitadel-pnpm-source/package-lock.json",
+		"docs/ZITADEL-SOURCE.md":                                 "ZITADEL-SOURCE.md",
+		"scripts/replay-zitadel-inputs.sh":                       "scripts/replay-zitadel-inputs.sh",
+		"scripts/zitadel-console-notices.go":                     "scripts/zitadel-console-notices.go",
+		"server/go.mod":                                          "server/go.mod",
+		"server/go.sum":                                          "server/go.sum",
+		"server/cmd/zitadel-module-sources/capture.go":           "server/cmd/zitadel-module-sources/capture.go",
+		"server/cmd/zitadel-module-sources/generator_sources.go": "server/cmd/zitadel-module-sources/generator_sources.go",
+		"server/cmd/zitadel-module-sources/generators.go":        "server/cmd/zitadel-module-sources/generators.go",
+		"server/cmd/zitadel-module-sources/graph_metadata.go":    "server/cmd/zitadel-module-sources/graph_metadata.go",
+		"server/cmd/zitadel-module-sources/json_fields.go":       "server/cmd/zitadel-module-sources/json_fields.go",
+		"server/cmd/zitadel-module-sources/main.go":              "server/cmd/zitadel-module-sources/main.go",
+		"server/cmd/zitadel-module-sources/payload.go":           "server/cmd/zitadel-module-sources/payload.go",
+		"server/cmd/zitadel-module-sources/restore.go":           "server/cmd/zitadel-module-sources/restore.go",
+		"server/cmd/zitadel-module-sources/selection.go":         "server/cmd/zitadel-module-sources/selection.go",
+		"server/cmd/zitadel-bsr-sources/files.go":                "server/cmd/zitadel-bsr-sources/files.go",
+		"server/cmd/zitadel-bsr-sources/main.go":                 "server/cmd/zitadel-bsr-sources/main.go",
+		"server/cmd/zitadel-bsr-sources/package.go":              "server/cmd/zitadel-bsr-sources/package.go",
+		"server/cmd/zitadel-bsr-sources/validation.go":           "server/cmd/zitadel-bsr-sources/validation.go",
+		"Dockerfile.zitadel":                                     "Dockerfile.zitadel",
+		"scripts/zitadel-image-package.go":                       "scripts/zitadel-image-package.go",
+		"scripts/zitadel-image-smoke.go":                         "scripts/zitadel-image-smoke.go",
+		"scripts/zitadel-service-smoke.go":                       "scripts/zitadel-service-smoke.go",
+		"scripts/zitadel-browser.go":                             "scripts/zitadel-browser.go",
+		"server/cmd/zitadel-module-sources/README.md":            "server/cmd/zitadel-module-sources/README.md",
+		"server/cmd/zitadel-bsr-sources/README.md":               "server/cmd/zitadel-bsr-sources/README.md",
+		"tools/zitadel-pnpm-source/README.md":                    "tools/zitadel-pnpm-source/README.md",
+		"third_party/zitadel-build-tools/COPYING":                "third_party/zitadel-build-tools/COPYING",
+		"third_party/zitadel-build-tools/README.md":              "third_party/zitadel-build-tools/README.md",
+		"third_party/zitadel-build-tools/scope.json":             "third_party/zitadel-build-tools/scope.json",
+	}
+}
+
 // TestRetainedInputsArchive exercises the actual closed archive with private
 // capsule modes. Compiled output and ambient caches must never enter it.
 func TestRetainedInputsArchive(t *testing.T) {
@@ -115,6 +196,7 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 			files := map[string]string{
 				"apps/api/project.json": "serialized API\n",
 				"empty.go":              "",
+				"go.mod":                "module frozen.example/service\n",
 				"scripts/generate.sh":   "#!/bin/sh\nexit 0\n",
 			}
 			for name, body := range files {
@@ -164,6 +246,9 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				"recipes/zitadel-pnpm-source/package-lock.json":                   []byte("native pnpm SDK locks\n"),
 				"ZITADEL-SOURCE.md":                                               []byte("source description\n"),
 				"modifications.json":                                              []byte("dated modification record\n"),
+			}
+			for name, body := range sourceApprovedExtraRecordsForTest() {
+				records[name] = body
 			}
 			if kind == "missing-record" {
 				delete(records, "api-project.original.json")
@@ -235,6 +320,10 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 					}
 				}
 				for name, want := range records {
+					info, err := os.Stat(filepath.Join(output, "prepared/records", filepath.FromSlash(name)))
+					if err != nil || info.Mode() != 0644 {
+						t.Fatalf("audit record is not inert data: %s: %v", name, err)
+					}
 					gotRecord, err := os.ReadFile(filepath.Join(output, "prepared/records", filepath.FromSlash(name)))
 					if err != nil || !bytes.Equal(gotRecord, want) {
 						t.Fatalf("literal audit record changed: %s: %v", name, err)
@@ -528,7 +617,13 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
-	for _, kind := range []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"} {
+	kinds := []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"}
+	for name := range sourceApprovedExtraRecordsForTest() {
+		for _, kind := range []string{"missing authored:", "empty authored:", "linked authored:", "unsafe-mode authored:"} {
+			kinds = append(kinds, kind+name)
+		}
+	}
+	for _, kind := range kinds {
 		t.Run(kind, func(t *testing.T) {
 			build, repo := t.TempDir(), t.TempDir()
 			write := func(root, name, body string) {
@@ -565,6 +660,9 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 			for _, name := range []string{"index.mjs", "package.json", "package-lock.json"} {
 				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
 			}
+			for name, body := range sourceApprovedExtraRecordsForTest() {
+				write(repo, name, string(body))
+			}
 			preparation := fmt.Sprintf(`{"schemaVersion":1,"upstreamCommit":"8afa5dd37a8e723efb9eace8d09fd5c1cccef694","recipeSha256":"%s","inputManifestSha256":"%s","imageAdmission":"unknown","licenseClosure":"unknown","metadataProfile":"machine-id-no-jsonpath-v1"}`, hash("prepare-zitadel-source.sh\n"), hash("zitadel-source-inputs.sha256\n"))
 			write(build, "prepared/source-preparation.json", preparation)
 			profile, err := sourceSealTree(filepath.Join(build, "prepared/source"), filepath.Join(t.TempDir(), "reference"))
@@ -590,6 +688,26 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 						if e := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), filepath.Join(repo, name)); e != nil {
 							t.Fatal(e)
 						}
+					}
+				}
+			}
+			for name := range sourceApprovedExtraRecordsForTest() {
+				p := filepath.Join(repo, filepath.FromSlash(name))
+				switch kind {
+				case "missing authored:" + name, "linked authored:" + name:
+					if err := os.Remove(p); err != nil {
+						t.Fatal(err)
+					}
+					if strings.HasPrefix(kind, "linked") {
+						if err := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), p); err != nil {
+							t.Fatal(err)
+						}
+					}
+				case "empty authored:" + name:
+					write(repo, name, "")
+				case "unsafe-mode authored:" + name:
+					if err := os.Chmod(p, 0666); err != nil {
+						t.Fatal(err)
 					}
 				}
 			}
@@ -646,11 +764,11 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 28 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 56 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 28 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 56 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
@@ -666,6 +784,36 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 						t.Fatalf("translation context not retained literally: %s: %v", name, readErr)
 					}
 				}
+				if len(sourceApprovedAliasesForTest()) != 40 {
+					t.Fatal("approved grant fixture is incomplete")
+				}
+				for original, retained := range sourceApprovedAliasesForTest() {
+					want, readErr := os.ReadFile(filepath.Join(repo, filepath.FromSlash(original)))
+					got, err := sourceReadAt(output, "records/"+retained)
+					if readErr != nil || err != nil || !bytes.Equal(want, got) {
+						t.Fatalf("approved source not retained at its unique alias: %s: %v / %v", original, readErr, err)
+					}
+				}
+				checkRecords := func(wantSuccess bool) {
+					t.Helper()
+					var out, diagnostic bytes.Buffer
+					status := sourceBundleRun([]string{"--verify-build-records", output, got.ManifestSHA256, repo}, &out, &diagnostic)
+					if (status == 0) != wantSuccess || (!wantSuccess && out.Len() != 0) {
+						t.Fatalf("current build-record observation: success=%v status=%d: %s", wantSuccess, status, diagnostic.String())
+					}
+				}
+				checkRecords(true)
+				for original := range sourceApprovedAliasesForTest() {
+					name := filepath.Join(repo, filepath.FromSlash(original))
+					before, err := os.ReadFile(name)
+					if err != nil {
+						t.Fatal(err)
+					}
+					write(repo, original, string(before)+"changed after capture\n")
+					checkRecords(false)
+					write(repo, original, string(before))
+				}
+				checkRecords(true)
 				archive := filepath.Join(t.TempDir(), "prepared.tar")
 				archiveHash, err := sourcePackTree(output, got.ManifestSHA256, archive)
 				if err != nil {
@@ -675,9 +823,28 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				if err := sourceUnpackTree(archive, archiveHash, got.ManifestSHA256, unpacked); err != nil {
 					t.Fatal(err)
 				}
-				restored, err := sourceRestoreBuild(unpacked, got.ManifestSHA256, filepath.Join(t.TempDir(), "restored"))
+				restoredRoot := filepath.Join(t.TempDir(), "restored")
+				restored, err := sourceRestoreBuild(unpacked, got.ManifestSHA256, restoredRoot)
 				if err != nil || restored.ManifestSHA256 != got.ManifestSHA256 || restored.Records != got.Records {
 					t.Fatalf("actual captured source cannot enter the native restoration: %+v: %v", restored, err)
+				}
+				for original, retained := range sourceApprovedAliasesForTest() {
+					want, readErr := os.ReadFile(filepath.Join(repo, filepath.FromSlash(original)))
+					name := filepath.Join(restoredRoot, "prepared/records", filepath.FromSlash(retained))
+					body, err := os.ReadFile(name)
+					info, statErr := os.Stat(name)
+					if readErr != nil || err != nil || statErr != nil || !bytes.Equal(want, body) || info.Mode() != 0644 {
+						t.Fatalf("approved archived/restored record differs: %s", original)
+					}
+				}
+				upstream, err := os.ReadFile(filepath.Join(restoredRoot, "prepared/source/go.mod"))
+				if err != nil || string(upstream) != "frozen go.mod\n" {
+					t.Fatal("helper module overwrote the upstream module", err)
+				}
+				for _, name := range []string{"server", "scripts", "Dockerfile.zitadel"} {
+					if _, err := os.Lstat(filepath.Join(restoredRoot, name)); !os.IsNotExist(err) {
+						t.Fatal("audit source escaped fixed restore targets", name, err)
+					}
 				}
 			} else {
 				if err == nil || got.ManifestSHA256 != "" {
