@@ -14,7 +14,7 @@ const mega = load(readFileSync(join(root, '.mega-linter.yml'), 'utf8'));
 const workflow = load(readFileSync(join(root, '.github/workflows/ci.yaml'), 'utf8'));
 
 function mandatoryQualityChecks(candidate) {
-  const job = candidate.jobs['test-portal-identity'];
+  const job = candidate.jobs['test-portal-quality'];
   assert.equal(job.if, undefined);
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
@@ -38,7 +38,7 @@ for (const observer of ['portal-template-quality.test.mjs', 'portal-spelling-qua
   for (const mutation of ['missing', 'conditional', 'ignored failure']) {
     test(`${observer} cannot be ${mutation}`, () => {
       const candidate = structuredClone(workflow);
-      const steps = candidate.jobs['test-portal-identity'].steps;
+      const steps = candidate.jobs['test-portal-quality'].steps;
       const selected = steps.find(step => step.run?.includes(observer));
       if (mutation === 'missing') steps.splice(steps.indexOf(selected), 1);
       else if (mutation === 'conditional') selected.if = 'false';
