@@ -42,7 +42,7 @@ for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/p
 done
 printf '{"targets":{"generate-install":{"options":{"commands":["native generator"]}}}}\n' >"$out/source/apps/api/project.json"
 jq -n --arg pin "${TEST_PIN:-8afa5dd37a8e723efb9eace8d09fd5c1cccef694}" --arg profile "${TEST_METADATA_PROFILE:-machine-id-no-jsonpath-v1}" \
-  --arg dependency "${TEST_DEPENDENCY_PROFILE:-go-jose-4.1.6-x-net-0.62.0-v1}" \
+  --arg dependency "${TEST_DEPENDENCY_PROFILE:-go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1}" \
   '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:$profile,dependencyProfile:$dependency} |
     if $dependency == "missing" then del(.dependencyProfile) else . end' >"$out/source-preparation.json"
 STUB
@@ -183,6 +183,12 @@ set -euo pipefail
 case "$1 $2" in
   'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
   'env GOROOT') echo "$TEST_GOROOT";;
+  'tool nm')
+    [[ "$#" -eq 3 && "$3" == */service/zitadel ]]
+    [[ "${TEST_FAIL:-}" != empty-symbols ]] || exit
+    if [[ "${TEST_FAIL:-}" = missing-main-symbol ]]; then echo '400100 T runtime.main'; exit; fi
+    echo '400000 T main.main'
+    [[ "${TEST_FAIL:-}" != partial-symbols ]] || exit 42;;
   'version -m')
     if [[ "$3" == *.artifacts/bin/linux/amd64/protoc-gen-openapiv2 ]]; then
       printf 'fixture: go1.26.10\n\tmod\tgithub.com/grpc-ecosystem/grpc-gateway/v2\t%s\n' "${TEST_API_OPENAPI_VERSION:-v2.28.0}"
@@ -221,8 +227,8 @@ case "$1 $2" in
           cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
-          jq -n --arg profile "${TEST_REPLAY_PROFILE:-35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8}" \
-            --argjson bytes "${TEST_REPLAY_BYTES:-261684243}" \
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
+            --argjson bytes "${TEST_REPLAY_BYTES:-261684474}" \
             '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:28,bytes:$bytes,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
@@ -237,8 +243,8 @@ case "$1 $2" in
           cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            --arg profile "${TEST_CAPTURE_PROFILE:-35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8}" \
-            --argjson bytes "${TEST_CAPTURE_BYTES:-261684243}" \
+            --arg profile "${TEST_CAPTURE_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
+            --argjson bytes "${TEST_CAPTURE_BYTES:-261684474}" \
             '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:28,bytes:$bytes,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
@@ -614,6 +620,9 @@ reject unadmitted-metadata-replacement-graph TEST_UNADMITTED=graph-replacement
 reject unadmitted-metadata-replacement-binary TEST_UNADMITTED=binary-replacement
 reject partial-package-graph TEST_FAIL=package-graph
 reject partial-binary-metadata TEST_FAIL=binary-metadata
+reject empty-binary-symbols TEST_FAIL=empty-symbols
+reject missing-binary-main-symbol TEST_FAIL=missing-main-symbol
+reject failed-partial-binary-symbols TEST_FAIL=partial-symbols
 test "$failures" -eq 0
 : >"$TEST_CALLS"
 env BUF_TOKEN=unrelated-fixture-token BUF_CACHE_DIR="$scratch/ambient-buf-cache" XDG_CONFIG_HOME="$scratch/ambient-buf-config" \
@@ -669,8 +678,8 @@ for fault in unsealed-source both-source-modes capture-with-prepared substituted
     console-seal-only) args+=(--console-sha256 "$prepared_sha");;
     console-duplicate-seal) args+=(--console-inputs "$scratch/unavailable-capsule" --console-sha256 "$prepared_sha" --console-sha256 "$prepared_sha");;
   esac
-  profile=35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8
-  bytes=261684243
+  profile=10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555
+  bytes=261684474
   [[ "$fault" != substituted-prepared-profile ]] || profile=wrong
   [[ "$fault" != retired-prepared-profile ]] || profile=0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d
   [[ "$fault" != retired-prepared-bytes ]] || bytes=261683913
@@ -696,6 +705,8 @@ capture_reject retired-capture-profile "$TEST_MODULE_VERIFIER" TEST_CAPTURE_PROF
 capture_reject retired-capture-bytes "$TEST_MODULE_VERIFIER" TEST_CAPTURE_BYTES=261683913
 capture_reject prior-security-capture-profile "$TEST_MODULE_VERIFIER" TEST_CAPTURE_PROFILE=7449046b66227f32e1d79b0635b04ba6b32d6e63cfd966a2293a4cad34a13e87
 capture_reject prior-security-capture-bytes "$TEST_MODULE_VERIFIER" TEST_CAPTURE_BYTES=261684090
+capture_reject html-only-capture-profile "$TEST_MODULE_VERIFIER" TEST_CAPTURE_PROFILE=35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8
+capture_reject html-only-capture-bytes "$TEST_MODULE_VERIFIER" TEST_CAPTURE_BYTES=261684243
 ln -s "$TEST_MODULE_VERIFIER" "$scratch/linked-verifier"
 cp "$TEST_MODULE_VERIFIER" "$scratch/nonexecutable-verifier"
 chmod 644 "$scratch/nonexecutable-verifier"
@@ -734,7 +745,7 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8" and .sourceSnapshot.files == 9599 and .sourceSnapshot.bytes == 261684243 and .sourceSnapshot.records == 28 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .sourceSnapshot.files == 9599 and .sourceSnapshot.bytes == 261684474 and .sourceSnapshot.records == 28 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null

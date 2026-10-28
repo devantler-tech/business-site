@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
   "metadataProfile": "machine-id-no-jsonpath-v1",
-  "goModSha256": "d3646d619621042fb5039f534df32350380c7640620f58086a67e7d6c6fb23b5",
-  "goSumSha256": "ecb0f1cc67843b22a16c3e7a5fee39a5ec930acd787051a8d697e119282b0646",
+  "goModSha256": "d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50",
+  "goSumSha256": "19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba",
   "modules": [
     {
       "original": {
@@ -2217,16 +2217,16 @@
     {
       "original": {
         "Path": "github.com/gorilla/csrf",
-        "Version": "v1.7.2",
-        "Sum": "h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=",
+        "Version": "v1.7.3",
+        "Sum": "h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0=",
         "GoModSum": "h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/gorilla/csrf",
-        "Version": "v1.7.2",
-        "Sum": "h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=",
+        "Version": "v1.7.3",
+        "Sum": "h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0=",
         "GoModSum": "h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=",
         "Main": false,
         "Replace": null

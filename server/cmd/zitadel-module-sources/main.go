@@ -9,7 +9,7 @@ import (
 )
 
 // The reviewed catalogue, not a CLI input, chooses the admitted service graph.
-const frozenCatalogue = "3fe0596b0ac9a68c733defd12304edf7f686e00dc7c11317dd616fd903f40187"
+const frozenCatalogue = "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd"
 
 // run is inert without arguments and admits exactly one explicit operation.
 func run(args []string, stdout io.Writer) error {

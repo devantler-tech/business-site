@@ -2,7 +2,7 @@
 
 The explicit offline preparer produces the frozen ZITADEL 4.20.0 source without
 the unadmitted Ailerons font assets or the JSONPath machine-ID metadata selector.
-It also applies the exact pinned go-jose/v4 4.1.6 dependency update described below.
+It also applies the exact pinned security dependency updates described below.
 It does not fetch, compile, publish an image,
 configure an account or activate the portal. Ordinary builds never invoke it.
 
@@ -72,20 +72,27 @@ Reintroducing JSONPath support requires a separately admitted implementation and
 compatibility validation, not removal of these exclusion checks. This restriction
 does not change the portal → customer Dex → ZITADEL login architecture.
 
-The `go-jose-4.1.6-x-net-0.62.0-v1` dependency profile applies the exact native Go
-1.26.10 metadata for `go-jose/v4` 4.1.6 and `golang.org/x/net` 0.62.0: two module
-lines and four added checksums. Complete original and resulting hashes are checked
+The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1` dependency profile applies the exact native Go
+1.26.10 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
+`gorilla/csrf` 1.7.3: three module lines and six added checksums. Complete original and resulting hashes are checked
 offline; the preparer never downloads or executes Go. Other dependency selections,
 the compiler and the upstream 4096-bit RSA key limit are preserved. Original unused
 checksum entries remain as produced by the native updates. The selected modules,
-compiler metadata and notice catalogue must agree on both patched versions. Dirty input
+compiler metadata and notice catalogue must agree on all three patched versions. Dirty input
 checkout metadata is ignored and preserved, just like other working-copy files.
+The login interceptor explicitly marks requests as plaintext only when the existing
+external TLS setting is disabled. The patched library's HTTPS Origin/Referer and
+token checks remain active for TLS-facing deployments; cross-origin and missing-token
+requests are rejected in either mode.
 
 Native CI builds pinned `govulncheck` 1.8.0 with the separate verifier compiler,
 then analyzes the actual frozen Linux executable in binary mode against
 `https://vuln.go.dev`. Findings and analysis errors fail the job before later
 image/replay proof; the ordinary text diagnostic is retained in the existing
 compact evidence. Do not use JSON mode as a success gate or suppress a finding.
+The actual packaged executable preserves function symbols and omits only DWARF
+debug data. A complete native symbol read must identify its main entrypoint before
+the checker runs; empty, failed or partial symbol reads cannot produce a build receipt.
 Binary symbol analysis is scoped to the executable's build configuration and
 cannot establish exploitability, complete source reachability or admission;
 the selected-version checks remain independent. See the

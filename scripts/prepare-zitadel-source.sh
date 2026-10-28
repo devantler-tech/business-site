@@ -91,6 +91,21 @@ awk '
 metadata_hash="$(shasum -a 256 "$stage/metadata" | awk '{print $1}')" || fail 'metadata transform hash failed'
 [[ "$metadata_hash" = 74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc ]] || fail 'metadata transform differs'
 mv "$stage/metadata" "$stage/source/$metadata"
+# The patched CSRF library requires an explicit marker for the already
+# configured plaintext development mode. TLS-facing requests retain its default.
+login_handler=internal/api/ui/login/login.go
+awk '
+  $0 == "\t\t\tcsrf.Protect(csrfCookieKey," {
+    print "\t\t\tif !externalSecure {"
+    print "\t\t\t\tr = csrf.PlaintextHTTPRequest(r)"
+    print "\t\t\t}"
+    changed++
+  }
+  { print }
+  END { if (changed != 1) exit 1 }
+' "$stage/source/$login_handler" >"$stage/login-handler" || fail 'login transport patch differs'
+[[ "$(shasum -a 256 "$stage/login-handler" | awk '{print $1}')" = 28da3dd3fd55002ea3239495cba504be6a355e9eed74133327aa564e634e812e ]] || fail 'login transport output differs'
+mv "$stage/login-handler" "$stage/source/$login_handler"
 # Apply the exact native Go 1.26.10 metadata for the selected security patches.
 # Keep all other selections and original checksums.
 awk '
@@ -100,10 +115,20 @@ awk '
   $0 == "\tgolang.org/x/net v0.61.0" {
     print "\tgolang.org/x/net v0.62.0"; net++; next
   }
+  $0 == "\tgithub.com/gorilla/csrf v1.7.2" {
+    print "\tgithub.com/gorilla/csrf v1.7.3"; csrf++; next
+  }
   { print }
-  END { if (jose != 1 || net != 1) exit 1 }
+  END { if (jose != 1 || net != 1 || csrf != 1) exit 1 }
 ' "$stage/source/go.mod" >"$stage/go.mod" || fail 'module patch differs'
 awk '
+  $0 == "github.com/gorilla/csrf v1.7.2 h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=" { originalCSRF++ }
+  $0 == "github.com/gorilla/csrf v1.7.2/go.mod h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=" {
+    print
+    print "github.com/gorilla/csrf v1.7.3 h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0="
+    print "github.com/gorilla/csrf v1.7.3/go.mod h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk="
+    changedCSRF++; next
+  }
   $0 == "github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=" { original++ }
   $0 == "github.com/go-jose/go-jose/v4 v4.1.4/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=" {
     print
@@ -119,10 +144,10 @@ awk '
     changedNet++; next
   }
   { print }
-  END { if (original != 1 || changed != 1 || originalNet != 1 || changedNet != 1) exit 1 }
+  END { if (original != 1 || changed != 1 || originalNet != 1 || changedNet != 1 || originalCSRF != 1 || changedCSRF != 1) exit 1 }
 ' "$stage/source/go.sum" >"$stage/go.sum" || fail 'checksum patch differs'
-[[ "$(shasum -a 256 "$stage/go.mod" | awk '{print $1}')" = d3646d619621042fb5039f534df32350380c7640620f58086a67e7d6c6fb23b5 ]] || fail 'patched module differs'
-[[ "$(shasum -a 256 "$stage/go.sum" | awk '{print $1}')" = ecb0f1cc67843b22a16c3e7a5fee39a5ec930acd787051a8d697e119282b0646 ]] || fail 'patched checksums differ'
+[[ "$(shasum -a 256 "$stage/go.mod" | awk '{print $1}')" = d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50 ]] || fail 'patched module differs'
+[[ "$(shasum -a 256 "$stage/go.sum" | awk '{print $1}')" = 19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba ]] || fail 'patched checksums differ'
 mv "$stage/go.mod" "$stage/source/go.mod"
 mv "$stage/go.sum" "$stage/source/go.sum"
 rm -- "$stage/source/console/src/assets/ailerons.otf" \
@@ -141,11 +166,11 @@ input_hash="$(shasum -a 256 "$root/scripts/zitadel-source-inputs.sha256" | awk '
 jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
   '{schemaVersion:1,upstreamCommit:$pin,recipeSha256:$recipe,inputManifestSha256:$inputs,
     imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:"machine-id-no-jsonpath-v1",
-    dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-v1",
+    dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1",
     removedFiles:["console/src/assets/ailerons.otf","console/src/styles/ailerons.scss",
       "internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf",
       "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss"],
-    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","go.mod","go.sum"]}' >"$stage/source-preparation.json"
+    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum"]}' >"$stage/source-preparation.json"
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
 reserved=0 complete=0 interrupted=0

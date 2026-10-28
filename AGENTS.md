@@ -68,8 +68,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
   without the unadmitted Ailerons assets or JSONPath machine-ID selector. It also
-  applies the exact native-generated go-jose/v4 4.1.6 dependency
-  profile, preserving its upstream key-size limit and all other module selections.
+  applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
+  1.7.3 dependency profile, preserving the upstream key-size limit and other
+  selections. The login interceptor marks only explicitly configured plaintext
+  mode for the patched CSRF library; production TLS checks stay enabled.
   Configured metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
   Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.

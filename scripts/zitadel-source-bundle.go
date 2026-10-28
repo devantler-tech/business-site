@@ -29,7 +29,7 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8"
+const sourcePreparedProfile = "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
@@ -265,6 +265,7 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		"Set apps/api/project.json generate-install.options.parallel to false; preserve all fourteen native install commands.",
 		"Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit.",
 		"Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections.",
+		"Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -414,7 +415,7 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			sourcePreparedProfile,
 			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			"746140fcdadcc6610f161f5fd043a7468839a603db2c346102eb91eec2807614",
+			"8fcd6ac4680c7df5b7fbb62b8eec832ca5881acb722c805d986ee749392dc58b",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string

@@ -138,7 +138,7 @@ started="$(date -u +%s)"
 if [[ -z "$prepared_source" ]]; then
   bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
 fi
-jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-v1"' "$output/prepared/source-preparation.json" >/dev/null
+jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
 if [[ -z "$prepared_source" ]]; then
@@ -162,7 +162,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8" and .files == 9599 and .records == 28 and .bytes == 261684243' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .records == 28 and .bytes == 261684474' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -221,7 +221,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "35bd476ac7c0264c4ae70db1bd38fad155a067edd37c8e317026518f419c04e8" and .files == 9599 and .bytes == 261684243 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .bytes == 261684474 and .records == 28 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
@@ -448,8 +448,12 @@ shasum -a 256 internal/api/ui/login/statik/statik.go >"$output/login-statik.befo
 mkdir "$output/service"
 binary="$output/service/zitadel"
 run_phase compile go build -buildvcs=false -o "$binary" \
-  -ldflags="-s -w -X github.com/zitadel/zitadel/cmd/build.version=$version -X github.com/zitadel/zitadel/cmd/build.commit=$pin -X github.com/zitadel/zitadel/cmd/build.date=$source_date" .
+  -ldflags="-w -X github.com/zitadel/zitadel/cmd/build.version=$version -X github.com/zitadel/zitadel/cmd/build.commit=$pin -X github.com/zitadel/zitadel/cmd/build.date=$source_date" .
 [[ -s "$binary" && -x "$binary" && ! -L "$binary" ]] || fail 'service binary missing'
+# The security checker needs function symbols; stripped binaries degrade to a
+# module-level report. Keep the table in the same executable that is packaged.
+go tool nm "$binary" >"$output/binary-symbols.txt"
+grep -Eq '^[[:space:]]*[[:xdigit:]]+[[:space:]]+T[[:space:]]+main\.main$' "$output/binary-symbols.txt" || fail 'service function symbols missing'
 readelf -h "$binary" >"$output/elf.txt"
 grep -q 'Advanced Micro Devices X86-64' "$output/elf.txt" || fail 'wrong ELF architecture'
 readelf -l "$binary" >"$output/elf-program.txt"
