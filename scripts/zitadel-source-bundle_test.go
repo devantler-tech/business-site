@@ -250,6 +250,9 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 			for name, body := range sourceApprovedExtraRecordsForTest() {
 				records[name] = body
 			}
+			for name, body := range sourceNoticeOriginalsForTest(t) {
+				records[name] = body
+			}
 			if kind == "missing-record" {
 				delete(records, "api-project.original.json")
 			}
@@ -616,8 +619,37 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
+// sourceNoticeOriginalsForTest binds the two existing originals independently
+// of the production capture map; a fixture cannot stand in for their full bodies.
+func sourceNoticeOriginalsForTest(t *testing.T) map[string][]byte {
+	t.Helper()
+	originals := []struct {
+		name   string
+		bytes  int
+		sha256 string
+	}{
+		{"third_party/zitadel-console-notices/catalogue.json", 12536, "4f964bd659a7656f7951c363535120af0fe881be37b1ac522e0964dd41647206"},
+		{"third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat", 330467, "a5638281157e8c902b127a5376f9ea2d024bf2ee11524133a6a76cd1d14ee7be"},
+	}
+	bodies := map[string][]byte{}
+	for _, original := range originals {
+		body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(original.name)))
+		if err != nil || len(body) != original.bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != original.sha256 {
+			t.Fatalf("original notice input changed: %s: %v", original.name, err)
+		}
+		bodies[original.name] = body
+	}
+	return bodies
+}
+
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
+	noticeOriginals := sourceNoticeOriginalsForTest(t)
 	kinds := []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"}
+	for name := range noticeOriginals {
+		for _, kind := range []string{"missing notice:", "empty notice:", "linked notice:", "unsafe-mode notice:"} {
+			kinds = append(kinds, kind+name)
+		}
+	}
 	for name := range sourceApprovedExtraRecordsForTest() {
 		for _, kind := range []string{"missing authored:", "empty authored:", "linked authored:", "unsafe-mode authored:"} {
 			kinds = append(kinds, kind+name)
@@ -661,6 +693,9 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
 			}
 			for name, body := range sourceApprovedExtraRecordsForTest() {
+				write(repo, name, string(body))
+			}
+			for name, body := range noticeOriginals {
 				write(repo, name, string(body))
 			}
 			preparation := fmt.Sprintf(`{"schemaVersion":1,"upstreamCommit":"8afa5dd37a8e723efb9eace8d09fd5c1cccef694","recipeSha256":"%s","inputManifestSha256":"%s","imageAdmission":"unknown","licenseClosure":"unknown","metadataProfile":"machine-id-no-jsonpath-v1"}`, hash("prepare-zitadel-source.sh\n"), hash("zitadel-source-inputs.sha256\n"))
@@ -707,6 +742,26 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					write(repo, name, "")
 				case "unsafe-mode authored:" + name:
 					if err := os.Chmod(p, 0666); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for name := range noticeOriginals {
+				file := filepath.Join(repo, filepath.FromSlash(name))
+				switch kind {
+				case "missing notice:" + name, "linked notice:" + name:
+					if err := os.Remove(file); err != nil {
+						t.Fatal(err)
+					}
+					if strings.HasPrefix(kind, "linked") {
+						if err := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), file); err != nil {
+							t.Fatal(err)
+						}
+					}
+				case "empty notice:" + name:
+					write(repo, name, "")
+				case "unsafe-mode notice:" + name:
+					if err := os.Chmod(file, 0666); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -764,11 +819,11 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 56 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 58 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 56 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 58 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
@@ -813,6 +868,52 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					checkRecords(false)
 					write(repo, original, string(before))
 				}
+				for name, want := range noticeOriginals {
+					matches := 0
+					for _, member := range manifest.Records {
+						if member.Path == name {
+							matches++
+							if member.Bytes != int64(len(want)) || member.Mode != 0644 || member.SHA256 != hash(string(want)) {
+								t.Fatalf("notice record metadata differs: %s", name)
+							}
+						}
+					}
+					body, err := sourceReadAt(output, "records/"+name)
+					if matches != 1 || err != nil || !bytes.Equal(body, want) {
+						t.Fatalf("original notice not retained exactly once: %s: %v", name, err)
+					}
+					for _, mutation := range []string{"changed", "missing", "linked", "unsafe-mode"} {
+						file := filepath.Join(repo, filepath.FromSlash(name))
+						switch mutation {
+						case "changed":
+							write(repo, name, string(want)+"changed after capture\n")
+						case "missing", "linked":
+							if err := os.Remove(file); err != nil {
+								t.Fatal(err)
+							}
+							if mutation == "linked" {
+								if err := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), file); err != nil {
+									t.Fatal(err)
+								}
+							}
+						case "unsafe-mode":
+							if err := os.Chmod(file, 0666); err != nil {
+								t.Fatal(err)
+							}
+						}
+						checkRecords(false)
+						if mutation == "linked" {
+							if err := os.Remove(file); err != nil {
+								t.Fatal(err)
+							}
+						}
+						write(repo, name, string(want))
+						if err := os.Chmod(file, 0644); err != nil {
+							t.Fatal(err)
+						}
+						checkRecords(true)
+					}
+				}
 				checkRecords(true)
 				archive := filepath.Join(t.TempDir(), "prepared.tar")
 				archiveHash, err := sourcePackTree(output, got.ManifestSHA256, archive)
@@ -835,6 +936,17 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					info, statErr := os.Stat(name)
 					if readErr != nil || err != nil || statErr != nil || !bytes.Equal(want, body) || info.Mode() != 0644 {
 						t.Fatalf("approved archived/restored record differs: %s", original)
+					}
+				}
+				for name, want := range noticeOriginals {
+					file := filepath.Join(restoredRoot, "prepared/records", filepath.FromSlash(name))
+					body, err := os.ReadFile(file)
+					info, statErr := os.Stat(file)
+					if err != nil || statErr != nil || !bytes.Equal(body, want) || info.Mode() != 0644 {
+						t.Fatalf("archived notice original differs: %s", name)
+					}
+					if _, err := os.Lstat(filepath.Join(restoredRoot, "prepared/source", filepath.FromSlash(name))); !os.IsNotExist(err) {
+						t.Fatalf("notice original escaped audit records: %s", name)
 					}
 				}
 				upstream, err := os.ReadFile(filepath.Join(restoredRoot, "prepared/source/go.mod"))
