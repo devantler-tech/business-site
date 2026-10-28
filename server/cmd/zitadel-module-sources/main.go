@@ -19,6 +19,9 @@ func run(args []string, stdout io.Writer) error {
 	if args[0] == "restore-go-inputs" {
 		return runGoInputRestoration(args[1:], stdout)
 	}
+	if args[0] == "capture-verifier-bootstrap" || args[0] == "verify-verifier-bootstrap" || args[0] == "restore-verifier-bootstrap" {
+		return runVerifierBootstrap(args[0], args[1:], stdout)
+	}
 	if args[0] == "capture-graph-metadata" || args[0] == "verify-graph-metadata" {
 		return runGoGraphMetadata(args[0], args[1:], stdout)
 	}

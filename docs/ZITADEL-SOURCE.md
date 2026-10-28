@@ -624,6 +624,19 @@ restored over the upstream service module. Only the four existing fixed native
 inputs receive additional restoration destinations. The scoped grant is unchanged;
 this capture does not complete bootstrap-dependency or image admission.
 
+`--restore-tools <snapshot> <manifest-sha256> <new-tool-source-root>` restores
+the 37 approved authored files and three scoped terms documents at their original
+paths, including `server/go.mod`, `server/go.sum` and both verifier command
+directories. Its fresh private root is separate from the sealed snapshot and
+the upstream service module. All restored files remain inert 0644 data.
+`--verify-tools <snapshot> <manifest-sha256> <tool-source-root>` rechecks that exact
+closed layout, complete bodies, canonical modes and private root. Missing, extra,
+linked, changed or executable files fail without a successful receipt. Existing
+outputs are preserved, and failed restoration removes only its own reservation.
+The receipt binds the upstream source seal and complete restored member digest;
+`goVerifiersRebuilt` remains false. These operations do not acquire dependencies,
+run a compiler or change the native replay's executable inputs.
+
 The Linux entrypoint also accepts the mutually exclusive
 `--build --prepared-source <snapshot> --prepared-sha256 <manifest-sha256>
 --output <new-build-root>` mode. It restores those records without rerunning
@@ -835,7 +848,8 @@ the original binaries and archives remain excluded. Full replay remains #343.
 
 The explicit replay command assembles this build's prepared source, selected
 service and generator Go originals, authenticated graph metadata, pnpm originals,
-schema originals and console originals, plus their original build receipt. It
+schema originals, console originals and the fixed source-verifier bootstrap,
+plus their original build receipt. It
 selects those fixed components rather than archiving the build directory. Prior
 compiled output, installed workspaces, side-effect caches and ambient stores are
 excluded. The same closed archive engine uses a distinct `retained-build-inputs`
@@ -848,13 +862,16 @@ bash scripts/replay-zitadel-inputs.sh \
   --build /physical/owned/original-build \
   --module-source-verifier /physical/owned/zitadel-module-sources \
   --bsr-source-verifier /physical/owned/zitadel-bsr-sources \
+  --verifier-go /physical/original-go1.27.3/bin/go \
   --output /physical/owned/new-offline-replay
 ```
 
 The existing builder's exclusive `--retained-inputs`/`--retained-sha256` mode
 reuses prepared-source and recipe admission. The original receipt binds the
-separately supplied verifier executables; their known command/compiler metadata
-and byte digests must agree. Maintained native verifiers authenticate every
+separately supplied verifier executables and the compiler digest observed before
+their original builds; command/compiler metadata and byte digests must agree.
+Original executables authenticate bootstrap data, while the service replay uses
+only reconstructed executables. Maintained native verifiers authenticate every
 capsule and its source/recipe joins before reconstruction. Go receives original
 ZIP/mod/info and signed checksum records, never extracted trees or trusted ZIP
 hash markers. pnpm receives original archives and verified native indexes, never
@@ -865,6 +882,15 @@ The outer command checks an independently reachable network control, creates a
 new network namespace and verifies different namespace identity, the original
 nonroot UID/GID, no new privileges and zero effective/bounding capabilities.
 It also observes the network control fail there. The complete existing native
+pipeline first restores the exact approved tool-source layout and checksum-pinned
+x/mod ZIP/mod/info into fresh private caches. The supplied original Go 1.27.3
+compiler rebuilds the two fixed commands with identical flags. Their successful
+native package compositions and executable bytes must equal the original build.
+A separate empty-cache control must refuse acquisition. The reconstructed module
+verifier rechecks the capsule; only these rebuilt binaries then enter service
+replay. Source, bootstrap, compiler and binary identities are rechecked at the
+final boundary, with a separate reconstruction receipt.
+The complete existing native
 install, generation, console, service compilation and notice pipeline then runs
 inside that namespace with fresh owned compiler/acquisition stores and empty
 ambient configuration. pnpm explicitly uses offline installation, Go remote
@@ -895,15 +921,16 @@ The retained marker enters the final build receipt before either notice inventor
 binds its bytes; completion only renames that unchanged receipt.
 
 Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
-and the repository's separately built Go 1.27.3 verifiers and lock-pinned native
+the caller-selected original Go 1.27.3 distribution and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside
 the input archive. This does not claim a hermetic OS/toolchain distribution.
 The builder still reads this checkout's maintained notice collectors/catalogues.
 The [identity build-tool scope](../third_party/zitadel-build-tools/README.md) grants
 AGPL-3.0-only for its exact authored file list and terms, without licensing the
 remaining application. Check it with `bash scripts/check-zitadel-build-tools-license.sh`.
-Complete custom-tool capture, bootstrap-dependency treatment and reconstruction
-remain #387; a grant does not supply those missing source inputs. Durable source-offer
+The approved tool source and x/mod originals support this verifier reconstruction.
+Other custom-tool inputs, preferred source and bootstrap-dependency treatment
+remain #387; a grant does not supply missing source inputs. Durable source-offer
 assembly and distribution admission remain #308.
 
 Only after successful full native compilation, complete same-build notice
