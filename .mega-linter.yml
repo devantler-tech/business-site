@@ -4,6 +4,9 @@
 GO_GOLANGCI_LINT_CLI_EXECUTABLE: ["go", "run", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0"]
 GO_REVIVE_ARGUMENTS: ["./..."]
 GO_REVIVE_CLI_LINT_MODE: list_of_files
+# The bundled OSV binary's Go 1.26 analyzer cannot load the Go 1.27 module.
+# Rebuild the same scanner with this module's selected compiler; keep all targets.
+REPOSITORY_OSV_SCANNER_CLI_EXECUTABLE: ["bash", "/github/workspace/scripts/scan-go-source.sh"]
 HTML_HTMLHINT_CONFIG_FILE: .htmlhintrc
 # The required workflow scans the server module from a nested workspace.
 HTML_HTMLHINT_RULES_PATH: /github/workspace
