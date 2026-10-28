@@ -9,6 +9,12 @@ APIs through its native JavaScript packages. The exact SDK dependencies and thei
 original integrity values are in `package-lock.json`, separately from the frozen
 identity application's lock and toolchain.
 
+The adapter's selected authored files have the explicit
+[AGPL-3.0-only build-tool scope](../../third_party/zitadel-build-tools/README.md).
+The package remains private; its dependency licenses and the terms of all other
+application source remain separate. This grant is not complete corresponding-source
+capture, a public source offer or identity image admission.
+
 ```sh
 npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
 node --test tools/zitadel-pnpm-source/index.test.mjs

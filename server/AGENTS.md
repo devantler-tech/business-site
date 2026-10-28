@@ -126,6 +126,10 @@ the declared compiler, preserving its native rules, project scope and fix mode.
 The analyzer regression exercises all actual module packages and a genuine format
 diagnostic against the pinned container's rule snapshot; native container proof is
 still separate. Never replace it with a disabled scanner or ignored failures.
+OSV's supported executable override rebuilds the same scanner version with the
+module-selected stable compiler before analysis. Preserve its complete target,
+arguments and exit status; run `bash scripts/scan-go-source.test.sh` from the
+repository root. A compiler-selection or analysis error is never a clean scan.
 Lychee's test-only preprocessor renders all six actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
