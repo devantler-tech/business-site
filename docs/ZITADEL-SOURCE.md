@@ -585,13 +585,16 @@ These operations do not install dependencies or run the upstream build. A
 prepared-source round trip establishes only that source snapshot's correspondence.
 The Linux builder's optional `--capture-source` flag invokes `--capture-build`
 immediately before installation. It retains the preparation receipt, original and
-serialized API configuration, seven-input hash record, five exact recipes/input
-files, including the console download helper, build guide and a dated modification
-record. That date belongs to the frozen
+serialized API configuration, seven-input hash record, existing third-party
+catalogues and terms, and a dated modification record. It also retains every one
+of the 37 approved authored paths and three scoped terms documents listed in
+`third_party/zitadel-build-tools/scope.json`. Twelve existing aliases are reused;
+the missing 25 authored paths and three terms documents bring the closed inventory
+to 56 records, within the existing 64-record bound. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those twenty-eight records separate from the upstream source. The completed build
+keeps those fifty-six records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
@@ -600,13 +603,23 @@ diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all twenty-eight literal records and places only the four fixed build inputs at
+It retains all fifty-six literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
 This operation authenticates the externally sealed file set, not an arbitrary
 snapshot's suitability for the frozen build; empty directories are not source
 members, while valid empty files remain preserved.
+
+`--verify-build-records <snapshot> <manifest-sha256> <repository>` independently
+rechecks the complete sealed snapshot and the current repository bodies selected
+by the literal capture map. Missing, linked, unsupported-mode or changed records
+fail without a success result. Both fresh capture and prepared/native replay
+perform this readback before completing their build receipt. Retained records
+remain 0644 audit data: no script, Dockerfile or helper module is executed or
+restored over the upstream service module. Only the four existing fixed native
+inputs receive additional restoration destinations. The scoped grant is unchanged;
+this capture does not complete bootstrap-dependency or image admission.
 
 The Linux entrypoint also accepts the mutually exclusive
 `--build --prepared-source <snapshot> --prepared-sha256 <manifest-sha256>
@@ -783,7 +796,7 @@ The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
 as a literal source/build record. The native pnpm adapter and both SDK manifests
-are three of the twenty-eight literal records. The text-font entrypoint, its
+are three of the fifty-six literal records. The text-font entrypoint, its
 companion, frozen catalogue and Apache text are four further records; the
 original Lato OFL is already retained in the complete prepared source.
 

@@ -45,6 +45,94 @@ type sourceCaptureSummary struct {
 	RecipeSHA256          string `json:"recipeSha256"`
 }
 
+type sourceRecordInput struct {
+	repository     bool
+	name, retained string
+}
+
+// sourceBuildRecordInputs is the closed capture map. Its records are inert audit
+// data; neither the grant document nor archived bytes may add a path or command.
+func sourceBuildRecordInputs() []sourceRecordInput {
+	return []sourceRecordInput{
+		{false, "prepared/source-preparation.json", "source-preparation.json"},
+		{false, "api-project.original.json", "api-project.original.json"},
+		{false, "api-project.serial.json", "api-project.serial.json"},
+		{false, "inputs.sha256", "inputs.sha256"},
+		{true, "scripts/prepare-zitadel-source.sh", "recipes/prepare-zitadel-source.sh"},
+		{true, "scripts/zitadel-source-inputs.sha256", "recipes/zitadel-source-inputs.sha256"},
+		{true, "scripts/build-zitadel-linux.sh", "recipes/build-zitadel-linux.sh"},
+		{true, "scripts/zitadel-source-bundle.go", "recipes/zitadel-source-bundle.go"},
+		{true, "scripts/zitadel-console-assets.go", "recipes/zitadel-console-assets.go"},
+		{true, "scripts/zitadel-login-icons.go", "recipes/zitadel-login-icons.go"},
+		{true, "scripts/zitadel-text-fonts.go", "recipes/zitadel-text-fonts.go"},
+		{true, "scripts/zitadel-copied-assets.go", "recipes/zitadel-copied-assets.go"},
+		{true, "third_party/zitadel-copied-assets/catalogue.json", "third_party/zitadel-copied-assets/catalogue.json"},
+		{true, "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md", "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md"},
+		{true, "third_party/zitadel-copied-assets/Material-Icons-LICENSE", "third_party/zitadel-copied-assets/Material-Icons-LICENSE"},
+		{true, "third_party/zitadel-copied-assets/Flag-Icons-LICENSE", "third_party/zitadel-copied-assets/Flag-Icons-LICENSE"},
+		{true, "third_party/zitadel-copied-assets/ZITADEL-LICENSE", "third_party/zitadel-copied-assets/ZITADEL-LICENSE"},
+		{true, "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md", "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md"},
+		{true, "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md", "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md"},
+		{true, "third_party/zitadel-copied-assets/original-line-awesome.css", "third_party/zitadel-copied-assets/original-line-awesome.css"},
+		{true, "third_party/zitadel-copied-assets/original-line-awesome.min.css", "third_party/zitadel-copied-assets/original-line-awesome.min.css"},
+		{true, "third_party/zitadel-text-fonts/catalogue.json", "third_party/zitadel-text-fonts/catalogue.json"},
+		{true, "third_party/zitadel-text-fonts/Apache-2.0.txt", "third_party/zitadel-text-fonts/Apache-2.0.txt"},
+		{true, "tools/zitadel-pnpm-source/index.mjs", "recipes/zitadel-pnpm-source/index.mjs"},
+		{true, "tools/zitadel-pnpm-source/package.json", "recipes/zitadel-pnpm-source/package.json"},
+		{true, "tools/zitadel-pnpm-source/package-lock.json", "recipes/zitadel-pnpm-source/package-lock.json"},
+		{true, "docs/ZITADEL-SOURCE.md", "ZITADEL-SOURCE.md"},
+		{true, "scripts/replay-zitadel-inputs.sh", "scripts/replay-zitadel-inputs.sh"},
+		{true, "scripts/zitadel-console-notices.go", "scripts/zitadel-console-notices.go"},
+		{true, "server/go.mod", "server/go.mod"},
+		{true, "server/go.sum", "server/go.sum"},
+		{true, "server/cmd/zitadel-module-sources/capture.go", "server/cmd/zitadel-module-sources/capture.go"},
+		{true, "server/cmd/zitadel-module-sources/generator_sources.go", "server/cmd/zitadel-module-sources/generator_sources.go"},
+		{true, "server/cmd/zitadel-module-sources/generators.go", "server/cmd/zitadel-module-sources/generators.go"},
+		{true, "server/cmd/zitadel-module-sources/graph_metadata.go", "server/cmd/zitadel-module-sources/graph_metadata.go"},
+		{true, "server/cmd/zitadel-module-sources/json_fields.go", "server/cmd/zitadel-module-sources/json_fields.go"},
+		{true, "server/cmd/zitadel-module-sources/main.go", "server/cmd/zitadel-module-sources/main.go"},
+		{true, "server/cmd/zitadel-module-sources/payload.go", "server/cmd/zitadel-module-sources/payload.go"},
+		{true, "server/cmd/zitadel-module-sources/restore.go", "server/cmd/zitadel-module-sources/restore.go"},
+		{true, "server/cmd/zitadel-module-sources/selection.go", "server/cmd/zitadel-module-sources/selection.go"},
+		{true, "server/cmd/zitadel-bsr-sources/files.go", "server/cmd/zitadel-bsr-sources/files.go"},
+		{true, "server/cmd/zitadel-bsr-sources/main.go", "server/cmd/zitadel-bsr-sources/main.go"},
+		{true, "server/cmd/zitadel-bsr-sources/package.go", "server/cmd/zitadel-bsr-sources/package.go"},
+		{true, "server/cmd/zitadel-bsr-sources/validation.go", "server/cmd/zitadel-bsr-sources/validation.go"},
+		{true, "Dockerfile.zitadel", "Dockerfile.zitadel"},
+		{true, "scripts/zitadel-image-package.go", "scripts/zitadel-image-package.go"},
+		{true, "scripts/zitadel-image-smoke.go", "scripts/zitadel-image-smoke.go"},
+		{true, "scripts/zitadel-service-smoke.go", "scripts/zitadel-service-smoke.go"},
+		{true, "scripts/zitadel-browser.go", "scripts/zitadel-browser.go"},
+		{true, "server/cmd/zitadel-module-sources/README.md", "server/cmd/zitadel-module-sources/README.md"},
+		{true, "server/cmd/zitadel-bsr-sources/README.md", "server/cmd/zitadel-bsr-sources/README.md"},
+		{true, "tools/zitadel-pnpm-source/README.md", "tools/zitadel-pnpm-source/README.md"},
+		{true, "third_party/zitadel-build-tools/COPYING", "third_party/zitadel-build-tools/COPYING"},
+		{true, "third_party/zitadel-build-tools/README.md", "third_party/zitadel-build-tools/README.md"},
+		{true, "third_party/zitadel-build-tools/scope.json", "third_party/zitadel-build-tools/scope.json"},
+	}
+}
+
+// sourceBuildRecordNames also refuses duplicate sources and destination aliases,
+// before either capture or restoration can silently replace a retained member.
+func sourceBuildRecordNames() (map[string]bool, error) {
+	names := map[string]bool{"modifications.json": true}
+	seen := map[struct {
+		repository bool
+		name       string
+	}]bool{}
+	for _, entry := range sourceBuildRecordInputs() {
+		key := struct {
+			repository bool
+			name       string
+		}{entry.repository, entry.name}
+		if !sourcePath(entry.name) || !sourcePath(entry.retained) || names[entry.retained] || seen[key] {
+			return nil, fmt.Errorf("duplicate or invalid literal build record")
+		}
+		names[entry.retained], seen[key] = true, true
+	}
+	return names, nil
+}
+
 // sourceRestoreBuild restores declared bytes only. Like unpack, it authenticates
 // a closed snapshot against the caller's external seal; the native builder still
 // has to admit its frozen profile and literal recipe/transformation identities.
@@ -54,35 +142,9 @@ func sourceRestoreBuild(snapshot, seal, output string) (summary sourceCaptureSum
 	if err != nil || manifest.PreparedProfile == "" {
 		return summary, fmt.Errorf("verified prepared build snapshot required")
 	}
-	recordNames := map[string]bool{
-		"source-preparation.json":                                         true,
-		"api-project.original.json":                                       true,
-		"api-project.serial.json":                                         true,
-		"inputs.sha256":                                                   true,
-		"recipes/prepare-zitadel-source.sh":                               true,
-		"recipes/zitadel-source-inputs.sha256":                            true,
-		"recipes/build-zitadel-linux.sh":                                  true,
-		"recipes/zitadel-source-bundle.go":                                true,
-		"recipes/zitadel-console-assets.go":                               true,
-		"recipes/zitadel-login-icons.go":                                  true,
-		"recipes/zitadel-text-fonts.go":                                   true,
-		"recipes/zitadel-copied-assets.go":                                true,
-		"third_party/zitadel-copied-assets/catalogue.json":                true,
-		"third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md":       true,
-		"third_party/zitadel-copied-assets/Material-Icons-LICENSE":        true,
-		"third_party/zitadel-copied-assets/Flag-Icons-LICENSE":            true,
-		"third_party/zitadel-copied-assets/ZITADEL-LICENSE":               true,
-		"third_party/zitadel-copied-assets/ZITADEL-LICENSING.md":          true,
-		"third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md":       true,
-		"third_party/zitadel-copied-assets/original-line-awesome.css":     true,
-		"third_party/zitadel-copied-assets/original-line-awesome.min.css": true,
-		"third_party/zitadel-text-fonts/catalogue.json":                   true,
-		"third_party/zitadel-text-fonts/Apache-2.0.txt":                   true,
-		"recipes/zitadel-pnpm-source/index.mjs":                           true,
-		"recipes/zitadel-pnpm-source/package.json":                        true,
-		"recipes/zitadel-pnpm-source/package-lock.json":                   true,
-		"ZITADEL-SOURCE.md":                                               true,
-		"modifications.json":                                              true,
+	recordNames, err := sourceBuildRecordNames()
+	if err != nil {
+		return summary, err
 	}
 	if len(manifest.Records) != len(recordNames) {
 		return summary, fmt.Errorf("prepared build records are incomplete or unexpected")
@@ -203,36 +265,15 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		fmt.Fprintf(&inputRecord, "%s  %s\n", inputHashes[name], name)
 	}
 	records := map[string][]byte{}
-	for _, entry := range []struct{ root, name, retained string }{
-		{build, "prepared/source-preparation.json", "source-preparation.json"},
-		{build, "api-project.original.json", "api-project.original.json"},
-		{build, "api-project.serial.json", "api-project.serial.json"},
-		{build, "inputs.sha256", "inputs.sha256"},
-		{repository, "scripts/prepare-zitadel-source.sh", "recipes/prepare-zitadel-source.sh"},
-		{repository, "scripts/zitadel-source-inputs.sha256", "recipes/zitadel-source-inputs.sha256"},
-		{repository, "scripts/build-zitadel-linux.sh", "recipes/build-zitadel-linux.sh"},
-		{repository, "scripts/zitadel-source-bundle.go", "recipes/zitadel-source-bundle.go"},
-		{repository, "scripts/zitadel-console-assets.go", "recipes/zitadel-console-assets.go"},
-		{repository, "scripts/zitadel-login-icons.go", "recipes/zitadel-login-icons.go"},
-		{repository, "scripts/zitadel-text-fonts.go", "recipes/zitadel-text-fonts.go"},
-		{repository, "scripts/zitadel-copied-assets.go", "recipes/zitadel-copied-assets.go"},
-		{repository, "third_party/zitadel-copied-assets/catalogue.json", "third_party/zitadel-copied-assets/catalogue.json"},
-		{repository, "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md", "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md"},
-		{repository, "third_party/zitadel-copied-assets/Material-Icons-LICENSE", "third_party/zitadel-copied-assets/Material-Icons-LICENSE"},
-		{repository, "third_party/zitadel-copied-assets/Flag-Icons-LICENSE", "third_party/zitadel-copied-assets/Flag-Icons-LICENSE"},
-		{repository, "third_party/zitadel-copied-assets/ZITADEL-LICENSE", "third_party/zitadel-copied-assets/ZITADEL-LICENSE"},
-		{repository, "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md", "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md"},
-		{repository, "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md", "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md"},
-		{repository, "third_party/zitadel-copied-assets/original-line-awesome.css", "third_party/zitadel-copied-assets/original-line-awesome.css"},
-		{repository, "third_party/zitadel-copied-assets/original-line-awesome.min.css", "third_party/zitadel-copied-assets/original-line-awesome.min.css"},
-		{repository, "third_party/zitadel-text-fonts/catalogue.json", "third_party/zitadel-text-fonts/catalogue.json"},
-		{repository, "third_party/zitadel-text-fonts/Apache-2.0.txt", "third_party/zitadel-text-fonts/Apache-2.0.txt"},
-		{repository, "tools/zitadel-pnpm-source/index.mjs", "recipes/zitadel-pnpm-source/index.mjs"},
-		{repository, "tools/zitadel-pnpm-source/package.json", "recipes/zitadel-pnpm-source/package.json"},
-		{repository, "tools/zitadel-pnpm-source/package-lock.json", "recipes/zitadel-pnpm-source/package-lock.json"},
-		{repository, "docs/ZITADEL-SOURCE.md", "ZITADEL-SOURCE.md"},
-	} {
-		body, err := sourceReadAt(entry.root, entry.name)
+	if _, err := sourceBuildRecordNames(); err != nil {
+		return summary, err
+	}
+	for _, entry := range sourceBuildRecordInputs() {
+		root := build
+		if entry.repository {
+			root = repository
+		}
+		body, err := sourceReadAt(root, entry.name)
 		if err != nil || len(body) == 0 || len(body) > sourceManifestLimit {
 			return summary, fmt.Errorf("build source record unavailable: %s", entry.retained)
 		}
@@ -287,6 +328,37 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 	return sourceCaptureSummary{ManifestSHA256: sealed, PreparedProfileSHA256: seal, Files: len(manifest.Files), Records: len(manifest.Records), Bytes: total, RecipeSHA256: digest(records["recipes/build-zitadel-linux.sh"])}, nil
 }
 
+// sourceVerifyBuildRecords rechecks the current repository against every literal
+// retained repository record. Restored audit data never chooses the input paths.
+func sourceVerifyBuildRecords(snapshot, seal, repository string) (sourceManifest, error) {
+	manifest, err := sourceVerifyTree(snapshot, seal)
+	if err != nil || manifest.PreparedProfile == "" {
+		return sourceManifest{}, fmt.Errorf("verified prepared build snapshot required")
+	}
+	names, err := sourceBuildRecordNames()
+	if err != nil || len(manifest.Records) != len(names) {
+		return sourceManifest{}, fmt.Errorf("incomplete build record membership")
+	}
+	members := map[string]sourceMember{}
+	for _, member := range manifest.Records {
+		if !names[member.Path] {
+			return sourceManifest{}, fmt.Errorf("unexpected build record")
+		}
+		members[member.Path] = member
+	}
+	for _, entry := range sourceBuildRecordInputs() {
+		if !entry.repository {
+			continue
+		}
+		body, err := sourceReadAt(repository, entry.name)
+		member := members[entry.retained]
+		if err != nil || int64(len(body)) != member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
+			return sourceManifest{}, fmt.Errorf("repository differs from retained build record: %s", entry.retained)
+		}
+	}
+	return sourceVerifyTree(snapshot, seal)
+}
+
 // sourceReadAt propagates checked file and root close failures together.
 func sourceReadAt(root, name string) (body []byte, result error) {
 	st, err := os.Lstat(root)
@@ -310,6 +382,9 @@ func sourceReadAt(root, name string) (body []byte, result error) {
 	info, err := r.Lstat(name)
 	if err != nil {
 		return nil, err
+	}
+	if info.Mode() != 0644 && info.Mode() != 0755 && info.Mode() != 0600 && info.Mode() != 0444 {
+		return nil, fmt.Errorf("unsupported build record mode")
 	}
 	return sourceRead(r, name, info)
 }
@@ -426,6 +501,8 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 		value = struct {
 			ManifestSHA256 string `json:"manifestSha256"`
 		}{seal}
+	case len(args) == 4 && args[0] == "--verify-build-records":
+		value, err = sourceVerifyBuildRecords(args[1], args[2], args[3])
 	case len(args) == 3 && args[0] == "--verify":
 		value, err = sourceVerifyTree(args[1], args[2])
 	case len(args) == 4 && args[0] == "--pack":
