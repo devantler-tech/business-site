@@ -53,6 +53,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     GO_GOLANGCI_LINT_CLI_EXECUTABLE: ['go', 'run', 'github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0'],
     GO_REVIVE_ARGUMENTS: ['./...'],
     GO_REVIVE_CLI_LINT_MODE: 'list_of_files',
+    REPOSITORY_OSV_SCANNER_CLI_EXECUTABLE: ['bash', '/github/workspace/scripts/scan-go-source.sh'],
     HTML_HTMLHINT_CONFIG_FILE: '.htmlhintrc',
     HTML_HTMLHINT_RULES_PATH: '/github/workspace',
     SPELL_CSPELL_CONFIG_FILE: '.cspell.json',
