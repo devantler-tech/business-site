@@ -101,13 +101,16 @@ func sourceApprovedAliasesForTest() map[string]string {
 // TestRetainedInputsArchive exercises the actual closed archive with private
 // capsule modes. Compiled output and ambient caches must never enter it.
 func TestRetainedInputsArchive(t *testing.T) {
-	for _, kind := range []string{"valid", "missing-component", "linked-member", "unsupported-mode"} {
+	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "linked-member", "unsupported-mode"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals"}
+			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap"}
 			modes := []os.FileMode{0600, 0444, 0644, 0755}
 			for i, component := range components {
 				if kind == "missing-component" && i == 0 {
+					continue
+				}
+				if kind == "missing-verifier-bootstrap" && component == "selected-verifier-bootstrap" {
 					continue
 				}
 				dir := filepath.Join(root, component)

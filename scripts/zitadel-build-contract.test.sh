@@ -34,6 +34,41 @@ for scanner_status in 42 3 0; do
   test ! -s "$scratch/scanner-step.stdout"
   test ! -s "$scratch/scanner-step.stderr"
 done
+# Exercise the actual native composition producer, including plausible complete
+# stdout followed by a failure. The failed producer must prevent normalization.
+composition_run="$(jq -er '[.jobs["build-zitadel-linux"].steps[]|select(.name=="Observe actual verifier package compositions")|.run]|select(length==1)|.[0]' "$scratch/ci.json")"
+mkdir -p "$scratch/composition/bin"
+cat >"$scratch/composition/bin/go" <<'COMPOSITION'
+#!/usr/bin/env bash
+set -eu
+test "$#" -eq 4
+test "$1" = list
+test "$2" = -json
+test "$3" = ./cmd/zitadel-module-sources
+test "$4" = ./cmd/zitadel-bsr-sources
+printf '%s\n' '{"ImportPath":"module","Name":"main","GoFiles":["main.go"]}' '{"ImportPath":"bsr","Name":"main","GoFiles":["main.go"]}'
+exit "$COMPOSITION_FIXTURE_STATUS"
+COMPOSITION
+chmod +x "$scratch/composition/bin/go"
+composition_compiler_sha="$(shasum -a 256 "$scratch/composition/bin/go" | awk '{print $1}')"
+for composition_status in 42 0; do
+  rm -f "$scratch/composition/verifier-composition.json"
+  observed_status=0
+  IDENTITY_VERIFIER_GO="$scratch/composition/bin/go" IDENTITY_VERIFIER_GO_SHA256="$composition_compiler_sha" RUNNER_TEMP="$scratch/composition" COMPOSITION_FIXTURE_STATUS="$composition_status" \
+    bash -e -o pipefail -c "$composition_run" >"$scratch/composition.stdout" 2>"$scratch/composition.stderr" || observed_status=$?
+  test "$observed_status" -eq "$composition_status"
+  if [[ "$composition_status" -ne 0 ]]; then
+    test ! -e "$scratch/composition/verifier-composition.json"
+  else
+    jq -e 'length==2 and .[0].ImportPath=="module" and .[1].ImportPath=="bsr"' "$scratch/composition/verifier-composition.json" >/dev/null
+  fi
+done
+rm -f "$scratch/composition/verifier-composition.json"
+if IDENTITY_VERIFIER_GO="$scratch/composition/bin/go" IDENTITY_VERIFIER_GO_SHA256="$(printf '%064d' 0)" RUNNER_TEMP="$scratch/composition" COMPOSITION_FIXTURE_STATUS=0 \
+  bash -e -o pipefail -c "$composition_run" >"$scratch/stale-compiler.stdout" 2>"$scratch/stale-compiler.stderr"; then
+  echo 'changed original verifier compiler was accepted' >&2; exit 1
+fi
+test ! -e "$scratch/composition/verifier-composition.json"
 # Validate one complete workflow document, including mandatory diagnostic retention.
 check() {
   jq -e '
@@ -77,13 +112,28 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify the exact identity build-tool license scope") < index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Build the complete native Linux service and embedded console" and
-      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
+      .run == "bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --verifier-bootstrap-cache \"$IDENTITY_VERIFIER_CACHE\" --verifier-composition \"$RUNNER_TEMP/verifier-composition.json\" --verifier-compiler-sha256 \"$IDENTITY_VERIFIER_GO_SHA256\" --source \"$RUNNER_TEMP/zitadel-upstream\" --output \"$RUNNER_TEMP/zitadel-build\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[]|select(.name=="Prepare original verifier compiler and private caches")]|length)==1 and
+    any($job.steps[]; .name=="Prepare original verifier compiler and private caches" and .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
+      (.run|contains("test \"$(go env GOVERSION)\" = go1.27.3")) and
+      (.run|contains("compiler=\"$(realpath \"$(command -v go)\")\"")) and
+      (.run|contains("IDENTITY_VERIFIER_GO_SHA256=$compiler_sha")) and
+      (.run|contains("GOMODCACHE=$RUNNER_TEMP/verifier-modules")) and (.run|contains("GOFLAGS="))) and
+    ([$job.steps[]|select(.name=="Observe actual verifier package compositions")]|length)==1 and
+    any($job.steps[]; .name=="Observe actual verifier package compositions" and .["working-directory"]=="server" and .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
+      (.run|contains("IDENTITY_VERIFIER_GO_SHA256")) and
+      (.run|split("\n")|.[1])=="\"$IDENTITY_VERIFIER_GO\" list -json ./cmd/zitadel-module-sources ./cmd/zitadel-bsr-sources > \"$RUNNER_TEMP/verifier-packages.jsonl\"" and
+      (.run|contains(".Incomplete!=true and .Error==null and ((.DepsErrors // [])|length)==0"))) and
+    ([$job.steps[].name]|index("Setup the source verifier compiler") < index("Prepare original verifier compiler and private caches") and
+      index("Prepare original verifier compiler and private caches") < index("Verify selected Go source retention") and
+      index("Verify selected schema source retention") < index("Observe actual verifier package compositions") and
+      index("Observe actual verifier package compositions") < index("Setup the frozen identity Go compiler")) and
     any($job.steps[]; .name == "Read back restored Go inputs without networking" and
       .run == "bash scripts/readback-zitadel-go-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Replay the complete retained identity build without networking" and
-      .run == "bash scripts/replay-zitadel-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --output \"$RUNNER_TEMP/zitadel-offline-replay\"" and
+      .run == "bash scripts/replay-zitadel-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --verifier-go \"$IDENTITY_VERIFIER_GO\" --output \"$RUNNER_TEMP/zitadel-offline-replay\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
@@ -147,11 +197,11 @@ check() {
     ([$job.steps[].name] | index("Verify and restore the actual selected pnpm sources") > index("Build the complete native Linux service and embedded console")) and
     any($job.steps[]; .name == "Verify selected Go source retention" and
       .["working-directory"] == "server" and
-      .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
+      .run == "go test -race ./cmd/zitadel-module-sources\nCGO_ENABLED=0 \"$IDENTITY_VERIFIER_GO\" build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-module-sources\" ./cmd/zitadel-module-sources\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify selected schema source retention" and
       .["working-directory"] == "server" and
-      .run == "go test -race ./cmd/zitadel-bsr-sources\nCGO_ENABLED=0 go build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-bsr-sources\" ./cmd/zitadel-bsr-sources\n" and
+      .run == "go test -race ./cmd/zitadel-bsr-sources\nCGO_ENABLED=0 \"$IDENTITY_VERIFIER_GO\" build -trimpath -buildvcs=false -o \"$RUNNER_TEMP/zitadel-bsr-sources\" ./cmd/zitadel-bsr-sources\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Setup the source verifier compiler" and
       (.uses // "" | startswith("actions/setup-go@")) and
@@ -231,8 +281,8 @@ check() {
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
-        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "go-input-restoration.json", "go-input-readback.json", "go-input-native/manifest.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
-          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
+        sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "verifier-tool-source.json", "selected-verifier-bootstrap/manifest.json", "verifier-bootstrap-capture.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "go-input-restoration.json", "go-input-readback.json", "go-input-native/manifest.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
+          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","verifier-reconstruction.json","verifier-tool-source.json","verifier-bootstrap-restored.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
     any(.jobs.validation.steps[]; (.with["job-results"] // "" | contains("needs.build-zitadel-linux.result"))) and
@@ -432,11 +482,21 @@ for mutation in \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.mod"; "missing/mod") else . end)' \
   '.jobs.changes.steps |= map(if .id == "filter" then .with.filters |= sub("server/go.sum"; "missing/sum") else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Setup the source verifier compiler"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Prepare original verifier compiler and private caches"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .run=(.run|sub("go1.27.3";"go1.26.10")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Observe actual verifier package compositions"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Observe actual verifier package compositions" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Observe actual verifier package compositions" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Observe actual verifier package compositions" then .run=(.run|sub("list -json";"list -e -json")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .run=(.run|sub("--verifier-bootstrap-cache";"--missing-cache")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Replay the complete retained identity build without networking" then .run=(.run|sub("--verifier-go";"--missing-compiler")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Setup the source verifier compiler" then .with["go-version-file"]="missing/go.mod" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= sort_by(if .name == "Setup the frozen identity Go compiler" then 0 else 1 end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .run=(.run | sub("CGO_ENABLED=0 go build"; "echo")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .run=(.run | sub("CGO_ENABLED=0"; "echo")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Build the complete native Linux service and embedded console" then .run=(.run | sub("--module-source-verifier"; "--missing-verifier")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify selected Go source retention"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify selected Go source retention" then .if="false" else . end)' \

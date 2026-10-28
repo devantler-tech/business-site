@@ -1114,6 +1114,7 @@ func sourceInputComponents() map[string]bool {
 		"selected-go-sources": false, "selected-generator-go-sources": false,
 		"go-graph-metadata": false, "selected-pnpm-sources": false,
 		"selected-bsr-sources": false, "selected-console-originals": false,
+		"selected-verifier-bootstrap": false,
 	}
 }
 
