@@ -342,6 +342,8 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache: false
+      - name: Build the pinned identity vulnerability checker
+        run: GOBIN="$RUNNER_TEMP/identity-analysis" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Verify selected Go source retention
         working-directory: server
         run: |
@@ -396,6 +398,8 @@ jobs:
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
         run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+      - name: Scan the actual frozen identity executable
+        run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" 2>&1'
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -676,6 +680,64 @@ jobs:
       - name: Verify default-off release authority and immutable caller wiring
         run: bash scripts/runtime-publisher-contract.test.sh
 
+  # Tool installation and quality observers have no database dependency.
+  test-portal-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Setup Node.js for portal quality
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frontend dependencies
+        working-directory: .
+        run: npm ci
+      - name: Verify locked checker provisioning and stalled-registry failure controls
+        working-directory: .
+        run: node --test scripts/portal-quality-provisioning.test.mjs
+      - name: Verify actual Go-template HTML quality and retained attribute failures
+        working-directory: .
+        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+      - name: Verify compatible embedded Go analysis and genuine finding rejection
+        working-directory: .
+        run: node --test scripts/portal-go-analyzer-quality.test.mjs
+      - name: Verify rendered portal targets and ordinary document passthrough
+        working-directory: .
+        run: bash scripts/portal-links-preprocess.test.sh
+      - name: Verify exact fictional credential examples and adjacent leak rejection
+        working-directory: .
+        run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
+      - name: Verify portal copy and API vocabulary with retained typo failures
+        working-directory: .
+        run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
+      - name: Verify package documentation with all selected Go files
+        working-directory: .
+        env:
+          GOBIN: ${{ runner.temp }}/portal-quality-tools
+        run: |
+          go install github.com/mgechev/revive@v1.16.0
+          PORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh
+      - name: Verify complete ordinary-suite composition
+        working-directory: .
+        run: node --test scripts/identity-cohorts.test.mjs
+
   test-portal-identity:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -713,43 +775,13 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      - name: Setup Node.js for portal quality
+      - name: Setup Node.js for cohort verification
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install frontend dependencies
-        working-directory: .
-        run: npm ci
-      - name: Verify locked checker provisioning and stalled-registry failure controls
-        working-directory: .
-        run: node --test scripts/portal-quality-provisioning.test.mjs
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
-      - name: Verify actual Go-template HTML quality and retained attribute failures
-        working-directory: .
-        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
-      - name: Verify compatible embedded Go analysis and genuine finding rejection
-        working-directory: .
-        run: node --test scripts/portal-go-analyzer-quality.test.mjs
-      - name: Verify rendered portal targets and ordinary document passthrough
-        working-directory: .
-        run: bash scripts/portal-links-preprocess.test.sh
-      - name: Verify exact fictional credential examples and adjacent leak rejection
-        working-directory: .
-        run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
-      - name: Verify portal copy and API vocabulary with retained typo failures
-        working-directory: .
-        run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
-      - name: Verify package documentation with all selected Go files
-        working-directory: .
-        env:
-          GOBIN: ${{ runner.temp }}/portal-quality-tools
-        run: |
-          go install github.com/mgechev/revive@v1.16.0
-          PORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
@@ -765,9 +797,6 @@ jobs:
           go mod verify
           test -z "$(gofmt -l .)"
           go vet ./...
-      - name: Verify complete ordinary-suite composition
-        working-directory: .
-        run: node --test scripts/identity-cohorts.test.mjs
       - name: List the complete compiled ordinary test inventory
         run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test broker and durable access boundary
@@ -783,7 +812,7 @@ jobs:
 
   # Separate setup/build budget; identity and quality must finish successfully first.
   test-combined-runtime:
-    needs: [test-portal-identity]
+    needs: [test-portal-quality, test-portal-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -951,6 +980,7 @@ jobs:
       - test-zitadel-source
       - build-zitadel-linux
       - test-portal-identity
+      - test-portal-quality
       - test-combined-runtime
     steps:
       - name: Check job results
@@ -967,6 +997,7 @@ jobs:
             ${{ needs.test-zitadel-source.result }}
             ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-quality.result }}
             ${{ needs.test-combined-runtime.result }}
 
   status:
@@ -985,6 +1016,7 @@ jobs:
       - test-zitadel-source
       - build-zitadel-linux
       - test-portal-identity
+      - test-portal-quality
       - test-combined-runtime
       - validation
       - publish-container
@@ -1003,6 +1035,7 @@ jobs:
             ${{ needs.test-zitadel-source.result }}
             ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-quality.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}

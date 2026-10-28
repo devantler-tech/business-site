@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +14,17 @@ import (
 
 // digest returns the complete literal-input SHA-256, never a Go content sum.
 func digest(body []byte) string { return fmt.Sprintf("%x", sha256.Sum256(body)) }
+
+// The native capture command must admit the catalogue shipped with its recipe.
+func TestFrozenCatalogueMatchesRecipe(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "..", "third_party", "zitadel-go-module-notices", "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := digest(body); got != frozenCatalogue {
+		t.Fatalf("checked-in catalogue is not admitted by the native command: got %s, policy %s", got, frozenCatalogue)
+	}
+}
 
 type selectionFixture struct {
 	build                    string

@@ -43,12 +43,18 @@ function assertRuntime(workflow) {
   const job = workflow.jobs["test-portal-identity"];
   assert.equal(job.if, undefined);
   const steps = job.steps;
+  const quality = workflow.jobs["test-portal-quality"];
+  assert.equal(quality.if, undefined);
+  assert.ok(quality["continue-on-error"] == null || quality["continue-on-error"] === false);
+  const qualitySteps = quality.steps;
   const runtime = workflow.jobs["test-combined-runtime"];
   assert.equal(runtime.if, undefined);
-  assert.deepEqual(runtime.needs, ["test-portal-identity"]);
+  assert.deepEqual(runtime.needs, ["test-portal-quality", "test-portal-identity"]);
   const packageSteps = runtime.steps;
   const node = steps.findIndex((s) => s.uses?.startsWith("actions/setup-node@"));
-  const install = steps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
+  const install = qualitySteps.findIndex((s) => s.run === "npm ci" && s["working-directory"] === ".");
+  const qualityNode = qualitySteps.findIndex(s => s.uses?.startsWith("actions/setup-node@"));
+  const qualityGo = qualitySteps.findIndex(s => s.uses?.startsWith("actions/setup-go@"));
   const go = steps.findIndex((s) => s.uses?.startsWith("actions/setup-go@"));
   const compilerInstall = packageSteps.findIndex((s) => s.run === "npm --prefix web ci" && s["working-directory"] === ".");
   const contactIntegration = steps.findIndex(
@@ -94,7 +100,9 @@ function assertRuntime(workflow) {
   const packageNode = packageSteps.findIndex(s => s.uses?.startsWith("actions/setup-node@"));
   assert.equal(packageSteps[packageNode]?.with?.["node-version-file"], ".node-version");
   assert.equal(packageSteps[packageGo]?.with?.["go-version-file"], "server/go.mod");
-  assert.ok(node >= 0 && install > node && packageInstall > packageNode && compilerInstall > packageInstall && build > compilerInstall && smoke > build);
+  assert.ok(node >= 0 && qualityNode >= 0 && qualityGo >= 0 && install > qualityNode && packageInstall > packageNode && compilerInstall > packageInstall && build > compilerInstall && smoke > build);
+  assert.equal(qualitySteps[qualityNode].with["node-version-file"], ".node-version");
+  assert.equal(qualitySteps[qualityGo].with["go-version-file"], "server/go.mod");
   assert.ok(
     go >= 0 &&
       database >= 0 &&
@@ -117,7 +125,7 @@ function assertRuntime(workflow) {
   );
   assert.ok(inventory > packageInstall && inventory < build, "verify compiled-module inventory before packaging");
   assert.ok(
-    browser > install,
+    browser > node,
     "run the actual served browser controls with explicitly configured Node before packaging",
   );
   assert.ok(extract > smoke && uploadIndex > extract, "test the extracted archive before upload");
@@ -125,7 +133,6 @@ function assertRuntime(workflow) {
   for (const index of [
     node,
     go,
-    install,
     database,
     host,
     ordinary,
@@ -137,6 +144,14 @@ function assertRuntime(workflow) {
       steps[index]["continue-on-error"] == null || steps[index]["continue-on-error"] === false,
       "required runtime failures cannot be ignored",
     );
+  }
+  for (const index of [qualityNode, qualityGo, install]) {
+    assert.equal(qualitySteps[index].if, undefined);
+    assert.ok(qualitySteps[index]["continue-on-error"] == null || qualitySteps[index]["continue-on-error"] === false);
+  }
+  for (const gate of [workflow.jobs.validation, workflow.jobs.status]) {
+    assert.ok(gate.needs.includes("test-portal-quality"));
+    assert.match(gate.steps[0].with["job-results"], /needs\.test-portal-quality\.result/);
   }
   for (const index of [packageGo, packageNode, packageInstall, compilerInstall, inventory, build, smoke, extract, uploadIndex]) {
     assert.equal(packageSteps[index].if, undefined, "required package steps cannot be conditional");

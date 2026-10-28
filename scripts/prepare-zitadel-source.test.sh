@@ -43,14 +43,27 @@ mkdir "$scratch/pristine"
 git -C "$scratch/upstream" --no-replace-objects archive "$pin" | tar -x -C "$scratch/pristine"
 mkdir -p "$scratch/upstream/console/src"
 git -C "$scratch/upstream" show "$pin:console/src/styles.scss" >"$scratch/upstream/console/src/styles.scss"
+for member in go.mod go.sum; do
+  git -C "$scratch/upstream" show "$pin:$member" >"$scratch/upstream/$member"
+  printf '\nFICTIONAL-PRIVATE-MODULE-MARKER\n' >>"$scratch/upstream/$member"
+done
 
 # Dirty/untracked input bytes must neither leak into output nor be overwritten.
 printf '\nLOCAL-ONLY-FICTIONAL-MARKER\n' >>"$scratch/upstream/console/src/styles.scss"
 printf 'FICTIONAL-PRIVATE-INPUT\n' >"$scratch/upstream/local-only.txt"
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-before"
+shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-before"
 bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after"
 cmp "$scratch/input-before" "$scratch/input-after"
+shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
+cmp "$scratch/modules-before" "$scratch/modules-after"
+# Independently collected with native Go 1.26.10 for the three selected patches,
+# without a toolchain change or unrelated selected dependency changes.
+test "$(shasum -a 256 "$scratch/prepared source/source/go.mod" | awk '{print $1}')" = \
+  d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50
+test "$(shasum -a 256 "$scratch/prepared source/source/go.sum" | awk '{print $1}')" = \
+  19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba
 test -f "$scratch/upstream/local-only.txt"
 test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
@@ -62,6 +75,18 @@ cp "$root/scripts/testdata/zitadel-metadata-profile/metadata_profile_test.go" \
 (cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
   go test -mod=readonly -count=1 ./internal/id -run '^TestCustomerMetadataProfile')
 rm -- "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
+
+# Compile the unchanged prepared interceptor with the real patched CSRF package.
+# Only unrelated instance/cookie-name policies are doubled in this focused probe.
+mkdir "$scratch/csrf-probe"
+cp "$root/scripts/testdata/zitadel-metadata-profile/login_csrf_test.go" "$scratch/csrf-probe/"
+{
+  printf 'package csrfprobe\nimport ("net/http"; "strings"; "github.com/gorilla/csrf")\n'
+  awk '/^func createCSRFInterceptor\(/ { active=1 } active {print} active && /^}/ {exit}' \
+    "$scratch/prepared source/source/internal/api/ui/login/login.go"
+} >"$scratch/csrf-probe/interceptor.go"
+printf 'module example.invalid/csrfprobe\n\ngo 1.26.0\n\nrequire github.com/gorilla/csrf v1.7.3\n' >"$scratch/csrf-probe/go.mod"
+(cd "$scratch/csrf-probe" && GOTOOLCHAIN=go1.26.10 go mod tidy && GOTOOLCHAIN=go1.26.10 go test -race -count=1 .)
 
 for path in \
   console/src/assets/ailerons.otf \
@@ -81,6 +106,11 @@ metadata=internal/id/sonyflake.go
 test "$(shasum -a 256 "$scratch/prepared source/source/$metadata" | awk '{print $1}')" = \
   74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc
 cp "$scratch/prepared source/source/$metadata" "$scratch/pristine/$metadata"
+test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/login.go" | awk '{print $1}')" = \
+  28da3dd3fd55002ea3239495cba504be6a355e9eed74133327aa564e634e812e
+cp "$scratch/prepared source/source/internal/api/ui/login/login.go" "$scratch/pristine/internal/api/ui/login/login.go"
+cp "$scratch/prepared source/source/go.mod" "$scratch/pristine/go.mod"
+cp "$scratch/prepared source/source/go.sum" "$scratch/pristine/go.sum"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
@@ -88,7 +118,8 @@ jq -e --arg pin "$pin" '
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
   (.removedFiles | length) == 4 and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
-  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go"]
+  .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
 # Never overwrite a completed output or a pre-existing directory/symlink.
@@ -134,7 +165,12 @@ mkdir "$scratch/metadata-bin"
 cat >"$scratch/metadata-bin/awk" <<'WRAPPER'
 #!/usr/bin/env bash
 for arg in "$@"; do
-  if [[ "$arg" == */internal/id/sonyflake.go ]]; then
+  if [[ "$arg" == */internal/api/ui/login/login.go && -n "${SOURCE_TEST_LOGIN_STATUS:-}" ]]; then
+    printf 'observed\n' >"$SOURCE_TEST_LOGIN_OBSERVED"
+    printf 'package login\n'
+    exit "$SOURCE_TEST_LOGIN_STATUS"
+  fi
+  if [[ "$arg" == */internal/id/sonyflake.go && -n "${SOURCE_TEST_METADATA_STATUS:-}" ]]; then
     printf 'package id\n'
     exit "${SOURCE_TEST_METADATA_STATUS:-42}"
   fi
@@ -146,6 +182,13 @@ for status in 42 0; do
   reject env PATH="$scratch/metadata-bin:$PATH" SOURCE_TEST_AWK="$real_awk" SOURCE_TEST_METADATA_STATUS="$status" \
     bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/partial-metadata-$status"
   test ! -e "$scratch/partial-metadata-$status"
+done
+for status in 42 0; do
+  reject env PATH="$scratch/metadata-bin:$PATH" SOURCE_TEST_AWK="$real_awk" SOURCE_TEST_LOGIN_STATUS="$status" \
+    SOURCE_TEST_LOGIN_OBSERVED="$scratch/login-observed-$status" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/partial-login-$status"
+  test "$(cat "$scratch/login-observed-$status")" = observed
+  test ! -e "$scratch/partial-login-$status"
 done
 
 # A failed receipt-input read cannot be hidden by a successful JSON writer.

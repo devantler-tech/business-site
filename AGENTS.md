@@ -67,14 +67,22 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
-  without the unadmitted Ailerons assets or JSONPath machine-ID selector. Configured
-  metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
+  without the unadmitted Ailerons assets or JSONPath machine-ID selector. It also
+  applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
+  1.7.3 dependency profile, preserving the upstream key-size limit and other
+  selections. The login interceptor marks only explicitly configured plaintext
+  mode for the patched CSRF library; production TLS checks stay enabled.
+  Configured metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
   Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.
 - `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
   CI retains build diagnostics only; successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+  The separately compiled pinned vulnerability checker analyzes the actual Linux
+  binary against the official database; preserve its failure status and retained
+  text diagnostics. Both output streams enter the retained report without changing
+  the checker exit status. Its verdict is not full admission or deployed acceptance.
 - `scripts/zitadel-source-bundle.go` is an explicit, otherwise inert source-input
   snapshot/archive verifier. Its prepared-source operation admits only the complete
   frozen tree after API serialization, preserving empty files and executable modes.

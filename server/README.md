@@ -437,6 +437,14 @@ Node 24 and runs all six controls unconditionally; its runtime contract rejects
 a missing, conditional or error-tolerant browser check. Moving these controls to
 their own runtime does not make them optional.
 
+CI gives quality observers and database tests independent ten-minute jobs.
+The quality job owns the locked npm install, checker controls and cohort-verifier
+self-tests. The database job needs only Go, Node's built-in modules and its
+disposable PostgreSQL service; its compiled inventory, both actual cohorts and
+complete evidence join stay together. Packaging has its own ten-minute budget
+and requires both jobs to succeed. Both required aggregates include all three
+stages; no package deadline, test, observer or failure propagation is relaxed.
+
 The constructor test also creates and drops its own uniquely named fixture database,
 uses verified TLS through a synthetic loopback database gateway and discovers a
 synthetic TLS broker; complete dependencies must still leave every private route closed.

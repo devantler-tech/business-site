@@ -140,9 +140,11 @@ test('a confined non-root image is supplied for the actual runtime package', () 
 
 /** Reject skipped image validation, broad artifacts or incomplete success aggregation. */
 function assertCI(w) {
+  assert.equal(w.jobs['test-portal-quality'].if, undefined);
+  assert.ok(w.jobs['test-portal-quality']['continue-on-error'] == null || w.jobs['test-portal-quality']['continue-on-error'] === false);
   assert.equal(w.jobs['test-portal-identity'].if, undefined);
   assert.equal(w.jobs['test-combined-runtime'].if, undefined);
-  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-identity']);
+  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-quality', 'test-portal-identity']);
   const steps = w.jobs['test-combined-runtime'].steps;
   const build = steps.findIndex(s => s.run?.includes('docker build --file Dockerfile'));
   const smoke = steps.findIndex(s => s.run === 'node scripts/container-smoke.test.mjs business-site:test runtime-dist');
@@ -179,6 +181,9 @@ test('CI must exercise and retain the actual container before distribution', asy
   const w = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
   assertCI(w);
   for (const mutate of [
+    w => { w.jobs['test-portal-quality'].if = 'false'; },
+    w => { w.jobs['test-portal-quality']['continue-on-error'] = true; },
+    w => { w.jobs['test-combined-runtime'].needs = ['test-portal-identity']; },
     w => { w.jobs['test-portal-identity'].if = 'false'; },
     w => { w.jobs['test-combined-runtime'].if = 'false'; },
     w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },

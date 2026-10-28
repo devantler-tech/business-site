@@ -19,23 +19,37 @@ const commands = [
   "node ../scripts/identity-cohorts.mjs",
 ];
 
+/** The observer's self-test needs npm; actual database evidence does not. */
+const commandJob = (w, index) => w.jobs[index === 0 ? "test-portal-quality" : "test-portal-identity"];
+
 /** Require every actual cohort command once, unconditionally and in execution order. */
 function checkWorkflow(w) {
   const job = w.jobs["test-portal-identity"];
+  const quality = w.jobs["test-portal-quality"];
+  assert.ok(quality);
+  assert.equal(quality.if, undefined);
+  assert.ok(quality["continue-on-error"] == null || quality["continue-on-error"] === false);
+  assert.deepEqual(w.jobs["test-combined-runtime"].needs, ["test-portal-quality", "test-portal-identity"]);
   assert.equal(job.if, undefined);
   assert.ok(job["continue-on-error"] == null || job["continue-on-error"] === false);
   let previous = job.steps.findIndex((s) => s.run === "bash scripts/check-go-contact.sh");
   assert.ok(previous >= 0);
   for (const [i, command] of commands.entries()) {
-    const steps = job.steps.filter((s) => s.run === command);
+    const owner = commandJob(w, i);
+    const steps = [quality, job].flatMap((portal) => portal.steps).filter((s) => s.run === command);
     assert.equal(steps.length, 1, `exactly one required invocation: ${command}`);
     const step = steps[0];
-    const index = job.steps.indexOf(step);
-    assert.ok(index > previous);
-    previous = index;
+    const index = owner.steps.indexOf(step);
+    if (i === 0) {
+      const install = quality.steps.findIndex(s => s.run === "npm ci");
+      assert.ok(install >= 0 && index > install);
+    } else {
+      assert.ok(index > previous);
+      previous = index;
+    }
     assert.equal(step.if, undefined);
     assert.ok(step["continue-on-error"] == null || step["continue-on-error"] === false);
-    assert.equal(step["working-directory"] ?? job.defaults?.run?.["working-directory"], i === 0 ? "." : "server");
+    assert.equal(step["working-directory"] ?? owner.defaults?.run?.["working-directory"], i === 0 ? "." : "server");
     if (i === 2 || i === 3) assert.equal(step.shell, "bash", "tee must preserve go failure through pipefail");
   }
 }
@@ -46,13 +60,30 @@ for (let i = 0; i < commands.length; i++) {
     [
       "omitted",
       (w, step) => {
-        w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter((s) => s !== step);
+        const job = commandJob(w, i);
+        job.steps = job.steps.filter((s) => s !== step);
       },
     ],
     [
       "duplicated",
       (w, step) => {
-        w.jobs["test-portal-identity"].steps.push(structuredClone(step));
+        commandJob(w, i).steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "duplicated in the other portal job",
+      (w, step) => {
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "moved to the other portal job",
+      (w, step) => {
+        const owner = commandJob(w, i);
+        owner.steps = owner.steps.filter((s) => s !== step);
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(step);
       },
     ],
     [
@@ -76,7 +107,7 @@ for (let i = 0; i < commands.length; i++) {
   ])
     test(`workflow refuses ${fault} cohort boundary ${i}`, () => {
       const changed = structuredClone(workflow);
-      const step = changed.jobs["test-portal-identity"].steps.find((s) => s.run === commands[i]);
+      const step = commandJob(changed, i).steps.find((s) => s.run === commands[i]);
       assert.ok(step);
       mutate(changed, step);
       assert.throws(() => checkWorkflow(changed));

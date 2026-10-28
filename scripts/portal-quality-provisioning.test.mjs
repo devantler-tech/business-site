@@ -21,7 +21,7 @@ const lock = JSON.parse(readFileSync('package-lock.json'));
 const workflow = load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
 
 function assertProvisioning(manifest, lock, workflow) {
-  const steps = workflow.jobs['test-portal-identity'].steps;
+  const steps = workflow.jobs['test-portal-quality'].steps;
   const install = steps.findIndex(s => s.run === 'npm ci');
   assert.ok(install >= 0);
   const witness = steps.findIndex(s => s.run === 'node --test scripts/portal-quality-provisioning.test.mjs');
@@ -50,10 +50,10 @@ for (const [name, mutate] of [
   ['stale root lock', (_, l) => { l.packages[''].devDependencies.htmlhint = '1.9.1'; }],
   ['stale installed lock', (_, l) => { l.packages['node_modules/htmlhint'].version = '1.9.1'; }],
   ['missing integrity', (_, l) => { delete l.packages['node_modules/htmlhint'].integrity; }],
-  ['missing fault control', (_, __, w) => { w.jobs['test-portal-identity'].steps = w.jobs['test-portal-identity'].steps.filter(s => !s.run?.includes('portal-quality-provisioning')); }],
-  ['conditional fault control', (_, __, w) => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('portal-quality-provisioning')).if = 'false'; }],
-  ['ignored fault control', (_, __, w) => { w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('portal-quality-provisioning'))['continue-on-error'] = true; }],
-  ['wrong fault-control directory', (_, __, w) => { delete w.jobs['test-portal-identity'].steps.find(s => s.run?.includes('portal-quality-provisioning'))['working-directory']; }],
+  ['missing fault control', (_, __, w) => { w.jobs['test-portal-quality'].steps = w.jobs['test-portal-quality'].steps.filter(s => !s.run?.includes('portal-quality-provisioning')); }],
+  ['conditional fault control', (_, __, w) => { w.jobs['test-portal-quality'].steps.find(s => s.run?.includes('portal-quality-provisioning')).if = 'false'; }],
+  ['ignored fault control', (_, __, w) => { w.jobs['test-portal-quality'].steps.find(s => s.run?.includes('portal-quality-provisioning'))['continue-on-error'] = true; }],
+  ['wrong fault-control directory', (_, __, w) => { delete w.jobs['test-portal-quality'].steps.find(s => s.run?.includes('portal-quality-provisioning'))['working-directory']; }],
 ]) {
   test(`locked provisioning rejects ${name}`, () => {
     const inputs = [manifest, lock, workflow].map(value => structuredClone(value));

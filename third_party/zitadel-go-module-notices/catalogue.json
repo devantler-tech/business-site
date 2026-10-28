@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
   "metadataProfile": "machine-id-no-jsonpath-v1",
-  "goModSha256": "e67d24ece452f947049ecf12bfa19542881d02c41686ce6f26e10a64fa0bea5a",
-  "goSumSha256": "48c0e5066bb716329885e25c059123814499b79220fd8d04ae7545121517a79a",
+  "goModSha256": "d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50",
+  "goSumSha256": "19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba",
   "modules": [
     {
       "original": {
@@ -1690,16 +1690,16 @@
     {
       "original": {
         "Path": "github.com/go-jose/go-jose/v4",
-        "Version": "v4.1.4",
-        "Sum": "h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=",
+        "Version": "v4.1.6",
+        "Sum": "h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=",
         "GoModSum": "h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/go-jose/go-jose/v4",
-        "Version": "v4.1.4",
-        "Sum": "h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=",
+        "Version": "v4.1.6",
+        "Sum": "h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=",
         "GoModSum": "h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=",
         "Main": false,
         "Replace": null
@@ -2217,16 +2217,16 @@
     {
       "original": {
         "Path": "github.com/gorilla/csrf",
-        "Version": "v1.7.2",
-        "Sum": "h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=",
+        "Version": "v1.7.3",
+        "Sum": "h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0=",
         "GoModSum": "h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/gorilla/csrf",
-        "Version": "v1.7.2",
-        "Sum": "h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=",
+        "Version": "v1.7.3",
+        "Sum": "h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0=",
         "GoModSum": "h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=",
         "Main": false,
         "Replace": null
@@ -5834,16 +5834,16 @@
     {
       "original": {
         "Path": "golang.org/x/net",
-        "Version": "v0.61.0",
-        "Sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+        "Version": "v0.62.0",
+        "Sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
         "GoModSum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "golang.org/x/net",
-        "Version": "v0.61.0",
-        "Sum": "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=",
+        "Version": "v0.62.0",
+        "Sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=",
         "GoModSum": "h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=",
         "Main": false,
         "Replace": null
