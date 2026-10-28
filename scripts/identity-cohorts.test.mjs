@@ -36,7 +36,7 @@ function checkWorkflow(w) {
   assert.ok(previous >= 0);
   for (const [i, command] of commands.entries()) {
     const owner = commandJob(w, i);
-    const steps = owner.steps.filter((s) => s.run === command);
+    const steps = [quality, job].flatMap((portal) => portal.steps).filter((s) => s.run === command);
     assert.equal(steps.length, 1, `exactly one required invocation: ${command}`);
     const step = steps[0];
     const index = owner.steps.indexOf(step);
@@ -68,6 +68,22 @@ for (let i = 0; i < commands.length; i++) {
       "duplicated",
       (w, step) => {
         commandJob(w, i).steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "duplicated in the other portal job",
+      (w, step) => {
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "moved to the other portal job",
+      (w, step) => {
+        const owner = commandJob(w, i);
+        owner.steps = owner.steps.filter((s) => s !== step);
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(step);
       },
     ],
     [
