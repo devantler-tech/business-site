@@ -48,7 +48,7 @@ These framework-neutral sources are also used by the isolated Svelte Home candid
 server-only company/offer configuration and permanent customer invitation are documented in `web/README.md`.
 The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
 the existing ranking implementation and complete dated snapshot with Astro. It preserves
-the curated six-tool output, compact public website example, research disclosure and old bookmarks
+the curated six-tool output, compact public website example, closed historical links and old bookmarks
 without changing the source-owned publisher. Its enabled/false/unset and actual snapshot-path
 checks are included in `scripts/check-svelte-frontend.sh`.
 Prices are introductory guides, not an automatic checkout:
@@ -102,8 +102,9 @@ No production account or guest invitation code is used. Built-page checks verify
 website example and both rollback thumbnails, their readable larger images and localized visit action.
 
 Home puts plain-language quality and security highlights before prices and one compact public website example.
-Projects leads with six maintained public tools, followed by the compact website example, hosting
-and research. Home avoids source-code links; Projects offers controlled public project destinations
+Projects leads with six maintained public tools, followed by the compact website example and hosting.
+Earlier project references stay in a closed native disclosure outside the section index.
+Home avoids source-code links; Projects offers controlled public project destinations
 and wider-work navigation, not raw code files or workflows. The journal and existing technical documentation retain their own detail. The copy
 describes verified practices rather than universal coverage, certification, vulnerability-free
 software or unlimited maintenance. Project-specific checks and ongoing support remain scoped.
@@ -146,12 +147,12 @@ tracked on #5. The disabled Codex chat schedule is unrelated and remains disable
 
 Every build runs ranking, rollout and publisher-boundary controls plus emitted bilingual-page
 checks. CI builds enabled, explicit false and entirely unset states before uploading normal
-production output. Existing quality/security, prices, inquiry, theme, research and image checks
+production output. Existing quality/security, prices, inquiry, theme, historical-bookmark and image checks
 remain active in the new presentation.
 
 The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
 `/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
-distinguishes maintained tools, a public website example and research without inventing client outcomes. The journal and technical
+distinguishes maintained tools and a public website example without inventing client outcomes. The journal and technical
 pages reuse the business navigation, typography, colors, footer and appearance control through
 Starlight component overrides. Their search, sidebar, RSS and historical articles remain available.
 Only Starlight Blog's preview cards receive whole-card mouse navigation. Each native title link
@@ -183,11 +184,13 @@ output before uploading its preview. The source-owned publisher deploys this rep
 main revision. Presentation rollback requires a reviewed source revert and publication.
 
 Projects presents six stars-ranked maintained tools, followed by one compact public website example
-and earlier research. KSail's product introduction explains setup, deployment and operation rather
+and hosting. KSail's product introduction explains setup, deployment and operation rather
 than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
-with private details masked and the redaction disclosed in both languages. Expandable English
-research and diagrams are sourced from `src/content/docs/projects/completed.mdx`. The legacy
-active/completed URLs redirect to the public catalogue or research section of `/projects/`; the
+with private details masked and the redaction disclosed in both languages. Historical English
+references and diagrams remain in the closed “Earlier project links” disclosure, without a feature
+heading, hero or section-index link. Astro recovery renders the original
+`src/content/docs/projects/completed.mdx` there. The legacy
+active/completed URLs redirect to the public catalogue or historical disclosure of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
 The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
@@ -354,7 +357,7 @@ Keep this lane single-flight—maintain or measure the current post before start
 ## Public product catalogue
 
 Normal Projects output selects six maintained public tools as described under Featured portfolio,
-alongside the public website example, hosting and research. The old “Built in the open” shelf of
+alongside the public website example and hosting, with historical links available separately. The old “Built in the open” shelf of
 tools, libraries, templates and source-available inspiration appears only when both
 `FEATURE_CLIENT_PORTFOLIO` and `FEATURE_FEATURED_PORTFOLIO` are explicitly false.
 `src/data/public-products.json` holds the full curated bilingual descriptions. The

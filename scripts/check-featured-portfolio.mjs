@@ -14,6 +14,7 @@ for (const prefix of ['', 'da/']) {
   if (!enabled) continue;
   for (const html of [home, projects]) {
     const visibleText = readerText(html);
+    assert.doesNotMatch(visibleText, /earlier research|tidligere forskning|Research & completed work|Forskning og afsluttede/i, 'Home and Projects focus on professional work rather than promoting academic research');
     assert.doesNotMatch(visibleText, /family|familie|Wedding App|Anonymized|Anonymiseret/i, 'The business presentation omits personal framing and anonymous demos');
     assert.equal((html.match(/data-work-example="coaching"/g) ?? []).length, 1);
     assert.match(html, /data-work-example="coaching"[^>]*data-compact-work/, 'The public website is a compact example, not a dominant case-study feature');
@@ -43,6 +44,11 @@ for (const prefix of ['', 'da/']) {
   assert.doesNotMatch(ksail, /Assistant start screen|assistentens startskærm/i, 'Do not publish the rejected Assistant start screen');
   assert.doesNotMatch(ksail, /ksail-cli-dark|KSail CLI/);
   for (const id of ['open-title', 'family-title', 'technical-projects', 'research', 'engineering-checks', '-self-hosted-personal-apps']) assert.ok(projects.includes(`id="${id}"`));
+  assert.doesNotMatch(projects, /href="#research"|<section\b[^>]*aria-labelledby="research-title"/, 'Academic work is not a promoted section');
+  const archive = projects.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
+  assert.ok(archive, 'Earlier project links preserve real historical destinations');
+  assert.doesNotMatch(archive[1], /\bopen(?:\s|=|$)/);
+  assert.ok(archive[2].includes(prefix ? 'Tidligere projektlinks' : 'Earlier project links'));
   assert.ok(projects.includes('href="/pdfs/thesis.pdf"'));
   assert.doesNotMatch(projects, /<script[^>]*>[\s\S]*?(?:api\.github\.com|fetch\()[\s\S]*?<\/script>/, 'No visitor-side GitHub calls');
 }

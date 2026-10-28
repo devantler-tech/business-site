@@ -2,7 +2,7 @@
 import { Image } from 'astro:assets';
 import { getEntry, render } from 'astro:content';
 import workflows from '../../assets/editorial/workflows.webp';
-import research from '../../assets/editorial/data-research.webp';
+import { portfolioText } from './portfolio-content';
 import { copy, type Locale } from './content';
 import { supporting } from './supporting';
 import PublicProductCard from './PublicProductCard.astro';
@@ -12,6 +12,7 @@ interface Props { locale: Locale }
 const { locale } = Astro.props;
 const t = supporting[locale];
 const home = copy[locale];
+const text = portfolioText[locale];
 const featured = publicProducts.slice(0, 6);
 const additional = publicProducts.slice(6);
 const engineeringSources = [
@@ -36,7 +37,7 @@ if (!completed) throw new Error('The research catalogue is missing');
 const { Content: ResearchContent } = await render(completed);
 ---
 <nav class="project-index" aria-label={t.projectIndex}>
-  <a href="#open-title">{t.openTitle}</a><a href="#family-title">{t.familyTitle}</a><a href="#research">{t.researchTitle}</a>
+  <a href="#open-title">{t.openTitle}</a><a href="#family-title">{t.familyTitle}</a>
 </nav>
 <section aria-labelledby="open-title">
   <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span>
@@ -57,14 +58,12 @@ const { Content: ResearchContent } = await render(completed);
     <p>{t.platformText}</p><p class="note">{t.platformScope}</p>
   </article>
 </section>
-<section id="research" aria-labelledby="research-title">
-  <p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{t.researchTitle}</h2>
-  <article class="feature">
-    <div><h3>{t.researchProject}</h3><p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{t.thesis} <span aria-hidden="true">↗</span></a></div>
-    <Image src={research} alt="" width={760} format="webp" />
-  </article>
-  <details><summary>{t.researchExpand}</summary><div class="catalogue" lang="en"><ResearchContent /></div></details>
-</section>
+<details id="research"><summary>{text.earlierLinks}</summary>
+  <div class="catalogue"><span class="legacy-anchor" id="research-title" aria-hidden="true"></span>
+    <p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{t.thesis} <span aria-hidden="true">↗</span></a>
+    <div lang="en"><ResearchContent /></div>
+  </div>
+</details>
 <script is:inline data-project-reveal>
   const revealTarget = () => {
     let id;
@@ -91,11 +90,6 @@ const { Content: ResearchContent } = await render(completed);
   .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 2rem; }
   .additional { padding: 0 1.25rem 1.25rem; margin-top: 0; }
   .count { margin-left: .6rem; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); align-items: center; gap: 3rem; margin-top: 2.5rem; }
-  .feature + .feature { border-top: 1px solid var(--line); padding-top: 2.5rem; }
-  .feature p { margin-block: 1rem; }
-  .feature img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
-  .feature > img { aspect-ratio: 16 / 9; object-fit: cover; }
   figure { margin: 0; } figcaption, .note { font-size: .8rem; color: var(--muted); margin-top: .75rem; }
   .family { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; margin-top: 2rem; }
   .hosting-project { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); max-width: 760px; }
@@ -115,6 +109,6 @@ const { Content: ResearchContent } = await render(completed);
   .catalogue :global(h2 img) { display: none; }
   .catalogue :global(a) { color: var(--accent); overflow-wrap: anywhere; }
   .catalogue :global(.sl-anchor-link) { display: none; }
-  @media (max-width: 760px) { section { padding-block: 2rem; } .feature, .family { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue { padding-inline: 1rem; } .shelf-heading { grid-template-columns: 1fr; } .shelf-heading img { display: none; } }
+  @media (max-width: 760px) { section { padding-block: 2rem; } .family { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue { padding-inline: 1rem; } .shelf-heading { grid-template-columns: 1fr; } .shelf-heading img { display: none; } }
   @media (max-width: 600px) { .product-grid, .engineering-proof ul { grid-template-columns: 1fr; } .additional { padding-inline: .75rem; } }
 </style>

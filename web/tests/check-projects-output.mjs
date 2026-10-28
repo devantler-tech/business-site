@@ -31,6 +31,11 @@ for (const locale of ["en", "da"]) {
   assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
   assert.ok(html.includes('href="/pdfs/thesis.pdf"'));
   assert.ok(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>[\s\S]*?id="-data-product-"/.test(html), "research remains in a native disclosure");
+  assert.ok(!/href="#research"|<section\b[^>]*aria-labelledby="research-title"/.test(html), "Research is not promoted in the section index or as a feature");
+  const archive = html.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
+  assert.ok(archive, "Historical bookmarks retain a native disclosure");
+  assert.ok(!/\bopen(?:\s|=|$)/.test(archive[1]), "Historical references start closed");
+  assert.ok(archive[2].includes(locale === "da" ? "Tidligere projektlinks" : "Earlier project links"));
   assert.ok(!/Family project|family member|Familieprojekt|familieprojekter|Wedding App|github\.com\/[^"]+\/blob\//.test(html));
   assert.equal(/mailto:|CVR|46830385/.test(html),process.env.FEATURE_COMPANY_IDENTITY === "true");
   assert.ok(!/sveltekit.start|type="module"/.test(html));
