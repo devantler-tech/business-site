@@ -98,13 +98,16 @@ return {url:location.href, ready:document.readyState, text:document.body.innerTe
   resources:performance.getEntriesByType('resource').map(e=>e.name)};`
 
 type browserDriver struct {
-	ctx               context.Context
-	client            *http.Client
-	session, category string
-	mfaDeferred       bool
-	lastPage          browserPage
-	sessionIDLength   int
-	versionPresent    bool
+	ctx                                                     context.Context
+	client                                                  *http.Client
+	session, category                                       string
+	mfaDeferred                                             bool
+	lastPage                                                browserPage
+	sessionIDLength                                         int
+	versionPresent                                          bool
+	providerStage                                           string
+	providerSetupPhase, providerRequest, providerHTTPStatus int
+	lastProvider                                            browserProviderPage
 }
 
 // browserHTTPClient bounds driver requests beyond the configured page-load
@@ -290,7 +293,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 				// Only fixed labels, counts and booleans survive a failed observation. Never
 				// retain DOM text, URLs, form values or driver diagnostics.
 				page := d.lastPage
-				b, err := json.MarshalIndent(map[string]any{"result": "incomplete", "stage": phase, "category": d.category, "sessionIdLength": d.sessionIDLength, "browserVersionPresent": d.versionPresent, "usernameForm": page.Username, "passwordForm": page.Password, "authenticatedConsole": page.Console, "optionalMFAOffered": page.OptionalMFA, "optionalMFADeferred": d.mfaDeferred, "selectedFontLoaded": page.FaceLoaded, "fontsReady": page.FontsReady, "failedFontCount": len(page.FailedFonts), "secureContext": page.SecureContext, "webCrypto": page.WebCrypto}, "", "  ")
+				b, err := json.MarshalIndent(map[string]any{"result": "incomplete", "stage": phase, "category": d.category, "providerStage": d.providerStage, "providerSetupPhase": d.providerSetupPhase, "providerRequest": d.providerRequest, "providerHTTPStatus": d.providerHTTPStatus, "providerCount": d.lastProvider.Count, "providerGlyphs": d.lastProvider.Glyphs, "providerLabels": d.lastProvider.Labels, "providerTargets": d.lastProvider.Targets, "providerThemeReady": d.lastProvider.ThemeReady, "providerResources": d.lastProvider.Resources, "providerKeyboard": d.lastProvider.Keyboard, "sessionIdLength": d.sessionIDLength, "browserVersionPresent": d.versionPresent, "usernameForm": page.Username, "passwordForm": page.Password, "authenticatedConsole": page.Console, "optionalMFAOffered": page.OptionalMFA, "optionalMFADeferred": d.mfaDeferred, "selectedFontLoaded": page.FaceLoaded, "fontsReady": page.FontsReady, "failedFontCount": len(page.FailedFonts), "secureContext": page.SecureContext, "webCrypto": page.WebCrypto}, "", "  ")
 				if err == nil {
 					err = imageWrite(output, "browser-incomplete.json", append(b, '\n'), 0600)
 				}
@@ -558,15 +561,17 @@ func browserProviderAdmit(p browserProviderPage, kind, theme string) bool {
 const browserProviderSetup = `
 const done=arguments[arguments.length-1];
 (async()=>{
- let phase=0;
+ let phase=0,request=0,status=0;
  try {
   if(location.origin!=='http://fixture.localhost:8080'||!location.pathname.startsWith('/ui/console/'))throw 0;
   const token=JSON.parse(sessionStorage.getItem('zitadel:access_token'));
   if(typeof token!=='string'||!token||token.length>16384)throw 0;
   const api=async(method,path,body)=>{
+   request++;status=0;
    const timer=new AbortController();const stop=setTimeout(()=>timer.abort(),2000);
    try {
     const response=await fetch(path,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',redirect:'error',signal:timer.signal});
+    status=Number.isInteger(response.status)?response.status:0;
     if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw 0;
     const text=await response.text();if(!text||text.length>1048576)throw 0;const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw 0;return value;
    }finally{clearTimeout(stop)}
@@ -603,8 +608,8 @@ const done=arguments[arguments.length-1];
   const valid=list=>Array.isArray(list)&&list.length===2&&ids.every((id,i)=>list.some(p=>p.idpId===id&&p.idpName===providers[i][1]));
   after=(await api('GET','/admin/v1/policies/login')).policy;
   if(String(read.details?.totalResult)!=='2'||!valid(read.result)||!valid(after.idps)||JSON.stringify(normalize(after))!==JSON.stringify(intended)||stable(after)!==stableBefore)throw 0;
-  done({complete:true,count:ids.length,phase:4,ids});
- }catch{done({complete:false,count:0,phase})}
+  done({complete:true,count:ids.length,phase:4,ids,request,status});
+ }catch{done({complete:false,count:0,phase,request,status})}
 })();`
 
 // Read computed native glyphs, labels and targets. No DOM/style/event injection
@@ -660,6 +665,7 @@ func (d *browserDriver) providerPage(kind, theme string) (browserProviderPage, e
 		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserProviderObservation, "args": []string{kind, theme}}, &p); err != nil {
 			return p, err
 		}
+		d.lastProvider = p
 		if browserProviderAdmit(p, kind, theme) {
 			return p, nil
 		}
@@ -673,7 +679,19 @@ func (d *browserDriver) providerPage(kind, theme string) (browserProviderPage, e
 
 // Provider setup and presentation have their own bounded 120s phase after the
 // unchanged 100s operator journey. They never widen the service network namespace.
-func (d *browserDriver) providerPresentation(output string) ([]browserProviderCase, error) {
+func (d *browserDriver) providerPresentation(output string) (cases []browserProviderCase, result error) {
+	defer func() {
+		if result != nil && d.session != "" {
+			old, category := d.ctx, d.category
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			d.ctx = ctx
+			_, _ = d.capture(output, "provider-incomplete", browserPage{})
+			cancel()
+			d.ctx = old
+			d.category = category
+		}
+	}()
+	d.providerStage = "setup"
 	if err := d.call("POST", "/timeouts", map[string]int{"implicit": 0, "pageLoad": 20000, "script": 20000}, nil); err != nil {
 		return nil, err
 	}
@@ -682,32 +700,49 @@ func (d *browserDriver) providerPresentation(output string) ([]browserProviderCa
 		Count    int      `json:"count"`
 		Phase    int      `json:"phase"`
 		IDs      []string `json:"ids"`
+		Request  int      `json:"request"`
+		Status   int      `json:"status"`
 	}
 	if err := d.call("POST", "/execute/async", map[string]any{"script": browserProviderSetup, "args": []any{}}, &setup); err != nil {
 		return nil, err
 	}
-	if !setup.Complete || setup.Count != 2 || setup.Phase != 4 || len(setup.IDs) != 2 || setup.IDs[0] == setup.IDs[1] || !regexp.MustCompile("^[0-9]{1,30}$").MatchString(setup.IDs[0]) || !regexp.MustCompile("^[0-9]{1,30}$").MatchString(setup.IDs[1]) {
+	if setup.Phase >= 0 && setup.Phase <= 4 {
+		d.providerSetupPhase = setup.Phase
+	}
+	if setup.Request >= 0 && setup.Request <= 11 {
+		d.providerRequest = setup.Request
+	}
+	if setup.Status >= 0 && setup.Status <= 599 {
+		d.providerHTTPStatus = setup.Status
+	}
+	if !setup.Complete || setup.Count != 2 || setup.Phase != 4 || setup.Request != 11 || setup.Status != 200 || len(setup.IDs) != 2 || setup.IDs[0] == setup.IDs[1] || !regexp.MustCompile("^[0-9]{1,30}$").MatchString(setup.IDs[0]) || !regexp.MustCompile("^[0-9]{1,30}$").MatchString(setup.IDs[1]) {
 		return nil, fmt.Errorf("fictional provider setup incomplete")
 	}
-	cases := []browserProviderCase{}
+	cases = []browserProviderCase{}
 	capture := func(kind, theme string) error {
+		d.providerStage = kind + "-" + theme
 		p, err := d.providerPage(kind, theme)
 		if err != nil {
 			return err
 		}
 		if kind == "login" || kind == "registration" {
+			d.providerStage = kind + "-" + theme + "-keyboard"
+			d.lastProvider.Keyboard = false
 			if err = d.providerTab(); err != nil {
 				return err
 			}
+			d.lastProvider.Keyboard = true
 		}
 		screen, err := d.capture(output, "provider-"+kind+"-"+theme, browserPage{})
 		if err != nil {
 			return err
 		}
 		if kind == "table" {
+			d.lastProvider.Targets = false
 			if err = d.providerTableRoutes(setup.IDs); err != nil {
 				return err
 			}
+			d.lastProvider.Targets = true
 		}
 		cases = append(cases, browserProviderCase{kind, theme, p.Count, p.Glyphs, p.Labels, p.Targets, p.ThemeReady, p.Resources, p.Keyboard, screen.Screenshot})
 		return nil
@@ -880,6 +915,10 @@ func (d *browserDriver) closeSession() error {
 // local edit forms, rather than inferred from unrelated removal buttons.
 func (d *browserDriver) providerTableRoutes(ids []string) error {
 	for i, name := range []string{"Fixture Google", "Fixture GitHub"} {
+		d.providerStage = "table-navigation-google"
+		if i == 1 {
+			d.providerStage = "table-navigation-github"
+		}
 		var element map[string]string
 		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const rows=[...document.querySelectorAll('cnsl-idp-table tr')].filter(r=>r.innerText.includes(arguments[0]));return rows.length===1?rows[0]:null;`, "args": []string{name}}, &element); err != nil {
 			return err

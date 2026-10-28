@@ -40,11 +40,11 @@ for(const mode of ['positive','bad-duration','bad-boolean','http-error','malform
   }else if(path==='/admin/v1/policies/login/idps'){assert.ok(ids.includes(body.idpId));linked.push(body.idpId);}
   else if(path==='/admin/v1/policies/login/idps/_search')response={details:{totalResult:'2'},result:linked.slice(0,mode==='missing-provider'?1:2).map((idpId,i)=>({idpId,idpName:['Fixture Google','Fixture GitHub'][i]}))};
   else assert.fail('unexpected API request');
-  return {ok:mode!=='http-error',headers:{get:()=> 'application/json'},text:async()=>mode==='malformed-body'?'incomplete JSON':JSON.stringify(response)};
+  return {ok:mode!=='http-error',status:mode==='http-error'?403:200,headers:{get:()=> 'application/json'},text:async()=>mode==='malformed-body'?'incomplete JSON':JSON.stringify(response)};
  };
  const result=await new Promise(resolve=>setup(resolve));
  assert.equal(result.complete,mode==='positive',`${mode} returned wrong verdict`);
- if(mode==='positive'){assert.equal(result.count,2);assert.equal(result.phase,4);assert.deepEqual(result.ids,ids);assert.equal(requests.length,11);}
+ if(mode==='positive'){assert.equal(result.count,2);assert.equal(result.phase,4);assert.equal(result.request,11);assert.equal(result.status,200);assert.deepEqual(result.ids,ids);assert.equal(requests.length,11);}
  else{assert.equal(result.count,0);assert.equal(JSON.stringify(result).includes('fictional-unit-bearer'),false);}
 }
 console.log('PASS: actual observation-script resource controls and ten closed fixture API cases (unit inputs only)');
