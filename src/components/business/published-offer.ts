@@ -133,12 +133,12 @@ export const publishedOffer = {
   "clientCopy": {
     "en": {
       "qualityScope": "Checks are chosen for each project; they are not a certification or a promise of flawless software. Maintenance, backups and support are agreed separately.",
-      "portfolioBridge": "Websites, web apps, reusable tools and earlier research. Explore the full range of work behind Devantler Tech.",
+      "portfolioBridge": "Websites, web apps and practical tools. Explore selected work by Devantler Tech.",
       "catalogueIntro": "Alongside websites and web apps, I build tools for developing, checking and running software. Here is the complete public collection, including work still in development."
     },
     "da": {
       "qualityScope": "Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Vedligeholdelse, backup og support aftales særskilt.",
-      "portfolioBridge": "Hjemmesider, webapps, genbrugelige værktøjer og tidligere forskning. Se bredden i arbejdet bag Devantler Tech.",
+      "portfolioBridge": "Hjemmesider, webapps og nyttige værktøjer. Se udvalgte projekter fra Devantler Tech.",
       "catalogueIntro": "Ud over hjemmesider og webapps bygger jeg værktøjer til at udvikle, kontrollere og drive software. Her er hele den offentlige samling, også projekter under udvikling."
     }
   },
