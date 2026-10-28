@@ -9,7 +9,7 @@ import { journalPaths } from "../../src/data/journal.mjs";
 const paths = [...readingPaths(), ...guidePaths()].map(path => `${path.slice(1)}index.html`);
 const admitted = new Set([...readingPaths(), ...guidePaths(), ...journalPaths(), "/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/"]);
 const candidate = new URL("../build/", import.meta.url);
-const published = new URL("../../dist/", import.meta.url);
+const published = new URL("../../.generated/content/", import.meta.url);
 /** @typedef {{nodeName:string,tagName?:string,value?:string,attrs?:{name:string,value:string}[],childNodes?:MarkupNode[],parentNode?:MarkupNode|null}} MarkupNode */
 /** @param {MarkupNode} node @returns {MarkupNode[]} */
 const all = node => [node, ...(node.childNodes ?? []).flatMap(all)];
@@ -42,7 +42,7 @@ return function check(html) {
   const nodes = all(body);
   assert.ok(original);
   const previous = all(original);
-  assert.equal(normalized(body), normalized(original), "complete prose/code/metadata/tag text must match Astro");
+  assert.equal(normalized(body), normalized(original), "complete prose/code/metadata/tag text must match the complete compiled source");
   const diagrams = nodes.filter(node => hasClass(node,"reading-diagram"));
   const expectedDiagrams = previous.filter(node => node.tagName === "pre" && hasClass(node,"mermaid"));
   /** @param {MarkupNode|undefined} node */
@@ -251,4 +251,4 @@ if (process.argv[2] === "disabled") {
   console.log(`Svelte reading: ${mutations.length} independent output-rejection controls verified`);
 }
 }
-console.log(`Svelte reading: all ${readingPaths().length} articles and ${guidePaths().length} technical guides ${process.argv[2] === "enabled" ? "match actual Astro bodies, dates, metadata, assets, bookmarks, copy controls and destinations" : "and dependent assets absent"}`);
+console.log(`Svelte reading: all ${readingPaths().length} articles and ${guidePaths().length} technical guides ${process.argv[2] === "enabled" ? "match compiled content bodies, dates, metadata, assets, bookmarks, copy controls and destinations" : "and dependent assets absent"}`);

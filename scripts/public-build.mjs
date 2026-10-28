@@ -4,6 +4,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "parse5";
+import { publicEntries } from "../web/public-selection.ts";
+import { assertVisitorPrivacy } from "./visitor-privacy.mjs";
 
 /** Snapshot only regular files, never follow a substituted directory or symlink. @param {string} root */
 function files(root) {
@@ -47,9 +49,9 @@ export function capturePublicArtifact(candidate,manifest,nonce = randomUUID()) {
 }
 
 /** Independently validate routes/assets and bind the complete snapshot to this actual build.
- * @param {string} candidate @param {string} reference @param {{nonce:string,manifest:string}|undefined} options */
+ * @param {string} candidate @param {string|Map<string,Buffer>} reference @param {{nonce:string,manifest:string}|undefined} options */
 export function validateSelection(candidate,reference,options) {
-  const selected = files(candidate), baseline = files(reference);
+  const selected = files(candidate), baseline = typeof reference === "string" ? files(reference) : reference;
   const actual = new Map(selected);
   for (const name of selected.keys()) {
     assert.ok(name !== "publication-source.json","Public selection cannot copy a publisher receipt");
@@ -73,7 +75,13 @@ export function validateSelection(candidate,reference,options) {
   for (const [name,bytes] of selected) {
     const dependencies = [];
     if (name.endsWith(".html")) {
+      assertVisitorPrivacy(bytes.toString(),name);
       for (const node of nodes(parse(bytes.toString()))) {
+        if (node.tagName === "meta" && ["og:image","twitter:image"].includes(attr(node,"property") ?? attr(node,"name"))) dependencies.push(attr(node,"content"));
+        if (node.tagName === "script" && attr(node,"type") === "application/ld+json") {
+          const data=JSON.parse((node.childNodes ?? []).map((/** @type {any} */ child)=>child.value ?? "").join(""));
+          for (const item of data["@graph"] ?? [data]) if (typeof item.image === "string") dependencies.push(item.image);
+        }
         if (["script","img","source"].includes(node.tagName)) {
           if (attr(node,"src")) dependencies.push(attr(node,"src"));
           for (const entry of (attr(node,"srcset") ?? "").split(",")) if (entry.trim()) dependencies.push(entry.trim().split(/\s+/)[0]);
@@ -106,7 +114,7 @@ export function validateSelection(candidate,reference,options) {
 }
 
 /** Replace generated output completely; no stale incumbent assets survive selection.
- * @param {string} candidate @param {string} reference @param {string} target @param {{nonce:string,manifest:string}} options */
+ * @param {string} candidate @param {string|Map<string,Buffer>} reference @param {string} target @param {{nonce:string,manifest:string}} options */
 export function promoteSelection(candidate,reference,target,options) {
   const selected = validateSelection(candidate,reference,options);
   rmSync(target,{recursive:true,force:true});
@@ -115,5 +123,9 @@ export function promoteSelection(candidate,reference,target,options) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   assert.equal(process.argv.length,3,"Public selection requires its caller's current build nonce");
-  promoteSelection("web/build","dist","dist",{nonce:process.argv[2],manifest:".astro/selected-public-artifact.json"});
+  const reference = new Map(publicEntries().filter(path=>path.endsWith("/")).map(path=>[`${path.slice(1)}index.html`,Buffer.alloc(0)]));
+  reference.set("404.html",Buffer.alloc(0));
+  reference.set("CNAME",readFileSync("public/CNAME"));
+  for (const prefix of ["", "da/"]) if (!reference.has(`${prefix}company/index.html`)) reference.set(`${prefix}company/index.html`,Buffer.from(`<!doctype html><html lang="${prefix?"da":"en"}"><head><meta name="robots" content="noindex"><meta http-equiv="refresh" content="2;url=/${prefix}"><link rel="canonical" href="https://devantler.tech/${prefix}"></head><body><a href="/${prefix}">Devantler Tech</a></body></html>`));
+  promoteSelection("web/build",reference,"dist",{nonce:process.argv[2],manifest:".generated/selected-public-artifact.json"});
 }

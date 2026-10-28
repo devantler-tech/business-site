@@ -59,7 +59,7 @@ export async function checkEditorialAssets(repository) {
   assertUniqueIllustrations(covers, otherImages);
   const researchSubjects = [];
   for (const [slug, file, variable] of [
-    ['data-space-diagram', 'components/business/ClientPortfolio.astro', 'diagram'],
+    ['data-space-diagram', 'content/docs/projects/completed.mdx', 'dataSpaceImg'],
     ['historical-data-product', 'content/docs/projects/completed.mdx', 'dataProductImg'],
   ]) {
     const filePath = join(source, file);

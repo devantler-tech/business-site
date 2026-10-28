@@ -2,9 +2,10 @@ import { defineConfig, loadEnv } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import adapter from "@sveltejs/adapter-static";
 import { enhancedImages } from "@sveltejs/enhanced-img";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { capturePublicArtifact } from "../scripts/public-build.mjs";
-import { frontendEntries, checkUnseenRoutes, parseFrontendRelease } from "./src/release-gate.ts";
+import { frontendEntries, checkUnseenRoutes } from "./src/public-routes.ts";
 import { readJournal, journalArchives } from "../src/data/journal.mjs";
 import { readingPaths, readReadingReference } from "../src/data/journal-reading.mjs";
 import { readJournalFeedReference } from "../src/data/journal-feed-reference.mjs";
@@ -16,33 +17,39 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     {
       name: "authored-journal",
+      configureServer(server) {
+        // The same closed asset inventory serves local development; never expose
+        // the generated working directory or arbitrary repository files.
+        const inventory = readReadingReference().assets as {filename:string;source:string}[];
+        const assets = new Map(inventory.map(asset=>[`/${asset.filename}`,asset]));
+        server.middlewares.use((request,response,next)=>{
+          const asset = assets.get(new URL(request.url ?? "/","http://localhost").pathname);
+          if (!asset) return next();
+          const type = asset.filename.endsWith(".css") ? "text/css" : asset.filename.endsWith(".js") ? "text/javascript" : asset.filename.endsWith(".png") ? "image/png" : asset.filename.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+          response.setHeader("Content-Type",type);
+          response.setHeader("Cache-Control","no-store");
+          response.end(Buffer.from(asset.source,"base64"));
+        });
+      },
       resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:technical-guides", "virtual:journal-feed", "virtual:business-sharing", "virtual:public-discovery"].includes(id)) return `\0${id}`; },
       load(id) {
-        const enabled = parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND);
-        if (id === "\0virtual:business-sharing") return `export default ${JSON.stringify(enabled ? readPublicDiscoveryReference().sharingImage : null)};`;
-        if (id === "\0virtual:public-discovery") return `export default ${JSON.stringify(enabled ? readPublicDiscoveryReference().assets : null)};`;
-        if (id === "\0virtual:technical-guides") return `export default ${JSON.stringify(enabled ? readReadingReference().guides : null)};`;
+        if (id === "\0virtual:business-sharing") return `export default ${JSON.stringify(readPublicDiscoveryReference().sharingImage)};`;
+        if (id === "\0virtual:public-discovery") return `export default ${JSON.stringify(readPublicDiscoveryReference().assets)};`;
+        if (id === "\0virtual:technical-guides") return `export default ${JSON.stringify(readReadingReference().guides)};`;
         if (id === "\0virtual:journal-feed") {
-          const reference = enabled ? readJournalFeedReference() : null;
+          const reference = readJournalFeedReference();
           return `export default ${JSON.stringify(reference ? {xml:reference.xml,assets:reference.assets} : null)};`;
         }
         if (id === "\0virtual:journal-reading") {
-          if (!enabled) return "export default null;";
           return `export default ${JSON.stringify(readReadingReference().readings)};`;
         }
         if (["\0virtual:journal", "\0virtual:journal-archives"].includes(id)) {
-          const admitted = enabled ? new Set(readingPaths()) : new Set();
-          const posts = enabled ? readJournal().map(post => ({...post,
+          const admitted = new Set(readingPaths());
+          const posts = readJournal().map(post => ({...post,
             href:admitted.has(new URL(post.href).pathname) ? new URL(post.href).pathname : post.href,
             tags:post.tags.map(tag => ({...tag,href:new URL(tag.href).pathname})),
-          })) : [];
+          }));
           return `export default ${JSON.stringify(id === "\0virtual:journal" ? posts : journalArchives(posts))};`;
-        }
-      },
-      generateBundle() {
-        if (!parseFrontendRelease(loadEnv(mode, process.cwd(), "FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND)) return;
-        for (const asset of readReadingReference().assets) {
-          this.emitFile({type:"asset",fileName:asset.filename,source:Buffer.from(asset.source, "base64")});
         }
       },
     },
@@ -52,18 +59,24 @@ export default defineConfig(({ mode }) => ({
         ...adapter(),
         async adapt(builder) {
           await adapter().adapt(builder);
-          if (parseFrontendRelease(loadEnv(mode,process.cwd(),"FEATURE_SVELTE_FRONTEND").FEATURE_SVELTE_FRONTEND)) {
-            writeDiscovery("build");
-            writeFileSync("build/404.html",readFileSync(new URL("./not-found.html",import.meta.url)));
-            capturePublicArtifact("build","../.astro/selected-public-artifact.json",process.env.SVELTE_PUBLIC_BUILD_NONCE);
-          } else rmSync("../.astro/selected-public-artifact.json",{force:true});
+          // These literal HTML/module dependencies are content assets, not
+          // application imports. Write the complete admitted closure explicitly;
+          // framework SSR asset relocation retains only its own app namespace.
+          for (const asset of readReadingReference().assets) {
+            const file = `build/${asset.filename}`;
+            mkdirSync(dirname(file),{recursive:true});
+            writeFileSync(file,Buffer.from(asset.source,"base64"));
+          }
+          writeDiscovery("build");
+          writeFileSync("build/404.html",readFileSync(new URL("./not-found.html",import.meta.url)));
+          capturePublicArtifact("build","../.generated/selected-public-artifact.json",process.env.SVELTE_PUBLIC_BUILD_NONCE);
         },
       },
       prerender: {
-        entries: frontendEntries(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_SVELTE_FRONTEND, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
+        entries: frontendEntries(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
         crawl: false,
         handleUnseenRoutes: ({ routes }) =>
-          checkUnseenRoutes(loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_SVELTE_FRONTEND, routes, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
+          checkUnseenRoutes(routes, loadEnv(mode, process.cwd(), "FEATURE_").FEATURE_COMPANY_IDENTITY),
       },
     }),
   ],

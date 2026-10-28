@@ -9,7 +9,7 @@ if (!enabled) {
   for (const path of candidate.keys()) assert.ok(!/^(?:pdfs\/|_astro\/|favicon\.png$|robots\.txt$|sitemap[^/]*\.xml$)/.test(path),`Disabled public discovery leaked ${path}`);
   console.log("Public discovery disabled: downloads, XML, robots, favicon and sharing assets absent");
 } else {
-  const baseline = artifact("dist");
+  const baseline = artifact(".generated/content");
   test("actual candidate independently retains the authoritative downloads", () => assertDownloads(candidate,baseline));
   test("actual candidate discovers exactly its admitted canonical pages", () => { assertSitemap(candidate,baseline); });
   test("actual candidate retains complete bilingual business sharing", () => assertSharing(candidate,baseline));

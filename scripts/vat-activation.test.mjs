@@ -20,7 +20,7 @@ const currentCI = workflow => {
   const builds = workflow.jobs?.['build-docs']?.steps?.filter(step => step.run === 'npm run build' && step.id === 'current-production') ?? [];
   return builds.length === 1 && builds[0]['working-directory'] === '.' && builds[0].if == null &&
     (builds[0]['continue-on-error'] == null || builds[0]['continue-on-error'] === false) && !Object.hasOwn(builds[0].env, 'FEATURE_VAT_PRICES') &&
-    builds[0].env.FEATURE_COMPANY_IDENTITY === 'true' && builds[0].env.FEATURE_SVELTE_FRONTEND === 'true' &&
+    builds[0].env.FEATURE_COMPANY_IDENTITY === 'true' &&
     builds[0].env.FEATURE_OFFER_COPY === 'false' && !Object.hasOwn(builds[0].env, 'FEATURE_CUSTOMER_SCOPE') &&
     typeof builds[0].env.COMPANY_POSTAL_ADDRESS === 'string' && builds[0].env.COMPANY_POSTAL_ADDRESS.split('\n').length === 2;
 };
@@ -43,7 +43,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
   const directory = mkdtempSync(join(tmpdir(), 'vat-preview-order-'));
   try {
     mkdirSync(join(directory, 'bin'));
-    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_OFFER_COPY-}" "${FEATURE_SVELTE_FRONTEND-}" > dist/presentation\n', { mode: 0o700 });
+    writeFileSync(join(directory, 'bin', 'npm'), '#!/bin/sh\n[ "$1 $2" = "run build" ] || exit 23\nmkdir -p dist\nprintf "%s\\n" "${FEATURE_COMPANY_IDENTITY-}" "${FEATURE_OFFER_COPY-}" > dist/presentation\n', { mode: 0o700 });
     for (const step of ci.jobs['build-docs'].steps.filter(step => /^(?:npm run build|env .* npm run build)$/.test(step.run ?? ''))) {
       const env = { ...process.env, PATH: `${directory}/bin:${process.env.PATH}` };
       for (const key of Object.keys(env).filter(key => key.startsWith('FEATURE_'))) delete env[key];
@@ -53,7 +53,7 @@ test('executing actual CI producer commands leaves the production tuple for uplo
       assert.ifError(result.error);
       assert.equal(result.status, 0, result.stderr);
     }
-    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\ntrue\n');
+    assert.equal(readFileSync(join(directory, 'dist', 'presentation'), 'utf8'), 'true\nfalse\n');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

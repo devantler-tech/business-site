@@ -3,10 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 
-// Execute the actual inline head script. Only browser event/element boundaries
+// Execute the actual shared head script. Only browser event/element boundaries
 // are simulated; navigation, card selection and accessibility are production code.
-const config = readFileSync(new URL('../astro.config.mjs', import.meta.url), 'utf8');
-assert.match(config, /content: readFileSync\(new URL\('\.\/src\/components\/business\/journal-navigation\.js'/, 'The shared controller must be wired into the page head');
 const script = readFileSync(new URL('../src/components/business/journal-navigation.js', import.meta.url), 'utf8');
 
 class Element {

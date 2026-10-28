@@ -1,7 +1,7 @@
 # Business-site contributor reference
 
-This directory holds contributor documentation and architecture decisions, not the Astro
-application or rendered Starlight content. Start with the [project README](../README.md) for
+This directory holds contributor documentation and architecture decisions, not the Svelte
+application or authored reading content. Start with the [project README](../README.md) for
 local first use and [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contribution path.
 The reference below covers editorial standards, bilingual content, catalogue maintenance,
 CV data and build-time previews. Application paths are relative to the repository root.
@@ -40,17 +40,12 @@ clean-install checks. These commands change local dependencies/lockfile, not the
 
 ## Business website
 
-The business homepage is rendered by `src/components/business/BusinessSite.astro` at `/` (English)
-and `/da/` (Danish). Its offer amounts and translated copy live together in
-`src/components/business/business-copy.ts`; `content.ts` applies Astro's release configuration.
-Plain-language quality copy lives in `client-copy.ts`, with its Astro adapter in `client-facing.ts`.
-These framework-neutral sources are also used by the isolated Svelte Home candidate; its matching
-server-only company/offer configuration and permanent customer invitation are documented in `web/README.md`.
-The Svelte Projects candidate also shares `client-products.ts`, `portfolio-content.ts`,
-the existing ranking implementation and complete dated snapshot with Astro. It preserves
-the curated six-tool output, compact public website example, closed historical links and old bookmarks
-without changing the source-owned publisher. Its enabled/false/unset and actual snapshot-path
-checks are included in `scripts/check-svelte-frontend.sh`.
+The Svelte routes under `web/src/routes/` render the English/Danish business pages.
+Offer amounts and translated copy live in `src/components/business/business-copy.ts`;
+quality copy lives in `client-copy.ts`. Native server-only settings in `web/src/env.ts`
+control company identity and revised offer copy independently. Projects uses `client-products.ts`,
+`portfolio-content.ts` and the complete dated ranking snapshot. Every build retains the six-tool
+catalogue, public website example, historical links and bookmarks. See `web/README.md`.
 Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds
@@ -73,29 +68,28 @@ a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a we
 Each price is marked "incl. VAT" / "inkl. moms" and the note states the included 25% Danish VAT.
 The totals live in `vatInclusiveOffers` in `business-copy.ts`; `scripts/vat-prices.test.mjs`
 guards the exact approved totals, net floors and no double VAT. Current ordinary company facts
-are shared by both frontends and every package profile. The temporary VAT gate and historical
+are shared by the public frontend and every package profile. The temporary VAT gate and historical
 comparison inputs are removed in source. Reviewed publication and fresh bilingual live verification
 remain tracked in #346 until their completion is recorded.
 The publisher and production-template packager retain company identity enabled and the
-revised-offer release disabled. The customer invitation is permanent. The ordinary Astro comparison
-and explicit recovery also retain current prices. This does not activate orders, payments or additional customer eligibility.
+revised-offer release disabled. The customer invitation is permanent. Every package retains current prices. This does not activate orders, payments or additional customer eligibility.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
 selector offers System, Light and Dark in both languages. The small head script applies the saved
-choice before painting, follows system changes in System mode, and shares Starlight's
+choice before painting, follows system changes in System mode, and retains the existing
 `starlight-theme` preference with supporting pages. If browser storage is blocked, switching still
 works for the current page. Without JavaScript, the page follows the system theme and hides the
-inactive selector. `scripts/theme.test.mjs` tests the actual controller as part of every build.
+inactive selector. `scripts/theme.test.mjs` tests the actual controller in CI.
 
 The introduction identifies Nikolai with the existing public `profile.jpg` photograph, biography
 and GitHub links. First-person English/Danish copy explains the independent business without
 inventing client endorsements; the featured business presentation omits personal/family framing. The real photograph
 also supplies the sharing image. Built-page checks verify the portrait and profile journey.
 
-Selected work uses the same `WorkExample.astro` card on Home and Projects in both languages.
+Selected work uses the same Svelte visitor presentation on Home and Projects in both languages.
 AS Coaching og Vaner includes a real public homepage capture, a compact responsive thumbnail
 linked to its original local JPEG in a new tab, and a separate link to the public website.
-The explicit featured-portfolio rollback shows the Wedding App's documented local guest demo after sign-in, with names, date,
+The retained historical reference describes the Wedding App's documented local guest demo after sign-in, with names, date,
 venue/address, countdown values and the venue background removed before capture. The card
 explicitly labels it an anonymized demo and does not link to the private invitation site.
 No production account or guest invitation code is used. Built-page checks verify the normal
@@ -150,46 +144,25 @@ checks. CI builds enabled, explicit false and entirely unset states before uploa
 production output. Existing quality/security, prices, inquiry, theme, historical-bookmark and image checks
 remain active in the new presentation.
 
-The business identity also covers `/about/` and `/projects/`, with Danish counterparts at
-`/da/about/` and `/da/projects/`. About introduces the founder of a one-person business; Projects
-distinguishes maintained tools and a public website example without inventing client outcomes. The journal and technical
-pages reuse the business navigation, typography, colors, footer and appearance control through
-Starlight component overrides. Their search, sidebar, RSS and historical articles remain available.
-Only Starlight Blog's preview cards receive whole-card mouse navigation. Each native title link
-provides the single keyboard destination without making its article a second focus stop. Links,
-form controls, disclosure toggles and editable descendants retain their own interaction; individual
-journal and technical articles remain reading surfaces. `scripts/journal-navigation.test.mjs`
-executes the actual head script as part of every build.
-The isolated Svelte candidate shares that controller, archive configuration and introductory copy.
-Its main English archive reads the authored Astro collection at build time, with exact generated-card
-comparisons across all main, topic and author archive pages. Topic and author archives retain every
-matching post on one page, while the main archive retains its five-post pagination. One full reading route, `/blog/building-ksail-from-shell-to-dotnet-to-go/`,
-uses an input-bound build-only reference from the maintained Astro renderer. The candidate retains
-its complete prose, bookmarks, code/copy controls, metadata, dates and actual local assets, without
-a second Markdown renderer. `scripts/build-journal-reference.sh` builds that private generated input;
-the normal production publisher neither runs nor consumes it. Topic and author browsing stays local;
-author cards retain their separate external profile links. Other reading routes and RSS stay on their
-published destinations; Danish business navigation does not invent translated Journal articles.
-There is one appearance picker, including on mobile; the documentation header measures its height
-so the reading tools do not overlap the business navigation.
+The same Svelte shell serves Home, About, Projects, the English Journal and technical guides.
+All main, topic and author archives remain local; the main archive has five-post pagination,
+and filtered archives contain every matching post. Each native card title remains the single
+keyboard destination. The shared card controller leaves nested controls and reading surfaces alone.
 
-All builds use the editorial Journal frame.
-Its introduction, lead story, two-column archive and narrower reading pages use the homepage's
-type and palette. A native “Browse the Journal” disclosure keeps the existing post/topic menu
-available without a permanent documentation sidebar. Search, RSS, authors, tags, pagination,
-article bookmarks and copy controls retain their existing behavior. Technical guides keep their
-normal Starlight frame. Every build verifies the professional presentation across all generated
-Journal routes, including archives, authors, tags and reading pages. CI checks the final production
-output before uploading its preview. The source-owned publisher deploys this repository's reviewed
-main revision. Presentation rollback requires a reviewed source revert and publication.
+The native content builder reads all authored articles and guides, preserves complete prose,
+heading bookmarks, copy payloads, tables, diagrams, committed dates and metadata, and generates
+RSS plus its image closure. Source fingerprints and digests bind generated input to the actual
+checkout. Svelte emits the sole public application. Run `scripts/build-journal-reference.sh`
+before standalone frontend builds; `npm run build` prepares it automatically. The retained
+`/_astro/` image URLs are compatibility paths without an Astro compiler or runtime.
 
 Projects presents six stars-ranked maintained tools, followed by one compact public website example
 and hosting. KSail's product introduction explains setup, deployment and operation rather
 than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
 with private details masked and the redaction disclosed in both languages. Historical English
 references and diagrams remain in the closed “Earlier project links” disclosure, without a feature
-heading, hero or section-index link. Astro recovery renders the original
-`src/content/docs/projects/completed.mdx` there. The legacy
+heading, hero or section-index link. Legacy catalogue metadata remains in
+`src/content/docs/projects/completed.mdx` for drift/provenance checks. The legacy
 active/completed URLs redirect to the public catalogue or historical disclosure of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
@@ -228,7 +201,7 @@ or inquiry wording; the separate revised-hosting activation in #18 is unchanged.
 The public customer invitation covers private customers and businesses in Denmark and the rest
 of the EU. Scope, price and applicable VAT are confirmed before an agreement. Projects outside
 the EU need a separate eligibility assessment before an offer; this is not automatic worldwide
-availability. `customer-scope.ts` supplies this boundary to Astro and the Svelte
+availability. `customer-scope.ts` supplies this boundary to the Svelte
 candidate independently of offer and identity release flags. Following verified source-owned
 publication and English/Danish live visits, the invitation is permanent in ordinary, explicitly
 false and entirely unset builds. The temporary customer-scope release setting has been removed
@@ -294,8 +267,8 @@ compliance, zero processing or measured discovery outcomes from this build check
 ## CV download
 
 The About page offers the CV as an A4 PDF at `/pdfs/nikolai-emil-damm-cv.pdf`. It is not a checked-in
-file: the static endpoint in `src/pages/pdfs/` renders it during `npm run build` (and on request in
-`npm run dev`) from `src/data/cv.ts`, using the same palette as the site theme.
+file: the native content builder renders it during `npm run build` and before `npm run dev`
+from `src/data/cv.ts`, using the same palette and installed font packages.
 
 `src/data/cv.ts` is the single source for the CV. The detailed background in
 `src/content/docs/about.mdx` retains a hand-written experience roster.
@@ -307,11 +280,11 @@ bump the `updated` date in `src/data/cv.ts` so the PDF says when it last changed
 
 The article footer's modification date comes from the committed history of that content file,
 not the build or deployment date. The publication date remains the post's explicit frontmatter.
-All maintained Astro builders fetch complete Git history. The shared production build rejects
+All maintained builders fetch complete Git history. The shared production build rejects
 shallow, absent, enclosing or unreadable history rather than publishing misleading freshness.
 Use a complete checkout for local production builds; for an existing shallow clone, run
 `git fetch --unshallow` before rebuilding. Git-less source archives cannot establish these dates.
-An untracked file has no committed modification date, so Starlight omits that footer date.
+An untracked article has no committed modification date and fails the content build.
 `bash scripts/journal-history.test.sh` exercises real commit histories and the checkout depths
 configured by CI, source publication and legacy callers. Article revisions advance the date;
 unrelated commits do not. Publication, provider authority and portal rollout boundaries are unchanged.
@@ -396,65 +369,27 @@ per-user, or percentage evaluation. Flipping a flag means a **rebuild + redeploy
 rollout would require an SSR/hybrid adapter or a client-side [OpenFeature](https://openfeature.dev/)
 web island — explicitly out of scope for the static site today.)
 
-### The convention — `astro:env`
+### Native server-only settings
 
-The isolated SvelteKit migration candidate in `web/` uses its own framework-native
-`FEATURE_SVELTE_FRONTEND` setting, not the Astro schema. It remains default-off. The common
-build can select it, the publisher admits it only for an artifact-only preview, and the Go
-packager requires an explicit `--svelte` option. Production publication remains Astro.
-See the [candidate guide](../web/README.md) for its enabled,
-false and entirely unset checks. Restart the preview process after rebuilding a different
-setting: a running preview has already loaded the old compiled server. Gate review is tracked
-by [#125](https://github.com/devantler-tech/business-site/issues/125).
+`web/src/env.ts` declares strict build-time values through SvelteKit's environment module.
+`FEATURE_COMPANY_IDENTITY` and `FEATURE_OFFER_COPY` independently default to false; ambiguous
+values fail. Company identity requires its separately validated address, confined to the two
+company documents. Production publication explicitly enables identity and leaves revised offer
+copy disabled. Local tests use a fictional address; never copy private production input into fixtures.
 
-Flags are declared in the Zod-validated [`astro:env`](https://docs.astro.build/en/guides/environment-variables/)
-`env.schema` in [`astro.config.mjs`](../astro.config.mjs) — type-safe over raw `import.meta.env`:
+`PUBLIC_CONTENT_PROFILE=production-template` retains the Go runtime's address placeholders.
+Other builds use `default`. Invalid profiles fail. The old frontend selector is retired: every
+build is Svelte. Obsolete preview/client/featured combinations unsupported by the current public
+presentation fail rather than silently changing the requested result.
 
-```js
-env: {
-  schema: {
-    FEATURE_PREVIEW_BANNER: envField.boolean({
-      context: "server",   // read at build time in .astro components (SSG)
-      access: "public",
-      default: false,      // OFF by default — production omits the gated output
-    }),
-  },
-},
-```
-
-Gate rendering on the flag by importing it from `astro:env/server` (or `astro:env/client` for a
-`PUBLIC_`-prefixed client flag) — see [`src/components/PreviewBanner.astro`](../src/components/PreviewBanner.astro),
-the worked example mounted on the English and Danish business homepages. When the flag is off,
-the component emits nothing; enabling it adds a localized notice above the homepage introduction.
-
-Flags can also gate **content-collection inclusion** (filter entries out of `getCollection(...)`
-when a flag is off) to hold back whole docs sections.
-
-### Preview builds
-
-To review flagged content before production enables it, run a **preview build** with the flag on:
-
-```sh
-FEATURE_PREVIEW_BANNER=true npm run build
-```
-
-Production builds in CI keep this example preview-banner flag off, testing both an explicit
-`false` value and an entirely unset environment. `publish-site.yaml` publication leaves it unset.
-CI also tests an explicitly enabled preview build.
-This is not a rule for every flag: client-facing and featured-portfolio
-presentation default to true, and the source-owned publisher explicitly enables company identity.
-The Journal presentation is permanent and no longer has a feature flag.
-That identity preview needs the separately documented fictional address for local use; never copy
-the production address into a local fixture or public artifact.
+To preview revised offer text locally, run `FEATURE_OFFER_COPY=true npm run build`.
+Restart a running preview after rebuilding. The company matrix in
+`scripts/check-svelte-company.sh` covers unset/false settings, published identity, independent
+revised offers and runtime templates, plus invalid inputs and private-diagnostic controls.
 
 ### Lifecycle — remove the gate once shipped
 
-A *release* flag is **short-lived**. Once the content/UI is live for good:
-
-1. Delete the flag from the `env.schema` in `astro.config.mjs`.
-2. Inline the gated markup (drop the `{ FLAG && (...) }` wrapper) or delete the example component.
-3. Remove the flag from any preview-build invocations.
-
-A growing set of stale flags is debt, not progress — retire each one as soon as its content ships.
-Only a genuine kill-switch or a permanent setting is long-lived (and a permanent setting belongs in
-plain config, not a flag).
+After reviewed activation and live proof, remove a temporary release setting from
+`web/src/env.ts`, simplify its consumers, and remove obsolete build invocations in the same PR.
+Only genuine operational settings remain long-lived. Frozen publication artifacts and historical
+Git revisions remain recovery evidence; there is no second application or frontend recovery input.

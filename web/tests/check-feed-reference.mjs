@@ -3,7 +3,7 @@ import {readFileSync,writeFileSync,unlinkSync} from "node:fs";
 import {createHash} from "node:crypto";
 import {readJournalFeedReference} from "../../src/data/journal-feed-reference.mjs";
 
-const file = new URL("../../.astro/journal-feed.json",import.meta.url);
+const file = new URL("../../.generated/journal-feed.json",import.meta.url);
 const original = readFileSync(file,"utf8");
 const valid = JSON.parse(original);
 assert.ok(valid.assets.length > 1,"partial closure needs a healthy image beside the rejected image");

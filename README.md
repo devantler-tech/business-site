@@ -14,9 +14,9 @@ work on the static site.
 
 The [SvelteKit frontend](web/README.md) implements English/Danish
 Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
-The source-owned publisher and production Go image explicitly select it. Local builds remain
-default-off for comparison; Astro + Starlight still supplies the maintained content and an
-input-bound reading reference. Astro is also retained for reviewed recovery.
+Every local build, publication and Go package uses Svelte. A native Markdown/content build
+retains the complete articles, guides, feed, downloads and existing green-orb favicon.
+See the [Svelte-only decision](docs/adr/0027-svelte-only-public-build.md).
 
 ## Run the site locally
 
@@ -27,10 +27,11 @@ From the directory where you want your checkout:
 git clone https://github.com/devantler-tech/business-site.git
 cd business-site
 npm ci
+npm --prefix web ci
 npm run dev -- --host 127.0.0.1
 ```
 
-Open the local address printed by Astro (normally `http://127.0.0.1:4321/`). Check `/da/` for
+Open the local address printed by Vite (normally `http://127.0.0.1:5173/`). Check `/da/` for
 Danish and `/blog/` for the Journal. Stop the server with Ctrl+C. This starts only a local
 development server; it does not publish the website or enable the private portal.
 
@@ -38,15 +39,14 @@ From the repository root, build and inspect the static output with:
 
 ```sh
 npm --prefix web ci
-LC_ALL=C FEATURE_SVELTE_FRONTEND=true npm run build
+LC_ALL=C npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
 A successful build creates `dist/` and passes the embedded source and visitor-page checks.
-Use the preview address printed by Astro, then stop it with Ctrl+C. Do not edit `dist/`.
+Use the preview address printed by Vite, then stop it with Ctrl+C. Do not edit `dist/`.
 The Journal frame is permanent; rollback requires a reviewed source revert and publication.
-The curated client-facing portfolio is enabled by default and retains its explicit-false
-build-time rollback. Other previews and their prerequisites are explained in the
+The curated portfolio is permanent. Independent company and offer previews are explained in the
 [site reference](docs/README.md#feature-flags-build-time).
 
 ## Contribute or find the right guide

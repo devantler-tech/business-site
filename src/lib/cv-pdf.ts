@@ -1,11 +1,7 @@
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
-import interRegular from "@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf?inline";
-import interMedium from "@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf?inline";
-import interSemibold from "@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf?inline";
-import interBold from "@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf?inline";
-import monoRegular from "@expo-google-fonts/roboto-mono/400Regular/RobotoMono_400Regular.ttf?inline";
-import monoMedium from "@expo-google-fonts/roboto-mono/500Medium/RobotoMono_500Medium.ttf?inline";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import type { Cv, Entry, Role, SkillGroup } from "../data/cv";
 
 // A4 in PostScript points.
@@ -38,16 +34,18 @@ const COLOR = {
   white: "#ffffff",
 };
 
-// Fonts and the portrait are imported as data URIs so the renderer has no filesystem layout to depend on.
+// Resolve the maintained font packages directly during the native content build.
 const dataUriToBuffer = (uri: string) => Buffer.from(uri.slice(uri.indexOf(",") + 1), "base64");
+const require = createRequire(import.meta.url);
+const font = (path: string) => readFileSync(require.resolve(path));
 
 const FONTS = {
-  sans: interRegular,
-  sansMedium: interMedium,
-  sansSemibold: interSemibold,
-  sansBold: interBold,
-  mono: monoRegular,
-  monoMedium: monoMedium,
+  sans: font("@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf"),
+  sansMedium: font("@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf"),
+  sansSemibold: font("@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf"),
+  sansBold: font("@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf"),
+  mono: font("@expo-google-fonts/roboto-mono/400Regular/RobotoMono_400Regular.ttf"),
+  monoMedium: font("@expo-google-fonts/roboto-mono/500Medium/RobotoMono_500Medium.ttf"),
 };
 type FontName = keyof typeof FONTS;
 
@@ -104,11 +102,15 @@ class CvRenderer {
 
   // Sidebar sections flow across pages in this order, each drawn on the first page with room for it.
   private readonly sidebarQueue: Array<[title: string, body: (y: number) => number]>;
+  private readonly cv: Cv;
+  private readonly photo: Buffer;
 
   constructor(
-    private readonly cv: Cv,
-    private readonly photo: Buffer,
+    cv: Cv,
+    photo: Buffer,
   ) {
+    this.cv = cv;
+    this.photo = photo;
     this.updatedAt = new Date(cv.updated);
     this.sidebarQueue = [
       ["Contact", (y) => this.sideContact(y)],
@@ -137,7 +139,7 @@ class CvRenderer {
         ModDate: this.updatedAt,
       },
     });
-    for (const [name, data] of Object.entries(FONTS)) this.doc.registerFont(name, dataUriToBuffer(data));
+    for (const [name, data] of Object.entries(FONTS)) this.doc.registerFont(name, data);
   }
 
   render(): Promise<Buffer> {

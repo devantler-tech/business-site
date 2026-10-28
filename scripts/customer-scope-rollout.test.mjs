@@ -22,7 +22,7 @@ const valid = ci => {
       (steps[i]['continue-on-error'] == null || steps[i]['continue-on-error'] === false));
 };
 test('shipped customer invitation has no active framework or component release gate', () => {
-  for (const name of ['astro.config.mjs', 'web/src/env.ts', 'src/components/business/CustomerScope.astro', 'web/src/lib/CustomerScope.svelte', 'src/components/business/business-copy.ts', 'src/components/business/supporting-copy.ts', 'web/src/lib/business.server.ts']) {
+  for (const name of ['web/src/env.ts', 'web/src/lib/CustomerScope.svelte', 'src/components/business/business-copy.ts', 'src/components/business/supporting-copy.ts', 'web/src/lib/business.server.ts']) {
     const source = readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /FEATURE_CUSTOMER_SCOPE|customerScopeEnabled/, name);
   }

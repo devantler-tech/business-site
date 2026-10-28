@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .astro/
+.generated/
 /runtime-dist/
 /runtime-production-dist/
 /runtime-svelte-default-dist/
