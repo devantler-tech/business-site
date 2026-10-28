@@ -178,7 +178,7 @@ test("an explicit server directory overrides the ordinary suite job default", ()
 function assertProductionProfile(w) {
   const steps = w.jobs["test-combined-runtime"].steps;
   const build = steps.findIndex(
-    (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
+    (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
   );
   const smoke = steps.findIndex((s) => s.run === "node scripts/runtime-smoke.test.mjs runtime-production-dist");
   const extract = steps.findIndex((s) =>
@@ -207,7 +207,7 @@ test("CI exercises the actual production package and image", () => {
   for (const change of [
     (w) => {
       w.jobs["test-combined-runtime"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
       ).if = "false";
     },
     (w) => {
@@ -217,7 +217,7 @@ test("CI exercises the actual production package and image", () => {
     },
     (w) => {
       delete w.jobs["test-combined-runtime"].steps.find(
-        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template --svelte",
+        (s) => s.run === "bash scripts/package-runtime.sh --release --production-template",
       ).env.GH_TOKEN;
     },
     (w) => {

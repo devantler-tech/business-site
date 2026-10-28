@@ -12,6 +12,7 @@ cleanup_failed_build() {
 trap cleanup_failed_build EXIT
 bash scripts/check-source-history.sh
 node web/public-selection.ts
+node scripts/check-editorial-assets.mjs
 bash scripts/build-journal-reference.sh
 build_nonce="$(node --input-type=module -e 'import {randomUUID} from "node:crypto"; console.log(randomUUID())')"
 SVELTE_PUBLIC_BUILD_NONCE="$build_nonce" npm --prefix web run build
@@ -19,6 +20,7 @@ for check in output projects-output journal-output reading-output feed-output di
   node "web/tests/check-$check.mjs" enabled
 done
 node web/tests/check-company-output.mjs
+node scripts/check-business-site.mjs web/build
 bash scripts/check-portal-artifacts.sh web/build
 node scripts/public-build.mjs "$build_nonce"
 bash scripts/check-portal-artifacts.sh dist
