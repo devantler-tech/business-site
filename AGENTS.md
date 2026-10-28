@@ -67,7 +67,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
-  without the unadmitted Ailerons assets or JSONPath machine-ID selector. It also
+  without the unadmitted Ailerons assets or JSONPath machine-ID selector. Its fixed
+  neutral-provider profile replaces decoration in eighteen native consumers with
+  the already-admitted arrow fonts and removes sixteen provider image paths.
+  Provider labels, links, forms and surviving branding/theme rules stay intact.
+  The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other
   selections. The login interceptor marks only explicitly configured plaintext
@@ -216,7 +220,13 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   The separately explicit `--browser-smoke` profile also uses the runner's Chrome
   and matching WebDriver inside the owned service network namespace as a non-root
   user. Its native browser sandbox remains enabled. It exercises only fictional
-  Login V1 and authenticated Console presentation, with source/image-bound receipts
+  Login V1 and authenticated Console presentation, plus ten native neutral-provider
+  cases (light/dark chooser, two configured table rows, Google editor, login and
+  registration). Fixture-only native API setup preserves the login policy except
+  enabling the two unusable fictional providers; no external action is followed.
+  Login/registration links are reached by native Tab, and the picker by Enter.
+  The unchanged operator journey has 100s; the additional presentation phase has
+  120s, within a 4min worker wrapper. It retains source/image-bound receipts
   and screenshots; it grants no production login, mail, invitation or activation
   clearance. The Go browser worker is reachable only through the explicit profile.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
@@ -277,11 +287,13 @@ node --test scripts/tenant-package.test.mjs
 node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
+# The preparer suite also runs the real immutable provider-input controls.
 bash scripts/zitadel-build-tools-license.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
 (cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
+node scripts/zitadel-provider-browser.test.mjs
 (cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)

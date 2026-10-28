@@ -365,6 +365,8 @@ jobs:
       - name: Verify the bounded console notice capture
         working-directory: scripts
         run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go
+      - name: Verify native provider presentation controls
+        run: node scripts/zitadel-provider-browser.test.mjs
       - name: Verify local identity image packaging and execution controls
         working-directory: scripts
         run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go
@@ -545,6 +547,8 @@ jobs:
             .portalFederation == false and .productionTLS == false and .invitationProof == false and
             .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
             (.pages | map(.kind)) == ["login","password","console"] and
+            (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
+            all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -630,6 +634,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/login.png
             ${{ runner.temp }}/zitadel-image/password.png
             ${{ runner.temp }}/zitadel-image/console.png
+            ${{ runner.temp }}/zitadel-image/provider-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
             ${{ runner.temp }}/zitadel-offline-replay/input-archive.json

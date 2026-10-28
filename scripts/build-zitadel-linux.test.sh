@@ -228,9 +228,9 @@ case "$1 $2" in
           cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
-          jq -n --arg profile "${TEST_REPLAY_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
-            --argjson bytes "${TEST_REPLAY_BYTES:-261684474}" --argjson records "${TEST_REPLAY_RECORDS:-56}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-3eaa277f9c3eac93b34af9929f580a361c04df45c0dee53ba5e6decbdeb1bd87}" \
+            --argjson bytes "${TEST_REPLAY_BYTES:-261634865}" --argjson records "${TEST_REPLAY_RECORDS:-56}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9583,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ "$#" -eq 6 && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
           mkdir -p "$6/records/recipes" "$6/records/scripts" "$6/source/console/scripts"
@@ -245,9 +245,9 @@ case "$1 $2" in
           cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            --arg profile "${TEST_CAPTURE_PROFILE:-10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555}" \
-            --argjson bytes "${TEST_CAPTURE_BYTES:-261684474}" --argjson records "${TEST_CAPTURE_RECORDS:-56}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9599,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
+            --arg profile "${TEST_CAPTURE_PROFILE:-3eaa277f9c3eac93b34af9929f580a361c04df45c0dee53ba5e6decbdeb1bd87}" \
+            --argjson bytes "${TEST_CAPTURE_BYTES:-261634865}" --argjson records "${TEST_CAPTURE_RECORDS:-56}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9583,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
@@ -691,8 +691,8 @@ for fault in unsealed-source both-source-modes capture-with-prepared substituted
     console-seal-only) args+=(--console-sha256 "$prepared_sha");;
     console-duplicate-seal) args+=(--console-inputs "$scratch/unavailable-capsule" --console-sha256 "$prepared_sha" --console-sha256 "$prepared_sha");;
   esac
-  profile=10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555
-  bytes=261684474
+  profile=3eaa277f9c3eac93b34af9929f580a361c04df45c0dee53ba5e6decbdeb1bd87
+  bytes=261634865
   records=56
   [[ "$fault" != incomplete-authored-records ]] || records=28
   [[ "$fault" != extra-authored-records ]] || records=57
@@ -761,7 +761,7 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .sourceSnapshot.files == 9599 and .sourceSnapshot.bytes == 261684474 and .sourceSnapshot.records == 56 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "3eaa277f9c3eac93b34af9929f580a361c04df45c0dee53ba5e6decbdeb1bd87" and .sourceSnapshot.files == 9583 and .sourceSnapshot.bytes == 261634865 and .sourceSnapshot.records == 56 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null

@@ -21,7 +21,7 @@ done
 [[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit preparation, source and output are required'
 [[ -d "$source_repo" ]] || fail 'source repository is absent'
 [[ ! -e "$output" && ! -L "$output" ]] || fail 'output already exists'
-for tool in git tar shasum jq awk cmp find sort grep sed mktemp mkdir mv rm basename dirname; do
+for tool in git tar shasum jq awk cmp find sort grep sed mktemp mkdir mv rm basename dirname go; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
 done
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
@@ -57,6 +57,11 @@ cmp "$stage/expected-hashes" "$stage/actual-hashes" || fail 'archive contents di
 sort "$stage/paths" >"$stage/expected-paths"
 cmp "$stage/expected-paths" "$stage/actual-paths" || fail 'archive has missing or additional files'
 (cd "$stage/source" && shasum -a 256 -c "$root/scripts/zitadel-source-inputs.sha256") >/dev/null
+# Native provider decoration reuses the already-admitted arrow fonts. The exact
+# closed transform runs only inside this fresh exported stage, before generation.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --neutral-provider-icons --prepare --source "$stage/source" >"$stage/provider-icons.json"
+jq -e '.profile == "native-neutral-provider-icons-v1" and .changedFiles == 18 and .removedFiles == 16 and .consoleSlots == 27 and .loginSlots == 2' "$stage/provider-icons.json" >/dev/null
 console=console/src/styles.scss
 login=internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$stage/console"
@@ -158,6 +163,12 @@ rm -- "$stage/source/console/src/assets/ailerons.otf" \
 (cd "$stage/source" && find . -type f ! -perm 0644 ! -perm 0755 -print) >"$stage/invalid-modes"
 [[ ! -s "$stage/invalid-modes" ]] || fail 'source has unexpected file permissions'
 awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' "$stage/tree" | sort >"$stage/expected-executables"
+# Only the four removed Apple SVG originals were executable.
+for removed in console/src/assets/images/idp/apple-dark.svg console/src/assets/images/idp/apple.svg \
+  internal/api/ui/login/static/resources/images/idp/apple-dark.svg internal/api/ui/login/static/resources/images/idp/apple.svg; do
+  grep -Fxv "$removed" "$stage/expected-executables" >"$stage/executables-next"
+  mv "$stage/executables-next" "$stage/expected-executables"
+done
 (cd "$stage/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$stage/actual-executables"
 cmp "$stage/expected-executables" "$stage/actual-executables" || fail 'source executable modes differ from committed source'
 recipe_hash="$(shasum -a 256 "$0" | awk '{print $1}')" || fail 'recipe hash read failed'
@@ -169,8 +180,8 @@ jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
     dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1",
     removedFiles:["console/src/assets/ailerons.otf","console/src/styles/ailerons.scss",
       "internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf",
-      "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss"],
-    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum"]}' >"$stage/source-preparation.json"
+      "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss","console/src/assets/images/idp/apple-dark.svg","console/src/assets/images/idp/apple.svg","console/src/assets/images/idp/github-dark.svg","console/src/assets/images/idp/github.svg","console/src/assets/images/idp/gitlab.svg","console/src/assets/images/idp/google.png","console/src/assets/images/idp/ms.svg","console/src/assets/images/idp/oauth.svg","console/src/assets/images/idp/saml-icon.svg","internal/api/ui/login/static/resources/images/idp/apple-dark.svg","internal/api/ui/login/static/resources/images/idp/apple.svg","internal/api/ui/login/static/resources/images/idp/github-white.png","internal/api/ui/login/static/resources/images/idp/github.png","internal/api/ui/login/static/resources/images/idp/gitlab.png","internal/api/ui/login/static/resources/images/idp/google.png","internal/api/ui/login/static/resources/images/idp/ms.svg"],
+    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss"],providerProfile:"native-neutral-provider-icons-v1"}' >"$stage/source-preparation.json"
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
 reserved=0 complete=0 interrupted=0

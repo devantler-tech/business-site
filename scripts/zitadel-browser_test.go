@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -268,3 +273,129 @@ func TestBrowserDriverAllowsBoundedSessionStartup(t *testing.T) {
 		t.Fatalf("bounded browser startup refused: %v", err)
 	}
 }
+
+// One successful URL or correct glyph cannot clear an incomplete native surface.
+func TestBrowserProviderObservationAdmission(t *testing.T) {
+	good := browserProviderPage{URL: "http://fixture.localhost:8080/ui/console/instance?id=idp", Kind: "picker", Theme: "light", Count: 9, Glyphs: true, Labels: true, Targets: true, ThemeReady: true, Resources: true, Keyboard: true}
+	if !browserProviderAdmit(good, "picker", "light") {
+		t.Fatal("complete picker refused")
+	}
+	for name, change := range map[string]func(*browserProviderPage){
+		"external":          func(p *browserProviderPage) { p.URL = "https://outside.invalid/ui/console/instance?id=idp" },
+		"wrong route":       func(p *browserProviderPage) { p.URL = "http://fixture.localhost:8080/ui/console/users" },
+		"missing icon":      func(p *browserProviderPage) { p.Count = 8 },
+		"wrong theme":       func(p *browserProviderPage) { p.Theme = "dark" },
+		"missing glyph":     func(p *browserProviderPage) { p.Glyphs = false },
+		"missing label":     func(p *browserProviderPage) { p.Labels = false },
+		"changed target":    func(p *browserProviderPage) { p.Targets = false },
+		"missing theme":     func(p *browserProviderPage) { p.ThemeReady = false },
+		"external resource": func(p *browserProviderPage) { p.Resources = false },
+		"unreachable link":  func(p *browserProviderPage) { p.Keyboard = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := good
+			change(&bad)
+			if browserProviderAdmit(bad, "picker", "light") {
+				t.Fatal("incomplete provider observation admitted")
+			}
+		})
+	}
+	for _, kind := range []string{"table", "editor-google", "login", "registration"} {
+		page := good
+		page.Kind = kind
+		page.Count = 2
+		switch kind {
+		case "editor-google":
+			page.Count = 1
+			page.URL = "http://fixture.localhost:8080/ui/console/instance/provider/google/create"
+		case "login":
+			page.URL = "http://fixture.localhost:8080/ui/login/login?authRequest=fictional"
+		case "registration":
+			page.URL = "http://fixture.localhost:8080/ui/login/register/option?authRequest=fictional"
+		}
+		if !browserProviderAdmit(page, kind, "light") {
+			t.Fatalf("complete %s refused", kind)
+		}
+		page.URL = "http://fixture.localhost:8080/incorrect"
+		if browserProviderAdmit(page, kind, "light") {
+			t.Fatalf("wrong %s route admitted", kind)
+		}
+	}
+}
+
+func TestBrowserProviderReceiptBindsCompleteCaseSet(t *testing.T) {
+	output := t.TempDir()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
+		t.Fatal(err)
+	}
+	data := encoded.Bytes()
+	cases := []browserProviderCase{}
+	for _, name := range []string{"picker/light", "table/light", "editor-google/light", "picker/dark", "table/dark", "editor-google/dark", "login/light", "registration/light", "login/dark", "registration/dark"} {
+		parts := strings.Split(name, "/")
+		kind, theme := parts[0], parts[1]
+		count := 2
+		if kind == "picker" {
+			count = 9
+		}
+		if kind == "editor-google" {
+			count = 1
+		}
+		filename := "provider-" + kind + "-" + theme + ".png"
+		if err := os.WriteFile(filepath.Join(output, filename), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		cases = append(cases, browserProviderCase{kind, theme, count, true, true, true, true, true, true, browserScreen{filename, len(data), imageHash(data)}})
+	}
+	if err := browserProviderReceipt(output, cases); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func([]browserProviderCase) []browserProviderCase{
+		"missing screen":   func(c []browserProviderCase) []browserProviderCase { return c[:9] },
+		"duplicate screen": func(c []browserProviderCase) []browserProviderCase { c[1] = c[0]; return c },
+		"missing glyph":    func(c []browserProviderCase) []browserProviderCase { c[7].Glyphs = false; return c },
+		"unsafe path":      func(c []browserProviderCase) []browserProviderCase { c[7].Screenshot.Path = "../outside.png"; return c },
+		"changed digest": func(c []browserProviderCase) []browserProviderCase {
+			c[7].Screenshot.SHA256 = strings.Repeat("0", 64)
+			return c
+		},
+		"changed length": func(c []browserProviderCase) []browserProviderCase { c[7].Screenshot.Bytes++; return c },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := append([]browserProviderCase{}, cases...)
+			if browserProviderReceipt(output, mutate(bad)) == nil {
+				t.Fatal("incomplete case set admitted")
+			}
+		})
+	}
+	if err := os.WriteFile(filepath.Join(output, cases[0].Screenshot.Path), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if browserProviderReceipt(output, cases) == nil {
+		t.Fatal("changed screenshot admitted")
+	}
+}
+
+func TestBrowserCleanupSurvivesExpiredObservation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	transport := browserRoundTrip(func(req *http.Request) (*http.Response, error) {
+		if req.Context().Err() != nil {
+			return nil, req.Context().Err()
+		}
+		if req.Method != "DELETE" || req.URL.Path != "/session/fixture" {
+			t.Fatal("wrong cleanup target")
+		}
+		called = true
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"value":null}`)), Header: make(http.Header)}, nil
+	})
+	d := browserDriver{ctx: ctx, client: &http.Client{Transport: transport}, session: "fixture", category: "observation"}
+	if err := d.closeSession(); err != nil || !called || d.ctx != ctx || d.category != "observation" {
+		t.Fatal("expired observation cancelled independent cleanup", err)
+	}
+}
+
+type browserRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f browserRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
