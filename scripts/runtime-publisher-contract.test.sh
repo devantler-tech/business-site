@@ -37,7 +37,7 @@ release_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || (inputs.mode == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027)) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
-    .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@b03d137ac25ef4299d4bc4ebee08928e1e57708e" and
+    .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@8e2dfbd3f9249b76b58234189ccbbae98d11b32b" and
     .jobs.release.permissions=={"contents":"read"} and
     .jobs.release.secrets=={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"} and
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
