@@ -81,7 +81,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   distribution clearance or portal activation. Read the same source/build guide.
   The separately compiled pinned vulnerability checker analyzes the actual Linux
   binary against the official database; preserve its failure status and retained
-  text diagnostics. Its verdict is not full admission or deployed acceptance.
+  text diagnostics. Both output streams enter the retained report without changing
+  the checker exit status. Its verdict is not full admission or deployed acceptance.
 - `scripts/zitadel-source-bundle.go` is an explicit, otherwise inert source-input
   snapshot/archive verifier. Its prepared-source operation admits only the complete
   frozen tree after API serialization, preserving empty files and executable modes.

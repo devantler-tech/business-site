@@ -90,6 +90,8 @@ then analyzes the actual frozen Linux executable in binary mode against
 `https://vuln.go.dev`. Findings and analysis errors fail the job before later
 image/replay proof; the ordinary text diagnostic is retained in the existing
 compact evidence. Do not use JSON mode as a success gate or suppress a finding.
+Standard output and standard error share that retained report, including early
+scanner errors; redirection preserves the checker's original exit status.
 The actual packaged executable preserves function symbols and omits only DWARF
 debug data. A complete native symbol read must identify its main entrypoint before
 the checker runs; empty, failed or partial symbol reads cannot produce a build receipt.
