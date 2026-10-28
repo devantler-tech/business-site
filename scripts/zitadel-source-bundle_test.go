@@ -185,10 +185,262 @@ func TestRetainedInputsArchive(t *testing.T) {
 	}
 }
 
+// sourceToolFixture gives the source layout controls independently named bodies.
+func sourceToolFixture(t *testing.T) (string, string, map[string][]byte) {
+	t.Helper()
+	input := t.TempDir()
+	if err := os.WriteFile(filepath.Join(input, "go.mod"), []byte("upstream service module\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	profile, err := sourceSealTree(input, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := map[string][]byte{"modifications.json": []byte("modifications\n")}
+	for _, entry := range sourceBuildRecordInputs() {
+		records[entry.retained] = []byte("other retained input " + entry.retained + "\n")
+	}
+	approved := sourceApprovedAliasesForTest()
+	for name, alias := range approved {
+		records[alias] = []byte("approved tool source " + name + "\n")
+	}
+	seal, err := sourceAddRecords(snapshot, profile, records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot, seal, records
+}
+
+// TestSourceRestoreToolsKeepsOnlyTheApprovedSource preserves the granted layout
+// without replacing the upstream service module or claiming tool reconstruction.
+func TestSourceRestoreToolsKeepsOnlyTheApprovedSource(t *testing.T) {
+	snapshot, seal, records := sourceToolFixture(t)
+	approved := sourceApprovedAliasesForTest()
+	output := filepath.Join(t.TempDir(), "tools")
+	var out, diagnostic bytes.Buffer
+	if status := sourceBundleRun([]string{"--restore-tools", snapshot, seal, output}, &out, &diagnostic); status != 0 {
+		t.Fatalf("retained source cannot reconstruct the approved tool layout: %s", diagnostic.String())
+	}
+	count := 0
+	if err := filepath.WalkDir(output, func(name string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		name, err := filepath.Rel(output, name)
+		if err != nil {
+			return err
+		}
+		alias, ok := approved[filepath.ToSlash(name)]
+		if !ok {
+			return fmt.Errorf("unapproved tool-source destination %s", name)
+		}
+		body, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil || !bytes.Equal(body, records[alias]) {
+			return fmt.Errorf("restored tool body differs: %s", name)
+		}
+		info, err := entry.Info()
+		if err != nil || info.Mode() != 0644 {
+			return fmt.Errorf("tool records must remain regular inert data: %s", name)
+		}
+		count++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 40 {
+		t.Fatalf("restore the exact 37 approved paths and three terms, got %d", count)
+	}
+	if _, err := os.Stat(filepath.Join(output, "go.mod")); !os.IsNotExist(err) {
+		t.Fatal("tool metadata must not replace the upstream service module")
+	}
+	out.Reset()
+	if status := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); status != 0 {
+		t.Fatalf("complete restored tool source cannot be read back: %s", diagnostic.String())
+	}
+	if err := os.WriteFile(filepath.Join(output, "server/go.mod"), []byte("different module\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if status := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); status == 0 || out.Len() != 0 {
+		t.Fatal("changed restored tool source must refuse a success receipt")
+	}
+}
+
+// TestSourceToolReadbackRejectsALatePrivacyChange checks the readback boundary,
+// after initial output admission rather than only the CLI's early root check.
+func TestSourceToolReadbackRejectsALatePrivacyChange(t *testing.T) {
+	snapshot, seal, _ := sourceToolFixture(t)
+	output := filepath.Join(t.TempDir(), "tools")
+	if _, err := sourceToolSource(snapshot, seal, output, true); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := sourceToolPlan(snapshot, seal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.Chmod(output, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := sourceToolFiles(root, plan); err == nil {
+		t.Fatal("late loss of output privacy passed the readback boundary")
+	}
+}
+
+// TestSourceToolRestorationRefusesIncompleteInputs keeps failed reconstruction
+// separate from success and preserves an existing caller-owned output.
+func TestSourceToolRestorationRefusesIncompleteInputs(t *testing.T) {
+	for _, kind := range []string{"wrong-seal", "changed-source", "missing-source", "linked-source", "mode-source", "partial-profile", "existing-output", "inside-snapshot", "alias-inside-snapshot"} {
+		t.Run(kind, func(t *testing.T) {
+			snapshot, seal, records := sourceToolFixture(t)
+			output := filepath.Join(t.TempDir(), "tools")
+			source := filepath.Join(snapshot, "records", sourceApprovedAliasesForTest()["server/go.mod"])
+			switch kind {
+			case "wrong-seal":
+				seal = strings.Repeat("0", 64)
+			case "changed-source":
+				if err := os.WriteFile(source, []byte("other module"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "missing-source":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+			case "linked-source":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(snapshot, "source/go.mod"), source); err != nil {
+					t.Fatal(err)
+				}
+			case "mode-source":
+				if err := os.Chmod(source, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "partial-profile":
+				// A valid external seal is not permission to omit an approved body.
+				delete(records, sourceApprovedAliasesForTest()["server/go.mod"])
+				input := t.TempDir()
+				if err := os.WriteFile(filepath.Join(input, "source.go"), []byte("source"), 0644); err != nil {
+					t.Fatal(err)
+				}
+				snapshot = filepath.Join(t.TempDir(), "partial")
+				profile, err := sourceSealTree(input, snapshot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				seal, err = sourceAddRecords(snapshot, profile, records)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "existing-output":
+				if err := os.Mkdir(output, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(output, "keep"), []byte("keep"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "inside-snapshot":
+				output = filepath.Join(snapshot, "tools")
+			case "alias-inside-snapshot":
+				alias := filepath.Join(t.TempDir(), "alias")
+				if err := os.Symlink(snapshot, alias); err != nil {
+					t.Fatal(err)
+				}
+				output = filepath.Join(alias, "tools")
+			}
+			var out, diagnostic bytes.Buffer
+			if code := sourceBundleRun([]string{"--restore-tools", snapshot, seal, output}, &out, &diagnostic); code == 0 || out.Len() != 0 {
+				t.Fatal("invalid restoration emitted a successful receipt")
+			}
+			if kind == "existing-output" {
+				if body, err := os.ReadFile(filepath.Join(output, "keep")); err != nil || string(body) != "keep" {
+					t.Fatal("existing output changed")
+				}
+			} else if _, err := os.Lstat(output); !os.IsNotExist(err) {
+				t.Fatal("failed restoration left an output")
+			}
+		})
+	}
+}
+
+// TestSourceToolReadbackRefusesMutatedOutputs exercises every retained source
+// family and closed output membership through the real explicit CLI operation.
+func TestSourceToolReadbackRefusesMutatedOutputs(t *testing.T) {
+	for _, kind := range []string{"module", "sum", "command", "recipe", "terms", "missing", "link", "mode", "extra-file", "extra-directory", "directory-mode", "root-mode", "linked-root"} {
+		t.Run(kind, func(t *testing.T) {
+			snapshot, seal, _ := sourceToolFixture(t)
+			output := filepath.Join(t.TempDir(), "tools")
+			if _, err := sourceToolSource(snapshot, seal, output, true); err != nil {
+				t.Fatal(err)
+			}
+			member := filepath.Join(output, "server/go.mod")
+			switch kind {
+			case "module", "sum", "command", "recipe", "terms":
+				names := map[string]string{"module": "server/go.mod", "sum": "server/go.sum", "command": "server/cmd/zitadel-module-sources/main.go", "recipe": "scripts/build-zitadel-linux.sh", "terms": "third_party/zitadel-build-tools/COPYING"}
+				target := filepath.Join(output, names[kind])
+				if info, err := os.Lstat(target); err != nil || !info.Mode().IsRegular() {
+					t.Fatal("the existing source/terms body must be the mutation target")
+				}
+				if err := os.WriteFile(target, []byte("changed"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "missing":
+				if err := os.Remove(member); err != nil {
+					t.Fatal(err)
+				}
+			case "link":
+				if err := os.Remove(member); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(output, "server/go.sum"), member); err != nil {
+					t.Fatal(err)
+				}
+			case "mode":
+				if err := os.Chmod(member, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "extra-file":
+				if err := os.WriteFile(filepath.Join(output, "server/cmd/zitadel-module-sources/extra.go"), []byte("extra"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "extra-directory":
+				if err := os.Mkdir(filepath.Join(output, "unused"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "directory-mode":
+				if err := os.Chmod(filepath.Join(output, "server/cmd"), 0777); err != nil {
+					t.Fatal(err)
+				}
+			case "root-mode":
+				if err := os.Chmod(output, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "linked-root":
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(output, link); err != nil {
+					t.Fatal(err)
+				}
+				output = link
+			}
+			var out, diagnostic bytes.Buffer
+			if code := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); code == 0 || out.Len() != 0 {
+				t.Fatal("changed tool-source output emitted success")
+			}
+		})
+	}
+}
+
 // TestSourceRestoreBuildKeepsLiteralInputs proves the replay seam restores a
-// verified closed snapshot without re-preparing it or replacing its original API
-// record with the serialized source configuration. Frozen-profile admission is
-// separately owned by the native builder, as for the existing unpack operation.
+// verified closed snapshot without re-preparing it or replacing its API record.
 func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 	for _, kind := range []string{"valid", "missing-record", "extra-record", "changed-member", "wrong-seal", "existing-output", "output-inside-snapshot", "output-alias-inside-snapshot"} {
 		t.Run(kind, func(t *testing.T) {
