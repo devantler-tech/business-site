@@ -58,15 +58,15 @@ export default defineConfig(({ mode }) => ({
       adapter: {
         ...adapter(),
         async adapt(builder) {
-          await adapter().adapt(builder);
           // These literal HTML/module dependencies are content assets, not
-          // application imports. Write the complete admitted closure explicitly;
-          // framework SSR asset relocation retains only its own app namespace.
+          // application imports. Populate the client directory before adaptation
+          // so both framework preview and static publication serve the same closure.
           for (const asset of readReadingReference().assets) {
-            const file = `build/${asset.filename}`;
+            const file = `${builder.getClientDirectory()}/${asset.filename}`;
             mkdirSync(dirname(file),{recursive:true});
             writeFileSync(file,Buffer.from(asset.source,"base64"));
           }
+          await adapter().adapt(builder);
           writeDiscovery("build");
           writeFileSync("build/404.html",readFileSync(new URL("./not-found.html",import.meta.url)));
           capturePublicArtifact("build","../.generated/selected-public-artifact.json",process.env.SVELTE_PUBLIC_BUILD_NONCE);
