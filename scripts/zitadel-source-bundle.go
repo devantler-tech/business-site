@@ -1546,6 +1546,7 @@ func sourceInputComponents() map[string]bool {
 		"selected-bsr-sources": false, "selected-console-originals": false,
 		"selected-verifier-bootstrap": false,
 		"selected-notice-originals":   false,
+		"selected-pnpm-sdk-bootstrap": false,
 	}
 }
 

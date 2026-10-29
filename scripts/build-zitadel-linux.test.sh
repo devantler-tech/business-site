@@ -57,18 +57,50 @@ set -euo pipefail
 if [[ "$1" = --version ]]; then echo "${TEST_NODE:-v22.23.3}"; exit; fi
 [[ "$1" == */tools/zitadel-pnpm-source/index.mjs ]]
 if [[ -n "${TEST_EXPECT_PNPM_SDK:-}" ]]; then [[ "$1" = "$TEST_EXPECT_PNPM_SDK/index.mjs" ]]; fi
-if [[ "$2" = inspect ]]; then
+if [[ "$2" != bootstrap-* ]]; then
+  args=("$@")
+  guard=0
+  if [[ "$#" -ge 12 ]]; then guard=$(($#-10)); fi
+  if [[ "$guard" -ge 2 ]] && [[ "${args[$guard]}" = --sdk-bootstrap ]]; then
+    [[ "${args[$((guard+2))]}" = --sdk-bootstrap-sha256 && "${args[$((guard+4))]}" = --sdk-source-sha256 && "${args[$((guard+6))]}" = --sdk-tool-source-sha256 && "${args[$((guard+8))]}" = --sdk-recipe-sha256 ]]
+    jq -e --arg seal "${args[$((guard+3))]}" --arg source "${args[$((guard+5))]}" --arg tools "${args[$((guard+7))]}" --arg recipe "${args[$((guard+9))]}" \
+      '.manifestSha256==$seal and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .recipeSha256==$recipe' "${args[$((guard+1))]}/receipt.json" >/dev/null
+    set -- "${args[@]:0:$guard}"
+  elif [[ -n "${TEST_EXPECT_PNPM_SDK:-}" ]]; then
+    echo 'retained SDK call lacks authenticated bootstrap arguments' >&2; exit 42
+  fi
+fi
+if [[ "$2" = bootstrap-capture ]]; then
+  [[ "$#" -eq 12 && "$3" = --source-sha256 && "$5" = --tool-source-sha256 && "$7" = --recipe-sha256 && "$9" = --output && "${11}" = --scratch ]]
+  [[ "${TEST_FAIL:-}" != sdk-bootstrap-capture ]] || exit 42
+  mkdir "${10}"
+  packages=132
+  [[ "${TEST_FAIL:-}" != sdk-bootstrap-incomplete ]] || packages=131
+  jq -n --arg source "$4" --arg tools "$6" --arg recipe "$8" --argjson packages "$packages" \
+    '{schemaVersion:1,profile:"identity-pnpm-sdk-bootstrap-v1",manifestSha256:("7"*64),sourceManifestSha256:$source,toolSourceSha256:$tools,recipeSha256:$recipe,packages:$packages,sdkReconstructed:false,nativeOfflineReplayProved:false}' >"${10}/receipt.json"
+  cat "${10}/receipt.json"
+elif [[ "$2" = bootstrap-verify ]]; then
+  [[ "$#" -eq 14 && "$3" = --capsule && "$5" = --sha256 && "$7" = --source-sha256 && "$9" = --tool-source-sha256 && "${11}" = --recipe-sha256 && "${13}" = --sdk-root ]]
+  [[ "${TEST_FAIL:-}" != sdk-bootstrap-readback ]] || exit 42
+  cat "$4/receipt.json"
+elif [[ "$2" = inspect ]]; then
   [[ "$#" -eq 4 && "$3" = --build && -s "$4/pnpm-selected-projects.json" && ! -e "$4/generate.log" ]]
   [[ "${TEST_FAIL:-}" != pnpm-early-check ]] || exit 42
   packages=1
   [[ "${TEST_FAIL:-}" != pnpm-early-incomplete ]] || packages=0
   jq -n --argjson packages "$packages" '{schemaVersion:1,profile:"native-installation-selection-v1",packages:$packages,optionalSkips:0,selectedPNPMSourcesCaptured:false,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
-elif [[ "$2" = capture ]]; then
+elif [[ "$2" = capture || "$2" = recapture ]]; then
   [[ "$3" = --build && "$5" = --source-sha256 && "$7" = --output && "$9" = --scratch ]]
   jq -e 'length == 4' "$4/pnpm-selected-projects.json" >/dev/null
   [[ "${TEST_FAIL:-}" != pnpm-capture ]] || { echo '{"plausible":"partial"}'; exit 42; }
   mkdir "$8"
   packages=1
+  if [[ "$2" = recapture ]]; then
+    [[ "${TEST_FAIL:-}" != retained-recapture ]] || exit 42
+    [[ "${TEST_FAIL:-}" != retained-recapture-incomplete ]] || packages=0
+    [[ "$#" -eq 16 && "${11}" = --original-capsule && "${13}" = --original-sha256 && "${15}" = --original-scratch ]]
+    jq -e --arg source "$6" --arg seal "${14}" '.sourceManifestSha256==$source and .manifestSha256==$seal' "${12}/receipt.json" >/dev/null
+  fi
   if [[ "${TEST_FAIL:-}" = pnpm-incomplete ]]; then packages=0; fi
   jq -n --arg source "$6" --argjson packages "$packages" \
     '{schemaVersion:1,manifestSha256:("e"*64),sourceManifestSha256:$source,packages:$packages,archives:1,files:14,bytes:123,selectedPNPMSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}' >"$8/receipt.json"
@@ -77,6 +109,7 @@ elif [[ "$2" = capture ]]; then
 elif [[ "$2" = restore ]]; then
   [[ "$#" -eq 10 && "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch && "$9" = --store ]]
   [[ "${TEST_FAIL:-}" != retained-pnpm ]] || exit 42
+  if [[ "$4" = */recaptured-pnpm-sources ]]; then [[ "${TEST_FAIL:-}" != retained-recapture-restore ]] || exit 42; fi
   mkdir "${10}"
   printf 'restored native CAFS\n' >"${10}/native-restore-control"
   jq '. + {nativeStoreRestored:true}' "$4/receipt.json"
@@ -84,6 +117,7 @@ elif [[ "$2" = restore ]]; then
 elif [[ "$2" = verify ]]; then
   [[ "$3" = --capsule && "$5" = --sha256 && "$7" = --scratch ]]
   [[ "${TEST_FAIL:-}" != pnpm-readback ]] || exit 42
+  if [[ "$4" = */recaptured-pnpm-sources ]]; then [[ "${TEST_FAIL:-}" != retained-recapture-verify ]] || exit 42; fi
   cat "$4/receipt.json"
 else exit 42
 fi
@@ -855,6 +889,7 @@ jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sour
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.toolSource.toolSourceSha256 == ("9"*64) and .sourceSnapshot.toolSource.members == 40 and .sourceSnapshot.toolSource.goVerifiersRebuilt == false and .sourceSnapshot.verifierBootstrap.files == 4 and .sourceSnapshot.verifierBootstrap.verifierBootstrapCaptured == true and .sourceSnapshot.verifierBootstrap.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.verifierBootstrap.toolSourceSha256 == .sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.verifierCompiler == {go:"1.27.3",sha256:("8"*64)}' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.sdkBootstrap.profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceSnapshot.sdkBootstrap.packages==132 and .sourceSnapshot.sdkBootstrap.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.sdkBootstrap.toolSourceSha256==.sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.sdkBootstrap.recipeSha256==.recipeSha256 and .sourceSnapshot.sdkBootstrap.sdkReconstructed==false and .sourceSnapshot.sdkBootstrap.nativeOfflineReplayProved==false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -871,7 +906,7 @@ if bash "$build" --build --prepared-source "$TEST_PREPARED_BUILD" --prepared-sha
   echo 'build output was allowed inside the sealed console input' >&2; exit 1
 fi
 test ! -e "$scratch/captured/selected-console-originals/nested-build"
-for failure in tool-source-restore tool-source-readback verifier-bootstrap-capture verifier-bootstrap-readback verifier-bootstrap-incomplete graph-metadata-capture graph-metadata-readback graph-metadata-incomplete pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback authored-source-readback late-authored-record module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges late-notice-catalogue late-notice-psl; do
+for failure in sdk-bootstrap-capture sdk-bootstrap-incomplete sdk-bootstrap-readback tool-source-restore tool-source-readback verifier-bootstrap-capture verifier-bootstrap-readback verifier-bootstrap-incomplete graph-metadata-capture graph-metadata-readback graph-metadata-incomplete pnpm-early-check pnpm-early-incomplete generator-checkpoint-changed generator-observation generator-readback generator-incomplete generator-source-capture generator-source-readback generator-source-incomplete pnpm-selection pnpm-capture pnpm-incomplete pnpm-readback pnpm-tool-changed console-capture console-verify console-request-incomplete console-tool-changed console-launcher-changed bsr-copy-changed source-capture source-readback authored-source-readback late-authored-record module-source-capture module-source-readback module-source-incomplete bsr-tool-changed bsr-tool-binding bsr-resolution bsr-metadata bsr-export bsr-capture bsr-readback bsr-incomplete bsr-cache bsr-descriptor network-isolation network-leak no-new-privileges late-notice-catalogue late-notice-psl; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$failure" bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" "${capture_inputs[@]}" --source "$scratch/upstream" --output "$scratch/$failure" >"$scratch/$failure.log" 2>&1; then echo "failed source capture/readback admitted: $failure" >&2; exit 1; fi
   test ! -e "$scratch/$failure/build-receipt.json"
@@ -897,7 +932,7 @@ cp -R "$scratch/complete/prepared" "$retained/source/source-snapshot/"
 for record in api-project.original.json api-project.serial.json inputs.sha256; do
   cp "$scratch/complete/$record" "$retained/source/source-snapshot/$record"
 done
-for component in selected-go-sources selected-generator-go-sources go-graph-metadata selected-pnpm-sources selected-bsr-sources selected-console-originals selected-notice-originals; do
+for component in selected-go-sources selected-generator-go-sources go-graph-metadata selected-pnpm-sources selected-bsr-sources selected-console-originals selected-notice-originals selected-pnpm-sdk-bootstrap; do
   cp -R "$scratch/captured/$component" "$retained/source/"
 done
 mkdir -p "$retained/source/selected-go-sources/records"
@@ -925,6 +960,7 @@ if ! env TEST_EXPECT_PNPM_SDK="$native_sdk" bash "$build" --build --retained-inp
 fi
 jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
 jq -e --slurpfile original "$retained/source/build-receipt.json" '.noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.originalInputsReadbackPassed==true and .noticeOriginals.files==43' "$retained_output/build-receipt.json" >/dev/null
+jq -e --slurpfile original "$retained/source/build-receipt.json" '.sdkBootstrap==$original[0].sourceSnapshot.sdkBootstrap and .sdkNativeOperations.profile=="identity-native-pnpm-sdk-operations-v1" and .sdkNativeOperations.nativeOperationsPassed==true and .sdkNativeOperations.nativeOfflineReplayProved==false and .sdkNativeOperations.operations==["restore","inspect","verify","capture","verify","restore"]' "$retained_output/build-receipt.json" >/dev/null
 final_receipt="$(shasum -a 256 "$retained_output/build-receipt.json" | awk '{print $1}')"
 for phase in console icons text-fonts copied-assets; do
   [[ "$(cat "$retained_output/fixture-$phase-receipt.sha256")" == "$final_receipt" ]] || { echo "final receipt differs from $phase inventory binding" >&2; exit 1; }
@@ -995,6 +1031,13 @@ test ! -e "$scratch/late-restored-notice/build-receipt.json"
 test -s "$scratch/late-restored-notice/service/zitadel"
 grep -Fq 'retained notice originals changed' "$scratch/late-restored-notice.log"
 
+for fault in retained-recapture retained-recapture-incomplete retained-recapture-verify retained-recapture-restore; do
+  : >"$TEST_CALLS"
+  if env TEST_FAIL="$fault" TEST_RETAINED_PROXY_URL="file://$scratch/$fault/go-input-native/go-proxy" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --pnpm-source-sdk "$native_sdk" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
+    echo "incomplete native SDK operation admitted: $fault" >&2; exit 1
+  fi
+  test ! -e "$scratch/$fault/build-receipt.json"
+done
 for fault in retained-go-consumption retained-go-consumption-partial; do
   : >"$TEST_CALLS"
   if env TEST_FAIL="$fault" TEST_RETAINED_PROXY_URL="file://$scratch/$fault/go-input-native/go-proxy" bash "$build" --build --retained-inputs "$retained" --retained-sha256 "$prepared_sha" --pnpm-source-sdk "$native_sdk" --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --output "$scratch/$fault" >"$scratch/$fault.log" 2>&1; then
@@ -1030,6 +1073,7 @@ for control in complete jq-partial hash-partial; do
   done
   jq -n '{sourceInput:{manifestSha256:("a"*64)},recipeSha256:("c"*64),binarySha256:("d"*64)}' >"$receipt_output/native.json"
   jq -n '{goVerifiersRebuilt:true,fixture:"receipt I/O only"}' >"$receipt_output/verifier-reconstruction.json"
+  jq -n '{sdkReconstructed:true,fixture:"receipt I/O only"}' >"$receipt_output/sdk-reconstruction.json"
   case "$control" in
     jq-partial)
       printf '#!/usr/bin/env bash\nprintf "{\\\"schemaVersion\\\":1"\nexit 42\n' >"$receipt_output/bin/jq"

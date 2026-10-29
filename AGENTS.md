@@ -187,8 +187,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   selection, complete original archive SRI, independent CAFS byte checks and
   native lifecycle classification. Restoration preserves verified literal indexes;
   it never transplants old installation metadata into the application. The
-  adapter and both SDK manifests are retained source/build records. Capture and
-  reconstruction do not establish an offline install or complete native replay.
+  adapter and both SDK manifests are retained source/build records. The separate
+  SDK bootstrap capsule retains all 132 original locked packages and supplemental
+  terms. Raw built-in verification must precede native npm reconstruction and every
+  SDK use; no ambient module path, configuration or cache may supply dependencies.
+  SDK reconstruction remains scoped evidence; only the complete restricted replay
+  caller can establish an offline application build. Read its README.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.

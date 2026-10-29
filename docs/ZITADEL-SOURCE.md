@@ -995,17 +995,24 @@ Module/package paths, checksums, complete terms and origin inputs remain checked
 The retained marker enters the final build receipt before either notice inventory
 binds its bytes; completion only renames that unchanged receipt.
 
-Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities,
-the caller-selected original Go 1.27.3 distribution and lock-pinned native
-pnpm SDK remain explicit build-tool boundaries, not application payloads inside
-the input archive. This does not claim a hermetic OS/toolchain distribution.
-The retained native caller explicitly receives `--pnpm-source-sdk` pointing at
-that installed original SDK directory. Its fixed entrypoint, package declaration
-and lock must equal the retained authored inputs before and after native use;
-linked, missing or changed source refuses completion. This keeps the original
-installed SDK dependency boundary explicit while the forty-member caller root
-remains closed. SDK dependency capture/bootstrap remains #422; the notice capsule
-does not supply it or claim that proof.
+Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities
+and the caller-selected original Go 1.27.3 distribution remain explicit build-tool
+boundaries. This does not claim a hermetic OS/toolchain distribution.
+The separate `selected-pnpm-sdk-bootstrap` component retains the unchanged SDK
+lock's 132 original archives, source/recipe/tool bindings, complete installed-file
+observations and supplemental terms. Built-in verification authenticates these
+inputs before native npm seeds a fresh cache from local originals and reconstructs
+the SDK offline. No old `node_modules` or npm cache is copied. Empty and partial
+cache controls must fail after the positive reconstruction succeeds.
+The retained native caller receives `--pnpm-source-sdk` pointing at this newly
+reconstructed SDK. Its complete source, installation and original capsule are
+rechecked before and after native operations. Six actual operations surround the
+same native build: restore, inspect, verify, recapture, verify and restore. Recapture
+uses only authenticated original archives through the existing capture callback.
+The separate component leaves the forty-member caller source root, 58-record
+inventory, four restoration targets and 43-original notice capsule unchanged.
+Its receipts remain scoped; complete offline replay is asserted only by the
+existing restricted caller after every build and notice check passes.
 Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
 43-file plan retains original notices, attributions, catalogues, the historical
 public-suffix source and copied CSS. The five guidance READMEs and three authored

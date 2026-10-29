@@ -123,7 +123,7 @@ func TestNoticeOriginalsSurviveWithoutCheckout(t *testing.T) {
 		t.Fatalf("complete retained originals cannot be captured: %s", diagnostic.String())
 	}
 	// Exercise the actual existing transport; fake receipt prose is insufficient.
-	for _, component := range []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap"} {
+	for _, component := range []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap", "selected-pnpm-sdk-bootstrap"} {
 		dir := filepath.Join(build, component)
 		if err := os.Mkdir(dir, 0700); err != nil {
 			t.Fatal(err)
@@ -407,10 +407,10 @@ func sourceApprovedAliasesForTest() map[string]string {
 // TestRetainedInputsArchive exercises the actual closed archive with private
 // capsule modes. Compiled output and ambient caches must never enter it.
 func TestRetainedInputsArchive(t *testing.T) {
-	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "missing-notice-originals", "linked-member", "unsupported-mode"} {
+	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "missing-notice-originals", "missing-sdk-bootstrap", "linked-member", "unsupported-mode"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap", "selected-notice-originals"}
+			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap", "selected-notice-originals", "selected-pnpm-sdk-bootstrap"}
 			modes := []os.FileMode{0600, 0444, 0644, 0755}
 			for i, component := range components {
 				if kind == "missing-component" && i == 0 {
@@ -420,6 +420,9 @@ func TestRetainedInputsArchive(t *testing.T) {
 					continue
 				}
 				if kind == "missing-notice-originals" && component == "selected-notice-originals" {
+					continue
+				}
+				if kind == "missing-sdk-bootstrap" && component == "selected-pnpm-sdk-bootstrap" {
 					continue
 				}
 				dir := filepath.Join(root, component)

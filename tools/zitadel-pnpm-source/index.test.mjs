@@ -620,7 +620,7 @@ test("capture refuses output in the prepared source before changing it", async (
   assert.equal(fs.existsSync(nested), false);
 });
 
-function archiveFixture(t, needsBuild = false, archiveMode = 0o644, manifestExtra = {}) {
+function archiveFixture(t, needsBuild = false, archiveMode = 0o644, manifestExtra = {}, binBody = "#!/bin/sh\nexit 0\n") {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "zitadel-pnpm-native-test-")));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const source = path.join(directory, "package");
@@ -632,7 +632,7 @@ function archiveFixture(t, needsBuild = false, archiveMode = 0o644, manifestExtr
   );
   fs.writeFileSync(path.join(source, "index.js"), "export const value = 1;\n", { mode: 0o644 });
   fs.chmodSync(path.join(source, "index.js"), archiveMode);
-  fs.writeFileSync(path.join(source, "bin"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  fs.writeFileSync(path.join(source, "bin"), binBody, { mode: 0o755 });
   const archive = execFileSync("tar", ["-czf", "-", "-C", directory, "package"], {
     env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
@@ -956,3 +956,178 @@ for (const [name, mutate] of [
     );
   });
 }
+
+// A clean recipient must be able to authenticate inert bootstrap data before
+// any third-party SDK code exists or can execute.
+test("inert entrypoint imports and no-argument invocation need no installed SDK", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-inert-")));
+  try {
+    const entry = path.join(root, "index.mjs");
+    fs.copyFileSync(fileURLToPath(new URL("./index.mjs", import.meta.url)), entry);
+    for (const args of [[entry], ["--input-type=module", "-e", `await import(${JSON.stringify(entry)});`]]) {
+      const result = spawnSync(process.execPath, args, {
+        encoding: "utf8", timeout: 5000, env: { PATH: process.env.PATH },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, "");
+      assert.equal(result.stderr, "");
+    }
+    assert.deepEqual(fs.readdirSync(root), ["index.mjs"]);
+  } finally {
+    fs.rmSync(root, { recursive: true });
+  }
+});
+
+// The archive, native npm installation and SDK implementation are real. Only
+// the original acquisition is local, so these tests require no network.
+async function sdkBootstrapFixture(t, binBody, sharedBin = false) {
+  const f = archiveFixture(t, false, 0o644, { bin: { alpha: "bin" } }, binBody);
+  const sdk = path.join(f.directory, "sdk");
+  fs.mkdirSync(sdk, { mode: 0o700 });
+  fs.copyFileSync(fileURLToPath(new URL("./index.mjs", import.meta.url)), path.join(sdk, "index.mjs"));
+  const manifest = { name: "fictional-sdk", version: "1.0.0", private: true, dependencies: { alpha: "1.0.0" } };
+  const lock = { name: manifest.name, version: manifest.version, lockfileVersion: 3, requires: true,
+    packages: { "": manifest, "node_modules/alpha": { version: "1.0.0", resolved: "https://registry.npmjs.org/alpha/-/alpha-1.0.0.tgz", integrity: sri(f.archive), bin: { alpha: "bin" } } } };
+  const other = sharedBin ? archiveFixture(t, false, 0o644, { name: "beta", bin: { alpha: "bin" } }) : undefined;
+  if (other) {
+    manifest.dependencies.beta = "1.0.0";
+    lock.packages["node_modules/beta"] = { version: "1.0.0", resolved: "https://registry.npmjs.org/beta/-/beta-1.0.0.tgz", integrity: sri(other.archive), bin: { alpha: "bin" } };
+  }
+  fs.writeFileSync(path.join(sdk, "package.json"), JSON.stringify(manifest) + "\n");
+  fs.writeFileSync(path.join(sdk, "package-lock.json"), JSON.stringify(lock) + "\n");
+  const cache = path.join(f.directory, "initial-cache");
+  const userconfig = path.join(f.directory, "user-npmrc"), globalconfig = path.join(f.directory, "global-npmrc");
+  fs.writeFileSync(userconfig, ""); fs.writeFileSync(globalconfig, "");
+  const archive = path.join(f.directory, "alpha.tgz"); fs.writeFileSync(archive, f.archive);
+  const npm = (args) => execFileSync("npm", ["--cache", cache, "--userconfig", userconfig, "--globalconfig", globalconfig,
+    "--offline", "--ignore-scripts", "--audit=false", "--fund=false", ...args], {
+      env: { PATH: process.env.PATH, HOME: f.directory }, encoding: "utf8", timeout: 10000,
+    });
+  npm(["cache", "add", archive]);
+  if (other) {
+    const second = path.join(f.directory, "beta.tgz"); fs.writeFileSync(second, other.archive);
+    npm(["cache", "add", second]);
+  }
+  npm(["ci", "--prefix", sdk]);
+  const api = await import("./index.mjs");
+  const npmCLI = fs.realpathSync(execFileSync("which", ["npm"], { encoding: "utf8" }).trim());
+  const source = "1".repeat(64), tools = "2".repeat(64), recipe = "3".repeat(64);
+  const policy = { lock: createHash("sha256").update(fs.readFileSync(path.join(sdk, "package-lock.json"))).digest("hex"), packages: other ? 2 : 1 };
+  const capsule = path.join(f.directory, "bootstrap"), scratch = path.join(f.directory, "capture-work");
+  const captured = await api.captureSDKBootstrap({ sdkRoot: sdk, sourceManifestSha256: source, toolSourceSha256: tools,
+    recipeSha256: recipe, output: capsule, scratch, policy, acquire: async p => p.name === "beta" ? other.archive : f.archive, npmCLI });
+  return { ...f, api, sdk, capsule, captured, source, tools, recipe, policy, npmCLI };
+}
+
+test("SDK bootstrap binds original archives to the actual complete native installation", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  assert.equal(f.captured.packages, 1);
+  assert.equal(f.captured.sdkReconstructed, false);
+  assert.equal(f.captured.nativeOfflineReplayProved, false);
+  const verified = f.api.verifySDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+    sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe, sdkRoot: f.sdk, policy: f.policy, npmCLI: f.npmCLI });
+  assert.deepEqual(verified, f.captured);
+  for (const [fault, mutate] of [
+    ["changed installed dependency", () => fs.appendFileSync(path.join(f.sdk, "node_modules/alpha/index.js"), "changed\n")],
+  ]) {
+    mutate();
+    assert.throws(() => f.api.verifySDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+      sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe, sdkRoot: f.sdk, policy: f.policy, npmCLI: f.npmCLI }), undefined, fault);
+  }
+});
+
+test("SDK bootstrap observes native npm bin normalization without changing original archives", async (t) => {
+  const f = await sdkBootstrapFixture(t, "#!/usr/bin/env node\r\nconsole.log('fixture');\r\n");
+  assert.equal(fs.readFileSync(path.join(f.sdk, "node_modules/alpha/bin"), "utf8"), "#!/usr/bin/env node\nconsole.log('fixture');\r\n");
+  const manifest = JSON.parse(fs.readFileSync(path.join(f.capsule, "manifest.json")));
+  assert.equal(manifest.packages[0].integrity, sri(f.archive));
+});
+
+test("SDK bootstrap binds npm's actual choice when original packages share a command name", async (t) => {
+  const f = await sdkBootstrapFixture(t, undefined, true);
+  assert.equal(f.captured.packages, 2);
+  assert.ok(["../alpha/bin", "../beta/bin"].includes(fs.readlinkSync(path.join(f.sdk, "node_modules/.bin/alpha"))));
+});
+
+test("SDK reconstruction uses native offline npm with a fresh layout and cache", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const output = path.join(f.directory, "reconstructed-sdk"), scratch = path.join(f.directory, "reconstruction-work");
+  const result = await f.api.reconstructSDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+    sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe,
+    sourceRoot: f.sdk, output, scratch, policy: f.policy, npmCLI: f.npmCLI });
+  assert.equal(result.sdkReconstructed, true);
+  assert.equal(result.installationMatched, true);
+  assert.equal(result.compositionMatched, true);
+  assert.equal(result.nativeOfflineReplayProved, false);
+  assert.equal(fs.readFileSync(path.join(output, "node_modules/alpha/index.js"), "utf8"), "export const value = 1;\n");
+  assert.equal(fs.readlinkSync(path.join(output, "node_modules/.bin/alpha")), "../alpha/bin");
+  assert.equal(fs.existsSync(path.join(output, "index.test.mjs")), false);
+  assert.equal(fs.existsSync(path.join(output, "README.md")), false);
+});
+
+test("SDK bootstrap preserves complete supplemental terms and refuses a changed body", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const name = path.join(f.capsule, "terms/CC-BY-3.0.txt");
+  assert.equal(fs.existsSync(name), true, "assessed complete legal-code supplement was not retained");
+  assert.equal(createHash("sha256").update(fs.readFileSync(name)).digest("hex"), "e6bc9e9c474700b708f568bac9e5a8a9bcb2b1dad53442f5ba449fcb848b8e76");
+  fs.writeFileSync(name, "changed\n");
+  assert.throws(() => f.api.verifySDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+    sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe,
+    sourceRoot: f.sdk, policy: f.policy, npmCLI: f.npmCLI }));
+});
+
+for (const fault of ["extra empty directory", "unsafe directory mode", "unbound project config", "linked project config"]) {
+  test(`SDK raw readback refuses ${fault} before dependency loading`, async (t) => {
+    const f = await sdkBootstrapFixture(t);
+    if (fault === "extra empty directory") fs.mkdirSync(path.join(f.sdk, "node_modules/alpha/unexpected"));
+    else if (fault === "unsafe directory mode") fs.chmodSync(path.join(f.sdk, "node_modules/alpha"), 0o777);
+    else if (fault === "unbound project config") fs.writeFileSync(path.join(f.sdk, ".npmrc"), "omit=dev\n");
+    else fs.symlinkSync("missing-config", path.join(f.sdk, ".npmrc"));
+    assert.throws(() => f.api.verifySDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+      sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe,
+      sdkRoot: f.sdk, policy: f.policy, npmCLI: f.npmCLI }));
+  });
+}
+
+test("native SDK operations refuse dependency fallback through ambient NODE_PATH", () => {
+  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-no-ambient-")));
+  try {
+    const entry = path.join(directory, "index.mjs");
+    fs.copyFileSync(fileURLToPath(new URL("./index.mjs", import.meta.url)), entry);
+    const fixture = selectionFixture();
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e",
+      `const m=await import(${JSON.stringify(entry)}); m.selectInstalled(${JSON.stringify(fixture)},${JSON.stringify(root)});`], {
+      encoding: "utf8", timeout: 5000,
+      env: { PATH: process.env.PATH, NODE_PATH: fileURLToPath(new URL("./node_modules", import.meta.url)) },
+    });
+    assert.equal(result.status, 1, "ambient SDK dependencies were executed");
+    assert.match(result.stderr, /SDK dependency resolved outside the owned installation/);
+  } finally { fs.rmSync(directory, { recursive: true }); }
+});
+
+test("SDK bootstrap records the actual selected npm version", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const manifest = JSON.parse(fs.readFileSync(path.join(f.capsule, "manifest.json")));
+  const actual = execFileSync(process.execPath, [f.npmCLI, "--version"], { encoding: "utf8", env: { PATH: process.env.PATH, HOME: f.directory } }).trim();
+  assert.equal(manifest.runtime.npmVersion, actual);
+});
+
+test("native pnpm recapture obtains every archive only from the authenticated original capsule", async (t) => {
+  const f = await buildFixture(t);
+  const original = await captureBuild(f.options);
+  const api = await import("./index.mjs");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("network acquisition attempted during retained recapture"); };
+  try {
+    const output = path.join(f.directory, "recaptured");
+    const actual = await api.recaptureBuild({ build: f.build, sourceManifestSha256: "a".repeat(64),
+      capsule: f.output, sha256: original.manifestSha256, output, scratch: path.join(f.directory, "recapture-work"),
+      originalScratch: path.join(f.directory, "original-check"), expectedLock: f.expectedLock });
+    assert.equal(actual.packages, 1);
+    assert.equal(actual.selectedPNPMSourcesCaptured, true);
+    assert.equal(actual.nativeOfflineReplayProved, false);
+    const verified = await verifyCapsule({ capsule: output, sha256: actual.manifestSha256,
+      scratch: path.join(f.directory, "recapture-check"), expectedLock: f.expectedLock });
+    assert.deepEqual(verified, actual);
+  } finally { globalThis.fetch = previousFetch; }
+});

@@ -80,6 +80,22 @@ go_root="$(go env GOROOT)"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 retained_receipt=''
 pnpm_sdk="$root/tools/zitadel-pnpm-source"
+sdk_bootstrap='' sdk_bootstrap_sha='' sdk_context_source='' sdk_context_tools=''
+sdk_recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
+check_sdk_bootstrap_readback() {
+  [[ -n "$sdk_bootstrap" ]] || return 0
+  node "$pnpm_sdk/index.mjs" bootstrap-verify --capsule "$sdk_bootstrap" --sha256 "$sdk_bootstrap_sha" \
+    --source-sha256 "$sdk_context_source" --tool-source-sha256 "$sdk_context_tools" --recipe-sha256 "$sdk_recipe_hash" --sdk-root "$pnpm_sdk" >"$output/sdk-bootstrap-readback.pending"
+  cmp "$output/sdk-bootstrap-capture.pending" "$output/sdk-bootstrap-readback.pending" || fail 'SDK bootstrap readback differs'
+}
+run_pnpm_sdk() {
+  if [[ -n "$retained_inputs" ]]; then
+    node "$pnpm_sdk/index.mjs" "$@" --sdk-bootstrap "$sdk_bootstrap" --sdk-bootstrap-sha256 "$sdk_bootstrap_sha" \
+      --sdk-source-sha256 "$sdk_context_source" --sdk-tool-source-sha256 "$sdk_context_tools" --sdk-recipe-sha256 "$sdk_recipe_hash"
+  else
+    node "$pnpm_sdk/index.mjs" "$@"
+  fi
+}
 # The installed lock-pinned SDK remains an explicit external build-tool boundary
 # (#422). Its source must equal the retained authored source; this is not SDK
 # bootstrap reconstruction or dependency-source capture.
@@ -120,6 +136,11 @@ if [[ -n "$retained_inputs" ]]; then
   jq -e '.schemaVersion==1 and .platform=="linux/amd64" and .profile=="api-login-v1-console" and .sourceSnapshot.dependencyInputsCaptured==false and .sourceSnapshot.nativeOfflineReplayProved==false' "$retained_receipt" >/dev/null || fail 'retained build profile differs'
   prepared_source="$retained_inputs/source/source-snapshot"
   prepared_sha="$(jq -er '.sourceSnapshot.manifestSha256' "$retained_receipt")"
+  sdk_bootstrap="$retained_inputs/source/selected-pnpm-sdk-bootstrap" sdk_context_source="$prepared_sha"
+  sdk_context_tools="$(jq -er '.sourceSnapshot.toolSource.toolSourceSha256|select(test("^[0-9a-f]{64}$"))' "$retained_receipt")"
+  sdk_bootstrap_sha="$(jq -er '.sourceSnapshot.sdkBootstrap.manifestSha256|select(test("^[0-9a-f]{64}$"))' "$retained_receipt")"
+  jq -e --arg source "$prepared_sha" --arg tools "$sdk_context_tools" --arg recipe "$sdk_recipe_hash" \
+    '.sourceSnapshot.sdkBootstrap|.schemaVersion==1 and .profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .recipeSha256==$recipe and .packages==132 and .sdkReconstructed==false and .nativeOfflineReplayProved==false' "$retained_receipt" >/dev/null || fail 'retained SDK bootstrap context differs'
   console_inputs="$retained_inputs/source/selected-console-originals"
   console_sha="$(jq -er '.consoleDownloads.manifestSha256' "$retained_receipt")"
 fi
@@ -148,6 +169,10 @@ fi
 complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
+if [[ -n "$retained_inputs" ]]; then
+  jq '.sourceSnapshot.sdkBootstrap' "$retained_receipt" >"$output/sdk-bootstrap-capture.pending"
+  check_sdk_bootstrap_readback
+fi
 module_verifier_hash='' bsr_verifier_hash=''
 # Both source modes acquire schemas from an owned cache and empty configuration;
 # source restoration must not inherit a host cache or an account's credentials.
@@ -253,7 +278,7 @@ if [[ -n "$retained_inputs" ]]; then
   # The SDK consumes the versioned CAFS root; native pnpm appends v10 to its
   # configured store base. Preserve that native boundary in both directions.
   mkdir -m 700 "$npm_config_store_dir"
-  node "$pnpm_sdk/index.mjs" restore --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
+  run_pnpm_sdk restore --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
     --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir/v10" >"$output/retained-pnpm-restoration.json"
   jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
     '.nativeStoreRestored==true and .sourceManifestSha256==$source and del(.nativeStoreRestored)==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-restoration.json" >/dev/null || fail 'retained pnpm source join differs'
@@ -286,6 +311,13 @@ if [[ "$capture_source" -eq 1 ]]; then
   notice_summary="$(cat "$output/notice-originals.json")"
   go run "$root/scripts/zitadel-source-bundle.go" --restore-tools "$output/source-snapshot" "$source_manifest" "$output/verifier-tool-source" >"$output/verifier-tool-source.json"
   tool_source_sha="$(jq -er '.toolSourceSha256' "$output/verifier-tool-source.json")"
+  sdk_bootstrap="$output/selected-pnpm-sdk-bootstrap" sdk_context_source="$source_manifest" sdk_context_tools="$tool_source_sha"
+  node "$pnpm_sdk/index.mjs" bootstrap-capture --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" --recipe-sha256 "$sdk_recipe_hash" \
+    --output "$sdk_bootstrap" --scratch "$output/sdk-bootstrap-work" >"$output/sdk-bootstrap-capture.pending"
+  jq -e --arg source "$source_manifest" --arg tools "$tool_source_sha" --arg recipe "$sdk_recipe_hash" \
+    '.schemaVersion==1 and .profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .recipeSha256==$recipe and .packages==132 and .sdkReconstructed==false and .nativeOfflineReplayProved==false and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$output/sdk-bootstrap-capture.pending" >/dev/null || fail 'complete original SDK bootstrap required'
+  sdk_bootstrap_sha="$(jq -er .manifestSha256 "$output/sdk-bootstrap-capture.pending")"
+  check_sdk_bootstrap_readback
   "$module_verifier" capture-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" \
     --cache "$verifier_cache" --composition "$verifier_composition" --output "$output/selected-verifier-bootstrap" >"$output/verifier-bootstrap-capture.json"
   jq -e --arg source "$source_manifest" --arg tools "$tool_source_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .files==4 and .verifierBootstrapCaptured==true and .goVerifiersRebuilt==false' "$output/verifier-bootstrap-capture.json" >/dev/null || fail 'complete original verifier bootstrap required'
@@ -384,9 +416,9 @@ without_network() {
 install_options=()
 if [[ -n "$retained_inputs" ]]; then install_options+=(--offline); fi
 run_phase install pnpm install "${install_options[@]}" --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
-if [[ "$capture_source" -eq 1 ]]; then
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
-  node "$pnpm_sdk/index.mjs" inspect --build "$output" >"$output/pnpm-installation-check.json"
+  run_pnpm_sdk inspect --build "$output" >"$output/pnpm-installation-check.json"
   jq -e '.schemaVersion == 1 and .profile == "native-installation-selection-v1" and .packages > 0 and .selectedPNPMSourcesCaptured == false and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false' "$output/pnpm-installation-check.json" >/dev/null || fail 'incomplete early native installation check'
 fi
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
@@ -562,11 +594,10 @@ if [[ "$capture_source" -eq 1 ]]; then
   cmp "$output/go-graph-metadata-capture.pending" "$output/go-graph-metadata-readback.json" || fail 'Go graph metadata readback differs'
   # The source capsule retains original registry archives, not generated install
   # outputs or a global cache. Its native SDK is acquired separately by CI.
-  pnpm_tool="$root/tools/zitadel-pnpm-source/index.mjs"
-  node "$pnpm_tool" capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
+  run_pnpm_sdk capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
   jq -e --arg source "$source_manifest" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .packages > 0 and .archives > 0 and .files > 0 and .selectedPNPMSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/pnpm-source-capture.pending" >/dev/null || fail 'incomplete selected pnpm source capture'
   pnpm_manifest="$(jq -er .manifestSha256 "$output/pnpm-source-capture.pending")"
-  node "$pnpm_tool" verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
+  run_pnpm_sdk verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
   cmp "$output/pnpm-source-capture.pending" "$output/pnpm-source-readback.pending" || fail 'selected pnpm source readback differs'
   for member in index.mjs package.json package-lock.json; do
     cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter changed during build'
@@ -653,15 +684,44 @@ if [[ "$capture_source" -eq 1 ]]; then
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
   check_text_notice_records "$output/source-snapshot/records"
   source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
-  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],verifierCompiler:{go:"1.27.3",sha256:$compiler}}')"
+  check_sdk_bootstrap_readback
+  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],sdkBootstrap:$sdk[0],verifierCompiler:{go:"1.27.3",sha256:$compiler}}')"
   source_snapshot_json="$(jq --argjson originals "$notice_summary" '. + {noticeOriginals:$originals}' <<<"$source_snapshot_json")"
+fi
+if [[ -n "$retained_inputs" ]]; then
+  # Exercise the reconstructed SDK around this same denied-network build. Only
+  # authenticated originals supply recapture; no second compiler build is added.
+  run_pnpm_sdk verify --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
+    --scratch "$output/pnpm-original-check-work" >"$output/retained-pnpm-verification.json"
+  jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-verification.json" >/dev/null || fail 'original pnpm readback differs'
+  run_pnpm_sdk recapture --build "$output" --source-sha256 "$prepared_sha" --output "$output/recaptured-pnpm-sources" --scratch "$output/pnpm-recapture-work" \
+    --original-capsule "$retained_inputs/source/selected-pnpm-sources" --original-sha256 "$pnpm_seal" --original-scratch "$output/pnpm-original-recapture-check" >"$output/pnpm-recapture.json"
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
+    '.schemaVersion==1 and .sourceManifestSha256==$source and .packages==$original[0].sourceSnapshot.pnpmSources.packages and .selectedPNPMSourcesCaptured==true and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$output/pnpm-recapture.json" >/dev/null || fail 'native pnpm recapture incomplete'
+  recaptured_pnpm_sha="$(jq -er .manifestSha256 "$output/pnpm-recapture.json")"
+  run_pnpm_sdk verify --capsule "$output/recaptured-pnpm-sources" --sha256 "$recaptured_pnpm_sha" --scratch "$output/pnpm-recapture-check-work" >"$output/pnpm-recapture-verification.json"
+  cmp "$output/pnpm-recapture.json" "$output/pnpm-recapture-verification.json" || fail 'native pnpm recapture readback differs'
+  mkdir -m 700 "$output/pnpm-recapture-store"
+  run_pnpm_sdk restore --capsule "$output/recaptured-pnpm-sources" --sha256 "$recaptured_pnpm_sha" \
+    --scratch "$output/pnpm-recapture-restore-work" --store "$output/pnpm-recapture-store/v10" >"$output/pnpm-recapture-restoration.json"
+  jq -e --slurpfile capture "$output/pnpm-recapture.json" '.nativeStoreRestored==true and del(.nativeStoreRestored)==$capture[0]' "$output/pnpm-recapture-restoration.json" >/dev/null || fail 'recaptured native store restoration differs'
+  check_sdk_bootstrap_readback
+  jq -n --arg source "$prepared_sha" --arg recipe "$sdk_recipe_hash" --arg sdk "$sdk_bootstrap_sha" --arg original "$pnpm_seal" --arg recaptured "$recaptured_pnpm_sha" \
+    --arg restore "$(shasum -a 256 "$output/retained-pnpm-restoration.json" | awk '{print $1}')" \
+    --arg inspect "$(shasum -a 256 "$output/pnpm-installation-check.json" | awk '{print $1}')" \
+    --arg verify "$(shasum -a 256 "$output/retained-pnpm-verification.json" | awk '{print $1}')" \
+    --arg capture "$(shasum -a 256 "$output/pnpm-recapture.json" | awk '{print $1}')" \
+    --arg verifyRecapture "$(shasum -a 256 "$output/pnpm-recapture-verification.json" | awk '{print $1}')" \
+    --arg restoreRecapture "$(shasum -a 256 "$output/pnpm-recapture-restoration.json" | awk '{print $1}')" \
+    '{schemaVersion:1,profile:"identity-native-pnpm-sdk-operations-v1",sourceManifestSha256:$source,recipeSha256:$recipe,sdkBootstrapManifestSha256:$sdk,originalPnpmManifestSha256:$original,recapturedPnpmManifestSha256:$recaptured,operations:["restore","inspect","verify","capture","verify","restore"],receipts:{restore:$restore,inspect:$inspect,verify:$verify,capture:$capture,verifyRecapture:$verifyRecapture,restoreRecapture:$restoreRecapture},nativeOperationsPassed:true,nativeOfflineReplayProved:false}' >"$output/pnpm-sdk-operations.json"
+  jq -e '(.receipts|keys)==["capture","inspect","restore","restoreRecapture","verify","verifyRecapture"] and all(.receipts[]; test("^[0-9a-f]{64}$"))' "$output/pnpm-sdk-operations.json" >/dev/null || fail 'complete native SDK operation digests required'
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
     '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
 if [[ -n "$retained_inputs" ]]; then
-  jq --argjson originals "$notice_summary" '. + {retainedInputsRestored:true,noticeOriginals:$originals}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
+  jq --argjson originals "$notice_summary" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" --slurpfile operations "$output/pnpm-sdk-operations.json" '. + {retainedInputsRestored:true,noticeOriginals:$originals,sdkBootstrap:$sdk[0],sdkNativeOperations:$operations[0]}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
   mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
 fi
 # Both inventories bind these final bytes. After capture, only rename the receipt.
@@ -690,6 +750,7 @@ elif [[ -n "$prepared_source" ]]; then
 fi
 check_notice_readback
 check_pnpm_sdk_source
+check_sdk_bootstrap_readback
 mv "$output/build-receipt.pending" "$output/build-receipt.json"
 complete=1
 printf 'Complete native build evidence only: %s\n' "$output"
