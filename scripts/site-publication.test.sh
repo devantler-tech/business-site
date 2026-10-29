@@ -13,7 +13,7 @@ require '(.on | keys | sort) == ["push","schedule","workflow_dispatch"] and .on.
 require '.on.workflow_dispatch.inputs.mode.type == "choice" and .on.workflow_dispatch.inputs.mode.default == "preview" and .on.workflow_dispatch.inputs.mode.options == ["preview","publish"]' 'manual dispatch defaults to artifact-only preview'
 require '.permissions == {} and .jobs.build.permissions == {"contents":"read"} and .jobs.deploy.permissions == {"pages":"write","id-token":"write"}' 'authority must remain least privilege'
 require '.jobs.build.steps[0].name == "Validate source-owned admission" and .jobs.build.steps[1].with.ref == "\u0024{{ github.sha }}" and .jobs.build.steps[1].with["persist-credentials"] == false and .jobs.build.steps[1].with.repository == null' 'admission precedes exact own-source checkout'
-require '.jobs.build.steps[0].env == {"PUBLICATION_REPOSITORY":"\u0024{{ github.repository }}","PUBLICATION_REF":"\u0024{{ github.ref }}","PUBLICATION_EVENT":"\u0024{{ github.event_name }}","PUBLICATION_ENABLED":"\u0024{{ vars.SITE_PUBLICATION_ENABLED }}","PUBLICATION_MODE":"\u0024{{ inputs.mode || \u0027publish\u0027 }}","PUBLIC_FRONTEND":"\u0024{{ inputs.frontend || \u0027svelte\u0027 }}","SOURCE_REVISION":"\u0024{{ github.sha }}"}' 'admission binds runtime context safely'
+require '.jobs.build.steps[0].env == {"PUBLICATION_REPOSITORY":"\u0024{{ github.repository }}","PUBLICATION_REF":"\u0024{{ github.ref }}","PUBLICATION_EVENT":"\u0024{{ github.event_name }}","PUBLICATION_ENABLED":"\u0024{{ vars.SITE_PUBLICATION_ENABLED }}","PUBLICATION_MODE":"\u0024{{ inputs.mode || \u0027publish\u0027 }}","SOURCE_REVISION":"\u0024{{ github.sha }}"}' 'admission binds runtime context safely'
 # Check ordered, fail-closed build steps and protected deployment dependencies.
 layout_valid() {
   jq -e '
@@ -69,7 +69,6 @@ sha=0123456789abcdef0123456789abcdef01234567
 admit() {
   env PUBLICATION_REPOSITORY="$1" PUBLICATION_REF="$2" PUBLICATION_EVENT="$3" \
     PUBLICATION_ENABLED="$4" PUBLICATION_MODE="$5" SOURCE_REVISION="$6" \
-    PUBLIC_FRONTEND="${7:-astro}" \
     bash -c "$admission" >/dev/null 2>&1
 }
 for event in push schedule workflow_dispatch; do

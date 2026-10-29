@@ -43,24 +43,26 @@ ci_gate_valid <<<"$ci_json" || fail 'CI aggregate must resolve the canonical act
 ci_preview_valid() {
   jq -e '
     .jobs["build-docs"].steps as $steps |
-    [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].env.FEATURE_PREVIEW_BANNER == "true")] as $preview |
-    [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].env.FEATURE_PREVIEW_BANNER == "false")] as $production |
+    [range(0; $steps | length) | select($steps[.].run == "bash scripts/check-svelte-frontend.sh")] as $matrix |
+    [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].name == "Build" and $steps[.].env.FEATURE_COMPANY_IDENTITY == "false")] as $default |
+    [range(0; $steps | length) | select($steps[.].run == "npm run build" and $steps[.].id == "current-production" and $steps[.].env.FEATURE_COMPANY_IDENTITY == "true")] as $production |
     [range(0; $steps | length) | select($steps[.].with.path == "dist")] as $artifacts |
-    ($preview | length) == 1 and ($production | length) == 1 and ($artifacts | length) == 1 and
-    $preview[0] < $production[0] and $production[0] < $artifacts[0] and
-    all(($preview + $production)[]; $steps[.] | .["working-directory"] == "." and .if == null and .["continue-on-error"] == null)
+    all([$matrix,$default,$production,$artifacts][]; length == 1) and
+    $matrix[0] < $default[0] and $default[0] < $production[0] and $production[0] < $artifacts[0] and
+    all(($matrix + $default + $production)[]; $steps[.] | .if == null and .["continue-on-error"] == null)
   ' >/dev/null
 }
-ci_preview_valid <<<"$ci_json" || fail 'CI must validate preview-on before preview-off and upload only the final production output'
+ci_preview_valid <<<"$ci_json" || fail 'CI must validate native profiles and upload only final production output'
 for broken_preview in \
-  '.jobs["build-docs"].steps |= map(select(.env.FEATURE_PREVIEW_BANNER != "true"))' \
-  '.jobs["build-docs"].steps |= map(if .env.FEATURE_PREVIEW_BANNER == "true" then .env.FEATURE_PREVIEW_BANNER = "false" else . end)' \
-  '.jobs["build-docs"].steps |= map(select(.env.FEATURE_PREVIEW_BANNER != "false"))' \
+  '.jobs["build-docs"].steps |= map(select(.run != "bash scripts/check-svelte-frontend.sh"))' \
+  '.jobs["build-docs"].steps |= map(select(.name != "Build"))' \
+  '.jobs["build-docs"].steps |= map(select(.id != "current-production"))' \
+  '.jobs["build-docs"].steps |= map(if .id == "current-production" then .env.FEATURE_COMPANY_IDENTITY = "false" else . end)' \
   '.jobs["build-docs"].steps |= reverse' \
   '.jobs["build-docs"].steps |= ([.[-1]] + .[0:-1])' \
-  '.jobs["build-docs"].steps |= map(if .env.FEATURE_PREVIEW_BANNER == "true" then .["continue-on-error"] = true else . end)'; do
+  '.jobs["build-docs"].steps |= map(if .run == "bash scripts/check-svelte-frontend.sh" then .["continue-on-error"] = true else . end)'; do
   if ci_preview_valid <<<"$(jq "$broken_preview" <<<"$ci_json")"; then
-    fail 'a broken preview/production build sequence passed its negative control'
+    fail 'a broken native-profile/production build sequence passed its negative control'
   fi
 done
 for broken_ci in \

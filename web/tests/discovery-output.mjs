@@ -3,6 +3,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "parse5";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { journalPaths } from "../../src/data/journal.mjs";
+import { readingPaths, guidePaths } from "../../src/data/journal-reading.mjs";
 
 /** Read the complete actual artifact, not a success-shaped subset. @param {string} root @returns {Map<string,Buffer>} */
 export function artifact(root) {
@@ -55,13 +57,13 @@ export function assertSitemap(candidate, baseline) {
   const index = locations(xml(get(candidate,"sitemap-index.xml")).sitemapindex.sitemap);
   assert.deepEqual(index,[`${origin}/sitemap-0.xml`],"Public discovery sitemap relationship");
   const actual = locations(xml(get(candidate,"sitemap-0.xml")).urlset.url);
-  const baselineLocations = locations(xml(get(baseline,"sitemap-0.xml")).urlset.url);
-  const expected = baselineLocations.filter(href => {
+  const baselineLocations = baseline.has("sitemap-0.xml") ? locations(xml(get(baseline,"sitemap-0.xml")).urlset.url) : null;
+  const expected = baselineLocations ? baselineLocations.filter(href => {
     const page = baseline.get(fileFor(new URL(href).pathname));
     if (!page) return false;
     const elements = nodes(page);
     return !meta(elements,"robots").some(value => /\bnoindex\b/i.test(value)) && attr(links(elements,"canonical")[0],"href") === href;
-  });
+  }) : ["/","/da/","/about/","/da/about/","/projects/","/da/projects/",...(process.env.FEATURE_COMPANY_IDENTITY === "true" ? ["/company/","/da/company/"] : []),...journalPaths(),...readingPaths(),...guidePaths()].map(path=>origin+path);
   assert.ok(expected.length > 10,"Public discovery baseline must contain real route coverage");
   assert.equal(new Set(actual).size,actual.length,"Public discovery duplicate sitemap entry");
   assert.deepEqual([...actual].sort(),[...expected].sort(),"Public discovery complete canonical route membership");
@@ -78,16 +80,24 @@ export function assertSitemap(candidate, baseline) {
 /** @param {Map<string,Buffer>} candidate @param {Map<string,Buffer>} baseline */
 export function assertSharing(candidate, baseline) {
   for (const path of ["/","/da/","/about/","/da/about/","/projects/","/da/projects/"]) {
-    const elements = nodes(get(candidate,fileFor(path))), reference = nodes(get(baseline,fileFor(path)));
+    const elements = nodes(get(candidate,fileFor(path)));
+    const referencePage = baseline.get(fileFor(path));
+    const reference = referencePage ? nodes(referencePage) : [];
+    const hasReference = meta(reference,"og:title").length > 0;
     if (path.includes("projects")) {
-      for (const page of [elements,reference]) assert.doesNotMatch(meta(page,"description").join(" "),/family projects|familieprojekter/i,"Public discovery must use the professional portfolio description");
+      assert.doesNotMatch(meta(elements,"description").join(" "),/family projects|familieprojekter/i,"Public discovery must use the professional portfolio description");
     }
     for (const key of ["description","og:title","og:description","og:type","og:url","og:locale","og:image","og:image:alt","twitter:card"]) {
-      assert.deepEqual(meta(elements,key),meta(reference,key),`Public discovery metadata ${key} at ${path}`);
+      if (hasReference) assert.deepEqual(meta(elements,key),meta(reference,key),`Public discovery metadata ${key} at ${path}`);
       assert.equal(meta(elements,key).length,1,`Public discovery metadata must be unique: ${key}`);
+      assert.ok(meta(elements,key)[0].trim(), `Public discovery metadata must be nonempty: ${key}`);
     }
-    for (const rel of ["canonical","sitemap","icon"]) assert.deepEqual(links(elements,rel).map(node => attr(node,"href")),links(reference,rel).map(node => attr(node,"href")),`Public discovery ${rel} at ${path}`);
-    assert.deepEqual(links(elements,"alternate").filter(node=>attr(node,"hreflang")).map(node=>[attr(node,"hreflang"),attr(node,"href")]),links(reference,"alternate").filter(node=>attr(node,"hreflang")).map(node=>[attr(node,"hreflang"),attr(node,"href")]),`Public discovery languages at ${path}`);
+    for (const [rel,expected] of [["canonical",origin+path],["sitemap","/sitemap-index.xml"],["icon","/favicon.png"]]) assert.deepEqual(links(elements,rel).map(node=>attr(node,"href")),[expected],`Public discovery ${rel} at ${path}`);
+    const suffix = path.replace(/^\/da\//,"/");
+    assert.deepEqual(links(elements,"alternate").filter(node=>attr(node,"hreflang")).map(node=>[attr(node,"hreflang"),attr(node,"href")]),[["en",origin+suffix],["da",origin+"/da"+suffix],["x-default",origin+suffix]],`Public discovery languages at ${path}`);
+    assert.deepEqual(meta(elements,"og:locale"),[path.startsWith("/da/")?"da_DK":"en_GB"],"Public discovery locale");
+    assert.deepEqual(meta(elements,"og:url"),[origin+path],"Public discovery social canonical");
+    assert.deepEqual(meta(elements,"og:description"),meta(elements,"description"),"Public discovery social description");
     const portrait = new URL(meta(elements,"og:image")[0]);
     assert.equal(portrait.origin,origin,"Public discovery local sharing portrait");
     assert.ok(get(candidate,portrait.pathname.slice(1)).equals(get(baseline,portrait.pathname.slice(1))),"Public discovery sharing image dependency retained");
@@ -100,5 +110,5 @@ export function assertSharing(candidate, baseline) {
   }
 }
 
-/** The baseline is independently rendered Astro output; no candidate generator is imported. @param {Map<string,Buffer>} candidate @param {Map<string,Buffer>} baseline */
+/** Downloads are source-bound; canonical route/locale expectations are independent of adapter output. @param {Map<string,Buffer>} candidate @param {Map<string,Buffer>} baseline */
 export function assertDiscovery(candidate,baseline) { assertDownloads(candidate,baseline); const count=assertSitemap(candidate,baseline); assertSharing(candidate,baseline); return count; }

@@ -8,51 +8,36 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 ## Layout and ownership
 
-- The Astro + Starlight application lives at the repository root: `src/`,
-  `public/`, `scripts/` and root package/configuration files.
-- `web/` is the SvelteKit public frontend. Its framework-native
-  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
-  with the two historical English project redirects, the English Journal's paginated main archive,
-  complete unpaginated topic and author archives,
-  all 15 complete Journal reading routes, and the six existing English technical guides,
-  including locally rendered diagrams and the complete template collection. Enabled company
-  identity also admits the two English/Danish company-information pages, with the address
-  confined to those disclosures and omitted when identity is disabled. The legacy
-  GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
-  Follow `web/README.md`. The normal build selects the verified complete candidate only when
-  explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
-  publication explicitly selects Svelte, with main-only artifact previews and explicit Astro
-  recovery. Production-profile Go packaging also selects Svelte; the ordinary package remains
-  an Astro comparison. Only Svelte packages use the explicit `--svelte` option; omit it for the
-  ordinary Astro comparison. Both ignore ambient frontend settings.
+- `web/` is the sole public application, built with SvelteKit and Svelte. Root `src/`
+  and `public/` retain framework-neutral copy, authored Markdown, images and downloads.
+  Local builds, publication and both Go package profiles always use Svelte. The retired
+  frontend release flag has no effect; Astro applications, compiler and recovery option are removed.
+- English/Danish Home, About and Projects, the complete English Journal, all technical guides,
+  RSS, discovery assets and historical redirects are permanent. Preserve incoming heading
+  bookmarks and the existing green-orb favicon. Never invent Danish article or guide routes.
+- `src/data/build-content.mjs` compiles the maintained Markdown with Satteri, YAML metadata,
+  Expressive Code, Sharp and the existing CV renderer. It never evaluates MDX. Historical
+  `.mdx` filenames remain content inputs, not executable components. Technical template
+  cards come from the maintained template collection. Catalogue/CV legacy metadata remains
+  available to the cross-product drift guards; it is not another web application.
+- `scripts/build-journal-reference.sh` prepares source-bound content under ignored
+  `.generated/`; the normal build invokes it automatically. Use it before standalone
+  `web/` builds. Complete own-source Git history, before/after input fingerprints, exact
+  inventories, asset digests and independent refusal controls remain mandatory. Diagrams
+  use only their locally bundled Mermaid graph; ordinary code retains its native copy controls.
+  The `/_astro/` image URL namespace is retained for compatibility and has no Astro dependency.
+- `web/src/env.ts` retains strict, independent default-off company/offer settings. The postal
+  address is confined to the two enabled disclosure documents. Shared layout/load data never
+  carries it; runtime template placeholders remain escaped. Public invitation copy does not
+  activate Go portal capabilities. Read `web/README.md` for builds and verification.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
-  under `src/components/business/`; the existing Astro adapters retain its release configuration.
-  The Svelte candidate preserves the two default-off company/offer settings
-  through its native server-only configuration. Shared layout/load data never carries the address;
-  the company-page HTML transform retains escaped text and the runtime's template placeholders.
-- Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
-  `client-products.ts` and `portfolio-content.ts`; both frontends use the same ranking implementation
-  and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.
-- The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
-  using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
-  configuration, introductory copy and the native-link card controller. Technical routes
-  reuse their maintained Astro-rendered bodies, bookmarks, native code controls and table semantics;
-  only the original English routes are admitted. Admitted bodies reuse an
-  input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
-  enabled candidate builds. The selected normal build prepares it automatically through the explicit
-  incumbent builder, never recursively through the normal publication entrypoint.
-  The reference also bundles the existing Mermaid dependency with the candidate's Vite toolchain.
-  Only diagram articles load that local module graph; ordinary code retains its separate copy controls.
-  Numeric archives and article slugs share explicit dispatch; unsupported nested article routes
-  fail the build. Never invent Danish article routes.
-  The enabled candidate retains the complete English `/blog/rss.xml` and its canonical image
-  dependencies through an input-bound generated reference and native prerendered endpoints.
-  Feed XML, images and discovery stay default-off; do not invent a Danish feed or add a browser parser.
-  The same input-bound reference captures the generated CV, maintained thesis PDF, favicon,
-  robots file and sharing portrait through inspected file descriptors. Native prerendered endpoints
-  retain these downloads locally. The final adapter output supplies canonical sitemap membership,
-  excluding redirects and noindex disclosures; never copy publisher CNAME or publication receipts.
-  All discovery assets and endpoints are absent when the candidate is false or unset.
+  under `src/components/business/`. Portfolio descriptions, presentation and bookmark aliases
+  live in `client-products.ts` and `portfolio-content.ts`; preserve complete dated rankings
+  and the shared bookmark-disclosure controller.
+- The adapter supplies canonical sitemap membership, excluding redirects/noindex disclosures.
+  The publication validator independently checks the full route inventory, local dependencies,
+  visitor privacy, forbidden private output and this build's complete file hashes/nonce.
+  Only the promoter adds CNAME; publication receipts remain publisher-owned.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `third_party/zitadel-build-tools/scope.json` defines the exact 37 authored
   identity-build files and three license documents granted under AGPL-3.0-only.
@@ -338,7 +323,7 @@ See docs/adr/0003-source-owned-publication.md.
 ## Content boundaries
 
 Read `docs/README.md` before editing public content. Pages and journal posts live in
-`src/content/docs/`; this inner Starlight collection is not the contributor-docs directory.
+`src/content/docs/`; this authored content collection is not the contributor-docs directory.
 Edit bilingual catalogue descriptions in `src/data/public-products.json`; set changes must also
 update the inventory in `src/content/docs/projects/active.mdx` and the dated stars snapshot.
 Keep KSail brief and linked to ksail.devantler.tech rather than duplicating its documentation.
@@ -346,7 +331,7 @@ Keep KSail brief and linked to ksail.devantler.tech rather than duplicating its 
 
 Write concise, reader-facing present-state copy, verified outcomes and a clear next step.
 Follow the editorial standard for posts and material updates; never invent experience or numbers.
-Unreleased UI/content stays behind a default-off `astro:env` release flag until reviewed activation
+Unreleased UI/content stays behind a default-off server-only Svelte release flag until reviewed activation
 and live proof; remove the flag once shipped. Never hand-edit generated output or edit a journal
 post during a project-description sync.
 
@@ -367,12 +352,12 @@ Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optiona
 plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
 net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
-VAT-inclusive prices and current company facts are permanent in both frontends and every package
+VAT-inclusive prices and current company facts are permanent in the frontend and every package
 profile. The source-owned publisher and production-template packager enable company identity and
 the reviewed private/business customer invitation for Denmark and the EU; revised-offer copy stays
 disabled. Scope, price and applicable VAT are confirmed before agreement, and outside-EU projects
-require a separate assessment before any offer. The ordinary Astro comparison and explicit
-Astro recovery use the same approved price state; no historical no-VAT setting remains.
+require a separate assessment before any offer. Every package uses the same approved price state;
+no historical no-VAT setting remains.
 This public invitation does not authorize portal orders or change server-side country eligibility.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.

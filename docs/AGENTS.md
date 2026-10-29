@@ -18,7 +18,7 @@ CI runs them (Node 24 with npm 11).
 | Dependency audit (when `package*.json` changes) | `./scripts/audit-dependencies.test.sh && ./scripts/audit-dependencies.sh` |
 
 A browser check (`npm run preview`) must be started in the background with its PID
-captured, and killed afterwards even on failure, so port 4321 is freed.
+captured, and killed afterwards even on failure, so the preview port is freed.
 
 ## Where things live
 
@@ -44,7 +44,7 @@ Application paths below are relative to the repository root.
 - **Blog posts are a product.** Follow the README's *Blog editorial standard*: evidence first, an
   outside reader's problem, verified outcomes, a clear next step, and one experiment issue per
   substantive publication or refresh. Never invent users, numbers or first-person experience.
-- **Unreleased content ships latent** behind a default-off `astro:env` flag (README → *Feature flags*),
+- **Unreleased content ships latent** behind a default-off server-only Svelte flag (README → *Feature flags*),
   and each release flag is removed once its content is live.
 - **Never hand-edit generated output**, and never edit a blog post during a project-description sync.
 

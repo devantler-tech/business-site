@@ -73,6 +73,14 @@ test("all resource-link token forms reject a missing local dependency", () => {
     }
     writeFileSync(join(candidate,"index.html"),'<html><link rel="preload" href="https://devantler.tech/missing.css"></html>');
     assert.throws(()=>validateSelection(candidate,reference),/dependency/,"Canonical absolute dependencies are still local");
+    for (const html of ['<meta property="og:image" content="https://devantler.tech/missing.webp">','<script type="application/ld+json">{"@graph":[{"image":"https://devantler.tech/missing.webp"}]}</script>']) {
+      writeFileSync(join(candidate,"index.html"),html);
+      assert.throws(()=>validateSelection(candidate,reference),/dependency/,"Sharing/schema images must be emitted too");
+    }
+    for (const [html,pattern] of [['<script src="https://example.invalid/analytics.js"></script>',/automatic scripts/],['<a data-umami-event="visit">Visit</a>',/statistics collection/]]) {
+      writeFileSync(join(candidate,"index.html"),html);
+      assert.throws(()=>validateSelection(candidate,reference),pattern,"Every route retains visitor privacy admission");
+    }
   } finally { rmSync(root,{recursive:true}); }
 });
 

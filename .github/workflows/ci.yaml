@@ -65,7 +65,6 @@ jobs:
               - 'scripts/**'
               - '*.json'
               - '.npmrc'
-              - 'astro.config.mjs'
               - 'docs/**'
               - 'deploy/**'
               - '.github/workflows/**'
@@ -135,45 +134,22 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: web
         run: npm ci
-      - name: Verify the isolated Svelte frontend in both release states
+      - name: Verify the Svelte frontend and independent business settings
         run: bash scripts/check-svelte-frontend.sh
       - name: Verify the retained frontend decision samples
         run: bash scripts/check-frontend-research.sh
-      - name: Build enabled preview
-        working-directory: .
-        env:
-          FEATURE_PREVIEW_BANNER: "true"
-        run: npm run build
-      - name: Build client-facing portfolio preview
-        working-directory: .
-        env:
-          FEATURE_CLIENT_PORTFOLIO: "true"
-        run: npm run build
-      - name: Build revised hosting-offer preview
-        working-directory: .
-        env:
-          FEATURE_OFFER_COPY: "true"
-        run: npm run build
-      - name: Build legacy revised hosting-offer preview
-        working-directory: .
-        env:
-          FEATURE_CLIENT_PORTFOLIO: "false"
-          FEATURE_FEATURED_PORTFOLIO: "false"
-          FEATURE_OFFER_COPY: "true"
-        run: npm run build
-      - name: Build featured portfolio preview
-        working-directory: .
-        env:
-          FEATURE_FEATURED_PORTFOLIO: "true"
-        run: npm run build
+      - name: Verify native content and publication refusals
+        run: |
+          node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs scripts/package-profile-contract.test.mjs
+          node --test scripts/theme.test.mjs scripts/visitor-privacy.test.mjs scripts/journal-navigation.test.mjs
+          node --test scripts/customer-scope-rollout.test.mjs scripts/vat-prices-retirement.test.mjs
+          bash scripts/journal-history.test.sh
       - name: Build
         working-directory: .
         env:
           FEATURE_PREVIEW_BANNER: "false"
-          FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
           FEATURE_OFFER_COPY: "false"
-          FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
@@ -190,7 +166,6 @@ jobs:
         working-directory: .
         env:
           FEATURE_COMPANY_IDENTITY: "true"
-          FEATURE_SVELTE_FRONTEND: "true"
           FEATURE_OFFER_COPY: "false"
           COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
         run: npm run build
@@ -927,23 +902,6 @@ jobs:
           package="$(find runtime-dist -maxdepth 1 -type d -name 'package.*')"
           test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
           docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$package"
-      - name: Build actual Svelte public runtime candidate
-        working-directory: .
-        run: bash scripts/package-runtime.sh --release --default --svelte
-      - name: Exercise Svelte package and its extracted archive with private routes off
-        working-directory: .
-        run: |
-          node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist
-          extracted="$(mktemp -d)"
-          tar -xzf runtime-svelte-default-dist/business-site-runtime.tar.gz -C "$extracted"
-          node scripts/runtime-smoke.test.mjs "$extracted"
-      - name: Upload verified Svelte public runtime candidate
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: business-site-svelte-runtime
-          path: runtime-svelte-default-dist/business-site-runtime.tar.gz
-          if-no-files-found: error
-          retention-days: 7
       - name: Exercise actual restricted container
         working-directory: .
         env:
@@ -959,7 +917,7 @@ jobs:
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/package-runtime.sh --release --production-template --svelte
+        run: bash scripts/package-runtime.sh --release --production-template
       - name: Exercise production template with private fictional disclosure
         working-directory: .
         run: node scripts/runtime-smoke.test.mjs runtime-production-dist

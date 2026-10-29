@@ -23,7 +23,7 @@ Object.assign(fresh.repositories, {
  */
 function build(filename) {
   const run = spawnSync("npm", ["--prefix", "web", "run", "build"], {
-    cwd: root, env: { ...process.env, FEATURE_SVELTE_FRONTEND: "true", PUBLIC_STARS_SNAPSHOT: filename },
+    cwd: root, env: { ...process.env, PUBLIC_STARS_SNAPSHOT: filename },
     encoding: "utf8", timeout: 45000, maxBuffer: 4 * 1024 * 1024,
   });
   assert.ifError(run.error);

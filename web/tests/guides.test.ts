@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { frontendEntries } from "../src/release-gate.ts";
+import { frontendEntries } from "../src/public-routes.ts";
 
 // Losing any established guide route must fail independently of healthy Journal routes.
 test("enabled visitors can finish every existing technical guide locally", () => {
@@ -11,10 +11,10 @@ test("enabled visitors can finish every existing technical guide locally", () =>
   assert.ok(!entries.some(path => path.startsWith("/da/templates/") || path === "/da/agentic-engineering/"), "do not invent translated guides");
 });
 
-test("the old GitOps tenant bookmark remains reachable only in enabled output", () => {
+test("the old GitOps tenant bookmark remains reachable in every public build", () => {
   assert.ok(frontendEntries("true").includes("/templates/gitops-tenant-template/"), "missing legacy template redirect");
-  assert.ok(!frontendEntries("false").includes("/templates/gitops-tenant-template/"));
-  assert.ok(!frontendEntries(undefined).includes("/templates/gitops-tenant-template/"));
+  assert.ok(frontendEntries("false").includes("/templates/gitops-tenant-template/"));
+  assert.ok(frontendEntries().includes("/templates/gitops-tenant-template/"));
 });
 
 test("technical bodies preserve their committed date without inventing Journal metadata", async () => {

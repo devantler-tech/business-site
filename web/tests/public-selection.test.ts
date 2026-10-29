@@ -5,37 +5,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { selectedFrontend } from "../public-selection.ts";
 
-test("one framework-native production selection rejects ambiguous flags and respects explicit overrides", () => {
-  const directory = mkdtempSync(join(tmpdir(),"frontend-selection-"));
-  const before = process.env.FEATURE_SVELTE_FRONTEND;
-  const presentation = ["FEATURE_PREVIEW_BANNER","FEATURE_CLIENT_PORTFOLIO","FEATURE_FEATURED_PORTFOLIO"];
-  const previous = Object.fromEntries(presentation.map(key => [key,process.env[key]]));
+test("Svelte is selected with absent or obsolete frontend settings; unsupported presentation still fails", () => {
+  const directory=mkdtempSync(join(tmpdir(),"public-profile-"));
+  const keys=["FEATURE_SVELTE_FRONTEND","FEATURE_PREVIEW_BANNER","FEATURE_CLIENT_PORTFOLIO","FEATURE_FEATURED_PORTFOLIO"];
+  const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
   try {
-    delete process.env.FEATURE_SVELTE_FRONTEND;
-    for (const key of presentation) delete process.env[key];
-    assert.equal(selectedFrontend(directory),"astro");
-    writeFileSync(join(directory,".env.production"),"FEATURE_SVELTE_FRONTEND=true\n");
+    for(const key of keys) delete process.env[key];
     assert.equal(selectedFrontend(directory),"svelte");
-    process.env.FEATURE_PREVIEW_BANNER="true";
-    assert.throws(() => selectedFrontend(directory), /unsupported/);
-    delete process.env.FEATURE_PREVIEW_BANNER;
-    for (const key of presentation.slice(1)) {
-      process.env[key]="false";
-      assert.throws(() => selectedFrontend(directory),/unsupported/);
+    writeFileSync(join(directory,".env.production"),"FEATURE_SVELTE_FRONTEND=false\n");
+    assert.equal(selectedFrontend(directory),"svelte");
+    for(const value of ["false","true","obsolete"]) {process.env.FEATURE_SVELTE_FRONTEND=value; assert.equal(selectedFrontend(directory),"svelte");}
+    for(const [key,value] of [["FEATURE_PREVIEW_BANNER","true"],["FEATURE_CLIENT_PORTFOLIO","false"],["FEATURE_FEATURED_PORTFOLIO","false"]]) {
+      process.env[key]=value;
+      assert.throws(()=>selectedFrontend(directory),/unsupported/);
       delete process.env[key];
     }
-    process.env.FEATURE_SVELTE_FRONTEND="false";
-    assert.equal(selectedFrontend(directory),"astro");
-    for (const value of ["", "yes", "TRUE", "1"]) {
-      process.env.FEATURE_SVELTE_FRONTEND=value;
-      assert.throws(() => selectedFrontend(directory), /must be true or false/);
-    }
   } finally {
-    if (before === undefined) delete process.env.FEATURE_SVELTE_FRONTEND;
-    else process.env.FEATURE_SVELTE_FRONTEND=before;
-    for (const key of presentation) {
-      if (previous[key] === undefined) delete process.env[key]; else process.env[key]=previous[key];
-    }
+    for(const key of keys) {if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
     rmSync(directory,{recursive:true});
   }
 });

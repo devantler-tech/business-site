@@ -10,11 +10,6 @@ on:
         type: choice
         options: [preview, publish]
         default: preview
-      frontend:
-        description: Public frontend; Astro is retained for reviewed recovery
-        type: choice
-        options: [astro, svelte]
-        default: svelte
   schedule:
     - cron: "17 6 * * *"
 
@@ -42,7 +37,6 @@ jobs:
           PUBLICATION_EVENT: ${{ github.event_name }}
           PUBLICATION_ENABLED: ${{ vars.SITE_PUBLICATION_ENABLED }}
           PUBLICATION_MODE: ${{ inputs.mode || 'publish' }}
-          PUBLIC_FRONTEND: ${{ inputs.frontend || 'svelte' }}
           SOURCE_REVISION: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -53,10 +47,6 @@ jobs:
           case "$PUBLICATION_MODE" in
             preview) [[ "$PUBLICATION_EVENT" == workflow_dispatch ]] || exit 1 ;;
             publish) [[ "$PUBLICATION_ENABLED" == true ]] || exit 1 ;;
-            *) exit 1 ;;
-          esac
-          case "$PUBLIC_FRONTEND" in
-            astro|svelte) ;;
             *) exit 1 ;;
           esac
       - name: Checkout exact own source
@@ -82,7 +72,6 @@ jobs:
       - name: Build production site
         env:
           PUBLIC_CONTENT_PROFILE: "default"
-          FEATURE_SVELTE_FRONTEND: ${{ inputs.frontend != 'astro' && 'true' || 'false' }}
           FEATURE_COMPANY_IDENTITY: "true"
           FEATURE_OFFER_COPY: "false"
           COMPANY_POSTAL_ADDRESS: ${{ secrets.COMPANY_POSTAL_ADDRESS }}

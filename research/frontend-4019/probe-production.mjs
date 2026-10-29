@@ -4,7 +4,6 @@ import { setTimeout } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const samples = [
-  ["astro", 5881, "dist/server/entry.mjs"],
   ["svelte", 5882, "build/index.js"],
 ];
 

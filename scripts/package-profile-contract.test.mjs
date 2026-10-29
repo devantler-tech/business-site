@@ -37,10 +37,10 @@ exit 42
         COMPANY_POSTAL_ADDRESS: 'Fictional private input', PUBLIC_CONTENT_PROFILE: 'production-template', FEATURE_COMPANY_IDENTITY: 'true', FEATURE_OFFER_COPY: 'true', FEATURE_PREVIEW_BANNER: 'true', FEATURE_SVELTE_FRONTEND: 'true' },
     });
     assert.equal(result.status, 42, 'The boundary double stops immediately after capturing the actual build invocation');
-    assert.deepEqual(JSON.parse(readFileSync(capture)), { profile: 'default', company: 'false', address: '', preview: 'false', offer: 'false', frontend:'false' });
+    assert.deepEqual(JSON.parse(readFileSync(capture)), { profile: 'default', company: 'false', address: '', preview: 'false', offer: 'false' });
     const selected = spawnSync('bash',['scripts/package-runtime.sh','--development','--default','--svelte'], {cwd:root,timeout:10000,env:boundaryEnv});
     assert.equal(selected.status,42);
-    assert.equal(JSON.parse(readFileSync(capture)).frontend,'true','Only the explicit package option selects Svelte');
+    assert.equal(JSON.parse(readFileSync(capture)).frontend,undefined,'A retired frontend variable cannot select another application');
     writeFileSync(path.join(root, 'scripts/refresh-public-stars.sh'), '#!/bin/sh\nprintf "{}" > "$1"\n');
     const production = spawnSync('bash', ['scripts/package-runtime.sh', '--development', '--production-template', '--svelte'], {
       cwd: root, timeout: 10000, env: boundaryEnv,
@@ -48,6 +48,6 @@ exit 42
     assert.equal(production.status, 42, 'The production boundary double stops at the real build invocation');
     const released = JSON.parse(readFileSync(capture));
     assert.deepEqual(released, { profile: 'production-template', company: 'true', address: '', preview: 'false',
-      offer: 'false', frontend: 'true' });
+      offer: 'false' });
   } finally { rmSync(root, { recursive: true }); }
 });
