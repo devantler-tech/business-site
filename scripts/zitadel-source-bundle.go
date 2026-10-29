@@ -527,6 +527,7 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests.",
 		"Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths.",
 		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
+		"Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
