@@ -1042,24 +1042,34 @@ var neutralSMTPInputs = []neutralProviderInput{
 func init() {
 	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
 	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
+	iconExtensions["--neutral-mdi-icons"] = runNeutralMDIIcons
 }
 
 // runNeutralProviderIcons validates the complete frozen decoration profile before
 // replacing its eighteen consumers and retiring sixteen images in a confined export.
 func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
-	return prepareNeutralIconProfile(args, out, diagnostic, false)
+	return prepareNeutralIconProfile(args, out, diagnostic, "provider")
 }
 
 // runNeutralSMTPIcons preserves the five SMTP consumers while retiring only its
 // closed nine-image family. Existing provider and Login profiles stay separate.
 func runNeutralSMTPIcons(args []string, out, diagnostic io.Writer) int {
-	return prepareNeutralIconProfile(args, out, diagnostic, true)
+	return prepareNeutralIconProfile(args, out, diagnostic, "smtp")
 }
 
-// Both profiles use the same confined, prevalidated stage writer. Their original
+// runNeutralMDIIcons retains the standard icon family while replacing only the
+// unresolved OpenID/JWT decorations in their five fixed native consumers.
+func runNeutralMDIIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "mdi")
+}
+
+// All three profiles use the same confined, prevalidated stage writer. Their original
 // membership, transformations and receipt cardinalities are fixed independently.
-func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bool) int {
+func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile string) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
+	if profile != "provider" && profile != "smtp" && profile != "mdi" {
+		return fail(fmt.Errorf("unknown fixed icon profile"))
+	}
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
 		return fail(fmt.Errorf("explicit preparation and source required"))
 	}
@@ -1092,9 +1102,17 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		"console/src/assets/images/idp":                     {"apple-dark.svg", "apple.svg", "github-dark.svg", "github.svg", "gitlab.svg", "google.png", "ms.svg", "oauth.svg", "saml-icon.svg"},
 		"internal/api/ui/login/static/resources/images/idp": {"apple-dark.svg", "apple.svg", "github-white.png", "github.png", "gitlab.png", "google.png", "ms.svg"},
 	}
-	if smtp {
+	if profile == "smtp" {
 		inputs = neutralSMTPInputs
 		families = map[string][]string{"console/src/assets/images/smtp": {"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"}}
+	}
+	if profile == "mdi" {
+		inputs = neutralMDIInputs()
+		names := []string{"openid.svg", "jwt.svg"}
+		for _, asset := range mdiFrozen {
+			names = append(names, path.Base(asset.Path))
+		}
+		families = map[string][]string{"console/src/assets/mdi": names}
 	}
 	for dir, names := range families {
 		if err = exactDirectory(source, dir, names); err != nil {
@@ -1110,11 +1128,18 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 			return fail(fmt.Errorf("original identity differs: %s", input.path))
 		}
 		originals[input.path] = body
-		if input.kind == "retire" {
+		if input.kind == "retire" || input.kind == "retain" {
 			continue
 		}
 		text := string(body)
 		switch input.kind {
+		case "mdi-registry", "mdi-table", "mdi-chooser", "mdi-editor-oidc", "mdi-editor-jwt":
+			var slots int
+			text, slots, e = neutralMDIChange(input, text)
+			if e != nil {
+				return fail(e)
+			}
+			consoleSlots += slots
 		case "smtp-chooser", "smtp-editor":
 			old := `<img class="smtp-logo" [src]="provider.image" [alt]="provider.description" />`
 			if input.kind == "smtp-editor" {
@@ -1219,11 +1244,14 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		}
 		replacements[input.path] = []byte(text)
 	}
-	if smtp && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
+	if profile == "smtp" && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
 		return fail(fmt.Errorf("incomplete neutral SMTP profile"))
 	}
-	if !smtp && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
+	if profile == "provider" && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral provider profile"))
+	}
+	if profile == "mdi" && (len(originals) != 32 || len(replacements) != 5 || consoleSlots != 6 || loginSlots != 0 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral MDI profile"))
 	}
 	// Refuse a changed original before replacing any selected body.
 	for _, input := range inputs {
@@ -1233,6 +1261,9 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		}
 	}
 	for _, input := range inputs {
+		if input.kind == "retain" {
+			continue
+		}
 		if input.kind == "retire" {
 			if err = confined.Remove(input.path); err != nil {
 				return fail(err)
@@ -1271,7 +1302,11 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 			continue
 		}
 		body, e := neutralProviderRead(confined, input)
-		if e != nil || !bytes.Equal(body, replacements[input.path]) {
+		want := replacements[input.path]
+		if input.kind == "retain" {
+			want = originals[input.path]
+		}
+		if e != nil || !bytes.Equal(body, want) {
 			return fail(fmt.Errorf("prepared decoration readback differs"))
 		}
 	}
@@ -1280,8 +1315,11 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		return fail(fmt.Errorf("prepared source root changed"))
 	}
 	receipt := map[string]any{"schemaVersion": 1, "profile": "native-neutral-provider-icons-v1", "changedFiles": 18, "removedFiles": 16, "consoleSlots": consoleSlots, "loginSlots": loginSlots, "imageAdmission": "unknown", "licenseClosure": "unknown"}
-	if smtp {
+	if profile == "smtp" {
 		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["settingsValues"] = "native-neutral-smtp-icons-v1", 5, 9, settingsValues
+	}
+	if profile == "mdi" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["retainedFiles"] = "native-neutral-mdi-icons-v1", 5, 2, 25
 	}
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
@@ -1330,7 +1368,14 @@ func neutralProviderConsumers() []inputRecord {
 	var consumers []inputRecord
 	for _, input := range neutralProviderInputs {
 		if input.kind != "retire" {
-			consumers = append(consumers, inputRecord{input.path, input.expected})
+			expected := input.expected
+			// These two consumers subsequently receive the separate MDI profile.
+			for _, mdi := range neutralMDIConsumers() {
+				if mdi.Path == input.path {
+					expected = mdi.SHA256
+				}
+			}
+			consumers = append(consumers, inputRecord{input.path, expected})
 		}
 	}
 	return consumers
@@ -1352,6 +1397,11 @@ func neutralSMTPConsumers() []inputRecord {
 // this is a closed-family check, not a general JavaScript or URL parser.
 func neutralProviderOutput(name string, body []byte) error {
 	lower := strings.ToLower(filepath.ToSlash(name))
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if strings.Contains(lower, "mdi/"+mark) {
+			return fmt.Errorf("retired MDI decoration remains")
+		}
+	}
 	for _, family := range []string{"idp", "smtp"} {
 		if strings.Contains(lower, "/images/"+family+"/") || strings.HasPrefix(lower, "images/"+family+"/") {
 			return fmt.Errorf("retired %s provider image output remains", family)
@@ -1363,6 +1413,11 @@ func neutralProviderOutput(name string, body []byte) error {
 		slash := strings.NewReplacer("\\/", "/", "\\u002f", "/", "\\x2f", "/")
 		for i := 0; i < 3; i++ {
 			text = slash.Replace(text)
+		}
+		for _, mark := range []string{"openid.svg", "jwt.svg"} {
+			if strings.Contains(text, "mdi/"+mark) {
+				return fmt.Errorf("retired MDI decoration reference remains")
+			}
 		}
 		for _, family := range []string{"idp", "smtp"} {
 			if strings.Contains(text, "images/"+family+"/") {
@@ -1398,5 +1453,98 @@ func neutralProviderSourceFamilies(source string) error {
 			return fmt.Errorf("retired provider source image remains")
 		}
 	}
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if _, err := os.Lstat(filepath.Join(source, "console/src/assets/mdi", mark)); !os.IsNotExist(err) {
+			return fmt.Errorf("retired MDI source remains or cannot be observed")
+		}
+	}
 	return nil
+}
+
+// neutralMDIInputs closes all 27 native graphics and the five consumers after
+// the provider profile. Retained artwork remains byte-identical to upstream.
+func neutralMDIInputs() []neutralProviderInput {
+	inputs := []neutralProviderInput{
+		{path: "console/src/app/app.component.ts", sha256: "f266e00e6d404e94e58fad66972b3da6c74a4818992bbec91d59a8b151113c4e", mode: 0644, kind: "mdi-registry", expected: "235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab"},
+		{path: "console/src/app/modules/idp-table/idp-table.component.html", sha256: "2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e", mode: 0644, kind: "mdi-table", expected: "5c489734a039df3535d00e7761200621bfca99e25d63955b70a1d1e712f76544"},
+		{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.html", sha256: "41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8", mode: 0644, kind: "mdi-chooser", expected: "015e783ee150d21280d7748ab897c1b709fb5e208777370059716f7b10766188"},
+		{path: "console/src/app/modules/providers/provider-oidc/provider-oidc.component.html", sha256: "fac7817b5db6d79d22d4a278ba4bd0e4151d30f137c448264c53899ac85b7a81", mode: 0644, kind: "mdi-editor-oidc", expected: "3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80"},
+		{path: "console/src/app/modules/providers/provider-jwt/provider-jwt.component.html", sha256: "19471a418b11da8bf48740dc16162ce93a7d12c69705a3af1012a4f4fe659bf8", mode: 0644, kind: "mdi-editor-jwt", expected: "5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9"},
+		{path: "console/src/assets/mdi/openid.svg", sha256: "05780f911a252dff978d08568675cbe24a53093fcbb04d5be9a9e1fa3e1c4f63", mode: 0644, kind: "retire"},
+		{path: "console/src/assets/mdi/jwt.svg", sha256: "24c9cd3a49a7459d14da7146832b4e986bfbd484bfc3cde7f485da8f6ccc5c03", mode: 0644, kind: "retire"},
+	}
+	for _, asset := range mdiFrozen {
+		inputs = append(inputs, neutralProviderInput{path: asset.Path, sha256: asset.SHA256, mode: 0644, kind: "retain", expected: asset.SHA256})
+	}
+	return inputs
+}
+
+// neutralMDIConsumers binds the completed decoration changes, excluding artwork.
+func neutralMDIConsumers() []inputRecord {
+	var result []inputRecord
+	for _, input := range neutralMDIInputs() {
+		if input.kind != "retain" && input.kind != "retire" {
+			result = append(result, inputRecord{input.path, input.expected})
+		}
+	}
+	return result
+}
+
+// neutralMDIChange replaces only fixed decorative slots and obsolete SVG
+// registrations. Native provider identifiers, forms, links and LDAP stay intact.
+func neutralMDIChange(input neutralProviderInput, text string) (string, int, error) {
+	if input.kind == "mdi-registry" {
+		var lines []string
+		removed := 0
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_openid',") || strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_jwt',") {
+				removed++
+				continue
+			}
+			lines = append(lines, line)
+		}
+		if removed != 2 {
+			return "", 0, fmt.Errorf("MDI registrations differ")
+		}
+		return strings.Join(lines, "\n"), 0, nil
+	}
+	size, class := "48", "idp-logo"
+	if input.kind == "mdi-table" {
+		size, class = "28", "idp-icon"
+	}
+	if input.kind == "mdi-chooser" {
+		size, class = "36", "icon"
+	}
+	slots := 0
+	for _, mark := range []string{"openid", "jwt"} {
+		alt := mark
+		if input.kind == "mdi-table" && mark == "openid" {
+			alt = "oidc"
+		}
+		old := `<mat-icon class="` + class + `" svgIcon="mdi_` + mark + `" alt="` + alt + `" />`
+		count := strings.Count(text, old)
+		if count == 0 {
+			continue
+		}
+		if count != 1 {
+			return "", 0, fmt.Errorf("MDI decoration slot differs")
+		}
+		glyph := "la-arrow-right"
+		if mark == "jwt" {
+			glyph = "la-key"
+		}
+		replacement := `<i class="` + class + ` neutral-mdi-icon las ` + glyph + `" aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ` + size + `px; height: ` + size + `px; font-size: ` + size + `px;"></i>`
+		text = strings.Replace(text, old, replacement, 1)
+		slots++
+	}
+	if input.kind == "mdi-chooser" {
+		if strings.Count(text, ` svgIcon="mdi_jwt"`) != 1 {
+			return "", 0, fmt.Errorf("native LDAP decoration differs")
+		}
+		text = strings.Replace(text, ` svgIcon="mdi_jwt"`, "", 1)
+	}
+	if strings.Contains(text, "mdi_openid") || strings.Contains(text, "mdi_jwt") {
+		return "", 0, fmt.Errorf("retired MDI registration remains")
+	}
+	return text, slots, nil
 }

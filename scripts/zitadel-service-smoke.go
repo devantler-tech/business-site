@@ -657,6 +657,7 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		} `json:"pages"`
 		ProviderIcons []browserProviderCase `json:"providerIcons"`
 		SMTPIcons     []browserProviderCase `json:"smtpIcons"`
+		MDIIcons      []browserProviderCase `json:"mdiIcons"`
 		Cleanup       string                `json:"cleanup"`
 		Portal        bool                  `json:"portalFederation"`
 		TLS           bool                  `json:"productionTLS"`
@@ -682,6 +683,9 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		return err
 	}
 	if err = browserSMTPReceipt(output, receipt.SMTPIcons); err != nil {
+		return err
+	}
+	if err = browserMDIReceipt(output, receipt.MDIIcons); err != nil {
 		return err
 	}
 	bound, err := json.MarshalIndent(map[string]any{"schemaVersion": 1, "upstreamCommit": imagePin, "localImageId": image, "browserReceiptSha256": imageHash(raw), "browserSourceSha256": imageHash(source), "cleanup": "complete", "imageAdmission": "unknown", "licenseClosure": "unknown"}, "", "  ")

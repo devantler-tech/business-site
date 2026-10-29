@@ -115,8 +115,8 @@ cp "$scratch/prepared source/source/go.sum" "$scratch/pristine/go.sum"
 # Pin all eighteen independently observed neutral consumers; retain an exact
 # whole-tree comparison, not a projection of selected expected fields.
 cat >"$scratch/neutral-consumers.sha256" <<'PROVIDERS'
-2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e  console/src/app/modules/idp-table/idp-table.component.html
-41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8  console/src/app/modules/policies/idp-settings/idp-settings.component.html
+5c489734a039df3535d00e7761200621bfca99e25d63955b70a1d1e712f76544  console/src/app/modules/idp-table/idp-table.component.html
+015e783ee150d21280d7748ab897c1b709fb5e208777370059716f7b10766188  console/src/app/modules/policies/idp-settings/idp-settings.component.html
 bcd033476803838515de5f25057ac4df9749f26049bf4a0c2926acb83ea01b94  console/src/app/modules/providers/provider-apple/provider-apple.component.html
 bb307b70f936d780f8584f01c4691efd042d43d95041df294f2af1f48ae94459  console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html
 380b3dca85ef437d4446987a5e22020c1a7e1bec1bc874ff7942dd0e204a1efd  console/src/app/modules/providers/provider-github-es/provider-github-es.component.html
@@ -138,6 +138,9 @@ db4f7c1746b2f3f19a1de401ac5cf658439e59d3f045106ff4aa05dc4eb8a8eb  console/src/ap
 f340db31d1e1d4db10e1646eb218b2e46fe7e6568e9801b26494f94602c168cd  console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts
 3c6be2a65c023c2aa1fa0ab86dc54530e0db7d3d79880099be3772f062db579f  console/src/app/modules/smtp-provider/smtp-provider.component.html
 194fd266ef3301dcb35b6ead7d92d5ac9860685d52e1312f693dfa644300eb24  console/src/app/modules/smtp-provider/smtp-provider.scss
+235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab  console/src/app/app.component.ts
+3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80  console/src/app/modules/providers/provider-oidc/provider-oidc.component.html
+5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9  console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
 PROVIDERS
 (cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
 while read -r _hash path; do
@@ -168,7 +171,9 @@ for path in \
   console/src/assets/images/smtp/mailjet.svg\
   console/src/assets/images/smtp/outlook.svg\
   console/src/assets/images/smtp/postmark.png\
-  console/src/assets/images/smtp/sendgrid.png; do
+  console/src/assets/images/smtp/sendgrid.png\
+  console/src/assets/mdi/openid.svg\
+  console/src/assets/mdi/jwt.svg; do
   test ! -e "$scratch/prepared source/source/$path"
   rm -- "$scratch/pristine/$path"
 done
@@ -177,11 +182,11 @@ rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
-  (.removedFiles | length) == 29 and .providerProfile == "native-neutral-provider-icons-v1" and
-  .smtpProfile == "native-neutral-smtp-icons-v1" and
+  (.removedFiles | length) == 31 and .providerProfile == "native-neutral-provider-icons-v1" and
+  .smtpProfile == "native-neutral-smtp-icons-v1" and .mdiProfile == "native-neutral-mdi-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
   .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
-  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss"]
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
 # Never overwrite a completed output or a pre-existing directory/symlink.

@@ -16,6 +16,70 @@ import (
 	"testing"
 )
 
+// Retired decorative marks must fail in every source, output and compiler
+// package, including escaped bundle references outside the retained catalogue.
+func TestCopiedMDIMarksCannotHideOutsideTheRetainedCatalogue(t *testing.T) {
+	for _, name := range []string{"openid.svg", "jwt.svg"} {
+		for _, prefix := range []string{"console/src/assets/mdi/", "console/dist/console/assets/mdi/", "static/assets/mdi/"} {
+			t.Run(prefix+name, func(t *testing.T) {
+				if err := neutralProviderOutput(prefix+name, nil); err == nil {
+					t.Fatal("retired MDI mark was accepted")
+				}
+			})
+		}
+		for _, slash := range []string{"/", `\/`, `\u002f`, `\x2f`} {
+			t.Run(slash+name, func(t *testing.T) {
+				body := []byte("assets" + slash + "mdi" + slash + name)
+				if err := neutralProviderOutput("chunk.js", body); err == nil {
+					t.Fatal("retired MDI reference was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Retained MDI evidence must observe each actual body and both copies, rather
+// than accepting a catalogue that describes inputs the collector never reads.
+func TestCopiedMDIRetentionObservesItsCompleteInputs(t *testing.T) {
+	for _, attack := range []string{"source", "console-output", "embedded-output", "terms", "consumer", "missing-source", "linked-source"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			body := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>`)
+			terms := []byte("Complete fictional fixture terms.\n")
+			consumer := []byte("fixed native consumer\n")
+			policy.MDI = []mdiProvenance{{Path: "console/src/assets/mdi/fixture.svg", Bytes: len(body), SHA256: digest(body), GitBlob: blob(body), PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/fixture.svg", PrimarySHA256: digest(body), Author: "Fixture author", Notice: "Pictogrammers-LICENSE"}}
+			policy.MDINotices = []inputRecord{{"Pictogrammers-LICENSE", digest(terms)}}
+			policy.MDIConsumers = []inputRecord{{"console/src/app/fixture-mdi.html", digest(consumer)}}
+			paths := []string{"console/src/assets/mdi/fixture.svg", "console/dist/console/assets/mdi/fixture.svg", "internal/api/ui/console/static/assets/mdi/fixture.svg"}
+			for _, name := range paths {
+				put(t, filepath.Join(build, "prepared/source", name), body)
+			}
+			put(t, filepath.Join(build, "prepared/source/console/src/app/fixture-mdi.html"), consumer)
+			put(t, filepath.Join(notices, "Pictogrammers-LICENSE"), terms)
+			appendCopiedCompilerMember(t, build, "static/assets/mdi/fixture.svg")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("valid MDI baseline: %v", err)
+			}
+			target := map[string]string{"source": filepath.Join(build, "prepared/source", paths[0]), "console-output": filepath.Join(build, "prepared/source", paths[1]), "embedded-output": filepath.Join(build, "prepared/source", paths[2]), "terms": filepath.Join(notices, "Pictogrammers-LICENSE"), "consumer": filepath.Join(build, "prepared/source/console/src/app/fixture-mdi.html"), "missing-source": filepath.Join(build, "prepared/source", paths[0]), "linked-source": filepath.Join(build, "prepared/source", paths[0])}[attack]
+			if attack == "missing-source" || attack == "linked-source" {
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+				if attack == "linked-source" {
+					if err := os.Symlink(filepath.Join(build, "prepared/source", paths[1]), target); err != nil {
+						t.Fatal(err)
+					}
+				}
+			} else {
+				put(t, target, []byte("changed\n"))
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("incomplete or changed MDI evidence was accepted")
+			}
+		})
+	}
+}
+
 // An undeclared translation must not disappear from the closed copied-asset
 // selection merely because the original collector recognized only icon paths.
 func TestCopiedTranslationsRejectUndeclaredSourceOutputAndCompilerMembers(t *testing.T) {
@@ -653,5 +717,37 @@ func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
 				t.Fatal("unexamined SMTP consumer accepted")
 			}
 		})
+	}
+}
+
+// The retained MDI policy supplements the original catalogue; it must not change
+// the old catalogue's identities or accidentally restore an unresolved mark.
+func TestCopiedMDIProductionPolicyIsClosedAndKeepsExistingCatalogue(t *testing.T) {
+	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 {
+		t.Fatal("frozen catalogue or complete MDI policy changed")
+	}
+	previous := ""
+	pictogrammers, mail := 0, 0
+	for _, a := range copiedFrozen.MDI {
+		if a.Path <= previous || strings.HasSuffix(a.Path, "/openid.svg") || strings.HasSuffix(a.Path, "/jwt.svg") {
+			t.Fatal("duplicate, unordered or unresolved MDI member")
+		}
+		previous = a.Path
+		if a.Notice == "Google-Mail-LICENSE" {
+			mail++
+			if a.Path != "console/src/assets/mdi/mail.svg" || a.SHA256 != a.PrimarySHA256 {
+				t.Fatal("Mail primary identity differs")
+			}
+		} else if a.Notice == "Pictogrammers-LICENSE" {
+			pictogrammers++
+			if a.SHA256 == a.PrimarySHA256 {
+				t.Fatal("modified native wrapper incorrectly equals primary")
+			}
+		} else {
+			t.Fatal("unknown MDI grant")
+		}
+	}
+	if pictogrammers != 24 || mail != 1 {
+		t.Fatal("MDI provenance family incomplete")
 	}
 }

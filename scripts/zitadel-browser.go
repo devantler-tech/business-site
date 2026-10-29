@@ -66,7 +66,7 @@ func browserAdmit(page browserPage, kind string) bool {
 	}
 	if kind == "provider-console" {
 		settings := u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
-		editor := regexp.MustCompile(`^/ui/console/instance/provider/(google/create|(google|github)/[0-9]{1,30})$`).MatchString(u.Path)
+		editor := regexp.MustCompile(`^/ui/console/instance/provider/((google|oidc|jwt)/create|(google|github)/[0-9]{1,30})$`).MatchString(u.Path)
 		return page.ProviderConsole && (settings || editor) && len(strings.TrimSpace(page.Text)) > 40
 	}
 	if !strings.HasPrefix(u.Path, "/ui/login/") {
@@ -99,7 +99,7 @@ return {url:location.href, ready:document.readyState, text:document.body.innerTe
   secureContext:window.isSecureContext, webCrypto:typeof crypto.subtle?.digest === 'function',
   username:shown('#loginName'), password:shown('#password'),
   console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
-  providerConsole:!!(root && shown('cnsl-header') && shown('cnsl-instance,cnsl-provider-google,cnsl-provider-github')),
+  providerConsole:!!(root && shown('cnsl-header') && shown('cnsl-instance,cnsl-provider-google,cnsl-provider-github,cnsl-provider-oidc,cnsl-provider-jwt')),
   smtpConsole:!!(root && shown('cnsl-header') && shown('cnsl-notification-smtp-provider,cnsl-smtp-provider')),
   consolePresented:settled && navigationVisible,
   optionalMFA:!!skip, mfaAction:skip?.form?.action || '',
@@ -121,6 +121,7 @@ type browserDriver struct {
 	providerSetupPhase, providerRequest, providerHTTPStatus int
 	lastProvider                                            browserProviderPage
 	smtpCases                                               []browserProviderCase
+	mdiCases                                                []browserProviderCase
 }
 
 // browserHTTPClient bounds driver requests beyond the configured page-load
@@ -513,7 +514,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 		return err
 	}
 	phase = "receipt"
-	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "mdiIcons": d.mdiCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err
@@ -560,6 +561,10 @@ func browserProviderAdmit(p browserProviderPage, kind, theme string) bool {
 		return p.Count == 9 && u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
 	case "table":
 		return p.Count == 2 && u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
+	case "mdi-picker", "mdi-table":
+		return p.Count == 2 && u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
+	case "editor-oidc", "editor-jwt":
+		return p.Count == 1 && u.Path == "/ui/console/instance/provider/"+strings.TrimPrefix(kind, "editor-")+"/create"
 	case "editor-google":
 		return p.Count == 1 && u.Path == "/ui/console/instance/provider/google/create"
 	case "login":
@@ -830,6 +835,11 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 	d.smtpCases, smtpErr = d.smtpPresentation(output)
 	if smtpErr != nil {
 		return nil, smtpErr
+	}
+	var mdiErr error
+	d.mdiCases, mdiErr = d.mdiPresentation(output)
+	if mdiErr != nil {
+		return nil, mdiErr
 	}
 	// Clear only this worker's disposable profile, after all authenticated Console
 	// observations. No real user's session, provider account or persistent state exists.
@@ -1202,6 +1212,227 @@ func browserPresentationScreenshot(output, name string, screen browserScreen) er
 	}
 	if _, err = imagepng.Decode(bytes.NewReader(png)); err != nil {
 		return fmt.Errorf("presentation screenshot incomplete")
+	}
+	return nil
+}
+
+// MDI fixture providers are unlinked from the login policy. The old Google and
+// GitHub login fixture remains exactly two providers; no external IdP is used.
+const browserMDISetup = `
+const done=arguments[arguments.length-1];
+(async()=>{let request=0,status=0;try{
+ if(location.origin!=='http://fixture.localhost:8080'||!location.pathname.startsWith('/ui/console/'))throw 0;
+ const token=JSON.parse(sessionStorage.getItem('zitadel:access_token'));
+ if(typeof token!=='string'||!token||token.length>16384)throw 0;
+ const api=async(method,path,body)=>{request++;status=0;const timer=new AbortController(),stop=setTimeout(()=>timer.abort(),2000);try{
+  const response=await fetch(path,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',redirect:'error',signal:timer.signal});status=response.status;
+  if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw 0;
+  const text=await response.text();if(!text||text.length>1048576)throw 0;const value=JSON.parse(text);if(!value||typeof value!=='object'||Array.isArray(value))throw 0;return value;
+ }finally{clearTimeout(stop)}};
+ const before=await api('GET','/admin/v1/policies/login');
+ const linked=before.policy?.idps;
+ if(!Array.isArray(linked)||linked.length!==2||!linked.some(p=>p.idpName==='Fixture Google')||!linked.some(p=>p.idpName==='Fixture GitHub'))throw 0;
+ const options={isLinkingAllowed:false,isCreationAllowed:false,isAutoCreation:false,isAutoUpdate:false,autoLinking:'AUTO_LINKING_OPTION_UNSPECIFIED'};
+ const fixtures=[['oidc',{name:'Fixture OIDC',issuer:location.origin,clientId:'fictional-oidc-client',clientSecret:'FictionalOIDCOnly1!',scopes:['openid','profile'],providerOptions:options}],['jwt',{name:'Fixture JWT',issuer:location.origin,jwtEndpoint:location.origin+'/fictional-jwt',keysEndpoint:location.origin+'/oauth/v2/keys',headerName:'X-Fictional-JWT',audience:'fictional-jwt-audience',providerOptions:options}]];
+ const ids=[];for(const [type,body]of fixtures){const made=await api('POST','/admin/v1/idps/'+type,body);if(typeof made.id!=='string'||!/^\d{1,30}$/.test(made.id)||ids.includes(made.id))throw 0;ids.push(made.id);
+  const read=await api('GET','/admin/v1/idps/templates/'+made.id);if(read.idp?.id!==made.id||read.idp?.name!==body.name)throw 0;}
+ const after=await api('GET','/admin/v1/policies/login');if(JSON.stringify(after.policy)!==JSON.stringify(before.policy))throw 0;
+ done({complete:true,count:2,ids,request,status});
+}catch{done({complete:false,count:0,request,status})}})();`
+
+// Actual native glyph, control, route and loaded-resource observations only.
+const browserMDIObservation = `
+const [kind,theme]=arguments;
+const picker=kind==='mdi-picker',table=kind==='mdi-table',type=kind==='editor-oidc'?'oidc':'jwt';
+const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+const shown=e=>{if(!e)return false;const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth};
+const plain=s=>s.replaceAll('"','').replaceAll("'",'').trim();
+const icons=[...document.querySelectorAll(picker?'cnsl-idp-settings .neutral-mdi-icon':table?'cnsl-idp-table .neutral-mdi-icon':'cnsl-provider-'+type+' .neutral-mdi-icon')];
+const glyphs=icons.length>0&&icons.every(e=>{const s=getComputedStyle(e),b=getComputedStyle(e,'::before');let expected=type;if(picker){const route=e.closest('a.item')?.pathname;expected=['oidc','jwt'].find(t=>route==='/ui/console/instance/provider/'+t+'/create')}else if(table){const text=e.closest('tr')?.innerText??'',matches=['oidc','jwt'].filter(t=>text.includes('Fixture '+t.toUpperCase()));expected=matches.length===1?matches[0]:''}const jwt=expected==='jwt';return ['oidc','jwt'].includes(expected)&&e.classList.contains(jwt?'la-key':'la-arrow-right')&&shown(e)&&plain(b.content).codePointAt(0)===(jwt?0xf084:0xf061)&&plain(b.fontFamily)==='Line Awesome Free'&&parseFloat(s.fontSize)===(picker?36:table?28:48)&&e.getAttribute('aria-hidden')==='true'&&[...document.fonts].some(f=>f.status==='loaded'&&plain(f.family)==='Line Awesome Free')});
+let labels=false,targets=false,keyboard=icons.every(e=>e.tabIndex<0);
+if(picker){const anchors=icons.map(e=>e.closest('a.item'));labels=['oidc','jwt'].every(t=>anchors.some(a=>a?.pathname==='/ui/console/instance/provider/'+t+'/create'&&a.innerText.includes(t==='oidc'?'OIDC':'JWT')));targets=anchors.length===2&&anchors.every(a=>a?.origin===location.origin&&['oidc','jwt'].some(t=>a.pathname==='/ui/console/instance/provider/'+t+'/create'));keyboard=keyboard&&anchors.every(a=>a?.tabIndex===0&&shown(a));}
+else if(table){const rows=icons.map(e=>e.closest('tr'));labels=['OIDC','JWT'].every(t=>rows.some(r=>r?.innerText.includes('Fixture '+t)));targets=rows.length===2&&rows.every(r=>shown(r)&&r.querySelector('button'))&&icons.some(e=>e.classList.contains('la-arrow-right'))&&icons.some(e=>e.classList.contains('la-key'));}
+else{const q=n=>document.querySelector('cnsl-provider-'+type+' input[formcontrolname="'+n+'"]');labels=document.body.innerText.includes(type==='oidc'?'OIDC':'JWT')&&!!q('name');targets=!!q('issuer')&&!!document.querySelector('cnsl-provider-'+type+' button[type="submit"]')&&(type==='oidc'?!!q('clientId')&&!!q('clientSecret'):!!q('headerName')&&!!q('jwtEndpoint')&&!!q('keysEndpoint')&&!!q('audience'));}
+const resources=performance.getEntriesByType('resource').map(e=>e.name);
+return {url:location.href,kind,theme,count:icons.length,glyphs,labels,targets,keyboard,
+ themeReady:!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&back.getAnimations().every(a=>!a.pending&&a.playState!=='running'),
+ resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(n=>{const u=new URL(n);return u.origin===location.origin&&!/\/mdi\/(openid|jwt)\.svg$/i.test(u.pathname)})};`
+
+func (d *browserDriver) mdiPage(kind, theme string) (browserProviderPage, error) {
+	for {
+		var visible bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const k=arguments[0],s=k==='mdi-picker'?'cnsl-idp-settings .new-idp-wrapper':k==='mdi-table'?'cnsl-idp-table':'cnsl-provider-'+k.slice(7)+' .neutral-mdi-icon';const e=document.querySelector(s);if(!e)return false;e.scrollIntoView({behavior:'instant',block:'center'});return true;`, "args": []string{kind}}, &visible); err != nil {
+			return browserProviderPage{}, err
+		}
+		var p browserProviderPage
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserMDIObservation, "args": []string{kind, theme}}, &p); err != nil {
+			return p, err
+		}
+		d.lastProvider = p
+		if visible && browserProviderAdmit(p, kind, theme) {
+			return p, nil
+		}
+		select {
+		case <-d.ctx.Done():
+			return p, fmt.Errorf("MDI presentation incomplete")
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// Runs inside the existing bounded provider phase. Only native chooser links
+// are activated with Enter; no create form or federation action is submitted.
+func (d *browserDriver) mdiPresentation(output string) ([]browserProviderCase, error) {
+	d.providerStage = "mdi-setup"
+	if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/instance?id=idp"}, nil); err != nil {
+		return nil, err
+	}
+	if _, err := d.waitPage("provider-console"); err != nil {
+		return nil, err
+	}
+	var setup struct {
+		Complete bool     `json:"complete"`
+		Count    int      `json:"count"`
+		IDs      []string `json:"ids"`
+	}
+	if err := d.call("POST", "/execute/async", map[string]any{"script": browserMDISetup, "args": []any{}}, &setup); err != nil {
+		return nil, err
+	}
+	if !setup.Complete || setup.Count != 2 || len(setup.IDs) != 2 {
+		return nil, fmt.Errorf("unlinked fictional MDI fixture incomplete")
+	}
+	cases := []browserProviderCase{}
+	for _, theme := range []string{"light", "dark"} {
+		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/instance?id=idp"}, nil); err != nil {
+			return nil, err
+		}
+		if _, err := d.waitPage("provider-console"); err != nil {
+			return nil, err
+		}
+		selector := `cnsl-theme-setting button.theme-setting-button:has(svg.sun)`
+		if theme == "dark" {
+			selector = `cnsl-theme-setting button.theme-setting-button:has(svg.moon)`
+		}
+		var active bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `return document.querySelector(arguments[0])?.classList.contains('active')===true;`, "args": []string{selector}}, &active); err != nil {
+			return nil, err
+		}
+		if !active {
+			button, err := d.element(selector)
+			if err != nil {
+				return nil, err
+			}
+			if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+				return nil, err
+			}
+		}
+		for _, kind := range []string{"mdi-picker", "mdi-table", "editor-oidc", "editor-jwt"} {
+			d.providerStage = kind + "-" + theme
+			if strings.HasPrefix(kind, "editor-") {
+				link, err := d.element(`cnsl-idp-settings a[href="/ui/console/instance/provider/` + strings.TrimPrefix(kind, "editor-") + `/create"]`)
+				if err != nil {
+					return nil, err
+				}
+				if err = d.call("POST", link+"/value", map[string]string{"text": "\ue007"}, nil); err != nil {
+					return nil, err
+				}
+				if _, err = d.waitPage("provider-console"); err != nil {
+					return nil, err
+				}
+			}
+			page, err := d.mdiPage(kind, theme)
+			if err != nil {
+				return nil, err
+			}
+			screen, err := d.capture(output, "mdi-"+kind+"-"+theme, browserPage{})
+			if err != nil {
+				return nil, err
+			}
+			if kind == "mdi-table" {
+				if err = d.mdiTableRoutes(setup.IDs); err != nil {
+					return nil, err
+				}
+			}
+			cases = append(cases, browserProviderCase{kind, theme, page.Count, page.Glyphs, page.Labels, page.Targets, page.ThemeReady, page.Resources, page.Keyboard, screen.Screenshot})
+			if strings.HasPrefix(kind, "editor-") {
+				if err = d.call("POST", "/back", map[string]any{}, nil); err != nil {
+					return nil, err
+				}
+				if _, err = d.mdiPage("mdi-picker", theme); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return cases, nil
+}
+
+func browserMDIReceipt(output string, cases []browserProviderCase) error {
+	if len(cases) != 8 {
+		return fmt.Errorf("MDI case set incomplete")
+	}
+	index := 0
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range []string{"mdi-picker", "mdi-table", "editor-oidc", "editor-jwt"} {
+			c := cases[index]
+			index++
+			route := "/ui/console/instance?id=idp"
+			if strings.HasPrefix(kind, "editor-") {
+				route = "/ui/console/instance/provider/" + strings.TrimPrefix(kind, "editor-") + "/create"
+			}
+			p := browserProviderPage{"http://" + serviceAuthority + route, c.Kind, c.Theme, c.Count, c.Glyphs, c.Labels, c.Targets, c.ThemeReady, c.Resources, c.Keyboard}
+			if c.Kind != kind || c.Theme != theme || !browserProviderAdmit(p, kind, theme) {
+				return fmt.Errorf("MDI case differs")
+			}
+			name := "mdi-" + kind + "-" + theme + ".png"
+			if c.Screenshot.Path != name {
+				return fmt.Errorf("MDI screenshot path differs")
+			}
+			if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Exercise the two actual configured row destinations. A removal button alone
+// cannot prove that the row still opens the right protocol editor and values.
+func (d *browserDriver) mdiTableRoutes(ids []string) error {
+	for i, typ := range []string{"oidc", "jwt"} {
+		name := "Fixture " + strings.ToUpper(typ)
+		var element map[string]string
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const rows=[...document.querySelectorAll('cnsl-idp-table tr')].filter(r=>r.innerText.includes(arguments[0]));return rows.length===1?rows[0]:null;`, "args": []string{name}}, &element); err != nil {
+			return err
+		}
+		id := element["element-6066-11e4-a52e-4f735466cecf"]
+		if id == "" || len(id) > 512 {
+			return fmt.Errorf("native MDI row absent")
+		}
+		if err := d.call("POST", "/element/"+url.PathEscape(id)+"/click", map[string]any{}, nil); err != nil {
+			return err
+		}
+		expected := "/ui/console/instance/provider/" + typ + "/" + ids[i]
+		for {
+			var ok bool
+			if err := d.call("POST", "/execute/sync", map[string]any{"script": `const q=n=>document.querySelector('input[formcontrolname="'+n+'"]');return location.origin==='http://fixture.localhost:8080'&&location.pathname===arguments[0]&&q('name')?.value===arguments[1]&&q('issuer')?.value===location.origin&&(arguments[2]==='oidc'?q('clientId')?.value==='fictional-oidc-client':q('headerName')?.value==='X-Fictional-JWT'&&q('audience')?.value==='fictional-jwt-audience');`, "args": []string{expected, name, typ}}, &ok); err != nil {
+				return err
+			}
+			if ok {
+				break
+			}
+			select {
+			case <-d.ctx.Done():
+				return fmt.Errorf("native MDI row destination differs")
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/instance?id=idp"}, nil); err != nil {
+			return err
+		}
+		if _, err := d.mdiPage("mdi-table", d.lastProvider.Theme); err != nil {
+			return err
+		}
 	}
 	return nil
 }

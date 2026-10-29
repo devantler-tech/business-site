@@ -512,3 +512,99 @@ func TestBrowserSMTPFrameIsSeparateFromProviderAndHomeFrames(t *testing.T) {
 		}
 	}
 }
+
+// The new MDI presentation cases must bind their actual local chooser, table and
+// two unsubmitted create forms; existing Google/GitHub evidence is insufficient.
+func TestBrowserMDIObservationRequiresItsNativeCase(t *testing.T) {
+	for _, tc := range []struct {
+		kind, route string
+		count       int
+	}{
+		{"mdi-picker", "/ui/console/instance?id=idp", 2},
+		{"mdi-table", "/ui/console/instance?id=idp", 2},
+		{"editor-oidc", "/ui/console/instance/provider/oidc/create", 1},
+		{"editor-jwt", "/ui/console/instance/provider/jwt/create", 1},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			good := browserProviderPage{"http://" + serviceAuthority + tc.route, tc.kind, "light", tc.count, true, true, true, true, true, true}
+			if !browserProviderAdmit(good, tc.kind, "light") {
+				t.Fatal("complete MDI native case refused")
+			}
+			for name, mutate := range map[string]func(*browserProviderPage){
+				"glyph": func(p *browserProviderPage) { p.Glyphs = false }, "label": func(p *browserProviderPage) { p.Labels = false },
+				"controls": func(p *browserProviderPage) { p.Targets = false }, "theme": func(p *browserProviderPage) { p.ThemeReady = false },
+				"resource": func(p *browserProviderPage) { p.Resources = false }, "keyboard": func(p *browserProviderPage) { p.Keyboard = false },
+				"count": func(p *browserProviderPage) { p.Count++ }, "route": func(p *browserProviderPage) {
+					p.URL = "http://" + serviceAuthority + "/ui/console/instance/provider/google/create"
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					bad := good
+					mutate(&bad)
+					if browserProviderAdmit(bad, tc.kind, "light") {
+						t.Fatal("incomplete MDI case admitted")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestBrowserMDIReceiptBindsEveryCaseAndActualScreenshot(t *testing.T) {
+	output := t.TempDir()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
+		t.Fatal(err)
+	}
+	raw := encoded.Bytes()
+	var cases []browserProviderCase
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range []string{"mdi-picker", "mdi-table", "editor-oidc", "editor-jwt"} {
+			count := 1
+			if strings.HasPrefix(kind, "mdi-") {
+				count = 2
+			}
+			name := "mdi-" + kind + "-" + theme + ".png"
+			if err := os.WriteFile(filepath.Join(output, name), raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			cases = append(cases, browserProviderCase{kind, theme, count, true, true, true, true, true, true, browserScreen{name, len(raw), imageHash(raw)}})
+		}
+	}
+	if err := browserMDIReceipt(output, cases); err != nil {
+		t.Fatal(err)
+	}
+	for i := range cases {
+		for name, mutate := range map[string]func(*browserProviderCase){
+			"glyph": func(c *browserProviderCase) { c.Glyphs = false }, "labels": func(c *browserProviderCase) { c.Labels = false },
+			"controls": func(c *browserProviderCase) { c.Targets = false }, "theme": func(c *browserProviderCase) { c.ThemeReady = false },
+			"resources": func(c *browserProviderCase) { c.Resources = false }, "keyboard": func(c *browserProviderCase) { c.Keyboard = false },
+			"count": func(c *browserProviderCase) { c.Count++ }, "path": func(c *browserProviderCase) { c.Screenshot.Path = "../outside.png" },
+			"length": func(c *browserProviderCase) { c.Screenshot.Bytes++ }, "digest": func(c *browserProviderCase) { c.Screenshot.SHA256 = strings.Repeat("0", 64) },
+		} {
+			t.Run(fmt.Sprint(i)+"/"+name, func(t *testing.T) {
+				bad := append([]browserProviderCase{}, cases...)
+				mutate(&bad[i])
+				if browserMDIReceipt(output, bad) == nil {
+					t.Fatal("incomplete MDI proof admitted")
+				}
+			})
+		}
+	}
+	for _, bad := range [][]browserProviderCase{nil, cases[:7], append(append([]browserProviderCase{}, cases...), cases[0])} {
+		if browserMDIReceipt(output, bad) == nil {
+			t.Fatal("incomplete or extra case set admitted")
+		}
+	}
+	duplicate := append([]browserProviderCase{}, cases...)
+	duplicate[1] = duplicate[0]
+	if browserMDIReceipt(output, duplicate) == nil {
+		t.Fatal("duplicate MDI case admitted")
+	}
+	if err := os.WriteFile(filepath.Join(output, cases[7].Screenshot.Path), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if browserMDIReceipt(output, cases) == nil {
+		t.Fatal("unread screenshot change admitted")
+	}
+}

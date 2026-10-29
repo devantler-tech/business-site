@@ -60,6 +60,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   removes nine image paths, reusing the existing envelope glyph. Preserve all nine
   preset connection defaults and the native generic SMTP path. The complete compiler
   stream is checked before catalogue selection; no retired SMTP path may hide outside it.
+  The separate MDI profile retains twenty-five standard graphics with immutable
+  provenance and complete original terms, replaces OpenID/JWT decoration in five
+  native consumers and retires only their two SVGs. Preserve the LDAP control and
+  both native protocol editors. The existing catalogue remains 1,858/3,716; the
+  MDI extension adds twenty-five originals and fifty actual generated copies.
   The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other

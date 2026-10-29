@@ -56,3 +56,8 @@ df456abcbb2543864aa36ea3db7555502d5f091f77f16f974ea41e6de12894fd  console/src/as
 11951b969a6169db6c92f03e93039ce66c1576886c462c03e0549dc872db7283  console/src/assets/images/smtp/outlook.svg
 81ac09ed4332ff08fa1eb4ce3f225176e8083835529cd4a7fe899cbde71d31fc  console/src/assets/images/smtp/postmark.png
 8e5559c9e74a4b5ea732f9dcbaa0cc24dae759317edd1aed02e9a572141cee7a  console/src/assets/images/smtp/sendgrid.png
+f266e00e6d404e94e58fad66972b3da6c74a4818992bbec91d59a8b151113c4e  console/src/app/app.component.ts
+fac7817b5db6d79d22d4a278ba4bd0e4151d30f137c448264c53899ac85b7a81  console/src/app/modules/providers/provider-oidc/provider-oidc.component.html
+19471a418b11da8bf48740dc16162ce93a7d12c69705a3af1012a4f4fe659bf8  console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
+05780f911a252dff978d08568675cbe24a53093fcbb04d5be9a9e1fa3e1c4f63  console/src/assets/mdi/openid.svg
+24c9cd3a49a7459d14da7146832b4e986bfbd484bfc3cde7f485da8f6ccc5c03  console/src/assets/mdi/jwt.svg

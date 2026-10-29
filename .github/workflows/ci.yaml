@@ -509,7 +509,7 @@ jobs:
             .checkoutNoticeOriginalsUnavailable==true and
             .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and
             .noticeOriginals.schemaVersion==1 and .noticeOriginals.profile=="identity-notice-originals-v1" and
-            .noticeOriginals.files==41 and .noticeOriginals.bytes>0 and
+            .noticeOriginals.files==43 and .noticeOriginals.bytes>0 and
             .noticeOriginals.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
             .noticeOriginals.preparedProfileSha256==$original[0].sourceSnapshot.preparedProfileSha256 and
             .noticeOriginals.recipeSha256==$original[0].recipeSha256 and
@@ -576,6 +576,8 @@ jobs:
             all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             (.smtpIcons | map(.kind+"/"+.theme)) == ["picker/light","amazon/light","brevo/light","google/light","mailchimp/light","mailgun/light","mailjet/light","outlook/light","postmark/light","sendgrid/light","picker/dark","amazon/dark","brevo/dark","google/dark","mailchimp/dark","mailgun/dark","mailjet/dark","outlook/dark","postmark/dark","sendgrid/dark"] and
             all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.mdiIcons | map(.kind+"/"+.theme)) == ["mdi-picker/light","mdi-table/light","editor-oidc/light","editor-jwt/light","mdi-picker/dark","mdi-table/dark","editor-oidc/dark","editor-jwt/dark"] and
+            all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -670,6 +672,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/console.png
             ${{ runner.temp }}/zitadel-image/provider-*.png
             ${{ runner.temp }}/zitadel-image/smtp-*.png
+            ${{ runner.temp }}/zitadel-image/mdi-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json
