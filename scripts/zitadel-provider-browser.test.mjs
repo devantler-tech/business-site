@@ -160,7 +160,7 @@ for(const fault of ['none','wrong-origin','http-error','malformed-json','bad-id'
    assert.equal(options.method,'GET','MDI fixture mutated login policy');
    body={policy:{allowRegister:false,allowExternalIdp:true,idps:fault==='missing-linked-provider'?linked.slice(0,1):linked}};
    if(fault==='changed-policy'&&creates===2)body.policy.allowRegister=true;
-  }else if(path==='/admin/v1/idps/oidc'||path==='/admin/v1/idps/jwt'){
+  }else if(path==='/admin/v1/idps/generic_oidc'||path==='/admin/v1/idps/generic_jwt'){
    assert.equal(options.method,'POST');creates++;const posted=JSON.parse(options.body);
    assert.equal(posted.providerOptions.isCreationAllowed,false);assert.equal(posted.providerOptions.isLinkingAllowed,false);
    assert.equal(posted.issuer,location.origin);

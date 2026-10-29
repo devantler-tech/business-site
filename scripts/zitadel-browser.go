@@ -1233,7 +1233,7 @@ const done=arguments[arguments.length-1];
  const linked=before.policy?.idps;
  if(!Array.isArray(linked)||linked.length!==2||!linked.some(p=>p.idpName==='Fixture Google')||!linked.some(p=>p.idpName==='Fixture GitHub'))throw 0;
  const options={isLinkingAllowed:false,isCreationAllowed:false,isAutoCreation:false,isAutoUpdate:false,autoLinking:'AUTO_LINKING_OPTION_UNSPECIFIED'};
- const fixtures=[['oidc',{name:'Fixture OIDC',issuer:location.origin,clientId:'fictional-oidc-client',clientSecret:'FictionalOIDCOnly1!',scopes:['openid','profile'],providerOptions:options}],['jwt',{name:'Fixture JWT',issuer:location.origin,jwtEndpoint:location.origin+'/fictional-jwt',keysEndpoint:location.origin+'/oauth/v2/keys',headerName:'X-Fictional-JWT',audience:'fictional-jwt-audience',providerOptions:options}]];
+ const fixtures=[['generic_oidc',{name:'Fixture OIDC',issuer:location.origin,clientId:'fictional-oidc-client',clientSecret:'FictionalOIDCOnly1!',scopes:['openid','profile'],providerOptions:options}],['generic_jwt',{name:'Fixture JWT',issuer:location.origin,jwtEndpoint:location.origin+'/fictional-jwt',keysEndpoint:location.origin+'/oauth/v2/keys',headerName:'X-Fictional-JWT',audience:'fictional-jwt-audience',providerOptions:options}]];
  const ids=[];for(const [type,body]of fixtures){const made=await api('POST','/admin/v1/idps/'+type,body);if(typeof made.id!=='string'||!/^\d{1,30}$/.test(made.id)||ids.includes(made.id))throw 0;ids.push(made.id);
   const read=await api('GET','/admin/v1/idps/templates/'+made.id);if(read.idp?.id!==made.id||read.idp?.name!==body.name)throw 0;}
  const after=await api('GET','/admin/v1/policies/login');if(JSON.stringify(after.policy)!==JSON.stringify(before.policy))throw 0;
