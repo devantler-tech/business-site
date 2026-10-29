@@ -868,7 +868,7 @@ the original binaries and archives remain excluded. Full replay remains #343.
 
 The explicit replay command assembles this build's prepared source, selected
 service and generator Go originals, authenticated graph metadata, pnpm originals,
-schema originals, console originals and the fixed source-verifier bootstrap,
+schema originals, console originals, notice originals and the fixed source-verifier bootstrap,
 plus their original build receipt. It
 selects those fixed components rather than archiving the build directory. Prior
 compiled output, installed workspaces, side-effect caches and ambient stores are
@@ -944,7 +944,33 @@ Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities
 the caller-selected original Go 1.27.3 distribution and lock-pinned native
 pnpm SDK remain explicit build-tool boundaries, not application payloads inside
 the input archive. This does not claim a hermetic OS/toolchain distribution.
-The builder still reads this checkout's maintained notice collectors/catalogues.
+The retained native caller explicitly receives `--pnpm-source-sdk` pointing at
+that installed original SDK directory. Its fixed entrypoint, package declaration
+and lock must equal the retained authored inputs before and after native use;
+linked, missing or changed source refuses completion. This keeps the original
+installed SDK dependency boundary explicit while the forty-member caller root
+remains closed. SDK dependency capture/bootstrap remains #422; the notice capsule
+does not supply it or claim that proof.
+Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
+41-file plan retains original notices, attributions, catalogues, the historical
+public-suffix source and copied CSS. The five guidance READMEs and three authored
+tool-grant documents are outside that plan. It preserves the existing 58 build
+records and independently joins thirteen original-input records; it does not
+enlarge the source-restoration targets or the authored-code licence grant.
+
+Capture binds the capsule to the already sealed source snapshot, prepared
+profile and native recipe without introducing a cyclic source record. Each
+capture, restore and late readback observes the complete fixed membership,
+original bytes and modes. Raw/restored directories are private. The real replay
+runs the native builder from its authenticated 40-member tool-source layout,
+where none of the five checkout notice directories exists. Every native notice
+collector and both build-record readers consume the restored original root.
+Missing capsules, changed originals or receipt bindings fail before a completed
+receipt; a pristine checkout cannot rescue them. Connected builds separately
+recheck their original checkout so late changes remain refusals. Compact capsule
+manifests and readback summaries are retained as evidence; this mechanism does
+not itself prove native success or legal/source-offer completeness.
+
 The [identity build-tool scope](../third_party/zitadel-build-tools/README.md) grants
 AGPL-3.0-only for its exact authored file list and terms, without licensing the
 remaining application. Check it with `bash scripts/check-zitadel-build-tools-license.sh`.
