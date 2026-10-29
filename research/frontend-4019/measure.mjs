@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
-const roots = { astro: "dist/client", svelte: "build/client" };
+const roots = { svelte: "build/client" };
 async function files(dir) {
   let all = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {

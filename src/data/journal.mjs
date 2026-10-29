@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseFrontmatter } from "@astrojs/internal-helpers/frontmatter";
+import { parseFrontmatter } from "./frontmatter.mjs";
 import { markdownToHtml } from "satteri";
 import { slug } from "github-slugger";
 import { journalConfig } from "../components/business/journal-config.js";
@@ -29,7 +29,7 @@ export function readJournal(directory = defaultDirectory) {
       if (!/^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(id) || /^(?:\d+|tags|authors)(?:\/|$)/.test(id)) throw new Error(`Journal unsupported route: ${id}`);
       const source = readFileSync(file, "utf8");
       let data;
-      // Use Astro's actual frontmatter parser, including its YAML timestamp semantics for MD and MDX.
+      // Preserve YAML timestamps and fail closed on malformed authored metadata.
       try {
         const parsed = parseFrontmatter(source);
         if (!parsed.rawFrontmatter) throw new Error("frontmatter required");

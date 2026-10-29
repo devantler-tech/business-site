@@ -1,5 +1,4 @@
 import { error } from "@sveltejs/kit";
-import { FEATURE_SVELTE_FRONTEND } from "$app/env/private";
 import { business } from "#lib/business.server.ts";
 import { clientProducts } from "../../../../../src/components/business/client-products";
 import { professionalWork } from "../../../../../src/components/business/professional-work";
@@ -8,7 +7,7 @@ import { publicStarSnapshot, publicProducts, selectPublicTools } from "../../../
 import catalogue from "../../../../../src/data/public-products.json";
 
 export const load = ({ params }: { params: { locale?: string } }) => {
-  if (!FEATURE_SVELTE_FRONTEND || (params.locale !== undefined && params.locale !== "da")) error(404);
+  if ((params.locale !== undefined && params.locale !== "da")) error(404);
   const locale: "en" | "da" = params.locale === "da" ? "da" : "en";
   const t = business.client[locale];
   const s = business.supporting[locale];

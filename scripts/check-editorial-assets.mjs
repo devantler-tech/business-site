@@ -49,17 +49,19 @@ export async function checkEditorialAssets(repository) {
   const covers = await readJournalCovers(repository);
   const otherImages = [];
   const source = join(repository, 'src');
-  for (const file of readdirSync(source, { recursive: true }).filter(name => /\.(?:astro|mdx?|tsx?)$/.test(name) && !name.startsWith('content/docs/blog/'))) {
-    const path = join(source, file);
-    for (const match of readFileSync(path, 'utf8').matchAll(/(?:from\s*|src=)\s*["']([^"']+\.(?:webp|png|jpe?g))["']/g)) {
+  for (const tree of [source, join(repository, 'web/src')]) {
+  for (const file of readdirSync(tree, { recursive: true }).filter(name => /\.(?:mdx?|mjs|tsx?|svelte)$/.test(name) && !name.startsWith('content/docs/blog/'))) {
+    const path = join(tree, file);
+    for (const match of readFileSync(path, 'utf8').matchAll(/(?:from\s*|src=)\s*["']([^"']+\.(?:webp|png|jpe?g))(?:\?[^"']*)?["']/g)) {
       const asset = resolve(dirname(path), match[1]);
       if (asset.startsWith(join(repository, 'src/assets') + '/')) otherImages.push({ path: asset, digest: await imageDigest(asset) });
     }
   }
+  }
   assertUniqueIllustrations(covers, otherImages);
   const researchSubjects = [];
   for (const [slug, file, variable] of [
-    ['data-space-diagram', 'components/business/ClientPortfolio.astro', 'diagram'],
+    ['data-space-diagram', 'content/docs/projects/completed.mdx', 'dataSpaceImg'],
     ['historical-data-product', 'content/docs/projects/completed.mdx', 'dataProductImg'],
   ]) {
     const filePath = join(source, file);

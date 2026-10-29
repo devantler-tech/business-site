@@ -4,10 +4,10 @@ import { mock } from "node:test";
 import { syncBuiltinESMExports } from "node:module";
 import { capturePublicDiscoveryReference } from "../../src/data/public-discovery-reference.mjs";
 
-const file = new URL("../../dist/pdfs/thesis.pdf",import.meta.url);
-const backup = new URL("../../dist/pdfs/thesis.capture-control",import.meta.url);
-const substitute = new URL("../../dist/pdfs/nikolai-emil-damm-cv.pdf",import.meta.url);
-const reference = new URL("../../.astro/public-discovery.json",import.meta.url);
+const file = new URL("../../.generated/content/pdfs/thesis.pdf",import.meta.url);
+const backup = new URL("../../.generated/content/pdfs/thesis.capture-control",import.meta.url);
+const substitute = new URL("../../.generated/content/pdfs/nikolai-emil-damm-cv.pdf",import.meta.url);
+const reference = new URL("../../.generated/public-discovery.json",import.meta.url);
 const originalReference = fs.readFileSync(reference);
 const original = fs.readFileSync(file);
 const lstat = fs.lstatSync;

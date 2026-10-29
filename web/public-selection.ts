@@ -1,12 +1,16 @@
 import { loadEnv } from "vite";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { parseFrontendRelease } from "./src/release-gate.ts";
+import { frontendEntries } from "./src/public-routes.ts";
+
+/** Bind promotion to the same dotenv/process settings as the framework build. */
+export function publicEntries(directory = fileURLToPath(new URL("./",import.meta.url))) {
+  return frontendEntries(loadEnv("production",directory,"FEATURE_").FEATURE_COMPANY_IDENTITY);
+}
 
 /** Resolve the exact same production-mode setting as the candidate renderer. */
-export function selectedFrontend(directory = fileURLToPath(new URL("./",import.meta.url))): "astro" | "svelte" {
+export function selectedFrontend(directory = fileURLToPath(new URL("./",import.meta.url))): "svelte" {
   const flags = loadEnv("production",directory,"FEATURE_");
-  if (!parseFrontendRelease(flags.FEATURE_SVELTE_FRONTEND)) return "astro";
   // These older presentation variants are not implemented by the candidate.
   // Fail closed instead of quietly publishing a different flag combination.
   if (flags.FEATURE_PREVIEW_BANNER !== undefined && flags.FEATURE_PREVIEW_BANNER !== "false" ||
