@@ -319,17 +319,46 @@ jobs:
           cache: false
       - name: Build the pinned identity vulnerability checker
         run: GOBIN="$RUNNER_TEMP/identity-analysis" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - name: Prepare original verifier compiler and private caches
+        run: |
+          test "$(go env GOVERSION)" = go1.27.3
+          mkdir -m 700 "$RUNNER_TEMP/verifier-modules" "$RUNNER_TEMP/verifier-build-cache" "$RUNNER_TEMP/verifier-go-path"
+          compiler="$(realpath "$(command -v go)")"
+          compiler_sha="$(shasum -a 256 "$compiler" | awk '{print $1}')"
+          {
+            echo "IDENTITY_VERIFIER_GO=$compiler"
+            echo "IDENTITY_VERIFIER_GO_SHA256=$compiler_sha"
+            echo "IDENTITY_VERIFIER_CACHE=$RUNNER_TEMP/verifier-modules"
+            echo "GOMODCACHE=$RUNNER_TEMP/verifier-modules"
+            echo "GOCACHE=$RUNNER_TEMP/verifier-build-cache"
+            echo "GOPATH=$RUNNER_TEMP/verifier-go-path"
+            echo "GOENV=off"
+            echo "GOWORK=off"
+            echo "GOFLAGS="
+            echo "GOOS=linux"
+            echo "GOARCH=amd64"
+            echo "GOAMD64=v1"
+            echo "GOEXPERIMENT="
+            echo "GOFIPS140=off"
+          } >> "$GITHUB_ENV"
       - name: Verify selected Go source retention
         working-directory: server
         run: |
           go test -race ./cmd/zitadel-module-sources
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-module-sources" ./cmd/zitadel-module-sources
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-module-sources" ./cmd/zitadel-module-sources
       - name: Verify selected schema source retention
         working-directory: server
         run: |
           go test -race ./cmd/zitadel-bsr-sources
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-bsr-sources" ./cmd/zitadel-bsr-sources
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-bsr-sources" ./cmd/zitadel-bsr-sources
+      - name: Observe actual verifier package compositions
+        working-directory: server
+        run: |
+          test "$(shasum -a 256 "$IDENTITY_VERIFIER_GO" | awk '{print $1}')" = "$IDENTITY_VERIFIER_GO_SHA256"
+          "$IDENTITY_VERIFIER_GO" list -json ./cmd/zitadel-module-sources ./cmd/zitadel-bsr-sources > "$RUNNER_TEMP/verifier-packages.jsonl"
+          jq -s -e 'if length==2 and all(.[]; .Name=="main" and .Incomplete!=true and .Error==null and ((.DepsErrors // [])|length)==0) then map({ImportPath,Name,GoFiles}) else error("incomplete native verifier composition") end' "$RUNNER_TEMP/verifier-packages.jsonl" > "$RUNNER_TEMP/verifier-composition.json"
       - name: Setup the frozen identity Go compiler
+        # Preserve the original compiler path above; the service remains frozen.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.10"
@@ -372,7 +401,7 @@ jobs:
           git -C "$RUNNER_TEMP/zitadel-upstream" fetch --no-write-fetch-head --depth=1 https://github.com/zitadel/zitadel.git +refs/tags/v4.20.0:refs/tags/v4.20.0
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
-        run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+        run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-bootstrap-cache "$IDENTITY_VERIFIER_CACHE" --verifier-composition "$RUNNER_TEMP/verifier-composition.json" --verifier-compiler-sha256 "$IDENTITY_VERIFIER_GO_SHA256" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
       - name: Scan the actual frozen identity executable
         run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" 2>&1'
       - name: Unpack and verify the actual pre-install source archive
@@ -464,7 +493,7 @@ jobs:
       - name: Read back restored Go inputs without networking
         run: bash scripts/readback-zitadel-go-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources"
       - name: Replay the complete retained identity build without networking
-        run: bash scripts/replay-zitadel-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --output "$RUNNER_TEMP/zitadel-offline-replay"
+        run: bash scripts/replay-zitadel-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-go "$IDENTITY_VERIFIER_GO" --output "$RUNNER_TEMP/zitadel-offline-replay"
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -573,6 +602,9 @@ jobs:
             ${{ runner.temp }}/zitadel-build/*.sha256
             ${{ runner.temp }}/zitadel-build/source-snapshot/source-manifest.json
             ${{ runner.temp }}/zitadel-build/source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/verifier-tool-source.json
+            ${{ runner.temp }}/zitadel-build/selected-verifier-bootstrap/manifest.json
+            ${{ runner.temp }}/zitadel-build/verifier-bootstrap-capture.json
             ${{ runner.temp }}/zitadel-build/prepared-build-receipt.json
             ${{ runner.temp }}/zitadel-build/selected-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
@@ -606,6 +638,9 @@ jobs:
             ${{ runner.temp }}/zitadel-image/password.png
             ${{ runner.temp }}/zitadel-image/console.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-bootstrap-restored.json
             ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
             ${{ runner.temp }}/zitadel-offline-replay/input-archive.json
             ${{ runner.temp }}/zitadel-offline-replay/input-roundtrip.json

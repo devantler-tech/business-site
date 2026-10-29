@@ -7,13 +7,16 @@ export LC_ALL=C
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
 requested=0 capture_source=0 source_repo='' output='' module_verifier='' bsr_verifier='' prepared_source='' prepared_sha='' console_inputs='' console_sha='' source_manifest=''
-retained_inputs='' retained_sha=''
+retained_inputs='' retained_sha='' verifier_cache='' verifier_composition='' verifier_compiler_sha=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
     --capture-source) [[ "$capture_source" -eq 0 ]] || fail 'duplicate source capture'; capture_source=1; shift ;;
     --module-source-verifier) [[ -z "$module_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid module source verifier'; module_verifier="$2"; shift 2 ;;
     --bsr-source-verifier) [[ -z "$bsr_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid schema source verifier'; bsr_verifier="$2"; shift 2 ;;
+    --verifier-bootstrap-cache) [[ -z "$verifier_cache" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid verifier bootstrap cache'; verifier_cache="$2"; shift 2 ;;
+    --verifier-composition) [[ -z "$verifier_composition" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid verifier composition'; verifier_composition="$2"; shift 2 ;;
+    --verifier-compiler-sha256) [[ -z "$verifier_compiler_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid original verifier compiler seal'; verifier_compiler_sha="$2"; shift 2 ;;
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
     --prepared-source) [[ -z "$prepared_source" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid prepared source'; prepared_source="$2"; shift 2 ;;
     --prepared-sha256) [[ -z "$prepared_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid prepared source seal'; prepared_sha="$2"; shift 2 ;;
@@ -42,6 +45,13 @@ if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   for tool in curl sudo unshare setpriv id realpath; do command -v "$tool" >/dev/null || fail "missing source capture tool: $tool"; done
 else
   [[ -z "$module_verifier" && -z "$bsr_verifier" ]] || fail 'source verifiers require source capture or retained inputs'
+fi
+if [[ "$capture_source" -eq 1 ]]; then
+  [[ "$verifier_cache" = /* && -d "$verifier_cache" && ! -L "$verifier_cache" && "$verifier_cache" = "$(cd "$verifier_cache" && pwd -P)" ]] || fail 'capture requires its original physical verifier cache'
+  [[ "$verifier_composition" = /* && -f "$verifier_composition" && ! -L "$verifier_composition" ]] || fail 'capture requires original native verifier compositions'
+  [[ "$verifier_compiler_sha" =~ ^[0-9a-f]{64}$ ]] || fail 'capture requires the original compiler digest'
+else
+  [[ -z "$verifier_cache$verifier_composition$verifier_compiler_sha" ]] || fail 'verifier bootstrap acquisition is capture-only'
 fi
 for tool in bash git jq shasum node pnpm go time readelf find sort cmp comm diff grep sed awk; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
@@ -162,7 +172,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .records == 56 and .bytes == 261684474' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .records == 58 and .bytes == 261684474' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -221,8 +231,13 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .bytes == 261684474 and .records == 56 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "10662c79ea3d29974ae765bce6d58669c9da17cf4fece0502df4219bfc80c555" and .files == 9599 and .bytes == 261684474 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
+  go run "$root/scripts/zitadel-source-bundle.go" --restore-tools "$output/source-snapshot" "$source_manifest" "$output/verifier-tool-source" >"$output/verifier-tool-source.json"
+  tool_source_sha="$(jq -er '.toolSourceSha256' "$output/verifier-tool-source.json")"
+  "$module_verifier" capture-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" \
+    --cache "$verifier_cache" --composition "$verifier_composition" --output "$output/selected-verifier-bootstrap" >"$output/verifier-bootstrap-capture.json"
+  jq -e --arg source "$source_manifest" --arg tools "$tool_source_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .files==4 and .verifierBootstrapCaptured==true and .goVerifiersRebuilt==false' "$output/verifier-bootstrap-capture.json" >/dev/null || fail 'complete original verifier bootstrap required'
   check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
   jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
@@ -586,6 +601,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
   check_text_notice_records "$output/source-snapshot/records"
   source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],verifierCompiler:{go:"1.27.3",sha256:$compiler}}')"
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
@@ -610,6 +626,11 @@ if [[ -n "$retained_inputs" ]]; then
   go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" >/dev/null || fail 'retained inputs changed during build'
 fi
 if [[ "$capture_source" -eq 1 ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-tools "$output/source-snapshot" "$source_manifest" "$output/verifier-tool-source" >"$output/verifier-tool-source-final.json"
+  cmp "$output/verifier-tool-source.json" "$output/verifier-tool-source-final.json" || fail 'tool source changed during build'
+  "$module_verifier" verify-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" \
+    --package "$output/selected-verifier-bootstrap" --sha256 "$(jq -er .manifestSha256 "$output/verifier-bootstrap-capture.json")" >"$output/verifier-bootstrap-final.json"
+  cmp "$output/verifier-bootstrap-capture.json" "$output/verifier-bootstrap-final.json" || fail 'verifier bootstrap changed during build'
   go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$output/source-snapshot" "$source_manifest" "$root" >/dev/null || fail 'repository source differs from the captured build records'
 elif [[ -n "$prepared_source" ]]; then
   go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$prepared_source" "$prepared_sha" "$root" >/dev/null || fail 'repository source differs from the restored build records'

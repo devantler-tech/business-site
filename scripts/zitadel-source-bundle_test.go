@@ -101,13 +101,16 @@ func sourceApprovedAliasesForTest() map[string]string {
 // TestRetainedInputsArchive exercises the actual closed archive with private
 // capsule modes. Compiled output and ambient caches must never enter it.
 func TestRetainedInputsArchive(t *testing.T) {
-	for _, kind := range []string{"valid", "missing-component", "linked-member", "unsupported-mode"} {
+	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "linked-member", "unsupported-mode"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals"}
+			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap"}
 			modes := []os.FileMode{0600, 0444, 0644, 0755}
 			for i, component := range components {
 				if kind == "missing-component" && i == 0 {
+					continue
+				}
+				if kind == "missing-verifier-bootstrap" && component == "selected-verifier-bootstrap" {
 					continue
 				}
 				dir := filepath.Join(root, component)
@@ -185,10 +188,262 @@ func TestRetainedInputsArchive(t *testing.T) {
 	}
 }
 
+// sourceToolFixture gives the source layout controls independently named bodies.
+func sourceToolFixture(t *testing.T) (string, string, map[string][]byte) {
+	t.Helper()
+	input := t.TempDir()
+	if err := os.WriteFile(filepath.Join(input, "go.mod"), []byte("upstream service module\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	profile, err := sourceSealTree(input, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := map[string][]byte{"modifications.json": []byte("modifications\n")}
+	for _, entry := range sourceBuildRecordInputs() {
+		records[entry.retained] = []byte("other retained input " + entry.retained + "\n")
+	}
+	approved := sourceApprovedAliasesForTest()
+	for name, alias := range approved {
+		records[alias] = []byte("approved tool source " + name + "\n")
+	}
+	seal, err := sourceAddRecords(snapshot, profile, records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snapshot, seal, records
+}
+
+// TestSourceRestoreToolsKeepsOnlyTheApprovedSource preserves the granted layout
+// without replacing the upstream service module or claiming tool reconstruction.
+func TestSourceRestoreToolsKeepsOnlyTheApprovedSource(t *testing.T) {
+	snapshot, seal, records := sourceToolFixture(t)
+	approved := sourceApprovedAliasesForTest()
+	output := filepath.Join(t.TempDir(), "tools")
+	var out, diagnostic bytes.Buffer
+	if status := sourceBundleRun([]string{"--restore-tools", snapshot, seal, output}, &out, &diagnostic); status != 0 {
+		t.Fatalf("retained source cannot reconstruct the approved tool layout: %s", diagnostic.String())
+	}
+	count := 0
+	if err := filepath.WalkDir(output, func(name string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		name, err := filepath.Rel(output, name)
+		if err != nil {
+			return err
+		}
+		alias, ok := approved[filepath.ToSlash(name)]
+		if !ok {
+			return fmt.Errorf("unapproved tool-source destination %s", name)
+		}
+		body, err := os.ReadFile(filepath.Join(output, name))
+		if err != nil || !bytes.Equal(body, records[alias]) {
+			return fmt.Errorf("restored tool body differs: %s", name)
+		}
+		info, err := entry.Info()
+		if err != nil || info.Mode() != 0644 {
+			return fmt.Errorf("tool records must remain regular inert data: %s", name)
+		}
+		count++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 40 {
+		t.Fatalf("restore the exact 37 approved paths and three terms, got %d", count)
+	}
+	if _, err := os.Stat(filepath.Join(output, "go.mod")); !os.IsNotExist(err) {
+		t.Fatal("tool metadata must not replace the upstream service module")
+	}
+	out.Reset()
+	if status := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); status != 0 {
+		t.Fatalf("complete restored tool source cannot be read back: %s", diagnostic.String())
+	}
+	if err := os.WriteFile(filepath.Join(output, "server/go.mod"), []byte("different module\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if status := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); status == 0 || out.Len() != 0 {
+		t.Fatal("changed restored tool source must refuse a success receipt")
+	}
+}
+
+// TestSourceToolReadbackRejectsALatePrivacyChange checks the readback boundary,
+// after initial output admission rather than only the CLI's early root check.
+func TestSourceToolReadbackRejectsALatePrivacyChange(t *testing.T) {
+	snapshot, seal, _ := sourceToolFixture(t)
+	output := filepath.Join(t.TempDir(), "tools")
+	if _, err := sourceToolSource(snapshot, seal, output, true); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := sourceToolPlan(snapshot, seal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.Chmod(output, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := sourceToolFiles(root, plan); err == nil {
+		t.Fatal("late loss of output privacy passed the readback boundary")
+	}
+}
+
+// TestSourceToolRestorationRefusesIncompleteInputs keeps failed reconstruction
+// separate from success and preserves an existing caller-owned output.
+func TestSourceToolRestorationRefusesIncompleteInputs(t *testing.T) {
+	for _, kind := range []string{"wrong-seal", "changed-source", "missing-source", "linked-source", "mode-source", "partial-profile", "existing-output", "inside-snapshot", "alias-inside-snapshot"} {
+		t.Run(kind, func(t *testing.T) {
+			snapshot, seal, records := sourceToolFixture(t)
+			output := filepath.Join(t.TempDir(), "tools")
+			source := filepath.Join(snapshot, "records", sourceApprovedAliasesForTest()["server/go.mod"])
+			switch kind {
+			case "wrong-seal":
+				seal = strings.Repeat("0", 64)
+			case "changed-source":
+				if err := os.WriteFile(source, []byte("other module"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "missing-source":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+			case "linked-source":
+				if err := os.Remove(source); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(snapshot, "source/go.mod"), source); err != nil {
+					t.Fatal(err)
+				}
+			case "mode-source":
+				if err := os.Chmod(source, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "partial-profile":
+				// A valid external seal is not permission to omit an approved body.
+				delete(records, sourceApprovedAliasesForTest()["server/go.mod"])
+				input := t.TempDir()
+				if err := os.WriteFile(filepath.Join(input, "source.go"), []byte("source"), 0644); err != nil {
+					t.Fatal(err)
+				}
+				snapshot = filepath.Join(t.TempDir(), "partial")
+				profile, err := sourceSealTree(input, snapshot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				seal, err = sourceAddRecords(snapshot, profile, records)
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "existing-output":
+				if err := os.Mkdir(output, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(output, "keep"), []byte("keep"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "inside-snapshot":
+				output = filepath.Join(snapshot, "tools")
+			case "alias-inside-snapshot":
+				alias := filepath.Join(t.TempDir(), "alias")
+				if err := os.Symlink(snapshot, alias); err != nil {
+					t.Fatal(err)
+				}
+				output = filepath.Join(alias, "tools")
+			}
+			var out, diagnostic bytes.Buffer
+			if code := sourceBundleRun([]string{"--restore-tools", snapshot, seal, output}, &out, &diagnostic); code == 0 || out.Len() != 0 {
+				t.Fatal("invalid restoration emitted a successful receipt")
+			}
+			if kind == "existing-output" {
+				if body, err := os.ReadFile(filepath.Join(output, "keep")); err != nil || string(body) != "keep" {
+					t.Fatal("existing output changed")
+				}
+			} else if _, err := os.Lstat(output); !os.IsNotExist(err) {
+				t.Fatal("failed restoration left an output")
+			}
+		})
+	}
+}
+
+// TestSourceToolReadbackRefusesMutatedOutputs exercises every retained source
+// family and closed output membership through the real explicit CLI operation.
+func TestSourceToolReadbackRefusesMutatedOutputs(t *testing.T) {
+	for _, kind := range []string{"module", "sum", "command", "recipe", "terms", "missing", "link", "mode", "extra-file", "extra-directory", "directory-mode", "root-mode", "linked-root"} {
+		t.Run(kind, func(t *testing.T) {
+			snapshot, seal, _ := sourceToolFixture(t)
+			output := filepath.Join(t.TempDir(), "tools")
+			if _, err := sourceToolSource(snapshot, seal, output, true); err != nil {
+				t.Fatal(err)
+			}
+			member := filepath.Join(output, "server/go.mod")
+			switch kind {
+			case "module", "sum", "command", "recipe", "terms":
+				names := map[string]string{"module": "server/go.mod", "sum": "server/go.sum", "command": "server/cmd/zitadel-module-sources/main.go", "recipe": "scripts/build-zitadel-linux.sh", "terms": "third_party/zitadel-build-tools/COPYING"}
+				target := filepath.Join(output, names[kind])
+				if info, err := os.Lstat(target); err != nil || !info.Mode().IsRegular() {
+					t.Fatal("the existing source/terms body must be the mutation target")
+				}
+				if err := os.WriteFile(target, []byte("changed"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "missing":
+				if err := os.Remove(member); err != nil {
+					t.Fatal(err)
+				}
+			case "link":
+				if err := os.Remove(member); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(output, "server/go.sum"), member); err != nil {
+					t.Fatal(err)
+				}
+			case "mode":
+				if err := os.Chmod(member, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "extra-file":
+				if err := os.WriteFile(filepath.Join(output, "server/cmd/zitadel-module-sources/extra.go"), []byte("extra"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			case "extra-directory":
+				if err := os.Mkdir(filepath.Join(output, "unused"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "directory-mode":
+				if err := os.Chmod(filepath.Join(output, "server/cmd"), 0777); err != nil {
+					t.Fatal(err)
+				}
+			case "root-mode":
+				if err := os.Chmod(output, 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "linked-root":
+				link := filepath.Join(t.TempDir(), "link")
+				if err := os.Symlink(output, link); err != nil {
+					t.Fatal(err)
+				}
+				output = link
+			}
+			var out, diagnostic bytes.Buffer
+			if code := sourceBundleRun([]string{"--verify-tools", snapshot, seal, output}, &out, &diagnostic); code == 0 || out.Len() != 0 {
+				t.Fatal("changed tool-source output emitted success")
+			}
+		})
+	}
+}
+
 // TestSourceRestoreBuildKeepsLiteralInputs proves the replay seam restores a
-// verified closed snapshot without re-preparing it or replacing its original API
-// record with the serialized source configuration. Frozen-profile admission is
-// separately owned by the native builder, as for the existing unpack operation.
+// verified closed snapshot without re-preparing it or replacing its API record.
 func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 	for _, kind := range []string{"valid", "missing-record", "extra-record", "changed-member", "wrong-seal", "existing-output", "output-inside-snapshot", "output-alias-inside-snapshot"} {
 		t.Run(kind, func(t *testing.T) {
@@ -248,6 +503,9 @@ func TestSourceRestoreBuildKeepsLiteralInputs(t *testing.T) {
 				"modifications.json":                                              []byte("dated modification record\n"),
 			}
 			for name, body := range sourceApprovedExtraRecordsForTest() {
+				records[name] = body
+			}
+			for name, body := range sourceNoticeOriginalsForTest(t) {
 				records[name] = body
 			}
 			if kind == "missing-record" {
@@ -616,8 +874,37 @@ func TestSourcePackCannotModifyItsInputOrAnExistingArchive(t *testing.T) {
 
 // TestSourceCaptureBindsFrozenPreparationAndBuildRecords checks literal provenance
 // and verifies that recapturing unchanged modifications on another day is stable.
+// sourceNoticeOriginalsForTest binds the two existing originals independently
+// of the production capture map; a fixture cannot stand in for their full bodies.
+func sourceNoticeOriginalsForTest(t *testing.T) map[string][]byte {
+	t.Helper()
+	originals := []struct {
+		name   string
+		bytes  int
+		sha256 string
+	}{
+		{"third_party/zitadel-console-notices/catalogue.json", 12536, "4f964bd659a7656f7951c363535120af0fe881be37b1ac522e0964dd41647206"},
+		{"third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat", 330467, "a5638281157e8c902b127a5376f9ea2d024bf2ee11524133a6a76cd1d14ee7be"},
+	}
+	bodies := map[string][]byte{}
+	for _, original := range originals {
+		body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(original.name)))
+		if err != nil || len(body) != original.bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != original.sha256 {
+			t.Fatalf("original notice input changed: %s: %v", original.name, err)
+		}
+		bodies[original.name] = body
+	}
+	return bodies
+}
+
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
+	noticeOriginals := sourceNoticeOriginalsForTest(t)
 	kinds := []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"}
+	for name := range noticeOriginals {
+		for _, kind := range []string{"missing notice:", "empty notice:", "linked notice:", "unsafe-mode notice:"} {
+			kinds = append(kinds, kind+name)
+		}
+	}
 	for name := range sourceApprovedExtraRecordsForTest() {
 		for _, kind := range []string{"missing authored:", "empty authored:", "linked authored:", "unsafe-mode authored:"} {
 			kinds = append(kinds, kind+name)
@@ -661,6 +948,9 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				write(repo, "tools/zitadel-pnpm-source/"+name, name+"\n")
 			}
 			for name, body := range sourceApprovedExtraRecordsForTest() {
+				write(repo, name, string(body))
+			}
+			for name, body := range noticeOriginals {
 				write(repo, name, string(body))
 			}
 			preparation := fmt.Sprintf(`{"schemaVersion":1,"upstreamCommit":"8afa5dd37a8e723efb9eace8d09fd5c1cccef694","recipeSha256":"%s","inputManifestSha256":"%s","imageAdmission":"unknown","licenseClosure":"unknown","metadataProfile":"machine-id-no-jsonpath-v1"}`, hash("prepare-zitadel-source.sh\n"), hash("zitadel-source-inputs.sha256\n"))
@@ -707,6 +997,26 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					write(repo, name, "")
 				case "unsafe-mode authored:" + name:
 					if err := os.Chmod(p, 0666); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for name := range noticeOriginals {
+				file := filepath.Join(repo, filepath.FromSlash(name))
+				switch kind {
+				case "missing notice:" + name, "linked notice:" + name:
+					if err := os.Remove(file); err != nil {
+						t.Fatal(err)
+					}
+					if strings.HasPrefix(kind, "linked") {
+						if err := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), file); err != nil {
+							t.Fatal(err)
+						}
+					}
+				case "empty notice:" + name:
+					write(repo, name, "")
+				case "unsafe-mode notice:" + name:
+					if err := os.Chmod(file, 0666); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -764,11 +1074,11 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 				}
 			})
 			if kind == "valid" {
-				if err != nil || got.Files != 8 || got.Records != 56 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
+				if err != nil || got.Files != 8 || got.Records != 58 || got.PreparedProfileSHA256 != profile || got.ManifestSHA256 == profile {
 					t.Fatalf("incomplete source capture: %+v: %v", got, err)
 				}
 				manifest, err := sourceVerifyTree(output, got.ManifestSHA256)
-				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 56 {
+				if err != nil || manifest.PreparedProfile != profile || len(manifest.Records) != 58 {
 					t.Fatalf("unbound build records: %v", err)
 				}
 				if raw, err := sourceReadAt(output, "records/recipes/zitadel-console-assets.go"); err != nil || string(raw) != "zitadel-console-assets.go\n" {
@@ -813,6 +1123,52 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					checkRecords(false)
 					write(repo, original, string(before))
 				}
+				for name, want := range noticeOriginals {
+					matches := 0
+					for _, member := range manifest.Records {
+						if member.Path == name {
+							matches++
+							if member.Bytes != int64(len(want)) || member.Mode != 0644 || member.SHA256 != hash(string(want)) {
+								t.Fatalf("notice record metadata differs: %s", name)
+							}
+						}
+					}
+					body, err := sourceReadAt(output, "records/"+name)
+					if matches != 1 || err != nil || !bytes.Equal(body, want) {
+						t.Fatalf("original notice not retained exactly once: %s: %v", name, err)
+					}
+					for _, mutation := range []string{"changed", "missing", "linked", "unsafe-mode"} {
+						file := filepath.Join(repo, filepath.FromSlash(name))
+						switch mutation {
+						case "changed":
+							write(repo, name, string(want)+"changed after capture\n")
+						case "missing", "linked":
+							if err := os.Remove(file); err != nil {
+								t.Fatal(err)
+							}
+							if mutation == "linked" {
+								if err := os.Symlink(filepath.Join(repo, "docs/ZITADEL-SOURCE.md"), file); err != nil {
+									t.Fatal(err)
+								}
+							}
+						case "unsafe-mode":
+							if err := os.Chmod(file, 0666); err != nil {
+								t.Fatal(err)
+							}
+						}
+						checkRecords(false)
+						if mutation == "linked" {
+							if err := os.Remove(file); err != nil {
+								t.Fatal(err)
+							}
+						}
+						write(repo, name, string(want))
+						if err := os.Chmod(file, 0644); err != nil {
+							t.Fatal(err)
+						}
+						checkRecords(true)
+					}
+				}
 				checkRecords(true)
 				archive := filepath.Join(t.TempDir(), "prepared.tar")
 				archiveHash, err := sourcePackTree(output, got.ManifestSHA256, archive)
@@ -835,6 +1191,17 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 					info, statErr := os.Stat(name)
 					if readErr != nil || err != nil || statErr != nil || !bytes.Equal(want, body) || info.Mode() != 0644 {
 						t.Fatalf("approved archived/restored record differs: %s", original)
+					}
+				}
+				for name, want := range noticeOriginals {
+					file := filepath.Join(restoredRoot, "prepared/records", filepath.FromSlash(name))
+					body, err := os.ReadFile(file)
+					info, statErr := os.Stat(file)
+					if err != nil || statErr != nil || !bytes.Equal(body, want) || info.Mode() != 0644 {
+						t.Fatalf("archived notice original differs: %s", name)
+					}
+					if _, err := os.Lstat(filepath.Join(restoredRoot, "prepared/source", filepath.FromSlash(name))); !os.IsNotExist(err) {
+						t.Fatalf("notice original escaped audit records: %s", name)
 					}
 				}
 				upstream, err := os.ReadFile(filepath.Join(restoredRoot, "prepared/source/go.mod"))

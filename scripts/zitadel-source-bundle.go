@@ -77,6 +77,8 @@ func sourceBuildRecordInputs() []sourceRecordInput {
 		{true, "third_party/zitadel-copied-assets/original-line-awesome.min.css", "third_party/zitadel-copied-assets/original-line-awesome.min.css"},
 		{true, "third_party/zitadel-text-fonts/catalogue.json", "third_party/zitadel-text-fonts/catalogue.json"},
 		{true, "third_party/zitadel-text-fonts/Apache-2.0.txt", "third_party/zitadel-text-fonts/Apache-2.0.txt"},
+		{true, "third_party/zitadel-console-notices/catalogue.json", "third_party/zitadel-console-notices/catalogue.json"},
+		{true, "third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat", "third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat"},
 		{true, "tools/zitadel-pnpm-source/index.mjs", "recipes/zitadel-pnpm-source/index.mjs"},
 		{true, "tools/zitadel-pnpm-source/package.json", "recipes/zitadel-pnpm-source/package.json"},
 		{true, "tools/zitadel-pnpm-source/package-lock.json", "recipes/zitadel-pnpm-source/package-lock.json"},
@@ -227,6 +229,207 @@ func sourceRestoreBuild(snapshot, seal, output string) (summary sourceCaptureSum
 	summary.ManifestSHA256, summary.PreparedProfileSHA256 = seal, manifest.PreparedProfile
 	summary.Files, summary.Records = len(manifest.Files), len(manifest.Records)
 	return summary, nil
+}
+
+type sourceToolMember struct {
+	input  sourceRecordInput
+	member sourceMember
+}
+
+type sourceToolSummary struct {
+	SchemaVersion            int            `json:"schemaVersion"`
+	Profile                  string         `json:"profile"`
+	SourceManifestSHA256     string         `json:"sourceManifestSha256"`
+	ToolSourceSHA256         string         `json:"toolSourceSha256"`
+	Members                  []sourceMember `json:"members"`
+	ToolSourceReadbackPassed bool           `json:"toolSourceReadbackPassed"`
+	GoVerifiersRebuilt       bool           `json:"goVerifiersRebuilt"`
+}
+
+// sourceToolPlan selects only the reviewed own-source entries in the literal
+// capture table. Third-party source/notice inputs keep their separate owners.
+// The independent grant control pins this set to 37 paths and three terms.
+func sourceToolPlan(snapshot, seal string) ([]sourceToolMember, error) {
+	manifest, err := sourceVerifyTree(snapshot, seal)
+	if err != nil || manifest.PreparedProfile == "" {
+		return nil, fmt.Errorf("verified prepared tool-source snapshot required")
+	}
+	names, err := sourceBuildRecordNames()
+	if err != nil || len(manifest.Records) != len(names) {
+		return nil, fmt.Errorf("complete literal tool-source records required")
+	}
+	records := map[string]sourceMember{}
+	for _, member := range manifest.Records {
+		if !names[member.Path] {
+			return nil, fmt.Errorf("unexpected tool-source record")
+		}
+		records[member.Path] = member
+	}
+	var plan []sourceToolMember
+	for _, entry := range sourceBuildRecordInputs() {
+		if !entry.repository || (strings.HasPrefix(entry.name, "third_party/") && !strings.HasPrefix(entry.name, "third_party/zitadel-build-tools/")) {
+			continue
+		}
+		member, ok := records[entry.retained]
+		if !ok || member.Mode != 0644 {
+			return nil, fmt.Errorf("approved tool-source input missing")
+		}
+		member.Path = entry.name
+		plan = append(plan, sourceToolMember{entry, member})
+	}
+	if len(plan) != 40 {
+		return nil, fmt.Errorf("the exact approved tool-source scope is required")
+	}
+	sort.Slice(plan, func(i, j int) bool { return plan[i].member.Path < plan[j].member.Path })
+	return plan, nil
+}
+
+// sourceToolFiles checks closed membership and complete bodies through a
+// confined root. Its output stays inert; it does not compile or run source.
+func sourceToolFiles(root *os.Root, plan []sourceToolMember) error {
+	wanted, directories := map[string]sourceMember{}, map[string]bool{".": true}
+	for _, item := range plan {
+		wanted[item.member.Path] = item.member
+		for dir := path.Dir(item.member.Path); !directories[dir]; dir = path.Dir(dir) {
+			directories[dir] = true
+		}
+	}
+	seen := 0
+	err := fs.WalkDir(root.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			mode := os.FileMode(0755)
+			if name == "." {
+				mode = 0700
+			}
+			if !directories[name] || info.Mode() != os.ModeDir|mode {
+				return fmt.Errorf("unexpected tool-source directory")
+			}
+			return nil
+		}
+		member, ok := wanted[name]
+		if !ok || info.Mode() != 0644 {
+			return fmt.Errorf("unexpected or non-inert tool-source member")
+		}
+		body, err := sourceRead(root, name, info)
+		if err != nil || int64(len(body)) != member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
+			return fmt.Errorf("restored tool-source body differs")
+		}
+		seen++
+		return nil
+	})
+	if err != nil || seen != len(wanted) {
+		return errors.Join(fmt.Errorf("incomplete tool-source readback"), err)
+	}
+	return nil
+}
+
+// sourceToolSource uses fixed original paths in a new owned layout, separate
+// from both audit records and the four native service restoration destinations.
+func sourceToolSource(snapshot, seal, output string, restore bool) (summary sourceToolSummary, result error) {
+	plan, err := sourceToolPlan(snapshot, seal)
+	if err != nil {
+		return summary, err
+	}
+	input, err := filepath.EvalSymlinks(snapshot)
+	if err != nil {
+		return summary, err
+	}
+	input, err = filepath.Abs(input)
+	if err != nil {
+		return summary, err
+	}
+	output, err = filepath.Abs(output)
+	if err != nil {
+		return summary, err
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(output))
+	if err != nil {
+		return summary, err
+	}
+	output = filepath.Join(parent, filepath.Base(output))
+	if output == input || strings.HasPrefix(output, input+string(filepath.Separator)) {
+		return summary, fmt.Errorf("tool source must remain outside its sealed input")
+	}
+	if restore {
+		if err := os.Mkdir(output, 0700); err != nil {
+			return summary, err
+		}
+	}
+	owned, err := os.Lstat(output)
+	if err != nil || !owned.IsDir() || owned.Mode().Perm() != 0700 {
+		return summary, fmt.Errorf("physical private tool-source root required")
+	}
+	if restore {
+		defer func() {
+			if result != nil {
+				current, err := os.Lstat(output)
+				if err == nil && os.SameFile(owned, current) {
+					result = errors.Join(result, os.RemoveAll(output))
+				} else {
+					result = errors.Join(result, fmt.Errorf("tool-source reservation changed; replacement retained"))
+				}
+			}
+		}()
+	}
+	r, err := os.OpenRoot(output)
+	if err != nil {
+		return summary, err
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			summary = sourceToolSummary{}
+			result = errors.Join(result, err)
+		}
+	}()
+	opened, err := r.Lstat(".")
+	if err != nil || !os.SameFile(owned, opened) {
+		return summary, fmt.Errorf("tool-source reservation changed")
+	}
+	if restore {
+		for _, item := range plan {
+			body, err := sourceReadAt(snapshot, "records/"+item.input.retained)
+			if err != nil || int64(len(body)) != item.member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != item.member.SHA256 {
+				return summary, fmt.Errorf("approved tool source changed during restoration")
+			}
+			if err := r.MkdirAll(path.Dir(item.member.Path), 0755); err != nil {
+				return summary, err
+			}
+			f, err := r.OpenFile(item.member.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+			if err != nil {
+				return summary, err
+			}
+			if err := sourceWriteComplete(f, body, 0644); err != nil {
+				return summary, err
+			}
+		}
+	}
+	if _, err := sourceVerifyTree(snapshot, seal); err != nil {
+		return summary, err
+	}
+	if err := sourceToolFiles(r, plan); err != nil {
+		return summary, err
+	}
+	current, err := os.Lstat(output)
+	if err != nil || !os.SameFile(owned, current) || current.Mode() != os.ModeDir|0700 {
+		return summary, fmt.Errorf("tool-source root changed during readback")
+	}
+	members := make([]sourceMember, len(plan))
+	for i, item := range plan {
+		members[i] = item.member
+	}
+	raw, err := json.Marshal(members)
+	if err != nil {
+		return summary, err
+	}
+	return sourceToolSummary{SchemaVersion: 1, Profile: "identity-build-tool-source-v1", SourceManifestSHA256: seal,
+		ToolSourceSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), Members: members, ToolSourceReadbackPassed: true}, nil
 }
 
 // sourceCaptureBuild seals the pre-install source and its complete literal
@@ -477,6 +680,8 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 	var value any
 	var err error
 	switch {
+	case len(args) == 4 && (args[0] == "--restore-tools" || args[0] == "--verify-tools"):
+		value, err = sourceToolSource(args[1], args[2], args[3], args[0] == "--restore-tools")
 	case len(args) == 4 && args[0] == "--restore-build":
 		value, err = sourceRestoreBuild(args[1], args[2], args[3])
 	case len(args) == 3 && args[0] == "--seal-inputs":
@@ -911,6 +1116,7 @@ func sourceInputComponents() map[string]bool {
 		"selected-go-sources": false, "selected-generator-go-sources": false,
 		"go-graph-metadata": false, "selected-pnpm-sources": false,
 		"selected-bsr-sources": false, "selected-console-originals": false,
+		"selected-verifier-bootstrap": false,
 	}
 }
 

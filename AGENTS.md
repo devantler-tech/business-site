@@ -74,14 +74,20 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains fifty-six literal build/modification records and rechecks the snapshot/archive
+  retains fifty-eight literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt.
   These include all 37 approved authored paths and their three scoped terms documents,
-  using the existing aliases without duplicate source records. Explicit
+  using the existing aliases without duplicate source records. The Console supplement catalogue
+  and historical public-suffix original are retained as two additional inert records. Explicit
   `--verify-build-records` rechecks the current literal repository inputs against
   the sealed snapshot before a completed native receipt. Records remain inert
   0644 audit data; the helper module never replaces the upstream service module. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
+  Explicit `--restore-tools` restores only the 37 approved authored paths and
+  three terms documents into a separate, fresh private tool-source tree at their
+  original paths. `--verify-tools` rechecks complete membership, bytes and modes
+  against the sealed snapshot. Both operations refuse partial or changed input;
+  neither compiles tools, restores bootstrap dependencies or admits distribution.
   Its explicit `--restore-build` operation restores the sealed files and literal
   records into a new native layout. The Linux builder's mutually exclusive
   `--prepared-source`/`--prepared-sha256` mode reuses the existing frozen capture
@@ -91,10 +97,15 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   complete dependency capture or native offline replay. Keep both modes' private
   Go/pnpm/schema acquisition caches, empty schema credentials/configuration,
   public checksum verification and confined records.
-- `scripts/replay-zitadel-inputs.sh` explicitly assembles only the seven sealed
+- `scripts/replay-zitadel-inputs.sh` explicitly assembles only the eight sealed
   input components and their original build receipt using the archive engine's
   distinct retained-input profile. That profile preserves private capsule modes
-  and cannot impersonate prepared source. The Linux builder's exclusive
+  and cannot impersonate prepared source. Inside the same network boundary,
+  reconstruct both source verifiers with the caller-selected original Go 1.27.3
+  compiler, the approved source layout and checksum-pinned x/mod originals.
+  Preserve original compiler, native package composition and exact binary hash
+  joins. Only rebuilt executables enter the service pipeline; original programs
+  authenticate bootstrap data and never serve as a replay fallback. The Linux builder's exclusive
   `--retained-inputs`/`--retained-sha256` mode authenticates and reconstructs native
   Go, pnpm and schema stores before the existing full pipeline. Only the outer
   replay command may emit a whole-build success receipt, after that pipeline and
@@ -108,6 +119,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   builds it before selecting the unchanged frozen identity compiler. The Linux
   builder requires its explicit executable path when source capture is enabled
   and binds its compiler, command identity and byte digest to the receipt.
+  Its separate verifier-bootstrap modes retain only original x/mod ZIP/mod/info
+  and successful native package membership, tied to the approved tool-source seal.
+  Closed-profile verification and restoration never assert tool reconstruction.
   Explicit capture retains the frozen service's 231 original/effective selections
   and 466 source/metadata files from that build's private cache. The root command's
   complete dependency set must equal the compiler stream. External-seal readback
