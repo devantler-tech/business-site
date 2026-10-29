@@ -269,7 +269,9 @@ jobs:
 
   test-zitadel-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Both complete refusal suites reached five minutes on the hosted runner;
+    # keep a bounded allowance for setup and finalization as well.
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
