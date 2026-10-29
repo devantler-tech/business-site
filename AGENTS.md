@@ -121,7 +121,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   authenticate bootstrap data and never serve as a replay fallback. The Linux builder's exclusive
   `--retained-inputs`/`--retained-sha256` mode authenticates and reconstructs native
   Go, pnpm and schema stores before the existing full pipeline. Retain exactly
-  41 notice originals in their source/profile/recipe-bound capsule, including
+  43 notice originals in their source/profile/recipe-bound capsule, including
   the thirteen original-input record joins. Every collector uses the restored
   root; the authenticated native tool-source caller has no checkout notice
   directories. Preserve connected checkout and restored-root late readbacks,
