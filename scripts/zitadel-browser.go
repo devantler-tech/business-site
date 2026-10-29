@@ -633,6 +633,13 @@ const done=arguments[arguments.length-1];
 const browserProviderObservation = `
 const [kind,theme]=arguments;
 const login=kind==='login'||kind==='registration';
+// The native page background transitions after the root class changes. Read
+// the completed default-fixture color rather than capturing the opposite theme.
+const consoleThemeReady=()=>{
+ const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+ return !!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&
+  back.getAnimations().every(a=>!a.pending&&a.playState!=='running');
+};
 const selector=login?'a.lgn-idp .logo':kind==='picker'?'cnsl-idp-settings a.item .neutral-provider-icon':kind==='table'?'cnsl-idp-table .neutral-provider-icon':'cnsl-provider-google .neutral-provider-icon';
 const icons=[...document.querySelectorAll(selector)];
 const shown=e=>{const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth;};
@@ -671,7 +678,7 @@ if(kind==='picker'){
 }
 const resources=performance.getEntriesByType('resource').map(e=>e.name);
 return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,targets:targetOK,keyboard,
- themeReady:login?document.documentElement.classList.contains('lgn-'+theme+'-theme'):!!document.querySelector('cnsl-root.'+theme+'-theme'),
+ themeReady:login?document.documentElement.classList.contains('lgn-'+theme+'-theme'):consoleThemeReady(),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/idp\//i.test(u.pathname)})};`
 
 const browserRegistrationURL = `
@@ -1028,6 +1035,13 @@ func browserSMTPAdmit(p browserProviderPage, kind, theme string) bool {
 const browserSMTPObservation = `
 const [kind,theme]=arguments;
 const picker=kind==='picker';
+// Match the frozen fixture's settled native backdrop, without changing styles
+// or disabling its transition. The ordinary observation poll waits for it.
+const consoleThemeReady=()=>{
+ const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+ return !!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&
+  back.getAnimations().every(a=>!a.pending&&a.playState!=='running');
+};
 const names=['amazon','brevo','google','mailchimp','mailgun','mailjet','outlook','postmark','sendgrid'];
 const labels=['Amazon Ses','Brevo','Google','Mailchimp','Mailgun','Mailjet','Microsoft Exchange Online','Postmark','Sendgrid'];
 const descriptions={amazon:'amazon SES',google:'google',mailgun:'mailgun',mailjet:'mailjet',postmark:'postmark',sendgrid:'sendgrid',mailchimp:'mailchimp',brevo:'brevo',outlook:'Microsoft Exchange Online'};
@@ -1055,7 +1069,7 @@ if(picker){
 const resources=performance.getEntriesByType('resource').map(e=>e.name);
 return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,targets:targetOK,
  keyboard:icons.every(e=>e.tabIndex<0)&&(!picker||anchors.every(a=>a.tabIndex===0&&shown(a))),
- themeReady:!!document.querySelector('cnsl-root.'+theme+'-theme'),
+ themeReady:consoleThemeReady(),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/(?:idp|smtp)\//i.test(u.pathname)})};`
 
 func (d *browserDriver) smtpPage(kind, theme string) (browserProviderPage, error) {

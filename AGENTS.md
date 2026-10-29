@@ -238,6 +238,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   120s, within a 4min worker wrapper. That same phase independently requires twenty
   SMTP cases (chooser and nine unsaved preset editors in both themes), including
   unchanged defaults, native Enter, loaded envelope glyphs and each screenshot.
+  Console observations wait for the frozen fixture's native background transition
+  to finish and its computed background color to match the requested theme.
   It never saves a mail configuration or sends a message. It retains source/image-bound receipts
   and screenshots; it grants no production login, mail, invitation or activation
   clearance. The Go browser worker is reachable only through the explicit profile.

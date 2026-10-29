@@ -88,6 +88,10 @@ The native fictional-browser worker requires twenty additional SMTP observations
 the chooser and nine unsaved editors in light and dark themes. It checks native
 Enter navigation, rendered envelope fonts, labels, defaults, confined resources
 and source-bound screenshots. It neither saves a configuration nor sends mail.
+Both Console observation scripts also require the frozen fixture's computed page
+background to match the requested theme with no pending or running transition.
+The normal readiness poll waits for the native animation; it does not alter CSS
+or disable animations to obtain a screenshot.
 These cases share the existing 120-second presentation phase; the 100-second
 operator journey and four-minute wrapper are unchanged. Unit observations are
 not native rendering proof. A real native build/browser run must pass before

@@ -80,7 +80,7 @@ console.log('PASS: actual observation-script resource controls and ten closed fi
 // SMTP rendering is admitted independently of the existing ten IdP cases.
 const smtpObserve=script('browserSMTPObservation');
 for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','sendgrid','mailchimp','brevo','outlook']){
- for(const fault of ['none','missing-label','bad-host','bad-auth','hidden','focusable-decoration','wrong-glyph','external-resource','retired-resource','misassociated-glyph']){
+ for(const fault of ['none','missing-label','bad-host','bad-auth','hidden','focusable-decoration','wrong-glyph','external-resource','retired-resource','misassociated-glyph','missing-theme','missing-page-background','wrong-page-background','animating-page-background','pending-page-background']){
   const names=['amazon','brevo','google','mailchimp','mailgun','mailjet','outlook','postmark','sendgrid'];
   const labels=['Amazon Ses','Brevo','Google','Mailchimp','Mailgun','Mailjet','Microsoft Exchange Online','Postmark','Sendgrid'];
   const host={amazon:'email-smtp.us-east-2.amazonaws.com:587',google:'smtp.gmail.com:587',mailgun:'smtp.mailgun.org:465',mailjet:'in-v3.mailjet.com:465',postmark:'smtp.postmarkapp.com:587',sendgrid:'smtp.sendgrid.net:465',mailchimp:'smtp.mandrillapp.com:465',brevo:'smtp-relay.sendinblue.com:465',outlook:'smtp.office365.com:587'};
@@ -93,7 +93,8 @@ for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','se
   const icons=(kind==='picker'?names:[kind]).map(icon);
   globalThis.location=new URL('http://fixture.localhost:8080/ui/console/instance'+(kind==='picker'?'?id=smtpprovider':'/smtpprovider/'+kind));
   globalThis.innerHeight=1080;globalThis.innerWidth=1440;
-  globalThis.getComputedStyle=(e,pseudo)=>pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf061:0xf0e0)+'"',fontFamily:'"Line Awesome Free"'}:{fontFamily:'"Line Awesome Free"',fontSize:(kind==='picker'?36:48)+'px'};
+  const background={getAnimations:()=>fault==='animating-page-background'?[{playState:'running',pending:false}]:fault==='pending-page-background'?[{playState:'finished',pending:true}]:[]};
+  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:fault==='wrong-page-background'?'rgb(17, 24, 39)':'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf061:0xf0e0)+'"',fontFamily:'"Line Awesome Free"'}:{fontFamily:'"Line Awesome Free"',fontSize:(kind==='picker'?36:48)+'px'};
   const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/images/smtp/google.png':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
   globalThis.performance={getEntriesByType:()=>[{name:resource}]};
   const fonts=[{family:'Line Awesome Free',status:'loaded'}];fonts.status='loaded';
@@ -101,7 +102,8 @@ for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','se
   globalThis.document={readyState:'complete',fonts,body:{innerText:labels[names.indexOf(kind)]??'SMTP providers'},
    querySelectorAll:selector=>selector.includes('.neutral-smtp-icon')?icons:selector==='cnsl-notification-smtp-provider a.item'?anchors:[],
    querySelector:selector=>{
-    if(selector==='cnsl-root.light-theme')return {};
+    if(selector==='cnsl-root.light-theme')return fault==='missing-theme'?null:{};
+    if(selector==='cnsl-root .main-container')return fault==='missing-page-background'?null:background;
     if(selector==='cnsl-smtp-provider input[name="smtp-password"]')return kind==='outlook'?null:{};
     if(selector==='cnsl-smtp-provider input[name="token-endpoint"]')return kind==='outlook'?{}:null;
     if(selector==='cnsl-smtp-provider mat-checkbox.smtp-checkbox:nth-of-type(2) input')return {checked:fault==='bad-auth'?kind!=='outlook':kind==='outlook',disabled:true};
@@ -109,8 +111,11 @@ for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','se
     return null;
    }};
   const result=smtpObserve(kind,'light');
+  const themeComplete=!['missing-theme','missing-page-background','wrong-page-background','animating-page-background','pending-page-background'].includes(fault);
+  assert.equal(result.themeReady,themeComplete,kind+'/'+fault+' SMTP theme');
+  assert.equal(observe('picker','light').themeReady,themeComplete,kind+'/'+fault+' IdP theme');
   const relevant=fault==='none'||kind==='picker'&&['bad-host','bad-auth'].includes(fault)||kind!=='picker'&&['missing-label','misassociated-glyph'].includes(fault);
   assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,relevant,kind+'/'+fault);
  }
 }
-console.log('PASS: exact native SMTP observation script - 100 independent rendering and default controls (unit inputs only)');
+console.log('PASS: exact native SMTP observation script - 150 independent rendering, settled-theme and default controls (unit inputs only)');
