@@ -136,6 +136,8 @@ component. It preserves the unchanged SDK lock, all 132 original archives
 names and native install paths, complete installed bytes/modes/bin links, native
 npm composition and the three [supplemental terms](../../third_party/zitadel-pnpm-sdk/README.md).
 An alias's install path and original manifest name remain distinct identities.
+The original dev flags are lock metadata, not a test-only classification:
+capture uses the pinned `bin-links` normalizer to match native executable bytes.
 The component's own seal binds the source manifest, forty-member authored tool
 source, build recipe and original Node/npm identities.
 
