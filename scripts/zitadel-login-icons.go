@@ -1022,11 +1022,43 @@ var neutralProviderInputs = []neutralProviderInput{
 	{path: "internal/api/ui/login/static/resources/images/idp/ms.svg", sha256: "929f48f88c8ca7f3f5d294be47ec4caf51acc28ac25340c19a903125d7ecd84a", mode: 0644, kind: "retire", expected: ""},
 }
 
-func init() { iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons }
+var neutralSMTPInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html", sha256: "01a6530916d5417a53b17b705d021647e2c59af0b8eff9e4b4895bbe44c5be24", mode: 0644, kind: "smtp-chooser", expected: "7adb2e384cb0af6db510f3c1b07a9b91729ea922a004e4b6fed6fbd98352b1fc"},
+	{path: "console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss", sha256: "5f44a3766ed3b14f69939811a6718270feb0a262a950f446b32b6ef179a51a18", mode: 0644, kind: "smtp-chooser-style", expected: "db4f7c1746b2f3f19a1de401ac5cf658439e59d3f045106ff4aa05dc4eb8a8eb"},
+	{path: "console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts", sha256: "3ba4f1c0d1060d5ea1f0dc2f936fe05928e5c4cdcf34264a68fd8cf858230167", mode: 0644, kind: "smtp-settings", expected: "f340db31d1e1d4db10e1646eb218b2e46fe7e6568e9801b26494f94602c168cd"},
+	{path: "console/src/app/modules/smtp-provider/smtp-provider.component.html", sha256: "fbfd6946b3bf85f1a1f363e6477300d14b564b060c34fd19ae5d136d97324ec6", mode: 0644, kind: "smtp-editor", expected: "3c6be2a65c023c2aa1fa0ab86dc54530e0db7d3d79880099be3772f062db579f"},
+	{path: "console/src/app/modules/smtp-provider/smtp-provider.scss", sha256: "c63a74b193724641f6d2c329759c3877fe41cdf3c1415766635ffe08f8b386ab", mode: 0644, kind: "smtp-editor-style", expected: "194fd266ef3301dcb35b6ead7d92d5ac9860685d52e1312f693dfa644300eb24"},
+	{path: "console/src/assets/images/smtp/aws-ses.svg", sha256: "91c0f2067ee1c2d3ba7b6e5f171968599074908e214823d654d7a6f5e17d9923", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/brevo.svg", sha256: "c4cb54430034449ef93447bada3bd1c05c5935a9af1c1d239700c37c55436252", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailchimp.svg", sha256: "df456abcbb2543864aa36ea3db7555502d5f091f77f16f974ea41e6de12894fd", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailgun.svg", sha256: "35647003fcc8bd00fbddcfa415e37a56633e0778f89ba6850c64b01b7f9706c9", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailjet.svg", sha256: "09d2104401c81e490b33cee16cc961993e4c21c755b5dc4043061c8a368dd893", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/outlook.svg", sha256: "11951b969a6169db6c92f03e93039ce66c1576886c462c03e0549dc872db7283", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/postmark.png", sha256: "81ac09ed4332ff08fa1eb4ce3f225176e8083835529cd4a7fe899cbde71d31fc", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/sendgrid.png", sha256: "8e5559c9e74a4b5ea732f9dcbaa0cc24dae759317edd1aed02e9a572141cee7a", mode: 0644, kind: "retire"},
+}
+
+func init() {
+	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
+	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
+}
 
 // runNeutralProviderIcons validates the complete frozen decoration profile before
 // replacing its eighteen consumers and retiring sixteen images in a confined export.
 func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, false)
+}
+
+// runNeutralSMTPIcons preserves the five SMTP consumers while retiring only its
+// closed nine-image family. Existing provider and Login profiles stay separate.
+func runNeutralSMTPIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, true)
+}
+
+// Both profiles use the same confined, prevalidated stage writer. Their original
+// membership, transformations and receipt cardinalities are fixed independently.
+func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bool) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
 		return fail(fmt.Errorf("explicit preparation and source required"))
@@ -1055,18 +1087,24 @@ func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
 	if err != nil || !os.SameFile(before, opened) {
 		return fail(fmt.Errorf("source directory changed"))
 	}
-	for dir, names := range map[string][]string{
+	inputs := neutralProviderInputs
+	families := map[string][]string{
 		"console/src/assets/images/idp":                     {"apple-dark.svg", "apple.svg", "github-dark.svg", "github.svg", "gitlab.svg", "google.png", "ms.svg", "oauth.svg", "saml-icon.svg"},
 		"internal/api/ui/login/static/resources/images/idp": {"apple-dark.svg", "apple.svg", "github-white.png", "github.png", "gitlab.png", "google.png", "ms.svg"},
-	} {
+	}
+	if smtp {
+		inputs = neutralSMTPInputs
+		families = map[string][]string{"console/src/assets/images/smtp": {"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"}}
+	}
+	for dir, names := range families {
 		if err = exactDirectory(source, dir, names); err != nil {
 			return fail(err)
 		}
 	}
 	originals, replacements := map[string][]byte{}, map[string][]byte{}
-	consoleSlots, loginSlots := 0, 0
+	consoleSlots, loginSlots, settingsValues := 0, 0, 0
 	// Validate the complete original set before changing the private stage.
-	for _, input := range neutralProviderInputs {
+	for _, input := range inputs {
 		body, e := neutralProviderRead(confined, input)
 		if e != nil || digest(body) != input.sha256 {
 			return fail(fmt.Errorf("original identity differs: %s", input.path))
@@ -1077,6 +1115,41 @@ func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
 		}
 		text := string(body)
 		switch input.kind {
+		case "smtp-chooser", "smtp-editor":
+			old := `<img class="smtp-logo" [src]="provider.image" [alt]="provider.description" />`
+			if input.kind == "smtp-editor" {
+				old = `<img class="smtp-logo" [src]="state.defaults.image" [alt]="state.defaults.description" />`
+			}
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("SMTP decoration slot differs"))
+			}
+			text = strings.Replace(text, old, `<i class="smtp-logo neutral-smtp-icon las la-envelope" aria-hidden="true"></i>`, 1)
+			consoleSlots++
+		case "smtp-settings":
+			var lines []string
+			declarations := 0
+			for _, line := range strings.Split(text, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "image: string;" {
+					declarations++
+					continue
+				}
+				if strings.HasPrefix(trimmed, "image: './assets/images/smtp/") {
+					settingsValues++
+					continue
+				}
+				lines = append(lines, line)
+			}
+			if declarations != 1 || settingsValues != 9 {
+				return fail(fmt.Errorf("SMTP decoration settings differ"))
+			}
+			text = strings.Join(lines, "\n")
+		case "smtp-chooser-style", "smtp-editor-style":
+			selector, size := ".new-smtp-wrapper", "36px"
+			if input.kind == "smtp-editor-style" {
+				selector, size = ".wizard-header", "48px"
+			}
+			text += "\n" + selector + " .neutral-smtp-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  font-size: " + size + ";\n  flex-shrink: 0;\n}\n"
 		case "console":
 			var lines []string
 			for _, line := range strings.Split(text, "\n") {
@@ -1146,17 +1219,20 @@ func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
 		}
 		replacements[input.path] = []byte(text)
 	}
-	if len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 {
+	if smtp && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
+		return fail(fmt.Errorf("incomplete neutral SMTP profile"))
+	}
+	if !smtp && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral provider profile"))
 	}
 	// Refuse a changed original before replacing any selected body.
-	for _, input := range neutralProviderInputs {
+	for _, input := range inputs {
 		body, e := neutralProviderRead(confined, input)
 		if e != nil || !bytes.Equal(body, originals[input.path]) {
 			return fail(fmt.Errorf("original changed before preparation"))
 		}
 	}
-	for _, input := range neutralProviderInputs {
+	for _, input := range inputs {
 		if input.kind == "retire" {
 			if err = confined.Remove(input.path); err != nil {
 				return fail(err)
@@ -1186,7 +1262,27 @@ func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
 			return fail(e)
 		}
 	}
+	// Read the completed stage back before emitting either profile's success.
+	for _, input := range inputs {
+		if input.kind == "retire" {
+			if _, e := confined.Lstat(input.path); !os.IsNotExist(e) {
+				return fail(fmt.Errorf("retired decoration remains"))
+			}
+			continue
+		}
+		body, e := neutralProviderRead(confined, input)
+		if e != nil || !bytes.Equal(body, replacements[input.path]) {
+			return fail(fmt.Errorf("prepared decoration readback differs"))
+		}
+	}
+	after, err := os.Lstat(source)
+	if err != nil || !os.SameFile(before, after) || after.Mode() != before.Mode() {
+		return fail(fmt.Errorf("prepared source root changed"))
+	}
 	receipt := map[string]any{"schemaVersion": 1, "profile": "native-neutral-provider-icons-v1", "changedFiles": 18, "removedFiles": 16, "consoleSlots": consoleSlots, "loginSlots": loginSlots, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	if smtp {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["settingsValues"] = "native-neutral-smtp-icons-v1", 5, 9, settingsValues
+	}
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return fail(err)
@@ -1240,13 +1336,26 @@ func neutralProviderConsumers() []inputRecord {
 	return consumers
 }
 
-// Recognize the retired native family in real output paths and generated text.
+// neutralSMTPConsumers keeps the SMTP source binding separate from the 18 IdP consumers.
+func neutralSMTPConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralSMTPInputs {
+		if input.kind != "retire" {
+			consumers = append(consumers, inputRecord{input.path, input.expected})
+		}
+	}
+	return consumers
+}
+
+// Recognize the retired native provider families in output paths and text.
 // Repeated slash decoding covers the source compiler's escaped-string forms;
 // this is a closed-family check, not a general JavaScript or URL parser.
 func neutralProviderOutput(name string, body []byte) error {
 	lower := strings.ToLower(filepath.ToSlash(name))
-	if strings.Contains(lower, "/images/idp/") || strings.HasPrefix(lower, "images/idp/") {
-		return fmt.Errorf("retired provider image output remains")
+	for _, family := range []string{"idp", "smtp"} {
+		if strings.Contains(lower, "/images/"+family+"/") || strings.HasPrefix(lower, "images/"+family+"/") {
+			return fmt.Errorf("retired %s provider image output remains", family)
+		}
 	}
 	switch strings.ToLower(path.Ext(name)) {
 	case ".html", ".js", ".css", ".json", ".map", ".scss", ".svg":
@@ -1255,17 +1364,19 @@ func neutralProviderOutput(name string, body []byte) error {
 		for i := 0; i < 3; i++ {
 			text = slash.Replace(text)
 		}
-		if strings.Contains(text, "images/idp/") {
-			return fmt.Errorf("retired provider image URL remains")
+		for _, family := range []string{"idp", "smtp"} {
+			if strings.Contains(text, "images/"+family+"/") {
+				return fmt.Errorf("retired %s provider image URL remains", family)
+			}
 		}
 	}
 	return nil
 }
 
-// Both source image directories are wholly retired. Missing parents are valid
+// All three source image directories are retired. Missing parents are valid
 // in a restored tree; a linked, unreadable or nonempty family is never absence.
 func neutralProviderSourceFamilies(source string) error {
-	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp"} {
+	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp", "console/src/assets/images/smtp"} {
 		current := source
 		absent := false
 		for _, part := range strings.Split(family, "/") {

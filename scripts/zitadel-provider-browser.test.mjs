@@ -76,3 +76,41 @@ for(const mode of ['positive','bad-duration','bad-boolean','http-error','malform
  else{assert.equal(result.count,0);assert.equal(JSON.stringify(result).includes('fictional-unit-bearer'),false);}
 }
 console.log('PASS: actual observation-script resource controls and ten closed fixture API cases (unit inputs only)');
+
+// SMTP rendering is admitted independently of the existing ten IdP cases.
+const smtpObserve=script('browserSMTPObservation');
+for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','sendgrid','mailchimp','brevo','outlook']){
+ for(const fault of ['none','missing-label','bad-host','bad-auth','hidden','focusable-decoration','wrong-glyph','external-resource','retired-resource','misassociated-glyph']){
+  const names=['amazon','brevo','google','mailchimp','mailgun','mailjet','outlook','postmark','sendgrid'];
+  const labels=['Amazon Ses','Brevo','Google','Mailchimp','Mailgun','Mailjet','Microsoft Exchange Online','Postmark','Sendgrid'];
+  const host={amazon:'email-smtp.us-east-2.amazonaws.com:587',google:'smtp.gmail.com:587',mailgun:'smtp.mailgun.org:465',mailjet:'in-v3.mailjet.com:465',postmark:'smtp.postmarkapp.com:587',sendgrid:'smtp.sendgrid.net:465',mailchimp:'smtp.mandrillapp.com:465',brevo:'smtp-relay.sendinblue.com:465',outlook:'smtp.office365.com:587'};
+  const description={amazon:'amazon SES',google:'google',mailgun:'mailgun',mailjet:'mailjet',postmark:'postmark',sendgrid:'sendgrid',mailchimp:'mailchimp',brevo:'brevo',outlook:'Microsoft Exchange Online'};
+  const rect={x:1,y:1,left:1,top:1,right:81,bottom:81,width:80,height:80};
+  const shown={getBoundingClientRect:()=>rect,getClientRects:()=>fault==='hidden'?[]:[rect]};
+  const anchors=names.map((name,i)=>({...shown,origin:'http://fixture.localhost:8080',pathname:'/ui/console/instance/smtpprovider/'+name,tabIndex:0,innerText:fault==='missing-label'?'':labels[i]}));
+  anchors.push({...shown,origin:'http://fixture.localhost:8080',pathname:'/ui/console/instance/smtpprovider/generic',tabIndex:0,innerText:'Generic SMTP'});
+  const icon=name=>({...shown,tabIndex:fault==='focusable-decoration'?0:-1,getAttribute:key=>key==='aria-hidden'?'true':null,closest:selector=>selector==='a.item'?anchors[fault==='misassociated-glyph'?0:names.indexOf(name)]:null});
+  const icons=(kind==='picker'?names:[kind]).map(icon);
+  globalThis.location=new URL('http://fixture.localhost:8080/ui/console/instance'+(kind==='picker'?'?id=smtpprovider':'/smtpprovider/'+kind));
+  globalThis.innerHeight=1080;globalThis.innerWidth=1440;
+  globalThis.getComputedStyle=(e,pseudo)=>pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf061:0xf0e0)+'"',fontFamily:'"Line Awesome Free"'}:{fontFamily:'"Line Awesome Free"',fontSize:(kind==='picker'?36:48)+'px'};
+  const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/images/smtp/google.png':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
+  globalThis.performance={getEntriesByType:()=>[{name:resource}]};
+  const fonts=[{family:'Line Awesome Free',status:'loaded'}];fonts.status='loaded';
+  const inputs={description:{value:description[kind]},hostAndPort:{value:fault==='bad-host'?'incorrect':host[kind]},'smtp-user':{value:kind==='sendgrid'?'apikey':''},scopes:{value:'https://outlook.office.com/SMTP.Send'}};
+  globalThis.document={readyState:'complete',fonts,body:{innerText:labels[names.indexOf(kind)]??'SMTP providers'},
+   querySelectorAll:selector=>selector.includes('.neutral-smtp-icon')?icons:selector==='cnsl-notification-smtp-provider a.item'?anchors:[],
+   querySelector:selector=>{
+    if(selector==='cnsl-root.light-theme')return {};
+    if(selector==='cnsl-smtp-provider input[name="smtp-password"]')return kind==='outlook'?null:{};
+    if(selector==='cnsl-smtp-provider input[name="token-endpoint"]')return kind==='outlook'?{}:null;
+    if(selector==='cnsl-smtp-provider mat-checkbox.smtp-checkbox:nth-of-type(2) input')return {checked:fault==='bad-auth'?kind!=='outlook':kind==='outlook',disabled:true};
+    const match=selector.match(/^cnsl-smtp-provider input\[name="([^"]+)"\]$/);if(match)return inputs[match[1]]??null;
+    return null;
+   }};
+  const result=smtpObserve(kind,'light');
+  const relevant=fault==='none'||kind==='picker'&&['bad-host','bad-auth'].includes(fault)||kind!=='picker'&&['missing-label','misassociated-glyph'].includes(fault);
+  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,relevant,kind+'/'+fault);
+ }
+}
+console.log('PASS: exact native SMTP observation script - 100 independent rendering and default controls (unit inputs only)');

@@ -85,3 +85,58 @@ while IFS= read -r path; do
  done
 done <"$scratch/inputs"
 printf 'Provider icons: real 18-template behavior and %s original-input refusals passed.\n' "$controls"
+
+# Original SMTP artwork stays in disposable input fixtures, never in this repo.
+cat >"$scratch/smtp-inputs" <<'PATHS'
+console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html
+console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss
+console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts
+console/src/app/modules/smtp-provider/smtp-provider.component.html
+console/src/app/modules/smtp-provider/smtp-provider.scss
+PATHS
+git -C "$upstream" ls-tree -r --name-only "$pin" -- console/src/assets/images/smtp >>"$scratch/smtp-inputs"
+[[ "$(wc -l <"$scratch/smtp-inputs" | tr -d ' ')" -eq 14 ]]
+mkdir "$scratch/smtp-original"
+while IFS= read -r path; do
+ mkdir -p "$scratch/smtp-original/$(dirname "$path")"
+ git -C "$upstream" show "$pin:$path" >"$scratch/smtp-original/$path"
+ mode=$(git -C "$upstream" ls-tree "$pin" -- "$path" | awk '{print $1}')
+ chmod "${mode#100}" "$scratch/smtp-original/$path"
+done <"$scratch/smtp-inputs"
+cp -Rp "$scratch/smtp-original" "$scratch/smtp-positive"
+"$scratch/provider-icons" --neutral-smtp-icons --prepare --source "$scratch/smtp-positive" >"$scratch/smtp-receipt.json"
+jq -e '.schemaVersion==1 and .profile=="native-neutral-smtp-icons-v1" and .changedFiles==5 and .removedFiles==9 and .consoleSlots==2 and .settingsValues==9 and .imageAdmission=="unknown" and .licenseClosure=="unknown"' "$scratch/smtp-receipt.json" >/dev/null
+
+# Removing decoration must leave every native setting, binding and form intact.
+while IFS= read -r path; do
+ case "$path" in
+  */images/smtp/*) [[ ! -e "$scratch/smtp-positive/$path" && ! -L "$scratch/smtp-positive/$path" ]] ;;
+  *.html)
+   sed '/<img class="smtp-logo" /d' "$scratch/smtp-original/$path" >"$scratch/smtp-original-core"
+   sed '/<i class="smtp-logo neutral-smtp-icon las la-envelope" aria-hidden="true"><\/i>/d' "$scratch/smtp-positive/$path" >"$scratch/smtp-positive-core"
+   cmp "$scratch/smtp-original-core" "$scratch/smtp-positive-core"
+   ;;
+  *.ts)
+   sed '/^  image:/d' "$scratch/smtp-original/$path" >"$scratch/smtp-original-core"
+   cmp "$scratch/smtp-original-core" "$scratch/smtp-positive/$path"
+   ;;
+ esac
+done <"$scratch/smtp-inputs"
+smtp_controls=0
+while IFS= read -r path; do
+ for change in absent changed linked mode; do
+  cp -Rp "$scratch/smtp-original" "$scratch/smtp-adverse"
+  case "$change" in
+   absent) rm "$scratch/smtp-adverse/$path" ;;
+   changed) printf '\nchanged\n' >>"$scratch/smtp-adverse/$path" ;;
+   linked) rm "$scratch/smtp-adverse/$path"; ln -s "$scratch/smtp-original/$path" "$scratch/smtp-adverse/$path" ;;
+   mode) chmod 0666 "$scratch/smtp-adverse/$path" ;;
+  esac
+  if "$scratch/provider-icons" --neutral-smtp-icons --prepare --source "$scratch/smtp-adverse" >"$scratch/smtp-adverse-result" 2>&1; then
+   printf 'Admitted SMTP %s original: %s\n' "$change" "$path" >&2; exit 1
+  fi
+  rm -rf "$scratch/smtp-adverse"
+  smtp_controls=$((smtp_controls+1))
+ done
+done <"$scratch/smtp-inputs"
+printf 'SMTP icons: real five-consumer behavior and %s original-input refusals passed.\n' "$smtp_controls"

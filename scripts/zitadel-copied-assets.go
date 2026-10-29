@@ -49,9 +49,10 @@ type copiedPolicy struct {
 	TextNotices       string
 	TextPolicy        textPolicy
 	ProviderConsumers []inputRecord
+	SMTPConsumers     []inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers()}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers()}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -286,8 +287,12 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(policy.ProviderConsumers) == 0 || len(policy.ProviderConsumers) > 18 {
 		return fail(fmt.Errorf("neutral consumer policy incomplete"))
 	}
+	if len(policy.SMTPConsumers) == 0 || len(policy.SMTPConsumers) > 5 {
+		return fail(fmt.Errorf("neutral SMTP consumer policy incomplete"))
+	}
 	seenConsumers := map[string]bool{}
-	for _, consumer := range policy.ProviderConsumers {
+	consumers := append(append([]inputRecord{}, policy.ProviderConsumers...), policy.SMTPConsumers...)
+	for _, consumer := range consumers {
 		if !textPath(consumer.Path) || !textHex(consumer.SHA256, 64) || seenConsumers[consumer.Path] {
 			return fail(fmt.Errorf("neutral consumer policy differs"))
 		}
@@ -567,6 +572,11 @@ func copiedCompilerSet(data []byte, build string, expected map[string]bool) erro
 		for _, name := range p.EmbedFiles {
 			if !textPath(name) || all[name] {
 				return fmt.Errorf("invalid compiler member")
+			}
+			// Retired graphics are outside the retained catalogue. Check every
+			// compiler member before filtering to that catalogue's output set.
+			if err := neutralProviderOutput(name, nil); err != nil {
+				return err
 			}
 			all[name] = true
 			if strings.HasPrefix(name, "static/") && copiedSelected(strings.TrimPrefix(name, "static/")) {

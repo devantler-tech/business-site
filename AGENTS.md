@@ -71,6 +71,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   neutral-provider profile replaces decoration in eighteen native consumers with
   the already-admitted arrow fonts and removes sixteen provider image paths.
   Provider labels, links, forms and surviving branding/theme rules stay intact.
+  The separate SMTP profile binds fourteen originals, changes five consumers and
+  removes nine image paths, reusing the existing envelope glyph. Preserve all nine
+  preset connection defaults and the native generic SMTP path. The complete compiler
+  stream is checked before catalogue selection; no retired SMTP path may hide outside it.
   The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other
@@ -246,7 +250,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   enabling the two unusable fictional providers; no external action is followed.
   Login/registration links are reached by native Tab, and the picker by Enter.
   The unchanged operator journey has 100s; the additional presentation phase has
-  120s, within a 4min worker wrapper. It retains source/image-bound receipts
+  120s, within a 4min worker wrapper. That same phase independently requires twenty
+  SMTP cases (chooser and nine unsaved preset editors in both themes), including
+  unchanged defaults, native Enter, loaded envelope glyphs and each screenshot.
+  It never saves a mail configuration or sends a message. It retains source/image-bound receipts
   and screenshots; it grants no production login, mail, invitation or activation
   clearance. The Go browser worker is reachable only through the explicit profile.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64

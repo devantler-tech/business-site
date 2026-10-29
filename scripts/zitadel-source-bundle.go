@@ -29,11 +29,11 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "3eaa277f9c3eac93b34af9929f580a361c04df45c0dee53ba5e6decbdeb1bd87"
+const sourcePreparedProfile = "99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
-const sourceModifiedOn = "2026-10-28"
+const sourceModifiedOn = "2026-10-29"
 
 type sourceCapturePolicy struct{ Prepared, OriginalAPI, SerialAPI, Preparation string }
 type sourceCaptureSummary struct {
@@ -518,6 +518,7 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections.",
 		"Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests.",
 		"Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths.",
+		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -1104,7 +1105,7 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			sourcePreparedProfile,
 			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			"29f67f127b4538f2c15df94a5cdce323a010a27bb1e32e75f7ce4ab5276cab54",
+			"82f66c6a4a5a557c851f32611737c6e6ba8f2bdc316a012e6d8b62e80f6cf76b",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string
