@@ -495,8 +495,14 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		return summary, fmt.Errorf("build input record differs from the complete prepared source")
 	}
 	digest := func(body []byte) string { return fmt.Sprintf("%x", sha256.Sum256(body)) }
-	if digest(records["source-preparation.json"]) != policy.Preparation || digest(records["api-project.original.json"]) != policy.OriginalAPI || digest(records["api-project.serial.json"]) != policy.SerialAPI {
-		return summary, fmt.Errorf("frozen source transformation record differs")
+	for _, record := range []struct{ name, expected string }{
+		{"source-preparation.json", policy.Preparation},
+		{"api-project.original.json", policy.OriginalAPI},
+		{"api-project.serial.json", policy.SerialAPI},
+	} {
+		if digest(records[record.name]) != record.expected {
+			return summary, fmt.Errorf("frozen source transformation record differs: %s", record.name)
+		}
 	}
 	var prep struct {
 		UpstreamCommit      string `json:"upstreamCommit"`
@@ -1106,10 +1112,10 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			}
 		}
 		value, err = sourceCaptureBuildWithNotices(args[1], args[2], args[3], notices, sourceCapturePolicy{
-			sourcePreparedProfile,
-			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
-			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			"82f66c6a4a5a557c851f32611737c6e6ba8f2bdc316a012e6d8b62e80f6cf76b",
+			Prepared:    sourcePreparedProfile,
+			OriginalAPI: "bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
+			SerialAPI:   "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
+			Preparation: "4948930dfa2c93a61e6d4abc15263e2c51dd6800db75d74d12e2809bae2df7db",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string

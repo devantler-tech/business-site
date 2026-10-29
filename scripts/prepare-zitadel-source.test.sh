@@ -189,6 +189,29 @@ jq -e --arg pin "$pin" '
   .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
+# Exercise the actual native pre-install capture boundary, not a substituted
+# fixture policy. Both complete-source and preparation-receipt pins must agree.
+mkdir "$scratch/native-capture"
+cp -R "$scratch/prepared source" "$scratch/native-capture/prepared"
+(
+  cd "$scratch/native-capture/prepared/source"
+  shasum -a 256 go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock >"$scratch/native-capture/inputs.sha256"
+  cp apps/api/project.json "$scratch/native-capture/api-project.original.json"
+  jq '.targets["generate-install"].options.parallel = false' apps/api/project.json >"$scratch/native-capture/api-project.serial.json"
+  cp "$scratch/native-capture/api-project.serial.json" apps/api/project.json
+)
+go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/native-snapshot" >"$scratch/native-capture.json"
+jq -e '.preparedProfileSha256=="dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165" and .files==9572 and .bytes==261612982 and .records==58' "$scratch/native-capture.json" >/dev/null
+native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
+go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$scratch/native-snapshot" "$native_seal" "$scratch/native-notice-originals" >"$scratch/native-notices.json"
+jq -e '.files==43 and .originalInputsReadbackPassed==true' "$scratch/native-notices.json" >/dev/null
+cp "$scratch/native-capture/prepared/source-preparation.json" "$scratch/native-preparation-original.json"
+jq '.mdiProfile="changed"' "$scratch/native-preparation-original.json" >"$scratch/native-capture/prepared/source-preparation.json"
+reject go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/changed-native-snapshot"
+test ! -e "$scratch/changed-native-snapshot"
+cp "$scratch/native-preparation-original.json" "$scratch/native-capture/prepared/source-preparation.json"
+rm -rf -- "$scratch/native-capture" "$scratch/native-snapshot"
+
 # Never overwrite a completed output or a pre-existing directory/symlink.
 shasum -a 256 "$scratch/prepared source/source-preparation.json" >"$scratch/receipt-before"
 reject bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
