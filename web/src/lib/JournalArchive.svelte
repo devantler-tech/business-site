@@ -88,7 +88,7 @@
   .metadata { margin-block:1.25rem; color:var(--muted); font-size:.85rem; }
   .authors { display:flex; flex-wrap:wrap; gap:1rem; margin-top:.75rem; }
   .sl-blog-author { display:flex; gap:.5rem; align-items:center; text-decoration:none; line-height:1.3; }
-  .sl-blog-author img { width:2rem; height:2rem; border-radius:50%; border:1px solid var(--line); }
+  .sl-blog-author img { width:2rem; height:2rem; border-radius:50%; }
   .author-name,.author-title { display:block; }
   .author-name { font-weight:600; }
   .author-title { margin-top:.2rem; font-size:.75rem; }

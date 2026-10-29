@@ -92,7 +92,14 @@ export function assertSharing(candidate, baseline) {
       assert.equal(meta(elements,key).length,1,`Public discovery metadata must be unique: ${key}`);
       assert.ok(meta(elements,key)[0].trim(), `Public discovery metadata must be nonempty: ${key}`);
     }
-    for (const [rel,expected] of [["canonical",origin+path],["sitemap","/sitemap-index.xml"],["icon","/favicon.png"]]) assert.deepEqual(links(elements,rel).map(node=>attr(node,"href")),[expected],`Public discovery ${rel} at ${path}`);
+    for (const [rel,expected] of [["canonical",origin+path],["sitemap","/sitemap-index.xml"]]) assert.deepEqual(links(elements,rel).map(node=>attr(node,"href")),[expected],`Public discovery ${rel} at ${path}`);
+    const icons = links(elements,"icon");
+    assert.equal(icons.length,1,`Public discovery unique favicon at ${path}`);
+    const favicon = attr(icons[0],"href");
+    assert.ok(favicon);
+    assert.match(favicon,/^\/_app\/immutable\/assets\/favicon\.[A-Za-z0-9_-]+\.png$/,"Public discovery favicon must refresh cached browser icons");
+    // The image pipeline may losslessly re-encode PNGs; retain their format and dimensions.
+    assert.ok(get(candidate,favicon.slice(1)).subarray(0,33).equals(get(baseline,"favicon.png").subarray(0,33)),"Public discovery fingerprinted favicon retains the PNG format and dimensions");
     const suffix = path.replace(/^\/da\//,"/");
     assert.deepEqual(links(elements,"alternate").filter(node=>attr(node,"hreflang")).map(node=>[attr(node,"hreflang"),attr(node,"href")]),[["en",origin+suffix],["da",origin+"/da"+suffix],["x-default",origin+suffix]],`Public discovery languages at ${path}`);
     assert.deepEqual(meta(elements,"og:locale"),[path.startsWith("/da/")?"da_DK":"en_GB"],"Public discovery locale");
