@@ -1204,6 +1204,8 @@ func sourceNoticeOriginalsForTest(t *testing.T) map[string][]byte {
 	return bodies
 }
 
+// Prepared-source capture must bind the frozen profile and literal build inputs;
+// a complete-looking tree cannot substitute for those independent records.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 	noticeOriginals := sourceNoticeOriginalsForTest(t)
 	kinds := []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"}

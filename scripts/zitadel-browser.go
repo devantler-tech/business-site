@@ -1010,6 +1010,8 @@ func (d *browserDriver) providerTableRoutes(ids []string) error {
 // configuration, sends a test message or connects to an SMTP provider.
 var browserSMTPKinds = []string{"picker", "amazon", "brevo", "google", "mailchimp", "mailgun", "mailjet", "outlook", "postmark", "sendgrid"}
 
+// browserSMTPRoute admits only the chooser and nine fixed native preset routes;
+// observation data cannot select another destination.
 func browserSMTPRoute(kind string) string {
 	if kind == "picker" {
 		return "/ui/console/instance?id=smtpprovider"
@@ -1022,6 +1024,8 @@ func browserSMTPRoute(kind string) string {
 	return ""
 }
 
+// browserSMTPAdmit requires the exact local route, theme and complete rendering,
+// default-value, resource and keyboard observations for one closed SMTP case.
 func browserSMTPAdmit(p browserProviderPage, kind, theme string) bool {
 	route := browserSMTPRoute(kind)
 	count := 1
@@ -1072,6 +1076,8 @@ return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,ta
  themeReady:consoleThemeReady(),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/(?:idp|smtp)\//i.test(u.pathname)})};`
 
+// smtpPage observes the actual visible native form until its complete case is
+// ready, including the settled background, within the shared presentation bound.
 func (d *browserDriver) smtpPage(kind, theme string) (browserProviderPage, error) {
 	for {
 		var visible bool
@@ -1094,6 +1100,8 @@ func (d *browserDriver) smtpPage(kind, theme string) (browserProviderPage, error
 	}
 }
 
+// smtpPresentation follows native preset links with Enter and returns to the
+// chooser between unsaved forms. No mail configuration is created or submitted.
 func (d *browserDriver) smtpPresentation(output string) ([]browserProviderCase, error) {
 	cases := []browserProviderCase{}
 	for _, theme := range []string{"light", "dark"} {
@@ -1154,6 +1162,8 @@ func (d *browserDriver) smtpPresentation(output string) ([]browserProviderCase, 
 	return cases, nil
 }
 
+// browserSMTPReceipt independently checks the ordered twenty-case set and every
+// retained screenshot; an earlier IdP observation cannot stand in for SMTP proof.
 func browserSMTPReceipt(output string, cases []browserProviderCase) error {
 	if len(cases) != 20 {
 		return fmt.Errorf("SMTP browser case set incomplete")
@@ -1179,6 +1189,8 @@ func browserSMTPReceipt(output string, cases []browserProviderCase) error {
 	return nil
 }
 
+// browserPresentationScreenshot joins retained PNG bytes, dimensions and complete
+// decoding to its receipt rather than trusting a worker-supplied filename.
 func browserPresentationScreenshot(output, name string, screen browserScreen) error {
 	png, err := imageRead(output, name, 4<<20)
 	if err != nil || len(png) != screen.Bytes || imageHash(png) != screen.SHA256 {

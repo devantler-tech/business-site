@@ -536,6 +536,8 @@ func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, o
 	return nil
 }
 
+// copiedCompilerSet rejects failed observations and retired images throughout
+// the compiler stream, while comparing catalogue membership only for Console.
 func copiedCompilerSet(data []byte, build string, expected map[string]bool) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	seen := false
@@ -561,6 +563,13 @@ func copiedCompilerSet(data []byte, build string, expected map[string]bool) erro
 		if e = json.Unmarshal(raw, &p); e != nil || p.Incomplete || len(p.Error) > 0 && string(p.Error) != "null" || len(p.DepsErrors) > 0 {
 			return fmt.Errorf("failed compiler observation")
 		}
+		// Retired graphics must be absent from every compiled package, before
+		// selecting the Console package or its retained catalogue subset.
+		for _, name := range p.EmbedFiles {
+			if err := neutralProviderOutput(name, nil); err != nil {
+				return err
+			}
+		}
 		if p.ImportPath != "github.com/zitadel/zitadel/internal/api/ui/console" {
 			continue
 		}
@@ -572,11 +581,6 @@ func copiedCompilerSet(data []byte, build string, expected map[string]bool) erro
 		for _, name := range p.EmbedFiles {
 			if !textPath(name) || all[name] {
 				return fmt.Errorf("invalid compiler member")
-			}
-			// Retired graphics are outside the retained catalogue. Check every
-			// compiler member before filtering to that catalogue's output set.
-			if err := neutralProviderOutput(name, nil); err != nil {
-				return err
 			}
 			all[name] = true
 			if strings.HasPrefix(name, "static/") && copiedSelected(strings.TrimPrefix(name, "static/")) {

@@ -48,10 +48,13 @@ func TestCopiedTranslationsRejectUndeclaredSourceOutputAndCompilerMembers(t *tes
 	}
 }
 
+// Append an undeclared translation to the native-shaped Console compiler record.
 func appendTranslationCompilerMember(t *testing.T, build string) {
 	appendCopiedCompilerMember(t, build, "static/assets/i18n/zz.json")
 }
 
+// Mutate only the Console record in a complete fixture stream, preserving other
+// records so the test exercises catalogue filtering rather than malformed JSON.
 func appendCopiedCompilerMember(t *testing.T, build, member string) {
 	t.Helper()
 	decoder := json.NewDecoder(bytes.NewReader(mustTextRead(t, build, "packages.jsonl")))
@@ -75,6 +78,8 @@ func appendCopiedCompilerMember(t *testing.T, build, member string) {
 	}
 }
 
+// Every retired preset path must fail even when it is outside the retained
+// catalogue, where a subset-only compiler comparison would overlook it.
 func TestCopiedSMTPGraphicsCannotReturnInCompleteCompilerObservation(t *testing.T) {
 	for _, name := range []string{"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"} {
 		t.Run(name, func(t *testing.T) {
@@ -89,6 +94,66 @@ func TestCopiedSMTPGraphicsCannotReturnInCompleteCompilerObservation(t *testing.
 				t.Fatal("retired SMTP compiler member was hidden by catalogue filtering")
 			}
 		})
+	}
+}
+
+// Retired paths in an unrelated package must be checked before the Console
+// package filter, which must not hide another package's retired resources.
+func TestCopiedCompilerStreamRejectsRetiredImagesOutsideConsole(t *testing.T) {
+	paths := []string{
+		"static/assets/images/smtp/aws-ses.svg", "static/assets/images/smtp/brevo.svg",
+		"static/assets/images/smtp/google.png", "static/assets/images/smtp/mailchimp.svg",
+		"static/assets/images/smtp/mailgun.svg", "static/assets/images/smtp/mailjet.svg",
+		"static/assets/images/smtp/outlook.svg", "static/assets/images/smtp/postmark.png",
+		"static/assets/images/smtp/sendgrid.png", "static/assets/images/idp/google.png",
+		"resources/images/idp/apple.svg",
+	}
+	for _, position := range []string{"before", "after"} {
+		for _, member := range paths {
+			t.Run(position+"/"+member, func(t *testing.T) {
+				build, notices, recipe, policy := copiedFixture(t)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+					t.Fatalf("valid baseline: %v", err)
+				}
+				stream := mustTextRead(t, build, "packages.jsonl")
+				record, err := json.Marshal(map[string]any{
+					"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+					"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+					"EmbedPatterns": []string{"static"}, "EmbedFiles": []string{member},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				combined := append(append(record, '\n'), stream...)
+				if position == "after" {
+					combined = append(stream, append(record, '\n')...)
+				}
+				put(t, filepath.Join(build, "packages.jsonl"), combined)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+					t.Fatal("retired image in another compiler package was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Unrelated packages may embed ordinary assets with matching relative names;
+// they must not expand or otherwise change the Console catalogue comparison.
+func TestCopiedCompilerCatalogueComparisonRemainsConsoleScoped(t *testing.T) {
+	build, notices, recipe, policy := copiedFixture(t)
+	stream := mustTextRead(t, build, "packages.jsonl")
+	record, err := json.Marshal(map[string]any{
+		"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+		"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+		"EmbedPatterns": []string{"static"},
+		"EmbedFiles":    []string{"static/assets/icons/line-awesome/css/example.css", "static/application-info.txt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(build, "packages.jsonl"), append(stream, append(record, '\n')...))
+	if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+		t.Fatalf("unrelated compiler package changed the Console catalogue: %v", err)
 	}
 }
 
@@ -532,6 +597,8 @@ func TestCopiedCompletedCLIRequiresExactSavedInventoryAndStaysReadOnly(t *testin
 	}
 }
 
+// Source and both generated copies independently refuse retired images and
+// literal or escaped references; absence in one view cannot clear another.
 func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testing.T) {
 	cases := map[string]string{
 		"console/src/assets/images/idp/google.png":                    "retired source",
@@ -565,6 +632,8 @@ func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testi
 	}
 }
 
+// Missing or changed native form consumers must fail their frozen bindings,
+// even when all selected artwork outputs still appear complete.
 func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
 	for _, attack := range []string{"missing", "changed"} {
 		t.Run(attack, func(t *testing.T) {

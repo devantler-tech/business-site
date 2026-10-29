@@ -434,6 +434,8 @@ func TestBrowserProviderConsoleHasItsOwnNativeFrame(t *testing.T) {
 	}
 }
 
+// Synthetic receipt controls must reject incomplete cases and altered PNGs;
+// these fixtures are deliberately separate from actual native rendering proof.
 func TestBrowserSMTPReceiptRequiresAllThemesDefaultsAndScreens(t *testing.T) {
 	output := t.TempDir()
 	var encoded bytes.Buffer
@@ -493,6 +495,8 @@ func TestBrowserSMTPReceiptRequiresAllThemesDefaultsAndScreens(t *testing.T) {
 	}
 }
 
+// A native SMTP settings frame must not satisfy the unrelated home or IdP frame
+// predicates, even though they share the authenticated Console shell.
 func TestBrowserSMTPFrameIsSeparateFromProviderAndHomeFrames(t *testing.T) {
 	for _, kind := range browserSMTPKinds {
 		p := browserPage{URL: "http://" + serviceAuthority + browserSMTPRoute(kind), Ready: "complete", Text: strings.Repeat("SMTP settings ", 6), Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://" + serviceAuthority + "/font.woff2"}, SMTPConsole: true}

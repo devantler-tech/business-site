@@ -438,6 +438,8 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 	return sourceCaptureBuildWithNotices(build, repository, output, "", policy)
 }
 
+// sourceCaptureBuildWithNotices binds the prepared tree, literal build records
+// and original notice layout. Capture alone does not establish offline replay.
 func sourceCaptureBuildWithNotices(build, repository, output, notices string, policy sourceCapturePolicy) (summary sourceCaptureSummary, result error) {
 	seal, err := sourceSealTree(filepath.Join(build, "prepared/source"), output)
 	if err != nil {
