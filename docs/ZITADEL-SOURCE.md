@@ -55,6 +55,24 @@ The exact removed font bytes are identified in
 An applicable distribution grant was not established for them. This is an
 admission decision, not a finding of infringement.
 
+The `native-neutral-provider-icons-v1` profile retains the provider names, native
+authentication/registration links and form/event bindings. It replaces decoration
+in eleven Console HTML, two Login HTML and five SCSS consumers with the existing
+Line Awesome and Login arrow glyphs, then removes exactly nine Console and seven
+Login image paths. No artwork, font, glyph, dependency or licence grant is added.
+The thirty-four original inputs and all eighteen transformed consumers have fixed
+identities. The four removed Apple SVGs are the only executable paths subtracted
+from the complete surviving-mode comparison.
+
+The native slots are 28 pixels in the table, 36 in the chooser/editors and 46 in
+Login/registration with a centered 25-pixel glyph. Decoration is hidden from
+assistive technology and adds no focus stop. Surviving ZITADEL-brand dark/light
+rules remain active. The complete copied-asset census rejects provider images
+and stale URLs in either Console output, while the existing statik decoder
+checks the actual Login archive and registration template. These observations
+are bound across compilation; they do not enable social federation or admit the
+remaining branding/distribution under #384/#308.
+
 The `machine-id-no-jsonpath-v1` preparation profile removes the only linked use of
 `github.com/jarcoal/jpath`. The exact selected module archive did not establish an
 applicable distribution grant. This is an unresolved rights question, not a claim
@@ -75,7 +93,9 @@ does not change the portal → customer Dex → ZITADEL login architecture.
 The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1` dependency profile applies the exact native Go
 1.26.10 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
 `gorilla/csrf` 1.7.3: three module lines and six added checksums. Complete original and resulting hashes are checked
-offline; the preparer never downloads or executes Go. Other dependency selections,
+offline. The preparer runs only the maintained standard-library Go decoration
+transform with `GOTOOLCHAIN=local`; it never downloads a compiler or executes
+upstream Go source. Other dependency selections,
 the compiler and the upstream 4096-bit RSA key limit are preserved. Original unused
 checksum entries remain as produced by the native updates. The selected modules,
 compiler metadata and notice catalogue must agree on all three patched versions. Dirty input
@@ -1088,8 +1108,9 @@ within the worker deadline. The receipt records that choice and keeps `mfaProof`
 Production MFA requirements are unchanged. An incomplete journey may retain only
 fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
 form values. Requests have a 30-second budget covering the 20-second navigation
-limit; readiness polls use one second. The complete worker remains bounded to
-100 seconds.
+limit; readiness polls use one second. The operator journey has a 100-second
+bound. The separate neutral-provider presentation phase has a 120-second bound,
+and the outer worker wrapper allows four minutes.
 Driver session closure, process exit and private profile cleanup are mandatory.
 The outer Go harness rechecks the runner source, screenshot bytes and receipt,
 then binds the browser result to the inspected local image and upstream source.
@@ -1101,3 +1122,25 @@ HTTP/process receipt keeps `browserProof` and `authenticationProof` false;
 the browser receipt carries only its own observed journey. Image admission,
 complete notice closure, durable corresponding source and signed image/source
 publication remain required before runtime distribution and activation.
+
+The explicit restricted browser fixture also requires ten neutral-provider presentation
+observations: light/dark picker (nine entries), configured table (two fictional
+providers), Google editor, Login and registration. Both providers are created only
+in the disposable fixture through the authenticated operator’s same-origin native
+API. The fixture preserves all seventeen writable login-policy values except
+enabling external providers, verifies the two links, and never follows federation
+actions or enables local registration. The browser retains no bearer, auth-request
+URL, response body or real account data in its receipt. Native Tab reaches both
+Login/registration links; Enter activates the Google chooser route. Registration
+navigation preserves the existing native authentication request's exact
+`authRequestID` parameter rather than opening an unbound options page. Every case
+requires loaded glyphs, neutral geometry, labels, native targets, theme and confined
+resources, with ten bound PNGs in addition to the original three pages. These
+settings and editor observations require their own rendered native Console frame;
+they do not reuse the home screen's navigation-bar requirement. The original
+operator home observation retains that requirement. After native theme-button
+interaction, the worker scrolls the native viewport to the observed controls and
+requires their glyphs and links to fit inside it; it injects no DOM or styles.
+These checks cover two actual table variants and one actual editor; the other variants
+remain bound by their exact transformed source hashes. This remains presentation
+evidence, not completed federation, invitations, MFA or portal activation.

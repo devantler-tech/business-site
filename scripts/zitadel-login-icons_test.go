@@ -486,3 +486,36 @@ func TestClosedPathNormalization(t *testing.T) {
 		}
 	}
 }
+
+func TestLoginProviderGraphicsCannotReturnInsideCompiledStatik(t *testing.T) {
+	cases := map[string]string{
+		"resources/images/idp/google.png":      "retired original",
+		"resources/images/idp/extra.webp":      "additional image",
+		"resources/themes/styles/provider.css": `.logo{background:url(/ui/login/resources/images/idp/apple.svg)}`,
+		"templates/login.html":                 `<img src="resources/images/idp/google.png">`,
+		"templates/register_option.html":       `<img src="resources/images/idp/github.png">`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			build, notices := buildFixture(t)
+			if code, _, diagnostic := invoke(build, notices); code != 0 {
+				t.Fatalf("baseline: %s", diagnostic)
+			}
+			members := map[string][]byte{}
+			names := []string{}
+			for key, value := range fontBytes(t) {
+				p := "resources/fonts/lgn-icons/fonts/" + key
+				members[p] = value
+				names = append(names, p)
+			}
+			members[name] = []byte(body)
+			names = append(names, name)
+			sort.Strings(names)
+			put(t, filepath.Join(build, "prepared/source", statikPath), statikText(zipData(t, names, members)))
+			manifest(t, build)
+			if code, _, _ := invoke(build, notices); code == 0 {
+				t.Fatal("retired provider image or URL accepted inside actual decoded statik")
+			}
+		})
+	}
+}

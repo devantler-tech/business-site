@@ -12,8 +12,8 @@ publish="$(yq -o=json '.' "$root/.github/workflows/publish-runtime.yaml")" || fa
 # Accept only mandatory, read-only admission and original-image verification on the frozen source.
 admission_valid() {
   jq -e '
-    .permissions=={} and .jobs.admit.permissions=={"contents":"read","actions":"read","packages":"read"} and
     .jobs.admit.steps as $s |
+    .permissions=={} and .jobs.admit.permissions=={"contents":"read","actions":"read","packages":"read"} and
     $s[0].with.ref=="\u0024{{ github.sha }}" and $s[0].with["persist-credentials"]==false and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/admit-runtime-release.sh")]|length)==1 and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/verify-runtime-origin.sh")]|length)==1 and
@@ -93,7 +93,8 @@ ci="$(yq -o=json '.' "$root/.github/workflows/ci.yaml")"
 ci_valid() {
   jq -e '
     . as $workflow | .jobs["test-repository-contracts"] as $job |
-    $job.if==null and $job.steps as $steps |
+    $job.steps as $steps |
+    $job.if==null and
     all(["bash scripts/runtime-release.test.sh","bash scripts/runtime-verification.test.sh","bash scripts/runtime-publisher-contract.test.sh"][];
       . as $command | [$steps[]|select(.run==$command)] as $matches |
       ($matches|length)==1 and $matches[0].if==null and

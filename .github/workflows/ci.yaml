@@ -302,6 +302,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Setup provider-test Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Verify native provider presentation controls
+        run: node scripts/zitadel-provider-browser.test.mjs
       - name: Setup the prepared-source test compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -574,6 +580,8 @@ jobs:
             .portalFederation == false and .productionTLS == false and .invitationProof == false and
             .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
             (.pages | map(.kind)) == ["login","password","console"] and
+            (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
+            all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -662,6 +670,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/login.png
             ${{ runner.temp }}/zitadel-image/password.png
             ${{ runner.temp }}/zitadel-image/console.png
+            ${{ runner.temp }}/zitadel-image/provider-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json

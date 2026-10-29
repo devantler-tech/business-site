@@ -276,7 +276,10 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	put(b, "zitadel-copied-assets.go", []byte("selected copied-asset verifier"))
 	encoded, _ := json.Marshal(cat)
 	put(n, "catalogue.json", encoded)
-	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy}
+	neutralPath := "console/src/fixture-provider.html"
+	neutralBody := []byte(`<i class="neutral-provider-icon" aria-hidden="true"></i>`)
+	put(b, "prepared/source/"+neutralPath, neutralBody)
+	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}}
 }
 
 func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
@@ -502,6 +505,32 @@ func TestCopiedCompletedCLIRequiresExactSavedInventoryAndStaysReadOnly(t *testin
 				if !bytes.Equal(mustTextRead(t, b, f), want) {
 					t.Fatal("verification changed retained evidence", f)
 				}
+			}
+		})
+	}
+}
+
+func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testing.T) {
+	cases := map[string]string{
+		"console/src/assets/images/idp/google.png":                    "retired source",
+		"console/src/assets/images/idp/extra.webp":                    "additional source",
+		"internal/api/ui/login/static/resources/images/idp/extra.svg": "additional login source",
+		"console/dist/console/assets/images/idp/google.png":           "retired output",
+		"console/dist/console/assets/images/idp/extra.webp":           "additional output",
+		"internal/api/ui/console/static/assets/images/idp/google.png": "retired embedded copy",
+		"console/dist/console/provider.js":                            `const icon="./assets/images/idp/google.png";`,
+		"internal/api/ui/console/static/provider.css":                 `.icon{background:url(./assets/images/idp/apple.svg)}`,
+		"console/dist/console/escaped.js":                             `const icon="assets\/images\/idp\/google.png";`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			put(t, filepath.Join(build, "prepared/source", name), []byte(body))
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("retired provider image or URL omitted from output observation")
 			}
 		})
 	}

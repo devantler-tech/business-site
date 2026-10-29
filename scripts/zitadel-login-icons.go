@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/zlib"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
@@ -396,6 +397,11 @@ func inspectWithRead(build, notices string, readInput func(string, string, int64
 	members, err := decodeStatik(statik)
 	if err != nil {
 		return result, err
+	}
+	for name, body := range members {
+		if err = neutralProviderOutput(name, body); err != nil {
+			return result, err
+		}
 	}
 	fontNames := []string{"lgn-icons.eot", "lgn-icons.svg", "lgn-icons.ttf", "lgn-icons.woff"}
 	if err = exactDirectory(build, sourcePrefix+iconRoot+"fonts", fontNames); err != nil {
@@ -968,4 +974,318 @@ func normalizePath(data string, transform bool) (string, error) {
 		return bad()
 	}
 	return out.String(), nil
+}
+
+// The neutral provider profile changes decoration only in one immutable upstream
+// source family. Archive data cannot select paths, replacements or commands.
+type neutralProviderInput struct {
+	path, sha256 string
+	mode         os.FileMode
+	kind         string
+	expected     string
+}
+
+var neutralProviderInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/idp-table/idp-table.component.html", sha256: "f4bd9cab64343c81bd37942e50caa7d0895804d1e650f0dbdb381b5e802805bf", mode: 0644, kind: "console", expected: "2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e"},
+	{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.html", sha256: "4f54262e2e976803dee6bb96839867a703da8b14796bdc3ef43c0d59004b416b", mode: 0644, kind: "console", expected: "41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8"},
+	{path: "console/src/app/modules/providers/provider-apple/provider-apple.component.html", sha256: "f4a37534bc2a7f440087d94962ae7ee9e9e218cc88a7a237823ac89b057b8da7", mode: 0644, kind: "console", expected: "bcd033476803838515de5f25057ac4df9749f26049bf4a0c2926acb83ea01b94"},
+	{path: "console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html", sha256: "06ae466d2c46902757041c68371887643f511b8887e4cd3c87d17115d711174d", mode: 0644, kind: "console", expected: "bb307b70f936d780f8584f01c4691efd042d43d95041df294f2af1f48ae94459"},
+	{path: "console/src/app/modules/providers/provider-github-es/provider-github-es.component.html", sha256: "35b3ad53ae12758b0d7911c9e287cceedd1882b4e032f6622c0d20ec95e142e2", mode: 0644, kind: "console", expected: "380b3dca85ef437d4446987a5e22020c1a7e1bec1bc874ff7942dd0e204a1efd"},
+	{path: "console/src/app/modules/providers/provider-github/provider-github.component.html", sha256: "278c76029f8d65ebdb251c32b7e93447bf8b10c61f4c33294ff60d1dd166876d", mode: 0644, kind: "console", expected: "2eca45dc2386dc08bdd6af010b3782f3e3f9531260db70f22117aa115e976205"},
+	{path: "console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html", sha256: "8d77282cde7e54bb17ae6418af74395dda950b26c346c67e38a5a21385e547ec", mode: 0644, kind: "console", expected: "99871b68ae002cd48b82de6ef6b7beeaa3f3f5f2dc9b0df66a398149e0929e9f"},
+	{path: "console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html", sha256: "084cbfa2681d78fa14c5123a073826b52ed31c62b4031669a956c5c97122e85f", mode: 0644, kind: "console", expected: "341c4a94d2817aed886fe8268c31f890188fb8468e25d09e6e987a511305449b"},
+	{path: "console/src/app/modules/providers/provider-google/provider-google.component.html", sha256: "ca58e0f11408808cf8906c84df4b39e05c38c52d24102298d65a11c07524b7ac", mode: 0644, kind: "console", expected: "8fae34c70584f876ab9dad8608830b5f95d430310d1b33bca04e847ea492c7e8"},
+	{path: "console/src/app/modules/providers/provider-oauth/provider-oauth.component.html", sha256: "7d23482c90f1e58196b78c26e9b2410de9b4c7834882354403150af477f70a93", mode: 0644, kind: "console", expected: "eae8329b095b5987d8340a386957fb67d5ec58488e97f221c03cbf8592d71266"},
+	{path: "console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html", sha256: "63d880c2bd57c367580f43533ea79ef73eb5764530c84189308ff679479131ad", mode: 0644, kind: "console", expected: "0b5410b7aa9b905e0f4c074e85eda06905d51cef28cf3f3ca49c6b2146a3acff"},
+	{path: "internal/api/ui/login/static/templates/login.html", sha256: "4db65e16a4a4dab0af1c19e9dfd4a9df6497327e4c158d461035b4d4cca24913", mode: 0644, kind: "login", expected: "d749528ee622c0d376afc918d4d205bf9d42b6c33243301e721a997be631d4bf"},
+	{path: "internal/api/ui/login/static/templates/register_option.html", sha256: "fb9793de2be4fa47191a2907e5de9deec1d7093eae27334d9d10eaf3ffc156d7", mode: 0644, kind: "login", expected: "160874790c22abfd44bc977b2d978a8fbae73dc0e4adfa52917b4b3854ec123b"},
+	{path: "console/src/app/modules/idp-table/idp-table.component.scss", sha256: "adf0930761ba3e329eefe3b685cd348935741cc99f43fc0d09ff1cbe6d328e2c", mode: 0644, kind: "table-style", expected: "3109087ad9a64409e4e30d6eab7ea7b8f48b3c7194042d0171d1ee9f9926efb8"},
+	{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.scss", sha256: "60f4249cdc02789825fa72bea4c26309e2b827ea64b618c82220113b8b376c12", mode: 0644, kind: "chooser-style", expected: "8e5bf3f536e63f9e3fab90a2be0c46e7239190e2cc7ea558a0fcd5f90e0b6217"},
+	{path: "console/src/app/modules/providers/providers.scss", sha256: "a85293c7b43639478d6646e6ef908e29ce00a9daddb5e06855a3728386111b17", mode: 0644, kind: "editor-style", expected: "fc44668ff48fa9442f5b592abeac0402da17bd177b5809b8c5e1ea8675b58413"},
+	{path: "internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss", sha256: "e5ad481b25c8722d3a1b5afc2592a057c773dfcbab63fd35c5764aedebf0916d", mode: 0644, kind: "login-style", expected: "a25666a0c03c21542c84ab72d228c5ce91c6e7b00a712289d44a4f720f613732"},
+	{path: "internal/api/ui/login/static/resources/themes/scss/styles/vars.scss", sha256: "61f59f9b4d8dda32cde72d269917f761c3eac54909265ee930b791d9a589a1dd", mode: 0644, kind: "variables", expected: "a15f2692a597e8a8c3848d62073db1d48dce82aea66d6cabfda1d2019825a25c"},
+	{path: "console/src/assets/images/idp/apple-dark.svg", sha256: "d375e51b38ccc427162e5a06c3263df659095b3924f3a5007c4cf7eb0c05974c", mode: 0755, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/apple.svg", sha256: "8b7b000b5be857e72b18e61874b9e9380035408f5550dc5b0899d965f7fac6a2", mode: 0755, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/github-dark.svg", sha256: "2d766668e8fbcfb5f98d6f86acc0767ed95ceb1431e37187389dd62d3bb73c24", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/github.svg", sha256: "12794390cce7d0682ffc783c785e4282305684431b30b29ed75c224da24035b4", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/gitlab.svg", sha256: "ffb42267e29f711ed2bdf66e7827303272ecf83d1a81ffb3d4e68110716cb133", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/ms.svg", sha256: "929f48f88c8ca7f3f5d294be47ec4caf51acc28ac25340c19a903125d7ecd84a", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/oauth.svg", sha256: "2a5c60a1e0d2ce7957f92ce741f6e0c95f61a9bb9042e88f6dcdce0df3fc6400", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/saml-icon.svg", sha256: "8d6baf4e08d21cc1b53b01594dc979a38d33b9f8c44311cc7bdc4286bb4d4b75", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/apple-dark.svg", sha256: "d375e51b38ccc427162e5a06c3263df659095b3924f3a5007c4cf7eb0c05974c", mode: 0755, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/apple.svg", sha256: "8b7b000b5be857e72b18e61874b9e9380035408f5550dc5b0899d965f7fac6a2", mode: 0755, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/github-white.png", sha256: "60d03f0f1a09aafcc2df2e10b4ffd24eab44787b451f8fdb367c3baf589cf95a", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/github.png", sha256: "367d5cb2adc609451cf9127250edfe893837485e7c779d7dcb4e31234f59b001", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/gitlab.png", sha256: "d56b28d4ad3c65fb4e1a2fe79eee4b821f6e9ab3f01963fa5f1b71ec7c5b10cf", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/ms.svg", sha256: "929f48f88c8ca7f3f5d294be47ec4caf51acc28ac25340c19a903125d7ecd84a", mode: 0644, kind: "retire", expected: ""},
+}
+
+func init() { iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons }
+
+// runNeutralProviderIcons validates the complete frozen decoration profile before
+// replacing its eighteen consumers and retiring sixteen images in a confined export.
+func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
+	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
+	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
+		return fail(fmt.Errorf("explicit preparation and source required"))
+	}
+	source, err := filepath.Abs(args[2])
+	if err != nil {
+		return fail(err)
+	}
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil || resolved != source {
+		return fail(fmt.Errorf("canonical source required"))
+	}
+	before, err := os.Lstat(source)
+	if err != nil || !before.IsDir() {
+		return fail(fmt.Errorf("source directory required"))
+	}
+	confined, err := os.OpenRoot(source)
+	if err != nil {
+		return fail(err)
+	}
+	defer confined.Close()
+	if _, err = confined.Lstat(".git"); !os.IsNotExist(err) {
+		return fail(fmt.Errorf("exported source required"))
+	}
+	opened, err := confined.Stat(".")
+	if err != nil || !os.SameFile(before, opened) {
+		return fail(fmt.Errorf("source directory changed"))
+	}
+	for dir, names := range map[string][]string{
+		"console/src/assets/images/idp":                     {"apple-dark.svg", "apple.svg", "github-dark.svg", "github.svg", "gitlab.svg", "google.png", "ms.svg", "oauth.svg", "saml-icon.svg"},
+		"internal/api/ui/login/static/resources/images/idp": {"apple-dark.svg", "apple.svg", "github-white.png", "github.png", "gitlab.png", "google.png", "ms.svg"},
+	} {
+		if err = exactDirectory(source, dir, names); err != nil {
+			return fail(err)
+		}
+	}
+	originals, replacements := map[string][]byte{}, map[string][]byte{}
+	consoleSlots, loginSlots := 0, 0
+	// Validate the complete original set before changing the private stage.
+	for _, input := range neutralProviderInputs {
+		body, e := neutralProviderRead(confined, input)
+		if e != nil || digest(body) != input.sha256 {
+			return fail(fmt.Errorf("original identity differs: %s", input.path))
+		}
+		originals[input.path] = body
+		if input.kind == "retire" {
+			continue
+		}
+		text := string(body)
+		switch input.kind {
+		case "console":
+			var lines []string
+			for _, line := range strings.Split(text, "\n") {
+				if strings.Contains(line, "src=\"./assets/images/idp/") {
+					if strings.Contains(line, " light\"") {
+						continue
+					}
+					indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+					line = indent + "<i class=\"idp-logo neutral-provider-icon las la-arrow-right\" aria-hidden=\"true\"></i>"
+					consoleSlots++
+				}
+				lines = append(lines, line)
+			}
+			text = strings.Join(lines, "\n")
+		case "login":
+			old := "<span class=\"logo\"></span>"
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("login decoration differs"))
+			}
+			text = strings.Replace(text, old, "<span class=\"logo lgn-icon-arrow-right-solid\" aria-hidden=\"true\"></span>", 1)
+			loginSlots++
+		case "table-style", "chooser-style", "editor-style":
+			size := "36px"
+			if input.kind == "table-style" {
+				size = "28px"
+			}
+			text += "\n.neutral-provider-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: " + size + ";\n  height: " + size + ";\n  font-size: " + size + ";\n  margin-right: 1rem;\n  flex-shrink: 0;\n}\n"
+		case "login-style":
+			start := strings.Index(text, "\n  &.google {")
+			if start < 0 || !strings.HasSuffix(text, "\n}\n") {
+				return fail(fmt.Errorf("login provider styles differ"))
+			}
+			text = text[:start] + "\n}\n"
+			old := "  span.logo {\n"
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("login slot differs"))
+			}
+			text = strings.Replace(text, old, old+"    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    font-size: 25px;\n", 1)
+		case "variables":
+			var lines []string
+			removed := 0
+			for _, line := range strings.Split(text, "\n") {
+				selected := false
+				for _, name := range []string{"google", "github", "gitlab", "azure", "apple"} {
+					if strings.Contains(line, "--"+name+"-image-src:") {
+						selected = true
+					}
+				}
+				if selected {
+					removed++
+					continue
+				}
+				lines = append(lines, line)
+			}
+			if removed != 10 {
+				return fail(fmt.Errorf("provider variables differ"))
+			}
+			text = strings.Join(lines, "\n")
+		default:
+			return fail(fmt.Errorf("unsupported fixed input"))
+		}
+		if text == string(body) {
+			return fail(fmt.Errorf("unchanged selected decoration"))
+		}
+		if digest([]byte(text)) != input.expected {
+			return fail(fmt.Errorf("neutral consumer identity differs"))
+		}
+		replacements[input.path] = []byte(text)
+	}
+	if len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 {
+		return fail(fmt.Errorf("incomplete neutral provider profile"))
+	}
+	// Refuse a changed original before replacing any selected body.
+	for _, input := range neutralProviderInputs {
+		body, e := neutralProviderRead(confined, input)
+		if e != nil || !bytes.Equal(body, originals[input.path]) {
+			return fail(fmt.Errorf("original changed before preparation"))
+		}
+	}
+	for _, input := range neutralProviderInputs {
+		if input.kind == "retire" {
+			if err = confined.Remove(input.path); err != nil {
+				return fail(err)
+			}
+			continue
+		}
+		// Replace a generated stage member atomically; never truncate a hard-linked
+		// original or follow a swapped destination link outside the admitted root.
+		temporary := path.Join(path.Dir(input.path), ".provider-icons-"+rand.Text())
+		file, e := confined.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if e != nil {
+			return fail(e)
+		}
+		_, e = file.Write(replacements[input.path])
+		if e == nil {
+			e = file.Chmod(0644)
+		}
+		closeErr := file.Close()
+		if e == nil {
+			e = closeErr
+		}
+		if e == nil {
+			e = confined.Rename(temporary, input.path)
+		}
+		if e != nil {
+			_ = confined.Remove(temporary)
+			return fail(e)
+		}
+	}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "native-neutral-provider-icons-v1", "changedFiles": 18, "removedFiles": 16, "consoleSlots": consoleSlots, "loginSlots": loginSlots, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	body, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return fail(err)
+	}
+	if _, err = out.Write(append(body, '\n')); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// Read every selected member through the original open root; late path swaps
+// cannot redirect a subsequent read or write outside that source reservation.
+func neutralProviderRead(root *os.Root, input neutralProviderInput) ([]byte, error) {
+	parts := strings.Split(input.path, "/")
+	for i := range parts {
+		info, err := root.Lstat(path.Join(parts[:i+1]...))
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("unavailable or linked provider input")
+		}
+		if i < len(parts)-1 && !info.IsDir() {
+			return nil, fmt.Errorf("provider input parent differs")
+		}
+	}
+	file, err := root.OpenFile(input.path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || info.Mode() != input.mode || info.Size() > 1<<20 {
+		_ = file.Close()
+		return nil, fmt.Errorf("provider input mode or size differs")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	after, statErr := file.Stat()
+	closeErr := file.Close()
+	if err != nil || statErr != nil || closeErr != nil || int64(len(body)) != info.Size() || after.Mode() != info.Mode() || after.Size() != info.Size() || after.ModTime() != info.ModTime() {
+		return nil, fmt.Errorf("provider input read incomplete")
+	}
+	return body, nil
+}
+
+// neutralProviderConsumers returns the transformed consumers and their fixed
+// expected hashes, excluding retired images from the copied-asset policy.
+func neutralProviderConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralProviderInputs {
+		if input.kind != "retire" {
+			consumers = append(consumers, inputRecord{input.path, input.expected})
+		}
+	}
+	return consumers
+}
+
+// Recognize the retired native family in real output paths and generated text.
+// Repeated slash decoding covers the source compiler's escaped-string forms;
+// this is a closed-family check, not a general JavaScript or URL parser.
+func neutralProviderOutput(name string, body []byte) error {
+	lower := strings.ToLower(filepath.ToSlash(name))
+	if strings.Contains(lower, "/images/idp/") || strings.HasPrefix(lower, "images/idp/") {
+		return fmt.Errorf("retired provider image output remains")
+	}
+	switch strings.ToLower(path.Ext(name)) {
+	case ".html", ".js", ".css", ".json", ".map", ".scss", ".svg":
+		text := strings.ToLower(string(body))
+		slash := strings.NewReplacer("\\/", "/", "\\u002f", "/", "\\x2f", "/")
+		for i := 0; i < 3; i++ {
+			text = slash.Replace(text)
+		}
+		if strings.Contains(text, "images/idp/") {
+			return fmt.Errorf("retired provider image URL remains")
+		}
+	}
+	return nil
+}
+
+// Both source image directories are wholly retired. Missing parents are valid
+// in a restored tree; a linked, unreadable or nonempty family is never absence.
+func neutralProviderSourceFamilies(source string) error {
+	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp"} {
+		current := source
+		absent := false
+		for _, part := range strings.Split(family, "/") {
+			current = filepath.Join(current, part)
+			info, err := os.Lstat(current)
+			if os.IsNotExist(err) {
+				absent = true
+				break
+			}
+			if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("provider source family observation incomplete")
+			}
+		}
+		if absent {
+			continue
+		}
+		entries, err := os.ReadDir(current)
+		if err != nil || len(entries) != 0 {
+			return fmt.Errorf("retired provider source image remains")
+		}
+	}
+	return nil
 }
