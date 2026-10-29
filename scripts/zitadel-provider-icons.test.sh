@@ -40,6 +40,8 @@ while IFS= read -r path; do
  mode=$(git -C "$upstream" ls-tree "$pin" -- "$path" | awk '{print $1}')
  chmod "${mode#100}" "$scratch/original/$path"
 done <"$scratch/inputs"
+# Keep the existing native two-file entrypoint independently buildable.
+(cd "$root/scripts" && GOTOOLCHAIN=local go build -o "$scratch/native-login-font-verifier" zitadel-login-icons.go zitadel-text-fonts.go)
 (cd "$root/scripts" && GOTOOLCHAIN=local go build -o "$scratch/provider-icons" zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go)
 cp -Rp "$scratch/original" "$scratch/positive"
 printf 'unrelated source must survive\n' >"$scratch/positive/unrelated.txt"
