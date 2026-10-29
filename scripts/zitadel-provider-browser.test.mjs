@@ -131,12 +131,15 @@ for(const kind of ['mdi-picker','mdi-table','editor-oidc','editor-jwt']){
   const anchors=types.map(t=>({...visible,origin:location.origin,pathname:'/ui/console/instance/provider/'+t+'/create',innerText:fault==='missing-label'?'':t.toUpperCase(),tabIndex:0}));
   const rows=types.map(t=>({...visible,innerText:fault==='missing-label'?'':'Fixture '+t.toUpperCase(),querySelector:()=>fault==='missing-control'?null:{}}));
   const icons=types.map((t,i)=>({...visible,type:fault==='misassociated-glyph'?(t==='jwt'?'oidc':'jwt'):t,tabIndex:fault==='focusable-decoration'?0:-1,classList:{contains:c=>c===((fault==='misassociated-glyph'?t!=='jwt':t==='jwt')?'la-key':'la-arrow-right')},getAttribute:()=> 'true',closest:s=>s==='tr'?rows[i]:anchors[i]}));
+  // Native settings contains the configured-provider table as well as the chooser.
+  // Its two sibling table icons must never enter the chooser observation.
+  const tableIcons=picker?icons.map((e,i)=>({...e,tableOnly:true,closest:s=>s==='tr'?rows[i]:null})):[];
   const background={getAnimations:()=>fault==='animating-background'?[{pending:false,playState:'running'}]:[]};
   globalThis.location=new URL('http://fixture.localhost:8080'+(picker||table?'/ui/console/instance?id=idp':'/ui/console/instance/provider/'+kind.slice(7)+'/create'));
   const fonts=[{family:'Line Awesome Free',status:fault==='unloaded-font'?'error':'loaded'}];fonts.status='loaded';
   globalThis.document={readyState:'complete',fonts,body:{innerText:fault==='missing-label'?'':kind.slice(7).toUpperCase()},
-   querySelectorAll:s=>s.includes('.neutral-mdi-icon')?icons:[],querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:fault==='missing-control'?null:{}};
-  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:e.type==='jwt'?0xf084:0xf061)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(picker?36:table?28:48)+'px'};
+   querySelectorAll:s=>!s.includes('.neutral-mdi-icon')?[]:picker&&s==='cnsl-idp-settings .neutral-mdi-icon'?[...icons,...tableIcons]:icons,querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:fault==='missing-control'?null:{}};
+  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:e.type==='jwt'?0xf084:0xf061)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(e.tableOnly?28:picker?36:table?28:48)+'px'};
   const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/mdi/openid.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
   globalThis.performance={getEntriesByType:()=>[{name:resource}]};
   const result=mdiObserve(kind,'light');
@@ -160,7 +163,7 @@ for(const fault of ['none','wrong-origin','http-error','malformed-json','bad-id'
    assert.equal(options.method,'GET','MDI fixture mutated login policy');
    body={policy:{allowRegister:false,allowExternalIdp:true,idps:fault==='missing-linked-provider'?linked.slice(0,1):linked}};
    if(fault==='changed-policy'&&creates===2)body.policy.allowRegister=true;
-  }else if(path==='/admin/v1/idps/oidc'||path==='/admin/v1/idps/jwt'){
+  }else if(path==='/admin/v1/idps/generic_oidc'||path==='/admin/v1/idps/generic_jwt'){
    assert.equal(options.method,'POST');creates++;const posted=JSON.parse(options.body);
    assert.equal(posted.providerOptions.isCreationAllowed,false);assert.equal(posted.providerOptions.isLinkingAllowed,false);
    assert.equal(posted.issuer,location.origin);
