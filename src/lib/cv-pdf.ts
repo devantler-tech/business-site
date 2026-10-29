@@ -64,7 +64,7 @@ const STYLE = {
   entryTitle: { font: "sansSemibold", size: 10.2, color: COLOR.text },
   entryMeta: { font: "sansMedium", size: 8.3, color: COLOR.muted },
   period: { font: "monoMedium", size: 7.3, color: COLOR.accentOnWhite },
-  body: { font: "sans", size: 8.8, color: COLOR.text, lineGap: 1.8 },
+  body: { font: "sans", size: 8.8, color: COLOR.text, lineGap: 1.2 },
   link: { font: "mono", size: 7.3, color: COLOR.accentOnWhite },
   sideLabel: { font: "sansBold", size: 6.6, color: COLOR.accent, characterSpacing: 1.3 },
   sideValue: { font: "sans", size: 7.8, color: COLOR.sidebarText, lineGap: 1.6 },
@@ -239,7 +239,7 @@ class CvRenderer {
         if (block.bullet) this.circle(x + 3, this.y + STYLE.body.size * 0.55, 1.4, COLOR.accentOnWhite);
         this.y += this.text(block.text, block.x, this.y, block.width, block.style, block.link ? { link: block.link } : {});
       }
-      this.y += 8;
+      this.y += 6;
     });
   }
 
