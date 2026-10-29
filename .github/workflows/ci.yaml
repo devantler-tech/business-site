@@ -1162,7 +1162,8 @@ jobs:
           tag="$image:staging-$RUN_ID-$RUN_ATTEMPT"
           docker tag business-site:production-test "$tag"
           docker push "$tag"
-          ref="$(docker image inspect "$tag" --format '{{index .RepoDigests 0}}')"
+          ref="$(docker image inspect "$tag" --format '{{json .RepoDigests}}' |
+            jq -er --arg image "$image" 'map(select(startswith($image + "@"))) | unique | select(length == 1) | .[0]')"
           [[ "$ref" =~ ^ghcr.io/devantler-tech/business-site@sha256:[0-9a-f]{64}$ ]]
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Sign and verify source-bound digest and build provenance
