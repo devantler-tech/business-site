@@ -39,6 +39,7 @@ fi
 # Hydrate immutable objects through the independent archive, not another full copy.
 # A sparse working tree also proves that preparation never reads checkout bytes.
 git -C "$scratch/upstream" read-tree "$pin"
+bash "$root/scripts/zitadel-provider-icons.test.sh" "$scratch/upstream"
 mkdir "$scratch/pristine"
 git -C "$scratch/upstream" --no-replace-objects archive "$pin" | tar -x -C "$scratch/pristine"
 mkdir -p "$scratch/upstream/console/src"
@@ -111,15 +112,61 @@ test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/log
 cp "$scratch/prepared source/source/internal/api/ui/login/login.go" "$scratch/pristine/internal/api/ui/login/login.go"
 cp "$scratch/prepared source/source/go.mod" "$scratch/pristine/go.mod"
 cp "$scratch/prepared source/source/go.sum" "$scratch/pristine/go.sum"
+# Pin all eighteen independently observed neutral consumers; retain an exact
+# whole-tree comparison, not a projection of selected expected fields.
+cat >"$scratch/neutral-consumers.sha256" <<'PROVIDERS'
+2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e  console/src/app/modules/idp-table/idp-table.component.html
+41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8  console/src/app/modules/policies/idp-settings/idp-settings.component.html
+bcd033476803838515de5f25057ac4df9749f26049bf4a0c2926acb83ea01b94  console/src/app/modules/providers/provider-apple/provider-apple.component.html
+bb307b70f936d780f8584f01c4691efd042d43d95041df294f2af1f48ae94459  console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html
+380b3dca85ef437d4446987a5e22020c1a7e1bec1bc874ff7942dd0e204a1efd  console/src/app/modules/providers/provider-github-es/provider-github-es.component.html
+2eca45dc2386dc08bdd6af010b3782f3e3f9531260db70f22117aa115e976205  console/src/app/modules/providers/provider-github/provider-github.component.html
+99871b68ae002cd48b82de6ef6b7beeaa3f3f5f2dc9b0df66a398149e0929e9f  console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html
+341c4a94d2817aed886fe8268c31f890188fb8468e25d09e6e987a511305449b  console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html
+8fae34c70584f876ab9dad8608830b5f95d430310d1b33bca04e847ea492c7e8  console/src/app/modules/providers/provider-google/provider-google.component.html
+eae8329b095b5987d8340a386957fb67d5ec58488e97f221c03cbf8592d71266  console/src/app/modules/providers/provider-oauth/provider-oauth.component.html
+0b5410b7aa9b905e0f4c074e85eda06905d51cef28cf3f3ca49c6b2146a3acff  console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html
+d749528ee622c0d376afc918d4d205bf9d42b6c33243301e721a997be631d4bf  internal/api/ui/login/static/templates/login.html
+160874790c22abfd44bc977b2d978a8fbae73dc0e4adfa52917b4b3854ec123b  internal/api/ui/login/static/templates/register_option.html
+3109087ad9a64409e4e30d6eab7ea7b8f48b3c7194042d0171d1ee9f9926efb8  console/src/app/modules/idp-table/idp-table.component.scss
+8e5bf3f536e63f9e3fab90a2be0c46e7239190e2cc7ea558a0fcd5f90e0b6217  console/src/app/modules/policies/idp-settings/idp-settings.component.scss
+fc44668ff48fa9442f5b592abeac0402da17bd177b5809b8c5e1ea8675b58413  console/src/app/modules/providers/providers.scss
+a25666a0c03c21542c84ab72d228c5ce91c6e7b00a712289d44a4f720f613732  internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss
+a15f2692a597e8a8c3848d62073db1d48dce82aea66d6cabfda1d2019825a25c  internal/api/ui/login/static/resources/themes/scss/styles/vars.scss
+PROVIDERS
+(cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
+while read -r _hash path; do
+  cp "$scratch/prepared source/source/$path" "$scratch/pristine/$path"
+done <"$scratch/neutral-consumers.sha256"
+for path in \
+  console/src/assets/images/idp/apple-dark.svg\
+  console/src/assets/images/idp/apple.svg\
+  console/src/assets/images/idp/github-dark.svg\
+  console/src/assets/images/idp/github.svg\
+  console/src/assets/images/idp/gitlab.svg\
+  console/src/assets/images/idp/google.png\
+  console/src/assets/images/idp/ms.svg\
+  console/src/assets/images/idp/oauth.svg\
+  console/src/assets/images/idp/saml-icon.svg\
+  internal/api/ui/login/static/resources/images/idp/apple-dark.svg\
+  internal/api/ui/login/static/resources/images/idp/apple.svg\
+  internal/api/ui/login/static/resources/images/idp/github-white.png\
+  internal/api/ui/login/static/resources/images/idp/github.png\
+  internal/api/ui/login/static/resources/images/idp/gitlab.png\
+  internal/api/ui/login/static/resources/images/idp/google.png\
+  internal/api/ui/login/static/resources/images/idp/ms.svg; do
+  test ! -e "$scratch/prepared source/source/$path"
+  rm -- "$scratch/pristine/$path"
+done
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
-  (.removedFiles | length) == 4 and
+  (.removedFiles | length) == 20 and .providerProfile == "native-neutral-provider-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
   .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
-  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum"]
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
 # Never overwrite a completed output or a pre-existing directory/symlink.
@@ -291,6 +338,12 @@ for mask in 0133 0077; do
     fi
     (cd "$destination/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$scratch/actual-executables"
     git -C "$scratch/upstream" ls-tree -r "$pin" | awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' | sort >"$scratch/expected-executables"
+    for removed in console/src/assets/images/idp/apple-dark.svg console/src/assets/images/idp/apple.svg \
+      internal/api/ui/login/static/resources/images/idp/apple-dark.svg internal/api/ui/login/static/resources/images/idp/apple.svg; do
+      grep -Fxq "$removed" "$scratch/expected-executables"
+      grep -Fxv "$removed" "$scratch/expected-executables" >"$scratch/remaining-executables"
+      mv "$scratch/remaining-executables" "$scratch/expected-executables"
+    done
     if ! cmp "$scratch/expected-executables" "$scratch/actual-executables"; then
       echo "Preparation changed executable paths under umask $mask." >&2
       review_failures=$((review_failures + 1))

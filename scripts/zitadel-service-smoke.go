@@ -614,12 +614,12 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 	if err != nil {
 		return err
 	}
-	diagnostic, err := run(3*time.Minute, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
+	diagnostic, err := run(4*time.Minute, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
 		"setpriv", "--reuid="+strconv.Itoa(os.Getuid()), "--regid="+strconv.Itoa(os.Getgid()), "--clear-groups", "--no-new-privs",
 		"env", "-i", "PATH="+os.Getenv("PATH"), "HOME="+os.Getenv("HOME"), "LANG=C", "LC_ALL=C",
 		exe, "--browser-worker", output, namespace, imageHash(source))
 	if err != nil {
-		if stage := regexp.MustCompile(`browser stage=(admission|driver|session|login|password|console|cleanup|receipt) category=(observation|session-not-created|timeout|no-such-element|invalid-argument|javascript-error|webdriver|transport-timeout|transport|incomplete-response|invalid-envelope|invalid-result|invalid-session|missing-browser-version)`).Find(diagnostic); stage != nil {
+		if stage := regexp.MustCompile(`browser stage=(admission|driver|session|login|password|console|providers|cleanup|receipt) category=(observation|session-not-created|timeout|no-such-element|invalid-argument|javascript-error|webdriver|transport-timeout|transport|incomplete-response|invalid-envelope|invalid-result|invalid-session|missing-browser-version)`).Find(diagnostic); stage != nil {
 			return fmt.Errorf("native browser journey failed: %s", stage)
 		}
 		return fmt.Errorf("native browser journey failed")
@@ -655,13 +655,14 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 				SHA256 string `json:"sha256"`
 			} `json:"screenshot"`
 		} `json:"pages"`
-		Cleanup    string `json:"cleanup"`
-		Portal     bool   `json:"portalFederation"`
-		TLS        bool   `json:"productionTLS"`
-		Invitation bool   `json:"invitationProof"`
-		MFA        bool   `json:"mfaProof"`
-		Admission  string `json:"imageAdmission"`
-		License    string `json:"licenseClosure"`
+		ProviderIcons []browserProviderCase `json:"providerIcons"`
+		Cleanup       string                `json:"cleanup"`
+		Portal        bool                  `json:"portalFederation"`
+		TLS           bool                  `json:"productionTLS"`
+		Invitation    bool                  `json:"invitationProof"`
+		MFA           bool                  `json:"mfaProof"`
+		Admission     string                `json:"imageAdmission"`
+		License       string                `json:"licenseClosure"`
 	}
 	if err = imageDecode(raw, &receipt); err != nil || receipt.SchemaVersion != 1 || receipt.Profile != "fictional-native-browser" || receipt.Source != imageHash(source) || receipt.Executable != imageHash(binary) || receipt.Version == "" || receipt.Namespace != namespace || receipt.SandboxDisabled || len(receipt.Pages) != 3 || receipt.Cleanup != "complete" || receipt.Portal || receipt.TLS || receipt.Invitation || receipt.MFA || receipt.Admission != "unknown" || receipt.License != "unknown" {
 		return fmt.Errorf("browser observation binding differs")
@@ -675,6 +676,9 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		if e != nil || len(png) != page.Screenshot.Bytes || imageHash(png) != page.Screenshot.SHA256 {
 			return fmt.Errorf("browser screenshot binding differs")
 		}
+	}
+	if err = browserProviderReceipt(output, receipt.ProviderIcons); err != nil {
+		return err
 	}
 	bound, err := json.MarshalIndent(map[string]any{"schemaVersion": 1, "upstreamCommit": imagePin, "localImageId": image, "browserReceiptSha256": imageHash(raw), "browserSourceSha256": imageHash(source), "cleanup": "complete", "imageAdmission": "unknown", "licenseClosure": "unknown"}, "", "  ")
 	if err != nil {

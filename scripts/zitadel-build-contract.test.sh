@@ -144,6 +144,9 @@ check() {
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    any($source.steps[]; .name == "Verify native provider presentation controls" and
+      .run == "node scripts/zitadel-provider-browser.test.mjs" and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Verify local identity image packaging and execution controls" and
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go" and
@@ -260,6 +263,8 @@ check() {
       (.run | contains("sha256sum scripts/zitadel-browser.go")) and
       (.run | contains(".browserReceiptSha256 == $receipt")) and
       (.run | contains(".browserSandboxDisabled == false")) and
+      (.run | contains("(.providerIcons | map(.kind+\"/\"+.theme))")) and
+      (.run | contains("all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard)")) and
       (.run | contains(".mfaProof == false")) and
       (.run | contains(".optionalMFADeferred | type == \"boolean\"")) and
       (.run | contains(".portalFederation == false")) and
@@ -282,7 +287,7 @@ check() {
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
         sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "verifier-tool-source.json", "selected-verifier-bootstrap/manifest.json", "verifier-bootstrap-capture.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "go-input-restoration.json", "go-input-readback.json", "go-input-native/manifest.json", "selected-pnpm-sources/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
-          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","verifier-reconstruction.json","verifier-tool-source.json","verifier-bootstrap-restored.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
+          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png","provider-*.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","verifier-reconstruction.json","verifier-tool-source.json","verifier-bootstrap-restored.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
     any(.jobs.validation.steps[]; (.with["job-results"] // "" | contains("needs.build-zitadel-linux.result"))) and
@@ -582,6 +587,9 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify actual identity browser evidence"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual identity browser evidence" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual identity browser evidence" then .["continue-on-error"]=true else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(select(.name != "Verify native provider presentation controls"))' \
+  '.jobs["test-zitadel-source"].steps |= map(if .name == "Verify native provider presentation controls" then .if="false" else . end)' \
+  '.jobs["test-zitadel-source"].steps |= map(if .name == "Verify native provider presentation controls" then .["continue-on-error"]=true else . end)' \
   '.jobs.validation.needs |= map(select(. != "build-zitadel-linux"))' \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"

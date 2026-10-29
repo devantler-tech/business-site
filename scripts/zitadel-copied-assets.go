@@ -44,13 +44,14 @@ type copiedCatalogue struct {
 	Notices        []inputRecord   `json:"notices"`
 }
 type copiedPolicy struct {
-	CatalogueHash   string
-	Assets, Outputs int
-	TextNotices     string
-	TextPolicy      textPolicy
+	CatalogueHash     string
+	Assets, Outputs   int
+	TextNotices       string
+	TextPolicy        textPolicy
+	ProviderConsumers []inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers()}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -252,6 +253,8 @@ func copiedCapture(build, notices, recipe string, read textReader, policy copied
 	return inv, state.Raw, nil
 }
 
+// copiedObserve authenticates the frozen source, notice and package inputs before
+// joining their selected assets to the generated output. Incomplete input fails.
 func copiedObserve(build, notices, recipe string, read textReader, policy copiedPolicy) (copiedState, error) {
 	state := copiedState{SchemaVersion: 1, ImageAdmission: "unknown", LicenseClosure: "unknown"}
 	fail := func(e error) (copiedState, error) { return copiedState{}, e }
@@ -279,6 +282,20 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	lock, e := get(build, "prepared/source/pnpm-lock.yaml", "prepared/source/pnpm-lock.yaml", 4<<20)
 	if e != nil || !textHex(cat.LockSHA256, 64) || digest(lock) != cat.LockSHA256 {
 		return fail(fmt.Errorf("selected original package lock differs"))
+	}
+	if len(policy.ProviderConsumers) == 0 || len(policy.ProviderConsumers) > 18 {
+		return fail(fmt.Errorf("neutral consumer policy incomplete"))
+	}
+	seenConsumers := map[string]bool{}
+	for _, consumer := range policy.ProviderConsumers {
+		if !textPath(consumer.Path) || !textHex(consumer.SHA256, 64) || seenConsumers[consumer.Path] {
+			return fail(fmt.Errorf("neutral consumer policy differs"))
+		}
+		seenConsumers[consumer.Path] = true
+		body, err := get(build, "prepared/source/"+consumer.Path, "neutral-source/"+consumer.Path, 1<<20)
+		if err != nil || digest(body) != consumer.SHA256 {
+			return fail(fmt.Errorf("neutral provider consumer changed"))
+		}
 	}
 	var raw bytes.Buffer
 	fmt.Fprintln(&raw, "Frozen Console copied-asset attribution. This inventory is not full distribution or image admission.")
@@ -424,7 +441,7 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(expected) != policy.Outputs {
 		return fail(fmt.Errorf("selected copied-output count differs"))
 	}
-	if e = copiedFilesystemSet(filepath.Join(build, "prepared/source"), expected, sourceNames); e != nil {
+	if e = copiedFilesystemSet(filepath.Join(build, "prepared/source"), expected, sourceNames, func(name string) ([]byte, error) { return get(build, "prepared/source/"+name, "output/"+name, 64<<20) }); e != nil {
 		return fail(e)
 	}
 	compiler, e := get(build, "packages.jsonl", "packages.jsonl", 64<<20)
@@ -460,7 +477,12 @@ func copiedSelected(name string) bool {
 	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
 }
 
-func copiedFilesystemSet(source string, expected, sourceNames map[string]bool) error {
+// copiedFilesystemSet rejects linked, special and unexpected copied-asset members
+// and any retired provider artwork in the actual source and generated outputs.
+func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, observe func(string) ([]byte, error)) error {
+	if err := neutralProviderSourceFamilies(source); err != nil {
+		return err
+	}
 	for _, prefix := range []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"} {
 		e := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, e error) error {
 			if e != nil {
@@ -482,6 +504,19 @@ func copiedFilesystemSet(source string, expected, sourceNames map[string]bool) e
 					return fmt.Errorf("unexpected copied source: %s", relative)
 				}
 			} else {
+				if err := neutralProviderOutput(relative, nil); err != nil {
+					return err
+				}
+				switch strings.ToLower(filepath.Ext(relative)) {
+				case ".html", ".js", ".css", ".json", ".map", ".scss", ".svg":
+					body, err := observe(relative)
+					if err != nil {
+						return err
+					}
+					if err = neutralProviderOutput(relative, body); err != nil {
+						return err
+					}
+				}
 				member := strings.TrimPrefix(relative, prefix+"/")
 				if copiedSelected(member) && !expected[relative] {
 					return fmt.Errorf("unexpected copied output: %s", relative)
