@@ -1001,7 +1001,7 @@ async function sdkBootstrapFixture(t, binBody, sharedBin = false) {
   const archive = path.join(f.directory, "alpha.tgz"); fs.writeFileSync(archive, f.archive);
   const npm = (args) => execFileSync("npm", ["--cache", cache, "--userconfig", userconfig, "--globalconfig", globalconfig,
     "--offline", "--ignore-scripts", "--audit=false", "--fund=false", ...args], {
-      env: { PATH: process.env.PATH, HOME: f.directory }, encoding: "utf8", timeout: 10000,
+      cwd: sdk, env: { PATH: process.env.PATH, HOME: f.directory }, encoding: "utf8", timeout: 10000,
     });
   npm(["cache", "add", archive]);
   if (other) {
@@ -1018,6 +1018,23 @@ async function sdkBootstrapFixture(t, binBody, sharedBin = false) {
     recipeSha256: recipe, output: capsule, scratch, policy, acquire: async p => p.name === "beta" ? other.archive : f.archive, npmCLI });
   return { ...f, api, sdk, capsule, captured, source, tools, recipe, policy, npmCLI };
 }
+
+test("SDK bootstrap fixtures ignore the caller's npm engine policy", (t) => {
+  const caller = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sdk-caller-policy-")));
+  t.after(() => fs.rmSync(caller, { recursive: true }));
+  fs.writeFileSync(path.join(caller, "package.json"), JSON.stringify({
+    name: "fictional-hostile-caller", private: true,
+    devEngines: { packageManager: { name: "npm", version: ">=999.0.0", onFail: "error" } },
+  }) + "\n");
+  const result = spawnSync(process.execPath, ["--test",
+    "--test-name-pattern=^SDK bootstrap binds original archives to the actual complete native installation$",
+    fileURLToPath(import.meta.url)], {
+    cwd: caller, env: { PATH: process.env.PATH, HOME: caller },
+    encoding: "utf8", timeout: 30000, maxBuffer: 1024 * 1024,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(fs.readdirSync(caller), ["package.json"]);
+});
 
 test("SDK bootstrap binds original archives to the actual complete native installation", async (t) => {
   const f = await sdkBootstrapFixture(t);
