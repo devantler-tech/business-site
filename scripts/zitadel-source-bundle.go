@@ -77,6 +77,8 @@ func sourceBuildRecordInputs() []sourceRecordInput {
 		{true, "third_party/zitadel-copied-assets/original-line-awesome.min.css", "third_party/zitadel-copied-assets/original-line-awesome.min.css"},
 		{true, "third_party/zitadel-text-fonts/catalogue.json", "third_party/zitadel-text-fonts/catalogue.json"},
 		{true, "third_party/zitadel-text-fonts/Apache-2.0.txt", "third_party/zitadel-text-fonts/Apache-2.0.txt"},
+		{true, "third_party/zitadel-console-notices/catalogue.json", "third_party/zitadel-console-notices/catalogue.json"},
+		{true, "third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat", "third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat"},
 		{true, "tools/zitadel-pnpm-source/index.mjs", "recipes/zitadel-pnpm-source/index.mjs"},
 		{true, "tools/zitadel-pnpm-source/package.json", "recipes/zitadel-pnpm-source/package.json"},
 		{true, "tools/zitadel-pnpm-source/package-lock.json", "recipes/zitadel-pnpm-source/package-lock.json"},

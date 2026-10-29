@@ -588,22 +588,25 @@ immediately before installation. It retains the preparation receipt, original an
 serialized API configuration, seven-input hash record, existing third-party
 catalogues and terms, and a dated modification record. It also retains every one
 of the 37 approved authored paths and three scoped terms documents listed in
-`third_party/zitadel-build-tools/scope.json`. Twelve existing aliases are reused;
-the missing 25 authored paths and three terms documents bring the closed inventory
-to 56 records, within the existing 64-record bound. That date belongs to the frozen
+`third_party/zitadel-build-tools/scope.json`. Twelve existing aliases are reused.
+The Console supplement catalogue and historical public-suffix original are also
+retained at their literal paths. The closed inventory contains 58 records within
+the unchanged 64-record bound. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those fifty-six records separate from the upstream source. The completed build
+keeps those fifty-eight records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
-recipe, after a full post-build readback. Default invocation omits this capture.
+recipe, after a full post-build readback. The two notice originals remain inert
+records; retaining them does not assemble the complete 41-input notice offer or
+establish release admission. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
 diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all fifty-six literal records and places only the four fixed build inputs at
+It retains all fifty-eight literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
@@ -809,7 +812,7 @@ The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
 as a literal source/build record. The native pnpm adapter and both SDK manifests
-are three of the fifty-six literal records. The text-font entrypoint, its
+are three of the fifty-eight literal records. The text-font entrypoint, its
 companion, frozen catalogue and Apache text are four further records; the
 original Lato OFL is already retained in the complete prepared source.
 
