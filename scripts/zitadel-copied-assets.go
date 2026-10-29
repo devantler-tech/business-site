@@ -49,9 +49,10 @@ type copiedPolicy struct {
 	TextNotices       string
 	TextPolicy        textPolicy
 	ProviderConsumers []inputRecord
+	SMTPConsumers     []inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers()}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers()}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -286,8 +287,12 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(policy.ProviderConsumers) == 0 || len(policy.ProviderConsumers) > 18 {
 		return fail(fmt.Errorf("neutral consumer policy incomplete"))
 	}
+	if len(policy.SMTPConsumers) == 0 || len(policy.SMTPConsumers) > 5 {
+		return fail(fmt.Errorf("neutral SMTP consumer policy incomplete"))
+	}
 	seenConsumers := map[string]bool{}
-	for _, consumer := range policy.ProviderConsumers {
+	consumers := append(append([]inputRecord{}, policy.ProviderConsumers...), policy.SMTPConsumers...)
+	for _, consumer := range consumers {
 		if !textPath(consumer.Path) || !textHex(consumer.SHA256, 64) || seenConsumers[consumer.Path] {
 			return fail(fmt.Errorf("neutral consumer policy differs"))
 		}
@@ -531,6 +536,8 @@ func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, o
 	return nil
 }
 
+// copiedCompilerSet rejects failed observations and retired images throughout
+// the compiler stream, while comparing catalogue membership only for Console.
 func copiedCompilerSet(data []byte, build string, expected map[string]bool) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	seen := false
@@ -555,6 +562,13 @@ func copiedCompilerSet(data []byte, build string, expected map[string]bool) erro
 		}
 		if e = json.Unmarshal(raw, &p); e != nil || p.Incomplete || len(p.Error) > 0 && string(p.Error) != "null" || len(p.DepsErrors) > 0 {
 			return fmt.Errorf("failed compiler observation")
+		}
+		// Retired graphics must be absent from every compiled package, before
+		// selecting the Console package or its retained catalogue subset.
+		for _, name := range p.EmbedFiles {
+			if err := neutralProviderOutput(name, nil); err != nil {
+				return err
+			}
 		}
 		if p.ImportPath != "github.com/zitadel/zitadel/internal/api/ui/console" {
 			continue

@@ -269,7 +269,9 @@ jobs:
 
   test-zitadel-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Both complete refusal suites reached five minutes on the hosted runner;
+    # keep a bounded allowance for setup and finalization as well.
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -572,6 +574,8 @@ jobs:
             (.pages | map(.kind)) == ["login","password","console"] and
             (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
             all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.smtpIcons | map(.kind+"/"+.theme)) == ["picker/light","amazon/light","brevo/light","google/light","mailchimp/light","mailgun/light","mailjet/light","outlook/light","postmark/light","sendgrid/light","picker/dark","amazon/dark","brevo/dark","google/dark","mailchimp/dark","mailgun/dark","mailjet/dark","outlook/dark","postmark/dark","sendgrid/dark"] and
+            all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -665,6 +669,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/password.png
             ${{ runner.temp }}/zitadel-image/console.png
             ${{ runner.temp }}/zitadel-image/provider-*.png
+            ${{ runner.temp }}/zitadel-image/smtp-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json

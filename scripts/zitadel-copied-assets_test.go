@@ -48,7 +48,14 @@ func TestCopiedTranslationsRejectUndeclaredSourceOutputAndCompilerMembers(t *tes
 	}
 }
 
+// Append an undeclared translation to the native-shaped Console compiler record.
 func appendTranslationCompilerMember(t *testing.T, build string) {
+	appendCopiedCompilerMember(t, build, "static/assets/i18n/zz.json")
+}
+
+// Mutate only the Console record in a complete fixture stream, preserving other
+// records so the test exercises catalogue filtering rather than malformed JSON.
+func appendCopiedCompilerMember(t *testing.T, build, member string) {
 	t.Helper()
 	decoder := json.NewDecoder(bytes.NewReader(mustTextRead(t, build, "packages.jsonl")))
 	var stream bytes.Buffer
@@ -60,7 +67,7 @@ func appendTranslationCompilerMember(t *testing.T, build string) {
 			t.Fatal(err)
 		}
 		if record["ImportPath"] == "github.com/zitadel/zitadel/internal/api/ui/console" {
-			record["EmbedFiles"] = append(record["EmbedFiles"].([]any), "static/assets/i18n/zz.json")
+			record["EmbedFiles"] = append(record["EmbedFiles"].([]any), member)
 		}
 		if err := json.NewEncoder(&stream).Encode(record); err != nil {
 			t.Fatal(err)
@@ -68,6 +75,85 @@ func appendTranslationCompilerMember(t *testing.T, build string) {
 	}
 	if err := os.WriteFile(filepath.Join(build, "packages.jsonl"), stream.Bytes(), 0600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Every retired preset path must fail even when it is outside the retained
+// catalogue, where a subset-only compiler comparison would overlook it.
+func TestCopiedSMTPGraphicsCannotReturnInCompleteCompilerObservation(t *testing.T) {
+	for _, name := range []string{"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"} {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			// These paths are outside the copied catalogue. The complete compiler
+			// observation must reject them before selecting its catalogue subset.
+			appendCopiedCompilerMember(t, build, "static/assets/images/smtp/"+name)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("retired SMTP compiler member was hidden by catalogue filtering")
+			}
+		})
+	}
+}
+
+// Retired paths in an unrelated package must be checked before the Console
+// package filter, which must not hide another package's retired resources.
+func TestCopiedCompilerStreamRejectsRetiredImagesOutsideConsole(t *testing.T) {
+	paths := []string{
+		"static/assets/images/smtp/aws-ses.svg", "static/assets/images/smtp/brevo.svg",
+		"static/assets/images/smtp/google.png", "static/assets/images/smtp/mailchimp.svg",
+		"static/assets/images/smtp/mailgun.svg", "static/assets/images/smtp/mailjet.svg",
+		"static/assets/images/smtp/outlook.svg", "static/assets/images/smtp/postmark.png",
+		"static/assets/images/smtp/sendgrid.png", "static/assets/images/idp/google.png",
+		"resources/images/idp/apple.svg",
+	}
+	for _, position := range []string{"before", "after"} {
+		for _, member := range paths {
+			t.Run(position+"/"+member, func(t *testing.T) {
+				build, notices, recipe, policy := copiedFixture(t)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+					t.Fatalf("valid baseline: %v", err)
+				}
+				stream := mustTextRead(t, build, "packages.jsonl")
+				record, err := json.Marshal(map[string]any{
+					"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+					"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+					"EmbedPatterns": []string{"static"}, "EmbedFiles": []string{member},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				combined := append(append(record, '\n'), stream...)
+				if position == "after" {
+					combined = append(stream, append(record, '\n')...)
+				}
+				put(t, filepath.Join(build, "packages.jsonl"), combined)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+					t.Fatal("retired image in another compiler package was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Unrelated packages may embed ordinary assets with matching relative names;
+// they must not expand or otherwise change the Console catalogue comparison.
+func TestCopiedCompilerCatalogueComparisonRemainsConsoleScoped(t *testing.T) {
+	build, notices, recipe, policy := copiedFixture(t)
+	stream := mustTextRead(t, build, "packages.jsonl")
+	record, err := json.Marshal(map[string]any{
+		"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+		"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+		"EmbedPatterns": []string{"static"},
+		"EmbedFiles":    []string{"static/assets/icons/line-awesome/css/example.css", "static/application-info.txt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(build, "packages.jsonl"), append(stream, append(record, '\n')...))
+	if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+		t.Fatalf("unrelated compiler package changed the Console catalogue: %v", err)
 	}
 }
 
@@ -279,7 +365,8 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	neutralPath := "console/src/fixture-provider.html"
 	neutralBody := []byte(`<i class="neutral-provider-icon" aria-hidden="true"></i>`)
 	put(b, "prepared/source/"+neutralPath, neutralBody)
-	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}}
+	put(b, "prepared/source/console/src/fixture-smtp.html", []byte("fixed SMTP consumer"))
+	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}, SMTPConsumers: []inputRecord{{"console/src/fixture-smtp.html", digest([]byte("fixed SMTP consumer"))}}}
 }
 
 func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
@@ -510,6 +597,8 @@ func TestCopiedCompletedCLIRequiresExactSavedInventoryAndStaysReadOnly(t *testin
 	}
 }
 
+// Source and both generated copies independently refuse retired images and
+// literal or escaped references; absence in one view cannot clear another.
 func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testing.T) {
 	cases := map[string]string{
 		"console/src/assets/images/idp/google.png":                    "retired source",
@@ -521,6 +610,13 @@ func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testi
 		"console/dist/console/provider.js":                            `const icon="./assets/images/idp/google.png";`,
 		"internal/api/ui/console/static/provider.css":                 `.icon{background:url(./assets/images/idp/apple.svg)}`,
 		"console/dist/console/escaped.js":                             `const icon="assets\/images\/idp\/google.png";`,
+		"console/src/assets/images/smtp/google.png":                   "retired SMTP source",
+		"console/src/assets/images/smtp/extra.webp":                   "additional SMTP source",
+		"console/dist/console/assets/images/smtp/google.png":          "retired SMTP output",
+		"internal/api/ui/console/static/assets/images/smtp/extra.svg": "additional SMTP embedded output",
+		"console/dist/console/smtp.js":                                `const icon="./assets/images/smtp/google.png";`,
+		"internal/api/ui/console/static/smtp.css":                     `.icon{background:url(./assets/images/smtp/outlook.svg)}`,
+		"console/dist/console/smtp-escaped.js":                        `const icon="assets\/images\/smtp\/google.png";`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -531,6 +627,30 @@ func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testi
 			put(t, filepath.Join(build, "prepared/source", name), []byte(body))
 			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
 				t.Fatal("retired provider image or URL omitted from output observation")
+			}
+		})
+	}
+}
+
+// Missing or changed native form consumers must fail their frozen bindings,
+// even when all selected artwork outputs still appear complete.
+func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
+	for _, attack := range []string{"missing", "changed"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			name := filepath.Join(build, "prepared/source/console/src/fixture-smtp.html")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatal(err)
+			}
+			if attack == "missing" {
+				if err := os.Remove(name); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(name, []byte("unbound SMTP defaults"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined SMTP consumer accepted")
 			}
 		})
 	}

@@ -73,6 +73,30 @@ checks the actual Login archive and registration template. These observations
 are bound across compilation; they do not enable social federation or admit the
 remaining branding/distribution under #384/#308.
 
+The separate `native-neutral-smtp-icons-v1` profile uses the existing Line Awesome
+envelope in the SMTP chooser and all nine preset editors. Fourteen original inputs
+are fixed independently: five HTML/SCSS/settings consumers and nine retired images.
+The chooser retains its ten labelled native links, including generic SMTP. All
+connection defaults remain unchanged, including Amazon's native route key and
+Outlook's OAuth settings. The decorative slots remain 36 and 48 pixels.
+The complete source, both generated Console copies and every compiler-selected
+embedded path reject retired SMTP images; this check precedes catalogue filtering.
+The copied-asset catalogue still has 1,858 originals and 3,716 outputs, with a
+separate five-consumer SMTP binding alongside the unchanged eighteen IdP consumers.
+
+The native fictional-browser worker requires twenty additional SMTP observations:
+the chooser and nine unsaved editors in light and dark themes. It checks native
+Enter navigation, rendered envelope fonts, labels, defaults, confined resources
+and source-bound screenshots. It neither saves a configuration nor sends mail.
+Both Console observation scripts also require the frozen fixture's computed page
+background to match the requested theme with no pending or running transition.
+The normal readiness poll waits for the native animation; it does not alter CSS
+or disable animations to obtain a screenshot.
+These cases share the existing 120-second presentation phase; the 100-second
+operator journey and four-minute wrapper are unchanged. Unit observations are
+not native rendering proof. A real native build/browser run must pass before
+readiness; no source transform grants image or portal admission.
+
 The `machine-id-no-jsonpath-v1` preparation profile removes the only linked use of
 `github.com/jarcoal/jpath`. The exact selected module archive did not establish an
 applicable distribution grant. This is an unresolved rights question, not a claim

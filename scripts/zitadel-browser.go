@@ -29,6 +29,7 @@ type browserPage struct {
 	Password        bool     `json:"password"`
 	Console         bool     `json:"console"`
 	ProviderConsole bool     `json:"providerConsole"`
+	SMTPConsole     bool     `json:"smtpConsole"`
 	Presented       bool     `json:"consolePresented"`
 	OptionalMFA     bool     `json:"optionalMFA"`
 	MFAAction       string   `json:"mfaAction"`
@@ -59,6 +60,9 @@ func browserAdmit(page browserPage, kind string) bool {
 	}
 	if kind == "console" {
 		return strings.HasPrefix(u.Path, "/ui/console/") && page.Console && page.Presented && len(strings.TrimSpace(page.Text)) > 40
+	}
+	if kind == "smtp-console" {
+		return page.SMTPConsole && (u.Path == "/ui/console/instance" && u.Query().Get("id") == "smtpprovider" || regexp.MustCompile(`^/ui/console/instance/smtpprovider/(amazon|brevo|google|mailchimp|mailgun|mailjet|outlook|postmark|sendgrid)$`).MatchString(u.Path)) && len(strings.TrimSpace(page.Text)) > 40
 	}
 	if kind == "provider-console" {
 		settings := u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
@@ -96,6 +100,7 @@ return {url:location.href, ready:document.readyState, text:document.body.innerTe
   username:shown('#loginName'), password:shown('#password'),
   console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
   providerConsole:!!(root && shown('cnsl-header') && shown('cnsl-instance,cnsl-provider-google,cnsl-provider-github')),
+  smtpConsole:!!(root && shown('cnsl-header') && shown('cnsl-notification-smtp-provider,cnsl-smtp-provider')),
   consolePresented:settled && navigationVisible,
   optionalMFA:!!skip, mfaAction:skip?.form?.action || '',
   font, fontsReady:document.fonts.status === 'loaded',
@@ -115,6 +120,7 @@ type browserDriver struct {
 	providerStage                                           string
 	providerSetupPhase, providerRequest, providerHTTPStatus int
 	lastProvider                                            browserProviderPage
+	smtpCases                                               []browserProviderCase
 }
 
 // browserHTTPClient bounds driver requests beyond the configured page-load
@@ -507,7 +513,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 		return err
 	}
 	phase = "receipt"
-	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err
@@ -627,6 +633,13 @@ const done=arguments[arguments.length-1];
 const browserProviderObservation = `
 const [kind,theme]=arguments;
 const login=kind==='login'||kind==='registration';
+// The native page background transitions after the root class changes. Read
+// the completed default-fixture color rather than capturing the opposite theme.
+const consoleThemeReady=()=>{
+ const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+ return !!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&
+  back.getAnimations().every(a=>!a.pending&&a.playState!=='running');
+};
 const selector=login?'a.lgn-idp .logo':kind==='picker'?'cnsl-idp-settings a.item .neutral-provider-icon':kind==='table'?'cnsl-idp-table .neutral-provider-icon':'cnsl-provider-google .neutral-provider-icon';
 const icons=[...document.querySelectorAll(selector)];
 const shown=e=>{const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth;};
@@ -665,7 +678,7 @@ if(kind==='picker'){
 }
 const resources=performance.getEntriesByType('resource').map(e=>e.name);
 return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,targets:targetOK,keyboard,
- themeReady:login?document.documentElement.classList.contains('lgn-'+theme+'-theme'):!!document.querySelector('cnsl-root.'+theme+'-theme'),
+ themeReady:login?document.documentElement.classList.contains('lgn-'+theme+'-theme'):consoleThemeReady(),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/idp\//i.test(u.pathname)})};`
 
 const browserRegistrationURL = `
@@ -813,6 +826,11 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 			return nil, err
 		}
 	}
+	var smtpErr error
+	d.smtpCases, smtpErr = d.smtpPresentation(output)
+	if smtpErr != nil {
+		return nil, smtpErr
+	}
 	// Clear only this worker's disposable profile, after all authenticated Console
 	// observations. No real user's session, provider account or persistent state exists.
 	if err := d.call("POST", "/execute/sync", map[string]any{"script": `sessionStorage.clear(); localStorage.clear(); return true;`, "args": []any{}}, nil); err != nil {
@@ -906,16 +924,8 @@ func browserProviderReceipt(output string, cases []browserProviderCase) error {
 		if c.Screenshot.Path != name {
 			return fmt.Errorf("provider screenshot path differs")
 		}
-		png, err := imageRead(output, name, 4<<20)
-		if err != nil || len(png) != c.Screenshot.Bytes || imageHash(png) != c.Screenshot.SHA256 {
-			return fmt.Errorf("provider screenshot binding differs")
-		}
-		config, decodeErr := imagepng.DecodeConfig(bytes.NewReader(png))
-		if decodeErr != nil || config.Width < 320 || config.Height < 200 || config.Width > 4096 || config.Height > 2160 {
-			return fmt.Errorf("provider screenshot dimensions differ")
-		}
-		if _, err = imagepng.Decode(bytes.NewReader(png)); err != nil {
-			return fmt.Errorf("provider screenshot incomplete")
+		if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -992,6 +1002,206 @@ func (d *browserDriver) providerTableRoutes(ids []string) error {
 			case <-time.After(200 * time.Millisecond):
 			}
 		}
+	}
+	return nil
+}
+
+// The SMTP phase observes only native, unsaved forms. It never creates a mail
+// configuration, sends a test message or connects to an SMTP provider.
+var browserSMTPKinds = []string{"picker", "amazon", "brevo", "google", "mailchimp", "mailgun", "mailjet", "outlook", "postmark", "sendgrid"}
+
+// browserSMTPRoute admits only the chooser and nine fixed native preset routes;
+// observation data cannot select another destination.
+func browserSMTPRoute(kind string) string {
+	if kind == "picker" {
+		return "/ui/console/instance?id=smtpprovider"
+	}
+	for _, name := range browserSMTPKinds[1:] {
+		if kind == name {
+			return "/ui/console/instance/smtpprovider/" + name
+		}
+	}
+	return ""
+}
+
+// browserSMTPAdmit requires the exact local route, theme and complete rendering,
+// default-value, resource and keyboard observations for one closed SMTP case.
+func browserSMTPAdmit(p browserProviderPage, kind, theme string) bool {
+	route := browserSMTPRoute(kind)
+	count := 1
+	if kind == "picker" {
+		count = 9
+	}
+	return route != "" && p.URL == "http://"+serviceAuthority+route && p.Kind == kind && p.Theme == theme &&
+		(theme == "light" || theme == "dark") && p.Count == count && p.Glyphs && p.Labels && p.Targets && p.ThemeReady && p.Resources && p.Keyboard
+}
+
+const browserSMTPObservation = `
+const [kind,theme]=arguments;
+const picker=kind==='picker';
+// Match the frozen fixture's settled native backdrop, without changing styles
+// or disabling its transition. The ordinary observation poll waits for it.
+const consoleThemeReady=()=>{
+ const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+ return !!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&
+  back.getAnimations().every(a=>!a.pending&&a.playState!=='running');
+};
+const names=['amazon','brevo','google','mailchimp','mailgun','mailjet','outlook','postmark','sendgrid'];
+const labels=['Amazon Ses','Brevo','Google','Mailchimp','Mailgun','Mailjet','Microsoft Exchange Online','Postmark','Sendgrid'];
+const descriptions={amazon:'amazon SES',google:'google',mailgun:'mailgun',mailjet:'mailjet',postmark:'postmark',sendgrid:'sendgrid',mailchimp:'mailchimp',brevo:'brevo',outlook:'Microsoft Exchange Online'};
+const hosts={amazon:'email-smtp.us-east-2.amazonaws.com:587',google:'smtp.gmail.com:587',mailgun:'smtp.mailgun.org:465',mailjet:'in-v3.mailjet.com:465',postmark:'smtp.postmarkapp.com:587',sendgrid:'smtp.sendgrid.net:465',mailchimp:'smtp.mandrillapp.com:465',brevo:'smtp-relay.sendinblue.com:465',outlook:'smtp.office365.com:587'};
+const shown=e=>{if(!e)return false;const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth};
+const icons=[...document.querySelectorAll(picker?'cnsl-notification-smtp-provider .neutral-smtp-icon':'cnsl-smtp-provider .neutral-smtp-icon')];
+const plain=s=>s.replaceAll('"','').replaceAll("'",'').trim();
+const glyphs=icons.length>0&&icons.every(e=>{
+ const style=getComputedStyle(e),before=getComputedStyle(e,'::before');
+ return shown(e)&&plain(before.content).codePointAt(0)===0xf0e0&&plain(before.fontFamily)==='Line Awesome Free'&&parseFloat(style.fontSize)===(picker?36:48)&&
+  e.getAttribute('aria-hidden')==='true'&&[...document.fonts].some(f=>f.status==='loaded'&&plain(f.family)==='Line Awesome Free');
+});
+const anchors=picker?[...document.querySelectorAll('cnsl-notification-smtp-provider a.item')]:[];
+let labelOK=false,targetOK=false;
+if(picker){
+ labelOK=anchors.length===10&&names.every((name,i)=>anchors.some(a=>a.pathname==='/ui/console/instance/smtpprovider/'+name&&a.innerText.trim()===labels[i]))&&anchors.some(a=>a.pathname==='/ui/console/instance/smtpprovider/generic'&&a.innerText.trim()==='Generic SMTP');
+ targetOK=anchors.length===10&&anchors.every(a=>a.origin===location.origin&&['generic',...names].some(name=>a.pathname==='/ui/console/instance/smtpprovider/'+name))&&names.every(name=>icons.filter(e=>e.closest('a.item')?.pathname==='/ui/console/instance/smtpprovider/'+name).length===1);
+}else{
+ const input=name=>document.querySelector('cnsl-smtp-provider input[name="'+name+'"]');
+ const auth=document.querySelector('cnsl-smtp-provider mat-checkbox.smtp-checkbox:nth-of-type(2) input');
+ labelOK=names.includes(kind)&&input('description')?.value===descriptions[kind]&&document.body.innerText.includes(labels[names.indexOf(kind)]);
+ targetOK=names.includes(kind)&&input('hostAndPort')?.value===hosts[kind]&&input('smtp-user')?.value===(kind==='sendgrid'?'apikey':'')&&
+  !!auth&&auth.disabled===true&&auth.checked===(kind==='outlook')&&(kind==='outlook'?!!input('token-endpoint')&&input('scopes')?.value==='https://outlook.office.com/SMTP.Send'&&!input('smtp-password'):!!input('smtp-password')&&!input('token-endpoint'));
+}
+const resources=performance.getEntriesByType('resource').map(e=>e.name);
+return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,targets:targetOK,
+ keyboard:icons.every(e=>e.tabIndex<0)&&(!picker||anchors.every(a=>a.tabIndex===0&&shown(a))),
+ themeReady:consoleThemeReady(),
+ resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/(?:idp|smtp)\//i.test(u.pathname)})};`
+
+// smtpPage observes the actual visible native form until its complete case is
+// ready, including the settled background, within the shared presentation bound.
+func (d *browserDriver) smtpPage(kind, theme string) (browserProviderPage, error) {
+	for {
+		var visible bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const e=document.querySelector(arguments[0]==='picker'?'cnsl-notification-smtp-provider .new-smtp-wrapper':'cnsl-smtp-provider .wizard-header');if(!e)return false;e.scrollIntoView({behavior:'instant',block:'center'});return true;`, "args": []string{kind}}, &visible); err != nil {
+			return browserProviderPage{}, err
+		}
+		var page browserProviderPage
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserSMTPObservation, "args": []string{kind, theme}}, &page); err != nil {
+			return page, err
+		}
+		d.lastProvider = page
+		if visible && browserSMTPAdmit(page, kind, theme) {
+			return page, nil
+		}
+		select {
+		case <-d.ctx.Done():
+			return page, fmt.Errorf("SMTP presentation incomplete")
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// smtpPresentation follows native preset links with Enter and returns to the
+// chooser between unsaved forms. No mail configuration is created or submitted.
+func (d *browserDriver) smtpPresentation(output string) ([]browserProviderCase, error) {
+	cases := []browserProviderCase{}
+	for _, theme := range []string{"light", "dark"} {
+		d.providerStage = "smtp-picker-" + theme
+		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + browserSMTPRoute("picker")}, nil); err != nil {
+			return nil, err
+		}
+		if _, err := d.waitPage("smtp-console"); err != nil {
+			return nil, err
+		}
+		selector := `cnsl-theme-setting button.theme-setting-button:has(svg.sun)`
+		if theme == "dark" {
+			selector = `cnsl-theme-setting button.theme-setting-button:has(svg.moon)`
+		}
+		var active bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `return document.querySelector(arguments[0])?.classList.contains('active')===true;`, "args": []string{selector}}, &active); err != nil {
+			return nil, err
+		}
+		if !active {
+			button, err := d.element(selector)
+			if err != nil {
+				return nil, err
+			}
+			if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+				return nil, err
+			}
+		}
+		for _, kind := range browserSMTPKinds {
+			d.providerStage = "smtp-" + kind + "-" + theme
+			if kind != "picker" {
+				link, err := d.element(`cnsl-notification-smtp-provider a[href="` + browserSMTPRoute(kind) + `"]`)
+				if err != nil {
+					return nil, err
+				}
+				if err = d.call("POST", link+"/value", map[string]string{"text": "\ue007"}, nil); err != nil {
+					return nil, err
+				}
+			}
+			page, err := d.smtpPage(kind, theme)
+			if err != nil {
+				return nil, err
+			}
+			screen, err := d.capture(output, "smtp-"+kind+"-"+theme, browserPage{})
+			if err != nil {
+				return nil, err
+			}
+			cases = append(cases, browserProviderCase{kind, theme, page.Count, page.Glyphs, page.Labels, page.Targets, page.ThemeReady, page.Resources, page.Keyboard, screen.Screenshot})
+			if kind != "picker" {
+				if err = d.call("POST", "/back", map[string]any{}, nil); err != nil {
+					return nil, err
+				}
+				if _, err = d.smtpPage("picker", theme); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return cases, nil
+}
+
+// browserSMTPReceipt independently checks the ordered twenty-case set and every
+// retained screenshot; an earlier IdP observation cannot stand in for SMTP proof.
+func browserSMTPReceipt(output string, cases []browserProviderCase) error {
+	if len(cases) != 20 {
+		return fmt.Errorf("SMTP browser case set incomplete")
+	}
+	index := 0
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range browserSMTPKinds {
+			c := cases[index]
+			index++
+			p := browserProviderPage{"http://" + serviceAuthority + browserSMTPRoute(kind), c.Kind, c.Theme, c.Count, c.Glyphs, c.Labels, c.Targets, c.ThemeReady, c.Resources, c.Keyboard}
+			if c.Kind != kind || c.Theme != theme || !browserSMTPAdmit(p, kind, theme) {
+				return fmt.Errorf("SMTP browser case differs")
+			}
+			name := "smtp-" + kind + "-" + theme + ".png"
+			if c.Screenshot.Path != name {
+				return fmt.Errorf("SMTP screenshot path differs")
+			}
+			if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// browserPresentationScreenshot joins retained PNG bytes, dimensions and complete
+// decoding to its receipt rather than trusting a worker-supplied filename.
+func browserPresentationScreenshot(output, name string, screen browserScreen) error {
+	png, err := imageRead(output, name, 4<<20)
+	if err != nil || len(png) != screen.Bytes || imageHash(png) != screen.SHA256 {
+		return fmt.Errorf("presentation screenshot binding differs")
+	}
+	config, err := imagepng.DecodeConfig(bytes.NewReader(png))
+	if err != nil || config.Width < 320 || config.Height < 200 || config.Width > 4096 || config.Height > 2160 {
+		return fmt.Errorf("presentation screenshot dimensions differ")
+	}
+	if _, err = imagepng.Decode(bytes.NewReader(png)); err != nil {
+		return fmt.Errorf("presentation screenshot incomplete")
 	}
 	return nil
 }

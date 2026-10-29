@@ -1204,6 +1204,8 @@ func sourceNoticeOriginalsForTest(t *testing.T) map[string][]byte {
 	return bodies
 }
 
+// Prepared-source capture must bind the frozen profile and literal build inputs;
+// a complete-looking tree cannot substitute for those independent records.
 func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 	noticeOriginals := sourceNoticeOriginalsForTest(t)
 	kinds := []string{"valid", "changed-source", "changed-recipe", "changed-inputs", "missing-console-helper", "missing-pnpm-helper", "wrong-original-api", "wrong-serial-api", "linked-record", "existing-output", "missing font collector", "missing statik decoder", "missing font catalogue", "missing Apache text", "linked font collector", "linked statik decoder", "linked font catalogue", "linked Apache text", "missing copied collector", "linked copied collector", "missing copied catalogue", "linked copied catalogue", "missing original CSS", "linked original CSS", "missing flags grant", "linked flags grant", "missing source license", "linked source license", "missing source scope", "linked source scope", "missing contribution context", "linked contribution context"}
@@ -1375,7 +1377,7 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 						ModifiedOn    string   `json:"modifiedOn"`
 						Modifications []string `json:"modifications"`
 					}
-					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-28" || len(record.Modifications) != 7 || record.Modifications[3] != "Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit." || record.Modifications[4] != "Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections." || record.Modifications[5] != "Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests." || record.Modifications[6] != "Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths." {
+					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-29" || len(record.Modifications) != 8 || record.Modifications[3] != "Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit." || record.Modifications[4] != "Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections." || record.Modifications[5] != "Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests." || record.Modifications[6] != "Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths." || record.Modifications[7] != "Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults." {
 						t.Fatalf("modification date does not describe the frozen changes: %s: %v", raw, readErr)
 					}
 				}

@@ -433,3 +433,82 @@ func TestBrowserProviderConsoleHasItsOwnNativeFrame(t *testing.T) {
 		}
 	}
 }
+
+// Synthetic receipt controls must reject incomplete cases and altered PNGs;
+// these fixtures are deliberately separate from actual native rendering proof.
+func TestBrowserSMTPReceiptRequiresAllThemesDefaultsAndScreens(t *testing.T) {
+	output := t.TempDir()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
+		t.Fatal(err)
+	}
+	raw := encoded.Bytes()
+	cases := []browserProviderCase{}
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range browserSMTPKinds {
+			count := 1
+			if kind == "picker" {
+				count = 9
+			}
+			name := "smtp-" + kind + "-" + theme + ".png"
+			if err := os.WriteFile(filepath.Join(output, name), raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			cases = append(cases, browserProviderCase{kind, theme, count, true, true, true, true, true, true, browserScreen{name, len(raw), imageHash(raw)}})
+		}
+	}
+	if err := browserSMTPReceipt(output, cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{0, 1, 7, 9, 10, 17, 19} {
+		for name, mutate := range map[string]func(*browserProviderCase){
+			"glyph": func(c *browserProviderCase) { c.Glyphs = false }, "label": func(c *browserProviderCase) { c.Labels = false },
+			"defaults": func(c *browserProviderCase) { c.Targets = false }, "theme": func(c *browserProviderCase) { c.ThemeReady = false },
+			"resource": func(c *browserProviderCase) { c.Resources = false }, "keyboard": func(c *browserProviderCase) { c.Keyboard = false },
+			"count": func(c *browserProviderCase) { c.Count++ }, "kind": func(c *browserProviderCase) { c.Kind = "generic" },
+			"path": func(c *browserProviderCase) { c.Screenshot.Path = "../outside.png" }, "hash": func(c *browserProviderCase) { c.Screenshot.SHA256 = strings.Repeat("0", 64) },
+		} {
+			t.Run(fmt.Sprint(index)+"/"+name, func(t *testing.T) {
+				bad := append([]browserProviderCase{}, cases...)
+				mutate(&bad[index])
+				if browserSMTPReceipt(output, bad) == nil {
+					t.Fatal("incomplete SMTP evidence admitted")
+				}
+			})
+		}
+	}
+	for _, bad := range [][]browserProviderCase{nil, cases[:19], append(append([]browserProviderCase{}, cases...), cases[0])} {
+		if browserSMTPReceipt(output, bad) == nil {
+			t.Fatal("incomplete or extra SMTP case set admitted")
+		}
+	}
+	duplicate := append([]browserProviderCase{}, cases...)
+	duplicate[1] = duplicate[0]
+	if browserSMTPReceipt(output, duplicate) == nil {
+		t.Fatal("duplicate SMTP evidence admitted")
+	}
+	if err := os.WriteFile(filepath.Join(output, cases[19].Screenshot.Path), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if browserSMTPReceipt(output, cases) == nil {
+		t.Fatal("changed native screenshot admitted")
+	}
+}
+
+// A native SMTP settings frame must not satisfy the unrelated home or IdP frame
+// predicates, even though they share the authenticated Console shell.
+func TestBrowserSMTPFrameIsSeparateFromProviderAndHomeFrames(t *testing.T) {
+	for _, kind := range browserSMTPKinds {
+		p := browserPage{URL: "http://" + serviceAuthority + browserSMTPRoute(kind), Ready: "complete", Text: strings.Repeat("SMTP settings ", 6), Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://" + serviceAuthority + "/font.woff2"}, SMTPConsole: true}
+		if !browserAdmit(p, "smtp-console") {
+			t.Fatal("complete SMTP frame refused: " + kind)
+		}
+		if browserAdmit(p, "provider-console") || browserAdmit(p, "console") {
+			t.Fatal("SMTP frame admitted as another native journey")
+		}
+		p.SMTPConsole = false
+		if browserAdmit(p, "smtp-console") {
+			t.Fatal("absent native SMTP frame admitted")
+		}
+	}
+}
