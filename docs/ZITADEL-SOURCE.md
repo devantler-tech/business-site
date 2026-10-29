@@ -1108,8 +1108,9 @@ within the worker deadline. The receipt records that choice and keeps `mfaProof`
 Production MFA requirements are unchanged. An incomplete journey may retain only
 fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
 form values. Requests have a 30-second budget covering the 20-second navigation
-limit; readiness polls use one second. The complete worker remains bounded to
-100 seconds.
+limit; readiness polls use one second. The operator journey has a 100-second
+bound. The separate neutral-provider presentation phase has a 120-second bound,
+and the outer worker wrapper allows four minutes.
 Driver session closure, process exit and private profile cleanup are mandatory.
 The outer Go harness rechecks the runner source, screenshot bytes and receipt,
 then binds the browser result to the inspected local image and upstream source.

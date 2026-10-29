@@ -1024,6 +1024,8 @@ var neutralProviderInputs = []neutralProviderInput{
 
 func init() { iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons }
 
+// runNeutralProviderIcons validates the complete frozen decoration profile before
+// replacing its eighteen consumers and retiring sixteen images in a confined export.
 func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
@@ -1226,6 +1228,8 @@ func neutralProviderRead(root *os.Root, input neutralProviderInput) ([]byte, err
 	return body, nil
 }
 
+// neutralProviderConsumers returns the transformed consumers and their fixed
+// expected hashes, excluding retired images from the copied-asset policy.
 func neutralProviderConsumers() []inputRecord {
 	var consumers []inputRecord
 	for _, input := range neutralProviderInputs {

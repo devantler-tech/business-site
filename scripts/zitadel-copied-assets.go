@@ -253,6 +253,8 @@ func copiedCapture(build, notices, recipe string, read textReader, policy copied
 	return inv, state.Raw, nil
 }
 
+// copiedObserve authenticates the frozen source, notice and package inputs before
+// joining their selected assets to the generated output. Incomplete input fails.
 func copiedObserve(build, notices, recipe string, read textReader, policy copiedPolicy) (copiedState, error) {
 	state := copiedState{SchemaVersion: 1, ImageAdmission: "unknown", LicenseClosure: "unknown"}
 	fail := func(e error) (copiedState, error) { return copiedState{}, e }
@@ -475,6 +477,8 @@ func copiedSelected(name string) bool {
 	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
 }
 
+// copiedFilesystemSet rejects linked, special and unexpected copied-asset members
+// and any retired provider artwork in the actual source and generated outputs.
 func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, observe func(string) ([]byte, error)) error {
 	if err := neutralProviderSourceFamilies(source); err != nil {
 		return err

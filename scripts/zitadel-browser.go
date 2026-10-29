@@ -542,6 +542,8 @@ type browserProviderCase struct {
 	Screenshot browserScreen `json:"screenshot"`
 }
 
+// browserProviderAdmit requires complete provider observations on the fixed local
+// route for each case, with its expected theme, icon count and native controls.
 func browserProviderAdmit(p browserProviderPage, kind, theme string) bool {
 	u, err := url.Parse(p.URL)
 	if err != nil || u.Scheme != "http" || u.Host != serviceAuthority || u.User != nil || u.Opaque != "" || p.Kind != kind || p.Theme != theme || (theme != "light" && theme != "dark") || !p.Glyphs || !p.Labels || !p.Targets || !p.ThemeReady || !p.Resources || !p.Keyboard {
@@ -670,6 +672,8 @@ const browserRegistrationURL = `
 const id=document.querySelector('input[name="authRequestID"]')?.value;
 return id&&/^[A-Za-z0-9_-]{1,128}$/.test(id)?location.origin+'/ui/login/register/option?authRequestID='+encodeURIComponent(id):'';`
 
+// providerPage observes native controls within the provider phase's deadline,
+// returning only after the full case passes admission or observation fails.
 func (d *browserDriver) providerPage(kind, theme string) (browserProviderPage, error) {
 	for {
 		// Theme buttons are at the footer. Move only the native viewport back to
