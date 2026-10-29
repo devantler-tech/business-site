@@ -56,9 +56,9 @@ export interface Cv {
 }
 
 export const cv: Cv = {
-  updated: "2026-10-23",
+  updated: "2026-10-29",
   name: "Nikolai Emil Damm",
-  title: "Developer Experience Engineer",
+  title: "Senior Platform, AI and DevEx Engineer",
   location: "Funen, Denmark",
   website: { label: "devantler.tech", url: "https://devantler.tech" },
   github: { label: "github.com/devantler", url: "https://github.com/devantler" },
@@ -67,16 +67,23 @@ export const cv: Cv = {
     url: "https://www.linkedin.com/in/nikolai-emil-damm-14a786150/",
   },
   profile:
-    "I am a Developer Experience Engineer based in Denmark with an MSc in Software Engineering. I build open-source developer tools, operate Kubernetes platforms, and care deeply about making engineers more effective. My focus is on CNCF technologies, GitOps, and reducing friction in the software delivery lifecycle.",
+    "I am a Senior Platform, AI and DevEx Engineer based in Denmark with an MSc in Software Engineering. I build open-source developer tools, operate Kubernetes platforms, and care deeply about making engineers more effective. My focus is on CNCF technologies, GitOps, and reducing friction in the software delivery lifecycle.",
 
   experience: [
     {
-      title: "Developer Experience Engineer",
-      organisation: "TV2",
+      title: "Founder & CEO",
+      organisation: "Devantler Tech",
+      location: "Funen, Denmark",
+      period: "From Nov 2026",
+      summary: "Building and hosting websites, web applications and web services.",
+    },
+    {
+      title: "Senior Platform, AI and DevEx Engineer",
+      organisation: "TV 2 Denmark",
       location: "Odense",
       period: "Jun 2025 — Present",
       summary:
-        "I improve the developer experience for TV2's product teams — working closely with them to find where they get stuck, and with other enabling teams to keep our tools aligned with the wider organization.",
+        "I improve the developer experience for TV 2 Denmark's product teams — working closely with them to find where they get stuck, and with other enabling teams to keep our tools aligned with the wider organization.",
       highlights: [
         "In May 2026 the team was renamed from Developer Tooling to Development Platform, as the remit grew past internal tooling to cover running and securing software too.",
       ],
