@@ -1043,6 +1043,19 @@ test("SDK bootstrap observes native npm bin normalization without changing origi
   assert.equal(manifest.packages[0].integrity, sri(f.archive));
 });
 
+for (const mode of [0o666, 0o755]) {
+  test(`SDK capture refuses nonnative hidden lock mode ${mode.toString(8)}`, async (t) => {
+    const f = await sdkBootstrapFixture(t);
+    fs.chmodSync(path.join(f.sdk, "node_modules/.package-lock.json"), mode);
+    const output = path.join(f.directory, "unsafe-lock-capture");
+    await assert.rejects(f.api.captureSDKBootstrap({ sdkRoot: f.sdk,
+      sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe,
+      output, scratch: path.join(f.directory, "unsafe-lock-work"), policy: f.policy,
+      acquire: async () => f.archive, npmCLI: f.npmCLI }));
+    assert.equal(fs.existsSync(path.join(output, "manifest.json")), false);
+  });
+}
+
 test("SDK bootstrap binds npm's actual choice when original packages share a command name", async (t) => {
   const f = await sdkBootstrapFixture(t, undefined, true);
   assert.equal(f.captured.packages, 2);

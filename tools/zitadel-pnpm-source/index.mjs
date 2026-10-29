@@ -1036,7 +1036,10 @@ function sdkInstallation(sdk) {
           fail("unsafe SDK operational link");
         links.push({ path: relative, target });
       } else {
-        const body = readRegular(full, packageLimit);
+        // This generated file has no archive counterpart; bind npm's native
+        // umask-022 metadata mode before accepting it into the sealed snapshot.
+        const expectedMode = relative === "node_modules/.package-lock.json" ? 0o644 : undefined;
+        const body = readRegular(full, packageLimit, expectedMode);
         total += body.length;
         if (total > 128 * 1024 * 1024 || files.length >= 50000) fail("SDK installation exceeds bounds");
         files.push({ path: relative, bytes: body.length, mode: info.mode & 0o777, sha256: sha256(body) });
