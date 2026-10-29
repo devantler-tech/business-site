@@ -22,22 +22,23 @@ import (
 )
 
 type browserPage struct {
-	URL           string   `json:"url"`
-	Ready         string   `json:"ready"`
-	Text          string   `json:"text"`
-	Username      bool     `json:"username"`
-	Password      bool     `json:"password"`
-	Console       bool     `json:"console"`
-	Presented     bool     `json:"consolePresented"`
-	OptionalMFA   bool     `json:"optionalMFA"`
-	MFAAction     string   `json:"mfaAction"`
-	Font          string   `json:"font"`
-	FontsReady    bool     `json:"fontsReady"`
-	FaceLoaded    bool     `json:"selectedFaceLoaded"`
-	SecureContext bool     `json:"secureContext"`
-	WebCrypto     bool     `json:"webCrypto"`
-	FailedFonts   []string `json:"failedFonts"`
-	Resources     []string `json:"resources"`
+	URL             string   `json:"url"`
+	Ready           string   `json:"ready"`
+	Text            string   `json:"text"`
+	Username        bool     `json:"username"`
+	Password        bool     `json:"password"`
+	Console         bool     `json:"console"`
+	ProviderConsole bool     `json:"providerConsole"`
+	Presented       bool     `json:"consolePresented"`
+	OptionalMFA     bool     `json:"optionalMFA"`
+	MFAAction       string   `json:"mfaAction"`
+	Font            string   `json:"font"`
+	FontsReady      bool     `json:"fontsReady"`
+	FaceLoaded      bool     `json:"selectedFaceLoaded"`
+	SecureContext   bool     `json:"secureContext"`
+	WebCrypto       bool     `json:"webCrypto"`
+	FailedFonts     []string `json:"failedFonts"`
+	Resources       []string `json:"resources"`
 }
 
 // browserAdmit requires one complete native-page observation, including its
@@ -58,6 +59,11 @@ func browserAdmit(page browserPage, kind string) bool {
 	}
 	if kind == "console" {
 		return strings.HasPrefix(u.Path, "/ui/console/") && page.Console && page.Presented && len(strings.TrimSpace(page.Text)) > 40
+	}
+	if kind == "provider-console" {
+		settings := u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
+		editor := regexp.MustCompile(`^/ui/console/instance/provider/(google/create|(google|github)/[0-9]{1,30})$`).MatchString(u.Path)
+		return page.ProviderConsole && (settings || editor) && len(strings.TrimSpace(page.Text)) > 40
 	}
 	if !strings.HasPrefix(u.Path, "/ui/login/") {
 		return false
@@ -89,6 +95,7 @@ return {url:location.href, ready:document.readyState, text:document.body.innerTe
   secureContext:window.isSecureContext, webCrypto:typeof crypto.subtle?.digest === 'function',
   username:shown('#loginName'), password:shown('#password'),
   console:!!(root && root.querySelector('cnsl-header') && root.querySelector('cnsl-nav')),
+  providerConsole:!!(root && shown('cnsl-header') && shown('cnsl-instance,cnsl-provider-google,cnsl-provider-github')),
   consolePresented:settled && navigationVisible,
   optionalMFA:!!skip, mfaAction:skip?.form?.action || '',
   font, fontsReady:document.fonts.status === 'loaded',
@@ -620,7 +627,7 @@ const [kind,theme]=arguments;
 const login=kind==='login'||kind==='registration';
 const selector=login?'a.lgn-idp .logo':kind==='picker'?'cnsl-idp-settings a.item .neutral-provider-icon':kind==='table'?'cnsl-idp-table .neutral-provider-icon':'cnsl-provider-google .neutral-provider-icon';
 const icons=[...document.querySelectorAll(selector)];
-const shown=e=>e.getClientRects().length>0;
+const shown=e=>{const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth;};
 const routes=['google','azure-ad','github','github-es','gitlab','gitlab-self-hosted','apple','oauth','saml'];
 const labels=['Google','Microsoft','GitHub','GitHub Enterprise Server','GitLab','GitLab Self Hosted','Apple','Generic OAuth','SAML'];
 const plain=s=>s.replaceAll('"','').replaceAll("'",'').trim();
@@ -661,12 +668,18 @@ return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,ta
 
 func (d *browserDriver) providerPage(kind, theme string) (browserProviderPage, error) {
 	for {
+		// Theme buttons are at the footer. Move only the native viewport back to
+		// the observed controls; never manufacture DOM, styles, focus or events.
+		var visibleTarget bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const selectors={picker:'cnsl-idp-settings .new-idp-wrapper',table:'cnsl-idp-table','editor-google':'cnsl-provider-google .neutral-provider-icon',login:'.lgn-idp-providers',registration:'.lgn-register-options'};const e=document.querySelector(selectors[arguments[0]]);if(!e)return false;e.scrollIntoView({behavior:'instant',block:'center'});return true;`, "args": []string{kind}}, &visibleTarget); err != nil {
+			return browserProviderPage{}, err
+		}
 		var p browserProviderPage
 		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserProviderObservation, "args": []string{kind, theme}}, &p); err != nil {
 			return p, err
 		}
 		d.lastProvider = p
-		if browserProviderAdmit(p, kind, theme) {
+		if visibleTarget && browserProviderAdmit(p, kind, theme) {
 			return p, nil
 		}
 		select {
@@ -751,7 +764,7 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/instance?id=idp"}, nil); err != nil {
 			return nil, err
 		}
-		if _, err := d.waitPage("console"); err != nil {
+		if _, err := d.waitPage("provider-console"); err != nil {
 			return nil, err
 		}
 		var active bool
@@ -785,7 +798,7 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 		if err = d.call("POST", link+"/value", map[string]string{"text": "\ue007"}, nil); err != nil {
 			return nil, err
 		}
-		if _, err = d.waitPage("console"); err != nil {
+		if _, err = d.waitPage("provider-console"); err != nil {
 			return nil, err
 		}
 		if err = capture("editor-google", theme); err != nil {
@@ -952,7 +965,7 @@ func (d *browserDriver) providerTableRoutes(ids []string) error {
 		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/instance?id=idp"}, nil); err != nil {
 			return err
 		}
-		if _, err := d.waitPage("console"); err != nil {
+		if _, err := d.waitPage("provider-console"); err != nil {
 			return err
 		}
 		// Re-read actual table rows before selecting the second one. The parent phase

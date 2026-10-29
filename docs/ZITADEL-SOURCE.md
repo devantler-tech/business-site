@@ -1130,6 +1130,11 @@ URL, response body or real account data in its receipt. Native Tab reaches both
 Login/registration links; Enter activates the Google chooser route. Every case
 requires loaded glyphs, neutral geometry, labels, native targets, theme and confined
 resources, with ten bound PNGs in addition to the original three pages. These
-checks cover two actual table variants and one actual editor; the other variants
+settings and editor observations require their own rendered native Console frame;
+they do not reuse the home screen's navigation-bar requirement. The original
+operator home observation retains that requirement. After native theme-button
+interaction, the worker scrolls the native viewport to the observed controls and
+requires their glyphs and links to fit inside it; it injects no DOM or styles.
+These checks cover two actual table variants and one actual editor; the other variants
 remain bound by their exact transformed source hashes. This remains presentation
 evidence, not completed federation, invitations, MFA or portal activation.

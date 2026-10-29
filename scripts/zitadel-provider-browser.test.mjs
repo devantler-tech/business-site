@@ -13,6 +13,23 @@ for(const resource of ['http://fixture.localhost:8080/ui/login/resources/images/
 }
 globalThis.performance={getEntriesByType:()=>[{name:'http://fixture.localhost:8080/ui/login/resources/fonts/lgn-icons.woff'}]};
 assert.equal(observe('login','light').resources,true,'ordinary local resource refused');
+// Execute the same page observation on the native settings-frame shape: it has
+// a header and settings component, but intentionally has no home-navigation bar.
+const frameObservation=script('browserObservation');
+const visible={getClientRects:()=>[{}]};
+globalThis.window={isSecureContext:true};
+globalThis.getComputedStyle=()=>({fontFamily:'Roboto, sans-serif'});
+const fonts=[{family:'Roboto',status:'loaded'}];fonts.status='loaded';
+for(const mode of ['native-settings','missing-header','missing-frame']){
+ const root={querySelector:selector=>selector==='cnsl-header'&&mode!=='missing-header'?visible:null};
+ globalThis.document={body:{innerText:'Instance Settings Identity Providers Fixture Google Fixture GitHub'},fonts,readyState:'complete',
+  querySelector:selector=>selector==='cnsl-root'?root:null,
+  querySelectorAll:selector=>selector==='cnsl-header'&&mode!=='missing-header'||selector==='cnsl-instance,cnsl-provider-google,cnsl-provider-github'&&mode!=='missing-frame'?[visible]:[]};
+ const page=frameObservation();
+ assert.equal(page.providerConsole,mode==='native-settings',mode+' gave wrong provider-frame observation');
+ assert.equal(page.console,false,'settings frame satisfied home console requirement');
+ assert.equal(page.consolePresented,false,'settings frame satisfied home navigation requirement');
+}
 const setup=script('browserProviderSetup');
 for(const mode of ['positive','bad-duration','bad-boolean','http-error','malformed-body','missing-provider','wrong-policy','wrong-name','duplicate-id','wrong-origin']){
  const ids=['123456','789012'];const bools=['allowUsernamePassword','allowRegister','allowExternalIdp','forceMfa','hidePasswordReset','ignoreUnknownUsernames','allowDomainDiscovery','disableLoginWithEmail','disableLoginWithPhone','forceMfaLocalOnly'];

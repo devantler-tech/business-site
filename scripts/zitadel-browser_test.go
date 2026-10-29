@@ -399,3 +399,37 @@ func TestBrowserCleanupSurvivesExpiredObservation(t *testing.T) {
 type browserRoundTrip func(*http.Request) (*http.Response, error)
 
 func (f browserRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// The actual settings frame has no home-navigation bar. It still needs native
+// authenticated structure, loaded fonts/cryptography and confined resources.
+func TestBrowserProviderConsoleHasItsOwnNativeFrame(t *testing.T) {
+	p := browserPage{URL: "http://fixture.localhost:8080/ui/console/instance?id=idp", Ready: "complete", Text: "Instance Settings Identity Providers Fixture Google Fixture GitHub", Font: "Roboto, sans-serif", FontsReady: true, FaceLoaded: true, SecureContext: true, WebCrypto: true, FailedFonts: []string{}, Resources: []string{"http://fixture.localhost:8080/styles.css"}, ProviderConsole: true}
+	if browserAdmit(p, "console") {
+		t.Fatal("settings frame cleared the home navigation gate")
+	}
+	if !browserAdmit(p, "provider-console") {
+		t.Fatal("native settings frame rejected by home-only navigation requirement")
+	}
+	for name, change := range map[string]func(*browserPage){
+		"missing native frame": func(p *browserPage) { p.ProviderConsole = false },
+		"other route":          func(p *browserPage) { p.URL = "http://fixture.localhost:8080/ui/console/users" },
+		"similar prefix":       func(p *browserPage) { p.URL = "http://fixture.localhost:8080/ui/console/instance-untrusted" },
+		"external":             func(p *browserPage) { p.URL = "https://outside.invalid/ui/console/instance" },
+		"unloaded font":        func(p *browserPage) { p.FaceLoaded = false },
+		"external resource":    func(p *browserPage) { p.Resources = []string{"https://outside.invalid/font.woff"} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := p
+			change(&bad)
+			if browserAdmit(bad, "provider-console") {
+				t.Fatal("incomplete native provider frame admitted")
+			}
+		})
+	}
+	for _, route := range []string{"google/create", "google/123456", "github/789012"} {
+		p.URL = "http://fixture.localhost:8080/ui/console/instance/provider/" + route
+		if !browserAdmit(p, "provider-console") {
+			t.Fatal("native editor frame refused", route)
+		}
+	}
+}
