@@ -109,11 +109,11 @@ across the overlapping provider, SMTP and MDI profiles.
 The native worker additionally requires eight MDI cases: chooser, two fictional
 configured table rows and both unsaved protocol editors in each theme. OIDC/JWT
 fixture configurations are never linked to the Login policy; the original exact
-two-provider Login/registration proof remains separate. The new cases share the
+two-provider Login/registration proof remains separate. These cases share the
 existing 120-second presentation phase and four-minute wrapper. Their native
 rendering and screenshot bindings must pass; synthetic unit inputs are separate.
-These source changes were prepared on 2026-10-29; source/image admission and
-remaining graphics families stay open under #384/#387/#308.
+Source/image admission and remaining graphics families stay open under
+#384/#387/#308.
 
 The native fictional-browser worker requires twenty additional SMTP observations:
 the chooser and nine unsaved editors in light and dark themes. It checks native
