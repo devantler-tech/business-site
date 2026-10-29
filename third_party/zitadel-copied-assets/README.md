@@ -36,4 +36,23 @@ authenticate each Git blob and byte identity against the actual native source
 manifest, then require both generated hashes and the exact compiler selection.
 The collector rejects missing/extra/linked sources and outputs, substituted
 context, malformed UTF-8 or JSON, duplicate keys and uncompiled translations.
-Other graphics/provider marks and whole-distribution admission remain under #308.
+The separate MDI extension in the collector retains 25 original native SVGs and
+50 byte-identical generated copies without regenerating this catalogue. Its
+closed data includes each native SHA-256/Git blob, immutable primary URL/hash,
+author and complete original terms. Twenty-four use Pictogrammers MaterialDesign
+SVG commit `9e04201d4557e729822fb57f62a316c3dea1d4a8`; retain the full
+`Pictogrammers-LICENSE`, whose icon section selects Apache-2.0 and preserves
+its respective-license caveat. The Mail SVG uses Google's Material Symbols commit
+`6d7ca43bd6e6668531a00fcaca06d921b63dd716` and the complete original
+`Google-Mail-LICENSE` Apache text. The runtime notice preserves authors and
+native-wrapper modification identities, rather than claiming wrappers equal
+primary bytes. Complete native bodies remain in the source offer. These terms
+cover the selected original graphics only; no trademark endorsement is implied.
+
+The OpenID/JWT SVGs are not in that retained set. The preparer replaces only their
+decorative uses with existing admitted glyphs and removes the two originals and
+registrations. Both generated trees and every compiler record reject them,
+including escaped references outside the selected Console package. This does
+not disable OIDC/JWT, change the LDAP control, or add a new font or own-code grant.
+The MDI extension was prepared on 2026-10-29. Remaining official-branding,
+technology/utility families and whole-distribution admission stay under #384/#308.

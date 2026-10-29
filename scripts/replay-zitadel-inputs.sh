@@ -78,7 +78,7 @@ notice_root="$output/notice-originals-bootstrap"
 go run "$root/scripts/zitadel-source-bundle.go" --restore-notice-originals "$output/roundtrip/source/selected-notice-originals" "$snapshot" "$source_sha" "$notice_root" >"$output/notice-originals-bootstrap.json"
 go run "$root/scripts/zitadel-source-bundle.go" --verify-notice-originals "$notice_root" "$snapshot" "$source_sha" >"$output/notice-originals-bootstrap-readback.json"
 cmp "$output/notice-originals-bootstrap.json" "$output/notice-originals-bootstrap-readback.json"
-jq -e --slurpfile original "$original" '.files==41 and .originalInputsReadbackPassed==true and .==$original[0].sourceSnapshot.noticeOriginals' "$output/notice-originals-bootstrap.json" >/dev/null
+jq -e --slurpfile original "$original" '.files==43 and .originalInputsReadbackPassed==true and .==$original[0].sourceSnapshot.noticeOriginals' "$output/notice-originals-bootstrap.json" >/dev/null
 go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$snapshot" "$source_sha" "$root" "$notice_root" >/dev/null
 go run "$root/scripts/zitadel-source-bundle.go" --restore-tools "$snapshot" "$source_sha" "$output/verifier-tool-source" >"$output/verifier-tool-source.json"
 jq -e --slurpfile original "$original" '.==$original[0].sourceSnapshot.toolSource' "$output/verifier-tool-source.json" >/dev/null
@@ -143,7 +143,7 @@ jq -e --slurpfile original "$original" '.schemaVersion==1 and .profile=="identit
 jq -e --slurpfile original "$original" '
  .schemaVersion==1 and .retainedInputsRestored==true and .recipeSha256==$original[0].recipeSha256 and
  .sourceInput.manifestSha256==$original[0].sourceSnapshot.manifestSha256 and
- .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.files==41 and .noticeOriginals.originalInputsReadbackPassed==true and
+ .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.files==43 and .noticeOriginals.originalInputsReadbackPassed==true and
  .preparation==$original[0].preparation and .upstreamCommit==$original[0].upstreamCommit and
  .tools==$original[0].tools and .platform=="linux/amd64" and .profile=="api-login-v1-console" and
  .consoleDownloads.manifestSha256==$original[0].consoleDownloads.manifestSha256 and

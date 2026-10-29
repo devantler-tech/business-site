@@ -246,7 +246,7 @@ case "$1 $2" in
               rm -f "$7/third_party/$family/README.md"
             done
             (cd "$7" && find third_party -type f | sort | while IFS= read -r name; do shasum -a 256 "$name"; done) >"$7/.fixture-notice-digests"
-            jq -n --arg recipe "$(shasum -a 256 "${2%/scripts/zitadel-source-bundle.go}/scripts/build-zitadel-linux.sh" | awk '{print $1}')" '{schemaVersion:1,profile:"identity-notice-originals-v1",sourceManifestSha256:("a"*64),preparedProfileSha256:"99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298",recipeSha256:$recipe,manifestSha256:("c"*64),files:41,bytes:123,originalInputsReadbackPassed:true}' >"$7/.fixture-notice-summary.json"
+            jq -n --arg recipe "$(shasum -a 256 "${2%/scripts/zitadel-source-bundle.go}/scripts/build-zitadel-linux.sh" | awk '{print $1}')" '{schemaVersion:1,profile:"identity-notice-originals-v1",sourceManifestSha256:("a"*64),preparedProfileSha256:"dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165",recipeSha256:$recipe,manifestSha256:("c"*64),files:43,bytes:123,originalInputsReadbackPassed:true}' >"$7/.fixture-notice-summary.json"
           else
             cp -R "$4/third_party" "$7/"
             cp "$4/".fixture-notice-* "$7/"
@@ -279,9 +279,9 @@ case "$1 $2" in
           cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
-          jq -n --arg profile "${TEST_REPLAY_PROFILE:-99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298}" \
-            --argjson bytes "${TEST_REPLAY_BYTES:-261614535}" --argjson records "${TEST_REPLAY_RECORDS:-58}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9574,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165}" \
+            --argjson bytes "${TEST_REPLAY_BYTES:-261612982}" --argjson records "${TEST_REPLAY_RECORDS:-58}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9572,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ ( "$#" -eq 6 || "$#" -eq 7 ) && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
           originals="$5"
@@ -303,9 +303,9 @@ case "$1 $2" in
           cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            --arg profile "${TEST_CAPTURE_PROFILE:-99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298}" \
-            --argjson bytes "${TEST_CAPTURE_BYTES:-261614535}" --argjson records "${TEST_CAPTURE_RECORDS:-58}" \
-            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9574,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
+            --arg profile "${TEST_CAPTURE_PROFILE:-dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165}" \
+            --argjson bytes "${TEST_CAPTURE_BYTES:-261612982}" --argjson records "${TEST_CAPTURE_RECORDS:-58}" \
+            '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9572,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
           echo 'source archive fixture' >"$6"
@@ -779,8 +779,8 @@ for fault in unsealed-source both-source-modes capture-with-prepared substituted
     console-seal-only) args+=(--console-sha256 "$prepared_sha");;
     console-duplicate-seal) args+=(--console-inputs "$scratch/unavailable-capsule" --console-sha256 "$prepared_sha" --console-sha256 "$prepared_sha");;
   esac
-  profile=99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298
-  bytes=261614535
+  profile=dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165
+  bytes=261612982
   records=58
   [[ "$fault" != incomplete-authored-records ]] || records=28
   [[ "$fault" != extra-authored-records ]] || records=59
@@ -849,8 +849,8 @@ if bash "$build" --build --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$s
 if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" --source "$scratch/upstream" --output "$scratch/duplicate-bsr-verifier" >"$scratch/duplicate-bsr-verifier.log" 2>&1; then exit 1; fi
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" "${capture_inputs[@]}" --source "$scratch/upstream" --output "$scratch/captured"
-jq -e '.sourceSnapshot.noticeOriginals.files==41 and .sourceSnapshot.noticeOriginals.originalInputsReadbackPassed==true and .sourceSnapshot.noticeOriginals.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.noticeOriginals.preparedProfileSha256==.sourceSnapshot.preparedProfileSha256 and .sourceSnapshot.noticeOriginals.recipeSha256==.recipeSha256' "$scratch/captured/build-receipt.json" >/dev/null
-jq -e '.sourceSnapshot.preparedProfileSha256 == "99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298" and .sourceSnapshot.files == 9574 and .sourceSnapshot.bytes == 261614535 and .sourceSnapshot.records == 58 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.noticeOriginals.files==43 and .sourceSnapshot.noticeOriginals.originalInputsReadbackPassed==true and .sourceSnapshot.noticeOriginals.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.noticeOriginals.preparedProfileSha256==.sourceSnapshot.preparedProfileSha256 and .sourceSnapshot.noticeOriginals.recipeSha256==.recipeSha256' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165" and .sourceSnapshot.files == 9572 and .sourceSnapshot.bytes == 261612982 and .sourceSnapshot.records == 58 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
@@ -924,7 +924,7 @@ if ! env TEST_EXPECT_PNPM_SDK="$native_sdk" bash "$build" --build --retained-inp
   exit 1
 fi
 jq -e '.sourceInput.manifestSha256 == ("a"*64) and .sourceInput.nativeOfflineReplayProved == false and .retainedInputsRestored == true and .imageAdmission == "unknown" and .licenseClosure == "unknown"' "$retained_output/build-receipt.json" >/dev/null
-jq -e --slurpfile original "$retained/source/build-receipt.json" '.noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.originalInputsReadbackPassed==true and .noticeOriginals.files==41' "$retained_output/build-receipt.json" >/dev/null
+jq -e --slurpfile original "$retained/source/build-receipt.json" '.noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.originalInputsReadbackPassed==true and .noticeOriginals.files==43' "$retained_output/build-receipt.json" >/dev/null
 final_receipt="$(shasum -a 256 "$retained_output/build-receipt.json" | awk '{print $1}')"
 for phase in console icons text-fonts copied-assets; do
   [[ "$(cat "$retained_output/fixture-$phase-receipt.sha256")" == "$final_receipt" ]] || { echo "final receipt differs from $phase inventory binding" >&2; exit 1; }

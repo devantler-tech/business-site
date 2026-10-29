@@ -84,6 +84,37 @@ embedded path reject retired SMTP images; this check precedes catalogue filterin
 The copied-asset catalogue still has 1,858 originals and 3,716 outputs, with a
 separate five-consumer SMTP binding alongside the unchanged eighteen IdP consumers.
 
+The separate `native-neutral-mdi-icons-v1` profile binds the entire frozen
+27-file MDI family. It retains 25 standard graphics unchanged and their immutable
+primary origins, author attributions, native wrapper identities and full original
+Pictogrammers/Google Mail terms. The 24 Pictogrammers-derived native wrappers
+remain distinct from their primary SVG byte identities; the Mail SVG matches its
+primary bytes. A primary hash is provenance, not a claim that this build fetched
+or compiled a second primary tree. The complete native originals are retained in
+the prepared-source offer and checked against both generated Console copies and
+the full compiler stream. No trademark endorsement or new own-code grant follows.
+
+Only OpenID/JWT decoration is replaced, using the already-admitted arrow/key
+font glyphs in five native consumers and six visible slots. Their labels, native
+links, forms and event bindings remain unchanged; the inert JWT attribute on the
+LDAP text icon is removed without changing its visible LDAP control. The two
+unresolved SVGs and their app registrations are removed. Slots are 28 pixels in
+the table, 36 in the chooser and 48 in each native protocol editor. Missing,
+changed, linked or extra MDI inputs/copies and retired escaped references refuse.
+The original 1,858/3,716 catalogue remains pinned; this extension adds 25 retained
+originals, 50 generated copies and 25 actual Console embeds. The complete copied
+inventory therefore observes 1,883/3,766/1,883, with 26 unique final consumers
+across the overlapping provider, SMTP and MDI profiles.
+
+The native worker additionally requires eight MDI cases: chooser, two fictional
+configured table rows and both unsaved protocol editors in each theme. OIDC/JWT
+fixture configurations are never linked to the Login policy; the original exact
+two-provider Login/registration proof remains separate. These cases share the
+existing 120-second presentation phase and four-minute wrapper. Their native
+rendering and screenshot bindings must pass; synthetic unit inputs are separate.
+Source/image admission and remaining graphics families stay open under
+#384/#387/#308.
+
 The native fictional-browser worker requires twenty additional SMTP observations:
 the chooser and nine unsaved editors in light and dark themes. It checks native
 Enter navigation, rendered envelope fonts, labels, defaults, confined resources
@@ -642,7 +673,7 @@ A complete file manifest
 keeps those fifty-eight records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. The two notice originals remain inert
-records; retaining them does not assemble the complete 41-input notice offer or
+records; retaining them does not assemble the complete 43-input notice offer or
 establish release admission. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
@@ -976,7 +1007,7 @@ installed SDK dependency boundary explicit while the forty-member caller root
 remains closed. SDK dependency capture/bootstrap remains #422; the notice capsule
 does not supply it or claim that proof.
 Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
-41-file plan retains original notices, attributions, catalogues, the historical
+43-file plan retains original notices, attributions, catalogues, the historical
 public-suffix source and copied CSS. The five guidance READMEs and three authored
 tool-grant documents are outside that plan. It preserves the existing 58 build
 records and independently joins thirteen original-input records; it does not

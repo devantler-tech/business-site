@@ -29,7 +29,7 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "99857abf9171ae0dd25438a1006297f012de4a637be58fd41ff7af70852f9298"
+const sourcePreparedProfile = "dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
@@ -495,8 +495,14 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		return summary, fmt.Errorf("build input record differs from the complete prepared source")
 	}
 	digest := func(body []byte) string { return fmt.Sprintf("%x", sha256.Sum256(body)) }
-	if digest(records["source-preparation.json"]) != policy.Preparation || digest(records["api-project.original.json"]) != policy.OriginalAPI || digest(records["api-project.serial.json"]) != policy.SerialAPI {
-		return summary, fmt.Errorf("frozen source transformation record differs")
+	for _, record := range []struct{ name, expected string }{
+		{"source-preparation.json", policy.Preparation},
+		{"api-project.original.json", policy.OriginalAPI},
+		{"api-project.serial.json", policy.SerialAPI},
+	} {
+		if digest(records[record.name]) != record.expected {
+			return summary, fmt.Errorf("frozen source transformation record differs: %s", record.name)
+		}
 	}
 	var prep struct {
 		UpstreamCommit      string `json:"upstreamCommit"`
@@ -521,6 +527,7 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests.",
 		"Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths.",
 		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
+		"Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -650,8 +657,10 @@ func sourceNoticeMembers() []sourceMember {
 		{Path: "third_party/zitadel-console-notices/qrcode-license.txt", Bytes: 1076, SHA256: "8df47c6ad9ac2c41eb9b2a72def9908959da0ede8dadd56c7b249c1bdb0c5ce6", Mode: 0644},
 		{Path: "third_party/zitadel-console-notices/tiny-inflate-license.txt", Bytes: 1084, SHA256: "2af3d4c93529722bd5083f8f8b51c185423c06fb86d62ca00cd7c16182eebf39", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/Flag-Icons-LICENSE", Bytes: 1087, SHA256: "8f1195d55a2fd315a07d812328470ca9ba2abb78c8d317ff19619d5125e00cea", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/Google-Mail-LICENSE", Bytes: 11357, SHA256: "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md", Bytes: 1809, SHA256: "55a4cc3d450a9dfa4d12c7de238442562899868299b800dbac6c70ca6d99c490", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/Material-Icons-LICENSE", Bytes: 11358, SHA256: "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/Pictogrammers-LICENSE", Bytes: 1012, SHA256: "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md", Bytes: 38585, SHA256: "9ffa1bda0bca61af695a8de5c4f24410b731a2561584b8a0c5d1c209f1e4d5cc", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSE", Bytes: 34522, SHA256: "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md", Bytes: 1877, SHA256: "97a02685ee62bfd02b2e696580189807a193b81fcc37909818f9d19cef45394e", Mode: 0644},
@@ -819,7 +828,7 @@ func sourceNoticeObserve(root string, raw []byte, capture bool) (bodies map[stri
 			return nil, err
 		}
 	}
-	if len(bodies) != 41 || (!capture && !manifestSeen) {
+	if len(bodies) != 43 || (!capture && !manifestSeen) {
 		return nil, fmt.Errorf("incomplete notice original observation")
 	}
 	current, err := os.Lstat(root)
@@ -1104,10 +1113,10 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			}
 		}
 		value, err = sourceCaptureBuildWithNotices(args[1], args[2], args[3], notices, sourceCapturePolicy{
-			sourcePreparedProfile,
-			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
-			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			"82f66c6a4a5a557c851f32611737c6e6ba8f2bdc316a012e6d8b62e80f6cf76b",
+			Prepared:    sourcePreparedProfile,
+			OriginalAPI: "bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
+			SerialAPI:   "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
+			Preparation: "4948930dfa2c93a61e6d4abc15263e2c51dd6800db75d74d12e2809bae2df7db",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string

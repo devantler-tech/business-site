@@ -1042,24 +1042,34 @@ var neutralSMTPInputs = []neutralProviderInput{
 func init() {
 	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
 	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
+	iconExtensions["--neutral-mdi-icons"] = runNeutralMDIIcons
 }
 
 // runNeutralProviderIcons validates the complete frozen decoration profile before
 // replacing its eighteen consumers and retiring sixteen images in a confined export.
 func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
-	return prepareNeutralIconProfile(args, out, diagnostic, false)
+	return prepareNeutralIconProfile(args, out, diagnostic, "provider")
 }
 
 // runNeutralSMTPIcons preserves the five SMTP consumers while retiring only its
 // closed nine-image family. Existing provider and Login profiles stay separate.
 func runNeutralSMTPIcons(args []string, out, diagnostic io.Writer) int {
-	return prepareNeutralIconProfile(args, out, diagnostic, true)
+	return prepareNeutralIconProfile(args, out, diagnostic, "smtp")
 }
 
-// Both profiles use the same confined, prevalidated stage writer. Their original
+// runNeutralMDIIcons retains the standard icon family while replacing only the
+// unresolved OpenID/JWT decorations in their five fixed native consumers.
+func runNeutralMDIIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "mdi")
+}
+
+// All three profiles use the same confined, prevalidated stage writer. Their original
 // membership, transformations and receipt cardinalities are fixed independently.
-func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bool) int {
+func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile string) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
+	if profile != "provider" && profile != "smtp" && profile != "mdi" {
+		return fail(fmt.Errorf("unknown fixed icon profile"))
+	}
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
 		return fail(fmt.Errorf("explicit preparation and source required"))
 	}
@@ -1092,9 +1102,17 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		"console/src/assets/images/idp":                     {"apple-dark.svg", "apple.svg", "github-dark.svg", "github.svg", "gitlab.svg", "google.png", "ms.svg", "oauth.svg", "saml-icon.svg"},
 		"internal/api/ui/login/static/resources/images/idp": {"apple-dark.svg", "apple.svg", "github-white.png", "github.png", "gitlab.png", "google.png", "ms.svg"},
 	}
-	if smtp {
+	if profile == "smtp" {
 		inputs = neutralSMTPInputs
 		families = map[string][]string{"console/src/assets/images/smtp": {"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"}}
+	}
+	if profile == "mdi" {
+		inputs = neutralMDIInputs()
+		names := []string{"openid.svg", "jwt.svg"}
+		for _, asset := range mdiFrozen {
+			names = append(names, path.Base(asset.Path))
+		}
+		families = map[string][]string{"console/src/assets/mdi": names}
 	}
 	for dir, names := range families {
 		if err = exactDirectory(source, dir, names); err != nil {
@@ -1110,11 +1128,18 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 			return fail(fmt.Errorf("original identity differs: %s", input.path))
 		}
 		originals[input.path] = body
-		if input.kind == "retire" {
+		if input.kind == "retire" || input.kind == "retain" {
 			continue
 		}
 		text := string(body)
 		switch input.kind {
+		case "mdi-registry", "mdi-table", "mdi-chooser", "mdi-editor-oidc", "mdi-editor-jwt":
+			var slots int
+			text, slots, e = neutralMDIChange(input, text)
+			if e != nil {
+				return fail(e)
+			}
+			consoleSlots += slots
 		case "smtp-chooser", "smtp-editor":
 			old := `<img class="smtp-logo" [src]="provider.image" [alt]="provider.description" />`
 			if input.kind == "smtp-editor" {
@@ -1219,11 +1244,14 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		}
 		replacements[input.path] = []byte(text)
 	}
-	if smtp && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
+	if profile == "smtp" && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
 		return fail(fmt.Errorf("incomplete neutral SMTP profile"))
 	}
-	if !smtp && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
+	if profile == "provider" && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral provider profile"))
+	}
+	if profile == "mdi" && (len(originals) != 32 || len(replacements) != 5 || consoleSlots != 6 || loginSlots != 0 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral MDI profile"))
 	}
 	// Refuse a changed original before replacing any selected body.
 	for _, input := range inputs {
@@ -1233,6 +1261,9 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		}
 	}
 	for _, input := range inputs {
+		if input.kind == "retain" {
+			continue
+		}
 		if input.kind == "retire" {
 			if err = confined.Remove(input.path); err != nil {
 				return fail(err)
@@ -1271,7 +1302,11 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 			continue
 		}
 		body, e := neutralProviderRead(confined, input)
-		if e != nil || !bytes.Equal(body, replacements[input.path]) {
+		want := replacements[input.path]
+		if input.kind == "retain" {
+			want = originals[input.path]
+		}
+		if e != nil || !bytes.Equal(body, want) {
 			return fail(fmt.Errorf("prepared decoration readback differs"))
 		}
 	}
@@ -1280,8 +1315,11 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, smtp bo
 		return fail(fmt.Errorf("prepared source root changed"))
 	}
 	receipt := map[string]any{"schemaVersion": 1, "profile": "native-neutral-provider-icons-v1", "changedFiles": 18, "removedFiles": 16, "consoleSlots": consoleSlots, "loginSlots": loginSlots, "imageAdmission": "unknown", "licenseClosure": "unknown"}
-	if smtp {
+	if profile == "smtp" {
 		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["settingsValues"] = "native-neutral-smtp-icons-v1", 5, 9, settingsValues
+	}
+	if profile == "mdi" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["retainedFiles"] = "native-neutral-mdi-icons-v1", 5, 2, 25
 	}
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
@@ -1330,7 +1368,14 @@ func neutralProviderConsumers() []inputRecord {
 	var consumers []inputRecord
 	for _, input := range neutralProviderInputs {
 		if input.kind != "retire" {
-			consumers = append(consumers, inputRecord{input.path, input.expected})
+			expected := input.expected
+			// These two consumers subsequently receive the separate MDI profile.
+			for _, mdi := range neutralMDIConsumers() {
+				if mdi.Path == input.path {
+					expected = mdi.SHA256
+				}
+			}
+			consumers = append(consumers, inputRecord{input.path, expected})
 		}
 	}
 	return consumers
@@ -1352,6 +1397,11 @@ func neutralSMTPConsumers() []inputRecord {
 // this is a closed-family check, not a general JavaScript or URL parser.
 func neutralProviderOutput(name string, body []byte) error {
 	lower := strings.ToLower(filepath.ToSlash(name))
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if strings.Contains(lower, "mdi/"+mark) {
+			return fmt.Errorf("retired MDI decoration remains")
+		}
+	}
 	for _, family := range []string{"idp", "smtp"} {
 		if strings.Contains(lower, "/images/"+family+"/") || strings.HasPrefix(lower, "images/"+family+"/") {
 			return fmt.Errorf("retired %s provider image output remains", family)
@@ -1363,6 +1413,11 @@ func neutralProviderOutput(name string, body []byte) error {
 		slash := strings.NewReplacer("\\/", "/", "\\u002f", "/", "\\x2f", "/")
 		for i := 0; i < 3; i++ {
 			text = slash.Replace(text)
+		}
+		for _, mark := range []string{"openid.svg", "jwt.svg"} {
+			if strings.Contains(text, "mdi/"+mark) {
+				return fmt.Errorf("retired MDI decoration reference remains")
+			}
 		}
 		for _, family := range []string{"idp", "smtp"} {
 			if strings.Contains(text, "images/"+family+"/") {
@@ -1398,5 +1453,134 @@ func neutralProviderSourceFamilies(source string) error {
 			return fmt.Errorf("retired provider source image remains")
 		}
 	}
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if _, err := os.Lstat(filepath.Join(source, "console/src/assets/mdi", mark)); !os.IsNotExist(err) {
+			return fmt.Errorf("retired MDI source remains or cannot be observed")
+		}
+	}
 	return nil
+}
+
+// neutralMDIInputs closes all 27 native graphics and the five consumers after
+// the provider profile. Retained artwork remains byte-identical to upstream.
+func neutralMDIInputs() []neutralProviderInput {
+	inputs := []neutralProviderInput{
+		{path: "console/src/app/app.component.ts", sha256: "f266e00e6d404e94e58fad66972b3da6c74a4818992bbec91d59a8b151113c4e", mode: 0644, kind: "mdi-registry", expected: "235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab"},
+		{path: "console/src/app/modules/idp-table/idp-table.component.html", sha256: "2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e", mode: 0644, kind: "mdi-table", expected: "5c489734a039df3535d00e7761200621bfca99e25d63955b70a1d1e712f76544"},
+		{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.html", sha256: "41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8", mode: 0644, kind: "mdi-chooser", expected: "015e783ee150d21280d7748ab897c1b709fb5e208777370059716f7b10766188"},
+		{path: "console/src/app/modules/providers/provider-oidc/provider-oidc.component.html", sha256: "fac7817b5db6d79d22d4a278ba4bd0e4151d30f137c448264c53899ac85b7a81", mode: 0644, kind: "mdi-editor-oidc", expected: "3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80"},
+		{path: "console/src/app/modules/providers/provider-jwt/provider-jwt.component.html", sha256: "19471a418b11da8bf48740dc16162ce93a7d12c69705a3af1012a4f4fe659bf8", mode: 0644, kind: "mdi-editor-jwt", expected: "5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9"},
+		{path: "console/src/assets/mdi/openid.svg", sha256: "05780f911a252dff978d08568675cbe24a53093fcbb04d5be9a9e1fa3e1c4f63", mode: 0644, kind: "retire"},
+		{path: "console/src/assets/mdi/jwt.svg", sha256: "24c9cd3a49a7459d14da7146832b4e986bfbd484bfc3cde7f485da8f6ccc5c03", mode: 0644, kind: "retire"},
+	}
+	for _, asset := range mdiFrozen {
+		inputs = append(inputs, neutralProviderInput{path: asset.Path, sha256: asset.SHA256, mode: 0644, kind: "retain", expected: asset.SHA256})
+	}
+	return inputs
+}
+
+// neutralMDIConsumers binds the completed decoration changes, excluding artwork.
+func neutralMDIConsumers() []inputRecord {
+	var result []inputRecord
+	for _, input := range neutralMDIInputs() {
+		if input.kind != "retain" && input.kind != "retire" {
+			result = append(result, inputRecord{input.path, input.expected})
+		}
+	}
+	return result
+}
+
+// neutralMDIChange replaces only fixed decorative slots and obsolete SVG
+// registrations. Native provider identifiers, forms, links and LDAP stay intact.
+func neutralMDIChange(input neutralProviderInput, text string) (string, int, error) {
+	if input.kind == "mdi-registry" {
+		var lines []string
+		removed := 0
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_openid',") || strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_jwt',") {
+				removed++
+				continue
+			}
+			lines = append(lines, line)
+		}
+		if removed != 2 {
+			return "", 0, fmt.Errorf("MDI registrations differ")
+		}
+		return strings.Join(lines, "\n"), 0, nil
+	}
+	size, class := "48", "idp-logo"
+	if input.kind == "mdi-table" {
+		size, class = "28", "idp-icon"
+	}
+	if input.kind == "mdi-chooser" {
+		size, class = "36", "icon"
+	}
+	slots := 0
+	for _, mark := range []string{"openid", "jwt"} {
+		alt := mark
+		if input.kind == "mdi-table" && mark == "openid" {
+			alt = "oidc"
+		}
+		old := `<mat-icon class="` + class + `" svgIcon="mdi_` + mark + `" alt="` + alt + `" />`
+		count := strings.Count(text, old)
+		if count == 0 {
+			continue
+		}
+		if count != 1 {
+			return "", 0, fmt.Errorf("MDI decoration slot differs")
+		}
+		glyph := "la-arrow-right"
+		if mark == "jwt" {
+			glyph = "la-key"
+		}
+		replacement := `<i class="` + class + ` neutral-mdi-icon las ` + glyph + `" aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ` + size + `px; height: ` + size + `px; font-size: ` + size + `px;"></i>`
+		text = strings.Replace(text, old, replacement, 1)
+		slots++
+	}
+	if input.kind == "mdi-chooser" {
+		if strings.Count(text, ` svgIcon="mdi_jwt"`) != 1 {
+			return "", 0, fmt.Errorf("native LDAP decoration differs")
+		}
+		text = strings.Replace(text, ` svgIcon="mdi_jwt"`, "", 1)
+	}
+	if strings.Contains(text, "mdi_openid") || strings.Contains(text, "mdi_jwt") {
+		return "", 0, fmt.Errorf("retired MDI registration remains")
+	}
+	return text, slots, nil
+}
+
+// Shared by the native two-file login/font verifier and full copied-asset tool.
+// mdiProvenance binds retained native wrappers to their immutable primary origins.
+type mdiProvenance struct {
+	Path                                                        string
+	Bytes                                                       int
+	SHA256, GitBlob, PrimaryPath, PrimarySHA256, Author, Notice string
+}
+
+var mdiFrozen = []mdiProvenance{
+	{Path: "console/src/assets/mdi/account-cancel-outline.svg", Bytes: 922, SHA256: "8f6a46b284db9315478f57ec4c728ba363b1b298d45320ae5ea5121751be2972", GitBlob: "01ca0712bb2b1004767a9168bfa25649075663b4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/account-cancel-outline.svg", PrimarySHA256: "14d164d4a2ad635bf760f2de6b6c30ab2e8c4329ac69092b1ea4641dc3e0242c", Author: "Simran", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/account-check-outline.svg", Bytes: 627, SHA256: "3c7c793f99efe88f26f5e81f2d64f863d7128f41ab56c77da5f787b93b3fef83", GitBlob: "dd3d59285e24c4d78ce86a8ed8a6d765d7f87a3a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/account-check-outline.svg", PrimarySHA256: "a6f32eb17b2657c4e4b3975a60206d334b4b975586135357f4a676fc20389f78", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/api.svg", Bytes: 460, SHA256: "cc63969631086dcd9b6bd0f6468357ae101df4bafa725b1be082c2a0679a7273", GitBlob: "38dfa2a980511d9f45713b3eed026b7f9ebcb23a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/api.svg", PrimarySHA256: "4381cb06997f09c055ff42a4356579e6c558b2dd427b32e3a331722233c28b3c", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-decision-outline.svg", Bytes: 758, SHA256: "905827dc06b70f528f3554dbe3375b8649975dd41d77935d3400f3aefdcab684", GitBlob: "1ab13649c1956a42b98325b6c2980a18d5eb12e4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-decision-outline.svg", PrimarySHA256: "97c0ccb9ca07c47c0d93d16e2fea8174cb18e293f8248510703eefcff24d267b", Author: "Michael Richins", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-expand.svg", Bytes: 220, SHA256: "dbcf265c15ecaad1e1838e4b32c0fe435622f11d4e1f4114cf0d33a7b48407e8", GitBlob: "6e1f0076c90f2d3444bd8fe05fe8d2bc95e9df72", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-expand.svg", PrimarySHA256: "cce26ca5435273e9e075dd29db1143775287c427a2af2355573db74e6f8f33b0", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-right-bottom.svg", Bytes: 422, SHA256: "2a6ab46fac9c301964183127184a92c46c3c1bd35fa64cf6ddcd60724da03100", GitBlob: "33848b9af717542183f4c04a8fb97c5c3e404c43", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-right-bottom.svg", PrimarySHA256: "d3e7e17a0fd4c3021ef7ea609c491d3464fddb566fafd76810d8b195de19d3fa", Author: "Colton Wiscombe", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/broom.svg", Bytes: 531, SHA256: "ef5cbd4c4378386bc8326fcfbc36e750d78f1412aafcae4f446f59e5153dd9d6", GitBlob: "1e61d76750802eac462b64faa8b5ad13aa389966", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/broom.svg", PrimarySHA256: "7a4a63bfcd9c216cd7199ad74912f735a3315c692996bf71a2f3fdedbe4dc9aa", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/content-copy.svg", Bytes: 417, SHA256: "f24c47ca28e49c25e74d695ca635ab3747bca373dfeb4eeaaa88c98c461c5a5a", GitBlob: "0968db1a753b41d152c93f42459c8dd579d51ef3", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/content-copy.svg", PrimarySHA256: "5584bbc724b175dc9a197294266ec1c579b798149333ea65ebdd811fbd02e7c1", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/counter.svg", Bytes: 957, SHA256: "5d761bb9b8cddb5338aa41f2098319a69a130a59eade692843f420f2e8f5c4b5", GitBlob: "613b110ae6901043ae3538bb36cce5cf740b1d6f", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/counter.svg", PrimarySHA256: "17602cbe113282a867e9d390091ee46587a848b2675bb3384be57b0b024ebedf", Author: "Christopher Schreiner", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/format-letter-case-lower.svg", Bytes: 1199, SHA256: "a5016e35d22e5acea3bd00958730e98385ba09c934dd3ea7cf15ba36988cd7fc", GitBlob: "ea48e78a219aadd8142aefa9bd704027ffeacda5", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/format-letter-case-lower.svg", PrimarySHA256: "9317f9fe414593739b6556e08c08b52bb3ceb70eb016d3e118b0125a14e78dc4", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/format-letter-case-upper.svg", Bytes: 1195, SHA256: "ee0684e2c0f6365aace6b792afff8af4989a2dd0cf02587925cc8f086017f0a1", GitBlob: "36cb7e19d9ac010e6cb81512aa6043b51c492b0a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/format-letter-case-upper.svg", PrimarySHA256: "16a9661547440e57d9e7add82c11c51dd0b7a9150e914f5899a2cc6028942965", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lightbulb-off-outline.svg", Bytes: 682, SHA256: "1aa5a7e9e0defa5e8e10b3898150b390018342e1f17ae387aefebde7feac5134", GitBlob: "cc1a4f89e0c4ffba34a02273de8f431d19fe8b66", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lightbulb-off-outline.svg", PrimarySHA256: "26343d8b4c52c905072d32b9a38f7e3ac56f382ea458424c3c5877be4defcbc4", Author: "Hans Böhm", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lightbulb-on-outline.svg", Bytes: 728, SHA256: "2f4dfb3dd2b08c565991ae567dd2e574b34f5efdb59cb53634af06ec8314a238", GitBlob: "cc8b9f780d89ca8d6ab795aa6191567d94738078", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lightbulb-on-outline.svg", PrimarySHA256: "c1d233a37d67a340f9f42b578d70f447b4d5c22e7e96bed88dd74112f3348921", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lock-question.svg", Bytes: 1043, SHA256: "eaa5977b8c3aa7d0913f5e527b01c16d2e0c9d17471213b1c6ad3f41c6fca578", GitBlob: "99495d9fd525ab077a811ca9e5ef5a410232530b", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lock-question.svg", PrimarySHA256: "e2482adffc1aad0291d64280066d322d0f2f1ffcd5ce2f3d2176387d7287adf7", Author: "Simran", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lock-reset.svg", Bytes: 876, SHA256: "f2ab09fdcdf9c5761b71202ff4674a8bc31abe80b5b6e26f36b65f3ccdffa0aa", GitBlob: "817a328bda95283f58c0988203d4a6365d5320c4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lock-reset.svg", PrimarySHA256: "e17c400d3b8308b1a0df55e60fdf211bed600a794eaeeb18137fc2962544b87e", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/mail.svg", Bytes: 309, SHA256: "05f47e61b392b3d9a8f0d9c6d11503f276841901efc5869a2b17f9f57b912870", GitBlob: "15e1d12d4e1a21ead0cf4a03f0dd10fb48d884a4", PrimaryPath: "https://github.com/google/material-design-icons/blob/6d7ca43bd6e6668531a00fcaca06d921b63dd716/symbols/web/mail/materialsymbolsoutlined/mail_24px.svg", PrimarySHA256: "05f47e61b392b3d9a8f0d9c6d11503f276841901efc5869a2b17f9f57b912870", Author: "Google", Notice: "Google-Mail-LICENSE"},
+	{Path: "console/src/assets/mdi/numeric.svg", Bytes: 538, SHA256: "613206599b8162ee3359e6478a914b1c768b14035cc82fec229462c876e32a09", GitBlob: "8bd26d9fcdbf2c34048d0aa8555323fa812b0c46", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/numeric.svg", PrimarySHA256: "b2516da37500d52f0a43ff84eb36900c0e75801cf5118a93af1daca4c2711b07", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/pin-outline.svg", Bytes: 391, SHA256: "0314936a951083cda9223396c9639a285547aab344413b493443c023c86f9aeb", GitBlob: "5d2799f9825abcb265690e7881449d16ebcec316", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/pin-outline.svg", PrimarySHA256: "6048039bfe70cb103571416b5621db086f15ac9165ed9a3e0ce4a0c398e87c3a", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/pin.svg", Bytes: 354, SHA256: "6da5256e2bf228878047406b37faf135103f36e46f189bd5151582ac52b5244b", GitBlob: "22840369872cd00f25b8b582929e63fc0e38d76b", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/pin.svg", PrimarySHA256: "2f17cf4653d23302a5dd5695e814057322df1af2747b77b608055b0e4d3be539", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/radar.svg", Bytes: 761, SHA256: "ea31f4277b0166f24c0e51e9ad33740aae72c905e2b3ea5557d8813a59c7c99e", GitBlob: "aadfaa5b51def0ae61acafcdfb498c53c4fbb8b1", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/radar.svg", PrimarySHA256: "dff0497a00d7d72ab5f8c76f0bd3f6f97f0c8e2e72f9eab023784a767837060c", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/shield-alert.svg", Bytes: 390, SHA256: "fed8d1d1d364858530cb82a87638a6a35f04bd8c54450d6c2c0a63d8af2391fe", GitBlob: "a8fcb7abfd2b9b9e9e0a44323b5cdbad0a107602", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/shield-alert.svg", PrimarySHA256: "1cb13b4fe587c416952eb3855eb083e4f6f8c6c3a1a0ed0ec5bf3c39fc590c4e", Author: "Peter Noble", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/shield-check.svg", Bytes: 198, SHA256: "9c17250755c41530f8e5d51ef030ebb2d8b71682be4aa3209363ed930d65998b", GitBlob: "1d6fa58b22d622419c9256580b96f3b43dfdb796", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/shield-check.svg", PrimarySHA256: "e64250b11f695be074c753f54c4e06146153b0f3ffce57d6285e1db38565f972", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/symbol.svg", Bytes: 594, SHA256: "3dac682300a0ce63e54aa76349f800f4b82de7cb545ea824194a3e9c618e4421", GitBlob: "0ebc772f39ca73729ff46dd1a90c8c15f6a3bb3a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/symbol.svg", PrimarySHA256: "93314ad702d3bf1b181f46bff8aa0f0e9a0d5a423ffbfbdec46269d3264008f5", Author: "Haley Halcyon", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/textbox-password.svg", Bytes: 756, SHA256: "9c635718c3c5d3774179afa2944b4fb170eaf0ecd6280b6d7efcbd40d1fe5eca", GitBlob: "6f0743b6fa2f90bf4d1583314bd7bd062c4db926", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/form-textbox-password.svg", PrimarySHA256: "38dc71188bac84dd81c70f6bea5c100e5172572c37cc9342a603cf75665d847c", Author: "Michael Richins", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/usb-flash-drive-outline.svg", Bytes: 1037, SHA256: "9762ef5b6e151cf527c162f8de66f975298459ca4f13a176ee497af75dbcde40", GitBlob: "978edf050ae35760a214a82fddbcac955151cc4c", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/usb-flash-drive-outline.svg", PrimarySHA256: "f809b8a5d9ef5681dcbe76459d6beef44275459c3f091bb413c58817315e193f", Author: "Yaroslav Bandura", Notice: "Pictogrammers-LICENSE"},
 }

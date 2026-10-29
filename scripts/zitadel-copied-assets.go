@@ -50,9 +50,12 @@ type copiedPolicy struct {
 	TextPolicy        textPolicy
 	ProviderConsumers []inputRecord
 	SMTPConsumers     []inputRecord
+	MDI               []mdiProvenance
+	MDINotices        []inputRecord
+	MDIConsumers      []inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers()}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -292,6 +295,29 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	}
 	seenConsumers := map[string]bool{}
 	consumers := append(append([]inputRecord{}, policy.ProviderConsumers...), policy.SMTPConsumers...)
+	if len(policy.MDI) > 25 || len(policy.MDI) > 0 && (len(policy.MDINotices) == 0 || len(policy.MDINotices) > 2 || len(policy.MDIConsumers) == 0 || len(policy.MDIConsumers) > 5) || len(policy.MDI) == 0 && (len(policy.MDINotices) != 0 || len(policy.MDIConsumers) != 0) {
+		return fail(fmt.Errorf("MDI provenance policy incomplete"))
+	}
+	seenMDI := map[string]bool{}
+	for _, mdi := range policy.MDIConsumers {
+		if seenMDI[mdi.Path] {
+			return fail(fmt.Errorf("duplicate MDI consumer"))
+		}
+		seenMDI[mdi.Path] = true
+		overlap := false
+		for _, existing := range consumers {
+			if existing.Path != mdi.Path {
+				continue
+			}
+			if existing != mdi || mdi.Path != "console/src/app/modules/idp-table/idp-table.component.html" && mdi.Path != "console/src/app/modules/policies/idp-settings/idp-settings.component.html" {
+				return fail(fmt.Errorf("ambiguous shared decoration consumer"))
+			}
+			overlap = true
+		}
+		if !overlap {
+			consumers = append(consumers, mdi)
+		}
+	}
 	for _, consumer := range consumers {
 		if !textPath(consumer.Path) || !textHex(consumer.SHA256, 64) || seenConsumers[consumer.Path] {
 			return fail(fmt.Errorf("neutral consumer policy differs"))
@@ -446,6 +472,14 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(expected) != policy.Outputs {
 		return fail(fmt.Errorf("selected copied-output count differs"))
 	}
+	mdi, err := copiedMDIObserve(build, notices, policy, get, sourceNames, expected, compiled, &raw)
+	if err != nil {
+		return fail(err)
+	}
+	state.Assets = append(state.Assets, mdi...)
+	if len(expected) != policy.Outputs+2*len(policy.MDI) {
+		return fail(fmt.Errorf("MDI copied-output count differs"))
+	}
 	if e = copiedFilesystemSet(filepath.Join(build, "prepared/source"), expected, sourceNames, func(name string) ([]byte, error) { return get(build, "prepared/source/"+name, "output/"+name, 64<<20) }); e != nil {
 		return fail(e)
 	}
@@ -479,7 +513,64 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 // These are the complete observed output families, not catalogue-driven globs:
 // an additional asset in one of these classes must receive a new frozen review.
 func copiedSelected(name string) bool {
-	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "assets/mdi/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+}
+
+// copiedMDIObserve preserves complete terms and joins each retained native
+// wrapper to both generated copies and the complete Console compiler selection.
+// Primary hashes and attribution describe provenance, never trademark endorsement.
+func copiedMDIObserve(build, notices string, policy copiedPolicy, get func(string, string, string, int64) ([]byte, error), sourceNames, expected, compiled map[string]bool, raw *bytes.Buffer) ([]copiedBinding, error) {
+	terms := map[string]bool{}
+	for _, notice := range policy.MDINotices {
+		if !textPath(notice.Path) || !textHex(notice.SHA256, 64) || terms[notice.Path] {
+			return nil, fmt.Errorf("ambiguous MDI original terms")
+		}
+		body, err := get(notices, notice.Path, "mdi-notices/"+notice.Path, 1<<20)
+		if err != nil || len(body) == 0 || digest(body) != notice.SHA256 {
+			return nil, fmt.Errorf("MDI original terms differ")
+		}
+		terms[notice.Path] = true
+		fmt.Fprintf(raw, "\nFULL ORIGINAL MDI TERMS %s\n", notice.Path)
+		raw.Write(body)
+		raw.WriteByte('\n')
+	}
+	var result []copiedBinding
+	usedTerms, seen := map[string]bool{}, map[string]bool{}
+	for _, asset := range policy.MDI {
+		if !textPath(asset.Path) || !strings.HasPrefix(asset.Path, "console/src/assets/mdi/") || strings.TrimPrefix(asset.Path, "console/src/assets/mdi/") != filepath.Base(asset.Path) || !strings.HasSuffix(asset.Path, ".svg") || asset.Bytes < 1 || asset.Bytes > 4<<20 || !textHex(asset.SHA256, 64) || !textHex(asset.GitBlob, 40) || !textHex(asset.PrimarySHA256, 64) || asset.Author == "" || len(asset.Author) > 128 || strings.ContainsAny(asset.Author, "\r\n") || !terms[asset.Notice] || seen[asset.Path] {
+			return nil, fmt.Errorf("incomplete MDI provenance identity")
+		}
+		if !strings.HasPrefix(asset.PrimaryPath, "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/") && asset.PrimaryPath != "https://github.com/google/material-design-icons/blob/6d7ca43bd6e6668531a00fcaca06d921b63dd716/symbols/web/mail/materialsymbolsoutlined/mail_24px.svg" {
+			return nil, fmt.Errorf("unbound MDI primary origin")
+		}
+		seen[asset.Path], usedTerms[asset.Notice] = true, true
+		body, err := get(build, "prepared/source/"+asset.Path, "mdi-source/"+asset.Path, 4<<20)
+		if err != nil || len(body) != asset.Bytes || digest(body) != asset.SHA256 || blob(body) != asset.GitBlob {
+			return nil, fmt.Errorf("retained MDI original differs")
+		}
+		sourceNames[asset.Path] = true
+		name := strings.TrimPrefix(asset.Path, "console/src/")
+		outputs := []string{"console/dist/console/" + name, "internal/api/ui/console/static/" + name}
+		for i, output := range outputs {
+			if expected[output] {
+				return nil, fmt.Errorf("duplicate retained MDI output")
+			}
+			copy, err := get(build, "prepared/source/"+output, "mdi-output/"+output, 4<<20)
+			if err != nil || !bytes.Equal(copy, body) {
+				return nil, fmt.Errorf("retained MDI output differs")
+			}
+			expected[output] = true
+			if i == 1 {
+				compiled[output] = true
+			}
+		}
+		fmt.Fprintf(raw, "\nRETAINED MDI SOURCE %s\nSHA256 %s; Git blob %s; %d bytes. Native wrapper retained unchanged.\nPRIMARY %s\nPRIMARY SHA256 %s; author %s; complete terms %s. Native wrapper differs from primary: %t. Both native source and its modification/provenance record are retained; no trademark endorsement is implied.\nOUTPUTS %s\n", asset.Path, asset.SHA256, asset.GitBlob, asset.Bytes, asset.PrimaryPath, asset.PrimarySHA256, asset.Author, asset.Notice, asset.SHA256 != asset.PrimarySHA256, strings.Join(outputs, ", "))
+		result = append(result, copiedBinding{copiedAsset: copiedAsset{Family: "mdi", Path: asset.Path, Bytes: asset.Bytes, SHA256: asset.SHA256, GitBlob: asset.GitBlob, Outputs: outputs}})
+	}
+	if len(usedTerms) != len(terms) {
+		return nil, fmt.Errorf("unused MDI terms")
+	}
+	return result, nil
 }
 
 // copiedFilesystemSet rejects linked, special and unexpected copied-asset members
@@ -488,7 +579,14 @@ func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, o
 	if err := neutralProviderSourceFamilies(source); err != nil {
 		return err
 	}
-	for _, prefix := range []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"} {
+	prefixes := []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"}
+	for name := range sourceNames {
+		if strings.HasPrefix(name, "console/src/assets/mdi/") {
+			prefixes = append(prefixes, "console/src/assets/mdi")
+			break
+		}
+	}
+	for _, prefix := range prefixes {
 		e := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, e error) error {
 			if e != nil {
 				return e

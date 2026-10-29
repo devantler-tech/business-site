@@ -40,6 +40,8 @@ while IFS= read -r path; do
  mode=$(git -C "$upstream" ls-tree "$pin" -- "$path" | awk '{print $1}')
  chmod "${mode#100}" "$scratch/original/$path"
 done <"$scratch/inputs"
+# Keep the existing native two-file entrypoint independently buildable.
+(cd "$root/scripts" && GOTOOLCHAIN=local go build -o "$scratch/native-login-font-verifier" zitadel-login-icons.go zitadel-text-fonts.go)
 (cd "$root/scripts" && GOTOOLCHAIN=local go build -o "$scratch/provider-icons" zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go)
 cp -Rp "$scratch/original" "$scratch/positive"
 printf 'unrelated source must survive\n' >"$scratch/positive/unrelated.txt"
@@ -140,3 +142,63 @@ while IFS= read -r path; do
  done
 done <"$scratch/smtp-inputs"
 printf 'SMTP icons: real five-consumer behavior and %s original-input refusals passed.\n' "$smtp_controls"
+
+# The MDI profile follows the provider profile but preserves its original controls.
+cat >"$scratch/mdi-consumers" <<'PATHS'
+console/src/app/app.component.ts
+console/src/app/modules/idp-table/idp-table.component.html
+console/src/app/modules/policies/idp-settings/idp-settings.component.html
+console/src/app/modules/providers/provider-oidc/provider-oidc.component.html
+console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
+PATHS
+cp "$scratch/mdi-consumers" "$scratch/mdi-inputs"
+git -C "$upstream" ls-tree -r --name-only "$pin" -- console/src/assets/mdi >>"$scratch/mdi-inputs"
+[[ "$(wc -l <"$scratch/mdi-inputs" | tr -d ' ')" -eq 32 ]]
+cp -Rp "$scratch/positive" "$scratch/mdi-original"
+while IFS= read -r path; do
+ [[ -f "$scratch/mdi-original/$path" ]] && continue
+ mkdir -p "$scratch/mdi-original/$(dirname "$path")"
+ git -C "$upstream" show "$pin:$path" >"$scratch/mdi-original/$path"
+ chmod 0644 "$scratch/mdi-original/$path"
+done <"$scratch/mdi-inputs"
+cp -Rp "$scratch/mdi-original" "$scratch/mdi-positive"
+"$scratch/provider-icons" --neutral-mdi-icons --prepare --source "$scratch/mdi-positive" >"$scratch/mdi-receipt.json"
+jq -e '.profile=="native-neutral-mdi-icons-v1" and .changedFiles==5 and .removedFiles==2 and .retainedFiles==25 and .consoleSlots==6 and .imageAdmission=="unknown" and .licenseClosure=="unknown"' "$scratch/mdi-receipt.json" >/dev/null
+while IFS= read -r path; do
+ case "$path" in
+  */mdi/openid.svg|*/mdi/jwt.svg) [[ ! -e "$scratch/mdi-positive/$path" && ! -L "$scratch/mdi-positive/$path" ]] ;;
+  */mdi/*) cmp "$scratch/mdi-original/$path" "$scratch/mdi-positive/$path" ;;
+  *.html)
+   sed -E '/<mat-icon .*svgIcon="mdi_(openid|jwt)"/d; s/ svgIcon="mdi_jwt"//g' "$scratch/mdi-original/$path" >"$scratch/mdi-original-core"
+   sed '/<i .*neutral-mdi-icon/d' "$scratch/mdi-positive/$path" >"$scratch/mdi-positive-core"
+   cmp "$scratch/mdi-original-core" "$scratch/mdi-positive-core"
+   ;;
+  *.ts)
+   sed -E "/addSvgIcon\('mdi_(openid|jwt)'/d" "$scratch/mdi-original/$path" >"$scratch/mdi-original-core"
+   cmp "$scratch/mdi-original-core" "$scratch/mdi-positive/$path"
+   ;;
+ esac
+done <"$scratch/mdi-inputs"
+mdi_controls=0
+while IFS= read -r path; do
+ for change in absent changed linked mode; do
+  cp -Rp "$scratch/mdi-original" "$scratch/mdi-adverse"
+  case "$change" in
+   absent) rm "$scratch/mdi-adverse/$path" ;;
+   changed) printf '\nchanged\n' >>"$scratch/mdi-adverse/$path" ;;
+   linked) rm "$scratch/mdi-adverse/$path"; ln -s "$scratch/mdi-original/$path" "$scratch/mdi-adverse/$path" ;;
+   mode) chmod 0666 "$scratch/mdi-adverse/$path" ;;
+  esac
+  if "$scratch/provider-icons" --neutral-mdi-icons --prepare --source "$scratch/mdi-adverse" >"$scratch/mdi-adverse-result" 2>&1; then
+   printf 'Admitted MDI %s original: %s\n' "$change" "$path" >&2; exit 1
+  fi
+  rm -rf "$scratch/mdi-adverse"
+  mdi_controls=$((mdi_controls+1))
+ done
+done <"$scratch/mdi-inputs"
+cp -Rp "$scratch/mdi-original" "$scratch/mdi-extra"
+printf '<svg/>\n' >"$scratch/mdi-extra/console/src/assets/mdi/extra.svg"
+if "$scratch/provider-icons" --neutral-mdi-icons --prepare --source "$scratch/mdi-extra" >/dev/null 2>&1; then
+ echo 'Admitted an undeclared MDI source.' >&2; exit 1
+fi
+printf 'MDI icons: five native consumers, 25 unchanged graphics and %s original-input refusals passed.\n' "$mdi_controls"

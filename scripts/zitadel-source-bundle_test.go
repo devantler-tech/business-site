@@ -39,8 +39,10 @@ func noticeOriginalsForTest() []string {
 		"third_party/zitadel-console-notices/qrcode-license.txt",
 		"third_party/zitadel-console-notices/tiny-inflate-license.txt",
 		"third_party/zitadel-copied-assets/Flag-Icons-LICENSE",
+		"third_party/zitadel-copied-assets/Google-Mail-LICENSE",
 		"third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md",
 		"third_party/zitadel-copied-assets/Material-Icons-LICENSE",
+		"third_party/zitadel-copied-assets/Pictogrammers-LICENSE",
 		"third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md",
 		"third_party/zitadel-copied-assets/ZITADEL-LICENSE",
 		"third_party/zitadel-copied-assets/ZITADEL-LICENSING.md",
@@ -1377,7 +1379,7 @@ func TestSourceCaptureBindsFrozenPreparationAndBuildRecords(t *testing.T) {
 						ModifiedOn    string   `json:"modifiedOn"`
 						Modifications []string `json:"modifications"`
 					}
-					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-29" || len(record.Modifications) != 8 || record.Modifications[3] != "Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit." || record.Modifications[4] != "Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections." || record.Modifications[5] != "Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests." || record.Modifications[6] != "Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths." || record.Modifications[7] != "Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults." {
+					if readErr != nil || json.Unmarshal(raw, &record) != nil || record.ModifiedOn != "2026-10-29" || len(record.Modifications) != 9 || record.Modifications[3] != "Update go-jose/v4 to 4.1.6 with its native generated checksums; preserve the upstream key-size limit." || record.Modifications[4] != "Update golang.org/x/net to 0.62.0 with its native generated checksums; preserve upstream HTML protections." || record.Modifications[5] != "Update gorilla/csrf to 1.7.3 with its native generated checksums; mark only explicitly configured plaintext login requests." || record.Modifications[6] != "Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths." || record.Modifications[7] != "Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults." || record.Modifications[8] != "Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations." {
 						t.Fatalf("modification date does not describe the frozen changes: %s: %v", raw, readErr)
 					}
 				}

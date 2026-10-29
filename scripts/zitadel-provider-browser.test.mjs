@@ -24,7 +24,7 @@ for(const mode of ['native-settings','missing-header','missing-frame']){
  const root={querySelector:selector=>selector==='cnsl-header'&&mode!=='missing-header'?visible:null};
  globalThis.document={body:{innerText:'Instance Settings Identity Providers Fixture Google Fixture GitHub'},fonts,readyState:'complete',
   querySelector:selector=>selector==='cnsl-root'?root:null,
-  querySelectorAll:selector=>selector==='cnsl-header'&&mode!=='missing-header'||selector==='cnsl-instance,cnsl-provider-google,cnsl-provider-github'&&mode!=='missing-frame'?[visible]:[]};
+  querySelectorAll:selector=>selector==='cnsl-header'&&mode!=='missing-header'||selector==='cnsl-instance,cnsl-provider-google,cnsl-provider-github,cnsl-provider-oidc,cnsl-provider-jwt'&&mode!=='missing-frame'?[visible]:[]};
  const page=frameObservation();
  assert.equal(page.providerConsole,mode==='native-settings',mode+' gave wrong provider-frame observation');
  assert.equal(page.console,false,'settings frame satisfied home console requirement');
@@ -119,3 +119,66 @@ for(const kind of ['picker','amazon','google','mailgun','mailjet','postmark','se
  }
 }
 console.log('PASS: exact native SMTP observation script - 150 independent rendering, settled-theme and default controls (unit inputs only)');
+
+// Execute the actual MDI worker observation with adverse native-shaped inputs.
+const mdiObserve=script('browserMDIObservation');
+for(const kind of ['mdi-picker','mdi-table','editor-oidc','editor-jwt']){
+ for(const fault of ['none','hidden','focusable-decoration','wrong-glyph','misassociated-glyph','missing-label','missing-control','external-resource','retired-resource','unloaded-font','missing-theme','animating-background']){
+  const picker=kind==='mdi-picker',table=kind==='mdi-table';
+  const types=picker||table?['oidc','jwt']:[kind.slice(7)];
+  const rect={left:1,top:1,right:100,bottom:100,width:99,height:99};
+  const visible={getBoundingClientRect:()=>rect,getClientRects:()=>fault==='hidden'?[]:[rect]};
+  const anchors=types.map(t=>({...visible,origin:location.origin,pathname:'/ui/console/instance/provider/'+t+'/create',innerText:fault==='missing-label'?'':t.toUpperCase(),tabIndex:0}));
+  const rows=types.map(t=>({...visible,innerText:fault==='missing-label'?'':'Fixture '+t.toUpperCase(),querySelector:()=>fault==='missing-control'?null:{}}));
+  const icons=types.map((t,i)=>({...visible,type:fault==='misassociated-glyph'?(t==='jwt'?'oidc':'jwt'):t,tabIndex:fault==='focusable-decoration'?0:-1,classList:{contains:c=>c===((fault==='misassociated-glyph'?t!=='jwt':t==='jwt')?'la-key':'la-arrow-right')},getAttribute:()=> 'true',closest:s=>s==='tr'?rows[i]:anchors[i]}));
+  // Native settings contains the configured-provider table as well as the chooser.
+  // Its two sibling table icons must never enter the chooser observation.
+  const tableIcons=picker?icons.map((e,i)=>({...e,tableOnly:true,closest:s=>s==='tr'?rows[i]:null})):[];
+  const background={getAnimations:()=>fault==='animating-background'?[{pending:false,playState:'running'}]:[]};
+  globalThis.location=new URL('http://fixture.localhost:8080'+(picker||table?'/ui/console/instance?id=idp':'/ui/console/instance/provider/'+kind.slice(7)+'/create'));
+  const fonts=[{family:'Line Awesome Free',status:fault==='unloaded-font'?'error':'loaded'}];fonts.status='loaded';
+  globalThis.document={readyState:'complete',fonts,body:{innerText:fault==='missing-label'?'':kind.slice(7).toUpperCase()},
+   querySelectorAll:s=>!s.includes('.neutral-mdi-icon')?[]:picker&&s==='cnsl-idp-settings .neutral-mdi-icon'?[...icons,...tableIcons]:icons,querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:fault==='missing-control'?null:{}};
+  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:e.type==='jwt'?0xf084:0xf061)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(e.tableOnly?28:picker?36:table?28:48)+'px'};
+  const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/mdi/openid.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
+  globalThis.performance={getEntriesByType:()=>[{name:resource}]};
+  const result=mdiObserve(kind,'light');
+  const relevant=fault==='none'||picker&&fault==='missing-control';
+  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,relevant,kind+'/'+fault+' '+JSON.stringify(result));
+ }
+}
+console.log('PASS: actual MDI observation script - 48 independent native-shaped controls (unit inputs only)');
+
+// The exact setup script creates only unlinked fictional protocol fixtures.
+const mdiSetup=script('browserMDISetup');
+for(const fault of ['none','wrong-origin','http-error','malformed-json','bad-id','duplicate-id','wrong-name','changed-policy','missing-linked-provider']){
+ globalThis.location=new URL(fault==='wrong-origin'?'https://outside.invalid/':'http://fixture.localhost:8080/ui/console/instance?id=idp');
+ globalThis.sessionStorage={getItem:()=>JSON.stringify('fictional-native-fixture-token')};
+ let creates=0,calls=0;
+ const linked=[{idpId:'101',idpName:'Fixture Google'},{idpId:'102',idpName:'Fixture GitHub'}];
+ globalThis.fetch=async(path,options)=>{
+  calls++;assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');assert.equal(options.headers.Authorization,'Bearer fictional-native-fixture-token');
+  let body;
+  if(path==='/admin/v1/policies/login'){
+   assert.equal(options.method,'GET','MDI fixture mutated login policy');
+   body={policy:{allowRegister:false,allowExternalIdp:true,idps:fault==='missing-linked-provider'?linked.slice(0,1):linked}};
+   if(fault==='changed-policy'&&creates===2)body.policy.allowRegister=true;
+  }else if(path==='/admin/v1/idps/generic_oidc'||path==='/admin/v1/idps/generic_jwt'){
+   assert.equal(options.method,'POST');creates++;const posted=JSON.parse(options.body);
+   assert.equal(posted.providerOptions.isCreationAllowed,false);assert.equal(posted.providerOptions.isLinkingAllowed,false);
+   assert.equal(posted.issuer,location.origin);
+   if(creates===1){assert.equal(posted.name,'Fixture OIDC');assert.equal(posted.clientId,'fictional-oidc-client');}
+   else{assert.equal(posted.name,'Fixture JWT');assert.equal(posted.jwtEndpoint,location.origin+'/fictional-jwt');assert.equal(posted.keysEndpoint,location.origin+'/oauth/v2/keys');}
+   body={id:fault==='bad-id'?'bad/id':fault==='duplicate-id'?'201':String(200+creates)};
+  }else{
+   assert.equal(options.method,'GET');assert.ok(['/admin/v1/idps/templates/201','/admin/v1/idps/templates/202'].includes(path));
+   body={idp:{id:path.split('/').at(-1),name:fault==='wrong-name'?'Wrong':creates===1?'Fixture OIDC':'Fixture JWT'}};
+  }
+  return {ok:fault!=='http-error',status:fault==='http-error'?500:200,headers:{get:()=> 'application/json'},text:async()=>fault==='malformed-json'?'not-json':JSON.stringify(body)};
+ };
+ const result=await new Promise(resolve=>mdiSetup(resolve));
+ assert.equal(result.complete,fault==='none',fault+' MDI setup');
+ if(fault==='none'){assert.equal(result.count,2);assert.deepEqual(result.ids,['201','202']);assert.equal(calls,6);}
+ if(fault==='wrong-origin')assert.equal(calls,0);
+}
+console.log('PASS: actual MDI setup script - nine same-origin, unchanged-policy and provider readback controls (unit inputs only)');
