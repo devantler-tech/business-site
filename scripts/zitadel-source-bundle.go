@@ -435,6 +435,10 @@ func sourceToolSource(snapshot, seal, output string, restore bool) (summary sour
 // sourceCaptureBuild seals the pre-install source and its complete literal
 // preparation/build records. Only its caller's fresh reservation is removed.
 func sourceCaptureBuild(build, repository, output string, policy sourceCapturePolicy) (summary sourceCaptureSummary, result error) {
+	return sourceCaptureBuildWithNotices(build, repository, output, "", policy)
+}
+
+func sourceCaptureBuildWithNotices(build, repository, output, notices string, policy sourceCapturePolicy) (summary sourceCaptureSummary, result error) {
 	seal, err := sourceSealTree(filepath.Join(build, "prepared/source"), output)
 	if err != nil {
 		return summary, err
@@ -475,6 +479,9 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 		root := build
 		if entry.repository {
 			root = repository
+			if notices != "" && sourceIsNoticeOriginal(entry.name) {
+				root = notices
+			}
 		}
 		body, err := sourceReadAt(root, entry.name)
 		if err != nil || len(body) == 0 || len(body) > sourceManifestLimit {
@@ -525,6 +532,11 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 	if err != nil {
 		return summary, err
 	}
+	if notices != "" {
+		if _, err := sourceNoticeVerify(notices, output, sealed); err != nil {
+			return summary, err
+		}
+	}
 	var total int64
 	for _, member := range manifest.Files {
 		total += member.Bytes
@@ -535,6 +547,10 @@ func sourceCaptureBuild(build, repository, output string, policy sourceCapturePo
 // sourceVerifyBuildRecords rechecks the current repository against every literal
 // retained repository record. Restored audit data never chooses the input paths.
 func sourceVerifyBuildRecords(snapshot, seal, repository string) (sourceManifest, error) {
+	return sourceVerifyBuildRecordsWithNotices(snapshot, seal, repository, "")
+}
+
+func sourceVerifyBuildRecordsWithNotices(snapshot, seal, repository, notices string) (sourceManifest, error) {
 	manifest, err := sourceVerifyTree(snapshot, seal)
 	if err != nil || manifest.PreparedProfile == "" {
 		return sourceManifest{}, fmt.Errorf("verified prepared build snapshot required")
@@ -550,17 +566,395 @@ func sourceVerifyBuildRecords(snapshot, seal, repository string) (sourceManifest
 		}
 		members[member.Path] = member
 	}
+	if notices != "" {
+		if _, err := sourceNoticeVerify(notices, snapshot, seal); err != nil {
+			return sourceManifest{}, err
+		}
+	}
 	for _, entry := range sourceBuildRecordInputs() {
 		if !entry.repository {
 			continue
 		}
-		body, err := sourceReadAt(repository, entry.name)
+		root := repository
+		if notices != "" && sourceIsNoticeOriginal(entry.name) {
+			root = notices
+		}
+		body, err := sourceReadAt(root, entry.name)
 		member := members[entry.retained]
 		if err != nil || int64(len(body)) != member.Bytes || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
 			return sourceManifest{}, fmt.Errorf("repository differs from retained build record: %s", entry.retained)
 		}
 	}
+	if notices != "" {
+		if _, err := sourceNoticeVerify(notices, snapshot, seal); err != nil {
+			return sourceManifest{}, err
+		}
+	}
 	return sourceVerifyTree(snapshot, seal)
+}
+
+func sourceIsNoticeOriginal(name string) bool {
+	for _, member := range sourceNoticeMembers() {
+		if name == member.Path {
+			return true
+		}
+	}
+	return false
+}
+
+// sourceNoticeManifest binds one closed original-input capsule to an already
+// sealed prepared snapshot. It is separate from the snapshot it authenticates.
+type sourceNoticeManifest struct {
+	SchemaVersion         int            `json:"schemaVersion"`
+	Profile               string         `json:"profile"`
+	SourceManifestSHA256  string         `json:"sourceManifestSha256"`
+	PreparedProfileSHA256 string         `json:"preparedProfileSha256"`
+	RecipeSHA256          string         `json:"recipeSha256"`
+	Members               []sourceMember `json:"members"`
+}
+
+type sourceNoticeSummary struct {
+	SchemaVersion                int    `json:"schemaVersion"`
+	Profile                      string `json:"profile"`
+	SourceManifestSHA256         string `json:"sourceManifestSha256"`
+	PreparedProfileSHA256        string `json:"preparedProfileSha256"`
+	RecipeSHA256                 string `json:"recipeSha256"`
+	ManifestSHA256               string `json:"manifestSha256"`
+	Files                        int    `json:"files"`
+	Bytes                        int64  `json:"bytes"`
+	OriginalInputsReadbackPassed bool   `json:"originalInputsReadbackPassed"`
+}
+
+// sourceNoticeMembers is the reviewed original-byte boundary, not a licence
+// verdict. Identical bytes at different required paths remain separate inputs.
+func sourceNoticeMembers() []sourceMember {
+	return []sourceMember{
+		{Path: "third_party/zitadel-console-notices/catalogue.json", Bytes: 12536, SHA256: "4f964bd659a7656f7951c363535120af0fe881be37b1ac522e0964dd41647206", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/connect-LICENSE", Bytes: 11354, SHA256: "445e3398edab2a40d8d5e5c1a1d533af6464fbae8378ecc0caaf2668e9bbea73", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/connect-attribution.txt", Bytes: 602, SHA256: "e01fde43e84618ece70bd9401756fd7baa2c04c18787d0332f0c7ac472e74624", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/connect-web-attribution.txt", Bytes: 602, SHA256: "e01fde43e84618ece70bd9401756fd7baa2c04c18787d0332f0c7ac472e74624", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/google-protobuf-apache-license.txt", Bytes: 10173, SHA256: "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/google-protobuf-bsd-license.txt", Bytes: 1519, SHA256: "103441a2584cb720426c60320bcba53807024aab3080b00e0da841c305757a34", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/google-protobuf-closure-attribution.txt", Bytes: 84, SHA256: "6f451d925cddd9d9f35c5c112aebb058c6ac610515a04ae82aff2c1f966a3ac7", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/grpc-web-LICENSE", Bytes: 11357, SHA256: "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/grpc-web-attribution.txt", Bytes: 84, SHA256: "6f451d925cddd9d9f35c5c112aebb058c6ac610515a04ae82aff2c1f966a3ac7", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/grpc-web-google-source-attribution.txt", Bytes: 602, SHA256: "224506478be0f26af4120dbeab425efc529b544151d4e0cca267f09f478e2b50", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/ng-icons-LICENSE.md", Bytes: 1053, SHA256: "13fb1d1ebc52e14fce36d8250232d559fc47c8a91636ebf16697835efb6da1f0", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/opentype-LICENSE", Bytes: 1085, SHA256: "a5b87c9bc191e7f9c06b07bd7cbbed3ed846dfdb50e859484b2c245aa1ab2e61", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/protobuf-LICENSE", Bytes: 11357, SHA256: "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/protobuf-buf-attribution.txt", Bytes: 605, SHA256: "cbc300ed2b08a4853eb3b953cc60ebe2f6f739ce0dfa3c82735eb2715e204f16", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/protobuf-google-bsd-license.txt", Bytes: 1812, SHA256: "0e952cb110ff6944789fbe47c25b38819a3866c04c7c5cbea8d0c0d8f3a92f0e", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/qrcode-license.txt", Bytes: 1076, SHA256: "8df47c6ad9ac2c41eb9b2a72def9908959da0ede8dadd56c7b249c1bdb0c5ce6", Mode: 0644},
+		{Path: "third_party/zitadel-console-notices/tiny-inflate-license.txt", Bytes: 1084, SHA256: "2af3d4c93529722bd5083f8f8b51c185423c06fb86d62ca00cd7c16182eebf39", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/Flag-Icons-LICENSE", Bytes: 1087, SHA256: "8f1195d55a2fd315a07d812328470ca9ba2abb78c8d317ff19619d5125e00cea", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md", Bytes: 1809, SHA256: "55a4cc3d450a9dfa4d12c7de238442562899868299b800dbac6c70ca6d99c490", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/Material-Icons-LICENSE", Bytes: 11358, SHA256: "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md", Bytes: 38585, SHA256: "9ffa1bda0bca61af695a8de5c4f24410b731a2561584b8a0c5d1c209f1e4d5cc", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSE", Bytes: 34522, SHA256: "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md", Bytes: 1877, SHA256: "97a02685ee62bfd02b2e696580189807a193b81fcc37909818f9d19cef45394e", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/catalogue.json", Bytes: 962009, SHA256: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/original-line-awesome.css", Bytes: 110644, SHA256: "194db85f3ea5dd6c3864270bd81cacb137b4e1f1c1473f64d9a65545d8f4c66e", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/original-line-awesome.min.css", Bytes: 89729, SHA256: "ce61a18cf084f15003798340044643f329ac5f90045acb2d9e778368bd799854", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/catalogue.json", Bytes: 207607, SHA256: "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/external/armon-go-radix-LICENSE.txt", Bytes: 1079, SHA256: "831892cd31b9eef0311bb1de9014527ef5d3592eed7add1f9f829510d2065e62", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/external/jub0bs-cors-LICENSE.txt", Bytes: 1063, SHA256: "35266411be2f2a792cfac1ed4211d20610e33bc1921ae4a68ff01c12b95764e8", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/external/zlib-crc32.c.header.txt", Bytes: 574, SHA256: "e5c4e9c78aa77e8868f4ea0735e5519226109943b45e7092db956ec9821f8c0a", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/external/zlib-zlib.h.header.txt", Bytes: 1326, SHA256: "b09e2a43e9960d3d28d37d24f10dfbc462a4cb376da54ba571ac9a8874911ed5", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/publicsuffix/MPL-2.0.txt", Bytes: 16726, SHA256: "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat", Bytes: 330467, SHA256: "a5638281157e8c902b127a5376f9ea2d024bf2ee11524133a6a76cd1d14ee7be", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/unicode/BidiPBAReference-2013.java.rights.txt", Bytes: 221, SHA256: "b1e1ff06002e8881b6c0daf36f13f3e555e6ae8fbdeb966b9920bc7a9cc069be", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/unicode/BidiReference-2013.java.rights.txt", Bytes: 529, SHA256: "c47d586592db8e7efd2ed7d5095f2b9b4828da7dfd61618f362732fa83e76a35", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/incorporated/unicode/LICENSE-V3.txt", Bytes: 1995, SHA256: "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96", Mode: 0644},
+		{Path: "third_party/zitadel-login-icons/LICENSE.md", Bytes: 1809, SHA256: "55a4cc3d450a9dfa4d12c7de238442562899868299b800dbac6c70ca6d99c490", Mode: 0644},
+		{Path: "third_party/zitadel-login-icons/NOTICE.md", Bytes: 1251, SHA256: "bbbf1549408fef9c90199ac0859a49a110683cf3b89394e0402d030a7cfe5155", Mode: 0644},
+		{Path: "third_party/zitadel-login-icons/clipboard.svg", Bytes: 390, SHA256: "9a526c626cdb157f44c29831d5c99eba3d719a92758a257891164538090fd739", Mode: 0644},
+		{Path: "third_party/zitadel-text-fonts/Apache-2.0.txt", Bytes: 11358, SHA256: "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", Mode: 0644},
+		{Path: "third_party/zitadel-text-fonts/catalogue.json", Bytes: 30322, SHA256: "04619cd3cd0de555538bc81dd8d70e3ff0ccf575bde586cd6a32a0a924fa73cb", Mode: 0644},
+	}
+}
+
+// sourceNoticeContext joins all thirteen existing original records without
+// extending the prepared snapshot's record set or making its seal recursive.
+func sourceNoticeContext(snapshot, seal string) (sourceNoticeManifest, []byte, error) {
+	manifest, err := sourceVerifyTree(snapshot, seal)
+	if err != nil || !sourceDigest(manifest.PreparedProfile) {
+		return sourceNoticeManifest{}, nil, fmt.Errorf("verified prepared source required for notice originals")
+	}
+	names, err := sourceBuildRecordNames()
+	if err != nil || len(manifest.Records) != len(names) {
+		return sourceNoticeManifest{}, nil, fmt.Errorf("complete build records required for notice originals")
+	}
+	records := map[string]sourceMember{}
+	for _, member := range manifest.Records {
+		if !names[member.Path] {
+			return sourceNoticeManifest{}, nil, fmt.Errorf("unexpected notice build record")
+		}
+		records[member.Path] = member
+	}
+	members := sourceNoticeMembers()
+	originals := map[string]sourceMember{}
+	for _, member := range members {
+		originals[member.Path] = member
+	}
+	joins := 0
+	for _, entry := range sourceBuildRecordInputs() {
+		original, ok := originals[entry.name]
+		if !entry.repository || !ok {
+			continue
+		}
+		if records[entry.retained] != original {
+			return sourceNoticeManifest{}, nil, fmt.Errorf("notice original differs from retained build record: %s", entry.name)
+		}
+		joins++
+	}
+	if joins != 13 {
+		return sourceNoticeManifest{}, nil, fmt.Errorf("notice original record join is incomplete")
+	}
+	recipe := records["recipes/build-zitadel-linux.sh"]
+	if !sourceDigest(recipe.SHA256) || recipe.Bytes <= 0 || recipe.Mode != 0644 {
+		return sourceNoticeManifest{}, nil, fmt.Errorf("notice recipe binding missing")
+	}
+	value := sourceNoticeManifest{1, "identity-notice-originals-v1", seal, manifest.PreparedProfile, recipe.SHA256, members}
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return sourceNoticeManifest{}, nil, err
+	}
+	return value, append(raw, '\n'), nil
+}
+
+// sourceNoticeObserve reads the same complete closed observation it classifies.
+// Checkout capture may omit only five README documents; a capsule has no extras.
+func sourceNoticeObserve(root string, raw []byte, capture bool) (bodies map[string][]byte, result error) {
+	owned, err := os.Lstat(root)
+	if err != nil || (owned.Mode() != os.ModeDir|0700 && (!capture || owned.Mode() != os.ModeDir|0755)) {
+		return nil, fmt.Errorf("physical notice root with safe mode required")
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := r.Close(); closeErr != nil {
+			bodies = nil
+			result = errors.Join(result, closeErr)
+		}
+	}()
+	opened, err := r.Lstat(".")
+	if err != nil || !os.SameFile(owned, opened) {
+		return nil, fmt.Errorf("notice root changed")
+	}
+	wanted := map[string]sourceMember{}
+	directories := map[string]bool{".": true}
+	for _, member := range sourceNoticeMembers() {
+		wanted[member.Path] = member
+		for parent := path.Dir(member.Path); parent != "."; parent = path.Dir(parent) {
+			directories[parent] = true
+		}
+	}
+	roots := []string{"third_party/zitadel-console-notices", "third_party/zitadel-copied-assets", "third_party/zitadel-go-module-notices", "third_party/zitadel-login-icons", "third_party/zitadel-text-fonts"}
+	readmes := map[string]bool{}
+	for _, name := range roots {
+		readmes[name+"/README.md"] = true
+	}
+	for name := range directories {
+		info, err := r.Lstat(name)
+		if err != nil || (info.Mode() != os.ModeDir|0700 && (!capture || info.Mode() != os.ModeDir|0755)) {
+			return nil, fmt.Errorf("missing, linked or unsafe notice parent")
+		}
+	}
+	if !capture {
+		roots = []string{"."}
+	}
+	bodies = map[string][]byte{}
+	manifestSeen := false
+	for _, base := range roots {
+		if err := fs.WalkDir(r.FS(), base, func(name string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if !directories[name] || (info.Mode() != os.ModeDir|0700 && (!capture || info.Mode() != os.ModeDir|0755)) {
+					return fmt.Errorf("unexpected or unsafe notice directory")
+				}
+				return nil
+			}
+			if capture && readmes[name] {
+				if info.Mode() != 0644 {
+					return fmt.Errorf("unsafe excluded notice guidance")
+				}
+				return nil
+			}
+			if !capture && name == "notice-originals.json" {
+				if manifestSeen || info.Mode() != 0644 || info.Size() != int64(len(raw)) {
+					return fmt.Errorf("invalid notice manifest")
+				}
+				body, err := sourceRead(r, name, info)
+				if err != nil || !bytes.Equal(body, raw) {
+					return fmt.Errorf("notice manifest differs from source and original identities")
+				}
+				manifestSeen = true
+				return nil
+			}
+			member, ok := wanted[name]
+			if !ok || info.Mode() != 0644 || info.Size() != member.Bytes {
+				return fmt.Errorf("unexpected, linked or substituted notice original: %s", name)
+			}
+			if _, exists := bodies[name]; exists {
+				return fmt.Errorf("duplicate notice original")
+			}
+			body, err := sourceRead(r, name, info)
+			if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != member.SHA256 {
+				return fmt.Errorf("notice original bytes differ: %s", name)
+			}
+			bodies[name] = body
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if len(bodies) != 41 || (!capture && !manifestSeen) {
+		return nil, fmt.Errorf("incomplete notice original observation")
+	}
+	current, err := os.Lstat(root)
+	if err != nil || !os.SameFile(owned, current) || owned.Mode() != current.Mode() {
+		return nil, fmt.Errorf("notice root changed during readback")
+	}
+	return bodies, nil
+}
+
+func sourceNoticeSummaryFor(value sourceNoticeManifest, raw []byte) sourceNoticeSummary {
+	var total int64
+	for _, member := range value.Members {
+		total += member.Bytes
+	}
+	return sourceNoticeSummary{1, value.Profile, value.SourceManifestSHA256, value.PreparedProfileSHA256, value.RecipeSHA256, fmt.Sprintf("%x", sha256.Sum256(raw)), len(value.Members), total, true}
+}
+
+// sourceNoticeMaterialize creates only its own private output, rechecks both
+// inputs after writing, and never rolls back over a replaced output root.
+func sourceNoticeMaterialize(input, snapshot, seal, output string, capture bool) (summary sourceNoticeSummary, result error) {
+	value, raw, err := sourceNoticeContext(snapshot, seal)
+	if err != nil {
+		return summary, err
+	}
+	bodies, err := sourceNoticeObserve(input, raw, capture)
+	if err != nil {
+		return summary, err
+	}
+	inputPhysical, err := filepath.EvalSymlinks(input)
+	if err != nil {
+		return summary, err
+	}
+	snapshotPhysical, err := filepath.EvalSymlinks(snapshot)
+	if err != nil {
+		return summary, err
+	}
+	output, err = filepath.Abs(output)
+	if err != nil {
+		return summary, err
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(output))
+	if err != nil {
+		return summary, err
+	}
+	output = filepath.Join(parent, filepath.Base(output))
+	for _, source := range []string{inputPhysical, snapshotPhysical} {
+		source, err = filepath.Abs(source)
+		if err != nil {
+			return summary, err
+		}
+		if output == source || strings.HasPrefix(output, source+string(filepath.Separator)) {
+			return summary, fmt.Errorf("notice output must stay outside its inputs")
+		}
+	}
+	if err := os.Mkdir(output, 0700); err != nil {
+		return summary, err
+	}
+	owned, err := os.Lstat(output)
+	if err != nil {
+		return summary, err
+	}
+	defer func() {
+		if result != nil {
+			current, err := os.Lstat(output)
+			if err == nil && os.SameFile(owned, current) {
+				result = errors.Join(result, os.RemoveAll(output))
+			} else {
+				result = errors.Join(result, fmt.Errorf("notice reservation replaced; replacement retained"))
+			}
+		}
+	}()
+	r, err := os.OpenRoot(output)
+	if err != nil {
+		return summary, err
+	}
+	defer func() {
+		if closeErr := r.Close(); closeErr != nil {
+			summary = sourceNoticeSummary{}
+			result = errors.Join(result, closeErr)
+		}
+	}()
+	opened, err := r.Lstat(".")
+	if err != nil || !os.SameFile(owned, opened) {
+		return summary, fmt.Errorf("notice reservation changed")
+	}
+	for _, member := range value.Members {
+		if err := r.MkdirAll(path.Dir(member.Path), 0700); err != nil {
+			return summary, err
+		}
+		file, err := r.OpenFile(member.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0644)
+		if err != nil {
+			return summary, err
+		}
+		if err := sourceWriteComplete(file, bodies[member.Path], 0644); err != nil {
+			return summary, err
+		}
+	}
+	file, err := r.OpenFile("notice-originals.json", os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0644)
+	if err != nil {
+		return summary, err
+	}
+	if err := sourceWriteComplete(file, raw, 0644); err != nil {
+		return summary, err
+	}
+	if _, err := sourceNoticeObserve(output, raw, false); err != nil {
+		return summary, err
+	}
+	if _, err := sourceNoticeObserve(input, raw, capture); err != nil {
+		return summary, err
+	}
+	if _, finalRaw, err := sourceNoticeContext(snapshot, seal); err != nil || !bytes.Equal(raw, finalRaw) {
+		return summary, fmt.Errorf("notice source context changed during readback")
+	}
+	current, err := os.Lstat(output)
+	if err != nil || !os.SameFile(owned, current) || current.Mode() != os.ModeDir|0700 {
+		return summary, fmt.Errorf("notice output root changed during readback")
+	}
+	return sourceNoticeSummaryFor(value, raw), nil
+}
+
+// sourceNoticeVerify authenticates the complete restored layout before any
+// native collector may consume it; no checkout fallback is involved.
+func sourceNoticeVerify(root, snapshot, seal string) (sourceNoticeSummary, error) {
+	return sourceNoticeReadback(root, snapshot, seal, false)
+}
+
+func sourceNoticeReadback(root, snapshot, seal string, checkout bool) (sourceNoticeSummary, error) {
+	value, raw, err := sourceNoticeContext(snapshot, seal)
+	if err != nil {
+		return sourceNoticeSummary{}, err
+	}
+	if _, err := sourceNoticeObserve(root, raw, checkout); err != nil {
+		return sourceNoticeSummary{}, err
+	}
+	if _, finalRaw, err := sourceNoticeContext(snapshot, seal); err != nil || !bytes.Equal(raw, finalRaw) {
+		return sourceNoticeSummary{}, fmt.Errorf("notice source context changed during verification")
+	}
+	return sourceNoticeSummaryFor(value, raw), nil
 }
 
 // sourceReadAt propagates checked file and root close failures together.
@@ -681,6 +1075,12 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 	var value any
 	var err error
 	switch {
+	case len(args) == 5 && (args[0] == "--capture-notice-originals" || args[0] == "--restore-notice-originals"):
+		value, err = sourceNoticeMaterialize(args[1], args[2], args[3], args[4], args[0] == "--capture-notice-originals")
+	case len(args) == 4 && args[0] == "--verify-notice-originals":
+		value, err = sourceNoticeVerify(args[1], args[2], args[3])
+	case len(args) == 4 && args[0] == "--verify-notice-checkout":
+		value, err = sourceNoticeReadback(args[1], args[2], args[3], true)
 	case len(args) == 4 && (args[0] == "--restore-tools" || args[0] == "--verify-tools"):
 		value, err = sourceToolSource(args[1], args[2], args[3], args[0] == "--restore-tools")
 	case len(args) == 4 && args[0] == "--restore-build":
@@ -691,8 +1091,16 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 		value = struct {
 			ManifestSHA256 string `json:"manifestSha256"`
 		}{seal}
-	case len(args) == 4 && args[0] == "--capture-build":
-		value, err = sourceCaptureBuild(args[1], args[2], args[3], sourceCapturePolicy{
+	case (len(args) == 4 || len(args) == 5) && args[0] == "--capture-build":
+		notices := ""
+		if len(args) == 5 {
+			notices = args[4]
+			if notices == "" {
+				err = fmt.Errorf("explicit notice root is empty")
+				break
+			}
+		}
+		value, err = sourceCaptureBuildWithNotices(args[1], args[2], args[3], notices, sourceCapturePolicy{
 			sourcePreparedProfile,
 			"bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			"6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
@@ -707,8 +1115,16 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 		value = struct {
 			ManifestSHA256 string `json:"manifestSha256"`
 		}{seal}
-	case len(args) == 4 && args[0] == "--verify-build-records":
-		value, err = sourceVerifyBuildRecords(args[1], args[2], args[3])
+	case (len(args) == 4 || len(args) == 5) && args[0] == "--verify-build-records":
+		notices := ""
+		if len(args) == 5 {
+			notices = args[4]
+			if notices == "" {
+				err = fmt.Errorf("explicit notice root is empty")
+				break
+			}
+		}
+		value, err = sourceVerifyBuildRecordsWithNotices(args[1], args[2], args[3], notices)
 	case len(args) == 3 && args[0] == "--verify":
 		value, err = sourceVerifyTree(args[1], args[2])
 	case len(args) == 4 && args[0] == "--pack":
@@ -1118,6 +1534,7 @@ func sourceInputComponents() map[string]bool {
 		"go-graph-metadata": false, "selected-pnpm-sources": false,
 		"selected-bsr-sources": false, "selected-console-originals": false,
 		"selected-verifier-bootstrap": false,
+		"selected-notice-originals":   false,
 	}
 }
 

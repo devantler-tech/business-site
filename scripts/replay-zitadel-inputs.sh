@@ -74,7 +74,12 @@ bootstrap="$output/roundtrip/source/selected-verifier-bootstrap"
 bootstrap_sha="$(jq -er .sourceSnapshot.verifierBootstrap.manifestSha256 "$original")"
 [[ "$(shasum -a 256 "$verifier_go" | awk '{print $1}')" = "$compiler_sha" && "$(GOTOOLCHAIN=local "$verifier_go" env GOVERSION)" = go1.27.3 ]]
 # Match retained code to the reviewed caller before compiling or running it.
-go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$snapshot" "$source_sha" "$root" >/dev/null
+notice_root="$output/notice-originals-bootstrap"
+go run "$root/scripts/zitadel-source-bundle.go" --restore-notice-originals "$output/roundtrip/source/selected-notice-originals" "$snapshot" "$source_sha" "$notice_root" >"$output/notice-originals-bootstrap.json"
+go run "$root/scripts/zitadel-source-bundle.go" --verify-notice-originals "$notice_root" "$snapshot" "$source_sha" >"$output/notice-originals-bootstrap-readback.json"
+cmp "$output/notice-originals-bootstrap.json" "$output/notice-originals-bootstrap-readback.json"
+jq -e --slurpfile original "$original" '.files==41 and .originalInputsReadbackPassed==true and .==$original[0].sourceSnapshot.noticeOriginals' "$output/notice-originals-bootstrap.json" >/dev/null
+go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$snapshot" "$source_sha" "$root" "$notice_root" >/dev/null
 go run "$root/scripts/zitadel-source-bundle.go" --restore-tools "$snapshot" "$source_sha" "$output/verifier-tool-source" >"$output/verifier-tool-source.json"
 jq -e --slurpfile original "$original" '.==$original[0].sourceSnapshot.toolSource' "$output/verifier-tool-source.json" >/dev/null
 tools_sha="$(jq -er .toolSourceSha256 "$output/verifier-tool-source.json")"
@@ -107,9 +112,18 @@ rebuilt_module="$output/verifier-bin/zitadel-module-sources"
 jq -e --slurpfile original "$original" '.==$original[0].sourceSnapshot.verifierBootstrap' "$output/verifier-bootstrap-readback.json" >/dev/null
 # Only these rebuilt programs reach the real service pipeline. Original inputs
 # authenticate bootstrap capture; they are never an executable replay fallback.
-cd "$root"
-bash "$root/scripts/build-zitadel-linux.sh" --build --retained-inputs "$output/roundtrip" --retained-sha256 "$seal" \
+replay_root="$output/verifier-tool-source"
+# The real native caller sees only authenticated authored tools and terms. None
+# of the five ambient checkout notice families exists in this source layout.
+for family in zitadel-console-notices zitadel-go-module-notices zitadel-login-icons zitadel-text-fonts zitadel-copied-assets; do
+  [[ ! -e "$replay_root/third_party/$family" && ! -L "$replay_root/third_party/$family" ]]
+done
+cd "$replay_root"
+bash "$replay_root/scripts/build-zitadel-linux.sh" --build --retained-inputs "$output/roundtrip" --retained-sha256 "$seal" \
+  --pnpm-source-sdk "$root/tools/zitadel-pnpm-source" \
   --module-source-verifier "$output/verifier-bin/zitadel-module-sources" --bsr-source-verifier "$output/verifier-bin/zitadel-bsr-sources" --output "$output/native"
+go run "$replay_root/scripts/zitadel-source-bundle.go" --verify-notice-originals "$notice_root" "$snapshot" "$source_sha" >"$output/notice-originals-bootstrap-final.json"
+cmp "$output/notice-originals-bootstrap.json" "$output/notice-originals-bootstrap-final.json"
 go run "$root/scripts/zitadel-source-bundle.go" --verify-tools "$snapshot" "$source_sha" "$output/verifier-tool-source" >"$output/verifier-tool-source-final.json"
 cmp "$output/verifier-tool-source.json" "$output/verifier-tool-source-final.json"
 "$rebuilt_module" verify-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_sha" --tool-source-sha256 "$tools_sha" --package "$bootstrap" --sha256 "$bootstrap_sha" >"$output/verifier-bootstrap-final.json"
@@ -129,6 +143,7 @@ jq -e --slurpfile original "$original" '.schemaVersion==1 and .profile=="identit
 jq -e --slurpfile original "$original" '
  .schemaVersion==1 and .retainedInputsRestored==true and .recipeSha256==$original[0].recipeSha256 and
  .sourceInput.manifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+ .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and .noticeOriginals.files==41 and .noticeOriginals.originalInputsReadbackPassed==true and
  .preparation==$original[0].preparation and .upstreamCommit==$original[0].upstreamCommit and
  .tools==$original[0].tools and .platform=="linux/amd64" and .profile=="api-login-v1-console" and
  .consoleDownloads.manifestSha256==$original[0].consoleDownloads.manifestSha256 and
@@ -161,7 +176,7 @@ jq -n --arg input "$seal" --arg archive "$archive" --slurpfile native "$native" 
   --arg console "$console_notice_sha" --arg supplement "$supplement_notice_sha" --arg login "$login_notice_sha" --arg fonts "$font_notice_sha" --arg copied "$copied_notice_sha" '
  {schemaVersion:1,profile:"native-retained-input-replay-v1",platform:"linux/amd64",inputManifestSha256:$input,inputArchiveSha256:$archive,
  sourceManifestSha256:$native[0].sourceInput.manifestSha256,recipeSha256:$native[0].recipeSha256,binarySha256:$native[0].binarySha256,
- noticeInventories:{console:$console,supplement:$supplement,login:$login,textFonts:$fonts,copiedAssets:$copied},
+ noticeInventories:{console:$console,supplement:$supplement,login:$login,textFonts:$fonts,copiedAssets:$copied},noticeOriginals:$native[0].noticeOriginals,checkoutNoticeOriginalsUnavailable:true,
  networkDenied:true,nonRoot:true,noNewPrivileges:true,capabilitiesDropped:true,
  verifierReconstruction:$verifiers[0],
  dependencyInputsCaptured:true,nativeOfflineReplayProved:true,reproducible:false,imageAdmission:"unknown",licenseClosure:"unknown"}

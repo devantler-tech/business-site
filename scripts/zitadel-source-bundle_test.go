@@ -17,6 +17,310 @@ import (
 	"time"
 )
 
+// noticeOriginalsForTest names the maintained notice inputs independently of the
+// capsule implementation; README guidance and authored-tool terms are separate.
+func noticeOriginalsForTest() []string {
+	return []string{
+		"third_party/zitadel-console-notices/catalogue.json",
+		"third_party/zitadel-console-notices/connect-LICENSE",
+		"third_party/zitadel-console-notices/connect-attribution.txt",
+		"third_party/zitadel-console-notices/connect-web-attribution.txt",
+		"third_party/zitadel-console-notices/google-protobuf-apache-license.txt",
+		"third_party/zitadel-console-notices/google-protobuf-bsd-license.txt",
+		"third_party/zitadel-console-notices/google-protobuf-closure-attribution.txt",
+		"third_party/zitadel-console-notices/grpc-web-LICENSE",
+		"third_party/zitadel-console-notices/grpc-web-attribution.txt",
+		"third_party/zitadel-console-notices/grpc-web-google-source-attribution.txt",
+		"third_party/zitadel-console-notices/ng-icons-LICENSE.md",
+		"third_party/zitadel-console-notices/opentype-LICENSE",
+		"third_party/zitadel-console-notices/protobuf-LICENSE",
+		"third_party/zitadel-console-notices/protobuf-buf-attribution.txt",
+		"third_party/zitadel-console-notices/protobuf-google-bsd-license.txt",
+		"third_party/zitadel-console-notices/qrcode-license.txt",
+		"third_party/zitadel-console-notices/tiny-inflate-license.txt",
+		"third_party/zitadel-copied-assets/Flag-Icons-LICENSE",
+		"third_party/zitadel-copied-assets/Line-Awesome-LICENSE.md",
+		"third_party/zitadel-copied-assets/Material-Icons-LICENSE",
+		"third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md",
+		"third_party/zitadel-copied-assets/ZITADEL-LICENSE",
+		"third_party/zitadel-copied-assets/ZITADEL-LICENSING.md",
+		"third_party/zitadel-copied-assets/catalogue.json",
+		"third_party/zitadel-copied-assets/original-line-awesome.css",
+		"third_party/zitadel-copied-assets/original-line-awesome.min.css",
+		"third_party/zitadel-go-module-notices/catalogue.json",
+		"third_party/zitadel-go-module-notices/incorporated/external/armon-go-radix-LICENSE.txt",
+		"third_party/zitadel-go-module-notices/incorporated/external/jub0bs-cors-LICENSE.txt",
+		"third_party/zitadel-go-module-notices/incorporated/external/zlib-crc32.c.header.txt",
+		"third_party/zitadel-go-module-notices/incorporated/external/zlib-zlib.h.header.txt",
+		"third_party/zitadel-go-module-notices/incorporated/publicsuffix/MPL-2.0.txt",
+		"third_party/zitadel-go-module-notices/incorporated/publicsuffix/public_suffix_list.dat",
+		"third_party/zitadel-go-module-notices/incorporated/unicode/BidiPBAReference-2013.java.rights.txt",
+		"third_party/zitadel-go-module-notices/incorporated/unicode/BidiReference-2013.java.rights.txt",
+		"third_party/zitadel-go-module-notices/incorporated/unicode/LICENSE-V3.txt",
+		"third_party/zitadel-login-icons/LICENSE.md",
+		"third_party/zitadel-login-icons/NOTICE.md",
+		"third_party/zitadel-login-icons/clipboard.svg",
+		"third_party/zitadel-text-fonts/Apache-2.0.txt",
+		"third_party/zitadel-text-fonts/catalogue.json",
+	}
+}
+
+func noticeOriginalsFixture(t *testing.T) (string, string, string, map[string][]byte) {
+	t.Helper()
+	repository := t.TempDir()
+	originals := map[string][]byte{}
+	for _, name := range noticeOriginalsForTest() {
+		body, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		originals[name] = body
+		destination := filepath.Join(repository, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(destination, body, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prepared := t.TempDir()
+	if err := os.WriteFile(filepath.Join(prepared, "go.mod"), []byte("upstream fixture\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	profile, err := sourceSealTree(prepared, snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := map[string][]byte{"modifications.json": []byte("fixture modifications\n")}
+	for _, entry := range sourceBuildRecordInputs() {
+		body, ok := originals[entry.name]
+		if !ok {
+			body = []byte("fixture record " + entry.retained + "\n")
+		}
+		records[entry.retained] = body
+	}
+	if len(records) != 58 {
+		t.Fatal("notice transport must preserve the existing 58-record boundary")
+	}
+	seal, err := sourceAddRecords(snapshot, profile, records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repository, snapshot, seal, originals
+}
+
+// TestNoticeOriginalsSurviveWithoutCheckout catches a capsule that omits any
+// original or silently depends on its original checkout during restoration.
+func TestNoticeOriginalsSurviveWithoutCheckout(t *testing.T) {
+	repository, snapshot, seal, originals := noticeOriginalsFixture(t)
+	build := t.TempDir()
+	capsule := filepath.Join(build, "selected-notice-originals")
+	var out, diagnostic bytes.Buffer
+	if status := sourceBundleRun([]string{"--capture-notice-originals", repository, snapshot, seal, capsule}, &out, &diagnostic); status != 0 {
+		t.Fatalf("complete retained originals cannot be captured: %s", diagnostic.String())
+	}
+	// Exercise the actual existing transport; fake receipt prose is insufficient.
+	for _, component := range []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap"} {
+		dir := filepath.Join(build, component)
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "fixture"), []byte(component), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(build, "build-receipt.json"), []byte("transport fixture\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	retained := filepath.Join(t.TempDir(), "retained")
+	retainedSeal, err := sourceSealTreePhase(build, retained, "retained-build-inputs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "originals.tar")
+	digest, err := sourcePackTree(retained, retainedSeal, archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roundtrip := filepath.Join(t.TempDir(), "roundtrip")
+	if err := sourceUnpackTree(archive, digest, retainedSeal, roundtrip); err != nil {
+		t.Fatal(err)
+	}
+	capsule = filepath.Join(roundtrip, "source/selected-notice-originals")
+	if err := os.Rename(repository, repository+"-unavailable"); err != nil {
+		t.Fatal(err)
+	}
+	restored := filepath.Join(t.TempDir(), "restored")
+	out.Reset()
+	diagnostic.Reset()
+	if status := sourceBundleRun([]string{"--restore-notice-originals", capsule, snapshot, seal, restored}, &out, &diagnostic); status != 0 {
+		t.Fatalf("retained originals still require their checkout: %s", diagnostic.String())
+	}
+	for name, expected := range originals {
+		body, err := os.ReadFile(filepath.Join(restored, filepath.FromSlash(name)))
+		if err != nil || !bytes.Equal(body, expected) {
+			t.Fatalf("original input did not survive: %s: %v", name, err)
+		}
+	}
+}
+
+// TestBuildRecordsUseRetainedNoticeOriginals keeps the thirteen original-input
+// joins usable without ambient checkout notices, while authored terms remain
+// repository records and a missing capsule never falls back to that checkout.
+func TestBuildRecordsUseRetainedNoticeOriginals(t *testing.T) {
+	repository, snapshot, seal, originals := noticeOriginalsFixture(t)
+	for _, entry := range sourceBuildRecordInputs() {
+		if !entry.repository {
+			continue
+		}
+		if _, original := originals[entry.name]; original {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(snapshot, "records", filepath.FromSlash(entry.retained)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := filepath.Join(repository, filepath.FromSlash(entry.name))
+		if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name, body, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	capsule := filepath.Join(t.TempDir(), "capsule")
+	if _, err := sourceNoticeMaterialize(repository, snapshot, seal, capsule, true); err != nil {
+		t.Fatal(err)
+	}
+	for name := range originals {
+		if err := os.Remove(filepath.Join(repository, filepath.FromSlash(name))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, diagnostic bytes.Buffer
+	args := []string{"--verify-build-records", snapshot, seal, repository, capsule}
+	if code := sourceBundleRun(args, &out, &diagnostic); code != 0 {
+		t.Fatalf("retained record verification requires checkout notices: %s", diagnostic.String())
+	}
+	// A pristine checkout cannot rescue a missing explicit capsule.
+	for name, body := range originals {
+		if err := os.WriteFile(filepath.Join(repository, filepath.FromSlash(name)), body, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out.Reset()
+	diagnostic.Reset()
+	args[4] = filepath.Join(t.TempDir(), "missing")
+	if code := sourceBundleRun(args, &out, &diagnostic); code == 0 || out.Len() != 0 {
+		t.Fatal("missing retained originals fell back to the checkout")
+	}
+	args[4] = capsule
+	if err := os.WriteFile(filepath.Join(repository, "third_party/zitadel-build-tools/COPYING"), []byte("changed authored terms\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	diagnostic.Reset()
+	if code := sourceBundleRun(args, &out, &diagnostic); code == 0 || out.Len() != 0 {
+		t.Fatal("authored terms were incorrectly routed away from the repository")
+	}
+}
+
+// TestNoticeOriginalsRejectChangedInputs exercises the actual capsule verifier,
+// including same-length edits, private output, strict membership and bindings.
+func TestNoticeOriginalsRejectChangedInputs(t *testing.T) {
+	for _, test := range []string{"missing", "extra", "same-size", "mode", "linked-original", "linked-parent", "root-mode", "manifest-space", "manifest-source", "manifest-extra", "manifest-trailing", "recipe-seal", "profile-seal"} {
+		t.Run(test, func(t *testing.T) {
+			repository, snapshot, seal, _ := noticeOriginalsFixture(t)
+			capsule := filepath.Join(t.TempDir(), "capsule")
+			if _, err := sourceNoticeMaterialize(repository, snapshot, seal, capsule, true); err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(capsule, "third_party/zitadel-login-icons/NOTICE.md")
+			manifest := filepath.Join(capsule, "notice-originals.json")
+			var err error
+			switch test {
+			case "missing":
+				err = os.Remove(name)
+			case "extra":
+				err = os.WriteFile(filepath.Join(capsule, "extra"), []byte("unexpected"), 0644)
+			case "same-size":
+				var body []byte
+				body, err = os.ReadFile(name)
+				if err == nil {
+					body[0] ^= 1
+					err = os.WriteFile(name, body, 0644)
+				}
+			case "mode":
+				err = os.Chmod(name, 0600)
+			case "linked-original":
+				err = os.Rename(name, name+".saved")
+				if err == nil {
+					err = os.Symlink(name+".saved", name)
+				}
+			case "linked-parent":
+				parent := filepath.Dir(name)
+				err = os.Rename(parent, parent+".saved")
+				if err == nil {
+					err = os.Symlink(parent+".saved", parent)
+				}
+			case "root-mode":
+				err = os.Chmod(capsule, 0755)
+			case "manifest-space", "manifest-source", "manifest-extra", "manifest-trailing":
+				var body []byte
+				body, err = os.ReadFile(manifest)
+				if err == nil {
+					switch test {
+					case "manifest-space":
+						body = append([]byte(" "), body...)
+					case "manifest-trailing":
+						body = append(body, []byte("{}\n")...)
+					case "manifest-source":
+						body = bytes.Replace(body, []byte(seal), []byte(strings.Repeat("f", 64)), 1)
+					case "manifest-extra":
+						body = bytes.Replace(body, []byte("{\n"), []byte("{\n  \"unexpected\": true,\n"), 1)
+					}
+					err = os.WriteFile(manifest, body, 0644)
+				}
+			case "recipe-seal", "profile-seal":
+				var body []byte
+				body, err = os.ReadFile(manifest)
+				if err == nil {
+					var fields map[string]any
+					if err = json.Unmarshal(body, &fields); err == nil {
+						field := "recipeSha256"
+						if test == "profile-seal" {
+							field = "preparedProfileSha256"
+						}
+						original, ok := fields[field].(string)
+						if !ok || len(original) != 64 {
+							t.Fatal("fixture lacks the independent binding")
+						}
+						// Preserve canonical order/spacing so this case tests its
+						// changed binding rather than incidental JSON serialization.
+						body = bytes.Replace(body, []byte(original), []byte(strings.Repeat("f", 64)), 1)
+						err = os.WriteFile(manifest, body, 0644)
+					}
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out, diagnostic bytes.Buffer
+			if code := sourceBundleRun([]string{"--verify-notice-originals", capsule, snapshot, seal}, &out, &diagnostic); code == 0 || out.Len() != 0 {
+				t.Fatal("changed retained originals admitted a success summary")
+			}
+			restored := filepath.Join(t.TempDir(), "restored")
+			if _, err := sourceNoticeMaterialize(capsule, snapshot, seal, restored, false); err == nil {
+				t.Fatal("changed retained originals were restored")
+			}
+			if _, err := os.Lstat(restored); !os.IsNotExist(err) {
+				t.Fatal("failed restore published output")
+			}
+		})
+	}
+}
+
 // sourceApprovedExtraRecordsForTest supplies distinct bodies for the 25 missing
 // authored files and three terms documents, independently of the production map.
 func sourceApprovedExtraRecordsForTest() map[string][]byte {
@@ -101,16 +405,19 @@ func sourceApprovedAliasesForTest() map[string]string {
 // TestRetainedInputsArchive exercises the actual closed archive with private
 // capsule modes. Compiled output and ambient caches must never enter it.
 func TestRetainedInputsArchive(t *testing.T) {
-	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "linked-member", "unsupported-mode"} {
+	for _, kind := range []string{"valid", "missing-component", "missing-verifier-bootstrap", "missing-notice-originals", "linked-member", "unsupported-mode"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap"}
+			components := []string{"source-snapshot", "selected-go-sources", "selected-generator-go-sources", "go-graph-metadata", "selected-pnpm-sources", "selected-bsr-sources", "selected-console-originals", "selected-verifier-bootstrap", "selected-notice-originals"}
 			modes := []os.FileMode{0600, 0444, 0644, 0755}
 			for i, component := range components {
 				if kind == "missing-component" && i == 0 {
 					continue
 				}
 				if kind == "missing-verifier-bootstrap" && component == "selected-verifier-bootstrap" {
+					continue
+				}
+				if kind == "missing-notice-originals" && component == "selected-notice-originals" {
 					continue
 				}
 				dir := filepath.Join(root, component)

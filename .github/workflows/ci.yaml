@@ -525,6 +525,21 @@ jobs:
         run: bash scripts/readback-zitadel-go-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources"
       - name: Replay the complete retained identity build without networking
         run: bash scripts/replay-zitadel-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-go "$IDENTITY_VERIFIER_GO" --output "$RUNNER_TEMP/zitadel-offline-replay"
+      - name: Verify retained notice originals
+        run: |
+          jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            .profile=="native-retained-input-replay-v1" and
+            .checkoutNoticeOriginalsUnavailable==true and
+            .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and
+            .noticeOriginals.schemaVersion==1 and .noticeOriginals.profile=="identity-notice-originals-v1" and
+            .noticeOriginals.files==41 and .noticeOriginals.bytes>0 and
+            .noticeOriginals.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .noticeOriginals.preparedProfileSha256==$original[0].sourceSnapshot.preparedProfileSha256 and
+            .noticeOriginals.recipeSha256==$original[0].recipeSha256 and
+            (.noticeOriginals.manifestSha256|test("^[0-9a-f]{64}$")) and
+            .noticeOriginals.originalInputsReadbackPassed==true and
+            .imageAdmission=="unknown" and .licenseClosure=="unknown"
+          ' "$RUNNER_TEMP/zitadel-offline-replay/replay-receipt.json" >/dev/null
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -635,6 +650,10 @@ jobs:
             ${{ runner.temp }}/zitadel-build/*.sha256
             ${{ runner.temp }}/zitadel-build/source-snapshot/source-manifest.json
             ${{ runner.temp }}/zitadel-build/source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/selected-notice-originals/notice-originals.json
+            ${{ runner.temp }}/zitadel-build/notice-originals.json
+            ${{ runner.temp }}/zitadel-build/notice-originals-readback.json
+            ${{ runner.temp }}/zitadel-build/notice-checkout-readback.json
             ${{ runner.temp }}/zitadel-build/verifier-tool-source.json
             ${{ runner.temp }}/zitadel-build/selected-verifier-bootstrap/manifest.json
             ${{ runner.temp }}/zitadel-build/verifier-bootstrap-capture.json
@@ -675,6 +694,10 @@ jobs:
             ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-bootstrap-restored.json
+            ${{ runner.temp }}/zitadel-offline-replay/notice-originals-bootstrap.json
+            ${{ runner.temp }}/zitadel-offline-replay/notice-originals-bootstrap-final.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/notice-originals.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/notice-originals-readback.json
             ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
             ${{ runner.temp }}/zitadel-offline-replay/input-archive.json
             ${{ runner.temp }}/zitadel-offline-replay/input-roundtrip.json
