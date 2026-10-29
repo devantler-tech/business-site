@@ -666,6 +666,10 @@ return {url:location.href,kind,theme,count:icons.length,glyphs,labels:labelOK,ta
  themeReady:login?document.documentElement.classList.contains('lgn-'+theme+'-theme'):!!document.querySelector('cnsl-root.'+theme+'-theme'),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(name=>{const u=new URL(name);return u.origin===location.origin&&!/(?:assets\/images|resources\/images)\/idp\//i.test(u.pathname)})};`
 
+const browserRegistrationURL = `
+const id=document.querySelector('input[name="authRequestID"]')?.value;
+return id&&/^[A-Za-z0-9_-]{1,128}$/.test(id)?location.origin+'/ui/login/register/option?authRequestID='+encodeURIComponent(id):'';`
+
 func (d *browserDriver) providerPage(kind, theme string) (browserProviderPage, error) {
 	for {
 		// Theme buttons are at the footer. Move only the native viewport back to
@@ -829,7 +833,7 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 		// Derive only the auth request from the actual native login form. No external
 		// provider link is followed, and local registration remains disabled.
 		var registration string
-		if err := d.call("POST", "/execute/sync", map[string]any{"script": `const id=document.querySelector('input[name="authRequestID"]')?.value;return id&&/^[A-Za-z0-9_-]{1,128}$/.test(id)?location.origin+'/ui/login/register/option?authRequest='+encodeURIComponent(id):'';`, "args": []any{}}, &registration); err != nil {
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserRegistrationURL, "args": []any{}}, &registration); err != nil {
 			return nil, err
 		}
 		u, err := url.Parse(registration)

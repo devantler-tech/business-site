@@ -93,10 +93,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains fifty-six literal build/modification records and rechecks the snapshot/archive
+  retains fifty-eight literal build/modification records and rechecks the snapshot/archive
   before binding their identities to the completed binary's build receipt.
   These include all 37 approved authored paths and their three scoped terms documents,
-  using the existing aliases without duplicate source records. Explicit
+  using the existing aliases without duplicate source records. The Console supplement catalogue
+  and historical public-suffix original are retained as two additional inert records. Explicit
   `--verify-build-records` rechecks the current literal repository inputs against
   the sealed snapshot before a completed native receipt. Records remain inert
   0644 audit data; the helper module never replaces the upstream service module. CI

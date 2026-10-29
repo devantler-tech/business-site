@@ -30,6 +30,17 @@ for(const mode of ['native-settings','missing-header','missing-frame']){
  assert.equal(page.console,false,'settings frame satisfied home console requirement');
  assert.equal(page.consolePresented,false,'settings frame satisfied home navigation requirement');
 }
+const registrationURL=script('browserRegistrationURL');
+globalThis.location=new URL('http://fixture.localhost:8080/ui/login/login');
+for(const id of ['fictional-request_01','',null,'bad/request','x'.repeat(129)]){
+ globalThis.document={querySelector:selector=>{assert.equal(selector,'input[name="authRequestID"]');return id===null?null:{value:id};}};
+ const value=registrationURL();
+ if(id==='fictional-request_01'){
+  const url=new URL(value);
+  assert.equal(url.origin,location.origin);assert.equal(url.pathname,'/ui/login/register/option');
+  assert.deepEqual([...url.searchParams],[['authRequestID',id]],'wrong native auth-request parameter');
+ }else assert.equal(value,'','invalid or absent auth request admitted');
+}
 const setup=script('browserProviderSetup');
 for(const mode of ['positive','bad-duration','bad-boolean','http-error','malformed-body','missing-provider','wrong-policy','wrong-name','duplicate-id','wrong-origin']){
  const ids=['123456','789012'];const bools=['allowUsernamePassword','allowRegister','allowExternalIdp','forceMfa','hidePasswordReset','ignoreUnknownUsernames','allowDomainDiscovery','disableLoginWithEmail','disableLoginWithPhone','forceMfaLocalOnly'];
