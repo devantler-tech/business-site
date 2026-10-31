@@ -139,7 +139,9 @@ An alias's install path and original manifest name remain distinct identities.
 The original dev flags are lock metadata, not a test-only classification:
 capture uses the pinned `bin-links` normalizer to match native executable bytes.
 The component's own seal binds the source manifest, forty-member authored tool
-source, build recipe and original Node/npm identities.
+source, build recipe and original Node/npm identities. The npm fields hash its
+command shim and package metadata, so they identify the version only; npm's other
+files are anchored by the checksum-pinned Node tarball CI installs, not by the seal.
 
 `bootstrap-verify` uses built-ins only: it does not load the native SDK. It checks
 closed membership, all archive/term/source bytes and context before any external
@@ -155,9 +157,12 @@ The restricted replay caller runs this reconstruction inside its existing kernel
 network boundary, then proves empty and partial native caches cannot reconstruct
 it. The SDK performs restore, inspect, verify, recapture, verify and restore around
 one actual application build. Recapture uses the existing acquisition callback
-with verified original archives, never a new resolver or cache format. CI joins
-all six operation receipts to the same source, recipe and SDK seal. It uploads
-only compact manifests and receipts, never tarballs, caches or `node_modules`.
+with verified original archives, never a new resolver or cache format. The build
+script enforces each operation before recording that they passed. CI joins the
+receipt to the same source, recipe and SDK seal and checks the shape of all six
+operation digests, but it does not recompute them: only the retained restoration
+receipt is uploaded. Uploads are compact manifests and receipts, never tarballs,
+caches or `node_modules`.
 
 SDK receipts keep `nativeOfflineReplayProved` false. Only the enclosing complete
 native replay may assert that result after its existing checks all succeed. This

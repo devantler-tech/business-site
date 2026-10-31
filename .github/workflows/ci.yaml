@@ -49,6 +49,7 @@ jobs:
               - 'third_party/zitadel-build-tools/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
+              - 'third_party/zitadel-pnpm-sdk/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
               - 'tools/zitadel-pnpm-source/**'

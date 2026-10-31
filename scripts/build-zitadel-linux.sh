@@ -96,9 +96,8 @@ run_pnpm_sdk() {
     node "$pnpm_sdk/index.mjs" "$@"
   fi
 }
-# The installed lock-pinned SDK remains an explicit external build-tool boundary
-# (#422). Its source must equal the retained authored source; this is not SDK
-# bootstrap reconstruction or dependency-source capture.
+# A supplied lock-pinned SDK must have the retained authored source as its own.
+# Retained mode also requires it to be the one reconstructed from the capsule (#422).
 check_pnpm_sdk_source() {
   [[ -n "$supplied_pnpm_sdk" ]] || return 0
   local member
@@ -593,7 +592,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   "$module_verifier" verify-graph-metadata --package "$output/go-graph-metadata" --sha256 "$graph_metadata" --source-sha256 "$source_manifest" >"$output/go-graph-metadata-readback.json"
   cmp "$output/go-graph-metadata-capture.pending" "$output/go-graph-metadata-readback.json" || fail 'Go graph metadata readback differs'
   # The source capsule retains original registry archives, not generated install
-  # outputs or a global cache. Its native SDK is acquired separately by CI.
+  # outputs or a global cache. Retained mode reconstructs its native SDK from them.
   run_pnpm_sdk capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
   jq -e --arg source "$source_manifest" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .packages > 0 and .archives > 0 and .files > 0 and .selectedPNPMSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/pnpm-source-capture.pending" >/dev/null || fail 'incomplete selected pnpm source capture'
   pnpm_manifest="$(jq -er .manifestSha256 "$output/pnpm-source-capture.pending")"
