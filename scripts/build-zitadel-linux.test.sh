@@ -78,11 +78,11 @@ if [[ "$2" = bootstrap-capture ]]; then
   [[ "${TEST_FAIL:-}" != sdk-bootstrap-incomplete ]] || packages=131
   jq -n --arg source "$4" --arg tools "$6" --arg recipe "$8" --argjson packages "$packages" \
     '{schemaVersion:1,profile:"identity-pnpm-sdk-bootstrap-v1",manifestSha256:("7"*64),sourceManifestSha256:$source,toolSourceSha256:$tools,recipeSha256:$recipe,packages:$packages,sdkReconstructed:false,nativeOfflineReplayProved:false}' >"${10}/receipt.json"
-  cat "${10}/receipt.json"
+  jq -c . "${10}/receipt.json"
 elif [[ "$2" = bootstrap-verify ]]; then
   [[ "$#" -eq 14 && "$3" = --capsule && "$5" = --sha256 && "$7" = --source-sha256 && "$9" = --tool-source-sha256 && "${11}" = --recipe-sha256 && "${13}" = --sdk-root ]]
   [[ "${TEST_FAIL:-}" != sdk-bootstrap-readback ]] || exit 42
-  cat "$4/receipt.json"
+  jq -c . "$4/receipt.json"
 elif [[ "$2" = inspect ]]; then
   [[ "$#" -eq 4 && "$3" = --build && -s "$4/pnpm-selected-projects.json" && ! -e "$4/generate.log" ]]
   [[ "${TEST_FAIL:-}" != pnpm-early-check ]] || exit 42

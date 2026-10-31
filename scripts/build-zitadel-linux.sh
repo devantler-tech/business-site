@@ -170,7 +170,7 @@ complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
 if [[ -n "$retained_inputs" ]]; then
-  jq '.sourceSnapshot.sdkBootstrap' "$retained_receipt" >"$output/sdk-bootstrap-capture.pending"
+  jq -c '.sourceSnapshot.sdkBootstrap' "$retained_receipt" >"$output/sdk-bootstrap-capture.pending"
   check_sdk_bootstrap_readback
 fi
 module_verifier_hash='' bsr_verifier_hash=''

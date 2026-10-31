@@ -1098,7 +1098,6 @@ test("SDK reconstruction uses native offline npm with a fresh layout and cache",
 test("SDK bootstrap preserves complete supplemental terms and refuses a changed body", async (t) => {
   const f = await sdkBootstrapFixture(t);
   const name = path.join(f.capsule, "terms/CC-BY-3.0.txt");
-  assert.equal(fs.existsSync(name), true, "assessed complete legal-code supplement was not retained");
   assert.equal(createHash("sha256").update(fs.readFileSync(name)).digest("hex"), "e6bc9e9c474700b708f568bac9e5a8a9bcb2b1dad53442f5ba449fcb848b8e76");
   fs.writeFileSync(name, "changed\n");
   assert.throws(() => f.api.verifySDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
