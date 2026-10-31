@@ -407,8 +407,9 @@ bash ../scripts/check-portal-quality.sh
 GOTOOLCHAIN=local go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
 # Use bash with pipefail so tee cannot hide a failing Go process.
 set -o pipefail
-GOTOOLCHAIN=local go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
 GOTOOLCHAIN=local go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+GOTOOLCHAIN=local go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
 node ../scripts/identity-cohorts.mjs
 GOTOOLCHAIN=local go test -race -tags=contacttrialintegration ./internal/identity -run '^TestContactTrialHost' -count=1 -timeout=90s
 GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
@@ -416,14 +417,17 @@ GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
 The Go database tests and explicit trial-host integration do not require Node;
 the complete ordinary-suite evidence check uses the repository's Node 24 line.
-The ordinary suite runs in two complementary module-wide cohorts: all tests
-except `TestWorkApproval`/`TestWorkReview`, then that work-decision family. Both
-retain every source file and helper. The current compiled inventory (including
-examples and fuzz seeds) must match the two successful executions exactly once;
+The ordinary suite runs in three complementary module-wide cohorts: core tests,
+the `TestWorkApproval`/`TestWorkReview` work-decision family, and the private/operator
+families named by the final command. All three retain every source file and helper.
+The private/operator family is separated because the cumulative core runtime reached
+the fixed package deadline on main; each individual deadline remains unchanged.
+The current compiled inventory (including examples and fuzz seeds) must match the
+three successful executions exactly once;
 missing, duplicated, skipped, incomplete or failed results are refused. Each
-cohort retains its separate atomic coverage profile; neither alone represents
-combined coverage. Neither cohort can be conditional or error-tolerant in CI.
-Both run package binaries one at a time with `-p=1`,
+cohort retains its separate atomic coverage profile; none alone represents
+combined coverage. No cohort can be conditional or error-tolerant in CI.
+All three run package binaries one at a time with `-p=1`,
 so executable-building packages do not compete with identity's real expiry and
 database checks. This does not limit concurrency within a test or change race
 detection, combined test selection or the 90-second per-package/per-cohort deadline.
@@ -440,7 +444,7 @@ their own runtime does not make them optional.
 CI gives quality observers and database tests independent ten-minute jobs.
 The quality job owns the locked npm install, checker controls and cohort-verifier
 self-tests. The database job needs only Go, Node's built-in modules and its
-disposable PostgreSQL service; its compiled inventory, both actual cohorts and
+disposable PostgreSQL service; its compiled inventory, all three actual cohorts and
 complete evidence join stay together. Packaging has its own ten-minute budget
 and requires both jobs to succeed. Both required aggregates include all three
 stages; no package deadline, test, observer or failure propagation is relaxed.

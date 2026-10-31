@@ -70,11 +70,11 @@ A collection of [reusable GitHub Actions workflows](https://docs.github.com/en/a
 
 - **CI Workflows**: [Go](https://go.dev/) testing/linting, [dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review) and [Zizmor](https://github.com/woodruffw/zizmor) workflow analysis
 - **CD Workflows**: Signed application and manifests-only [OCI](https://opencontainers.org/) publication, plus [semantic-release](https://semantic-release.gitbook.io/) versioning
-- **Automation**: Auto-merge for trusted bots, TODO scanning, [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) sync and signed commit-back of exported auto-fixes
+- **Automation**: Auto-merge for trusted bots, TODO scanning, stale issue triage, [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository) sync and signed commit-back of exported auto-fixes
 
-{/* reusable-workflows-count: 14 — complete callable-file inventory, including internal offline fixtures; fixtures are not public APIs. Changes require reviewing the categories above and the maintained catalogue's public/internal indexes. */}
+{/* reusable-workflows-count: 15 — complete callable-file inventory, including internal offline fixtures; fixtures are not public APIs. Changes require reviewing the categories above and the maintained catalogue's public/internal indexes. */}
 
-{/* reusable-workflows-names: apply-signed-fixes,create-release,dependency-review,enable-auto-merge,publish-app,publish-manifests,release-recovery-offline-fixture,scan-for-todo-comments,scan-for-todo-comments-default-fixture,scan-for-todo-comments-readonly,scan-for-workflow-vulnerabilities,template-sync,validate-go-project,validate-go-project-readonly — exact workflow_call filenames in the pinned .github catalogue, including internal fixtures. Counts alone cannot detect renames or same-size swaps. */}
+{/* reusable-workflows-names: apply-signed-fixes,create-release,dependency-review,enable-auto-merge,publish-app,publish-manifests,release-recovery-offline-fixture,scan-for-todo-comments,scan-for-todo-comments-default-fixture,scan-for-todo-comments-readonly,scan-for-workflow-vulnerabilities,template-sync,triage-stale-issues,validate-go-project,validate-go-project-readonly — exact workflow_call filenames in the pinned .github catalogue, including internal fixtures. Counts alone cannot detect renames or same-size swaps. */}
 
 ## [⚡ Actions](https://github.com/devantler-tech/.github) ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF.svg?style=for-the-badge&logo=GitHub-Actions&logoColor=white)
 
@@ -93,13 +93,14 @@ A collection of [composite GitHub Actions](https://docs.github.com/en/actions/tu
 - **Setup Go Toolchain**: Set up Go with optional private module support
 - **Setup KSail**: Install [KSail](https://github.com/devantler-tech/ksail) CLI via [Homebrew](https://brew.sh/)
 - **TODOs**: Create GitHub issues from TODO comments in code
+- **Triage Stale Issues**: Remind on issues inactive for 90 days, then close them after 30 more days without activity
 - **Upload Coverage**: Upload a Cobertura XML coverage report to GitHub Code Quality
 - **Upsert Issue**: Create, update, reopen, or close a GitHub issue by title
 - **Validate Manifest Naming**: Check that Kubernetes manifests and machine patches follow a configurable naming convention
 - **Validate Retired Repository Links**: Reject links to retired GitHub repositories, with documented historical exceptions
 - **Validate Shell Pipelines**: Find early-exit `grep` assertions in shell scripts before `pipefail` can invert their result
 
-{/* actions-dirs: aggregate-job-checks,approve-pr,check-ci-run-budget,dependency-review,diagnose-flux,enable-auto-merge-on-pr,cleanup-ghcr-packages,free-disk-space,login-to-ghcr,run-dotnet-tests,setup-go-toolchain,setup-ksail-cli,create-issues-from-todos,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines — exact composite-action directory set in the pinned .github catalogue. Update the matching bullet and this one inventory together when an action changes. */}
+{/* actions-dirs: aggregate-job-checks,approve-pr,check-ci-run-budget,dependency-review,diagnose-flux,enable-auto-merge-on-pr,cleanup-ghcr-packages,free-disk-space,login-to-ghcr,run-dotnet-tests,setup-go-toolchain,setup-ksail-cli,create-issues-from-todos,triage-stale-issues,upload-coverage,upsert-issue,validate-naming,validate-retired-repo-links,validate-shell-pipelines — exact composite-action directory set in the pinned .github catalogue. Update the matching bullet and this one inventory together when an action changes. */}
 
 ## [🧠 Agent Skills](https://github.com/devantler-tech/agent-skills) ![GitHub Copilot](https://img.shields.io/badge/GitHub%20Copilot-000000.svg?style=for-the-badge&logo=githubcopilot&logoColor=white) ![Claude](https://img.shields.io/badge/Claude-D97757.svg?style=for-the-badge&logo=claude&logoColor=white)
 
