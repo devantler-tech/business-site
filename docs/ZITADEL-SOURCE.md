@@ -1009,9 +1009,9 @@ reconstructed SDK. Its complete source, installation and original capsule are
 rechecked before and after native operations. Six actual operations surround the
 same native build: restore, inspect, verify, recapture, verify and restore. Recapture
 uses only authenticated original archives through the existing capture callback.
-The separate component leaves the forty-member caller source root, 58-record
-inventory, four restoration targets and 43-original notice capsule unchanged.
-Its receipts remain scoped; complete offline replay is asserted only by the
+The caller source root has forty members, the build inventory has 58 records,
+source restoration has four targets and the notice capsule holds 43 originals.
+The separate SDK component adds to none of these sets. Its receipts remain scoped; complete offline replay is asserted only by the
 existing restricted caller after every build and notice check passes.
 Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
 43-file plan retains original notices, attributions, catalogues, the historical
