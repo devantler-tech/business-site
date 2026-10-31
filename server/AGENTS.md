@@ -96,7 +96,7 @@ tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
 Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
-`go mod verify`, `go vet ./...`, both complementary ordinary race/coverage cohorts
+`go mod verify`, `go vet ./...`, all three complementary ordinary race/coverage cohorts
 and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 `-skip`/`-run` commands and complete result check; preserve `-p=1`, `-count=1`,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs

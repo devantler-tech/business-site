@@ -851,10 +851,13 @@ jobs:
         run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test broker and durable access boundary
         shell: bash
-        run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl
+        run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
       - name: Test work approval and review boundary
         shell: bash
         run: go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+      - name: Test private and operator flows
+        shell: bash
+        run: go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
       - name: Verify every ordinary test ran exactly once
         run: node ../scripts/identity-cohorts.mjs
       - name: Scan reachable Go vulnerabilities
