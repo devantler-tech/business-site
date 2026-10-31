@@ -1157,8 +1157,8 @@ test("SDK reconstruction refuses a scratch directory that already holds a cache"
   const f = await sdkBootstrapFixture(t);
   const r = reconstructFixture(f, "preseeded-cache");
   fs.mkdirSync(path.join(r.scratch, "native-cache"), { recursive: true, mode: 0o700 });
-  await assert.rejects(r.run());
-  assert.equal(fs.existsSync(path.join(r.output, "node_modules")), false);
+  await assert.rejects(r.run(), { code: "EEXIST" });
+  assert.deepEqual(fs.readdirSync(r.output), []);
   assert.equal(fs.existsSync(path.join(r.scratch, "native-cache/_cacache")), false);
 });
 
