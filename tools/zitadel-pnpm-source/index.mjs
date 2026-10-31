@@ -7,16 +7,34 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
-const { filterLockfileByImportersAndEngine } = require("@pnpm/lockfile.filtering");
-const { nameVerFromPkgSnapshot, packageIdFromSnapshot, pkgSnapshotToResolution } = require("@pnpm/lockfile.utils");
-const { createCafs, getFilePathByModeInCafs, getIndexFilePathInCafs } = require("@pnpm/store.cafs");
-const { readWantedLockfile, readCurrentLockfile } = require("@pnpm/lockfile.fs");
-const { readModulesManifest } = require("@pnpm/modules-yaml");
-const { pkgRequiresBuild } = require("@pnpm/exec.pkg-requires-build");
-const { getBinsFromPackageManifest } = require("@pnpm/package-bins");
-const ssri = require("ssri");
+let nativeLoaded = false;
+let filterLockfileByImportersAndEngine, nameVerFromPkgSnapshot, packageIdFromSnapshot, pkgSnapshotToResolution;
+let createCafs, getFilePathByModeInCafs, getIndexFilePathInCafs, readWantedLockfile, readCurrentLockfile;
+let readModulesManifest, pkgRequiresBuild, getBinsFromPackageManifest, ssri;
+
+function sdkRequire(name) {
+  const resolved = fs.realpathSync(require.resolve(name));
+  if (!resolved.startsWith(path.join(here, "node_modules") + path.sep)) fail("SDK dependency resolved outside the owned installation");
+  return require(name);
+}
+
+// Inert source/bootstrap authentication must not execute an installed package.
+// Only an operation that actually interprets native pnpm data loads this set.
+function loadNativeSDK() {
+  if (nativeLoaded) return;
+  ({ filterLockfileByImportersAndEngine } = sdkRequire("@pnpm/lockfile.filtering"));
+  ({ nameVerFromPkgSnapshot, packageIdFromSnapshot, pkgSnapshotToResolution } = sdkRequire("@pnpm/lockfile.utils"));
+  ({ createCafs, getFilePathByModeInCafs, getIndexFilePathInCafs } = sdkRequire("@pnpm/store.cafs"));
+  ({ readWantedLockfile, readCurrentLockfile } = sdkRequire("@pnpm/lockfile.fs"));
+  ({ readModulesManifest } = sdkRequire("@pnpm/modules-yaml"));
+  ({ pkgRequiresBuild } = sdkRequire("@pnpm/exec.pkg-requires-build"));
+  ({ getBinsFromPackageManifest } = sdkRequire("@pnpm/package-bins"));
+  ssri = sdkRequire("ssri");
+  nativeLoaded = true;
+}
 const importerIds = [".", "console", "packages/zitadel-client", "packages/zitadel-proto"];
 const included = { dependencies: true, devDependencies: true, optionalDependencies: true };
 const registry = "https://registry.npmjs.org/";
@@ -39,13 +57,15 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 function archiveIntegrity(value) {
   if (typeof value !== "string" || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(value))
     fail("complete original archive SHA-512 required");
-  if (ssri.parse(value, { strict: true }).toString() !== value) fail("noncanonical archive SRI");
+  if (Buffer.from(value.slice(7), "base64").toString("base64") !== value.slice(7))
+    fail("noncanonical archive SRI");
   return value;
 }
 
 // Use pnpm's readers/filtering, preserving peer-qualified snapshots and native
 // platform skips. A wanted lock is not evidence that these roots were installed.
 export function selectInstalled({ wanted, current, modules, projects }, sourceRoot) {
+  loadNativeSDK();
   phase = "workspace-selection";
   if (!path.isAbsolute(sourceRoot) || path.normalize(sourceRoot) !== sourceRoot || !Array.isArray(projects))
     fail("invalid native workspace observation");
@@ -259,6 +279,7 @@ function fileMap(files) {
 // complete connected index, then every connected CAFS payload. Parsing writes
 // only into the caller's newly reserved, otherwise empty validation store.
 async function interpretArchive(archive, selected, index, validationStore) {
+  loadNativeSDK();
   if (
     !Buffer.isBuffer(archive) ||
     archive.length === 0 ||
@@ -468,6 +489,7 @@ const observations = [
 ];
 
 async function loadObservation(capsule, sourceRoot) {
+  loadNativeSDK();
   return readInstallation(
     path.join(capsule, "records/source"),
     path.join(capsule, "records/projects.json"),
@@ -477,6 +499,7 @@ async function loadObservation(capsule, sourceRoot) {
 }
 
 async function readInstallation(copy, projectsFile, sourceRoot, mode) {
+  loadNativeSDK();
   phase = "native-metadata-readers";
   const wanted = await readWantedLockfile(copy, {
     ignoreIncompatible: false,
@@ -958,6 +981,271 @@ export async function verifyCapsule({ capsule, sha256: seal, scratch, expectedLo
   return { ...receipt(manifest, seal), ...(target ? { nativeStoreRestored: true } : {}) };
 }
 
+const sdkBootstrapPolicy = { lock: "644afeb662510e90c782e5148821d59ee5de520873a11c5f062ed4df4118e25e", packages: 132 };
+const sdkSourceNames = ["index.mjs", "package.json", "package-lock.json"];
+// Supplemental upstream/standard terms remain distinct from the complete
+// original npm archives (including their README, headers and AUTHORS bodies).
+const sdkSupplements = [
+  { path: "pnpm-components-LICENSE", bytes: 1170, sha256: "127161487fae720d42adf2bbb7e5e047174fc443050e799c3fb2cad407d721ab",
+    package: "@pnpm/util.lex-comparator@3.0.2", kind: "version-bound-upstream-terms",
+    uri: "https://github.com/pnpm/components/blob/5a7eefc9f6242e7c5f7d97348592ca87a796a880/LICENSE" },
+  { path: "CC-BY-3.0.txt", bytes: 19467, sha256: "e6bc9e9c474700b708f568bac9e5a8a9bcb2b1dad53442f5ba449fcb848b8e76",
+    package: "spdx-exceptions@2.5.0", kind: "official-standard-legal-code-supplement", uri: "https://creativecommons.org/licenses/by/3.0/legalcode.txt" },
+  { path: "CC0-1.0.txt", bytes: 7048, sha256: "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    package: "spdx-license-ids@3.0.24", kind: "official-standard-legal-code-supplement", uri: "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt" },
+];
+
+function sdkPackages(source, policy) {
+  const raw = readRegular(path.join(source, "package-lock.json"), metadataLimit);
+  if (sha256(raw) !== policy.lock) fail("SDK original lock differs");
+  const lock = json(raw);
+  if (lock.lockfileVersion !== 3 || !lock.packages || Object.keys(lock.packages).length !== policy.packages + 1)
+    fail("SDK original package membership differs");
+  return Object.entries(lock.packages).filter(([name]) => name !== "").sort(([a], [b]) => a.localeCompare(b, "en")).map(([install, p]) => {
+    if (!/^node_modules\/(?:@[^/]+\/)?[^/]+(?:\/node_modules\/(?:@[^/]+\/)?[^/]+)*$/.test(install) || p.link || !p.version)
+      fail("SDK native install path differs");
+    const u = new URL(p.resolved);
+    if (u.origin !== registry.slice(0, -1) || u.username || u.password || u.search || u.hash)
+      fail("SDK original registry differs");
+    return { install, name: p.name || install.slice(install.lastIndexOf("node_modules/") + 13), version: p.version,
+      integrity: archiveIntegrity(p.integrity), tarball: p.resolved, dev: p.dev === true, optional: p.optional === true, peer: p.peer === true };
+  });
+}
+
+// Raw installed-file authentication uses only Node built-ins. In-root npm bin
+// links are observed explicitly; no package code is loaded while checking it.
+function sdkInstallation(sdk) {
+  let config;
+  try { config = fs.lstatSync(path.join(sdk, ".npmrc")); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  if (config) fail("unbound SDK project configuration");
+  const root = path.join(sdk, "node_modules"), files = [], links = [], directories = [];
+  if (fs.realpathSync(root) !== root || !fs.lstatSync(root).isDirectory()) fail("physical SDK installation required");
+  let total = 0, entries = 0;
+  function visit(dir) {
+    const before = fs.lstatSync(dir);
+    if (!before.isDirectory() || fs.realpathSync(dir) !== dir || (before.mode & 0o7777) !== 0o755) fail("unsafe SDK directory");
+    directories.push({ path: path.relative(sdk, dir).split(path.sep).join("/"), mode: 0o755 });
+    const names = fs.readdirSync(dir).sort();
+    for (const name of names) {
+      if (++entries > 50000) fail("SDK installation exceeds member bound");
+      const full = path.join(dir, name), relative = path.relative(sdk, full).split(path.sep).join("/"), info = fs.lstatSync(full);
+      if (info.isDirectory()) visit(full);
+      else if (info.isSymbolicLink()) {
+        const target = fs.readlinkSync(full), resolved = path.resolve(dir, target);
+        if (!relative.includes("/.bin/") || path.isAbsolute(target) || !resolved.startsWith(root + "/") || fs.realpathSync(resolved) !== resolved || !fs.lstatSync(resolved).isFile())
+          fail("unsafe SDK operational link");
+        links.push({ path: relative, target });
+      } else {
+        // This generated file has no archive counterpart; bind npm's native
+        // umask-022 metadata mode before accepting it into the sealed snapshot.
+        const expectedMode = relative === "node_modules/.package-lock.json" ? 0o644 : undefined;
+        const body = readRegular(full, packageLimit, expectedMode);
+        total += body.length;
+        if (total > 128 * 1024 * 1024 || files.length >= 50000) fail("SDK installation exceeds bounds");
+        files.push({ path: relative, bytes: body.length, mode: info.mode & 0o777, sha256: sha256(body) });
+      }
+    }
+    const after = fs.lstatSync(dir);
+    if (before.ino !== after.ino || before.dev !== after.dev || before.mtimeMs !== after.mtimeMs || JSON.stringify(names) !== JSON.stringify(fs.readdirSync(dir).sort()))
+      fail("SDK installation changed during observation");
+  }
+  visit(root);
+  return { files: files.sort((a, b) => a.path.localeCompare(b.path, "en")), links: links.sort((a, b) => a.path.localeCompare(b.path, "en")),
+    directories: directories.sort((a, b) => a.path.localeCompare(b.path, "en")) };
+}
+
+function sdkNpmIdentity(npmCLI) {
+  const node = fs.realpathSync(process.execPath);
+  const cli = fs.realpathSync(npmCLI || path.resolve(path.dirname(node), "../lib/node_modules/npm/bin/npm-cli.js"));
+  const original = readRegular(fs.realpathSync(path.resolve(path.dirname(cli), "../package.json")), metadataLimit);
+  const metadata = json(original);
+  if (metadata.name !== "npm" || !/^\d+\.\d+\.\d+$/.test(metadata.version)) fail("native npm identity incomplete");
+  return { node, cli, nodeVersion: process.versions.node, nodeSha256: sha256(readRegular(node, packageLimit)), npmVersion: metadata.version,
+    npmCliSha256: sha256(readRegular(cli, metadataLimit)), npmPackageSha256: sha256(original) };
+}
+
+function sdkNpm(args, work, cache, npmCLI) {
+  const identity = sdkNpmIdentity(npmCLI);
+  for (const name of ["userconfig", "globalconfig"]) {
+    const full = path.join(work, name);
+    if (!fs.existsSync(full)) writeNew(work, name, Buffer.alloc(0));
+    if (readRegular(full, 0, 0o600).length !== 0) fail("empty SDK npm configuration required");
+  }
+  const result = spawnSync(identity.node, [identity.cli, "--userconfig", path.join(work, "userconfig"), "--globalconfig", path.join(work, "globalconfig"),
+    "--cache", cache, "--offline", "--ignore-scripts", "--audit=false", "--fund=false", ...args],
+    { cwd: work, encoding: "utf8", env: { PATH: path.dirname(identity.node) + ":/usr/bin:/bin", HOME: work }, timeout: 120000, maxBuffer: metadataLimit });
+  if (result.error || result.status !== 0) fail("native SDK npm operation failed");
+  return result.stdout;
+}
+
+function sdkBootstrapReceipt(manifest, seal) {
+  return { schemaVersion: 1, profile: manifest.profile, manifestSha256: seal, sourceManifestSha256: manifest.sourceManifestSha256,
+    toolSourceSha256: manifest.toolSourceSha256, recipeSha256: manifest.recipeSha256, packages: manifest.packages.length,
+    sdkReconstructed: false, nativeOfflineReplayProved: false };
+}
+
+export async function captureSDKBootstrap({ sdkRoot, sourceManifestSha256, toolSourceSha256, recipeSha256, output, scratch,
+  policy = sdkBootstrapPolicy, acquire = downloadOriginal, npmCLI }) {
+  for (const value of [sourceManifestSha256, toolSourceSha256, recipeSha256]) if (!digest(value)) fail("SDK source bindings required");
+  separate(sdkRoot, output); separate(sdkRoot, scratch); separate(output, scratch);
+  const outputReservation = reserve(output), scratchReservation = reserve(scratch);
+  const packages = sdkPackages(sdkRoot, policy), before = sdkInstallation(sdkRoot), expected = new Set(["node_modules/.package-lock.json"]), expectedLinks = new Map();
+  const records = [];
+  const put = (name, body) => { writeNew(output, name, body); records.push(record(output, name)); };
+  for (const name of sdkSourceNames) put("records/sdk/" + name, readRegular(path.join(sdkRoot, name), metadataLimit));
+  for (const term of sdkSupplements) {
+    const body = readRegular(path.resolve(here, "../../third_party/zitadel-pnpm-sdk", term.path), term.bytes);
+    if (body.length !== term.bytes || sha256(body) !== term.sha256) fail("SDK supplemental terms differ");
+    put("terms/" + term.path, body);
+  }
+  loadNativeSDK();
+  for (let i = 0; i < packages.length; i++) {
+    const p = packages[i], archive = await acquire(p);
+    if (!Buffer.isBuffer(archive) || archive.length === 0 || archive.length > packageLimit || "sha512-" + createHash("sha512").update(archive).digest("base64") !== p.integrity)
+      fail("SDK original archive integrity differs");
+    const validation = path.join(scratch, "package-" + i); fs.mkdirSync(validation, { mode: 0o700 });
+    const native = createCafs(validation).addFilesFromTarball(gunzipSync(archive, { maxOutputLength: 512 * 1024 * 1024 }), true);
+    if (native.manifest?.name !== p.name || native.manifest?.version !== p.version) fail("SDK original package identity differs");
+    const files = fileMap(native.filesIndex), binRoot = path.join(validation, "bin-view");
+    if (!native.manifest.bin && native.manifest.directories?.bin) {
+      fs.mkdirSync(binRoot, { mode: 0o700 });
+      for (const name of Object.keys(files)) writeNew(binRoot, name, Buffer.alloc(0));
+    }
+    const commands = await getBinsFromPackageManifest(native.manifest, binRoot);
+    const bins = new Set(commands.map(c => path.relative(binRoot, c.path).split(path.sep).join("/")));
+    let binIndex = 0;
+    for (const [name, f] of Object.entries(files)) {
+      const relative = p.install + "/" + name, full = memberPath(sdkRoot, relative), mode = bins.has(name) ? 0o755 : nativeCafsMode(f.mode);
+      const body = readRegular(full, f.size, mode);
+      let expectedIntegrity = f.integrity, expectedSize = f.size;
+      if (bins.has(name)) {
+        // npm fixes executable permissions and a CRLF shebang only. Ask the
+        // unchanged native bin-links implementation to interpret that transition
+        // on a private copy; the original archive and CAFS bytes stay untouched.
+        const original = readRegular(getFilePathByModeInCafs(validation, f.integrity, f.mode), f.size);
+        const copy = path.join(validation, "normalized-bin-" + binIndex++);
+        writeNew(validation, path.basename(copy), original);
+        await sdkRequire("bin-links/lib/fix-bin")(copy);
+        const normalized = readRegular(copy, f.size, 0o755);
+        expectedIntegrity = "sha512-" + createHash("sha512").update(normalized).digest("base64");
+        expectedSize = normalized.length;
+      }
+      if (body.length !== expectedSize || "sha512-" + createHash("sha512").update(body).digest("base64") !== expectedIntegrity) fail("SDK installed bytes differ from original");
+      expected.add(relative);
+    }
+    for (const command of commands) {
+      const prefix = p.install.slice(0, p.install.lastIndexOf("node_modules/") + 12);
+      const link = prefix + "/.bin/" + command.name, target = path.posix.relative(path.posix.dirname(link), p.install + "/" + path.relative(binRoot, command.path).split(path.sep).join("/"));
+      if (!expectedLinks.has(link)) expectedLinks.set(link, new Set());
+      expectedLinks.get(link).add(target);
+    }
+    p.archive = "archives/" + sha256(archive) + ".tgz";
+    put(p.archive, archive);
+  }
+  assert.deepEqual(before.files.map(f => f.path), sorted(expected).sort((a, b) => a.localeCompare(b, "en")), "SDK native membership differs from originals");
+  assert.deepEqual(before.links.map(link => link.path), [...expectedLinks.keys()].sort((a, b) => a.localeCompare(b, "en")), "SDK native command membership differs");
+  for (const link of before.links)
+    if (!expectedLinks.get(link.path).has(link.target)) fail("SDK native command target differs from originals");
+  const expectedDirectories = new Set(["node_modules"]);
+  for (const name of [...expected, ...expectedLinks.keys()])
+    for (let parent = path.posix.dirname(name); parent !== "."; parent = path.posix.dirname(parent)) expectedDirectories.add(parent);
+  assert.deepEqual(before.directories, [...expectedDirectories].sort((a, b) => a.localeCompare(b, "en")).map(path => ({ path, mode: 0o755 })), "SDK native directory membership differs");
+  const identity = sdkNpmIdentity(npmCLI);
+  const composition = sdkNpm(["ls", "--all", "--json", "--prefix", sdkRoot], scratch, path.join(scratch, "npm-cache"), npmCLI);
+  json(Buffer.from(composition));
+  put("records/composition.json", Buffer.from(composition));
+  put("records/installation.json", encoded(before));
+  assert.deepEqual(sdkInstallation(sdkRoot), before, "SDK changed during original capture");
+  const manifest = { schemaVersion: 1, profile: "identity-pnpm-sdk-bootstrap-v1", sourceManifestSha256, toolSourceSha256, recipeSha256,
+    runtime: { nodeVersion: identity.nodeVersion, nodeSha256: identity.nodeSha256, npmVersion: identity.npmVersion, npmCliSha256: identity.npmCliSha256, npmPackageSha256: identity.npmPackageSha256 },
+    packages, supplements: sdkSupplements, files: records.sort((a, b) => a.path.localeCompare(b.path, "en")) };
+  const raw = encoded(manifest), seal = sha256(raw); writeNew(output, "manifest.json", raw);
+  sameDirectory(output, outputReservation); sameDirectory(scratch, scratchReservation);
+  return verifySDKBootstrap({ capsule: output, sha256: seal, sourceManifestSha256, toolSourceSha256, recipeSha256, sdkRoot, policy, npmCLI });
+}
+
+export function verifySDKBootstrap({ capsule, sha256: seal, sourceManifestSha256, toolSourceSha256, recipeSha256, sdkRoot, sourceRoot = sdkRoot || here, policy = sdkBootstrapPolicy, npmCLI }) {
+  for (const value of [sourceManifestSha256, toolSourceSha256, recipeSha256]) if (!digest(value)) fail("SDK source bindings required");
+  const reservation = privateDirectory(capsule), raw = readRegular(path.join(capsule, "manifest.json"), metadataLimit, 0o600);
+  if (!digest(seal) || sha256(raw) !== seal) fail("SDK bootstrap seal differs");
+  const manifest = json(raw);
+  if (!encoded(manifest).equals(raw) || manifest.schemaVersion !== 1 || manifest.profile !== "identity-pnpm-sdk-bootstrap-v1" || manifest.sourceManifestSha256 !== sourceManifestSha256 || manifest.toolSourceSha256 !== toolSourceSha256 || manifest.recipeSha256 !== recipeSha256 || !Array.isArray(manifest.files))
+    fail("SDK bootstrap context differs");
+  const payloads = sdkSourceNames.map(n => "records/sdk/" + n).concat(["records/composition.json", "records/installation.json"]);
+  assert.deepEqual(manifest.supplements, sdkSupplements, "SDK supplemental terms identities differ");
+  for (const term of sdkSupplements) {
+    const body = readRegular(path.join(capsule, "terms", term.path), term.bytes, 0o600);
+    if (body.length !== term.bytes || sha256(body) !== term.sha256) fail("SDK retained supplemental terms differ");
+    payloads.push("terms/" + term.path);
+  }
+  const packages = sdkPackages(path.join(capsule, "records/sdk"), policy);
+  if (manifest.packages.length !== packages.length) fail("SDK bootstrap package membership differs");
+  for (let i = 0; i < packages.length; i++) {
+    const { archive, ...retained } = manifest.packages[i];
+    assert.deepEqual(retained, packages[i], "SDK retained lock selection differs");
+    const body = readRegular(memberPath(capsule, archive), packageLimit, 0o600);
+    if (archive !== "archives/" + sha256(body) + ".tgz" || "sha512-" + createHash("sha512").update(body).digest("base64") !== retained.integrity) fail("SDK retained archive differs");
+    payloads.push(archive);
+  }
+  assert.deepEqual(manifest.files.map(f => f.path), payloads.sort((a, b) => a.localeCompare(b, "en")), "SDK bootstrap file membership differs");
+  for (const f of manifest.files) assert.deepEqual(record(capsule, f.path), f, "SDK retained payload changed");
+  closedMembers(capsule, [...payloads, "manifest.json"]);
+  for (const name of sdkSourceNames)
+    if (!readRegular(path.join(sourceRoot, name), metadataLimit).equals(readRegular(path.join(capsule, "records/sdk", name), metadataLimit, 0o600))) fail("SDK source differs from authenticated original");
+  if (sdkRoot) {
+    assert.deepEqual(sdkInstallation(sdkRoot), json(readRegular(path.join(capsule, "records/installation.json"), metadataLimit, 0o600)), "SDK installed payload differs");
+  }
+  const identity = sdkNpmIdentity(npmCLI);
+  assert.deepEqual(manifest.runtime, { nodeVersion: identity.nodeVersion, nodeSha256: identity.nodeSha256, npmVersion: identity.npmVersion, npmCliSha256: identity.npmCliSha256, npmPackageSha256: identity.npmPackageSha256 }, "SDK native tool identity differs");
+  sameDirectory(capsule, reservation);
+  return sdkBootstrapReceipt(manifest, seal);
+}
+
+export async function recaptureBuild({ build, sourceManifestSha256, capsule, sha256: seal, output, scratch, originalScratch, expectedLock = frozenLock }) {
+  for (const writable of [output, scratch, originalScratch]) separate(capsule, writable);
+  separate(originalScratch, output); separate(originalScratch, scratch);
+  const original = await verifyCapsule({ capsule, sha256: seal, scratch: originalScratch, expectedLock });
+  if (original.sourceManifestSha256 !== sourceManifestSha256) fail("retained pnpm source context differs");
+  const manifest = json(readRegular(path.join(capsule, "manifest.json"), metadataLimit, 0o600));
+  const selected = new Map(manifest.packages.map(p => [p.depPath, p]));
+  const result = await captureBuild({ build, sourceManifestSha256, output, scratch, expectedLock, acquire: async p => {
+    const previous = selected.get(p.depPath);
+    if (!previous) fail("recaptured native package is outside original selection");
+    const { archive, index, ...identity } = previous;
+    assert.deepEqual(p, identity, "recaptured native package identity differs");
+    return readRegular(memberPath(capsule, archive), packageLimit, 0o600);
+  } });
+  if (result.packages !== original.packages) fail("recaptured native package set incomplete");
+  const final = await verifyCapsule({ capsule, sha256: seal, scratch: path.join(originalScratch, "final-readback"), expectedLock });
+  assert.deepEqual(final, original, "original pnpm capsule changed during recapture");
+  return result;
+}
+
+export async function reconstructSDKBootstrap({ capsule, sha256: seal, sourceManifestSha256, toolSourceSha256, recipeSha256,
+  sourceRoot = here, output, scratch, policy = sdkBootstrapPolicy, npmCLI }) {
+  separate(capsule, output); separate(capsule, scratch); separate(output, scratch); separate(sourceRoot, output); separate(sourceRoot, scratch);
+  const args = { capsule, sha256: seal, sourceManifestSha256, toolSourceSha256, recipeSha256, sourceRoot, policy, npmCLI };
+  const original = verifySDKBootstrap(args);
+  const outputReservation = reserve(output), scratchReservation = reserve(scratch);
+  for (const name of sdkSourceNames) writeNew(output, name, readRegular(path.join(capsule, "records/sdk", name), metadataLimit, 0o600));
+  const cache = path.join(scratch, "native-cache"); reserve(cache);
+  const manifest = json(readRegular(path.join(capsule, "manifest.json"), metadataLimit, 0o600));
+  for (const p of manifest.packages) {
+    const body = readRegular(memberPath(capsule, p.archive), packageLimit, 0o600);
+    if ("sha512-" + createHash("sha512").update(body).digest("base64") !== p.integrity) fail("SDK original archive changed before native cache seeding");
+    sdkNpm(["cache", "add", memberPath(capsule, p.archive)], scratch, cache, npmCLI);
+  }
+  sdkNpm(["ci", "--prefix", output], scratch, cache, npmCLI);
+  // This built-in-only complete readback precedes every external SDK import.
+  verifySDKBootstrap({ ...args, sdkRoot: output });
+  const composition = sdkNpm(["ls", "--all", "--json", "--prefix", output], scratch, cache, npmCLI);
+  if (!readRegular(path.join(capsule, "records/composition.json"), metadataLimit, 0o600).equals(Buffer.from(composition)))
+    fail("reconstructed SDK native composition differs");
+  verifySDKBootstrap({ ...args, sdkRoot: output });
+  sameDirectory(output, outputReservation); sameDirectory(scratch, scratchReservation);
+  return { ...original, sdkReconstructed: true, installationMatched: true, compositionMatched: true };
+}
+
 async function main(args) {
   if (args.length === 0) return;
   if (
@@ -973,15 +1261,39 @@ async function main(args) {
     const key = args.shift();
     const value = args.shift();
     if (
-      !["--build", "--source-sha256", "--output", "--scratch", "--capsule", "--sha256", "--store"].includes(key) ||
+      !["--build", "--source-sha256", "--output", "--scratch", "--capsule", "--sha256", "--store", "--tool-source-sha256", "--recipe-sha256", "--sdk-root",
+        "--sdk-bootstrap", "--sdk-bootstrap-sha256", "--sdk-source-sha256", "--sdk-tool-source-sha256", "--sdk-recipe-sha256",
+        "--original-capsule", "--original-sha256", "--original-scratch"].includes(key) ||
       !value ||
       values[key]
     )
       fail("one complete explicit pnpm operation required");
     values[key] = value;
   }
+  const guardNames = ["--sdk-bootstrap", "--sdk-bootstrap-sha256", "--sdk-source-sha256", "--sdk-tool-source-sha256", "--sdk-recipe-sha256"];
+  let sdkGuard;
+  if (guardNames.some(name => values[name])) {
+    if (guardNames.some(name => !values[name]) || operation.startsWith("bootstrap-")) fail("complete exclusive SDK authentication required");
+    sdkGuard = { capsule: values["--sdk-bootstrap"], sha256: values["--sdk-bootstrap-sha256"], sourceManifestSha256: values["--sdk-source-sha256"],
+      toolSourceSha256: values["--sdk-tool-source-sha256"], recipeSha256: values["--sdk-recipe-sha256"], sdkRoot: here };
+    verifySDKBootstrap(sdkGuard);
+    for (const name of guardNames) delete values[name];
+  }
   let result;
-  if (operation === "inspect" && Object.keys(values).length === 1 && values["--build"]) {
+  if (operation === "bootstrap-capture" && Object.keys(values).length === 5 && values["--source-sha256"] && values["--tool-source-sha256"] && values["--recipe-sha256"] && values["--output"] && values["--scratch"]) {
+    result = await captureSDKBootstrap({ sdkRoot: here, sourceManifestSha256: values["--source-sha256"], toolSourceSha256: values["--tool-source-sha256"],
+      recipeSha256: values["--recipe-sha256"], output: values["--output"], scratch: values["--scratch"] });
+  } else if (["bootstrap-verify", "bootstrap-restore"].includes(operation) && Object.keys(values).length === (operation === "bootstrap-restore" ? 7 : values["--sdk-root"] ? 6 : 5) &&
+    values["--capsule"] && values["--sha256"] && values["--source-sha256"] && values["--tool-source-sha256"] && values["--recipe-sha256"] &&
+    (operation !== "bootstrap-restore" || values["--output"] && values["--scratch"])) {
+    const options = { capsule: values["--capsule"], sha256: values["--sha256"], sourceManifestSha256: values["--source-sha256"],
+      toolSourceSha256: values["--tool-source-sha256"], recipeSha256: values["--recipe-sha256"] };
+    result = operation === "bootstrap-restore" ? await reconstructSDKBootstrap({ ...options, output: values["--output"], scratch: values["--scratch"] }) :
+      verifySDKBootstrap({ ...options, sdkRoot: values["--sdk-root"] });
+  } else if (operation === "recapture" && Object.keys(values).length === 7 && values["--build"] && values["--source-sha256"] && values["--output"] && values["--scratch"] && values["--original-capsule"] && values["--original-sha256"] && values["--original-scratch"]) {
+    result = await recaptureBuild({ build: values["--build"], sourceManifestSha256: values["--source-sha256"], output: values["--output"], scratch: values["--scratch"],
+      capsule: values["--original-capsule"], sha256: values["--original-sha256"], originalScratch: values["--original-scratch"] });
+  } else if (operation === "inspect" && Object.keys(values).length === 1 && values["--build"]) {
     result = await inspectBuild({ build: values["--build"] });
   } else if (
     operation === "capture" &&
@@ -1012,6 +1324,7 @@ async function main(args) {
       restore: values["--store"],
     });
   } else fail("one complete explicit pnpm operation required");
+  if (sdkGuard) verifySDKBootstrap(sdkGuard);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

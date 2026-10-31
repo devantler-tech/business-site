@@ -49,6 +49,7 @@ jobs:
               - 'third_party/zitadel-build-tools/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
+              - 'third_party/zitadel-pnpm-sdk/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
               - 'tools/zitadel-pnpm-source/**'
@@ -517,6 +518,31 @@ jobs:
             .noticeOriginals.originalInputsReadbackPassed==true and
             .imageAdmission=="unknown" and .licenseClosure=="unknown"
           ' "$RUNNER_TEMP/zitadel-offline-replay/replay-receipt.json" >/dev/null
+      - name: Verify native SDK reconstruction and operations
+        run: |
+          jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            .profile=="native-retained-input-replay-v1" and .nativeOfflineReplayProved==true and
+            .sdkReconstruction.schemaVersion==1 and .sdkReconstruction.profile=="identity-pnpm-sdk-bootstrap-v1" and
+            .sdkReconstruction.packages==132 and .sdkReconstruction.sdkReconstructed==true and
+            .sdkReconstruction.installationMatched==true and .sdkReconstruction.compositionMatched==true and
+            .sdkReconstruction.emptyCacheRefused==true and .sdkReconstruction.partialCacheRefused==true and
+            .sdkReconstruction.nativeOfflineReplayProved==false and
+            (.sdkReconstruction | del(.installationMatched,.compositionMatched,.emptyCacheRefused,.partialCacheRefused)+{sdkReconstructed:false})==$original[0].sourceSnapshot.sdkBootstrap and
+            .sdkReconstruction.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .sdkReconstruction.toolSourceSha256==$original[0].sourceSnapshot.toolSource.toolSourceSha256 and
+            .sdkReconstruction.recipeSha256==$original[0].recipeSha256 and
+            .sdkNativeOperations.schemaVersion==1 and .sdkNativeOperations.profile=="identity-native-pnpm-sdk-operations-v1" and
+            .sdkNativeOperations.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .sdkNativeOperations.recipeSha256==$original[0].recipeSha256 and
+            .sdkNativeOperations.sdkBootstrapManifestSha256==.sdkReconstruction.manifestSha256 and
+            .sdkNativeOperations.originalPnpmManifestSha256==$original[0].sourceSnapshot.pnpmSources.manifestSha256 and
+            (.sdkNativeOperations.recapturedPnpmManifestSha256|test("^[0-9a-f]{64}$")) and
+            .sdkNativeOperations.operations==["restore","inspect","verify","capture","verify","restore"] and
+            (.sdkNativeOperations.receipts|keys)==["capture","inspect","restore","restoreRecapture","verify","verifyRecapture"] and
+            all(.sdkNativeOperations.receipts[]; test("^[0-9a-f]{64}$")) and
+            .sdkNativeOperations.nativeOperationsPassed==true and .sdkNativeOperations.nativeOfflineReplayProved==false and
+            .imageAdmission=="unknown" and .licenseClosure=="unknown"
+          ' "$RUNNER_TEMP/zitadel-offline-replay/replay-receipt.json" >/dev/null
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -653,6 +679,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/go-input-readback.json
             ${{ runner.temp }}/zitadel-build/go-input-native/manifest.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
+            ${{ runner.temp }}/zitadel-build/selected-pnpm-sdk-bootstrap/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json
@@ -674,6 +701,9 @@ jobs:
             ${{ runner.temp }}/zitadel-image/smtp-*.png
             ${{ runner.temp }}/zitadel-image/mdi-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/sdk-reconstruction.json
+            ${{ runner.temp }}/zitadel-offline-replay/sdk-bootstrap-final.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/pnpm-sdk-operations.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json
             ${{ runner.temp }}/zitadel-offline-replay/verifier-bootstrap-restored.json
