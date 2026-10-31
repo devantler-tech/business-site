@@ -1150,6 +1150,7 @@ test("native offline npm refuses a cache holding a different archive of the same
   add(f.archive, "alpha.tgz");
   assert.equal(npm(["ci", "--prefix", layout]).status, 0);
   assert.equal(fs.readFileSync(path.join(layout, "node_modules/alpha/index.js"), "utf8"), "export const value = 1;\n");
+  assert.doesNotMatch(fs.readFileSync(path.join(layout, "node_modules/alpha/bin"), "utf8"), /substituted/);
 });
 
 test("SDK reconstruction refuses a scratch directory that already holds a cache", async (t) => {
