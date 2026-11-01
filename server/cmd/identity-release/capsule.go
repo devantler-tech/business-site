@@ -60,7 +60,7 @@ func sourceOutputPath(name string) (string, error) {
 	return filepath.Join(parent, filepath.Base(name)), nil
 }
 
-func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, output string) (string, error) {
+func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, output string) (seal string, resultErr error) {
 	name, err := sourceOutputPath(output)
 	if err != nil {
 		return "", err
@@ -79,7 +79,7 @@ func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, o
 	if err != nil {
 		return "", err
 	}
-	defer root.Close()
+	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
 	for _, dir := range []string{"metadata", "layers", "sources", "notices", "status"} {
 		if err = root.Mkdir(dir, 0700); err != nil {
 			return "", err
@@ -101,7 +101,7 @@ func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, o
 	if err = writeSourceFile(root, "base-source.json", b); err != nil {
 		return "", err
 	}
-	seal := sourceSHA(b)
+	seal = sourceSHA(b)
 	if _, err = verifyBaseCapsule(p, name, seal); err != nil {
 		return "", err
 	}
@@ -121,7 +121,7 @@ func openBaseCapsule(name string) (*os.Root, error) {
 
 // The manifest is compared with the complete frozen declaration, not used to
 // select arbitrary paths or hashes. Its external seal is independently required.
-func verifyBaseCapsule(p baseProfile, name, seal string) (map[string][]byte, error) {
+func verifyBaseCapsule(p baseProfile, name, seal string) (result map[string][]byte, resultErr error) {
 	if !sourceDigest.MatchString(seal) {
 		return nil, fmt.Errorf("external capsule seal required")
 	}
@@ -136,7 +136,7 @@ func verifyBaseCapsule(p baseProfile, name, seal string) (map[string][]byte, err
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
 	files := append(baseSourceFiles(p), sourceFile{"base-source.json", int64(len(expected)), seal, 0444})
 	wanted := map[string]bool{}
 	for _, f := range files {
@@ -201,7 +201,7 @@ func verifyBaseCapsule(p baseProfile, name, seal string) (map[string][]byte, err
 
 // Canonical tar is a transport of verified data only. Original archives remain
 // opaque regular members; no programs or archive entries are extracted or run.
-func packBaseCapsule(p baseProfile, input, seal, output string) (string, error) {
+func packBaseCapsule(p baseProfile, input, seal, output string) (digest string, resultErr error) {
 	raw, err := verifyBaseCapsule(p, input, seal)
 	if err != nil {
 		return "", err
@@ -230,7 +230,7 @@ func packBaseCapsule(p baseProfile, input, seal, output string) (string, error) 
 	success := false
 	defer func() {
 		_ = f.Close()
-		if !success {
+		if !success || resultErr != nil {
 			_ = removeSourceOutput(name, created)
 		}
 	}()
@@ -279,8 +279,8 @@ func packBaseCapsule(p baseProfile, input, seal, output string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	defer parent.Close()
-	digest := fmt.Sprintf("%x", h.Sum(nil))
+	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
+	digest = fmt.Sprintf("%x", h.Sum(nil))
 	if _, err = readSourceFile(parent, sourceFile{filepath.Base(name), st.Size(), digest, 0444}); err != nil {
 		return "", err
 	}

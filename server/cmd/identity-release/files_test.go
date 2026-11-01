@@ -27,7 +27,11 @@ func openSourceFixtureRoot(t *testing.T, dir string) *os.Root {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = root.Close() })
+	t.Cleanup(func() {
+		if err := root.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	return root
 }
 
@@ -82,11 +86,7 @@ func TestSourceFileRequiresOneCompleteReadonlyRegularOriginal(t *testing.T) {
 			case "escape":
 				want.Path = "../original"
 			}
-			root, err := os.OpenRoot(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer root.Close()
+			root := openSourceFixtureRoot(t, dir)
 			got, err := readSourceFile(root, want)
 			if kind == "original" {
 				if err != nil || string(got) != string(data) {
@@ -123,12 +123,8 @@ func TestSourceFileCreationNeverOverwritesOrFollowsExistingFiles(t *testing.T) {
 			if kind == "escape" {
 				name = "../outside"
 			}
-			root, err := os.OpenRoot(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer root.Close()
-			err = writeSourceFile(root, name, []byte("retained"))
+			root := openSourceFixtureRoot(t, dir)
+			err := writeSourceFile(root, name, []byte("retained"))
 			if kind == "fresh" {
 				if err != nil {
 					t.Fatal(err)
