@@ -143,10 +143,19 @@ card and filtered autocomplete in light and dark themes. They run in a separate
 60-second phase before the unchanged provider phase, using the same fictional
 operator and restricted image. Native Tab/Enter follows the Angular Quickstart
 destination; native ArrowDown/Enter selects `angular` in the existing combobox
-without creating a project or application. Loaded glyphs, visible names, settled
-themes, original controls, confined resources and all six source-bound PNGs are
+without creating a project or application. The popup is selected through the
+native combobox `aria-controls` relationship, supporting the locked Angular
+inline popover and its global-overlay fallback. Finite page/popup transitions
+must settle before capture; a failed framework observation retains only its
+fictional fixture screenshot and fixed diagnostic fields. Loaded glyphs, visible
+names, settled themes, original controls, confined resources and all six source-bound PNGs are
 required. Synthetic observer controls do not replace those real visits. No
 federation, production TLS, invitation, MFA or portal-activation claim follows.
+
+The native browser/service gate runs immediately after the clean build and its
+executable scan, before the independent retained-source rebuild and complete
+network-denied replay. Those later gates and their receipt checks remain
+mandatory for CI success; early browser failure never implies replay success.
 
 The native fictional-browser worker requires twenty additional SMTP observations:
 the chooser and nine unsaved editors in light and dark themes. It checks native

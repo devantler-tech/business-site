@@ -269,7 +269,10 @@ check() {
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
       .run == "command -v google-chrome\ncommand -v chromedriver\ngo run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
-    ([$job.steps[].name] | index("Exercise the local restricted identity image") > index("Build the complete native Linux service and embedded console")) and
+    ([$job.steps[].name] | index("Scan the actual frozen identity executable") < index("Exercise the local restricted identity image") and
+      index("Exercise the local restricted identity image") < index("Verify actual identity browser evidence") and
+      index("Verify actual identity browser evidence") < index("Verify actual identity service evidence") and
+      index("Verify actual identity service evidence") < index("Rebuild the native service from the retained prepared source")) and
     any($job.steps[]; .name == "Verify actual identity browser evidence" and
       (.run | contains("sha256sum scripts/zitadel-browser.go")) and
       (.run | contains(".browserReceiptSha256 == $receipt")) and
@@ -635,6 +638,7 @@ for mutation in \
   '.jobs["test-zitadel-source"].steps |= map(select(.name != "Verify native provider presentation controls"))' \
   '.jobs["test-zitadel-source"].steps |= map(if .name == "Verify native provider presentation controls" then .if="false" else . end)' \
   '.jobs["test-zitadel-source"].steps |= map(if .name == "Verify native provider presentation controls" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= ([.[]|select(.name=="Exercise the local restricted identity image" or .name=="Verify actual identity browser evidence" or .name=="Verify actual identity service evidence")] as $browser | map(select(.name!="Exercise the local restricted identity image" and .name!="Verify actual identity browser evidence" and .name!="Verify actual identity service evidence")) | map(if .name=="Preserve build diagnostics, not unadmitted service distribution" then $browser[], . else . end))' \
   '.jobs.validation.needs |= map(select(. != "build-zitadel-linux"))' \
   '.jobs.status.steps[0].with["job-results"]=("$"+"{{ needs.test-zitadel-source.result }}")'; do
   jq "$mutation" "$scratch/ci.json" >"$scratch/mutation.json"

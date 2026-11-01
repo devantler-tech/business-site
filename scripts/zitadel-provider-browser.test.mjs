@@ -200,12 +200,13 @@ for(const kind of ['framework-quickstart','framework-selected','framework-picker
    return {...shown,href:location.origin+'/ui/console/projects/app-create?framework='+id,origin:location.origin,pathname:'/ui/console/projects/app-create',search:'?framework='+id,tabIndex:0,innerText:fault==='missing-label'?'':title,getAttribute:()=>title};
   });
   const icons=Array.from({length:quick?18:1},(_,i)=>({...shown,tabIndex:fault==='focusable-decoration'?0:-1,classList:{contains:()=>true},getAttribute:()=> 'true',closest:()=>links[i]}));
-  const input={...shown,value:fault==='wrong-id'?'wrong':'Angular',tabIndex:0,getAttribute:()=> 'true'};
+  const input={...shown,value:fault==='wrong-id'?'wrong':'Angular',tabIndex:0,getAttribute:attr=>attr==='aria-controls'?'framework-choices':'true'};
   const options=[{...shown,innerText:fault==='missing-label'?'':'Angular',getAttribute:()=> 'option'},{...shown,innerText:'Other (OIDC, SAML, API)'}];
-  globalThis.document={readyState:'complete',fonts,activeElement:input,querySelectorAll:()=>icons,
+  const panel={...shown,getAttribute:()=> 'listbox',getAnimations:()=>[],querySelectorAll:s=>s==='mat-option'?options:icons};
+  globalThis.document={readyState:'complete',fonts,activeElement:input,getElementById:id=>id==='framework-choices'?panel:null,querySelectorAll:s=>!quick&&!selected&&s.startsWith('.cdk-overlay-container')?[]:icons,
    querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:s==='cnsl-framework-change .framework-card'?{innerText:fault==='missing-label'?'':'Angular'}:s==='cnsl-framework-change button'?(fault==='missing-control'?null:{}):s.includes('input[role="combobox"]')?(fault==='missing-control'?null:input):null};
   const originalQuery=document.querySelectorAll;
-  document.querySelectorAll=s=>s.endsWith('mat-option')?options:originalQuery(s);
+  document.querySelectorAll=s=>!quick&&!selected&&s.startsWith('.cdk-overlay-container')?[]:s.endsWith('mat-option')?options:originalQuery(s);
   globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:0xf121)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(quick?20:selected?40:30)+'px'};
   const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/docs/img/tech/angular.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
   globalThis.performance={getEntriesByType:()=>[{name:resource}]};
@@ -216,13 +217,22 @@ for(const kind of ['framework-quickstart','framework-selected','framework-picker
 // An asynchronous autocomplete may have an input before its panel/options exist.
 // The observer must report incomplete facts so the worker polls, not throw.
 const completeFrameworkDocument=document;
+const completeFrameworkPanel=document.getElementById('framework-choices');
 for(const pending of ['no-options','one-option','no-input']){
  const originalQuery=completeFrameworkDocument.querySelectorAll;
  globalThis.document={...completeFrameworkDocument,
-  querySelector:s=>s==='cnsl-root .main-container'?{getAnimations:()=>[]}:pending==='no-input'&&s.includes('input[role="combobox"]')?null:completeFrameworkDocument.querySelector(s),
+  getElementById:id=>id==='framework-choices'?{...completeFrameworkPanel,querySelectorAll:s=>s==='mat-option'?(pending==='one-option'?completeFrameworkPanel.querySelectorAll(s).slice(0,1):[]):pending==='no-options'?[]:completeFrameworkPanel.querySelectorAll(s)}:null,
+  querySelector:s=>pending==='no-input'&&s.includes('input[role="combobox"]')?null:completeFrameworkDocument.querySelector(s),
   querySelectorAll:s=>s.endsWith('mat-option')?(pending==='one-option'?originalQuery(s).slice(0,1):[]):s.includes('.neutral-framework-icon')&&pending==='no-options'?[]:originalQuery(s)};
  const result=frameworkObserve('framework-picker','light');
  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,false,pending+' admitted an incomplete picker');
  assert.equal(result.keyboard,false,pending+' claimed keyboard readiness');
 }
-console.log('PASS: actual framework observation script - 42 native-shaped and asynchronous controls (unit inputs only)');
+for(const association of ['global-overlay','missing-panel','wrong-role','running-panel']){
+ globalThis.document={...completeFrameworkDocument,
+  getElementById:id=>association==='missing-panel'?null:{...completeFrameworkPanel,getAttribute:()=>association==='wrong-role'?'dialog':'listbox',getAnimations:()=>association==='running-panel'?[{pending:false,playState:'running',effect:{getComputedTiming:()=>({endTime:120})}}]:[]},
+  querySelectorAll:s=>s.endsWith('mat-option')?completeFrameworkPanel.querySelectorAll('mat-option'):completeFrameworkPanel.querySelectorAll('.neutral-framework-icon')};
+ const result=frameworkObserve('framework-picker','light');
+ assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,association==='global-overlay',association+' association admitted incorrectly '+JSON.stringify(result));
+}
+console.log('PASS: actual framework observation script - 46 native-shaped, association and asynchronous controls (unit inputs only)');

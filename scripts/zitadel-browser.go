@@ -1463,7 +1463,9 @@ func (d *browserDriver) mdiTableRoutes(ids []string) error {
 }
 
 // Observe native framework controls, including the loaded existing glyph and
-// visible labels. The filtered picker has Angular plus the separate Other choice.
+// visible labels. Bind the picker to its combobox aria-controls target, since
+// the locked CDK uses inline popovers rather than a global overlay container.
+// The filtered picker has Angular plus the separate Other choice.
 // Wait for finite descendant/route transitions; perpetual decorative spinners
 // are not page transitions. Missing asynchronous options stay incomplete.
 const browserFrameworkObservation = `
@@ -1471,15 +1473,17 @@ const [kind,theme]=arguments,quick=kind==='framework-quickstart',selected=kind==
 const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
 const shown=e=>{if(!e)return false;const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth};
 const plain=s=>s.replaceAll('"','').replaceAll("'",'').trim();
-const icons=[...document.querySelectorAll(quick?'cnsl-quickstart .neutral-framework-icon':selected?'cnsl-framework-change .neutral-framework-icon':'.cdk-overlay-container [role="listbox"] .neutral-framework-icon')];
+const input=document.querySelector('cnsl-framework-autocomplete input[role="combobox"]'),panelID=input?.getAttribute('aria-controls');
+const candidate=panelID?document.getElementById(panelID):null,panel=candidate?.getAttribute('role')==='listbox'?candidate:null;
+const icons=quick||selected?[...document.querySelectorAll(quick?'cnsl-quickstart .neutral-framework-icon':'cnsl-framework-change .neutral-framework-icon')]:[...(panel?.querySelectorAll('.neutral-framework-icon')||[])];
 const glyphs=icons.length>0&&icons.every(e=>{const b=getComputedStyle(e,'::before');return shown(e)&&e.classList.contains('la-code')&&plain(b.content).codePointAt(0)===0xf121&&plain(b.fontFamily)==='Line Awesome Free'&&parseFloat(getComputedStyle(e).fontSize)===(quick?20:selected?40:30)&&e.getAttribute('aria-hidden')==='true'&&[...document.fonts].some(f=>f.status==='loaded'&&plain(f.family)==='Line Awesome Free')});
 let labels=false,targets=false,keyboard=icons.length>0&&icons.every(e=>e.tabIndex<0);
 if(quick){const expected=[['angular','Angular'],['astro','Astro'],['django','Django'],['dotnet','.NET'],['expressjs','Express.js'],['fastapi','FastAPI'],['fastify','Fastify'],['flask','Flask'],['flutter','Flutter'],['go','Go'],['hono','Hono'],['laravel','Laravel'],['nestjs','NestJS'],['next','Next.js'],['nuxt','Nuxt.js'],['react','React'],['qwik','Qwik'],['solidstart','SolidStart']];const links=icons.map(e=>e.closest('a.quickstart-card'));labels=links.length===expected.length&&links.every((a,i)=>a&&a.innerText.trim()===expected[i][1]&&a.getAttribute('aria-label')===expected[i][1]);targets=links.length===expected.length&&links.every((a,i)=>a?.origin===location.origin&&a.pathname==='/ui/console/projects/app-create'&&a.search==='?framework='+expected[i][0]);keyboard=keyboard&&links.every(a=>a?.tabIndex===0);}
 else if(selected){const card=document.querySelector('cnsl-framework-change .framework-card');labels=card?.innerText.trim()==='Angular';targets=!!document.querySelector('cnsl-framework-change button')&&new URL(location.href).searchParams.get('framework')==='angular';}
-else{const input=document.querySelector('cnsl-framework-autocomplete input[role="combobox"]'),options=[...document.querySelectorAll('.cdk-overlay-container [role="listbox"] mat-option')];labels=options.length===2&&options[0].innerText.trim()==='Angular'&&options[1].innerText.trim().length>0;targets=shown(input)&&input.value==='Angular'&&input.getAttribute('aria-expanded')==='true'&&shown(options[0]);keyboard=keyboard&&shown(input)&&options.length===2&&input===document.activeElement&&input.tabIndex===0&&options[0].getAttribute('role')==='option';}
+else{const options=[...(panel?.querySelectorAll('mat-option')||[])];labels=options.length===2&&options[0].innerText.trim()==='Angular'&&options[1].innerText.trim().length>0;targets=shown(input)&&input.value==='Angular'&&input.getAttribute('aria-expanded')==='true'&&shown(options[0]);keyboard=keyboard&&shown(input)&&options.length===2&&input===document.activeElement&&input.tabIndex===0&&options[0].getAttribute('role')==='option';}
 const resources=performance.getEntriesByType('resource').map(e=>e.name);
 return {url:location.href,kind,theme,count:icons.length,glyphs,labels,targets,keyboard,
- themeReady:!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&back.getAnimations({subtree:true}).every(a=>a.effect?.getComputedTiming().endTime===Infinity||!a.pending&&a.playState!=='running'),
+ themeReady:!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&[...back.getAnimations({subtree:true}),...(panel?.getAnimations({subtree:true})||[])].every(a=>a.effect?.getComputedTiming().endTime===Infinity||!a.pending&&a.playState!=='running'),
  resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(n=>{const u=new URL(n);return u.origin===location.origin&&!u.pathname.includes('/docs/img/tech/')})};`
 
 func (d *browserDriver) frameworkPage(kind, theme string) (browserProviderPage, error) {
@@ -1502,8 +1506,17 @@ func (d *browserDriver) frameworkPage(kind, theme string) (browserProviderPage, 
 
 // Exercise real Tab/Enter and combobox ArrowDown/Enter. No project, application,
 // credential, integration or external documentation destination is created/opened.
-func (d *browserDriver) frameworkPresentation(output string) ([]browserProviderCase, error) {
-	cases := []browserProviderCase{}
+func (d *browserDriver) frameworkPresentation(output string) (cases []browserProviderCase, result error) {
+	defer func() {
+		if result != nil && d.session != "" {
+			old, category := d.ctx, d.category
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			d.ctx = ctx
+			_, _ = d.capture(output, "framework-incomplete", browserPage{})
+			cancel()
+			d.ctx, d.category = old, category
+		}
+	}()
 	for _, theme := range []string{"light", "dark"} {
 		d.providerStage = "framework-theme-" + theme
 		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/"}, nil); err != nil {
