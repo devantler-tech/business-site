@@ -54,5 +54,39 @@ decorative uses with existing admitted glyphs and removes the two originals and
 registrations. Both generated trees and every compiler record reject them,
 including escaped references outside the selected Console package. This does
 not disable OIDC/JWT, change the LDAP control, or add a new font or own-code grant.
-The MDI extension was prepared on 2026-10-29. Remaining official-branding,
-technology/utility families and whole-distribution admission stay under #384/#308.
+The MDI extension was prepared on 2026-10-29. The technology graphics were
+subsequently retired by the neutral framework profile; whole-distribution
+admission remains separate under #308.
+
+The collector's separate `nativeGraphics` records retain 27 unchanged graphics:
+19 Console originals, each with two generated copies and one compiler embed,
+and eight Login theme originals, each with its exact decoded statik member and
+archive hash. These are outside the generated 1,858-member catalogue and the
+25-member MDI extension. They are not covered by the Login font inventory's
+selected MIT terms.
+
+The three utility PNGs retain historical repository declarations:
+
+- The two `account-circle-outline*.png` files are byte-identical to their
+  introduction at ZITADEL commit `92a294f5c81243ebac8381eef2db8484116a2b7b`.
+  `ZITADEL-Console-2020-LICENSE` is that revision's complete root Apache-2.0 text
+  and original copyright context (11,357 bytes).
+- `transparent.png` is byte-identical to its introduction at
+  `08ae39ae1957289c74b9e6cfc5b30e198d42ce8f`.
+  `ZITADEL-Console-2022-LICENSE` retains that revision's complete root Apache-2.0
+  text and original copyright context (11,337 bytes).
+
+The remaining selected graphics retain the frozen current root license, scope
+and contribution context. The complete brand/trademark policy is read directly
+from sealed source at `apps/docs/content/legal/policies/brand-trademark-policy.mdx`
+and preserved in the notice diagnostic. Upstream identification is unchanged;
+these records introduce no new artwork, own-service branding, trademark grant
+or independent certification of primary authorship. Matching bytes in another
+component do not transfer that component's license to these files.
+
+The two historical originals expand the sealed notice capsule to 45 members;
+the 58 build records, prepared-source profile and 40-member tool-source boundary
+stay unchanged. Capture binds exact source hashes/blobs, both Console copies,
+actual compiler membership, decoded Login members and the generated manifest
+to the completed binary. Missing, extra, substituted and linked inputs fail.
+Release admission and deployed authentication acceptance are still separate.

@@ -136,7 +136,7 @@ every compiler package before selecting the unchanged catalogue. Escaped bundle
 references also refuse. The 1,883/3,766/1,883 retained inventory stays unchanged;
 the combined profiles now bind 34 distinct consumers. Complete source preparation
 contains 9,528 files and 261,324,795 bytes after native API serialization, while
-the 58-record, 40-tool and 43-notice boundaries remain intact.
+the 58-record, 40-tool and 45-notice boundaries remain intact.
 
 Six additional native browser cases observe Quickstart, the Angular selection
 card and filtered autocomplete in light and dark themes. They run in a separate
@@ -436,7 +436,24 @@ source/build records. The complete prepared upstream profile stays unchanged.
 Fixture controls and a full frozen-byte/compiler-record replay are diagnostic
 checks; only the hosted build observes actual compilation and native execution.
 
-This scope does not clear other graphics/provider marks, complete distribution
+The separate native-graphics observation closes the remaining 27 unchanged
+graphics: 19 Console source identities with 38 exact copies and 19 compiler
+embeds, and eight Login theme identities with exact decoded statik members.
+It preserves complete frozen root/scope/contribution and trademark-policy
+context, plus the two historical root license originals for the three unchanged
+utility PNGs. See the provenance README above for immutable revision details.
+The `nativeGraphics` inventory is separate from both the existing 1,883-member
+Console catalogue/MDI set and the Login font inventory's MIT label. All graphic
+formats throughout Console asset inputs and output trees are checked; the
+selected Login theme source and decoded member sets are closed too.
+
+No prepared upstream bytes, branding choices, modification date or profile
+change. The notice capsule grows from 43 to 45 originals while 58 build records,
+40 tool-source members and four restoration targets stay unchanged. The same
+47 native browser cases remain applicable; this evidence-only increment does
+not claim additional custom-branding, nil-policy or failed-fetch browser cases.
+
+This scope does not clear complete distribution
 licensing, durable public corresponding-source retrieval, signed image release,
 production federation or portal activation. `licenseClosure`, `imageAdmission`
 and reproducibility remain unchanged. See [ADR 0026](adr/0026-output-bound-copied-console-assets.md).
@@ -715,7 +732,7 @@ A complete file manifest
 keeps those fifty-eight records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
 recipe, after a full post-build readback. The two notice originals remain inert
-records; retaining them does not assemble the complete 43-input notice offer or
+records; retaining them does not assemble the complete 45-input notice offer or
 establish release admission. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
@@ -1052,11 +1069,11 @@ rechecked before and after native operations. Six actual operations surround the
 same native build: restore, inspect, verify, recapture, verify and restore. Recapture
 uses only authenticated original archives through the existing capture callback.
 The caller source root has forty members, the build inventory has 58 records,
-source restoration has four targets and the notice capsule holds 43 originals.
+source restoration has four targets and the notice capsule holds 45 originals.
 The separate SDK component adds to none of these sets. Its receipts remain scoped; complete offline replay is asserted only by the
 existing restricted caller after every build and notice check passes.
 Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
-43-file plan retains original notices, attributions, catalogues, the historical
+45-file plan retains original notices, attributions, catalogues, the historical
 public-suffix source and copied CSS. The five guidance READMEs and three authored
 tool-grant documents are outside that plan. It preserves the existing 58 build
 records and independently joins thirteen original-input records; it does not

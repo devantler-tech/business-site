@@ -43,6 +43,66 @@ type copiedCatalogue struct {
 	Archives       []copiedArchive `json:"archives"`
 	Notices        []inputRecord   `json:"notices"`
 }
+type copiedNativeDefinition struct {
+	Path             string `json:"path"`
+	Bytes            int    `json:"bytes"`
+	SHA256           string `json:"sha256"`
+	GitBlob          string `json:"gitBlob"`
+	DeclaredRevision string `json:"declaredRevision"`
+	DeclaredNotice   string `json:"declaredNotice"`
+}
+
+type copiedNativeBinding struct {
+	copiedNativeDefinition
+	Component            string   `json:"component"`
+	DeclaredNoticeSHA256 string   `json:"declaredNoticeSha256"`
+	Outputs              []string `json:"outputs,omitempty"`
+	StatikMember         string   `json:"statikMember,omitempty"`
+	StatikSHA256         string   `json:"statikSha256,omitempty"`
+}
+
+// Historical repository declarations are retained as context, not as a
+// certification of primary authorship or a new trademark/whole-image grant.
+var copiedNativeFrozen = []copiedNativeDefinition{
+	{Path: "console/src/assets/icons/android-chrome-192x192.png", Bytes: 17828, SHA256: "55136584844c823e026df289ed61c44cdcba8966c1d414bf3461ab216dd2273c", GitBlob: "f22bd442e631e91a1941f4f9d8b37c1ea4181ed1", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/android-chrome-512x512.png", Bytes: 137768, SHA256: "a07753d92a5557c9e7d798a1d3d14e484a4c0a189dfd63f50bb66092e9f56c5f", GitBlob: "6987ed11b45db3179879b2e0892a7afcdd891249", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/apple-touch-icon.png", Bytes: 18112, SHA256: "75693042742e1f01dbbb563a6b8a876147dd5a29335aa54581a2c11c07377630", GitBlob: "481610201581ee936684e3deb1b286d307803892", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/favicon-16x16.png", Bytes: 1551, SHA256: "c4731c9ca66e57ed050a1283839dccc862a9f4aa5e47baff0b8573b539070356", GitBlob: "4f45702ca9479bc35c6aeac617199db27bfad7c9", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/favicon-32x32.png", Bytes: 2050, SHA256: "145622f6496a4b962e549ae1f960af39460498a7fd4805b701df50073da1a7b9", GitBlob: "a598da05ebaac026fa3c1ca01fcf3accc4efe813", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/mstile-150x150.png", Bytes: 13206, SHA256: "9d68ac849f56a58c3e855e747f26a1099531dd8f3c04e98a851619932130849d", GitBlob: "ab518480e61be1a08fec9d736f64593926abe563", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/account-circle-outline-dark.png", Bytes: 1323, SHA256: "aba5cb004c6b1d195b71fd47441d36e0c4495d1cd74b4e574395c204e86a5daf", GitBlob: "eb92d2726fba66eea5e0d6e1225c5fccd714c476", DeclaredRevision: "92a294f5c81243ebac8381eef2db8484116a2b7b", DeclaredNotice: "ZITADEL-Console-2020-LICENSE"},
+	{Path: "console/src/assets/images/account-circle-outline.png", Bytes: 1384, SHA256: "f3030d2e58220063897f2f48c30dd95b0024d66c8fb551c3a95233a22445193f", GitBlob: "32dd883e89062f365e36afe43d934fd0a8c9b6b5", DeclaredRevision: "92a294f5c81243ebac8381eef2db8484116a2b7b", DeclaredNotice: "ZITADEL-Console-2020-LICENSE"},
+	{Path: "console/src/assets/images/transparent.png", Bytes: 629, SHA256: "600e8f2dd9f2068591ec375f9c698fe00f29b8c0f0dab40cd309c6ea2f8992bd", GitBlob: "02e3907e410c144fb2fff3e77b2c581098cf25e3", DeclaredRevision: "08ae39ae1957289c74b9e6cfc5b30e198d42ce8f", DeclaredNotice: "ZITADEL-Console-2022-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-dark.svg", Bytes: 6640, SHA256: "a08d5944f4f533dae2bbc10a06b4ea3a1b2cdf3d781a4951f4eb3a93ad4ecdd6", GitBlob: "c0308b345a31449a4e15ea1ec4aaa52ae3f78393", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-light.svg", Bytes: 6451, SHA256: "f71dfb88bd1408f515d02188c1c63483aa1a37e9bac65d78d1651f45cabe8e0b", GitBlob: "32f7e518059c5b86b9c3d07fbd2f13e0f7708617", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-dark-icon.svg", Bytes: 8678, SHA256: "6767d70158d40a666378108c1fc22cfd10f2295615c68c35c104605973e6a07c", GitBlob: "36da0d39f6e18ed80f20438082c34377222d80a5", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-dark.svg", Bytes: 8684, SHA256: "58171395669d0cadae8387af03516ef2151b340cac81abab7ed290b23989e650", GitBlob: "4d3181174e771eb1178985c0fe5a6c465c80d189", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-light-icon.svg", Bytes: 8243, SHA256: "b71bb9d338a88e5a58bde447d3b7c04c0c609fa4365f044c094086cfb573616f", GitBlob: "8f04c2c3369014eb1acf578d4361bd9c6d8785be", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-light.svg", Bytes: 8297, SHA256: "a4fde328acc63dec77fa54b05cb338bf439efe04b2bf659bf75b48cecbea7ae7", GitBlob: "df44ec5398d7f9af68250b6ae432375deaf80d16", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-social-preview25.png", Bytes: 450993, SHA256: "ae3348e95a6dfb7274ebdab03cf67a2e97c3d3c3d6cb66fe9faaee461ae7126e", GitBlob: "89b47ae4552c63723336893b700f1f2254d232cf", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/logo_blackfont_transparentbg.png", Bytes: 33093, SHA256: "ee9b1c89f252f16f3c4b7e231b387e5f84989f8380ba081bd58f420195c77ecf", GitBlob: "67a957500f1cc54edf76dd8aa8949ab16cb1acac", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/logo_whitefont_transparentbg.png", Bytes: 32831, SHA256: "0f81dc1e70e08c5caef4eb749613c3f1567b551edf39a6472d52286cf8783842", GitBlob: "48d5a9da16e583b5d4eb7979e6a2ad5a1d59b6b9", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/favicon.ico", Bytes: 38078, SHA256: "a1760389cf0eee45ef51059a632eb5ed886f686484846d3308847c8e1643a546", GitBlob: "de1ff1f956df4196dab40f550384f2bb86983b4f", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/favicon.ico", Bytes: 38078, SHA256: "81df5686ac4e7fe348779ce3bd61fe94ae2eea1762bd1f1756f92ea3c5970da9", GitBlob: "0b13cbabf6c535ee6f055df18ec7470eedbebc3e", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/flavor-spikes01-narrow.png", Bytes: 255525, SHA256: "9a90c3b6629af513c611c0095d7e4d3a3d9528e43f2eab6607fc03287a4e64f1", GitBlob: "05d02618f5593e2e1a80bca222f6e1cd15f946f2", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/flavor-spikes01-wide.png", Bytes: 951339, SHA256: "8a612025cd3869d5139a88eb5bc33cb7ba6dbcd38a68b3613affcd3b1c7a90a2", GitBlob: "a7542c611799887031d7bfe5b5c74ff53790bb5d", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/gradientdeco-full.svg", Bytes: 369928, SHA256: "b4bc86cd3277adfdbe6fb2eef34872f0d138db55c7d063aa2d0e3e990140712b", GitBlob: "bd2418a23b16ae2ffdbe38a78dd0ac283fbeac8d", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/logo-dark.svg", Bytes: 6640, SHA256: "a08d5944f4f533dae2bbc10a06b4ea3a1b2cdf3d781a4951f4eb3a93ad4ecdd6", GitBlob: "c0308b345a31449a4e15ea1ec4aaa52ae3f78393", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/logo-light.svg", Bytes: 6451, SHA256: "f71dfb88bd1408f515d02188c1c63483aa1a37e9bac65d78d1651f45cabe8e0b", GitBlob: "32f7e518059c5b86b9c3d07fbd2f13e0f7708617", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/select_arrow_dark.svg", Bytes: 385, SHA256: "73d8b8e3415ede2bdcfa513edd3aa7f03c28d7b7c0c363f9c118fc9eb91d8745", GitBlob: "43f22f29822558ad9f57ecdcc41d5e892492bc9b", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/select_arrow_light.svg", Bytes: 383, SHA256: "33a02c87c6dc725365699fb35da09c23e3657d36f754ec7debaca22434420258", GitBlob: "6a62ac0c49dbd1f331b4347f0e5ba2f56ed868c8", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+}
+
+var copiedNativeTermsFrozen = []inputRecord{
+	{"ZITADEL-Console-2020-LICENSE", "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"},
+	{"ZITADEL-Console-2022-LICENSE", "5fc72d30e91d6320cd4f5bfb94c74619b31be3d2a7436cda08f28a4267391a6d"},
+}
+
+var copiedNativeBrandFrozen = inputRecord{
+	"apps/docs/content/legal/policies/brand-trademark-policy.mdx",
+	"2a10fc0db4659c4265e8c0cf374ca527327bef7735b93af471d99d5ee2c84e74",
+}
+
 type copiedPolicy struct {
 	CatalogueHash      string
 	Assets, Outputs    int
@@ -54,9 +114,12 @@ type copiedPolicy struct {
 	MDI                []mdiProvenance
 	MDINotices         []inputRecord
 	MDIConsumers       []inputRecord
+	NativeGraphics     []copiedNativeDefinition
+	NativeTerms        []inputRecord
+	NativeBrandPolicy  inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), FrameworkConsumers: neutralFrameworkConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), FrameworkConsumers: neutralFrameworkConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}, NativeGraphics: copiedNativeFrozen, NativeTerms: copiedNativeTermsFrozen, NativeBrandPolicy: copiedNativeBrandFrozen}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -170,29 +233,31 @@ type copiedAlias struct {
 	Resolved string `json:"resolved"`
 }
 type copiedState struct {
-	SchemaVersion  int             `json:"schemaVersion"`
-	Inputs         []inputRecord   `json:"inputs"`
-	Assets         []copiedBinding `json:"assets"`
-	Raw            []byte          `json:"checkedNoticeBytes"`
-	ImageAdmission string          `json:"imageAdmission"`
-	LicenseClosure string          `json:"licenseClosure"`
-	Aliases        []copiedAlias   `json:"aliases"`
+	SchemaVersion  int                   `json:"schemaVersion"`
+	Inputs         []inputRecord         `json:"inputs"`
+	Assets         []copiedBinding       `json:"assets"`
+	Raw            []byte                `json:"checkedNoticeBytes"`
+	ImageAdmission string                `json:"imageAdmission"`
+	LicenseClosure string                `json:"licenseClosure"`
+	Aliases        []copiedAlias         `json:"aliases"`
+	NativeGraphics []copiedNativeBinding `json:"nativeGraphics"`
 }
 
 type copiedInventory struct {
-	SchemaVersion  int             `json:"schemaVersion"`
-	UpstreamCommit string          `json:"upstreamCommit"`
-	Profile        string          `json:"profile"`
-	Inputs         []inputRecord   `json:"inputs"`
-	Assets         []copiedBinding `json:"assets"`
-	RawDiagnostic  string          `json:"rawDiagnostic"`
-	Bytes          int             `json:"bytes"`
-	SHA256         string          `json:"sha256"`
-	BinarySHA256   string          `json:"binarySha256"`
-	ImageAdmission string          `json:"imageAdmission"`
-	LicenseClosure string          `json:"licenseClosure"`
-	Reproducible   bool            `json:"reproducible"`
-	Aliases        []copiedAlias   `json:"aliases"`
+	SchemaVersion  int                   `json:"schemaVersion"`
+	UpstreamCommit string                `json:"upstreamCommit"`
+	Profile        string                `json:"profile"`
+	Inputs         []inputRecord         `json:"inputs"`
+	Assets         []copiedBinding       `json:"assets"`
+	RawDiagnostic  string                `json:"rawDiagnostic"`
+	Bytes          int                   `json:"bytes"`
+	SHA256         string                `json:"sha256"`
+	BinarySHA256   string                `json:"binarySha256"`
+	ImageAdmission string                `json:"imageAdmission"`
+	LicenseClosure string                `json:"licenseClosure"`
+	Reproducible   bool                  `json:"reproducible"`
+	Aliases        []copiedAlias         `json:"aliases"`
+	NativeGraphics []copiedNativeBinding `json:"nativeGraphics"`
 }
 
 // The existing font collector supplies the canonical preparation/toolchain,
@@ -248,13 +313,28 @@ func copiedCapture(build, notices, recipe string, read textReader, policy copied
 			}
 		}
 	}
+	for _, asset := range state.NativeGraphics {
+		if asset.Component == "console" {
+			for _, name := range asset.Outputs {
+				if manifest[name] != asset.SHA256 {
+					return fail(fmt.Errorf("native Console generated manifest differs"))
+				}
+			}
+		} else if asset.Component == "login" {
+			if manifest[asset.Path] != asset.SHA256 || manifest[statikPath] != asset.StatikSHA256 {
+				return fail(fmt.Errorf("native Login generated manifest differs"))
+			}
+		} else {
+			return fail(fmt.Errorf("unknown native graphics component"))
+		}
+	}
 	state.Inputs = append(state.Inputs, inputRecord{"copied-assets.before.json", digest(before)}, inputRecord{"generated.sha256", digest(generated)}, inputRecord{"text-font-notices-inventory.json", digest(retained)}, inputRecord{textRaw, digest(retainedRaw)})
 	for _, in := range fontInventory.Inputs {
 		if in.Path == "build-receipt.json" {
 			state.Inputs = append(state.Inputs, in)
 		}
 	}
-	inv := copiedInventory{SchemaVersion: 1, UpstreamCommit: upstream, Profile: "api-login-v1-console", Inputs: state.Inputs, Assets: state.Assets, RawDiagnostic: "copied-asset-notices.txt", Bytes: len(state.Raw), SHA256: digest(state.Raw), BinarySHA256: fontInventory.BinarySHA256, ImageAdmission: "unknown", LicenseClosure: "unknown", Aliases: state.Aliases}
+	inv := copiedInventory{SchemaVersion: 1, UpstreamCommit: upstream, Profile: "api-login-v1-console", Inputs: state.Inputs, Assets: state.Assets, RawDiagnostic: "copied-asset-notices.txt", Bytes: len(state.Raw), SHA256: digest(state.Raw), BinarySHA256: fontInventory.BinarySHA256, ImageAdmission: "unknown", LicenseClosure: "unknown", Aliases: state.Aliases, NativeGraphics: state.NativeGraphics}
 	return inv, state.Raw, nil
 }
 
@@ -485,6 +565,19 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(expected) != policy.Outputs+2*len(policy.MDI) {
 		return fail(fmt.Errorf("MDI copied-output count differs"))
 	}
+	state.NativeGraphics, err = copiedNativeObserve(build, notices, policy, get, terms, sourceNames, expected, compiled, &raw)
+	if err != nil {
+		return fail(err)
+	}
+	nativeConsole := 0
+	for _, asset := range state.NativeGraphics {
+		if asset.Component == "console" {
+			nativeConsole++
+		}
+	}
+	if len(expected) != policy.Outputs+2*len(policy.MDI)+2*nativeConsole {
+		return fail(fmt.Errorf("native graphics copied-output count differs"))
+	}
 	if e = copiedFilesystemSet(filepath.Join(build, "prepared/source"), expected, sourceNames, func(name string) ([]byte, error) { return get(build, "prepared/source/"+name, "output/"+name, 64<<20) }); e != nil {
 		return fail(e)
 	}
@@ -515,10 +608,210 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	return state, nil
 }
 
+// Native graphics retain exact selected bytes and complete declared context.
+// The historical repository declarations do not certify original authorship,
+// authorize own-service branding, or change the separate image-admission gate.
+func copiedNativeObserve(build, notices string, policy copiedPolicy, get func(string, string, string, int64) ([]byte, error), currentTerms map[string][]byte, sourceNames, expected, compiled map[string]bool, raw *bytes.Buffer) ([]copiedNativeBinding, error) {
+	if len(policy.NativeGraphics) == 0 {
+		if len(policy.NativeTerms) != 0 || policy.NativeBrandPolicy != (inputRecord{}) {
+			return nil, fmt.Errorf("native graphics policy incomplete")
+		}
+		return nil, nil
+	}
+	if len(policy.NativeGraphics) != 27 || len(policy.NativeTerms) != 2 || policy.NativeBrandPolicy.Path != copiedNativeBrandFrozen.Path || !textHex(policy.NativeBrandPolicy.SHA256, 64) {
+		return nil, fmt.Errorf("native graphics policy differs")
+	}
+	terms := map[string][]byte{}
+	for _, name := range []string{"LICENSE", "LICENSING.md", "CONTRIBUTING.md"} {
+		body, err := get(build, "prepared/source/"+name, "native-context/"+name, 1<<20)
+		notice := "ZITADEL-" + name
+		if err != nil || len(body) == 0 || !bytes.Equal(body, currentTerms[notice]) {
+			return nil, fmt.Errorf("native source declaration context differs")
+		}
+		terms[notice] = body
+	}
+	brand, err := get(build, "prepared/source/"+policy.NativeBrandPolicy.Path, "native-context/brand-policy", 1<<20)
+	if err != nil || len(brand) == 0 || digest(brand) != policy.NativeBrandPolicy.SHA256 {
+		return nil, fmt.Errorf("native brand-policy context differs")
+	}
+	fmt.Fprintln(raw, "\nNATIVE GRAPHICS CONTEXT: repository declarations and unmodified upstream identification, not a new trademark grant or primary-authorship certification. Current root license, licensing scope and contribution context are retained above. Own-service branding remains a separate decision.")
+	fmt.Fprintln(raw, "\nFULL FROZEN BRAND POLICY")
+	raw.Write(brand)
+	raw.WriteByte('\n')
+	legacyRevisions := map[string]string{"ZITADEL-Console-2020-LICENSE": "92a294f5c81243ebac8381eef2db8484116a2b7b", "ZITADEL-Console-2022-LICENSE": "08ae39ae1957289c74b9e6cfc5b30e198d42ce8f"}
+	legacy := map[string]bool{}
+	for _, notice := range policy.NativeTerms {
+		if legacyRevisions[notice.Path] == "" || legacy[notice.Path] || !textHex(notice.SHA256, 64) {
+			return nil, fmt.Errorf("ambiguous native historical terms")
+		}
+		body, err := get(notices, notice.Path, "native-terms/"+notice.Path, 1<<20)
+		if err != nil || len(body) == 0 || digest(body) != notice.SHA256 {
+			return nil, fmt.Errorf("native historical terms differ")
+		}
+		terms[notice.Path], legacy[notice.Path] = body, true
+		fmt.Fprintf(raw, "\nFULL HISTORICAL REPOSITORY DECLARATION %s at %s/LICENSE\n", notice.Path, legacyRevisions[notice.Path])
+		raw.Write(body)
+		raw.WriteByte('\n')
+	}
+	seen, loginMembers, usedLegacy := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	var members map[string][]byte
+	var archiveSHA string
+	var result []copiedNativeBinding
+	for _, asset := range policy.NativeGraphics {
+		if !textPath(asset.Path) || asset.Bytes < 1 || asset.Bytes > 4<<20 || !textHex(asset.SHA256, 64) || !textHex(asset.GitBlob, 40) || !textHex(asset.DeclaredRevision, 40) || seen[asset.Path] || terms[asset.DeclaredNotice] == nil {
+			return nil, fmt.Errorf("incomplete native graphic identity")
+		}
+		if asset.DeclaredNotice == "ZITADEL-LICENSE" {
+			if asset.DeclaredRevision != upstream {
+				return nil, fmt.Errorf("native root declaration revision differs")
+			}
+		} else if legacyRevisions[asset.DeclaredNotice] != asset.DeclaredRevision {
+			return nil, fmt.Errorf("native historical declaration revision differs")
+		} else {
+			usedLegacy[asset.DeclaredNotice] = true
+		}
+		seen[asset.Path] = true
+		body, err := get(build, "prepared/source/"+asset.Path, "native-source/"+asset.Path, 4<<20)
+		if err != nil || len(body) != asset.Bytes || digest(body) != asset.SHA256 || blob(body) != asset.GitBlob {
+			return nil, fmt.Errorf("native selected original differs: %s", asset.Path)
+		}
+		binding := copiedNativeBinding{copiedNativeDefinition: asset, DeclaredNoticeSHA256: digest(terms[asset.DeclaredNotice])}
+		switch {
+		case strings.HasPrefix(asset.Path, "console/src/"):
+			name := strings.TrimPrefix(asset.Path, "console/src/")
+			if !copiedGraphic(name) || name != "favicon.ico" && !strings.HasPrefix(name, "assets/") || sourceNames[asset.Path] {
+				return nil, fmt.Errorf("ambiguous native Console source")
+			}
+			sourceNames[asset.Path] = true
+			binding.Component = "console"
+			binding.Outputs = []string{"console/dist/console/" + name, "internal/api/ui/console/static/" + name}
+			for i, output := range binding.Outputs {
+				if expected[output] {
+					return nil, fmt.Errorf("duplicate native Console output")
+				}
+				copy, err := get(build, "prepared/source/"+output, "native-output/"+output, 4<<20)
+				if err != nil || !bytes.Equal(copy, body) {
+					return nil, fmt.Errorf("native Console copy differs")
+				}
+				expected[output] = true
+				if i == 1 {
+					compiled[output] = true
+				}
+			}
+		case strings.HasPrefix(asset.Path, "internal/api/ui/login/static/resources/themes/zitadel/"):
+			const prefix = "internal/api/ui/login/static/"
+			name := strings.TrimPrefix(asset.Path, prefix)
+			if !copiedGraphic(name) || strings.TrimPrefix(name, "resources/themes/zitadel/") != filepath.Base(name) {
+				return nil, fmt.Errorf("ambiguous native Login resource")
+			}
+			if members == nil {
+				archive, err := get(build, "prepared/source/"+statikPath, "native-statik/"+statikPath, 32<<20)
+				if err != nil {
+					return nil, err
+				}
+				members, err = decodeStatik(archive)
+				if err != nil {
+					return nil, err
+				}
+				archiveSHA = digest(archive)
+			}
+			if !bytes.Equal(members[name], body) {
+				return nil, fmt.Errorf("native Login decoded member differs")
+			}
+			loginMembers[name] = true
+			binding.Component, binding.StatikMember, binding.StatikSHA256 = "login", name, archiveSHA
+		default:
+			return nil, fmt.Errorf("unsupported native graphics source")
+		}
+		fmt.Fprintf(raw, "\nRETAINED NATIVE GRAPHIC %s\nSHA256 %s; Git blob %s; %d bytes; selected unchanged at %s.\nDECLARED CONTEXT %s/LICENSE; retained complete context %s (%s). This records the repository declaration, not independent authorship or another component's grant.\nOUTPUTS %s; STATIK %s\n", asset.Path, asset.SHA256, asset.GitBlob, asset.Bytes, upstream, asset.DeclaredRevision, asset.DeclaredNotice, binding.DeclaredNoticeSHA256, strings.Join(binding.Outputs, ", "), binding.StatikMember)
+		result = append(result, binding)
+	}
+	if len(usedLegacy) != len(legacy) {
+		return nil, fmt.Errorf("unused native historical terms")
+	}
+	for name := range members {
+		if strings.HasPrefix(name, "resources/themes/zitadel/") && copiedGraphic(name) && !loginMembers[name] {
+			return nil, fmt.Errorf("unaccounted native Login member")
+		}
+	}
+	if len(loginMembers) > 0 {
+		prefix := "internal/api/ui/login/static/resources/themes/zitadel"
+		if err := filepath.WalkDir(filepath.Join(build, "prepared/source", prefix), func(name string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+				return fmt.Errorf("special native Login source")
+			}
+			relative, err := filepath.Rel(filepath.Join(build, "prepared/source/internal/api/ui/login/static"), name)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if copiedGraphic(relative) && !loginMembers[relative] {
+				return fmt.Errorf("unaccounted native Login source")
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
 // These are the complete observed output families, not catalogue-driven globs:
 // an additional asset in one of these classes must receive a new frozen review.
 func copiedSelected(name string) bool {
-	return strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "assets/mdi/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+	return copiedGraphic(name) || strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "assets/mdi/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+}
+
+// Select graphics by format throughout the Console output, independently of
+// the retained catalogue. An undeclared graphic cannot hide in a new directory.
+func copiedGraphic(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".svg", ".png", ".ico", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".apng", ".tif", ".tiff":
+		return true
+	}
+	return false
+}
+
+// These are the native Angular asset inputs, including its separately copied
+// favicon. Other application source is still sealed by the prepared-tree owner;
+// this observation does not turn uncompiled application files into asset inputs.
+func copiedNativeSourceSet(source string, sourceNames map[string]bool) error {
+	for _, prefix := range []string{"console/src/assets", "console/src/favicon.ico"} {
+		if _, err := os.Lstat(filepath.Join(source, prefix)); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		if err := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+				return fmt.Errorf("special native graphic source")
+			}
+			relative, err := filepath.Rel(source, name)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if copiedGraphic(relative) && !sourceNames[relative] {
+				return fmt.Errorf("unaccounted native graphic source: %s", relative)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // copiedMDIObserve preserves complete terms and joins each retained native
@@ -582,6 +875,9 @@ func copiedMDIObserve(build, notices string, policy copiedPolicy, get func(strin
 // and any retired provider artwork in the actual source and generated outputs.
 func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, observe func(string) ([]byte, error)) error {
 	if err := neutralProviderSourceFamilies(source); err != nil {
+		return err
+	}
+	if err := copiedNativeSourceSet(source, sourceNames); err != nil {
 		return err
 	}
 	prefixes := []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"}

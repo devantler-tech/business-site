@@ -663,6 +663,8 @@ func sourceNoticeMembers() []sourceMember {
 		{Path: "third_party/zitadel-copied-assets/Material-Icons-LICENSE", Bytes: 11358, SHA256: "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/Pictogrammers-LICENSE", Bytes: 1012, SHA256: "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md", Bytes: 38585, SHA256: "9ffa1bda0bca61af695a8de5c4f24410b731a2561584b8a0c5d1c209f1e4d5cc", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/ZITADEL-Console-2020-LICENSE", Bytes: 11357, SHA256: "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4", Mode: 0644},
+		{Path: "third_party/zitadel-copied-assets/ZITADEL-Console-2022-LICENSE", Bytes: 11337, SHA256: "5fc72d30e91d6320cd4f5bfb94c74619b31be3d2a7436cda08f28a4267391a6d", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSE", Bytes: 34522, SHA256: "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/ZITADEL-LICENSING.md", Bytes: 1877, SHA256: "97a02685ee62bfd02b2e696580189807a193b81fcc37909818f9d19cef45394e", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/catalogue.json", Bytes: 962009, SHA256: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Mode: 0644},
@@ -829,7 +831,7 @@ func sourceNoticeObserve(root string, raw []byte, capture bool) (bodies map[stri
 			return nil, err
 		}
 	}
-	if len(bodies) != 43 || (!capture && !manifestSeen) {
+	if len(bodies) != 45 || (!capture && !manifestSeen) {
 		return nil, fmt.Errorf("incomplete notice original observation")
 	}
 	current, err := os.Lstat(root)

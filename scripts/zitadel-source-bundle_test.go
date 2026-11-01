@@ -44,6 +44,8 @@ func noticeOriginalsForTest() []string {
 		"third_party/zitadel-copied-assets/Material-Icons-LICENSE",
 		"third_party/zitadel-copied-assets/Pictogrammers-LICENSE",
 		"third_party/zitadel-copied-assets/ZITADEL-CONTRIBUTING.md",
+		"third_party/zitadel-copied-assets/ZITADEL-Console-2020-LICENSE",
+		"third_party/zitadel-copied-assets/ZITADEL-Console-2022-LICENSE",
 		"third_party/zitadel-copied-assets/ZITADEL-LICENSE",
 		"third_party/zitadel-copied-assets/ZITADEL-LICENSING.md",
 		"third_party/zitadel-copied-assets/catalogue.json",
