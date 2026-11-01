@@ -1151,13 +1151,13 @@ cp -R "$c/github/devantler-tech/.github-public/actions/." "$c/github/devantler-t
 mv "$c/github/devantler-tech/.github-public/actions/alpha" "$c/github/devantler-tech/.github-public/actions/renamed"
 fail_match "Maintained automation: stale retired checkout cannot mask a rename" "$c" "'actions-dirs' marker does not match"
 
-for repository in actions maintenance; do
+for repository in actions maintenance agent-skills; do
   c="$tmp/retired-$repository"; build_fixture "$c"
   printf '<a href="https://github.com/devantler-tech/%s">Retired source</a>\n' "$repository" >> "$c/src/content/docs/index.mdx"
   fail_match "Retired links: $repository is rejected" "$c" "Retired-repo link"
 done
 
-for repository in actions maintenance reusable-workflows; do
+for repository in actions maintenance reusable-workflows agent-skills; do
   for suffix in -runner _helpers .tools; do
     c="$tmp/similar-$repository-$suffix"; build_fixture "$c"
     printf '<a href="https://github.com/devantler-tech/%s%s">Independent source</a>\n' \
