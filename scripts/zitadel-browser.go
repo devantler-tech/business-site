@@ -807,7 +807,7 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 			if kind == "login" {
 				offerKind = "login"
 			}
-			if err = d.sourceOfferCapture(output, offerKind, theme, p.ThemeReady); err != nil {
+			if err = d.sourceOfferCapture(output, offerKind, theme); err != nil {
 				return err
 			}
 		}
@@ -981,15 +981,18 @@ const browserSourceOfferURL = "https://github.com/devantler-tech/business-site/r
 // Observe the native anchor after genuine Tab input. The script neither changes
 // focus nor follows the external source link in the isolated fictional fixture.
 const browserSourceOfferObservation = `
+const [kind,theme]=arguments;
 const expected='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1';
 const links=[...document.querySelectorAll('cnsl-footer a, footer a')].filter(a=>a.getAttribute('href')===expected);
 const a=links.length===1?links[0]:null,r=a?.getBoundingClientRect(),style=a?getComputedStyle(a):null;
 const visible=!!a&&a.tagName==='A'&&a.href===expected&&a.innerText.trim()==='Source code'&&a.target==='_blank'&&['noopener','noreferrer'].every(v=>a.rel.split(/\s+/).includes(v))&&a.tabIndex===0&&!a.closest('[hidden],[inert],[aria-hidden="true"]')&&a.getClientRects().length>0&&style.display!=='none'&&style.visibility==='visible'&&Number(style.opacity)>0&&r.width>0&&r.height>0&&r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')===a;
-return {url:location.href,href:a?.href||'',visible,keyboard:visible&&document.activeElement===a};`
+const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+const themeReady=kind==='console'?!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&back.getAnimations().every(a=>!a.pending&&a.playState!=='running'):kind==='login'&&document.documentElement.classList.contains('lgn-'+theme+'-theme');
+return {url:location.href,href:a?.href||'',visible,keyboard:visible&&document.activeElement===a,themeReady};`
 
 type browserSourceOfferPage struct {
-	URL, Href         string
-	Visible, Keyboard bool
+	URL, Href                     string
+	Visible, Keyboard, ThemeReady bool
 }
 
 type browserSourceOfferCase struct {
@@ -1004,20 +1007,20 @@ type browserSourceOfferCase struct {
 
 // sourceOfferCapture confines the real native Tab sequence to the current
 // Login/Console page and records only fixed release data and proven booleans.
-func (d *browserDriver) sourceOfferCapture(output, kind, theme string, themeReady bool) error {
+func (d *browserDriver) sourceOfferCapture(output, kind, theme string) error {
 	if (kind != "console" && kind != "login") || (theme != "light" && theme != "dark") {
 		return fmt.Errorf("source-offer journey is outside the native fixture")
 	}
 	d.providerStage = "source-offer-" + kind + "-" + theme + "-keyboard"
 	if kind == "console" {
-		// Native click scrolls and focuses the existing, already-selected footer
-		// control. Reverse Tab reaches the preceding source link without walking
-		// through every provider in the catalogue or injecting a focus change.
+		// Element Send Keys focuses the existing keyboard-interactable control.
+		// Shift then release activates nothing: both native theme buttons toggle
+		// even when selected. Subsequent reverse Tab reaches the source anchor.
 		button, err := d.element("cnsl-footer cnsl-theme-setting button.theme-setting-button.active")
 		if err != nil {
 			return err
 		}
-		if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+		if err = d.call("POST", button+"/value", map[string]string{"text": "\ue008\ue000"}, nil); err != nil {
 			return err
 		}
 	}
@@ -1032,7 +1035,7 @@ func (d *browserDriver) sourceOfferCapture(output, kind, theme string, themeRead
 			return err
 		}
 		var page browserSourceOfferPage
-		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []any{}}, &page); err != nil {
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []string{kind, theme}}, &page); err != nil {
 			return err
 		}
 		u, err := url.Parse(page.URL)
@@ -1041,19 +1044,19 @@ func (d *browserDriver) sourceOfferCapture(output, kind, theme string, themeRead
 			(kind == "login" && u.Path != "/ui/login/login") || (kind != "console" && kind != "login") {
 			return fmt.Errorf("source-offer page is outside the native fixture")
 		}
-		if page.Href == browserSourceOfferURL && page.Visible && page.Keyboard && themeReady {
+		if page.Href == browserSourceOfferURL && page.Visible && page.Keyboard && page.ThemeReady {
 			screen, err := d.capture(output, "source-offer-"+kind+"-"+theme, browserPage{})
 			if err != nil {
 				return err
 			}
 			var after browserSourceOfferPage
-			if err = d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []any{}}, &after); err != nil || after != page {
+			if err = d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []string{kind, theme}}, &after); err != nil || after != page {
 				return fmt.Errorf("source-offer page changed during screenshot readback")
 			}
 			if err = d.call("DELETE", "/actions", nil, nil); err != nil {
 				return err
 			}
-			d.sourceOfferCases = append(d.sourceOfferCases, browserSourceOfferCase{kind, theme, page.Href, true, true, true, screen.Screenshot})
+			d.sourceOfferCases = append(d.sourceOfferCases, browserSourceOfferCase{kind, theme, page.Href, page.Visible, page.Keyboard, page.ThemeReady, screen.Screenshot})
 			return nil
 		}
 	}

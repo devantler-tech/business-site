@@ -752,8 +752,8 @@ func TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes(t *testing.T) {
 // The process double proves sequencing, not native page rendering: source-offer
 // evidence must remain true after the screenshot, rather than describe an earlier page.
 func TestSourceOfferCaptureRejectsPageReplacementDuringScreenshot(t *testing.T) {
-	for _, replace := range []bool{false, true} {
-		t.Run(fmt.Sprint(replace), func(t *testing.T) {
+	for _, mode := range []string{"original", "page-replaced", "theme-replaced", "unsettled-theme"} {
+		t.Run(mode, func(t *testing.T) {
 			var encoded bytes.Buffer
 			if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
 				t.Fatal(err)
@@ -768,9 +768,12 @@ func TestSourceOfferCaptureRejectsPageReplacementDuringScreenshot(t *testing.T) 
 				case "DELETE /session/fixture/actions":
 					cleared++
 				case "POST /session/fixture/execute/sync":
-					page := browserSourceOfferPage{"http://fixture.localhost:8080/ui/login/login", browserSourceOfferURL, tabs >= 2, tabs >= 2}
-					if replace && screenshots > 0 {
+					page := browserSourceOfferPage{"http://fixture.localhost:8080/ui/login/login", browserSourceOfferURL, tabs >= 2, tabs >= 2, mode != "unsettled-theme"}
+					if mode == "page-replaced" && screenshots > 0 {
 						page.Visible, page.Keyboard = false, false
+					}
+					if mode == "theme-replaced" && screenshots > 0 {
+						page.ThemeReady = false
 					}
 					value = page
 				case "GET /session/fixture/screenshot":
@@ -792,8 +795,8 @@ func TestSourceOfferCaptureRejectsPageReplacementDuringScreenshot(t *testing.T) 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			d := browserDriver{ctx: ctx, client: &http.Client{Timeout: time.Second, Transport: transport}, session: "fixture"}
-			err := d.sourceOfferCapture(t.TempDir(), "login", "light", true)
-			if replace {
+			err := d.sourceOfferCapture(t.TempDir(), "login", "light")
+			if mode != "original" {
 				if err == nil || len(d.sourceOfferCases) != 0 {
 					t.Fatal("source offer replaced during screenshot was accepted")
 				}
@@ -812,7 +815,7 @@ func TestConsoleSourceOfferUsesNativeFooterOriginAndReverseTab(t *testing.T) {
 	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
 		t.Fatal(err)
 	}
-	clicked, reversed, screenshots := false, false, 0
+	focused, reversed, screenshots := false, false, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var value any
@@ -823,8 +826,12 @@ func TestConsoleSourceOfferUsesNativeFooterOriginAndReverseTab(t *testing.T) {
 				t.Error("footer origin differs")
 			}
 			value = map[string]string{"element-6066-11e4-a52e-4f735466cecf": "theme"}
-		case "POST /session/fixture/element/theme/click":
-			clicked = true
+		case "POST /session/fixture/element/theme/value":
+			var keys struct{ Text string }
+			if err := json.NewDecoder(r.Body).Decode(&keys); err != nil || keys.Text != "\ue008\ue000" {
+				t.Error("nonactivating keyboard origin differs")
+			}
+			focused = true
 		case "POST /session/fixture/actions":
 			var action struct {
 				Actions []struct {
@@ -836,10 +843,10 @@ func TestConsoleSourceOfferUsesNativeFooterOriginAndReverseTab(t *testing.T) {
 			}
 			if len(action.Actions) == 1 && len(action.Actions[0].Actions) == 4 {
 				keys := action.Actions[0].Actions
-				reversed = clicked && keys[0].Type == "keyDown" && keys[0].Value == "\ue008" && keys[1].Type == "keyDown" && keys[1].Value == "\ue004" && keys[2].Type == "keyUp" && keys[2].Value == "\ue004" && keys[3].Type == "keyUp" && keys[3].Value == "\ue008"
+				reversed = focused && keys[0].Type == "keyDown" && keys[0].Value == "\ue008" && keys[1].Type == "keyDown" && keys[1].Value == "\ue004" && keys[2].Type == "keyUp" && keys[2].Value == "\ue004" && keys[3].Type == "keyUp" && keys[3].Value == "\ue008"
 			}
 		case "POST /session/fixture/execute/sync":
-			value = browserSourceOfferPage{"http://fixture.localhost:8080/ui/console/instance?id=idp", browserSourceOfferURL, reversed, reversed}
+			value = browserSourceOfferPage{"http://fixture.localhost:8080/ui/console/instance?id=idp", browserSourceOfferURL, reversed, reversed, true}
 		case "GET /session/fixture/screenshot":
 			screenshots++
 			value = base64.StdEncoding.EncodeToString(encoded.Bytes())
@@ -858,7 +865,7 @@ func TestConsoleSourceOfferUsesNativeFooterOriginAndReverseTab(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	d := browserDriver{ctx: ctx, client: &http.Client{Timeout: time.Second, Transport: transport}, session: "fixture"}
-	if err := d.sourceOfferCapture(t.TempDir(), "console", "light", true); err != nil || !clicked || !reversed || screenshots != 1 || len(d.sourceOfferCases) != 1 {
-		t.Fatalf("native footer keyboard journey failed: %v, clicked=%t reverse=%t screenshots=%d", err, clicked, reversed, screenshots)
+	if err := d.sourceOfferCapture(t.TempDir(), "console", "light"); err != nil || !focused || !reversed || screenshots != 1 || len(d.sourceOfferCases) != 1 {
+		t.Fatalf("native footer keyboard journey failed: %v, focused=%t reverse=%t screenshots=%d", err, focused, reversed, screenshots)
 	}
 }

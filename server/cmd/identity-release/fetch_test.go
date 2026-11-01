@@ -82,7 +82,7 @@ func TestSourceFetchRefusesAlteredOrInaccessibleInput(t *testing.T) {
 				input.Path = "../escape"
 			}
 			client := &http.Client{Transport: sourceRoundTrip(func(*http.Request) (*http.Response, error) {
-				var reader io.ReadCloser = io.NopCloser(strings.NewReader(body))
+				reader := io.NopCloser(strings.NewReader(body))
 				if kind == "late-read-error" {
 					reader = &sourceReadFailure{data: []byte(body)}
 				}

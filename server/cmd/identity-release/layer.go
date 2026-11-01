@@ -85,7 +85,8 @@ func checkBaseLayer(blob []byte, spec sourceObject, diffID string, wanted []sour
 		if !ok {
 			continue
 		}
-		if _, seen := result.Files[name]; seen || (h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeRegA) || h.Size != want.Bytes || h.Mode != int64(want.ImageMode) {
+		// tar.Reader normalizes legacy NUL regular headers to TypeReg.
+		if _, seen := result.Files[name]; seen || h.Typeflag != tar.TypeReg || h.Size != want.Bytes || h.Mode != int64(want.ImageMode) {
 			return sourceLayerResult{}, fmt.Errorf("selected base member type, size or mode differs")
 		}
 		b, err := io.ReadAll(io.LimitReader(reader, want.Bytes+1))

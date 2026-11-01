@@ -215,7 +215,7 @@ func packBaseCapsule(p baseProfile, input, seal, output string) (string, error) 
 		return "", err
 	}
 	rel, err := filepath.Rel(physical, name)
-	if err != nil || rel == "." || !(rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+	if err != nil || rel == "." || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("archive must be outside capsule")
 	}
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)

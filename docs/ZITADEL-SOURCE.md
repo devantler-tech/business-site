@@ -1364,6 +1364,14 @@ member's actual mode rather than normalizing or assuming one mode for all
 notices. The native source inspection and the original tar headers bind this
 distinction; the executable bit is not permission to execute a copyright file.
 
+The native source-offer screenshots require their own settled-theme observation
+before and after capture. Console's two theme buttons both toggle, including the
+selected button. The source-offer journey therefore uses nonactivating WebDriver
+keyboard input to establish that control as its origin, then genuine reverse Tab
+to reach the source link. It neither clicks the theme control nor borrows an
+earlier view's theme result. Existing provider/editor observations retain their
+independent theme and transition checks.
+
 ## Original base sources
 
 The otherwise inert [`identity-release` command](../server/cmd/identity-release/README.md)
