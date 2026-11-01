@@ -132,6 +132,7 @@ type browserDriver struct {
 	smtpCases                                               []browserProviderCase
 	mdiCases                                                []browserProviderCase
 	frameworkCases                                          []browserProviderCase
+	sourceOfferCases                                        []browserSourceOfferCase
 }
 
 // browserHTTPClient bounds driver requests beyond the configured page-load
@@ -533,7 +534,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 		return err
 	}
 	phase = "receipt"
-	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "mdiIcons": d.mdiCases, "frameworkIcons": d.frameworkCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "mdiIcons": d.mdiCases, "frameworkIcons": d.frameworkCases, "sourceOffer": d.sourceOfferCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err
@@ -801,6 +802,15 @@ func (d *browserDriver) providerPresentation(output string) (cases []browserProv
 		if err != nil {
 			return err
 		}
+		if kind == "table" || kind == "login" {
+			offerKind := "console"
+			if kind == "login" {
+				offerKind = "login"
+			}
+			if err = d.sourceOfferCapture(output, offerKind, theme); err != nil {
+				return err
+			}
+		}
 		if kind == "table" {
 			d.lastProvider.Targets = false
 			if err = d.providerTableRoutes(setup.IDs); err != nil {
@@ -958,6 +968,112 @@ func browserProviderReceipt(output string, cases []browserProviderCase) error {
 		name := "provider-" + c.Kind + "-" + c.Theme + ".png"
 		if c.Screenshot.Path != name {
 			return fmt.Errorf("provider screenshot path differs")
+		}
+		if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const browserSourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+
+// Observe the native anchor after genuine Tab input. The script neither changes
+// focus nor follows the external source link in the isolated fictional fixture.
+const browserSourceOfferObservation = `
+const [kind,theme]=arguments;
+const expected='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1';
+const links=[...document.querySelectorAll('cnsl-footer a, footer a')].filter(a=>a.getAttribute('href')===expected);
+const a=links.length===1?links[0]:null,r=a?.getBoundingClientRect(),style=a?getComputedStyle(a):null;
+const visible=!!a&&a.tagName==='A'&&a.href===expected&&a.innerText.trim()==='Source code'&&a.target==='_blank'&&['noopener','noreferrer'].every(v=>a.rel.split(/\s+/).includes(v))&&a.tabIndex===0&&!a.closest('[hidden],[inert],[aria-hidden="true"]')&&a.getClientRects().length>0&&style.display!=='none'&&style.visibility==='visible'&&Number(style.opacity)>0&&r.width>0&&r.height>0&&r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')===a;
+const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+const themeReady=kind==='console'?!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&back.getAnimations().every(a=>!a.pending&&a.playState!=='running'):kind==='login'&&document.documentElement.classList.contains('lgn-'+theme+'-theme');
+return {url:location.href,href:a?.href||'',visible,keyboard:visible&&document.activeElement===a,themeReady};`
+
+type browserSourceOfferPage struct {
+	URL, Href                     string
+	Visible, Keyboard, ThemeReady bool
+}
+
+type browserSourceOfferCase struct {
+	Kind       string        `json:"kind"`
+	Theme      string        `json:"theme"`
+	Href       string        `json:"href"`
+	Visible    bool          `json:"visible"`
+	Keyboard   bool          `json:"keyboard"`
+	ThemeReady bool          `json:"themeReady"`
+	Screenshot browserScreen `json:"screenshot"`
+}
+
+// sourceOfferCapture confines the real native Tab sequence to the current
+// Login/Console page and records only fixed release data and proven booleans.
+func (d *browserDriver) sourceOfferCapture(output, kind, theme string) error {
+	if (kind != "console" && kind != "login") || (theme != "light" && theme != "dark") {
+		return fmt.Errorf("source-offer journey is outside the native fixture")
+	}
+	d.providerStage = "source-offer-" + kind + "-" + theme + "-keyboard"
+	if kind == "console" {
+		// Element Send Keys focuses the existing keyboard-interactable control.
+		// Shift then release activates nothing: both native theme buttons toggle
+		// even when selected. Subsequent reverse Tab reaches the source anchor.
+		button, err := d.element("cnsl-footer cnsl-theme-setting button.theme-setting-button.active")
+		if err != nil {
+			return err
+		}
+		if err = d.call("POST", button+"/value", map[string]string{"text": "\ue008\ue000"}, nil); err != nil {
+			return err
+		}
+	}
+	for i := 0; i < 40; i++ {
+		keys := []any{map[string]any{"type": "keyDown", "value": "\ue004"}, map[string]any{"type": "keyUp", "value": "\ue004"}}
+		if kind == "console" {
+			keys = append([]any{map[string]any{"type": "keyDown", "value": "\ue008"}}, keys...)
+			keys = append(keys, map[string]any{"type": "keyUp", "value": "\ue008"})
+		}
+		actions := map[string]any{"actions": []any{map[string]any{"type": "key", "id": "source-offer-tab", "actions": keys}}}
+		if err := d.call("POST", "/actions", actions, nil); err != nil {
+			return err
+		}
+		var page browserSourceOfferPage
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []string{kind, theme}}, &page); err != nil {
+			return err
+		}
+		u, err := url.Parse(page.URL)
+		if err != nil || u.Scheme != "http" || u.Host != serviceAuthority || u.User != nil || u.Opaque != "" ||
+			(kind == "console" && (u.Path != "/ui/console/instance" || u.RawQuery != "id=idp")) ||
+			(kind == "login" && u.Path != "/ui/login/login") || (kind != "console" && kind != "login") {
+			return fmt.Errorf("source-offer page is outside the native fixture")
+		}
+		if page.Href == browserSourceOfferURL && page.Visible && page.Keyboard && page.ThemeReady {
+			screen, err := d.capture(output, "source-offer-"+kind+"-"+theme, browserPage{})
+			if err != nil {
+				return err
+			}
+			var after browserSourceOfferPage
+			if err = d.call("POST", "/execute/sync", map[string]any{"script": browserSourceOfferObservation, "args": []string{kind, theme}}, &after); err != nil || after != page {
+				return fmt.Errorf("source-offer page changed during screenshot readback")
+			}
+			if err = d.call("DELETE", "/actions", nil, nil); err != nil {
+				return err
+			}
+			d.sourceOfferCases = append(d.sourceOfferCases, browserSourceOfferCase{kind, theme, page.Href, page.Visible, page.Keyboard, page.ThemeReady, screen.Screenshot})
+			return nil
+		}
+	}
+	return fmt.Errorf("native source offer is not visible and reachable by Tab")
+}
+
+// browserSourceOfferReceipt requires both themes on both native interfaces and
+// binds each observation to its own screenshot after the native focus sequence.
+func browserSourceOfferReceipt(output string, cases []browserSourceOfferCase) error {
+	order := []string{"console/light", "console/dark", "login/light", "login/dark"}
+	if len(cases) != len(order) {
+		return fmt.Errorf("source-offer browser set incomplete")
+	}
+	for i, c := range cases {
+		name := "source-offer-" + c.Kind + "-" + c.Theme + ".png"
+		if c.Kind+"/"+c.Theme != order[i] || c.Href != browserSourceOfferURL || !c.Visible || !c.Keyboard || !c.ThemeReady || c.Screenshot.Path != name {
+			return fmt.Errorf("source-offer browser observation differs")
 		}
 		if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
 			return err

@@ -52,6 +52,9 @@ jobs:
               - 'third_party/zitadel-pnpm-sdk/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
+              - 'server/cmd/identity-release/**'
+              - 'scripts/retain-zitadel-base-source.sh'
+              - 'scripts/identity-base-source-ci.test.sh'
               - 'tools/zitadel-pnpm-source/**'
               - 'server/go.mod'
               - 'server/go.sum'
@@ -350,6 +353,13 @@ jobs:
             echo "GOEXPERIMENT="
             echo "GOFIPS140=off"
           } >> "$GITHUB_ENV"
+      - name: Retain and verify the frozen identity base sources
+        working-directory: server
+        run: |
+          go test -race ./cmd/identity-release
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/identity-release" ./cmd/identity-release
+          bash ../scripts/retain-zitadel-base-source.test.sh
+          bash ../scripts/retain-zitadel-base-source.sh --capture --command "$RUNNER_TEMP/identity-release" --output "$RUNNER_TEMP/zitadel-base-source"
       - name: Verify selected Go source retention
         working-directory: server
         run: |
@@ -444,6 +454,8 @@ jobs:
             all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             (.frameworkIcons | map(.kind+"/"+.theme)) == ["framework-quickstart/light","framework-selected/light","framework-picker/light","framework-quickstart/dark","framework-selected/dark","framework-picker/dark"] and
             all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.sourceOffer | map(.kind+"/"+.theme)) == ["console/light","console/dark","login/light","login/dark"] and
+            all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1") and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -453,6 +465,8 @@ jobs:
           jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
             def positiveInt: if type == "number" then . == floor and . > 0 else false end;
             $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
+            ($image[0].baseNotices|length) == 7 and
+            all($image[0].baseNotices[]; (.imagePath|startswith("/usr/share/")) and .file.bytes > 0 and (.file.sha256|test("^[0-9a-f]{64}$"))) and
             .schemaVersion == 1 and .profile == "isolated-service-smoke" and
             .upstreamCommit == $image[0].upstreamCommit and
             .localImageId == $image[0].localImageId and
@@ -648,6 +662,10 @@ jobs:
         with:
           name: zitadel-linux-build-evidence
           path: |
+            ${{ runner.temp }}/zitadel-base-source/evidence/capture.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/verify.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/pack.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/base-source.json
             ${{ runner.temp }}/zitadel-build/build-receipt.json
             ${{ runner.temp }}/zitadel-build/packages.jsonl
             ${{ runner.temp }}/zitadel-build/login-icons-inventory.json
@@ -693,6 +711,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/console-originals-roundtrip.json
             ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
+            ${{ runner.temp }}/zitadel-image/base-notices/*.txt
             ${{ runner.temp }}/zitadel-image/service-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-binding.json
@@ -704,6 +723,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/smtp-*.png
             ${{ runner.temp }}/zitadel-image/mdi-*.png
             ${{ runner.temp }}/zitadel-image/framework-*.png
+            ${{ runner.temp }}/zitadel-image/source-offer-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-bootstrap-final.json

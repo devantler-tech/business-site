@@ -29,7 +29,7 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908"
+const sourcePreparedProfile = "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
@@ -529,6 +529,7 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
 		"Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations.",
 		"Replace framework image decoration with the existing code glyph and visible names in seven consumers; remove all forty-four technology images and thirty-nine image properties while preserving all thirty-five framework entries and twenty-four selectable IDs. Retire the obsolete image-copy operation while still clearing old outputs.",
+		"Add the unconditional versioned corresponding-source offer to native Login and Console footers, preserving existing policy links and watermark behavior and dating both changed templates 2026-11-01.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -1119,7 +1120,7 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			Prepared:    sourcePreparedProfile,
 			OriginalAPI: "bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			SerialAPI:   "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			Preparation: "dc9d9d8c49e059d333cfca2ba157e2e13592cc8351917cdb7e2e9e5f6505db89",
+			Preparation: "905cc6f39bd269a2b3de5fc7a6f7ad299aa693283c708478436292f69f3b01bb",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string
