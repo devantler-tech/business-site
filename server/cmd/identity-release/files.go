@@ -104,6 +104,8 @@ func writeSourceFile(root *os.Root, name string, data []byte) error {
 	return err
 }
 
+// removeSourceOutput removes only the regular leaf identified at creation.
+// A nil result also covers an absent or replaced leaf, which is preserved.
 func removeSourceOutput(name string, created os.FileInfo) error {
 	if created == nil {
 		return nil

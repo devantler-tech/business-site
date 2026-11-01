@@ -1171,8 +1171,7 @@ The image inspection also requires `RootFS.type` to be `layers`, the thirteen
 ordered DiffIDs from pinned amd64 config
 `55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
 and exactly three application layers for WORKDIR and the two COPY instructions.
-The first PR run demonstrated that a single-layer expectation was incorrect;
-the corrected count passed the next native image inspection. Missing, shortened, substituted or extra
+Missing, shortened, substituted or extra
 layers refuse before execution. Reload inspection compares this complete
 filesystem identity too. The receipt retains it as `baseRootFS`; those
 uncompressed DiffIDs are distinct from compressed registry layer digests.

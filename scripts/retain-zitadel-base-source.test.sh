@@ -37,8 +37,10 @@ jq -n --arg op "$op" --arg seal "$seal" --arg archive "$archive_sha" --arg mode 
 [[ "$FIXTURE_MODE" != "$op-failure" ]] || exit 42
 FIXTURE
 chmod 700 "$scratch/collector"
+export FIXTURE_LOG="$scratch/inert.log" FIXTURE_MODE=original
 bash "$root/scripts/retain-zitadel-base-source.sh" > "$scratch/inert.txt"
-test ! -e "$scratch/log"
+test ! -e "$FIXTURE_LOG"
+grep -q -- '--capture --command' "$scratch/inert.txt"
 for mode in original capture-base-source-failure verify-base-source-failure pack-base-source-failure changed-archive changed-manifest false-admission; do
   export FIXTURE_LOG="$scratch/$mode.log" FIXTURE_MODE="$mode"
   status=0

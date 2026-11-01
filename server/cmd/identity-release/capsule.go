@@ -47,8 +47,8 @@ func baseManifestBytes(p baseProfile) ([]byte, error) {
 
 func sourceSHA(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
 
-// Resolve only the existing parent, then create one exclusive physical leaf.
-// A partial failed capture is private data and cannot be resumed or overwritten.
+// sourceOutputPath normalizes the destination through its existing physical parent.
+// It neither creates nor reserves the leaf; callers must create it exclusively.
 func sourceOutputPath(name string) (string, error) {
 	if !filepath.IsAbs(name) || filepath.Clean(name) != name {
 		return "", fmt.Errorf("absolute clean output path required")
