@@ -52,6 +52,9 @@ jobs:
               - 'third_party/zitadel-pnpm-sdk/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
+              - 'server/cmd/identity-release/**'
+              - 'scripts/retain-zitadel-base-source.sh'
+              - 'scripts/identity-base-source-ci.test.sh'
               - 'tools/zitadel-pnpm-source/**'
               - 'server/go.mod'
               - 'server/go.sum'
@@ -350,6 +353,13 @@ jobs:
             echo "GOEXPERIMENT="
             echo "GOFIPS140=off"
           } >> "$GITHUB_ENV"
+      - name: Retain and verify the frozen identity base sources
+        working-directory: server
+        run: |
+          go test -race ./cmd/identity-release
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/identity-release" ./cmd/identity-release
+          bash ../scripts/retain-zitadel-base-source.test.sh
+          bash ../scripts/retain-zitadel-base-source.sh --capture --command "$RUNNER_TEMP/identity-release" --output "$RUNNER_TEMP/zitadel-base-source"
       - name: Verify selected Go source retention
         working-directory: server
         run: |
@@ -652,6 +662,10 @@ jobs:
         with:
           name: zitadel-linux-build-evidence
           path: |
+            ${{ runner.temp }}/zitadel-base-source/evidence/capture.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/verify.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/pack.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/base-source.json
             ${{ runner.temp }}/zitadel-build/build-receipt.json
             ${{ runner.temp }}/zitadel-build/packages.jsonl
             ${{ runner.temp }}/zitadel-build/login-icons-inventory.json

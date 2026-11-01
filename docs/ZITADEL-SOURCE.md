@@ -1363,3 +1363,30 @@ while the other six copied terms files are 0644. Preserve and verify each
 member's actual mode rather than normalizing or assuming one mode for all
 notices. The native source inspection and the original tar headers bind this
 distinction; the executable bit is not permission to execute a copyright file.
+
+## Original base sources
+
+The otherwise inert [`identity-release` command](../server/cmd/identity-release/README.md)
+retains the frozen base's original OCI index/amd64 manifest/config, thirteen
+compressed layers, five Debian source descriptors, seven source archives/signature
+files, six installed-package records and seven complete notice bodies. Its closed
+41-file source set plus manifest preserves each original image mode separately
+from the read-only transport mode. Every original length and digest is pinned.
+The native CI caller captures, verifies and deterministically packs this set with
+the server's original Go compiler before selecting the frozen service compiler.
+It retains only four compact evidence files in ordinary build diagnostics, not
+the raw source archive or a newly distributed image.
+
+Complete metadata/layer/package/version/checksum joins and independent capsule
+readback are required. Missing, extra, linked, substituted or writable files fail;
+the archive is read back after closing and the whole source capsule is checked
+again. Acquisition has no authenticated input or arbitrary URL/profile option.
+An ordinary invocation neither fetches nor writes anything. Original source
+archives remain opaque data throughout these operations.
+
+OpenPGP armor is retained without a signature-verification claim. This command
+also does not verify the base image signature or public source availability.
+`baseImageSignatureVerified`, `openpgpVerified`, `sourceReleaseVerified` and
+`imageAdmission` remain false. Durable corresponding source, a separately
+authorized signed publisher, complete image/source pairing and the real deployed
+customer journey remain open in #308, #305 and #302.

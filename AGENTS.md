@@ -146,6 +146,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   nonroot user, with no new privileges and all capabilities dropped. Component
   receipts remain scoped and false for whole-build proof. CI retains compact
   evidence only; image/source-offer admission and portal activation stay separate.
+- `server/cmd/identity-release/` explicitly retains the frozen identity base's
+  original OCI metadata/layers, Debian source archives, package records and
+  notices. Read its README. Preserve complete checksum/closed-membership joins,
+  original modes, external seals and actual deterministic archive readback.
+  It never runs retained data, publishes an image or activates portal access;
+  signature, public-source and image-admission claims remain false.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI

@@ -1,6 +1,12 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/identity-release` explicitly retains and verifies the frozen identity base's
+original source data; read its README. Preserve its embedded closed profile,
+complete OCI/layer/package/descriptor joins, original modes, private read-only
+capsule, external seal and deterministic archive readback. It never executes
+retained content, verifies OpenPGP/image signatures, publishes or activates users.
+Keep those four proof fields false; publisher admission remains separate.
 `cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
 Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
 importing portal authority or entering the frozen identity service's graph.
