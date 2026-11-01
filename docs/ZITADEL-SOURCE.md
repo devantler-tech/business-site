@@ -110,7 +110,7 @@ The native worker additionally requires eight MDI cases: chooser, two fictional
 configured table rows and both unsaved protocol editors in each theme. OIDC/JWT
 fixture configurations are never linked to the Login policy; the original exact
 two-provider Login/registration proof remains separate. These cases share the
-existing 120-second presentation phase and four-minute wrapper. Their native
+existing 120-second presentation phase and five-minute wrapper. Their native
 rendering and screenshot bindings must pass; synthetic unit inputs are separate.
 Source/image admission and remaining graphics families stay open under
 #384/#308.
@@ -152,7 +152,7 @@ background to match the requested theme with no pending or running transition.
 The normal readiness poll waits for the native animation; it does not alter CSS
 or disable animations to obtain a screenshot.
 These cases share the existing 120-second presentation phase; the 100-second
-operator journey and four-minute wrapper are unchanged. Unit observations are
+operator journey retains its phase budget within the five-minute wrapper. Unit observations are
 not native rendering proof. A real native build/browser run must pass before
 readiness; no source transform grants image or portal admission.
 
@@ -1065,8 +1065,8 @@ The [identity build-tool scope](../third_party/zitadel-build-tools/README.md) gr
 AGPL-3.0-only for its exact authored file list and terms, without licensing the
 remaining application. Check it with `bash scripts/check-zitadel-build-tools-license.sh`.
 The approved tool source and x/mod originals support this verifier reconstruction.
-Other custom-tool inputs, preferred source and bootstrap-dependency treatment
-remain #387; a grant does not supply missing source inputs. Durable source-offer
+The approved tool source, scoped terms and selected bootstrap inputs are retained
+and reconstructed through the existing archive owners. Durable source-offer
 assembly and distribution admission remain #308.
 
 Only after successful full native compilation, complete same-build notice

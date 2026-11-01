@@ -614,7 +614,9 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 	if err != nil {
 		return err
 	}
-	diagnostic, err := run(4*time.Minute, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
+	// Cover the preserved 100s operator and 120s provider phases, the new 60s
+	// framework phase, and the existing cleanup margin without truncating a phase.
+	diagnostic, err := run(browserWorkerTimeout, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
 		"setpriv", "--reuid="+strconv.Itoa(os.Getuid()), "--regid="+strconv.Itoa(os.Getgid()), "--clear-groups", "--no-new-privs",
 		"env", "-i", "PATH="+os.Getenv("PATH"), "HOME="+os.Getenv("HOME"), "LANG=C", "LC_ALL=C",
 		exe, "--browser-worker", output, namespace, imageHash(source))
