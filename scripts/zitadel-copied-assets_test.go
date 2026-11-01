@@ -798,7 +798,7 @@ func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
 // The retained MDI policy supplements the original catalogue; it must not change
 // the old catalogue's identities or accidentally restore an unresolved mark.
 func TestCopiedMDIProductionPolicyIsClosedAndKeepsExistingCatalogue(t *testing.T) {
-	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 || len(copiedFrozen.FrameworkConsumers) != 7 {
+	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 || len(copiedFrozen.FrameworkConsumers) != 8 {
 		t.Fatal("frozen catalogue or complete MDI policy changed")
 	}
 	previous := ""

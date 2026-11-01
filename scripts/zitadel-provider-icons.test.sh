@@ -205,6 +205,7 @@ printf 'MDI icons: five native consumers, 25 unchanged graphics and %s original-
 
 # Framework artwork is an ephemeral immutable input, never a new repo asset.
 cat >"$scratch/framework-inputs" <<'PATHS'
+console/package.json
 apps/docs/frameworks.json
 console/src/app/components/quickstart/quickstart.component.ts
 console/src/app/components/framework-change/framework-change.component.ts
@@ -214,7 +215,7 @@ console/src/app/components/framework-autocomplete/framework-autocomplete.compone
 console/src/app/components/framework-change/framework-change.component.html
 PATHS
 git -C "$upstream" ls-tree -r --name-only "$pin" -- apps/docs/public/img/tech >>"$scratch/framework-inputs"
-[[ "$(wc -l <"$scratch/framework-inputs" | tr -d ' ')" -eq 51 ]]
+[[ "$(wc -l <"$scratch/framework-inputs" | tr -d ' ')" -eq 52 ]]
 mkdir "$scratch/framework-original"
 while IFS= read -r path; do
  mkdir -p "$scratch/framework-original/$(dirname "$path")"
@@ -224,7 +225,19 @@ while IFS= read -r path; do
 done <"$scratch/framework-inputs"
 cp -Rp "$scratch/framework-original" "$scratch/framework-positive"
 "$scratch/provider-icons" --neutral-framework-icons --prepare --source "$scratch/framework-positive" >"$scratch/framework-receipt.json"
-jq -e '.profile=="native-neutral-framework-icons-v1" and .changedFiles==7 and .removedFiles==44 and .consoleSlots==3 and .frameworks==35 and .frameworkIDs==24 and .imagePropertiesRemoved==39 and .imageAdmission=="unknown" and .licenseClosure=="unknown"' "$scratch/framework-receipt.json" >/dev/null
+jq -e '.profile=="native-neutral-framework-icons-v1" and .changedFiles==8 and .removedFiles==44 and .consoleSlots==3 and .frameworks==35 and .frameworkIDs==24 and .imagePropertiesRemoved==39 and .imageAdmission=="unknown" and .licenseClosure=="unknown"' "$scratch/framework-receipt.json" >/dev/null
+jq -e --slurpfile original "$scratch/framework-original/console/package.json" '.scripts["copy-docs-assets"]=="rm -rf src/assets/docs" and del(.scripts["copy-docs-assets"])==($original[0]|del(.scripts["copy-docs-assets"]))' "$scratch/framework-positive/console/package.json" >/dev/null
+# Source archives omit empty directories. Run the actual native package command
+# in that restored layout, also proving it removes old docs copies only.
+rmdir "$scratch/framework-positive/apps/docs/public/img/tech"
+mkdir -p "$scratch/framework-positive/console/src/assets/docs/img/tech"
+printf 'old image\n' >"$scratch/framework-positive/console/src/assets/docs/img/tech/stale.svg"
+printf 'unrelated\n' >"$scratch/framework-positive/console/src/assets/keep.txt"
+if ! (cd "$scratch/framework-positive/console" && npm run copy-docs-assets) >"$scratch/framework-native-copy.log" 2>&1; then
+ cat "$scratch/framework-native-copy.log" >&2; exit 1
+fi
+test ! -e "$scratch/framework-positive/console/src/assets/docs"
+test "$(cat "$scratch/framework-positive/console/src/assets/keep.txt")" = unrelated
 jq -S 'map(del(.imgSrcDark,.imgSrcLight))' "$scratch/framework-original/apps/docs/frameworks.json" >"$scratch/expected-framework-data"
 jq -S . "$scratch/framework-positive/apps/docs/frameworks.json" >"$scratch/actual-framework-data"
 cmp "$scratch/expected-framework-data" "$scratch/actual-framework-data"
@@ -263,4 +276,4 @@ printf '<svg/>\n' >"$scratch/framework-extra/apps/docs/public/img/tech/extra.svg
 if "$scratch/provider-icons" --neutral-framework-icons --prepare --source "$scratch/framework-extra" >/dev/null 2>&1; then
  echo 'Admitted an undeclared framework graphic.' >&2; exit 1
 fi
-printf 'Framework icons: seven native consumers, 44 retired images and %s original-input refusals passed.\n' "$framework_controls"
+printf 'Framework icons: eight native consumers, restored native copy task, 44 retired images and %s original-input refusals passed.\n' "$framework_controls"

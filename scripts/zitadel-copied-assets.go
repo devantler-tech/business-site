@@ -294,7 +294,7 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(policy.SMTPConsumers) == 0 || len(policy.SMTPConsumers) > 5 {
 		return fail(fmt.Errorf("neutral SMTP consumer policy incomplete"))
 	}
-	if len(policy.FrameworkConsumers) == 0 || len(policy.FrameworkConsumers) > 7 {
+	if len(policy.FrameworkConsumers) == 0 || len(policy.FrameworkConsumers) > 8 {
 		return fail(fmt.Errorf("neutral framework consumer policy incomplete"))
 	}
 	seenConsumers := map[string]bool{}

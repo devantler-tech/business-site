@@ -73,7 +73,7 @@ jq -e '.profile == "native-neutral-mdi-icons-v1" and .changedFiles == 5 and .rem
 # Keep all framework metadata and native actions while retiring only decoration.
 GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
   --neutral-framework-icons --prepare --source "$stage/source" >"$stage/framework-icons.json"
-jq -e '.profile == "native-neutral-framework-icons-v1" and .changedFiles == 7 and .removedFiles == 44 and .consoleSlots == 3 and .frameworks == 35 and .frameworkIDs == 24 and .imagePropertiesRemoved == 39 and (.changedPaths|length)==7 and (.removedPaths|length)==44' "$stage/framework-icons.json" >/dev/null
+jq -e '.profile == "native-neutral-framework-icons-v1" and .changedFiles == 8 and .removedFiles == 44 and .consoleSlots == 3 and .frameworks == 35 and .frameworkIDs == 24 and .imagePropertiesRemoved == 39 and (.changedPaths|length)==8 and (.removedPaths|length)==44' "$stage/framework-icons.json" >/dev/null
 console=console/src/styles.scss
 login=internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$stage/console"

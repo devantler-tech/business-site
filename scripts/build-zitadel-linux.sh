@@ -116,7 +116,7 @@ notice_args=()
 # These summaries describe complete original-byte readback, never legal closure.
 check_notice_summary() {
   jq -e --arg source "$notice_seal" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="665140a7c56dd3cba2a60a802b12afa365fbb24ee801760ddc0e8bc63b64fd03" and .recipeSha256==$recipe and .files==43 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
+    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .recipeSha256==$recipe and .files==43 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
 }
 check_notice_readback() {
   [[ -n "$notice_snapshot" ]] || return 0
@@ -241,7 +241,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "665140a7c56dd3cba2a60a802b12afa365fbb24ee801760ddc0e8bc63b64fd03" and .files == 9528 and .records == 58 and .bytes == 261324886' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .files == 9528 and .records == 58 and .bytes == 261324795' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -300,7 +300,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "665140a7c56dd3cba2a60a802b12afa365fbb24ee801760ddc0e8bc63b64fd03" and .files == 9528 and .bytes == 261324886 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .files == 9528 and .bytes == 261324795 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   notice_snapshot="$output/source-snapshot" notice_seal="$source_manifest" notice_root="$output/selected-notice-originals"
   go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$notice_snapshot" "$notice_seal" "$notice_root" >"$output/notice-originals.json" || fail 'complete notice-original capture failed'

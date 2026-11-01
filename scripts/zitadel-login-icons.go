@@ -1043,6 +1043,13 @@ var neutralSMTPInputs = []neutralProviderInput{
 // Complete original/output hashes are enforced by the surrounding fixed profile.
 func neutralFrameworkChange(input neutralProviderInput, text string) (string, int, error) {
 	fail := func() (string, int, error) { return "", 0, fmt.Errorf("native framework decoration differs") }
+	if input.kind == "framework-copy" {
+		old := "rm -rf src/assets/docs && mkdir -p src/assets/docs/img && cp -r ../apps/docs/public/img/tech src/assets/docs/img/"
+		if strings.Count(text, old) != 1 {
+			return fail()
+		}
+		return strings.Replace(text, old, "rm -rf src/assets/docs", 1), 0, nil
+	}
 	if input.kind == "framework-data" {
 		var rows []map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(text), &rows); err != nil || len(rows) != 35 {
@@ -1127,9 +1134,10 @@ func neutralFrameworkChange(input neutralProviderInput, text string) (string, in
 	return strings.Replace(text, old, replacement, 1), 1, nil
 }
 
-// The complete frozen framework family binds seven native consumers and all
+// The complete frozen framework family binds eight native consumers and all
 // forty-four decoration originals before changing the private prepared source.
 var neutralFrameworkInputs = []neutralProviderInput{
+	{path: "console/package.json", sha256: "7b6cf1e24e3496ed7ad03868f8e46e18eab66c9988ba7e4bb22b57349366d810", mode: 0644, kind: "framework-copy", expected: "405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba"},
 	{path: "apps/docs/frameworks.json", sha256: "2fb8165ab168234975f710989a83b40b3bd86429b332d1d8c45bf4ea560063a1", mode: 0644, kind: "framework-data", expected: "99b5bdf71a12e209c754bb8e013ab56c5c624066d5caf3e71cafed64b1c4dac8"},
 	{path: "console/src/app/components/quickstart/quickstart.component.ts", sha256: "09fadb50be8d91ef67b1c6b16c4eca6f99b589c04b99b0370d6660472923ec4a", mode: 0644, kind: "framework-mapping", expected: "ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc"},
 	{path: "console/src/app/components/framework-change/framework-change.component.ts", sha256: "a957a2bc496b3280e7bfff7f964569dcf70c3acecf57790c60b830faec4dec36", mode: 0644, kind: "framework-mapping", expected: "790fb8e83d170014ae9f2e31068cf906f89a4228190a7213f3950844c7cb2c5a"},
@@ -1292,7 +1300,7 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		}
 		text := string(body)
 		switch input.kind {
-		case "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
+		case "framework-copy", "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
 			var slots int
 			text, slots, e = neutralFrameworkChange(input, text)
 			if e != nil {
@@ -1419,7 +1427,7 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 	if profile == "mdi" && (len(originals) != 32 || len(replacements) != 5 || consoleSlots != 6 || loginSlots != 0 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral MDI profile"))
 	}
-	if profile == "framework" && (len(originals) != 51 || len(replacements) != 7 || consoleSlots != 3 || loginSlots != 0 || settingsValues != 0) {
+	if profile == "framework" && (len(originals) != 52 || len(replacements) != 8 || consoleSlots != 3 || loginSlots != 0 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral framework profile"))
 	}
 	// Refuse a changed original before replacing any selected body.
@@ -1491,7 +1499,7 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["retainedFiles"] = "native-neutral-mdi-icons-v1", 5, 2, 25
 	}
 	if profile == "framework" {
-		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-neutral-framework-icons-v1", 7, 44
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-neutral-framework-icons-v1", 8, 44
 		receipt["frameworks"], receipt["frameworkIDs"], receipt["imagePropertiesRemoved"] = 35, 24, 39
 		changed, removed := []string{}, []string{}
 		for _, input := range inputs {
@@ -1574,7 +1582,7 @@ func neutralSMTPConsumers() []inputRecord {
 	return consumers
 }
 
-// The metadata and all six render/mapping consumers share the frozen framework profile.
+// Metadata, the native copy task and six render/mapping consumers share one profile.
 func neutralFrameworkConsumers() []inputRecord {
 	var consumers []inputRecord
 	for _, input := range neutralFrameworkInputs {
