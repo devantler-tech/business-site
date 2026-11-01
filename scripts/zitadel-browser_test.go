@@ -803,3 +803,62 @@ func TestSourceOfferCaptureRejectsPageReplacementDuringScreenshot(t *testing.T) 
 		})
 	}
 }
+
+// Console's provider catalogue contains more than forty native focus stops.
+// Start from the real footer's already-selected theme button and reverse Tab;
+// do not grow the journey's bound or move focus with an injected script.
+func TestConsoleSourceOfferUsesNativeFooterOriginAndReverseTab(t *testing.T) {
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
+		t.Fatal(err)
+	}
+	clicked, reversed, screenshots := false, false, 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var value any
+		switch r.Method + " " + r.URL.Path {
+		case "POST /session/fixture/element":
+			var query struct{ Using, Value string }
+			if err := json.NewDecoder(r.Body).Decode(&query); err != nil || query.Using != "css selector" || query.Value != "cnsl-footer cnsl-theme-setting button.theme-setting-button.active" {
+				t.Error("footer origin differs")
+			}
+			value = map[string]string{"element-6066-11e4-a52e-4f735466cecf": "theme"}
+		case "POST /session/fixture/element/theme/click":
+			clicked = true
+		case "POST /session/fixture/actions":
+			var action struct {
+				Actions []struct {
+					Actions []struct{ Type, Value string }
+				}
+			}
+			if err := json.NewDecoder(r.Body).Decode(&action); err != nil {
+				t.Fatal(err)
+			}
+			if len(action.Actions) == 1 && len(action.Actions[0].Actions) == 4 {
+				keys := action.Actions[0].Actions
+				reversed = clicked && keys[0].Type == "keyDown" && keys[0].Value == "\ue008" && keys[1].Type == "keyDown" && keys[1].Value == "\ue004" && keys[2].Type == "keyUp" && keys[2].Value == "\ue004" && keys[3].Type == "keyUp" && keys[3].Value == "\ue008"
+			}
+		case "POST /session/fixture/execute/sync":
+			value = browserSourceOfferPage{"http://fixture.localhost:8080/ui/console/instance?id=idp", browserSourceOfferURL, reversed, reversed}
+		case "GET /session/fixture/screenshot":
+			screenshots++
+			value = base64.StdEncoding.EncodeToString(encoded.Bytes())
+		case "DELETE /session/fixture/actions":
+		default:
+			t.Error("unexpected driver operation: " + r.Method + " " + r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"value": value})
+	}))
+	defer server.Close()
+	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, server.Listener.Addr().String())
+	}}
+	defer transport.CloseIdleConnections()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	d := browserDriver{ctx: ctx, client: &http.Client{Timeout: time.Second, Transport: transport}, session: "fixture"}
+	if err := d.sourceOfferCapture(t.TempDir(), "console", "light", true); err != nil || !clicked || !reversed || screenshots != 1 || len(d.sourceOfferCases) != 1 {
+		t.Fatalf("native footer keyboard journey failed: %v, clicked=%t reverse=%t screenshots=%d", err, clicked, reversed, screenshots)
+	}
+}

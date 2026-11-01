@@ -1005,8 +1005,29 @@ type browserSourceOfferCase struct {
 // sourceOfferCapture confines the real native Tab sequence to the current
 // Login/Console page and records only fixed release data and proven booleans.
 func (d *browserDriver) sourceOfferCapture(output, kind, theme string, themeReady bool) error {
+	if (kind != "console" && kind != "login") || (theme != "light" && theme != "dark") {
+		return fmt.Errorf("source-offer journey is outside the native fixture")
+	}
+	d.providerStage = "source-offer-" + kind + "-" + theme + "-keyboard"
+	if kind == "console" {
+		// Native click scrolls and focuses the existing, already-selected footer
+		// control. Reverse Tab reaches the preceding source link without walking
+		// through every provider in the catalogue or injecting a focus change.
+		button, err := d.element("cnsl-footer cnsl-theme-setting button.theme-setting-button.active")
+		if err != nil {
+			return err
+		}
+		if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+			return err
+		}
+	}
 	for i := 0; i < 40; i++ {
-		actions := map[string]any{"actions": []any{map[string]any{"type": "key", "id": "source-offer-tab", "actions": []any{map[string]any{"type": "keyDown", "value": "\ue004"}, map[string]any{"type": "keyUp", "value": "\ue004"}}}}}
+		keys := []any{map[string]any{"type": "keyDown", "value": "\ue004"}, map[string]any{"type": "keyUp", "value": "\ue004"}}
+		if kind == "console" {
+			keys = append([]any{map[string]any{"type": "keyDown", "value": "\ue008"}}, keys...)
+			keys = append(keys, map[string]any{"type": "keyUp", "value": "\ue008"})
+		}
+		actions := map[string]any{"actions": []any{map[string]any{"type": "key", "id": "source-offer-tab", "actions": keys}}}
 		if err := d.call("POST", "/actions", actions, nil); err != nil {
 			return err
 		}
