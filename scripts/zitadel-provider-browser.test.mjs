@@ -186,10 +186,10 @@ console.log('PASS: actual MDI setup script - nine same-origin, unchanged-policy 
 // These are controls for the exact native-page observer, not real browser visits.
 const frameworkObserve=script('browserFrameworkObservation');
 for(const kind of ['framework-quickstart','framework-selected','framework-picker']){
- for(const fault of ['none','wrong-id','wrong-glyph','missing-label','missing-control','missing-theme','unloaded-font','retired-resource','external-resource','focusable-decoration']){
+ for(const fault of ['none','wrong-id','wrong-glyph','missing-label','missing-control','missing-theme','unloaded-font','retired-resource','external-resource','focusable-decoration','running-descendant','pending-descendant','perpetual-decoration']){
   const quick=kind==='framework-quickstart',selected=kind==='framework-selected';
   const shown={getClientRects:()=>[{}],getBoundingClientRect:()=>({width:50,height:50,top:10,left:10,bottom:60,right:60})};
-  const background={getAnimations:()=>[]};
+  const background={getAnimations:options=>['running-descendant','pending-descendant','perpetual-decoration'].includes(fault)&&options?.subtree?[{pending:fault==='pending-descendant',playState:fault==='pending-descendant'?'idle':'running',effect:{getComputedTiming:()=>({endTime:fault==='perpetual-decoration'?Infinity:350})}}]:[]};
   const route=quick?'/ui/console/':selected?'/ui/console/projects/app-create?framework='+(fault==='wrong-id'?'react':'angular'):'/ui/console/projects/app-create';
   globalThis.location=new URL('http://fixture.localhost:8080'+route);
   globalThis.innerHeight=1000;globalThis.innerWidth=1200;
@@ -210,7 +210,19 @@ for(const kind of ['framework-quickstart','framework-selected','framework-picker
   const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/docs/img/tech/angular.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
   globalThis.performance={getEntriesByType:()=>[{name:resource}]};
   const result=frameworkObserve(kind,'light');
-  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,fault==='none'||quick&&fault==='missing-control',kind+'/'+fault+' '+JSON.stringify(result));
+  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,fault==='none'||fault==='perpetual-decoration'||quick&&fault==='missing-control',kind+'/'+fault+' '+JSON.stringify(result));
  }
 }
-console.log('PASS: actual framework observation script - 30 native-shaped controls (unit inputs only)');
+// An asynchronous autocomplete may have an input before its panel/options exist.
+// The observer must report incomplete facts so the worker polls, not throw.
+const completeFrameworkDocument=document;
+for(const pending of ['no-options','one-option','no-input']){
+ const originalQuery=completeFrameworkDocument.querySelectorAll;
+ globalThis.document={...completeFrameworkDocument,
+  querySelector:s=>s==='cnsl-root .main-container'?{getAnimations:()=>[]}:pending==='no-input'&&s.includes('input[role="combobox"]')?null:completeFrameworkDocument.querySelector(s),
+  querySelectorAll:s=>s.endsWith('mat-option')?(pending==='one-option'?originalQuery(s).slice(0,1):[]):s.includes('.neutral-framework-icon')&&pending==='no-options'?[]:originalQuery(s)};
+ const result=frameworkObserve('framework-picker','light');
+ assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,false,pending+' admitted an incomplete picker');
+ assert.equal(result.keyboard,false,pending+' claimed keyboard readiness');
+}
+console.log('PASS: actual framework observation script - 42 native-shaped and asynchronous controls (unit inputs only)');
