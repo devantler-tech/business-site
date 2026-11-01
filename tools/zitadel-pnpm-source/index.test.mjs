@@ -1165,7 +1165,7 @@ test("SDK reconstruction refuses a scratch directory that already holds a cache"
 test("SDK reconstruction ignores an ambient npm cache and configuration", async (t) => {
   const f = await sdkBootstrapFixture(t);
   const ambient = path.join(f.directory, "ambient-cache"), rc = path.join(f.directory, "ambient-npmrc");
-  fs.writeFileSync(rc, `cache=${ambient}\n`);
+  fs.writeFileSync(rc, `cache=${ambient}\nbin-links=false\n`);
   const saved = { cache: process.env.npm_config_cache, userconfig: process.env.npm_config_userconfig };
   t.after(() => {
     for (const [key, value] of [["npm_config_cache", saved.cache], ["npm_config_userconfig", saved.userconfig]]) {
@@ -1178,6 +1178,7 @@ test("SDK reconstruction ignores an ambient npm cache and configuration", async 
   assert.equal((await r.run()).sdkReconstructed, true);
   assert.equal(fs.existsSync(ambient), false);
   assert.equal(fs.existsSync(path.join(r.scratch, "native-cache/_cacache")), true);
+  assert.equal(fs.readlinkSync(path.join(r.output, "node_modules/.bin/alpha")), "../alpha/bin");
 });
 
 test("SDK bootstrap preserves complete supplemental terms and refuses a changed body", async (t) => {
