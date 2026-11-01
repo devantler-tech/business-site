@@ -48,6 +48,10 @@ control company identity and revised offer copy independently. Projects uses `cl
 catalogue, public website example, historical links and bookmarks. See `web/README.md`.
 Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
+Both homepages advertise project planning from January 2027. The separate “Other requests”
+option invites enquiries outside the three priced services through the existing contact section.
+Each request is assessed for fit before scope, timing and price are agreed; it has no fixed
+starting or monthly price and does not create or accept a private portal order.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds
 use separately agreed iterations with their own scope, schedule and price. Monthly quotes are
 rounded totals based on hosting costs plus a fixed service fee to Nikolai, with amounts and

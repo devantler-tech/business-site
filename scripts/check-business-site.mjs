@@ -113,6 +113,16 @@ for (const locale of ['en', 'da']) {
       const offer = nodes.find(node => attr(node, 'data-offer') === service);
       assert.ok(offer && attr(offer, 'data-setup') === setup && attr(offer, 'data-monthly') === monthly);
     }
+    const availability = nodes.find(node => hasClass(node, 'availability'));
+    assert.equal(text(availability).trim(), locale === 'da' ? 'Planlægger projekter fra januar 2027' : 'Planning projects from January 2027');
+    const other = nodes.find(node => attr(node, 'data-offer') === 'other');
+    assert.ok(other, 'Visitors can enquire about other requests');
+    assert.equal(attr(other, 'data-setup'), undefined, 'Case-by-case work has no invented starting price');
+    assert.equal(attr(other, 'data-monthly'), undefined, 'Case-by-case work has no invented monthly price');
+    assert.ok(all(other).some(node => node.tagName === 'h3' && text(node) === (locale === 'da' ? 'Andre opgaver' : 'Other requests')));
+    assert.ok(all(other).some(node => node.tagName === 'a' && attr(node, 'href') === '#contact'));
+    assert.ok(text(other).includes(locale === 'da' ? 'Jeg vurderer hver opgave individuelt' : 'I assess each request individually'));
+    assert.ok(text(other).includes(locale === 'da' ? 'omfang, tidsplan og pris' : 'scope, timing and price'));
     const markers = nodes.filter(node => hasClass(node, 'vat-marker'));
     assert.equal(markers.length, 6);
     assert.ok(markers.every(node => text(node).includes(locale === 'da' ? 'inkl. moms' : 'incl. VAT')));

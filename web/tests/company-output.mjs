@@ -69,7 +69,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         /** @param {MarkupNode[]} nodes */
         const offers = nodes => nodes.filter(node => attr(node,"data-offer") !== undefined).map(node => [attr(node,"data-offer"),attr(node,"data-setup"),attr(node,"data-monthly"),text(node)]);
 
-        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"]]);
+        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"],["other",undefined,undefined]]);
       }
     }
     const path = join(candidate,`${prefix}company/index.html`);
