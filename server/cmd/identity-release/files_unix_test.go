@@ -16,12 +16,7 @@ func TestSourceOpenRegularDoesNotWaitForFIFO(t *testing.T) {
 	if err := syscall.Mkfifo(filepath.Join(dir, "leaf"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if f, err := sourceOpenRegular(root, "leaf"); err == nil {
+	if f, err := sourceOpenRegular(openSourceFixtureRoot(t, dir), "leaf"); err == nil {
 		_ = f.Close()
 		t.Fatal("FIFO admitted as regular source descriptor")
 	}
@@ -35,12 +30,7 @@ func TestSourceOpenRegularRefusesAReplacedSymlink(t *testing.T) {
 	if err := os.Symlink("original", filepath.Join(dir, "leaf")); err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if f, err := sourceOpenRegular(root, "leaf"); err == nil {
+	if f, err := sourceOpenRegular(openSourceFixtureRoot(t, dir), "leaf"); err == nil {
 		_ = f.Close()
 		t.Fatal("replaced source symlink followed")
 	}

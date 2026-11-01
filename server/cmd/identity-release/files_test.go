@@ -8,8 +8,31 @@ import (
 	"testing"
 )
 
+func replaceSourceFixtureData(t *testing.T, name string, data []byte) {
+	t.Helper()
+	if err := os.Chmod(name, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, 0444); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func openSourceFixtureRoot(t *testing.T, dir string) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
+}
+
 func TestSourceFileRequiresOneCompleteReadonlyRegularOriginal(t *testing.T) {
-	for _, kind := range []string{"original", "missing", "changed", "short", "long", "writable", "executable", "symlink", "hardlink", "directory", "escape"} {
+	for _, kind := range []string{"original", "missing", "changed", "short", "long", "writable", "executable", "symlink", "hard-link", "directory", "escape"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := t.TempDir()
 			name := "original"
@@ -25,15 +48,7 @@ func TestSourceFileRequiresOneCompleteReadonlyRegularOriginal(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "changed":
-				if err := os.Chmod(file, 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(file, []byte("different bytes!\n"), 0444); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(file, 0444); err != nil {
-					t.Fatal(err)
-				}
+				replaceSourceFixtureData(t, file, []byte("different bytes!\n"))
 			case "short":
 				want.Bytes++
 			case "long":
@@ -53,7 +68,7 @@ func TestSourceFileRequiresOneCompleteReadonlyRegularOriginal(t *testing.T) {
 				if err := os.Symlink("original.target", file); err != nil {
 					t.Fatal(err)
 				}
-			case "hardlink":
+			case "hard-link":
 				if err := os.Link(file, file+".alias"); err != nil {
 					t.Fatal(err)
 				}
@@ -120,7 +135,7 @@ func TestSourceFileCreationNeverOverwritesOrFollowsExistingFiles(t *testing.T) {
 				}
 				st, err := os.Lstat(filepath.Join(dir, name))
 				if err != nil || st.Mode().Perm() != 0444 {
-					t.Fatalf("noncanonical output: %v", err)
+					t.Fatalf("unexpected output: %v", err)
 				}
 			} else if err == nil {
 				t.Fatal("unsafe or existing output admitted")

@@ -35,7 +35,7 @@ func sourceParents(root *os.Root, name string) error {
 		current = path.Join(current, part)
 		st, err := root.Lstat(current)
 		if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm() != 0700 {
-			return fmt.Errorf("nonphysical or nonprivate capsule directory")
+			return fmt.Errorf("physical private capsule directory required")
 		}
 	}
 	return nil

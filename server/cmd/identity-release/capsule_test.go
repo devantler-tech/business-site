@@ -88,16 +88,21 @@ func syntheticBaseCollection(t *testing.T) (baseProfile, map[string][]byte) {
 	return p, raw
 }
 
+func capturedBaseFixture(t *testing.T) (baseProfile, string, string) {
+	t.Helper()
+	p, originals := syntheticBaseCollection(t)
+	root := filepath.Join(t.TempDir(), "capsule")
+	seal, err := captureBaseCapsule(context.Background(), p, func(_ context.Context, spec sourceObject) ([]byte, error) { return originals[spec.Path], nil }, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p, root, seal
+}
+
 func TestBaseCapsuleCapturesClosedOriginalsAndRefusesLaterChanges(t *testing.T) {
-	for _, kind := range []string{"original", "missing", "changed", "writable", "extra", "manifest", "external-seal", "symlink", "hardlink"} {
+	for _, kind := range []string{"original", "missing", "changed", "writable", "extra", "manifest", "external-seal", "symlink", "hard-link"} {
 		t.Run(kind, func(t *testing.T) {
-			p, raw := syntheticBaseCollection(t)
-			out := filepath.Join(t.TempDir(), "new-capsule")
-			read := func(_ context.Context, s sourceObject) ([]byte, error) { return raw[s.Path], nil }
-			seal, err := captureBaseCapsule(context.Background(), p, read, out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			p, out, seal := capturedBaseFixture(t)
 			file := filepath.Join(out, p.Descriptors[0].Archives[0].Path)
 			switch kind {
 			case "missing":
@@ -105,15 +110,7 @@ func TestBaseCapsuleCapturesClosedOriginalsAndRefusesLaterChanges(t *testing.T) 
 					t.Fatal(err)
 				}
 			case "changed":
-				if err := os.Chmod(file, 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(file, []byte("substituted"), 0444); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(file, 0444); err != nil {
-					t.Fatal(err)
-				}
+				replaceSourceFixtureData(t, file, []byte("substituted"))
 			case "writable":
 				if err := os.Chmod(file, 0644); err != nil {
 					t.Fatal(err)
@@ -124,15 +121,7 @@ func TestBaseCapsuleCapturesClosedOriginalsAndRefusesLaterChanges(t *testing.T) 
 				}
 			case "manifest":
 				file = filepath.Join(out, "base-source.json")
-				if err := os.Chmod(file, 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(file, []byte(`{}`), 0444); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(file, 0444); err != nil {
-					t.Fatal(err)
-				}
+				replaceSourceFixtureData(t, file, []byte(`{}`))
 			case "external-seal":
 				seal = strings.Repeat("0", 64)
 			case "symlink":
@@ -142,17 +131,20 @@ func TestBaseCapsuleCapturesClosedOriginalsAndRefusesLaterChanges(t *testing.T) 
 				if err := os.Symlink(path.Base(file)+".target", file); err != nil {
 					t.Fatal(err)
 				}
-			case "hardlink":
+			case "hard-link":
 				if err := os.Link(file, file+".alias"); err != nil {
 					t.Fatal(err)
 				}
 			}
-			_, err = verifyBaseCapsule(p, out, seal)
+			_, err := verifyBaseCapsule(p, out, seal)
 			if kind == "original" {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err = captureBaseCapsule(context.Background(), p, read, out); err == nil {
+				if _, err = captureBaseCapsule(context.Background(), p, func(context.Context, sourceObject) ([]byte, error) {
+					t.Fatal("existing destination reached acquisition")
+					return nil, nil
+				}, out); err == nil {
 					t.Fatal("existing capsule overwritten")
 				}
 			} else if err == nil {
@@ -163,13 +155,8 @@ func TestBaseCapsuleCapturesClosedOriginalsAndRefusesLaterChanges(t *testing.T) 
 }
 
 func TestBaseCapsuleArchiveIsDeterministicAndNeverOverwrites(t *testing.T) {
-	p, raw := syntheticBaseCollection(t)
-	dir := t.TempDir()
-	root := filepath.Join(dir, "capsule")
-	seal, err := captureBaseCapsule(context.Background(), p, func(_ context.Context, s sourceObject) ([]byte, error) { return raw[s.Path], nil }, root)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p, root, seal := capturedBaseFixture(t)
+	dir := filepath.Dir(root)
 	a, b := filepath.Join(dir, "a.tar"), filepath.Join(dir, "b.tar")
 	first, err := packBaseCapsule(p, root, seal, a)
 	if err != nil {
@@ -202,7 +189,7 @@ func TestBaseCapsuleArchiveIsDeterministicAndNeverOverwrites(t *testing.T) {
 		}
 		count++
 		if h.Typeflag != tar.TypeReg || h.Mode != 0444 || h.Uid != 0 || h.Gid != 0 || h.ModTime.Unix() != 0 {
-			t.Fatal("noncanonical archive metadata")
+			t.Fatal("unexpected archive metadata")
 		}
 		body, err := io.ReadAll(tr)
 		if err != nil || !bytes.Equal(body, retained[h.Name]) || int64(len(body)) != h.Size {

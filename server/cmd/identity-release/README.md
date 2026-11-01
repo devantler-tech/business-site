@@ -25,7 +25,7 @@ identity-release pack-base-source --input /absolute/capsule --sha256 EXTERNAL_MA
 ```
 
 The source set is closed: three original OCI metadata bodies, thirteen original
-compressed layers, five original clearsigned Debian source descriptors, seven
+compressed layers, five original clear-signed Debian source descriptors, seven
 original source archives/signature files, six installed-package records, six
 copyright bodies and the complete referenced GPL-2 text. The 41 payloads and one
 manifest are transported as read-only regular files under private directories.

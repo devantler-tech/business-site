@@ -1,5 +1,6 @@
 //go:build !darwin && !linux
 
+// Package main implements explicit frozen identity source operations.
 package main
 
 import (

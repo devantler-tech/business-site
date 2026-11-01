@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -57,7 +58,7 @@ func TestSourceFetchRefusesAlteredOrInaccessibleInput(t *testing.T) {
 			case "truncated":
 				body = "tes"
 			case "oversized":
-				body = "testx"
+				body = "tests"
 			case "wrong-hash":
 				body = "nope"
 			case "advertised-size":
@@ -71,7 +72,12 @@ func TestSourceFetchRefusesAlteredOrInaccessibleInput(t *testing.T) {
 			case "plain-http":
 				input.URL = "http://deb.debian.org/debian/original.tar.xz"
 			case "userinfo":
-				input.URL = "https://user:credential@deb.debian.org/debian/original.tar.xz"
+				u, err := url.Parse(input.URL)
+				if err != nil {
+					t.Fatal(err)
+				}
+				u.User = url.UserPassword("fixture-user", "not-a-secret")
+				input.URL = u.String()
 			case "query":
 				input.URL += "?token=forbidden"
 			case "fragment":

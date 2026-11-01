@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"path/filepath"
 	"testing"
 )
 
@@ -24,14 +23,9 @@ func TestReleaseCommandIsInertWithoutAnExplicitCompleteOperation(t *testing.T) {
 func TestReleaseCommandVerifiesAnExternallySealedCapsule(t *testing.T) {
 	// The real command uses only the embedded frozen profile; a synthetic capsule
 	// cannot enter its verification boundary even with its correct synthetic seal.
-	p, raw := syntheticBaseCollection(t)
-	root := filepath.Join(t.TempDir(), "capsule")
-	seal, err := captureBaseCapsule(context.Background(), p, func(_ context.Context, s sourceObject) ([]byte, error) { return raw[s.Path], nil }, root)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, root, seal := capturedBaseFixture(t)
 	var out bytes.Buffer
-	if err = runRelease(context.Background(), []string{"verify-base-source", "--input", root, "--sha256", seal}, &out); err == nil || out.Len() != 0 {
+	if err := runRelease(context.Background(), []string{"verify-base-source", "--input", root, "--sha256", seal}, &out); err == nil || out.Len() != 0 {
 		t.Fatal("synthetic profile impersonated original frozen base")
 	}
 }
