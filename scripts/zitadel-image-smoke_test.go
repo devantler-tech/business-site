@@ -153,10 +153,244 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 				return nil, fmt.Errorf("cleanup failed")
 			}
 			return nil, nil
+		case args[0] == "image" && args[1] == "save":
+			if len(args) != 5 || args[2] != "--output" || args[4] != "sha256:"+strings.Repeat("b", 64) {
+				t.Fatalf("candidate must preserve the exercised image ID: %s", command)
+			}
+			return nil, os.WriteFile(args[3], []byte("opaque Docker image fixture\n"), 0600)
+		case args[0] == "image" && args[1] == "load":
+			return []byte("Loaded image ID: sha256:" + strings.Repeat("b", 64) + "\n"), nil
+		case args[0] == "image" && args[1] == "ls":
+			if len(args) != 7 || args[2] != "--all" || args[3] != "--no-trunc" || args[4] != "--quiet" || args[5] != "--filter" || args[6] != "label=org.devantler-tech.identity-smoke-owner="+owner {
+				t.Fatalf("absence check must cover only this owner's complete image set: %s", command)
+			}
+			return nil, nil
 		default:
 			t.Fatalf("unexpected Docker command: %s", command)
 		}
 		return nil, nil
+	}
+}
+
+// This exercises the orchestration and opaque handoff only. A process double
+// cannot prove Docker archive semantics or real registry acceptance.
+func TestImageSmokePreservesTheExercisedCandidateBeforeCleanup(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	base := imageSmokeDouble(t, build, "")
+	probeComplete, saved, cleaned := false, false, false
+	run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+		if name == "docker" && args[0] == "image" && args[1] == "save" {
+			if !probeComplete || cleaned {
+				t.Fatal("candidate saved before probes or after cleanup")
+			}
+			saved = true
+		}
+		if name == "docker" && (args[0] == "rm" || (args[0] == "image" && args[1] == "rm")) {
+			cleaned = true
+		}
+		return base(d, name, args...)
+	}
+	if err := imageSmoke(build, repo, out, run, func(_, _ string) error { probeComplete = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !saved || !cleaned {
+		t.Fatal("successful smoke discarded the tested candidate")
+	}
+	var receipt struct {
+		LocalImageID      string `json:"localImageId"`
+		CandidateReloaded bool   `json:"candidateReloaded"`
+		Candidate         struct {
+			Path   string `json:"path"`
+			Bytes  int64  `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		} `json:"candidateArchive"`
+	}
+	b, err := os.ReadFile(filepath.Join(out, "image-smoke.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(b, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.CandidateReloaded || receipt.LocalImageID != "sha256:"+strings.Repeat("b", 64) || receipt.Candidate.Path != "candidate-image.tar" || receipt.Candidate.Bytes != 28 {
+		t.Fatalf("candidate identity/size missing: %+v", receipt)
+	}
+	archive, err := os.ReadFile(filepath.Join(out, receipt.Candidate.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(archive) != "opaque Docker image fixture\n" || receipt.Candidate.SHA256 != "76f5a0b00771eaed54175678f940fc8cbcb82ac2052ec00d688ae98ef2adae7c" {
+		t.Fatal("candidate bytes are not bound to the smoke receipt")
+	}
+	st, err := os.Stat(filepath.Join(out, receipt.Candidate.Path))
+	if err != nil || st.Mode().Perm() != 0444 {
+		t.Fatal("candidate was not sealed read-only")
+	}
+}
+
+func TestImageSmokeCandidateRequiresAFreshLoadAfterOriginalRemoval(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	base := imageSmokeDouble(t, build, "")
+	removals, loads := 0, 0
+	run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+		if name == "docker" && args[0] == "image" && args[1] == "rm" {
+			removals++
+		}
+		if name == "docker" && args[0] == "image" && args[1] == "load" {
+			wantArchive, err := filepath.EvalSymlinks(filepath.Join(out, "candidate-image.tar"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if removals != 1 || len(args) != 4 || args[2] != "--input" || args[3] != wantArchive {
+				t.Fatalf("candidate load must follow original removal and use only the sealed archive: removals=%d args=%q", removals, args)
+			}
+			loads++
+			return []byte("Loaded image ID: sha256:" + strings.Repeat("b", 64) + "\n"), nil
+		}
+		return base(d, name, args...)
+	}
+	if err := imageSmoke(build, repo, out, run); err != nil {
+		t.Fatal(err)
+	}
+	if loads != 1 || removals != 2 {
+		t.Fatalf("candidate was not loaded, verified and cleaned: loads=%d removals=%d", loads, removals)
+	}
+}
+
+func TestImageSmokeRejectsFailedOrChangedCandidateRoundtrip(t *testing.T) {
+	for _, kind := range []string{"absence-error", "original-present", "load-error", "wrong-id", "wrong-owner", "wrong-config", "changed-archive"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			out := filepath.Join(t.TempDir(), "smoke")
+			base := imageSmokeDouble(t, build, "")
+			loaded := false
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				if name == "docker" && args[0] == "image" && args[1] == "ls" {
+					if kind == "absence-error" {
+						return nil, fmt.Errorf("fixture absence check failed")
+					}
+					if kind == "original-present" {
+						return []byte("sha256:" + strings.Repeat("b", 64) + "\n"), nil
+					}
+				}
+				if name == "docker" && args[0] == "image" && args[1] == "load" {
+					loaded = true
+					if kind == "load-error" {
+						return []byte("plausible loaded output"), fmt.Errorf("fixture load failed")
+					}
+					if kind == "changed-archive" {
+						imageTestWrite(t, out, "candidate-image.tar", []byte("changed after export\n"))
+					}
+				}
+				b, err := base(d, name, args...)
+				if loaded && name == "docker" && args[0] == "image" && args[1] == "inspect" && err == nil {
+					var images []map[string]any
+					if err := json.Unmarshal(b, &images); err != nil {
+						t.Fatal(err)
+					}
+					switch kind {
+					case "wrong-id":
+						images[0]["Id"] = "sha256:" + strings.Repeat("c", 64)
+					case "wrong-owner":
+						images[0]["Config"].(map[string]any)["Labels"] = map[string]string{"org.devantler-tech.identity-smoke-owner": "foreign"}
+					case "wrong-config":
+						images[0]["Config"].(map[string]any)["User"] = "0"
+					}
+					b = imageTestJSON(t, images)
+				}
+				return b, err
+			}
+			if err := imageSmoke(build, repo, out, run); err == nil {
+				t.Fatal("invalid candidate roundtrip admitted")
+			}
+			if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+				t.Fatal("failed roundtrip emitted a successful receipt")
+			}
+		})
+	}
+}
+
+func TestImageSmokeNeverLoadsACandidateChangedDuringCleanup(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	base := imageSmokeDouble(t, build, "")
+	run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+		if name == "docker" && args[0] == "image" && args[1] == "ls" {
+			imageTestWrite(t, out, "candidate-image.tar", []byte("substituted before reload\n"))
+		}
+		if name == "docker" && args[0] == "image" && args[1] == "load" {
+			t.Fatal("changed candidate reached Docker load")
+		}
+		return base(d, name, args...)
+	}
+	if err := imageSmoke(build, repo, out, run); err == nil {
+		t.Fatal("changed candidate accepted")
+	}
+	if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+		t.Fatal("changed candidate emitted success")
+	}
+}
+
+func TestImageSmokeRejectsIncompleteCandidateExport(t *testing.T) {
+	for _, kind := range []string{"failed", "missing", "empty", "directory", "symlink", "hardlink", "oversized"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			out := filepath.Join(t.TempDir(), "smoke")
+			base := imageSmokeDouble(t, build, "")
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				if name != "docker" || args[0] != "image" || args[1] != "save" {
+					return base(d, name, args...)
+				}
+				p := args[3]
+				switch kind {
+				case "failed":
+					if err := os.WriteFile(p, []byte("plausible partial archive"), 0600); err != nil {
+						t.Fatal(err)
+					}
+					return []byte("plausible success output"), fmt.Errorf("fixture failed after partial export")
+				case "missing":
+					return nil, nil
+				case "empty":
+					return nil, os.WriteFile(p, nil, 0600)
+				case "directory":
+					return nil, os.Mkdir(p, 0700)
+				case "symlink", "hardlink":
+					foreign := filepath.Join(t.TempDir(), "foreign")
+					if err := os.WriteFile(foreign, []byte("foreign bytes"), 0600); err != nil {
+						t.Fatal(err)
+					}
+					if kind == "symlink" {
+						return nil, os.Symlink(foreign, p)
+					}
+					return nil, os.Link(foreign, p)
+				case "oversized":
+					f, err := os.Create(p)
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = f.Truncate((1 << 30) + 1)
+					closeErr := f.Close()
+					if err != nil {
+						return nil, err
+					}
+					return nil, closeErr
+				}
+				return nil, fmt.Errorf("unexpected case")
+			}
+			if err := imageSmoke(build, repo, out, run); err == nil {
+				t.Fatal("invalid export emitted success")
+			}
+			if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+				t.Fatal("failed export retained a success receipt")
+			}
+		})
 	}
 }
 

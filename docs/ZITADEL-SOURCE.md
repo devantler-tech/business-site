@@ -1156,6 +1156,28 @@ container and local image are removed by their inspected, owner-bound immutable
 identities. No tag or container name is overwritten or reclaimed. Cleanup or receipt-write failure
 cannot produce a success diagnostic.
 
+After all requested service/browser probes succeed, the command saves that exact
+image config ID with `docker image save --output` to `candidate-image.tar` in its
+private output directory. It refuses existing destinations, empty/nonregular,
+linked or over-1-GiB files and incomplete reads, then seals its size, SHA-256 and
+read-only mode. It removes the original container/image and confirms that no
+image carrying this invocation's unique ownership label remains, including
+intermediate/dangling images. Only then does it load the archive, inspect the
+same config ID and complete selected configuration, recheck the archive bytes,
+and remove the reloaded owned image. Load output text is never identity proof.
+Any failed export, absence check, reload, readback or cleanup prevents success.
+
+The receipt's `candidateArchive` and `candidateReloaded` fields bind this local
+handoff to the exercised image. The archive is opaque to this helper: Docker
+performs save/load; no second archive parser is introduced. Its tar digest,
+Docker config identity and a future registry manifest digest are distinct.
+A future publisher must verify the bytes before loading and independently join
+its registry manifest/config/payload after publication. It must use this tested
+candidate rather than rebuild it or add metadata that changes its config ID.
+The local archive grants no distribution authority and is deliberately absent
+from the diagnostic upload. Actual hosted Docker execution is separate from
+the process-double controls for failure handling and ordering.
+
 The diagnostic records the local image identity, context and recipe digests,
 payload file bindings, configured user, inspected restrictions, exact output,
 exit and cleanup. `cli-version-smoke` does not establish a daemon's effective
