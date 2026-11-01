@@ -1170,7 +1170,9 @@ Any failed export, absence check, reload, readback or cleanup prevents success.
 The image inspection also requires `RootFS.type` to be `layers`, the thirteen
 ordered DiffIDs from pinned amd64 config
 `55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
-and exactly one application layer. Missing, shortened, substituted or extra
+and exactly three application layers for WORKDIR and the two COPY instructions.
+The first PR run demonstrated that a single-layer expectation was incorrect;
+the corrected count still needs actual native CI readback. Missing, shortened, substituted or extra
 layers refuse before execution. Reload inspection compares this complete
 filesystem identity too. The receipt retains it as `baseRootFS`; those
 uncompressed DiffIDs are distinct from compressed registry layer digests.
@@ -1346,3 +1348,12 @@ requires their glyphs and links to fit inside it; it injects no DOM or styles.
 These checks cover two actual table variants and one actual editor; the other variants
 remain bound by their exact transformed source hashes. This remains presentation
 evidence, not completed federation, invitations, MFA or portal activation.
+
+The same owned container supplies six original Debian copyright bodies and the
+complete GPL-2 text they reference through seven explicit Docker copies. The
+closed, bounded readback checks original byte lengths, hashes and modes before
+export and again after reload; the receipt records their actual image paths.
+These originals are retained separately under `base-notices/`, alongside the
+RootFS prefix evidence. They were already shipped by the base, rather than
+new notices added to the application package. This is notice preservation and
+filesystem evidence, not complete base corresponding-source admission.

@@ -455,6 +455,8 @@ jobs:
           jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
             def positiveInt: if type == "number" then . == floor and . > 0 else false end;
             $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
+            ($image[0].baseNotices|length) == 7 and
+            all($image[0].baseNotices[]; (.imagePath|startswith("/usr/share/")) and .file.bytes > 0 and (.file.sha256|test("^[0-9a-f]{64}$"))) and
             .schemaVersion == 1 and .profile == "isolated-service-smoke" and
             .upstreamCommit == $image[0].upstreamCommit and
             .localImageId == $image[0].localImageId and
@@ -695,6 +697,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/console-originals-roundtrip.json
             ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
+            ${{ runner.temp }}/zitadel-image/base-notices/*.txt
             ${{ runner.temp }}/zitadel-image/service-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-binding.json

@@ -241,8 +241,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   archive and rechecks the same config identity and inspected configuration before final
   owner-bound cleanup. The archive stays local and is excluded from diagnostic upload.
   The inspected filesystem must contain the pinned base config's thirteen ordered
-  DiffIDs followed by exactly one application layer. Its `baseRootFS` readback
+  DiffIDs followed by exactly three application layers (WORKDIR and two COPY steps). Its `baseRootFS` readback
   remains distinct from the archive, image-config and registry-manifest digests.
+  Copy and retain the six original base package copyrights and their referenced
+  complete GPL-2 text from that actual owned container. Keep their closed readback
+  separate from /app notices; recheck it before export and after reload.
   Its size, digest and successful reload enter the receipt; they are not a registry identity,
   corresponding-source offer or distribution admission. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.

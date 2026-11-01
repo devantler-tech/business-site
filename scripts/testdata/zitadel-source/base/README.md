@@ -15,3 +15,13 @@ registry objects were independently read on 2026-11-01; the index's normal
 Cosign verification succeeded for `keyless@distroless.iam.gserviceaccount.com`
 with issuer `https://accounts.google.com`. This fixture alone is not a fresh
 signature verification or full distribution admission.
+
+The six `*-copyright.raw` files and `GPL-2.raw` preserve the original
+package copyright bodies and complete referenced GPL-2 text from those same
+checksum-verified layers, without Markdown formatting. The metadata chain is
+index → amd64 manifest → config/layer digests; each uncompressed layer digest
+was checked against the config. No SPDX signature or Debian OpenPGP verification
+is inferred. The native image test copies those seven exact paths from its
+actual owned container and keeps their readback separate from the application
+notice inventory. Full MPL-2.0 terms are contained in ca-certificates' original
+copyright body. These are upstream terms, not a grant for other own code.
