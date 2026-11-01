@@ -58,7 +58,7 @@ snapshots and joins the archive seals, original image/binary and independent
 offline binary to their original receipts. Source and image archives retain
 their producer modes and bytes. It writes only a new exclusive manifest.
 
-The manifest binds raw witness bytes rather than reserializing projections or
+The manifest binds raw witness bytes rather than rewriting selected fields or
 copying private service process/network details into a summary. The existing
 native engines remain responsible for archive membership, complete inventory,
 Docker inspection, screenshots and replay execution. This operation does not
