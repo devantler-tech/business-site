@@ -92,7 +92,7 @@ var imageBaseNotices = []imageBaseNotice{
 	{"/usr/share/doc/tzdata/copyright", imageFile{Path: "base-notices/tzdata-copyright.txt", Bytes: 375, SHA256: "cb61132bc0fc7b26ef5a82ee18b2fb644a1362f4f286ed980ff22e408471f59a", Mode: 0644}},
 	{"/usr/share/doc/tzdata-legacy/copyright", imageFile{Path: "base-notices/tzdata-legacy-copyright.txt", Bytes: 375, SHA256: "cb61132bc0fc7b26ef5a82ee18b2fb644a1362f4f286ed980ff22e408471f59a", Mode: 0644}},
 	{"/usr/share/doc/media-types/copyright", imageFile{Path: "base-notices/media-types-copyright.txt", Bytes: 268, SHA256: "5ded7c53199b6a1d089b0b7e231d77e5c84081c7156b372b3f11ad9c1c2c5cc7", Mode: 0644}},
-	{"/usr/share/doc/ca-certificates/copyright", imageFile{Path: "base-notices/ca-certificates-copyright.txt", Bytes: 18940, SHA256: "e85e1bcad3a915dc7e6f41412bc5bdeba275cadd817896ea0451f2140a93967c", Mode: 0644}},
+	{"/usr/share/doc/ca-certificates/copyright", imageFile{Path: "base-notices/ca-certificates-copyright.txt", Bytes: 18940, SHA256: "e85e1bcad3a915dc7e6f41412bc5bdeba275cadd817896ea0451f2140a93967c", Mode: 0555}},
 	{"/usr/share/common-licenses/GPL-2", imageFile{Path: "base-notices/GPL-2.txt", Bytes: 17984, SHA256: "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6", Mode: 0644}},
 }
 
@@ -104,7 +104,7 @@ func imageVerifyBaseNotices(output string) error {
 	for _, notice := range imageBaseNotices {
 		b, err := imageRead(output, notice.File.Path, 65536)
 		st, stErr := os.Lstat(filepath.Join(output, notice.File.Path))
-		if err != nil || stErr != nil || len(b) != notice.File.Bytes || imageHash(b) != notice.File.SHA256 || !st.Mode().IsRegular() || st.Mode().Perm() != 0644 {
+		if err != nil || stErr != nil || len(b) != notice.File.Bytes || imageHash(b) != notice.File.SHA256 || !st.Mode().IsRegular() || uint32(st.Mode().Perm()) != notice.File.Mode {
 			return fmt.Errorf("actual base notice differs: %s", notice.ImagePath)
 		}
 	}

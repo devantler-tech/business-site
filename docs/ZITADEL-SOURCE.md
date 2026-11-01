@@ -1172,7 +1172,7 @@ ordered DiffIDs from pinned amd64 config
 `55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
 and exactly three application layers for WORKDIR and the two COPY instructions.
 The first PR run demonstrated that a single-layer expectation was incorrect;
-the corrected count still needs actual native CI readback. Missing, shortened, substituted or extra
+the corrected count passed the next native image inspection. Missing, shortened, substituted or extra
 layers refuse before execution. Reload inspection compares this complete
 filesystem identity too. The receipt retains it as `baseRootFS`; those
 uncompressed DiffIDs are distinct from compressed registry layer digests.
@@ -1357,3 +1357,9 @@ These originals are retained separately under `base-notices/`, alongside the
 RootFS prefix evidence. They were already shipped by the base, rather than
 new notices added to the application package. This is notice preservation and
 filesystem evidence, not complete base corresponding-source admission.
+
+The frozen ca-certificates copyright is a regular file with original mode 0555,
+while the other six copied terms files are 0644. Preserve and verify each
+member's actual mode rather than normalizing or assuming one mode for all
+notices. The native source inspection and the original tar headers bind this
+distinction; the executable bit is not permission to execute a copyright file.

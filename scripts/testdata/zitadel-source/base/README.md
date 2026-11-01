@@ -25,3 +25,9 @@ is inferred. The native image test copies those seven exact paths from its
 actual owned container and keeps their readback separate from the application
 notice inventory. Full MPL-2.0 terms are contained in ca-certificates' original
 copyright body. These are upstream terms, not a grant for other own code.
+
+The ca-certificates copyright member in original layer
+`c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab`
+is a regular 18,940-byte file with mode **0555**. The other six notice copies
+are regular **0644** files. Fixture source files remain ordinary repository data;
+the process double separately preserves those observed container modes.

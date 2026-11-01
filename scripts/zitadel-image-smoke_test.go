@@ -212,7 +212,11 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 				if err != nil {
 					return nil, err
 				}
-				return nil, os.WriteFile(args[2], b, 0644)
+				mode := os.FileMode(0644)
+				if original == "ca-certificates-copyright.raw" {
+					mode = 0555
+				}
+				return nil, os.WriteFile(args[2], b, mode)
 			}
 
 			context := filepath.Join(filepath.Dir(args[2]), "context")
@@ -577,7 +581,7 @@ func TestImageCleanupNeverDeletesAnUnownedObject(t *testing.T) {
 // These controls exercise the actual Docker-copy boundary, not a notice summary.
 func TestImageSmokeRejectsMissingOrSubstitutedBaseCopyrights(t *testing.T) {
 	for _, pkg := range []string{"base-files", "netbase", "tzdata", "tzdata-legacy", "media-types", "ca-certificates", "GPL-2"} {
-		for _, kind := range []string{"missing", "substituted"} {
+		for _, kind := range []string{"missing", "substituted", "wrong-mode"} {
 			t.Run(pkg+"/"+kind, func(t *testing.T) {
 				build, repo, _ := imageTestFixture(t)
 				imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
@@ -591,7 +595,14 @@ func TestImageSmokeRejectsMissingOrSubstitutedBaseCopyrights(t *testing.T) {
 						if kind == "missing" {
 							return nil, fmt.Errorf("original copyright missing")
 						}
-						return nil, os.WriteFile(args[2], []byte("substituted original copyright\n"), 0644)
+						if kind == "substituted" {
+							return nil, os.WriteFile(args[2], []byte("substituted original copyright\n"), 0644)
+						}
+						raw, err := base(d, name, args...)
+						if err == nil {
+							err = os.Chmod(args[2], 0600)
+						}
+						return raw, err
 					}
 					return base(d, name, args...)
 				}
@@ -644,7 +655,12 @@ func TestImageSmokeRetainsOriginalBaseNoticeCopies(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if notice.ImagePath != wantPath || !bytes.Equal(got, want) || notice.File.SHA256 != imageHash(want) || notice.File.Bytes != len(want) || notice.File.Mode != 0644 {
+		if notice.ImagePath != wantPath || !bytes.Equal(got, want) || notice.File.SHA256 != imageHash(want) || notice.File.Bytes != len(want) || notice.File.Mode != func() uint32 {
+			if name == "ca-certificates" {
+				return 0555
+			}
+			return 0644
+		}() {
 			t.Fatal("original base copyright bytes/receipt differ")
 		}
 	}
