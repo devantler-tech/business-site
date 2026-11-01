@@ -1,10 +1,9 @@
 {
-  "observedAt": "2026-10-22",
-  "fetchedAt": "2026-10-22T21:22:43Z",
+  "observedAt": "2026-11-01",
+  "fetchedAt": "2026-11-01T21:41:08Z",
   "repositories": {
     ".github": 1,
-    "agent-plugins": 2,
-    "agent-skills": 3,
+    "agent-plugins": 3,
     "dotnet-template": 1,
     "go-template": 1,
     "khoist": 1,
@@ -22,11 +21,6 @@
       "fork": false
     },
     "agent-plugins": {
-      "private": false,
-      "archived": false,
-      "fork": false
-    },
-    "agent-skills": {
       "private": false,
       "archived": false,
       "fork": false
