@@ -49,3 +49,25 @@ publisher must establish those facts and join this base source to the actual
 tested image and application corresponding source before distribution. This
 command is outside the repository's specific 37-file AGPL grant; no new license
 grant for other authored application code is implied.
+
+## Local publication handoff
+
+`prepare-handoff` is a data-only observation of the original native job's three
+archives and fixed witnesses. It streams bounded, complete physical-file
+snapshots and joins the archive seals, original image/binary and independent
+offline binary to their original receipts. Source and image archives retain
+their producer modes and bytes. It writes only a new exclusive manifest.
+
+The manifest binds raw witness bytes rather than reserializing projections or
+copying private service process/network details into a summary. The existing
+native engines remain responsible for archive membership, complete inventory,
+Docker inspection, screenshots and replay execution. This operation does not
+repeat those engines or turn their component observations into release admission.
+The supplied source revision and CI run/attempt are caller assertions, not
+authenticated GitHub provenance. A later publisher must authenticate the original
+successful main run and independently verify the complete payload/witness set.
+No source offer, registry, signature, distribution or activation claim is granted.
+
+```sh
+identity-release prepare-handoff --input /absolute/native-job-root --source-sha FULL_COMMIT_SHA --run-id ORIGINAL_RUN_ID --run-attempt 1 --output /absolute/new-handoff.json
+```
