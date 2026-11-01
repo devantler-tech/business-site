@@ -1039,10 +1039,159 @@ var neutralSMTPInputs = []neutralProviderInput{
 	{path: "console/src/assets/images/smtp/sendgrid.png", sha256: "8e5559c9e74a4b5ea732f9dcbaa0cc24dae759317edd1aed02e9a572141cee7a", mode: 0644, kind: "retire"},
 }
 
+// Remove only decoration from the frozen metadata and its native renderers.
+// Complete original/output hashes are enforced by the surrounding fixed profile.
+func neutralFrameworkChange(input neutralProviderInput, text string) (string, int, error) {
+	fail := func() (string, int, error) { return "", 0, fmt.Errorf("native framework decoration differs") }
+	if input.kind == "framework-data" {
+		var rows []map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(text), &rows); err != nil || len(rows) != 35 {
+			return fail()
+		}
+		ids, images, properties := map[string]bool{}, map[string]bool{}, 0
+		for _, row := range rows {
+			if raw, ok := row["id"]; ok {
+				var id string
+				if json.Unmarshal(raw, &id) != nil || id == "" || ids[id] {
+					return fail()
+				}
+				ids[id] = true
+			}
+			for _, field := range []string{"imgSrcDark", "imgSrcLight"} {
+				if raw, ok := row[field]; ok {
+					var image string
+					if json.Unmarshal(raw, &image) != nil || !strings.HasPrefix(image, "/docs/img/tech/") {
+						return fail()
+					}
+					images[image] = true
+					properties++
+					delete(row, field)
+				} else if field == "imgSrcDark" {
+					return fail()
+				}
+			}
+		}
+		if len(ids) != 24 || len(images) != 32 || properties != 39 {
+			return fail()
+		}
+		body, err := json.MarshalIndent(rows, "", "  ")
+		if err != nil {
+			return "", 0, err
+		}
+		return string(append(body, '\n')), 0, nil
+	}
+	if input.kind == "framework-mapping" {
+		var lines []string
+		removed := 0
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "imgSrcDark") || strings.Contains(line, "imgSrcLight") {
+				removed++
+				continue
+			}
+			lines = append(lines, line)
+		}
+		want := 2
+		if strings.HasSuffix(input.path, "/quickstart.component.ts") {
+			want = 4
+		}
+		if removed != want {
+			return fail()
+		}
+		return strings.Join(lines, "\n"), 0, nil
+	}
+	indent, size, alt := "", 30, ""
+	switch input.kind {
+	case "framework-quickstart":
+		indent, size, alt = "        ", 20, ` alt="{{ framework.title }}"`
+	case "framework-picker":
+		indent = "                "
+	case "framework-change":
+		indent, size = "          ", 40
+	default:
+		return fail()
+	}
+	old := indent + "@if (framework.imgSrcDark) {\n" + indent + `  <img class="dark-only" [src]="framework.imgSrcDark"` + alt + " />\n" + indent + "}\n" +
+		indent + "@if (framework.imgSrcLight) {\n" + indent + `  <img class="light-only" [src]="framework.imgSrcLight"` + alt + " />\n" + indent + "}"
+	if strings.Count(text, old) != 1 {
+		return fail()
+	}
+	replacement := fmt.Sprintf(`%s<i class="neutral-framework-icon las la-code" style="font-size:%dpx" aria-hidden="true"></i>`, indent, size)
+	if input.kind == "framework-quickstart" {
+		replacement += "\n" + indent + `<span style="font-size:11px;line-height:1.1;text-align:center;max-width:56px">{{ framework.title }}</span>`
+		anchor := `class="quickstart-card card"`
+		if strings.Count(text, anchor) != 1 {
+			return fail()
+		}
+		text = strings.Replace(text, anchor, anchor+` [attr.aria-label]="framework.title"`, 1)
+	}
+	return strings.Replace(text, old, replacement, 1), 1, nil
+}
+
+// The complete frozen framework family binds seven native consumers and all
+// forty-four decoration originals before changing the private prepared source.
+var neutralFrameworkInputs = []neutralProviderInput{
+	{path: "apps/docs/frameworks.json", sha256: "2fb8165ab168234975f710989a83b40b3bd86429b332d1d8c45bf4ea560063a1", mode: 0644, kind: "framework-data", expected: "99b5bdf71a12e209c754bb8e013ab56c5c624066d5caf3e71cafed64b1c4dac8"},
+	{path: "console/src/app/components/quickstart/quickstart.component.ts", sha256: "09fadb50be8d91ef67b1c6b16c4eca6f99b589c04b99b0370d6660472923ec4a", mode: 0644, kind: "framework-mapping", expected: "ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc"},
+	{path: "console/src/app/components/framework-change/framework-change.component.ts", sha256: "a957a2bc496b3280e7bfff7f964569dcf70c3acecf57790c60b830faec4dec36", mode: 0644, kind: "framework-mapping", expected: "790fb8e83d170014ae9f2e31068cf906f89a4228190a7213f3950844c7cb2c5a"},
+	{path: "console/src/app/pages/app-create/app-create.component.ts", sha256: "aecc9782aaaddd251d7803c7c764df44da89a17517fb4d94ef58daf9b36d216e", mode: 0644, kind: "framework-mapping", expected: "6ed83747af1fbbfb2e5fefda0f281d06a1be7eb5a0fb6437ac2949f293b7afe5"},
+	{path: "console/src/app/components/quickstart/quickstart.component.html", sha256: "0a4bc61a3d29e31cf4c2d97d119534f138b6655e9bef21ce75276ef142c7e552", mode: 0644, kind: "framework-quickstart", expected: "7c71cf66e4f1547ec223f909a74997a11de9e590d2931ef4bf6453091fd3e969"},
+	{path: "console/src/app/components/framework-autocomplete/framework-autocomplete.component.html", sha256: "15e53508e8fab200bac069651f92646fbaee86a1367598b126df7c1801de5078", mode: 0644, kind: "framework-picker", expected: "7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7"},
+	{path: "console/src/app/components/framework-change/framework-change.component.html", sha256: "0b64bd0df4b261c0046169b8b6d67890837c88033dbbcede2dd324cf2eb63991", mode: 0644, kind: "framework-change", expected: "0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712"},
+	{path: "apps/docs/public/img/tech/android.svg", sha256: "f386c9e7395801722109553d294180d2c4b1fc70fd72a74afcfe6c2d6721cfad", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/angular.svg", sha256: "8be939aa259d174d90fc7098e90834ddd012d2fa12169b90cb290021c3e54eb8", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/aspnet.png", sha256: "1f56642d45c5fb2602a49da2cd737c83106de1535dee461dbc1e54e12c745d29", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/astro.svg", sha256: "b9b247578095c6290018ad56d1ec66e524020b32154ae722464f4c3fd2dc6463", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/dart.svg", sha256: "0aa6f25efd6c22ed76805b604fe6d605b8c6a8ceebc024b7ba5dbc84f5d7670d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/django.png", sha256: "f0f569df3ac940fc90323ae0943fa0076957076728ff088b08ed932ca522a85f", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/django.svg", sha256: "4496111c58134c4fac30c5bbabbba1bd2a0d3fe351cd58a3079a00a92a1134a5", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/dotnet.svg", sha256: "f222062c4f59b7864163bd54d24fafc40f1e2f2513672e50bc08e5025d73e4e5", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/elixir.svg", sha256: "7c6576f2c84ba2326924f77c60e30d04b73ae0eba8130f03e93fc7b102c705ec", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/expressjs.svg", sha256: "356a6c1b25c3d1b41aa62d830a88669addd60e1dceec6281615a19bb5b30d142", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/fastapi.svg", sha256: "7ef41f6a363b00ff595e6d0b933c025c92cbfae29dc1df24b2f6eb8b476ee486", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/fastify.svg", sha256: "94ce2186b67f0627daffdf4000c84a83ba41ccc12f603e2e03e9e67d563b77dd", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flask.svg", sha256: "3cbd66e5e0e30d7241717d582aeb7419efddf65ff4a361ce5ae7ef79589b3885", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flasklight.svg", sha256: "3be7f1ef59209dae0b7cfb9d342fa7acf503e5a96068324a96b64339bdf06133", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flutter.svg", sha256: "e5e83b93f5181249e9f0da7a017170d5716ed02c9fc2527cf55c6eb2d101916a", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/github.svg", sha256: "41cb449b4529dfd5a478e026a9e1a191ad6dcca5bc6e18f8125a848d0cba79e9", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/golang.svg", sha256: "1b5e8455f532b065aba5a3de4eef05c0f71520d469133832720cb23cb42d3a39", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/hono.svg", sha256: "9362f16d2faae430775434d204eb9032a8256ed913d50ad6b438a28395e97644", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/java.svg", sha256: "8e909af8ef74f273d5aae847694f9bf3e238a7b90272ffd02828244a17e72960", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/javascript.svg", sha256: "baa03265be69ef581f3c4a092feacb7390f7f00460b50fa041de1520dace02cb", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/laravel.svg", sha256: "dc4b656034018193478cd9a48afa7f307e33101787a20bac5fff2c0940101136", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nestjs.svg", sha256: "b968226a04dcc2f6201611fec5f91cb3f9a6b1c7357c02a17febd1495cad5719", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/net.svg", sha256: "f12658f6147f9964ec4321ec7fc57dbcbddf2ac424f91324459fef981e4fb3ab", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nextjs.svg", sha256: "e5351090db5ea00393a4a78f26ec0d4aa13b5b8612dd23f13bf522fb1184a4e4", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nextjslight.svg", sha256: "38e9550d76c4f3e83766e996d4f3a06b44de91c034d91869cd1b5975fb3cad2e", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nodejs.svg", sha256: "3013b930591ce102059b67654768d8f9f3e925b5946aea309fa48ac5f1967daa", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nuxtjs.svg", sha256: "3444e11856b46d9366b88fb3d4a1c0c459509e308bda32b4fbe9ff031a7011ab", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/oauth.svg", sha256: "2a5c60a1e0d2ce7957f92ce741f6e0c95f61a9bb9042e88f6dcdce0df3fc6400", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/oauth2-proxy.svg", sha256: "debc497c05d548e223ee6b62b4cf00ec6835bdc3f0f66e8a826a5ff9d0037239", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/passportjs.svg", sha256: "ef49b64066461d228b1170c66f8b0978ff1682b4b5768974cae37e4a0c789c0a", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/php.svg", sha256: "ac13adaa9dd9bcb7ee4616e9c160465a19dd4edd4990487c8905111952865377", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/pylon.svg", sha256: "6c1a18e08f87aa3e4f7dec24053ddfb4b3211bc7a1a21903498bf436a230fe09", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/python.svg", sha256: "b11b5e52ebdb684ff127217a423a77758e436bc42f57ecdf3bfbf0da94acf4d0", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/qwik.svg", sha256: "613432e02e26c387b452707f64a158d89e6ac0cb86fea9664ad2a5fef250ff25", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/react.png", sha256: "73bba63208aaee9bbc79c4c73b09db0e3be093d79010814498711292fc4dd3f3", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/react.svg", sha256: "861e5e8674aa75062c766d13159dde8d989b7c5e28331d7e1c71614f5e96e580", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/ruby.svg", sha256: "a45c29a69b5a010ad5f7d83907e3adbe6d150294b28a5c7d1ce698175bab258f", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/rust.svg", sha256: "9a9549ea02d34dec3a610b8299f1b8121c7b10b14a44d3baec46ba15e9a06ca2", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/rustlight.svg", sha256: "c96d69ff0dab2c26c41e21a9ecfd42dfb64be562d601b1e7635347483ccfc3ad", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/solidstart.svg", sha256: "5d565263241241895577a0253acb9f4415abcda20d095be0f1b3a4b159933ef8", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/spring.svg", sha256: "b60e9c0ae66b8042926aceb5e88be565803b381afedd755227e1564031a1ea6d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/sveltekit.svg", sha256: "45a8cb356d778104650d314ac2c3c7907abdfcc5c15f09910fe7c1c96e865f6d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/symfony.svg", sha256: "28a9f7b3bd61b421795d5a77c47b45411ace9a43b16ab01a07c7ebced928c881", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/vue.svg", sha256: "05c69aeeda1250c36e4845230976e6664a08ed67cdf14c9cbdb97223dc6d082d", mode: 0644, kind: "retire"},
+}
+
 func init() {
 	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
 	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
 	iconExtensions["--neutral-mdi-icons"] = runNeutralMDIIcons
+	iconExtensions["--neutral-framework-icons"] = runNeutralFrameworkIcons
+}
+
+func runNeutralFrameworkIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "framework")
 }
 
 // runNeutralProviderIcons validates the complete frozen decoration profile before
@@ -1067,7 +1216,7 @@ func runNeutralMDIIcons(args []string, out, diagnostic io.Writer) int {
 // membership, transformations and receipt cardinalities are fixed independently.
 func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile string) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
-	if profile != "provider" && profile != "smtp" && profile != "mdi" {
+	if profile != "provider" && profile != "smtp" && profile != "mdi" && profile != "framework" {
 		return fail(fmt.Errorf("unknown fixed icon profile"))
 	}
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
@@ -1114,6 +1263,16 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		}
 		families = map[string][]string{"console/src/assets/mdi": names}
 	}
+	if profile == "framework" {
+		inputs = neutralFrameworkInputs
+		var names []string
+		for _, input := range inputs {
+			if input.kind == "retire" {
+				names = append(names, path.Base(input.path))
+			}
+		}
+		families = map[string][]string{"apps/docs/public/img/tech": names}
+	}
 	for dir, names := range families {
 		if err = exactDirectory(source, dir, names); err != nil {
 			return fail(err)
@@ -1133,6 +1292,13 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		}
 		text := string(body)
 		switch input.kind {
+		case "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
+			var slots int
+			text, slots, e = neutralFrameworkChange(input, text)
+			if e != nil {
+				return fail(e)
+			}
+			consoleSlots += slots
 		case "mdi-registry", "mdi-table", "mdi-chooser", "mdi-editor-oidc", "mdi-editor-jwt":
 			var slots int
 			text, slots, e = neutralMDIChange(input, text)
@@ -1253,6 +1419,9 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 	if profile == "mdi" && (len(originals) != 32 || len(replacements) != 5 || consoleSlots != 6 || loginSlots != 0 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral MDI profile"))
 	}
+	if profile == "framework" && (len(originals) != 51 || len(replacements) != 7 || consoleSlots != 3 || loginSlots != 0 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral framework profile"))
+	}
 	// Refuse a changed original before replacing any selected body.
 	for _, input := range inputs {
 		body, e := neutralProviderRead(confined, input)
@@ -1320,6 +1489,19 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 	}
 	if profile == "mdi" {
 		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["retainedFiles"] = "native-neutral-mdi-icons-v1", 5, 2, 25
+	}
+	if profile == "framework" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-neutral-framework-icons-v1", 7, 44
+		receipt["frameworks"], receipt["frameworkIDs"], receipt["imagePropertiesRemoved"] = 35, 24, 39
+		changed, removed := []string{}, []string{}
+		for _, input := range inputs {
+			if input.kind == "retire" {
+				removed = append(removed, input.path)
+			} else {
+				changed = append(changed, input.path)
+			}
+		}
+		receipt["changedPaths"], receipt["removedPaths"] = changed, removed
 	}
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
@@ -1392,11 +1574,25 @@ func neutralSMTPConsumers() []inputRecord {
 	return consumers
 }
 
+// The metadata and all six render/mapping consumers share the frozen framework profile.
+func neutralFrameworkConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralFrameworkInputs {
+		if input.kind != "retire" {
+			consumers = append(consumers, inputRecord{input.path, input.expected})
+		}
+	}
+	return consumers
+}
+
 // Recognize the retired native provider families in output paths and text.
 // Repeated slash decoding covers the source compiler's escaped-string forms;
 // this is a closed-family check, not a general JavaScript or URL parser.
 func neutralProviderOutput(name string, body []byte) error {
 	lower := strings.ToLower(filepath.ToSlash(name))
+	if strings.Contains(lower, "docs/img/tech/") {
+		return fmt.Errorf("retired framework graphic remains")
+	}
 	for _, mark := range []string{"openid.svg", "jwt.svg"} {
 		if strings.Contains(lower, "mdi/"+mark) {
 			return fmt.Errorf("retired MDI decoration remains")
@@ -1414,6 +1610,9 @@ func neutralProviderOutput(name string, body []byte) error {
 		for i := 0; i < 3; i++ {
 			text = slash.Replace(text)
 		}
+		if strings.Contains(text, "docs/img/tech/") {
+			return fmt.Errorf("retired framework image reference remains")
+		}
 		for _, mark := range []string{"openid.svg", "jwt.svg"} {
 			if strings.Contains(text, "mdi/"+mark) {
 				return fmt.Errorf("retired MDI decoration reference remains")
@@ -1428,10 +1627,10 @@ func neutralProviderOutput(name string, body []byte) error {
 	return nil
 }
 
-// All three source image directories are retired. Missing parents are valid
+// The closed provider and framework image directories are retired. Missing parents are valid
 // in a restored tree; a linked, unreadable or nonempty family is never absence.
 func neutralProviderSourceFamilies(source string) error {
-	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp", "console/src/assets/images/smtp"} {
+	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp", "console/src/assets/images/smtp", "apps/docs/public/img/tech"} {
 		current := source
 		absent := false
 		for _, part := range strings.Split(family, "/") {

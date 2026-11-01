@@ -182,3 +182,34 @@ for(const fault of ['none','wrong-origin','http-error','malformed-json','bad-id'
  if(fault==='wrong-origin')assert.equal(calls,0);
 }
 console.log('PASS: actual MDI setup script - nine same-origin, unchanged-policy and provider readback controls (unit inputs only)');
+
+// These are controls for the exact native-page observer, not real browser visits.
+const frameworkObserve=script('browserFrameworkObservation');
+for(const kind of ['framework-quickstart','framework-selected','framework-picker']){
+ for(const fault of ['none','wrong-glyph','missing-label','missing-control','missing-theme','unloaded-font','retired-resource','external-resource','focusable-decoration']){
+  const quick=kind==='framework-quickstart',selected=kind==='framework-selected';
+  const shown={getClientRects:()=>[{}],getBoundingClientRect:()=>({width:50,height:50,top:10,left:10,bottom:60,right:60})};
+  const background={getAnimations:()=>[]};
+  const route=quick?'/ui/console/':selected?'/ui/console/projects/app-create?framework=angular':'/ui/console/projects/app-create';
+  globalThis.location=new URL('http://fixture.localhost:8080'+route);
+  globalThis.innerHeight=1000;globalThis.innerWidth=1200;
+  const fonts=[{family:'Line Awesome Free',status:fault==='unloaded-font'?'error':'loaded'}];fonts.status='loaded';
+  const links=Array.from({length:18},(_,i)=>{
+   const id=i===0?'angular':'fixture-'+i,title=i===0?'Angular':'Fixture '+i;
+   return {...shown,href:location.origin+'/ui/console/projects/app-create?framework='+id,origin:location.origin,pathname:'/ui/console/projects/app-create',search:'?framework='+id,tabIndex:0,innerText:fault==='missing-label'?'':title,getAttribute:()=>title};
+  });
+  const icons=Array.from({length:quick?18:1},(_,i)=>({...shown,tabIndex:fault==='focusable-decoration'?0:-1,classList:{contains:()=>true},getAttribute:()=> 'true',closest:()=>links[i]}));
+  const input={...shown,value:'Angular',tabIndex:0,getAttribute:()=> 'true'};
+  const options=[{...shown,innerText:fault==='missing-label'?'':'Angular',getAttribute:()=> 'option'},{...shown,innerText:'Other (OIDC, SAML, API)'}];
+  globalThis.document={readyState:'complete',fonts,activeElement:input,querySelectorAll:()=>icons,
+   querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:s==='cnsl-framework-change .framework-card'?{innerText:fault==='missing-label'?'':'Angular'}:s==='cnsl-framework-change button'?(fault==='missing-control'?null:{}):s.includes('input[role="combobox"]')?(fault==='missing-control'?null:input):null};
+  const originalQuery=document.querySelectorAll;
+  document.querySelectorAll=s=>s.endsWith('mat-option')?options:originalQuery(s);
+  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:0xf121)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(quick?20:selected?40:30)+'px'};
+  const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/docs/img/tech/angular.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
+  globalThis.performance={getEntriesByType:()=>[{name:resource}]};
+  const result=frameworkObserve(kind,'light');
+  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,fault==='none'||quick&&fault==='missing-control',kind+'/'+fault+' '+JSON.stringify(result));
+ }
+}
+console.log('PASS: actual framework observation script - 27 native-shaped controls (unit inputs only)');

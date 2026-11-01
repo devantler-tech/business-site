@@ -16,6 +16,79 @@ import (
 	"testing"
 )
 
+// A retired technology family cannot survive outside the selected catalogue,
+// including compiler packages and escaped bundle references.
+func TestCopiedFrameworkGraphicsCannotRemain(t *testing.T) {
+	for _, prefix := range []string{"docs/img/tech/", "console/dist/console/assets/docs/img/tech/", "static/assets/docs/img/tech/", "unrelated/assets/docs/img/tech/"} {
+		t.Run(prefix, func(t *testing.T) {
+			if err := neutralProviderOutput(prefix+"angular.svg", nil); err == nil {
+				t.Fatal("retired framework graphic was accepted")
+			}
+		})
+	}
+	for _, slash := range []string{"/", `\/`, `\u002f`, `\x2f`} {
+		t.Run(slash, func(t *testing.T) {
+			body := []byte(strings.Join([]string{"assets", "docs", "img", "tech", "angular.svg"}, slash))
+			if err := neutralProviderOutput("chunk.js", body); err == nil {
+				t.Fatal("retired framework reference was accepted")
+			}
+		})
+	}
+}
+
+// Observe the complete native source/output trees, not just selected artwork.
+func TestCopiedFrameworkGraphicsCannotHideInSourceOrEitherOutput(t *testing.T) {
+	cases := map[string]string{
+		"apps/docs/public/img/tech/extra.svg":                            "unadmitted technology source",
+		"console/dist/console/assets/docs/img/tech/angular.svg":          "retired output",
+		"internal/api/ui/console/static/assets/docs/img/tech/extra.webp": "undeclared embedded output",
+		"console/dist/console/framework.js":                              `const icon="./assets/docs/img/tech/angular.svg";`,
+		"internal/api/ui/console/static/framework.css":                   `.icon{background:url(assets/docs/img/tech/angular.svg)}`,
+		"console/dist/console/framework-escaped.js":                      `const icon="assets\\/docs\\/img\\/tech\\/angular.svg";`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			put(t, filepath.Join(build, "prepared/source", name), []byte(body))
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined technology source or generated output was accepted")
+			}
+		})
+	}
+}
+
+func TestCopiedFrameworkConsumersMustRemainBound(t *testing.T) {
+	for _, attack := range []string{"missing", "changed", "linked"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			name := filepath.Join(build, "prepared/source/apps/docs/frameworks.json")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			if attack == "changed" {
+				put(t, name, []byte("unbound framework selection"))
+			} else {
+				if err := os.Remove(name); err != nil {
+					t.Fatal(err)
+				}
+				if attack == "linked" {
+					target := filepath.Join(build, "same-framework-bytes")
+					put(t, target, []byte("fixed framework metadata"))
+					if err := os.Symlink(target, name); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined native framework metadata was accepted")
+			}
+		})
+	}
+}
+
 // Retired decorative marks must fail in every source, output and compiler
 // package, including escaped bundle references outside the retained catalogue.
 func TestCopiedMDIMarksCannotHideOutsideTheRetainedCatalogue(t *testing.T) {
@@ -171,6 +244,7 @@ func TestCopiedCompilerStreamRejectsRetiredImagesOutsideConsole(t *testing.T) {
 		"static/assets/images/smtp/outlook.svg", "static/assets/images/smtp/postmark.png",
 		"static/assets/images/smtp/sendgrid.png", "static/assets/images/idp/google.png",
 		"resources/images/idp/apple.svg",
+		"static/assets/docs/img/tech/angular.svg",
 	}
 	for _, position := range []string{"before", "after"} {
 		for _, member := range paths {
@@ -430,7 +504,8 @@ func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
 	neutralBody := []byte(`<i class="neutral-provider-icon" aria-hidden="true"></i>`)
 	put(b, "prepared/source/"+neutralPath, neutralBody)
 	put(b, "prepared/source/console/src/fixture-smtp.html", []byte("fixed SMTP consumer"))
-	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}, SMTPConsumers: []inputRecord{{"console/src/fixture-smtp.html", digest([]byte("fixed SMTP consumer"))}}}
+	put(b, "prepared/source/apps/docs/frameworks.json", []byte("fixed framework metadata"))
+	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}, SMTPConsumers: []inputRecord{{"console/src/fixture-smtp.html", digest([]byte("fixed SMTP consumer"))}}, FrameworkConsumers: []inputRecord{{"apps/docs/frameworks.json", digest([]byte("fixed framework metadata"))}}}
 }
 
 func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
@@ -723,7 +798,7 @@ func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
 // The retained MDI policy supplements the original catalogue; it must not change
 // the old catalogue's identities or accidentally restore an unresolved mark.
 func TestCopiedMDIProductionPolicyIsClosedAndKeepsExistingCatalogue(t *testing.T) {
-	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 {
+	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 || len(copiedFrozen.FrameworkConsumers) != 7 {
 		t.Fatal("frozen catalogue or complete MDI policy changed")
 	}
 	previous := ""

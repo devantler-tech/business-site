@@ -202,3 +202,65 @@ if "$scratch/provider-icons" --neutral-mdi-icons --prepare --source "$scratch/md
  echo 'Admitted an undeclared MDI source.' >&2; exit 1
 fi
 printf 'MDI icons: five native consumers, 25 unchanged graphics and %s original-input refusals passed.\n' "$mdi_controls"
+
+# Framework artwork is an ephemeral immutable input, never a new repo asset.
+cat >"$scratch/framework-inputs" <<'PATHS'
+apps/docs/frameworks.json
+console/src/app/components/quickstart/quickstart.component.ts
+console/src/app/components/framework-change/framework-change.component.ts
+console/src/app/pages/app-create/app-create.component.ts
+console/src/app/components/quickstart/quickstart.component.html
+console/src/app/components/framework-autocomplete/framework-autocomplete.component.html
+console/src/app/components/framework-change/framework-change.component.html
+PATHS
+git -C "$upstream" ls-tree -r --name-only "$pin" -- apps/docs/public/img/tech >>"$scratch/framework-inputs"
+[[ "$(wc -l <"$scratch/framework-inputs" | tr -d ' ')" -eq 51 ]]
+mkdir "$scratch/framework-original"
+while IFS= read -r path; do
+ mkdir -p "$scratch/framework-original/$(dirname "$path")"
+ git -C "$upstream" show "$pin:$path" >"$scratch/framework-original/$path"
+ mode=$(git -C "$upstream" ls-tree "$pin" -- "$path" | awk '{print $1}')
+ chmod "${mode#100}" "$scratch/framework-original/$path"
+done <"$scratch/framework-inputs"
+cp -Rp "$scratch/framework-original" "$scratch/framework-positive"
+"$scratch/provider-icons" --neutral-framework-icons --prepare --source "$scratch/framework-positive" >"$scratch/framework-receipt.json"
+jq -e '.profile=="native-neutral-framework-icons-v1" and .changedFiles==7 and .removedFiles==44 and .consoleSlots==3 and .frameworks==35 and .frameworkIDs==24 and .imagePropertiesRemoved==39 and .imageAdmission=="unknown" and .licenseClosure=="unknown"' "$scratch/framework-receipt.json" >/dev/null
+jq -S 'map(del(.imgSrcDark,.imgSrcLight))' "$scratch/framework-original/apps/docs/frameworks.json" >"$scratch/expected-framework-data"
+jq -S . "$scratch/framework-positive/apps/docs/frameworks.json" >"$scratch/actual-framework-data"
+cmp "$scratch/expected-framework-data" "$scratch/actual-framework-data"
+jq -e 'length==35 and (map(select(has("id")))|length)==24 and all(.[];has("imgSrcDark")==false and has("imgSrcLight")==false)' "$scratch/framework-positive/apps/docs/frameworks.json" >/dev/null
+while IFS= read -r path; do
+ case "$path" in
+  *.ts)
+   sed '/imgSrcDark/d; /imgSrcLight/d' "$scratch/framework-original/$path" >"$scratch/framework-original-core"
+   cmp "$scratch/framework-original-core" "$scratch/framework-positive/$path"
+   ;;
+  apps/docs/public/img/tech/*) [[ ! -e "$scratch/framework-positive/$path" && ! -L "$scratch/framework-positive/$path" ]] ;;
+ esac
+done <"$scratch/framework-inputs"
+grep -Fq '[attr.aria-label]="framework.title"' "$scratch/framework-positive/console/src/app/components/quickstart/quickstart.component.html"
+grep -Fq '{{ framework.title }}' "$scratch/framework-positive/console/src/app/components/quickstart/quickstart.component.html"
+[[ "$(find "$scratch/framework-positive/console" -name '*.html' -exec grep -h 'neutral-framework-icon las la-code' {} + | wc -l | tr -d ' ')" -eq 3 ]]
+framework_controls=0
+while IFS= read -r path; do
+ for change in absent changed linked mode; do
+  cp -Rp "$scratch/framework-original" "$scratch/framework-adverse"
+  case "$change" in
+   absent) rm "$scratch/framework-adverse/$path" ;;
+   changed) printf '\nchanged\n' >>"$scratch/framework-adverse/$path" ;;
+   linked) rm "$scratch/framework-adverse/$path"; ln -s "$scratch/framework-original/$path" "$scratch/framework-adverse/$path" ;;
+   mode) chmod 0666 "$scratch/framework-adverse/$path" ;;
+  esac
+  if "$scratch/provider-icons" --neutral-framework-icons --prepare --source "$scratch/framework-adverse" >/dev/null 2>&1; then
+   printf 'Admitted framework %s original: %s\n' "$change" "$path" >&2; exit 1
+  fi
+  rm -rf "$scratch/framework-adverse"
+  framework_controls=$((framework_controls+1))
+ done
+done <"$scratch/framework-inputs"
+cp -Rp "$scratch/framework-original" "$scratch/framework-extra"
+printf '<svg/>\n' >"$scratch/framework-extra/apps/docs/public/img/tech/extra.svg"
+if "$scratch/provider-icons" --neutral-framework-icons --prepare --source "$scratch/framework-extra" >/dev/null 2>&1; then
+ echo 'Admitted an undeclared framework graphic.' >&2; exit 1
+fi
+printf 'Framework icons: seven native consumers, 44 retired images and %s original-input refusals passed.\n' "$framework_controls"

@@ -113,7 +113,35 @@ two-provider Login/registration proof remains separate. These cases share the
 existing 120-second presentation phase and four-minute wrapper. Their native
 rendering and screenshot bindings must pass; synthetic unit inputs are separate.
 Source/image admission and remaining graphics families stay open under
-#384/#387/#308.
+#384/#308.
+
+The separate `native-neutral-framework-icons-v1` profile checks 51 original
+Git inputs, retires all 44 technology images and updates seven consumers. It
+removes only the 39 image properties from `apps/docs/frameworks.json`: all 35
+entries, 24 selectable IDs, descriptions, documentation links and client/SDK
+flags remain in their original order. The three TypeScript mapping/filter paths
+retain their native behavior. Quickstart cards, the autocomplete panel and the
+selected-framework card reuse the existing Line Awesome code glyph, with visible
+names; Quickstart also exposes the name as its native link label. No new artwork,
+font, renderer or framework catalogue is introduced.
+
+The complete copied-asset observation binds all seven changed files, refuses
+technology images in the original source or either generated copy, and examines
+every compiler package before selecting the unchanged catalogue. Escaped bundle
+references also refuse. The 1,883/3,766/1,883 retained inventory stays unchanged;
+the combined profiles now bind 33 distinct consumers. Complete source preparation
+contains 9,528 files and 261,324,886 bytes after native API serialization, while
+the 58-record, 40-tool and 43-notice boundaries remain intact.
+
+Six additional native browser cases observe Quickstart, the Angular selection
+card and filtered autocomplete in light and dark themes. They run in a separate
+60-second phase before the unchanged provider phase, using the same fictional
+operator and restricted image. Native Tab/Enter follows the Angular Quickstart
+destination; native ArrowDown/Enter selects `angular` in the existing combobox
+without creating a project or application. Loaded glyphs, visible names, settled
+themes, original controls, confined resources and all six source-bound PNGs are
+required. Synthetic observer controls do not replace those real visits. No
+federation, production TLS, invitation, MFA or portal-activation claim follows.
 
 The native fictional-browser worker requires twenty additional SMTP observations:
 the chooser and nine unsaved editors in light and dark themes. It checks native

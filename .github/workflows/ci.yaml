@@ -604,6 +604,8 @@ jobs:
             all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             (.mdiIcons | map(.kind+"/"+.theme)) == ["mdi-picker/light","mdi-table/light","editor-oidc/light","editor-jwt/light","mdi-picker/dark","mdi-table/dark","editor-oidc/dark","editor-jwt/dark"] and
             all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.frameworkIcons | map(.kind+"/"+.theme)) == ["framework-quickstart/light","framework-selected/light","framework-picker/light","framework-quickstart/dark","framework-selected/dark","framework-picker/dark"] and
+            all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
@@ -700,6 +702,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/provider-*.png
             ${{ runner.temp }}/zitadel-image/smtp-*.png
             ${{ runner.temp }}/zitadel-image/mdi-*.png
+            ${{ runner.temp }}/zitadel-image/framework-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-bootstrap-final.json

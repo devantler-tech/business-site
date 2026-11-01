@@ -608,3 +608,87 @@ func TestBrowserMDIReceiptBindsEveryCaseAndActualScreenshot(t *testing.T) {
 		t.Fatal("unread screenshot change admitted")
 	}
 }
+
+// Actual native framework cases must be admitted; changing one observed fact
+// must refuse rather than accepting a decorative screenshot alone.
+func TestBrowserFrameworkObservationsRequireCompleteNativeFacts(t *testing.T) {
+	for _, c := range []struct {
+		kind, route string
+		count       int
+	}{
+		{"framework-quickstart", "/ui/console/", 18},
+		{"framework-selected", "/ui/console/projects/app-create?framework=angular", 1},
+		{"framework-picker", "/ui/console/projects/app-create", 1},
+	} {
+		p := browserProviderPage{"http://" + serviceAuthority + c.route, c.kind, "light", c.count, true, true, true, true, true, true}
+		if !browserProviderAdmit(p, c.kind, "light") {
+			t.Errorf("complete %s refused", c.kind)
+		}
+		for name, mutate := range map[string]func(*browserProviderPage){
+			"glyph":    func(p *browserProviderPage) { p.Glyphs = false },
+			"label":    func(p *browserProviderPage) { p.Labels = false },
+			"control":  func(p *browserProviderPage) { p.Targets = false },
+			"theme":    func(p *browserProviderPage) { p.ThemeReady = false },
+			"resource": func(p *browserProviderPage) { p.Resources = false },
+			"keyboard": func(p *browserProviderPage) { p.Keyboard = false },
+			"count":    func(p *browserProviderPage) { p.Count++ },
+			"route":    func(p *browserProviderPage) { p.URL += "&unexpected=true" },
+		} {
+			bad := p
+			mutate(&bad)
+			if browserProviderAdmit(bad, c.kind, "light") {
+				t.Errorf("incomplete %s/%s admitted", c.kind, name)
+			}
+		}
+	}
+}
+
+func TestBrowserFrameworkReceiptRequiresAllSixBoundScreenshots(t *testing.T) {
+	output := t.TempDir()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 320, 200))); err != nil {
+		t.Fatal(err)
+	}
+	raw := encoded.Bytes()
+	var cases []browserProviderCase
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range []string{"framework-quickstart", "framework-selected", "framework-picker"} {
+			count := 1
+			if kind == "framework-quickstart" {
+				count = 18
+			}
+			name := kind + "-" + theme + ".png"
+			if err := os.WriteFile(filepath.Join(output, name), raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			cases = append(cases, browserProviderCase{kind, theme, count, true, true, true, true, true, true, browserScreen{name, len(raw), imageHash(raw)}})
+		}
+	}
+	if err := browserFrameworkReceipt(output, cases); err != nil {
+		t.Fatal(err)
+	}
+	for i := range cases {
+		for name, mutate := range map[string]func(*browserProviderCase){
+			"incomplete": func(c *browserProviderCase) { c.Keyboard = false },
+			"digest":     func(c *browserProviderCase) { c.Screenshot.SHA256 = strings.Repeat("0", 64) },
+			"path":       func(c *browserProviderCase) { c.Screenshot.Path = "../outside.png" },
+		} {
+			bad := append([]browserProviderCase{}, cases...)
+			mutate(&bad[i])
+			if browserFrameworkReceipt(output, bad) == nil {
+				t.Errorf("incomplete screenshot %d/%s admitted", i, name)
+			}
+		}
+	}
+	for _, bad := range [][]browserProviderCase{nil, cases[:5], append(append([]browserProviderCase{}, cases...), cases[0])} {
+		if browserFrameworkReceipt(output, bad) == nil {
+			t.Error("incomplete or extra framework set admitted")
+		}
+	}
+	if err := os.WriteFile(filepath.Join(output, cases[5].Screenshot.Path), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if browserFrameworkReceipt(output, cases) == nil {
+		t.Error("changed actual screenshot admitted")
+	}
+}
