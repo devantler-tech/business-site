@@ -1095,6 +1095,92 @@ test("SDK reconstruction uses native offline npm with a fresh layout and cache",
   assert.equal(fs.existsSync(path.join(output, "README.md")), false);
 });
 
+function reconstructFixture(f, name) {
+  const output = path.join(f.directory, `${name}-sdk`), scratch = path.join(f.directory, `${name}-work`);
+  return { output, scratch, run: () => f.api.reconstructSDKBootstrap({ capsule: f.capsule, sha256: f.captured.manifestSha256,
+    sourceManifestSha256: f.source, toolSourceSha256: f.tools, recipeSha256: f.recipe,
+    sourceRoot: f.sdk, output, scratch, policy: f.policy, npmCLI: f.npmCLI }) };
+}
+
+for (const name of ["index.mjs", "package.json", "package-lock.json"]) {
+  test(`SDK reconstruction refuses a substituted ${name} before creating its layout`, async (t) => {
+    const f = await sdkBootstrapFixture(t);
+    fs.appendFileSync(path.join(f.sdk, name), "\n");
+    const r = reconstructFixture(f, "substituted-source");
+    await assert.rejects(r.run(), /SDK source differs from authenticated original/);
+    assert.equal(fs.existsSync(r.output), false);
+    assert.equal(fs.existsSync(r.scratch), false);
+  });
+}
+
+test("SDK reconstruction refuses a substituted retained archive before creating its layout", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const other = archiveFixture(t, false, 0o644, { bin: { alpha: "bin" } }, "#!/usr/bin/env node\nconsole.log('substituted');\n");
+  const { archive } = JSON.parse(fs.readFileSync(path.join(f.capsule, "manifest.json"))).packages[0];
+  fs.writeFileSync(path.join(f.capsule, archive), other.archive);
+  const r = reconstructFixture(f, "substituted-archive");
+  await assert.rejects(r.run(), /SDK retained archive differs/);
+  assert.equal(fs.existsSync(r.output), false);
+  assert.equal(fs.existsSync(r.scratch), false);
+});
+
+test("native offline npm refuses a cache holding a different archive of the same package version", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const other = archiveFixture(t, false, 0o644, { bin: { alpha: "bin" } }, "#!/usr/bin/env node\nconsole.log('substituted');\n");
+  assert.notEqual(sri(other.archive), sri(f.archive));
+  const layout = path.join(f.directory, "wrong-cache-layout"), cache = path.join(f.directory, "wrong-cache");
+  fs.mkdirSync(layout, { mode: 0o700 });
+  for (const name of ["package.json", "package-lock.json"]) fs.copyFileSync(path.join(f.sdk, name), path.join(layout, name));
+  const userconfig = path.join(f.directory, "wrong-cache-user-npmrc"), globalconfig = path.join(f.directory, "wrong-cache-global-npmrc");
+  fs.writeFileSync(userconfig, ""); fs.writeFileSync(globalconfig, "");
+  const npm = (args) => spawnSync(process.execPath, [f.npmCLI, "--cache", cache, "--userconfig", userconfig, "--globalconfig", globalconfig,
+    "--offline", "--ignore-scripts", "--audit=false", "--fund=false", ...args], {
+      cwd: layout, env: { PATH: process.env.PATH, HOME: f.directory }, encoding: "utf8", timeout: 30000,
+    });
+  const add = (body, file) => {
+    const archive = path.join(f.directory, file); fs.writeFileSync(archive, body);
+    assert.equal(npm(["cache", "add", archive]).status, 0);
+  };
+  add(other.archive, "wrong-alpha.tgz");
+  const refused = npm(["ci", "--prefix", layout]);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /ENOTCACHED|EINTEGRITY/);
+  assert.equal(fs.existsSync(path.join(layout, "node_modules/alpha")), false);
+  // Only the retained archive changes here, so the refusal above was about the cache.
+  add(f.archive, "alpha.tgz");
+  assert.equal(npm(["ci", "--prefix", layout]).status, 0);
+  assert.equal(fs.readFileSync(path.join(layout, "node_modules/alpha/index.js"), "utf8"), "export const value = 1;\n");
+  assert.doesNotMatch(fs.readFileSync(path.join(layout, "node_modules/alpha/bin"), "utf8"), /substituted/);
+});
+
+test("SDK reconstruction refuses a scratch directory that already holds a cache", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const r = reconstructFixture(f, "preseeded-cache");
+  fs.mkdirSync(path.join(r.scratch, "native-cache"), { recursive: true, mode: 0o700 });
+  await assert.rejects(r.run(), { code: "EEXIST" });
+  assert.deepEqual(fs.readdirSync(r.output), []);
+  assert.equal(fs.existsSync(path.join(r.scratch, "native-cache/_cacache")), false);
+});
+
+test("SDK reconstruction ignores an ambient npm cache and configuration", async (t) => {
+  const f = await sdkBootstrapFixture(t);
+  const ambient = path.join(f.directory, "ambient-cache"), rc = path.join(f.directory, "ambient-npmrc");
+  fs.writeFileSync(rc, `cache=${ambient}\nbin-links=false\n`);
+  const saved = { cache: process.env.npm_config_cache, userconfig: process.env.npm_config_userconfig };
+  t.after(() => {
+    for (const [key, value] of [["npm_config_cache", saved.cache], ["npm_config_userconfig", saved.userconfig]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  process.env.npm_config_cache = ambient;
+  process.env.npm_config_userconfig = rc;
+  const r = reconstructFixture(f, "ambient-cache");
+  assert.equal((await r.run()).sdkReconstructed, true);
+  assert.equal(fs.existsSync(ambient), false);
+  assert.equal(fs.existsSync(path.join(r.scratch, "native-cache/_cacache")), true);
+  assert.equal(fs.readlinkSync(path.join(r.output, "node_modules/.bin/alpha")), "../alpha/bin");
+});
+
 test("SDK bootstrap preserves complete supplemental terms and refuses a changed body", async (t) => {
   const f = await sdkBootstrapFixture(t);
   const name = path.join(f.capsule, "terms/CC-BY-3.0.txt");
