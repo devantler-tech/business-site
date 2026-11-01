@@ -231,7 +231,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `Dockerfile.zitadel` and `scripts/zitadel-{image-package,image-smoke,service-smoke}.go` assemble an
   explicit local identity image and exercise its real version command. CI
   checks a closed package, the copied-back image payload and inspected container
-  restrictions, then removes only its owner-bound container and local image. The bounded
+  restrictions, then saves the exact exercised image to a bounded private archive. It removes
+  the original, confirms the complete owner-labelled image set is absent, reloads the sealed
+  archive and rechecks the same config identity and inspected configuration before final
+  owner-bound cleanup. The archive stays local and is excluded from diagnostic upload.
+  Its size, digest and successful reload enter the receipt; they are not a registry identity,
+  corresponding-source offer or distribution admission. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
   The separate explicit service profile also cold-starts the same image with an
   ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes

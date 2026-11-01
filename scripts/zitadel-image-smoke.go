@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -88,6 +91,78 @@ func imageInspectContainer(raw []byte, id, image, status string) (imageContainer
 		return imageContainer{}, fmt.Errorf("container restrictions or state differ")
 	}
 	return c, nil
+}
+
+// Preserve the exact exercised config ID before its owner-bound cleanup. This
+// seals an opaque local Docker-save handoff, not a registry manifest or admission.
+// A publisher must independently load it and verify that ID and its payload.
+func imageSaveCandidate(output, imageID string, run imageCommand) (candidate imageFile, result error) {
+	const name = "candidate-image.tar"
+	root, err := os.OpenRoot(output)
+	if err != nil {
+		return candidate, err
+	}
+	defer func() {
+		if err := root.Close(); err != nil && result == nil {
+			result = err
+		}
+	}()
+	if _, err = root.Lstat(name); !os.IsNotExist(err) {
+		return candidate, fmt.Errorf("candidate destination already exists or is unreadable")
+	}
+	if _, err = run(3*time.Minute, "docker", "image", "save", "--output", filepath.Join(output, name), imageID); err != nil {
+		return candidate, fmt.Errorf("tested candidate export failed: %w", err)
+	}
+	return imageSealCandidate(output)
+}
+
+func imageSealCandidate(output string) (candidate imageFile, result error) {
+	const name = "candidate-image.tar"
+	const limit int64 = 1 << 30
+	root, err := os.OpenRoot(output)
+	if err != nil {
+		return candidate, err
+	}
+	defer func() {
+		if err := root.Close(); err != nil && result == nil {
+			result = err
+		}
+	}()
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return candidate, err
+	}
+	defer func() {
+		if err := f.Close(); err != nil && result == nil {
+			result = err
+		}
+	}()
+	before, err := f.Stat()
+	if err != nil || !before.Mode().IsRegular() || before.Size() < 1 || before.Size() > limit {
+		return candidate, fmt.Errorf("invalid candidate size or type")
+	}
+	linkCount, ok := before.Sys().(*syscall.Stat_t)
+	if !ok || linkCount.Nlink != 1 {
+		return candidate, fmt.Errorf("candidate must have one owned pathname")
+	}
+	hash := sha256.New()
+	n, err := io.Copy(hash, io.LimitReader(f, limit+1))
+	if err != nil || n != before.Size() {
+		return candidate, fmt.Errorf("incomplete candidate read")
+	}
+	if err = f.Chmod(0444); err != nil {
+		return candidate, err
+	}
+	after, err := f.Stat()
+	entry, entryErr := root.Lstat(name)
+	if err != nil || entryErr != nil || !os.SameFile(before, after) || !os.SameFile(after, entry) || !entry.Mode().IsRegular() || after.Size() != n || entry.Size() != n || !after.ModTime().Equal(before.ModTime()) || entry.Mode().Perm() != 0444 {
+		return candidate, fmt.Errorf("candidate changed while sealing")
+	}
+	linkCount, ok = after.Sys().(*syscall.Stat_t)
+	if !ok || linkCount.Nlink != 1 {
+		return candidate, fmt.Errorf("candidate gained an unowned pathname")
+	}
+	return imageFile{Path: name, Bytes: int(n), SHA256: fmt.Sprintf("%x", hash.Sum(nil)), Mode: 0444}, nil
 }
 
 func imageSmoke(build, repo, output string, run imageCommand, probes ...func(string, string) error) (result error) {
@@ -299,6 +374,43 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 			return err
 		}
 	}
+	candidate, err := imageSaveCandidate(output, i.ID, run)
+	if err != nil {
+		return err
+	}
+	cleaned = true
+	if err = cleanup(); err != nil {
+		return err
+	}
+	ownedContainer, ownedImage = "", ""
+	cleaned = false
+	absent, err := run(30*time.Second, "docker", "image", "ls", "--all", "--no-trunc", "--quiet", "--filter", "label="+ownerLabel+"="+owner)
+	if err != nil || len(bytes.TrimSpace(absent)) != 0 {
+		return fmt.Errorf("original owned image absence not confirmed")
+	}
+	beforeLoad, err := imageSealCandidate(output)
+	if err != nil || beforeLoad != candidate {
+		return fmt.Errorf("candidate archive changed before reload")
+	}
+	_, loadErr := run(3*time.Minute, "docker", "image", "load", "--input", filepath.Join(output, candidate.Path))
+	// Even a failed load can leave this owned image behind. Inspect before
+	// assigning cleanup authority, and never infer success from CLI prose.
+	loadedRaw, inspectErr := run(30*time.Second, "docker", "image", "inspect", i.ID)
+	var loaded []imageInspect
+	if inspectErr != nil || imageDecode(loadedRaw, &loaded) != nil || len(loaded) != 1 || loaded[0].ID != i.ID || loaded[0].Config.Labels[ownerLabel] != owner {
+		return fmt.Errorf("reloaded candidate ownership or identity differs")
+	}
+	ownedImage = loaded[0].ID
+	if loadErr != nil {
+		return fmt.Errorf("candidate reload failed: %w", loadErr)
+	}
+	if !reflect.DeepEqual(loaded[0], i) {
+		return fmt.Errorf("reloaded candidate configuration differs")
+	}
+	readback, err := imageSealCandidate(output)
+	if err != nil || readback != candidate {
+		return fmt.Errorf("candidate archive changed after reload")
+	}
 	cleaned = true
 	if err = cleanup(); err != nil {
 		return err
@@ -309,6 +421,8 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 		UpstreamCommit      string      `json:"upstreamCommit"`
 		Base                string      `json:"base"`
 		LocalImageID        string      `json:"localImageId"`
+		CandidateArchive    imageFile   `json:"candidateArchive"`
+		CandidateReloaded   bool        `json:"candidateReloaded"`
 		ContextSHA256       string      `json:"contextSha256"`
 		DockerfileSHA256    string      `json:"dockerfileSha256"`
 		PackageSourceSHA256 string      `json:"packageSourceSha256"`
@@ -328,7 +442,7 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 		ImageAdmission      string      `json:"imageAdmission"`
 		LicenseClosure      string      `json:"licenseClosure"`
 		Reproducible        bool        `json:"reproducible"`
-	}{1, "cli-version-smoke", imagePin, imageBase, i.ID, seal, imageHash(recipe), imageHash(packageSource), imageHash(smokeSource), manifest.Files, string(version), observed.Config.User, true, "none", observed.HostConfig.CapDrop, observed.HostConfig.SecurityOpt, observed.HostConfig.PidsLimit, observed.HostConfig.Memory, observed.HostConfig.NanoCpus, 0, "complete", "unknown", "unknown", false}
+	}{1, "cli-version-smoke", imagePin, imageBase, i.ID, candidate, true, seal, imageHash(recipe), imageHash(packageSource), imageHash(smokeSource), manifest.Files, string(version), observed.Config.User, true, "none", observed.HostConfig.CapDrop, observed.HostConfig.SecurityOpt, observed.HostConfig.PidsLimit, observed.HostConfig.Memory, observed.HostConfig.NanoCpus, 0, "complete", "unknown", "unknown", false}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err
