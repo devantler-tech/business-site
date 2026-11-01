@@ -576,7 +576,7 @@ jobs:
             .checkoutNoticeOriginalsUnavailable==true and
             .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and
             .noticeOriginals.schemaVersion==1 and .noticeOriginals.profile=="identity-notice-originals-v1" and
-            .noticeOriginals.files==43 and .noticeOriginals.bytes>0 and
+            .noticeOriginals.files==45 and .noticeOriginals.bytes>0 and
             .noticeOriginals.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
             .noticeOriginals.preparedProfileSha256==$original[0].sourceSnapshot.preparedProfileSha256 and
             .noticeOriginals.recipeSha256==$original[0].recipeSha256 and

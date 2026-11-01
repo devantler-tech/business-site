@@ -116,7 +116,7 @@ notice_args=()
 # These summaries describe complete original-byte readback, never legal closure.
 check_notice_summary() {
   jq -e --arg source "$notice_seal" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .recipeSha256==$recipe and .files==43 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
+    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .recipeSha256==$recipe and .files==45 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
 }
 check_notice_readback() {
   [[ -n "$notice_snapshot" ]] || return 0

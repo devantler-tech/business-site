@@ -226,7 +226,7 @@ native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
 test ! -d "$scratch/native-snapshot/source/apps/docs/public/img/tech"
 (cd "$scratch/native-snapshot/source/console" && npm run copy-docs-assets)
 go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$scratch/native-snapshot" "$native_seal" "$scratch/native-notice-originals" >"$scratch/native-notices.json"
-jq -e '.files==43 and .originalInputsReadbackPassed==true' "$scratch/native-notices.json" >/dev/null
+jq -e '.files==45 and .originalInputsReadbackPassed==true' "$scratch/native-notices.json" >/dev/null
 cp "$scratch/native-capture/prepared/source-preparation.json" "$scratch/native-preparation-original.json"
 jq '.mdiProfile="changed"' "$scratch/native-preparation-original.json" >"$scratch/native-capture/prepared/source-preparation.json"
 reject go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/changed-native-snapshot"
