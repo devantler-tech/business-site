@@ -19,6 +19,77 @@ type iconFixture struct {
 	Vectors map[string]string `json:"vectors"`
 }
 
+var sourceOfferTestInputs = []struct{ fixture, path, original, expected string }{
+	{"console.html.raw", "console/src/app/modules/footer/footer.component.html", "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", "018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f"},
+	{"login.html.raw", "internal/api/ui/login/static/templates/footer.html", "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", "df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e"},
+}
+
+func sourceOfferFixture(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range sourceOfferTestInputs {
+		body, err := os.ReadFile(filepath.Join("testdata/zitadel-source/source-offer", input.fixture))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(body)) != input.original {
+			t.Fatal("immutable upstream fixture differs")
+		}
+		p := filepath.Join(root, input.path)
+		put(t, p, body)
+		if err := os.Chmod(p, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(t, filepath.Join(root, "unrelated.txt"), []byte("preserve unrelated source\n"))
+	return root
+}
+
+func TestExplicitSourceOfferPreservesNativeFooterContent(t *testing.T) {
+	root := sourceOfferFixture(t)
+	var out, diagnostic bytes.Buffer
+	if code := run([]string{"--source-offer", "--prepare", "--source", root}, &out, &diagnostic); code != 0 {
+		t.Fatalf("explicit source-offer preparation unavailable: %s", diagnostic.String())
+	}
+	const wantURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+	for _, input := range sourceOfferTestInputs {
+		b, err := os.ReadFile(filepath.Join(root, input.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fmt.Sprintf("%x", sha256.Sum256(b)) != input.expected {
+			t.Fatalf("native footer changed beyond its unconditional source link: %s", input.path)
+		}
+		if strings.Count(string(b), wantURL) != 1 {
+			t.Fatal("missing or repeated exact source offer")
+		}
+		if !strings.Contains(string(b), "Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer.") {
+			t.Fatalf("modified native footer lacks its dated change notice: %s", input.path)
+		}
+	}
+	var receipt struct {
+		Profile        string `json:"profile"`
+		SourceOfferURL string `json:"sourceOfferURL"`
+		ChangedFiles   int    `json:"changedFiles"`
+		RemovedFiles   int    `json:"removedFiles"`
+		ImageAdmission string `json:"imageAdmission"`
+		LicenseClosure string `json:"licenseClosure"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Profile != "native-source-offer-v1" || receipt.SourceOfferURL != wantURL || receipt.ChangedFiles != 2 || receipt.RemovedFiles != 0 || receipt.ImageAdmission != "unknown" || receipt.LicenseClosure != "unknown" {
+		t.Fatalf("incorrect prepared-only receipt: %+v", receipt)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "unrelated.txt"))
+	if err != nil || string(b) != "preserve unrelated source\n" {
+		t.Fatal("unrelated source changed")
+	}
+}
+
 func fixture(t *testing.T) iconFixture {
 	t.Helper()
 	b, err := os.ReadFile("testdata/zitadel-login-icons/fixtures.json")

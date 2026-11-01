@@ -74,6 +74,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   includes Quickstart, selected Angular and keyboard autocomplete in both themes.
   The native copy task only clears obsolete docs images; it never requires an
   empty source directory to survive archive restoration.
+  The separate source-offer profile binds both original native footers and adds
+  their unconditional versioned corresponding-source link with dated change notices.
+  Preserve existing policy links, watermark and theme controls. Its source seal and
+  preparation receipt must describe the actual complete transformed tree; the URL
+  alone is not evidence that a source release exists.
   The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other
@@ -235,6 +240,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   the original, confirms the complete owner-labelled image set is absent, reloads the sealed
   archive and rechecks the same config identity and inspected configuration before final
   owner-bound cleanup. The archive stays local and is excluded from diagnostic upload.
+  The inspected filesystem must contain the pinned base config's thirteen ordered
+  DiffIDs followed by exactly one application layer. Its `baseRootFS` readback
+  remains distinct from the archive, image-config and registry-manifest digests.
   Its size, digest and successful reload enter the receipt; they are not a registry identity,
   corresponding-source offer or distribution admission. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
@@ -266,6 +274,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   It never saves a mail configuration or sends a message. It retains source/image-bound receipts
   and screenshots; it grants no production login, mail, invitation or activation
   clearance. The Go browser worker is reachable only through the explicit profile.
+  Four separate source-offer observations require genuine Tab focus, visibility,
+  the exact versioned destination and same-page readback after each new screenshot,
+  in Login and Console in both themes. They never follow the external URL inside
+  the fictional fixture; public retrieval is a separate publication requirement.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses

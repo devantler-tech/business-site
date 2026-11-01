@@ -1191,11 +1191,23 @@ var neutralFrameworkInputs = []neutralProviderInput{
 	{path: "apps/docs/public/img/tech/vue.svg", sha256: "05c69aeeda1250c36e4845230976e6664a08ed67cdf14c9cbdb97223dc6d082d", mode: 0644, kind: "retire"},
 }
 
+const identitySourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+
+var sourceOfferInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/footer/footer.component.html", sha256: "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", mode: 0644, kind: "source-offer-console", expected: "018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f"},
+	{path: "internal/api/ui/login/static/templates/footer.html", sha256: "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", mode: 0644, kind: "source-offer-login", expected: "df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e"},
+}
+
 func init() {
 	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
 	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
 	iconExtensions["--neutral-mdi-icons"] = runNeutralMDIIcons
 	iconExtensions["--neutral-framework-icons"] = runNeutralFrameworkIcons
+	iconExtensions["--source-offer"] = runSourceOffer
+}
+
+func runSourceOffer(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "source-offer")
 }
 
 func runNeutralFrameworkIcons(args []string, out, diagnostic io.Writer) int {
@@ -1220,11 +1232,11 @@ func runNeutralMDIIcons(args []string, out, diagnostic io.Writer) int {
 	return prepareNeutralIconProfile(args, out, diagnostic, "mdi")
 }
 
-// All three profiles use the same confined, prevalidated stage writer. Their original
+// The profiles use the same confined, prevalidated stage writer. Their original
 // membership, transformations and receipt cardinalities are fixed independently.
 func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile string) int {
 	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
-	if profile != "provider" && profile != "smtp" && profile != "mdi" && profile != "framework" {
+	if profile != "provider" && profile != "smtp" && profile != "mdi" && profile != "framework" && profile != "source-offer" {
 		return fail(fmt.Errorf("unknown fixed icon profile"))
 	}
 	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
@@ -1281,6 +1293,10 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		}
 		families = map[string][]string{"apps/docs/public/img/tech": names}
 	}
+	if profile == "source-offer" {
+		inputs = sourceOfferInputs
+		families = map[string][]string{}
+	}
 	for dir, names := range families {
 		if err = exactDirectory(source, dir, names); err != nil {
 			return fail(err)
@@ -1300,6 +1316,21 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 		}
 		text := string(body)
 		switch input.kind {
+		case "source-offer-console":
+			old := `    <div class="theme">`
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("native Console footer slot differs"))
+			}
+			text = strings.Replace(text, old, "    <div class=\"footer-links\">\n      <a target=\"_blank\" rel=\"noopener noreferrer\" href=\""+identitySourceOfferURL+"\" external>Source code</a>\n    </div>\n\n"+old, 1)
+			text = "<!-- Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. -->\n" + text
+			consoleSlots++
+		case "source-offer-login":
+			if strings.Count(text, "</footer>") != 1 {
+				return fail(fmt.Errorf("native Login footer slot differs"))
+			}
+			text = strings.Replace(text, "</footer>", "  <a href=\""+identitySourceOfferURL+"\" rel=\"noopener noreferrer\" target=\"_blank\">Source code</a>\n</footer>", 1)
+			text = "{{/* Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. */}}\n" + text
+			loginSlots++
 		case "framework-copy", "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
 			var slots int
 			text, slots, e = neutralFrameworkChange(input, text)
@@ -1430,6 +1461,9 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 	if profile == "framework" && (len(originals) != 52 || len(replacements) != 8 || consoleSlots != 3 || loginSlots != 0 || settingsValues != 0) {
 		return fail(fmt.Errorf("incomplete neutral framework profile"))
 	}
+	if profile == "source-offer" && (len(originals) != 2 || len(replacements) != 2 || consoleSlots != 1 || loginSlots != 1 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete native source-offer profile"))
+	}
 	// Refuse a changed original before replacing any selected body.
 	for _, input := range inputs {
 		body, e := neutralProviderRead(confined, input)
@@ -1510,6 +1544,11 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 			}
 		}
 		receipt["changedPaths"], receipt["removedPaths"] = changed, removed
+	}
+	if profile == "source-offer" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-source-offer-v1", 2, 0
+		receipt["sourceOfferURL"] = identitySourceOfferURL
+		receipt["changedPaths"] = []string{sourceOfferInputs[0].path, sourceOfferInputs[1].path}
 	}
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {

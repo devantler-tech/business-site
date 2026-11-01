@@ -52,7 +52,39 @@ type imageConfig struct {
 type imageInspect struct {
 	ID, Os, Architecture string
 	Config               imageConfig
+	RootFS               imageRootFS
 }
+
+type imageRootFS struct {
+	Type   string   `json:"type"`
+	Layers []string `json:"layers"`
+}
+
+// These uncompressed DiffIDs come from the original amd64 config blob
+// 55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110,
+// selected by the immutable base index. They are not registry layer digests.
+var imageBaseDiffIDs = []string{
+	"sha256:9486261b5a13f63ca6904b36721527ac8f19df53d300560138d69ae9b4c203de",
+	"sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda",
+	"sha256:763a77745f27b86cf26b97887b6842d83720e63b1c48848c0ba9ee54e351d63a",
+	"sha256:f0d0eff4c2312a7bd6e21797bdfea5eb35f60e76b555ce2b22794424af2cad36",
+	"sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412",
+	"sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+	"sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+	"sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+	"sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+	"sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+	"sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+	"sha256:187cfc6d1e3e8a40a5e64653bcd3239c140807dcf1c09e48021178705a5a6139",
+	"sha256:f2392a9484bf6b18f06beaf705b994e31dbb2716c99cf7d03c9c495cd107f364",
+}
+
+func imageBaseRootFSValid(root imageRootFS) bool {
+	return root.Type == "layers" && len(root.Layers) == len(imageBaseDiffIDs)+1 &&
+		reflect.DeepEqual(root.Layers[:len(imageBaseDiffIDs)], imageBaseDiffIDs) &&
+		regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(root.Layers[len(imageBaseDiffIDs)])
+}
+
 type imageContainer struct {
 	ID, Image  string
 	Config     imageConfig
@@ -312,6 +344,9 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 	if i.Os != "linux" || i.Architecture != "amd64" || i.Config.WorkingDir != "/app" || !imageSafeConfig(i.Config) {
 		return fmt.Errorf("local image configuration differs")
 	}
+	if !imageBaseRootFSValid(i.RootFS) {
+		return fmt.Errorf("local image base filesystem differs")
+	}
 	created, err := run(30*time.Second, "docker", "create", "--label", ownerLabel+"="+owner, "--pull=never", "--platform=linux/amd64", "--network=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=32", "--memory=256m", "--cpus=1", i.ID)
 	if err != nil {
 		return err
@@ -420,6 +455,7 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 		Profile             string      `json:"profile"`
 		UpstreamCommit      string      `json:"upstreamCommit"`
 		Base                string      `json:"base"`
+		BaseRootFS          imageRootFS `json:"baseRootFS"`
 		LocalImageID        string      `json:"localImageId"`
 		CandidateArchive    imageFile   `json:"candidateArchive"`
 		CandidateReloaded   bool        `json:"candidateReloaded"`
@@ -442,7 +478,7 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 		ImageAdmission      string      `json:"imageAdmission"`
 		LicenseClosure      string      `json:"licenseClosure"`
 		Reproducible        bool        `json:"reproducible"`
-	}{1, "cli-version-smoke", imagePin, imageBase, i.ID, candidate, true, seal, imageHash(recipe), imageHash(packageSource), imageHash(smokeSource), manifest.Files, string(version), observed.Config.User, true, "none", observed.HostConfig.CapDrop, observed.HostConfig.SecurityOpt, observed.HostConfig.PidsLimit, observed.HostConfig.Memory, observed.HostConfig.NanoCpus, 0, "complete", "unknown", "unknown", false}
+	}{1, "cli-version-smoke", imagePin, imageBase, i.RootFS, i.ID, candidate, true, seal, imageHash(recipe), imageHash(packageSource), imageHash(smokeSource), manifest.Files, string(version), observed.Config.User, true, "none", observed.HostConfig.CapDrop, observed.HostConfig.SecurityOpt, observed.HostConfig.PidsLimit, observed.HostConfig.Memory, observed.HostConfig.NanoCpus, 0, "complete", "unknown", "unknown", false}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err

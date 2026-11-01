@@ -61,3 +61,5 @@ fac7817b5db6d79d22d4a278ba4bd0e4151d30f137c448264c53899ac85b7a81  console/src/ap
 19471a418b11da8bf48740dc16162ce93a7d12c69705a3af1012a4f4fe659bf8  console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
 05780f911a252dff978d08568675cbe24a53093fcbb04d5be9a9e1fa3e1c4f63  console/src/assets/mdi/openid.svg
 24c9cd3a49a7459d14da7146832b4e986bfbd484bfc3cde7f485da8f6ccc5c03  console/src/assets/mdi/jwt.svg
+6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525  console/src/app/modules/footer/footer.component.html
+d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074  internal/api/ui/login/static/templates/footer.html

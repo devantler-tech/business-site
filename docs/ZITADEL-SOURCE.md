@@ -1167,6 +1167,17 @@ same config ID and complete selected configuration, recheck the archive bytes,
 and remove the reloaded owned image. Load output text is never identity proof.
 Any failed export, absence check, reload, readback or cleanup prevents success.
 
+The image inspection also requires `RootFS.type` to be `layers`, the thirteen
+ordered DiffIDs from pinned amd64 config
+`55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
+and exactly one application layer. Missing, shortened, substituted or extra
+layers refuse before execution. Reload inspection compares this complete
+filesystem identity too. The receipt retains it as `baseRootFS`; those
+uncompressed DiffIDs are distinct from compressed registry layer digests.
+This check binds the candidate to the frozen base filesystem. It does not
+itself verify an upstream signature, retain base-package source, or complete
+the base's separate distribution assessment.
+
 The receipt's `candidateArchive` and `candidateReloaded` fields bind this local
 handoff to the exercised image. The archive is opaque to this helper: Docker
 performs save/load; no second archive parser is introduced. Its tar digest,
@@ -1191,6 +1202,28 @@ by this test. No customer credentials or configuration are supplied.
 false. Remaining terms and corresponding source remain #326/#308; complete
 restricted services and actual invitation/login acceptance remain #305/#302.
 The portal and identity publication remain off.
+
+## Native versioned source offer
+
+The explicit preparer's `native-source-offer-v1` profile adds an unconditional
+`Source code` anchor to both frozen native footers. The destination is
+`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1`.
+Both templates retain a 2026-11-01 modification notice. Existing privacy/terms
+links, branding conditions and theme controls remain; none controls the source
+anchor's availability. The complete prepared profile is
+`6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181`:
+9,528 files and 261,325,366 bytes before installation. Its two additional changed
+paths and fixed destination enter the preparation record and dated source records.
+
+The native browser worker requires four additional observations: Login and
+Console, each in light and dark themes. It reaches the real anchor with Tab,
+checks its exact destination and visible unobstructed bounds, captures a separate
+PNG, and rechecks the same page and focused anchor afterward. The host verifies
+the closed four-case set and every PNG digest; the earlier 47 screenshots remain
+separate. The fixture follows no external source link and proves no public
+availability. This profile neither publishes source nor admits distribution.
+The corresponding immutable release and anonymous retrieval must be verified
+before image distribution or a network-facing deployment uses this offer.
 
 ## Isolated service process test
 

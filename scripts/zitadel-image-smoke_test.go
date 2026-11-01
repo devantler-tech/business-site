@@ -12,6 +12,61 @@ import (
 )
 
 // Process doubles test orchestration failures, never real container acceptance.
+func imageBaseFixtureLayers(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/zitadel-source/base/config.json.raw")
+	if err != nil || imageHash(raw) != "55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110" {
+		t.Fatal("independent frozen base config differs")
+	}
+	var config struct {
+		RootFS struct {
+			DiffIDs []string `json:"diff_ids"`
+		} `json:"rootfs"`
+	}
+	if err := json.Unmarshal(raw, &config); err != nil || len(config.RootFS.DiffIDs) != 13 {
+		t.Fatal("independent base RootFS observation incomplete")
+	}
+	return append(config.RootFS.DiffIDs, "sha256:"+strings.Repeat("c", 64))
+}
+
+func TestImageSmokeRejectsAnUnboundBaseFilesystem(t *testing.T) {
+	for _, kind := range []string{"missing", "short", "substituted", "extra", "wrong-type"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			base := imageSmokeDouble(t, build, "")
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				raw, err := base(d, name, args...)
+				if err == nil && name == "docker" && args[0] == "image" && args[1] == "inspect" {
+					var all []map[string]any
+					if err := json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					layers, fsType := imageBaseFixtureLayers(t), "layers"
+					switch kind {
+					case "missing":
+						layers = nil
+					case "short":
+						layers = layers[:12]
+					case "substituted":
+						layers[0] = "sha256:" + strings.Repeat("d", 64)
+					case "extra":
+						layers = append(layers, "sha256:"+strings.Repeat("e", 64))
+					case "wrong-type":
+						fsType = "other"
+					}
+					all[0]["RootFS"] = map[string]any{"Type": fsType, "Layers": layers}
+					return imageTestJSON(t, all), nil
+				}
+				return raw, err
+			}
+			if err := imageSmoke(build, repo, filepath.Join(t.TempDir(), "smoke"), run); err == nil {
+				t.Fatal("image with unbound base filesystem was accepted")
+			}
+		})
+	}
+}
+
 func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 	t.Helper()
 	started := false
@@ -73,7 +128,7 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			if kind == "architecture" {
 				arch = "arm64"
 			}
-			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app", "Labels": map[string]string{"org.devantler-tech.identity-smoke-owner": owner}}}}), nil
+			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "RootFS": map[string]any{"Type": "layers", "Layers": imageBaseFixtureLayers(t)}, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app", "Labels": map[string]string{"org.devantler-tech.identity-smoke-owner": owner}}}}), nil
 		case args[0] == "create":
 			for _, flag := range []string{"--read-only", "--network=none", "--user=65532:65532", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pull=never", "--platform=linux/amd64", "--pids-limit=32", "--memory=256m", "--cpus=1"} {
 				if !strings.Contains(command, flag) {
@@ -407,6 +462,12 @@ func TestRestrictedImageSmokeCompletesOnlyAfterObservedSuccess(t *testing.T) {
 	}
 	if !bytes.Contains(b, []byte("cli-version-smoke")) || !bytes.Contains(b, []byte("unknown")) {
 		t.Fatal("missing honest scope")
+	}
+	var receipt struct {
+		BaseRootFS imageRootFS `json:"baseRootFS"`
+	}
+	if err := json.Unmarshal(b, &receipt); err != nil || receipt.BaseRootFS.Type != "layers" || strings.Join(receipt.BaseRootFS.Layers, "\n") != strings.Join(imageBaseFixtureLayers(t), "\n") {
+		t.Fatal("actual inspected base filesystem is absent from the receipt")
 	}
 }
 
