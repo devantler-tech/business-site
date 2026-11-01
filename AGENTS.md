@@ -65,6 +65,15 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   native consumers and retires only their two SVGs. Preserve the LDAP control and
   both native protocol editors. The existing catalogue remains 1,858/3,716; the
   MDI extension adds twenty-five originals and fifty actual generated copies.
+  The separate framework profile binds fifty-two immutable inputs, removes all
+  forty-four technology images and strips only image properties from the original
+  thirty-five-entry metadata. All twenty-four selectable IDs, documentation links,
+  filters and native selection behavior remain. Its three renderers use the existing
+  code glyph with visible names; all eight prepared consumers are read back before
+  observing complete source, output and compiler streams. Native browser evidence
+  includes Quickstart, selected Angular and keyboard autocomplete in both themes.
+  The native copy task only clears obsolete docs images; it never requires an
+  empty source directory to survive archive restoration.
   The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other

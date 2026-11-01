@@ -141,6 +141,14 @@ f340db31d1e1d4db10e1646eb218b2e46fe7e6568e9801b26494f94602c168cd  console/src/ap
 235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab  console/src/app/app.component.ts
 3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80  console/src/app/modules/providers/provider-oidc/provider-oidc.component.html
 5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9  console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
+99b5bdf71a12e209c754bb8e013ab56c5c624066d5caf3e71cafed64b1c4dac8  apps/docs/frameworks.json
+ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc  console/src/app/components/quickstart/quickstart.component.ts
+790fb8e83d170014ae9f2e31068cf906f89a4228190a7213f3950844c7cb2c5a  console/src/app/components/framework-change/framework-change.component.ts
+6ed83747af1fbbfb2e5fefda0f281d06a1be7eb5a0fb6437ac2949f293b7afe5  console/src/app/pages/app-create/app-create.component.ts
+7c71cf66e4f1547ec223f909a74997a11de9e590d2931ef4bf6453091fd3e969  console/src/app/components/quickstart/quickstart.component.html
+7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7  console/src/app/components/framework-autocomplete/framework-autocomplete.component.html
+0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712  console/src/app/components/framework-change/framework-change.component.html
+405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba  console/package.json
 PROVIDERS
 (cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
 while read -r _hash path; do
@@ -177,16 +185,26 @@ for path in \
   test ! -e "$scratch/prepared source/source/$path"
   rm -- "$scratch/pristine/$path"
 done
+# Enumerate all retired technology inputs from the immutable Git directory,
+# independently of the transform's receipt or input table.
+git -C "$scratch/upstream" ls-tree -r --name-only "$pin" -- apps/docs/public/img/tech >"$scratch/framework-original-paths"
+test "$(wc -l <"$scratch/framework-original-paths" | tr -d ' ')" -eq 44
+while IFS= read -r path; do
+  test ! -e "$scratch/prepared source/source/$path"
+  test ! -L "$scratch/prepared source/source/$path"
+  rm -- "$scratch/pristine/$path"
+done <"$scratch/framework-original-paths"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
-  (.removedFiles | length) == 31 and .providerProfile == "native-neutral-provider-icons-v1" and
+  (.removedFiles | length) == 75 and .providerProfile == "native-neutral-provider-icons-v1" and
+  .frameworkProfile == "native-neutral-framework-icons-v1" and
   .smtpProfile == "native-neutral-smtp-icons-v1" and .mdiProfile == "native-neutral-mdi-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
   .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
-  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html"]
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html","console/package.json","apps/docs/frameworks.json","console/src/app/components/quickstart/quickstart.component.ts","console/src/app/components/framework-change/framework-change.component.ts","console/src/app/pages/app-create/app-create.component.ts","console/src/app/components/quickstart/quickstart.component.html","console/src/app/components/framework-autocomplete/framework-autocomplete.component.html","console/src/app/components/framework-change/framework-change.component.html"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
 # Exercise the actual native pre-install capture boundary, not a substituted
@@ -201,8 +219,12 @@ cp -R "$scratch/prepared source" "$scratch/native-capture/prepared"
   cp "$scratch/native-capture/api-project.serial.json" apps/api/project.json
 )
 go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/native-snapshot" >"$scratch/native-capture.json"
-jq -e '.preparedProfileSha256=="dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165" and .files==9572 and .bytes==261612982 and .records==58' "$scratch/native-capture.json" >/dev/null
+jq -e '.preparedProfileSha256=="1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908" and .files==9528 and .bytes==261324795 and .records==58' "$scratch/native-capture.json" >/dev/null
 native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
+# The actual sealed file layout contains no empty technology directory. Its
+# native pre-build command must succeed without restoring retired image inputs.
+test ! -d "$scratch/native-snapshot/source/apps/docs/public/img/tech"
+(cd "$scratch/native-snapshot/source/console" && npm run copy-docs-assets)
 go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$scratch/native-snapshot" "$native_seal" "$scratch/native-notice-originals" >"$scratch/native-notices.json"
 jq -e '.files==43 and .originalInputsReadbackPassed==true' "$scratch/native-notices.json" >/dev/null
 cp "$scratch/native-capture/prepared/source-preparation.json" "$scratch/native-preparation-original.json"

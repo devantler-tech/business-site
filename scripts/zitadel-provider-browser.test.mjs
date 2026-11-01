@@ -182,3 +182,57 @@ for(const fault of ['none','wrong-origin','http-error','malformed-json','bad-id'
  if(fault==='wrong-origin')assert.equal(calls,0);
 }
 console.log('PASS: actual MDI setup script - nine same-origin, unchanged-policy and provider readback controls (unit inputs only)');
+
+// These are controls for the exact native-page observer, not real browser visits.
+const frameworkObserve=script('browserFrameworkObservation');
+for(const kind of ['framework-quickstart','framework-selected','framework-picker']){
+ for(const fault of ['none','wrong-id','wrong-glyph','missing-label','missing-control','missing-theme','unloaded-font','retired-resource','external-resource','focusable-decoration','running-descendant','pending-descendant','perpetual-decoration']){
+  const quick=kind==='framework-quickstart',selected=kind==='framework-selected';
+  const shown={getClientRects:()=>[{}],getBoundingClientRect:()=>({width:50,height:50,top:10,left:10,bottom:60,right:60})};
+  const background={getAnimations:options=>['running-descendant','pending-descendant','perpetual-decoration'].includes(fault)&&options?.subtree?[{pending:fault==='pending-descendant',playState:fault==='pending-descendant'?'idle':'running',effect:{getComputedTiming:()=>({endTime:fault==='perpetual-decoration'?Infinity:350})}}]:[]};
+  const route=quick?'/ui/console/':selected?'/ui/console/projects/app-create?framework='+(fault==='wrong-id'?'react':'angular'):'/ui/console/projects/app-create';
+  globalThis.location=new URL('http://fixture.localhost:8080'+route);
+  globalThis.innerHeight=1000;globalThis.innerWidth=1200;
+  const fonts=[{family:'Line Awesome Free',status:fault==='unloaded-font'?'error':'loaded'}];fonts.status='loaded';
+  const choices=[['angular','Angular'],['astro','Astro'],['django','Django'],['dotnet','.NET'],['expressjs','Express.js'],['fastapi','FastAPI'],['fastify','Fastify'],['flask','Flask'],['flutter','Flutter'],['go','Go'],['hono','Hono'],['laravel','Laravel'],['nestjs','NestJS'],['next','Next.js'],['nuxt','Nuxt.js'],['react','React'],['qwik','Qwik'],['solidstart','SolidStart']];
+  const links=choices.map(([originalId,title],i)=>{
+   const id=fault==='wrong-id'&&i===1?'fabricated':originalId;
+   return {...shown,href:location.origin+'/ui/console/projects/app-create?framework='+id,origin:location.origin,pathname:'/ui/console/projects/app-create',search:'?framework='+id,tabIndex:0,innerText:fault==='missing-label'?'':title,getAttribute:()=>title};
+  });
+  const icons=Array.from({length:quick?18:1},(_,i)=>({...shown,tabIndex:fault==='focusable-decoration'?0:-1,classList:{contains:()=>true},getAttribute:()=> 'true',closest:()=>links[i]}));
+  const input={...shown,value:fault==='wrong-id'?'wrong':'Angular',tabIndex:0,getAttribute:attr=>attr==='aria-controls'?'framework-choices':'true'};
+  const options=[{...shown,innerText:fault==='missing-label'?'':'Angular',getAttribute:()=> 'option'},{...shown,innerText:'Other (OIDC, SAML, API)'}];
+  const panel={...shown,getAttribute:()=> 'listbox',getAnimations:()=>[],querySelectorAll:s=>s==='mat-option'?options:icons};
+  globalThis.document={readyState:'complete',fonts,activeElement:input,getElementById:id=>id==='framework-choices'?panel:null,querySelectorAll:s=>!quick&&!selected&&s.startsWith('.cdk-overlay-container')?[]:icons,
+   querySelector:s=>s==='cnsl-root.light-theme'?(fault==='missing-theme'?null:{}):s==='cnsl-root .main-container'?background:s==='cnsl-framework-change .framework-card'?{innerText:fault==='missing-label'?'':'Angular'}:s==='cnsl-framework-change button'?(fault==='missing-control'?null:{}):s.includes('input[role="combobox"]')?(fault==='missing-control'?null:input):null};
+  const originalQuery=document.querySelectorAll;
+  document.querySelectorAll=s=>!quick&&!selected&&s.startsWith('.cdk-overlay-container')?[]:s.endsWith('mat-option')?options:originalQuery(s);
+  globalThis.getComputedStyle=(e,pseudo)=>e===background?{backgroundColor:'rgb(250, 250, 250)'}:pseudo?{content:'"'+String.fromCodePoint(fault==='wrong-glyph'?0xf0e0:0xf121)+'"',fontFamily:'Line Awesome Free'}:{fontSize:(quick?20:selected?40:30)+'px'};
+  const resource=fault==='external-resource'?'https://outside.invalid/font.woff2':fault==='retired-resource'?'http://fixture.localhost:8080/ui/console/assets/docs/img/tech/angular.svg':'http://fixture.localhost:8080/ui/console/assets/fonts/la-solid-900.woff2';
+  globalThis.performance={getEntriesByType:()=>[{name:resource}]};
+  const result=frameworkObserve(kind,'light');
+  assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,fault==='none'||fault==='perpetual-decoration'||quick&&fault==='missing-control',kind+'/'+fault+' '+JSON.stringify(result));
+ }
+}
+// An asynchronous autocomplete may have an input before its panel/options exist.
+// The observer must report incomplete facts so the worker polls, not throw.
+const completeFrameworkDocument=document;
+const completeFrameworkPanel=document.getElementById('framework-choices');
+for(const pending of ['no-options','one-option','no-input']){
+ const originalQuery=completeFrameworkDocument.querySelectorAll;
+ globalThis.document={...completeFrameworkDocument,
+  getElementById:id=>id==='framework-choices'?{...completeFrameworkPanel,querySelectorAll:s=>s==='mat-option'?(pending==='one-option'?completeFrameworkPanel.querySelectorAll(s).slice(0,1):[]):pending==='no-options'?[]:completeFrameworkPanel.querySelectorAll(s)}:null,
+  querySelector:s=>pending==='no-input'&&s.includes('input[role="combobox"]')?null:completeFrameworkDocument.querySelector(s),
+  querySelectorAll:s=>s.endsWith('mat-option')?(pending==='one-option'?originalQuery(s).slice(0,1):[]):s.includes('.neutral-framework-icon')&&pending==='no-options'?[]:originalQuery(s)};
+ const result=frameworkObserve('framework-picker','light');
+ assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,false,pending+' admitted an incomplete picker');
+ assert.equal(result.keyboard,false,pending+' claimed keyboard readiness');
+}
+for(const association of ['global-overlay','missing-panel','wrong-role','running-panel']){
+ globalThis.document={...completeFrameworkDocument,
+  getElementById:id=>association==='missing-panel'?null:{...completeFrameworkPanel,getAttribute:()=>association==='wrong-role'?'dialog':'listbox',getAnimations:()=>association==='running-panel'?[{pending:false,playState:'running',effect:{getComputedTiming:()=>({endTime:120})}}]:[]},
+  querySelectorAll:s=>s.endsWith('mat-option')?completeFrameworkPanel.querySelectorAll('mat-option'):completeFrameworkPanel.querySelectorAll('.neutral-framework-icon')};
+ const result=frameworkObserve('framework-picker','light');
+ assert.equal(result.glyphs&&result.labels&&result.targets&&result.themeReady&&result.resources&&result.keyboard,association==='global-overlay',association+' association admitted incorrectly '+JSON.stringify(result));
+}
+console.log('PASS: actual framework observation script - 46 native-shaped, association and asynchronous controls (unit inputs only)');

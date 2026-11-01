@@ -614,7 +614,9 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 	if err != nil {
 		return err
 	}
-	diagnostic, err := run(4*time.Minute, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
+	// Cover the preserved 100s operator and 120s provider phases, the new 60s
+	// framework phase, and the existing cleanup margin without truncating a phase.
+	diagnostic, err := run(browserWorkerTimeout, "sudo", "-n", "nsenter", "--target", strconv.Itoa(pid), "--net", "--",
 		"setpriv", "--reuid="+strconv.Itoa(os.Getuid()), "--regid="+strconv.Itoa(os.Getgid()), "--clear-groups", "--no-new-privs",
 		"env", "-i", "PATH="+os.Getenv("PATH"), "HOME="+os.Getenv("HOME"), "LANG=C", "LC_ALL=C",
 		exe, "--browser-worker", output, namespace, imageHash(source))
@@ -655,16 +657,17 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 				SHA256 string `json:"sha256"`
 			} `json:"screenshot"`
 		} `json:"pages"`
-		ProviderIcons []browserProviderCase `json:"providerIcons"`
-		SMTPIcons     []browserProviderCase `json:"smtpIcons"`
-		MDIIcons      []browserProviderCase `json:"mdiIcons"`
-		Cleanup       string                `json:"cleanup"`
-		Portal        bool                  `json:"portalFederation"`
-		TLS           bool                  `json:"productionTLS"`
-		Invitation    bool                  `json:"invitationProof"`
-		MFA           bool                  `json:"mfaProof"`
-		Admission     string                `json:"imageAdmission"`
-		License       string                `json:"licenseClosure"`
+		ProviderIcons  []browserProviderCase `json:"providerIcons"`
+		SMTPIcons      []browserProviderCase `json:"smtpIcons"`
+		MDIIcons       []browserProviderCase `json:"mdiIcons"`
+		FrameworkIcons []browserProviderCase `json:"frameworkIcons"`
+		Cleanup        string                `json:"cleanup"`
+		Portal         bool                  `json:"portalFederation"`
+		TLS            bool                  `json:"productionTLS"`
+		Invitation     bool                  `json:"invitationProof"`
+		MFA            bool                  `json:"mfaProof"`
+		Admission      string                `json:"imageAdmission"`
+		License        string                `json:"licenseClosure"`
 	}
 	if err = imageDecode(raw, &receipt); err != nil || receipt.SchemaVersion != 1 || receipt.Profile != "fictional-native-browser" || receipt.Source != imageHash(source) || receipt.Executable != imageHash(binary) || receipt.Version == "" || receipt.Namespace != namespace || receipt.SandboxDisabled || len(receipt.Pages) != 3 || receipt.Cleanup != "complete" || receipt.Portal || receipt.TLS || receipt.Invitation || receipt.MFA || receipt.Admission != "unknown" || receipt.License != "unknown" {
 		return fmt.Errorf("browser observation binding differs")
@@ -686,6 +689,9 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		return err
 	}
 	if err = browserMDIReceipt(output, receipt.MDIIcons); err != nil {
+		return err
+	}
+	if err = browserFrameworkReceipt(output, receipt.FrameworkIcons); err != nil {
 		return err
 	}
 	bound, err := json.MarshalIndent(map[string]any{"schemaVersion": 1, "upstreamCommit": imagePin, "localImageId": image, "browserReceiptSha256": imageHash(raw), "browserSourceSha256": imageHash(source), "cleanup": "complete", "imageAdmission": "unknown", "licenseClosure": "unknown"}, "", "  ")

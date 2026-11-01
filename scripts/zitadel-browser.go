@@ -21,6 +21,15 @@ import (
 	"time"
 )
 
+// The outer worker allowance follows the independently bounded phases and the
+// existing cleanup margin, so adding a phase cannot truncate later observations.
+const (
+	browserOperatorTimeout  = 100 * time.Second
+	browserFrameworkTimeout = 60 * time.Second
+	browserProviderTimeout  = 120 * time.Second
+	browserWorkerTimeout    = browserOperatorTimeout + browserFrameworkTimeout + browserProviderTimeout + 20*time.Second
+)
+
 type browserPage struct {
 	URL             string   `json:"url"`
 	Ready           string   `json:"ready"`
@@ -122,6 +131,7 @@ type browserDriver struct {
 	lastProvider                                            browserProviderPage
 	smtpCases                                               []browserProviderCase
 	mdiCases                                                []browserProviderCase
+	frameworkCases                                          []browserProviderCase
 }
 
 // browserHTTPClient bounds driver requests beyond the configured page-load
@@ -359,7 +369,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 			}
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), browserOperatorTimeout)
 	defer cancel()
 	d.ctx = ctx
 	d.client = browserHTTPClient()
@@ -486,10 +496,19 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 			return e
 		}
 	}
+	// Framework presentation has its own bounded phase and creates no resources.
+	phase = "frameworks"
+	frameworkCtx, frameworkCancel := context.WithTimeout(context.Background(), browserFrameworkTimeout)
+	d.ctx = frameworkCtx
+	d.frameworkCases, err = d.frameworkPresentation(output)
+	frameworkCancel()
+	if err != nil {
+		return err
+	}
 	// Provider presentation follows successful native operator authentication. Its
 	// separate deadline does not relax the existing operator or WebDriver budgets.
 	phase = "providers"
-	providerCtx, providerCancel := context.WithTimeout(context.Background(), 120*time.Second)
+	providerCtx, providerCancel := context.WithTimeout(context.Background(), browserProviderTimeout)
 	defer providerCancel()
 	d.ctx = providerCtx
 	providers, err := d.providerPresentation(output)
@@ -514,7 +533,7 @@ func browserWorker(output, namespace, sourceSHA string) (result error) {
 		return err
 	}
 	phase = "receipt"
-	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "mdiIcons": d.mdiCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "fictional-native-browser", "browserSourceSha256": sourceSHA, "workerExecutableSha256": imageHash(binary), "browserVersion": session.Capabilities.Version, "networkNamespace": namespace, "browserSandboxDisabled": false, "pages": pages, "providerIcons": providers, "smtpIcons": d.smtpCases, "mdiIcons": d.mdiCases, "frameworkIcons": d.frameworkCases, "optionalMFADeferred": d.mfaDeferred, "mfaProof": false, "cleanup": "complete", "portalFederation": false, "productionTLS": false, "invitationProof": false, "imageAdmission": "unknown", "licenseClosure": "unknown"}
 	b, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		return err
@@ -563,6 +582,12 @@ func browserProviderAdmit(p browserProviderPage, kind, theme string) bool {
 		return p.Count == 2 && u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
 	case "mdi-picker", "mdi-table":
 		return p.Count == 2 && u.Path == "/ui/console/instance" && u.Query().Get("id") == "idp"
+	case "framework-quickstart":
+		return p.Count == 18 && u.Path == "/ui/console/" && u.RawQuery == ""
+	case "framework-selected":
+		return p.Count == 1 && u.Path == "/ui/console/projects/app-create" && u.RawQuery == "framework=angular"
+	case "framework-picker":
+		return p.Count == 1 && u.Path == "/ui/console/projects/app-create" && u.RawQuery == ""
 	case "editor-oidc", "editor-jwt":
 		return p.Count == 1 && u.Path == "/ui/console/instance/provider/"+strings.TrimPrefix(kind, "editor-")+"/create"
 	case "editor-google":
@@ -1432,6 +1457,223 @@ func (d *browserDriver) mdiTableRoutes(ids []string) error {
 		}
 		if _, err := d.mdiPage("mdi-table", d.lastProvider.Theme); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// Observe native framework controls, including the loaded existing glyph and
+// visible labels. Bind the picker to its combobox aria-controls target, since
+// the locked CDK uses inline popovers rather than a global overlay container.
+// The filtered picker has Angular plus the separate Other choice.
+// Wait for finite descendant/route transitions; perpetual decorative spinners
+// are not page transitions. Missing asynchronous options stay incomplete.
+const browserFrameworkObservation = `
+const [kind,theme]=arguments,quick=kind==='framework-quickstart',selected=kind==='framework-selected';
+const root=document.querySelector('cnsl-root.'+theme+'-theme'),back=document.querySelector('cnsl-root .main-container');
+const shown=e=>{if(!e)return false;const r=e.getBoundingClientRect();return e.getClientRects().length>0&&r.width>0&&r.height>0&&r.top>=0&&r.left>=0&&r.bottom<=innerHeight&&r.right<=innerWidth};
+const plain=s=>s.replaceAll('"','').replaceAll("'",'').trim();
+const input=document.querySelector('cnsl-framework-autocomplete input[role="combobox"]'),panelID=input?.getAttribute('aria-controls');
+const candidate=panelID?document.getElementById(panelID):null,panel=candidate?.getAttribute('role')==='listbox'?candidate:null;
+const icons=quick||selected?[...document.querySelectorAll(quick?'cnsl-quickstart .neutral-framework-icon':'cnsl-framework-change .neutral-framework-icon')]:[...(panel?.querySelectorAll('.neutral-framework-icon')||[])];
+const glyphs=icons.length>0&&icons.every(e=>{const b=getComputedStyle(e,'::before');return shown(e)&&e.classList.contains('la-code')&&plain(b.content).codePointAt(0)===0xf121&&plain(b.fontFamily)==='Line Awesome Free'&&parseFloat(getComputedStyle(e).fontSize)===(quick?20:selected?40:30)&&e.getAttribute('aria-hidden')==='true'&&[...document.fonts].some(f=>f.status==='loaded'&&plain(f.family)==='Line Awesome Free')});
+let labels=false,targets=false,keyboard=icons.length>0&&icons.every(e=>e.tabIndex<0);
+if(quick){const expected=[['angular','Angular'],['astro','Astro'],['django','Django'],['dotnet','.NET'],['expressjs','Express.js'],['fastapi','FastAPI'],['fastify','Fastify'],['flask','Flask'],['flutter','Flutter'],['go','Go'],['hono','Hono'],['laravel','Laravel'],['nestjs','NestJS'],['next','Next.js'],['nuxt','Nuxt.js'],['react','React'],['qwik','Qwik'],['solidstart','SolidStart']];const links=icons.map(e=>e.closest('a.quickstart-card'));labels=links.length===expected.length&&links.every((a,i)=>a&&a.innerText.trim()===expected[i][1]&&a.getAttribute('aria-label')===expected[i][1]);targets=links.length===expected.length&&links.every((a,i)=>a?.origin===location.origin&&a.pathname==='/ui/console/projects/app-create'&&a.search==='?framework='+expected[i][0]);keyboard=keyboard&&links.every(a=>a?.tabIndex===0);}
+else if(selected){const card=document.querySelector('cnsl-framework-change .framework-card');labels=card?.innerText.trim()==='Angular';targets=!!document.querySelector('cnsl-framework-change button')&&new URL(location.href).searchParams.get('framework')==='angular';}
+else{const options=[...(panel?.querySelectorAll('mat-option')||[])];labels=options.length===2&&options[0].innerText.trim()==='Angular'&&options[1].innerText.trim().length>0;targets=shown(input)&&input.value==='Angular'&&input.getAttribute('aria-expanded')==='true'&&shown(options[0]);keyboard=keyboard&&shown(input)&&options.length===2&&input===document.activeElement&&input.tabIndex===0&&options[0].getAttribute('role')==='option';}
+const resources=performance.getEntriesByType('resource').map(e=>e.name);
+return {url:location.href,kind,theme,count:icons.length,glyphs,labels,targets,keyboard,
+ themeReady:!!root&&!!back&&getComputedStyle(back).backgroundColor===(theme==='light'?'rgb(250, 250, 250)':'rgb(17, 24, 39)')&&[...back.getAnimations({subtree:true}),...(panel?.getAnimations({subtree:true})||[])].every(a=>a.effect?.getComputedTiming().endTime===Infinity||!a.pending&&a.playState!=='running'),
+ resources:document.readyState==='complete'&&document.fonts.status==='loaded'&&resources.length>0&&resources.every(n=>{const u=new URL(n);return u.origin===location.origin&&!u.pathname.includes('/docs/img/tech/')})};`
+
+func (d *browserDriver) frameworkPage(kind, theme string) (browserProviderPage, error) {
+	for {
+		var p browserProviderPage
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": browserFrameworkObservation, "args": []string{kind, theme}}, &p); err != nil {
+			return p, err
+		}
+		d.lastProvider = p
+		if browserProviderAdmit(p, kind, theme) {
+			return p, nil
+		}
+		select {
+		case <-d.ctx.Done():
+			return p, fmt.Errorf("native framework presentation incomplete")
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// Exercise real Tab/Enter and combobox ArrowDown/Enter. No project, application,
+// credential, integration or external documentation destination is created/opened.
+func (d *browserDriver) frameworkPresentation(output string) (cases []browserProviderCase, result error) {
+	defer func() {
+		if result != nil && d.session != "" {
+			old, category := d.ctx, d.category
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			d.ctx = ctx
+			_, _ = d.capture(output, "framework-incomplete", browserPage{})
+			cancel()
+			d.ctx, d.category = old, category
+		}
+	}()
+	for _, theme := range []string{"light", "dark"} {
+		d.providerStage = "framework-theme-" + theme
+		if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/"}, nil); err != nil {
+			return nil, err
+		}
+		if _, err := d.waitPage("console"); err != nil {
+			return nil, err
+		}
+		selector := `cnsl-theme-setting button.theme-setting-button:has(svg.sun)`
+		if theme == "dark" {
+			selector = `cnsl-theme-setting button.theme-setting-button:has(svg.moon)`
+		}
+		var active bool
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `return document.querySelector(arguments[0])?.classList.contains('active')===true;`, "args": []string{selector}}, &active); err != nil {
+			return nil, err
+		}
+		if !active {
+			button, err := d.element(selector)
+			if err != nil {
+				return nil, err
+			}
+			if err = d.call("POST", button+"/click", map[string]any{}, nil); err != nil {
+				return nil, err
+			}
+		}
+		if err := d.call("POST", "/execute/sync", map[string]any{"script": `document.querySelector('cnsl-quickstart')?.scrollIntoView({behavior:'instant',block:'center'});return true;`, "args": []any{}}, nil); err != nil {
+			return nil, err
+		}
+		for _, kind := range []string{"framework-quickstart", "framework-selected", "framework-picker"} {
+			d.providerStage = kind + "-" + theme
+			d.lastProvider = browserProviderPage{}
+			if kind == "framework-selected" {
+				reached := false
+				for i := 0; i < 65; i++ {
+					actions := map[string]any{"actions": []any{map[string]any{"type": "key", "id": "framework-tab", "actions": []any{map[string]any{"type": "keyDown", "value": "\ue004"}, map[string]any{"type": "keyUp", "value": "\ue004"}}}}}
+					if err := d.call("POST", "/actions", actions, nil); err != nil {
+						return nil, err
+					}
+					var focus string
+					if err := d.call("POST", "/execute/sync", map[string]any{"script": `const e=document.activeElement;if(e?.matches('.neutral-framework-icon'))return 'decoration';return e?.matches('cnsl-quickstart a.quickstart-card')&&e.search==='?framework=angular'?'angular':'';`, "args": []any{}}, &focus); err != nil {
+						return nil, err
+					}
+					if focus == "decoration" {
+						return nil, fmt.Errorf("framework decoration took keyboard focus")
+					}
+					if focus == "angular" {
+						reached = true
+						break
+					}
+				}
+				if !reached {
+					return nil, fmt.Errorf("Angular quickstart unreachable with Tab")
+				}
+				if err := d.call("DELETE", "/actions", nil, nil); err != nil {
+					return nil, err
+				}
+				link, err := d.element(`cnsl-quickstart a.quickstart-card[href$="?framework=angular"]`)
+				if err != nil {
+					return nil, err
+				}
+				if err = d.call("POST", link+"/value", map[string]string{"text": "\ue007"}, nil); err != nil {
+					return nil, err
+				}
+			}
+			if kind == "framework-picker" {
+				d.providerStage = kind + "-" + theme + "-navigate"
+				if err := d.call("POST", "/url", map[string]string{"url": "http://" + serviceAuthority + "/ui/console/projects/app-create"}, nil); err != nil {
+					return nil, err
+				}
+				// Wait for the real native component, not an injected replacement.
+				d.providerStage = kind + "-" + theme + "-input-ready"
+				for {
+					var ready bool
+					if err := d.call("POST", "/execute/sync", map[string]any{"script": `return !!document.querySelector('cnsl-framework-autocomplete input[role="combobox"]');`, "args": []any{}}, &ready); err != nil {
+						return nil, err
+					}
+					if ready {
+						break
+					}
+					select {
+					case <-d.ctx.Done():
+						return nil, fmt.Errorf("native framework input absent")
+					case <-time.After(200 * time.Millisecond):
+					}
+				}
+				input, err := d.element(`cnsl-framework-autocomplete input[role="combobox"]`)
+				if err != nil {
+					return nil, err
+				}
+				if err = d.call("POST", input+"/click", map[string]any{}, nil); err != nil {
+					return nil, err
+				}
+				d.providerStage = kind + "-" + theme + "-type"
+				if err = d.call("POST", input+"/value", map[string]string{"text": "Angular"}, nil); err != nil {
+					return nil, err
+				}
+			}
+			d.providerStage = kind + "-" + theme + "-observe"
+			p, err := d.frameworkPage(kind, theme)
+			if err != nil {
+				return nil, err
+			}
+			d.providerStage = kind + "-" + theme + "-capture"
+			screen, err := d.capture(output, kind+"-"+theme, browserPage{})
+			if err != nil {
+				return nil, err
+			}
+			if kind == "framework-picker" {
+				d.providerStage = kind + "-" + theme + "-select"
+				input, err := d.element(`cnsl-framework-autocomplete input[role="combobox"]`)
+				if err != nil {
+					return nil, err
+				}
+				if err = d.call("POST", input+"/value", map[string]string{"text": "\ue015\ue007"}, nil); err != nil {
+					return nil, err
+				}
+				var selected bool
+				if err = d.call("POST", "/execute/sync", map[string]any{"script": `const e=document.querySelector('cnsl-framework-autocomplete input');return location.pathname==='/ui/console/projects/app-create'&&!location.search&&e?.value==='angular'&&e.getAttribute('aria-expanded')==='false'&&!document.querySelector('cnsl-framework-change');`, "args": []any{}}, &selected); err != nil {
+					return nil, err
+				}
+				if !selected {
+					return nil, fmt.Errorf("native Angular combobox selection differs")
+				}
+			}
+			cases = append(cases, browserProviderCase{kind, theme, p.Count, p.Glyphs, p.Labels, p.Targets, p.ThemeReady, p.Resources, p.Keyboard, screen.Screenshot})
+		}
+	}
+	return cases, nil
+}
+
+func browserFrameworkReceipt(output string, cases []browserProviderCase) error {
+	if len(cases) != 6 {
+		return fmt.Errorf("framework case set incomplete")
+	}
+	index := 0
+	for _, theme := range []string{"light", "dark"} {
+		for _, kind := range []string{"framework-quickstart", "framework-selected", "framework-picker"} {
+			c := cases[index]
+			index++
+			route := "/ui/console/"
+			if kind == "framework-selected" {
+				route = "/ui/console/projects/app-create?framework=angular"
+			}
+			if kind == "framework-picker" {
+				route = "/ui/console/projects/app-create"
+			}
+			p := browserProviderPage{"http://" + serviceAuthority + route, c.Kind, c.Theme, c.Count, c.Glyphs, c.Labels, c.Targets, c.ThemeReady, c.Resources, c.Keyboard}
+			if c.Kind != kind || c.Theme != theme || !browserProviderAdmit(p, kind, theme) {
+				return fmt.Errorf("framework case differs")
+			}
+			name := kind + "-" + theme + ".png"
+			if c.Screenshot.Path != name {
+				return fmt.Errorf("framework screenshot path differs")
+			}
+			if err := browserPresentationScreenshot(output, name, c.Screenshot); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -413,6 +413,72 @@ jobs:
         run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-bootstrap-cache "$IDENTITY_VERIFIER_CACHE" --verifier-composition "$RUNNER_TEMP/verifier-composition.json" --verifier-compiler-sha256 "$IDENTITY_VERIFIER_GO_SHA256" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
       - name: Scan the actual frozen identity executable
         run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" 2>&1'
+      # Catch native UI failures before the independent rebuild/replay work.
+      - name: Exercise the local restricted identity image
+        run: |
+          command -v google-chrome
+          command -v chromedriver
+          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+      - name: Verify actual identity browser evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-browser.go | cut -d ' ' -f 1)"
+          receipt="$(sha256sum "$RUNNER_TEMP/zitadel-image/browser-smoke.json" | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --arg receipt "$receipt" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            .schemaVersion == 1 and .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and .browserReceiptSha256 == $receipt and
+            .browserSourceSha256 == $source and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-binding.json" >/dev/null
+          jq -e --arg source "$source" '
+            .schemaVersion == 1 and .profile == "fictional-native-browser" and
+            .browserSourceSha256 == $source and (.browserVersion | type == "string" and length > 0) and
+            .browserSandboxDisabled == false and .cleanup == "complete" and
+            .portalFederation == false and .productionTLS == false and .invitationProof == false and
+            .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
+            (.pages | map(.kind)) == ["login","password","console"] and
+            (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
+            all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.smtpIcons | map(.kind+"/"+.theme)) == ["picker/light","amazon/light","brevo/light","google/light","mailchimp/light","mailgun/light","mailjet/light","outlook/light","postmark/light","sendgrid/light","picker/dark","amazon/dark","brevo/dark","google/dark","mailchimp/dark","mailgun/dark","mailjet/dark","outlook/dark","postmark/dark","sendgrid/dark"] and
+            all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.mdiIcons | map(.kind+"/"+.theme)) == ["mdi-picker/light","mdi-table/light","editor-oidc/light","editor-jwt/light","mdi-picker/dark","mdi-table/dark","editor-oidc/dark","editor-jwt/dark"] and
+            all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.frameworkIcons | map(.kind+"/"+.theme)) == ["framework-quickstart/light","framework-selected/light","framework-picker/light","framework-quickstart/dark","framework-selected/dark","framework-picker/dark"] and
+            all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
+      - name: Verify actual identity service evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            def positiveInt: if type == "number" then . == floor and . > 0 else false end;
+            $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
+            .schemaVersion == 1 and .profile == "isolated-service-smoke" and
+            .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and
+            .serviceSourceSha256 == $source and
+            .databaseImage == "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826" and
+            (.readyMilliseconds | positiveInt) and .readyMilliseconds < 240000 and
+            (.processSamples | length) == 3 and
+            all(.processSamples[]; .pid | positiveInt) and
+            (.processSamples | map(.pid) | unique | length) == 1 and
+            all(.processSamples[];
+              .name == "zitadel" and .uid == 65532 and .gid == 65532 and
+              (.rssKiB | positiveInt) and (.peakRssKiB | positiveInt) and
+              .peakRssKiB >= .rssKiB and .peakRssKiB < 1048576 and
+              (.threads | positiveInt) and .threads <= 128 and
+              .effectiveCapabilities == "0000000000000000" and
+              .boundingCapabilities == "0000000000000000" and
+              .noNewPrivileges == true and .seccompMode == 2 and
+              .mounts.rootReadOnly == true and .mounts.tmpfsBytes == 16777216 and
+              .mounts.uid == 65532 and .mounts.gid == 65532 and .mounts.mode == "0700" and
+              .mounts.noExec == true and .mounts.noSuid == true and .mounts.noDev == true) and
+            .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
+            .network == "internal-two-container-direct" and .transport == "fictional-http-only" and
+            .oidcDiscovery == true and .embeddedConsoleHTTP == true and
+            .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/service-smoke.json" >/dev/null
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -576,69 +642,6 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
-      - name: Exercise the local restricted identity image
-        run: |
-          command -v google-chrome
-          command -v chromedriver
-          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
-      - name: Verify actual identity browser evidence
-        run: |
-          source="$(sha256sum scripts/zitadel-browser.go | cut -d ' ' -f 1)"
-          receipt="$(sha256sum "$RUNNER_TEMP/zitadel-image/browser-smoke.json" | cut -d ' ' -f 1)"
-          jq -e --arg source "$source" --arg receipt "$receipt" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
-            .schemaVersion == 1 and .upstreamCommit == $image[0].upstreamCommit and
-            .localImageId == $image[0].localImageId and .browserReceiptSha256 == $receipt and
-            .browserSourceSha256 == $source and .cleanup == "complete" and
-            .imageAdmission == "unknown" and .licenseClosure == "unknown"
-          ' "$RUNNER_TEMP/zitadel-image/browser-binding.json" >/dev/null
-          jq -e --arg source "$source" '
-            .schemaVersion == 1 and .profile == "fictional-native-browser" and
-            .browserSourceSha256 == $source and (.browserVersion | type == "string" and length > 0) and
-            .browserSandboxDisabled == false and .cleanup == "complete" and
-            .portalFederation == false and .productionTLS == false and .invitationProof == false and
-            .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
-            (.pages | map(.kind)) == ["login","password","console"] and
-            (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
-            all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
-            (.smtpIcons | map(.kind+"/"+.theme)) == ["picker/light","amazon/light","brevo/light","google/light","mailchimp/light","mailgun/light","mailjet/light","outlook/light","postmark/light","sendgrid/light","picker/dark","amazon/dark","brevo/dark","google/dark","mailchimp/dark","mailgun/dark","mailjet/dark","outlook/dark","postmark/dark","sendgrid/dark"] and
-            all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
-            (.mdiIcons | map(.kind+"/"+.theme)) == ["mdi-picker/light","mdi-table/light","editor-oidc/light","editor-jwt/light","mdi-picker/dark","mdi-table/dark","editor-oidc/dark","editor-jwt/dark"] and
-            all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
-            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
-            .imageAdmission == "unknown" and .licenseClosure == "unknown"
-          ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
-      - name: Verify actual identity service evidence
-        run: |
-          source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
-          jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
-            def positiveInt: if type == "number" then . == floor and . > 0 else false end;
-            $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
-            .schemaVersion == 1 and .profile == "isolated-service-smoke" and
-            .upstreamCommit == $image[0].upstreamCommit and
-            .localImageId == $image[0].localImageId and
-            .serviceSourceSha256 == $source and
-            .databaseImage == "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826" and
-            (.readyMilliseconds | positiveInt) and .readyMilliseconds < 240000 and
-            (.processSamples | length) == 3 and
-            all(.processSamples[]; .pid | positiveInt) and
-            (.processSamples | map(.pid) | unique | length) == 1 and
-            all(.processSamples[];
-              .name == "zitadel" and .uid == 65532 and .gid == 65532 and
-              (.rssKiB | positiveInt) and (.peakRssKiB | positiveInt) and
-              .peakRssKiB >= .rssKiB and .peakRssKiB < 1048576 and
-              (.threads | positiveInt) and .threads <= 128 and
-              .effectiveCapabilities == "0000000000000000" and
-              .boundingCapabilities == "0000000000000000" and
-              .noNewPrivileges == true and .seccompMode == 2 and
-              .mounts.rootReadOnly == true and .mounts.tmpfsBytes == 16777216 and
-              .mounts.uid == 65532 and .mounts.gid == 65532 and .mounts.mode == "0700" and
-              .mounts.noExec == true and .mounts.noSuid == true and .mounts.noDev == true) and
-            .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
-            .network == "internal-two-container-direct" and .transport == "fictional-http-only" and
-            .oidcDiscovery == true and .embeddedConsoleHTTP == true and
-            .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
-            .imageAdmission == "unknown" and .licenseClosure == "unknown"
-          ' "$RUNNER_TEMP/zitadel-image/service-smoke.json" >/dev/null
       - name: Preserve build diagnostics, not unadmitted service distribution
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -700,6 +703,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/provider-*.png
             ${{ runner.temp }}/zitadel-image/smtp-*.png
             ${{ runner.temp }}/zitadel-image/mdi-*.png
+            ${{ runner.temp }}/zitadel-image/framework-*.png
             ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-reconstruction.json
             ${{ runner.temp }}/zitadel-offline-replay/sdk-bootstrap-final.json

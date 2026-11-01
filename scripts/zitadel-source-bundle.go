@@ -29,11 +29,11 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "dc09cf8494d8b7f44a3ee78957738994fce97f527f9b5660563dea9fc63b5165"
+const sourcePreparedProfile = "1c8d8aedcd1bbf5400c461579b338d40e118940d43696b60dcf277662a73c908"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
-const sourceModifiedOn = "2026-10-29"
+const sourceModifiedOn = "2026-11-01"
 
 type sourceCapturePolicy struct{ Prepared, OriginalAPI, SerialAPI, Preparation string }
 type sourceCaptureSummary struct {
@@ -528,6 +528,7 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Replace provider image decoration with existing neutral arrow icons in eighteen consumers; remove sixteen original provider image paths.",
 		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
 		"Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations.",
+		"Replace framework image decoration with the existing code glyph and visible names in seven consumers; remove all forty-four technology images and thirty-nine image properties while preserving all thirty-five framework entries and twenty-four selectable IDs. Retire the obsolete image-copy operation while still clearing old outputs.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -1116,13 +1117,13 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			Prepared:    sourcePreparedProfile,
 			OriginalAPI: "bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			SerialAPI:   "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			Preparation: "4948930dfa2c93a61e6d4abc15263e2c51dd6800db75d74d12e2809bae2df7db",
+			Preparation: "dc9d9d8c49e059d333cfca2ba157e2e13592cc8351917cdb7e2e9e5f6505db89",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string
 		seal, err = sourceSealTree(args[1], args[2])
 		if err == nil && seal != sourcePreparedProfile {
-			err = errors.Join(fmt.Errorf("prepared source differs from frozen complete profile"), os.RemoveAll(args[2]))
+			err = errors.Join(fmt.Errorf("prepared source differs from frozen complete profile (observed %s)", seal), os.RemoveAll(args[2]))
 		}
 		value = struct {
 			ManifestSHA256 string `json:"manifestSha256"`

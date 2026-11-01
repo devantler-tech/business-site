@@ -44,18 +44,19 @@ type copiedCatalogue struct {
 	Notices        []inputRecord   `json:"notices"`
 }
 type copiedPolicy struct {
-	CatalogueHash     string
-	Assets, Outputs   int
-	TextNotices       string
-	TextPolicy        textPolicy
-	ProviderConsumers []inputRecord
-	SMTPConsumers     []inputRecord
-	MDI               []mdiProvenance
-	MDINotices        []inputRecord
-	MDIConsumers      []inputRecord
+	CatalogueHash      string
+	Assets, Outputs    int
+	TextNotices        string
+	TextPolicy         textPolicy
+	ProviderConsumers  []inputRecord
+	SMTPConsumers      []inputRecord
+	FrameworkConsumers []inputRecord
+	MDI                []mdiProvenance
+	MDINotices         []inputRecord
+	MDIConsumers       []inputRecord
 }
 
-var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}}
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), FrameworkConsumers: neutralFrameworkConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}}
 
 func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
 
@@ -293,8 +294,12 @@ func copiedObserve(build, notices, recipe string, read textReader, policy copied
 	if len(policy.SMTPConsumers) == 0 || len(policy.SMTPConsumers) > 5 {
 		return fail(fmt.Errorf("neutral SMTP consumer policy incomplete"))
 	}
+	if len(policy.FrameworkConsumers) == 0 || len(policy.FrameworkConsumers) > 8 {
+		return fail(fmt.Errorf("neutral framework consumer policy incomplete"))
+	}
 	seenConsumers := map[string]bool{}
 	consumers := append(append([]inputRecord{}, policy.ProviderConsumers...), policy.SMTPConsumers...)
+	consumers = append(consumers, policy.FrameworkConsumers...)
 	if len(policy.MDI) > 25 || len(policy.MDI) > 0 && (len(policy.MDINotices) == 0 || len(policy.MDINotices) > 2 || len(policy.MDIConsumers) == 0 || len(policy.MDIConsumers) > 5) || len(policy.MDI) == 0 && (len(policy.MDINotices) != 0 || len(policy.MDIConsumers) != 0) {
 		return fail(fmt.Errorf("MDI provenance policy incomplete"))
 	}
