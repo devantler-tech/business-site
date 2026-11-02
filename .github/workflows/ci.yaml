@@ -519,8 +519,8 @@ jobs:
               (.namespaceInitRssKiB | positiveInt) and
               (.namespaceInitPeakRssKiB | positiveInt) and .namespaceInitPeakRssKiB >= .namespaceInitRssKiB and
               (.namespaceInitThreads | positiveInt) and
-              (.dockerMemoryUsage | type == "string" and length > 0) and
-              (.dockerCpuPercent | type == "string" and test("^[0-9]+([.][0-9]+)?%$")) and
+              (.dockerMemoryUsage | type == "string" and test("\\A[0-9]+([.][0-9]+)?(B|kB|KiB|MB|MiB|GB|GiB) / [0-9]+([.][0-9]+)?(B|kB|KiB|MB|MiB|GB|GiB)\\z")) and
+              (.dockerCpuPercent | type == "string" and test("\\A[0-9]+([.][0-9]+)?%\\z")) and
               (.dockerPids | positiveInt) and .dockerPids <= 128) and
             (.observationScope | contains("not Dex, portal, authentication, load sizing or backup/restore"))
           ' "$RUNNER_TEMP/zitadel-image/lifecycle-smoke.json" >/dev/null

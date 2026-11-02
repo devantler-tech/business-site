@@ -342,13 +342,17 @@ jq -n --arg source "$lifecycle_source" --slurpfile image "$scratch/lifecycle/zit
 cp "$scratch/lifecycle-good.json" "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
 (cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run")
 lifecycle_controls=0
-for mutation in '.verifiedTls=false' '.administratorRevoked=false' '.durableRestart=false' '.phaseBoundaryInterruption=false' '.phaseSeparation=false' '.authenticationProof=true' '.cleanup="incomplete"' '.serviceSourceSha256=("d"*64)' '.localImageId=("sha256:"+("e"*64))' '.resourceSamples=[]' '.resourceSamples[1].namespaceInitUid=0' '.resourceSamples[0].namespaceInitRssKiB=0' '.resourceSamples[0].dockerPids=129' '.resourceSamples[0].observedAt=null' '.databaseVolumeKiB=300000' '.elapsedMilliseconds=960000' '.fictionalIdentitySha256=""'; do
+for mutation in '.verifiedTls=false' '.administratorRevoked=false' '.durableRestart=false' '.phaseBoundaryInterruption=false' '.phaseSeparation=false' '.authenticationProof=true' '.cleanup="incomplete"' '.serviceSourceSha256=("d"*64)' '.localImageId=("sha256:"+("e"*64))' '.resourceSamples=[]' '.resourceSamples[1].namespaceInitUid=0' '.resourceSamples[0].namespaceInitRssKiB=0' '.resourceSamples[0].dockerPids=129' '.resourceSamples[0].observedAt=null' '.databaseVolumeKiB=300000' '.elapsedMilliseconds=960000' '.fictionalIdentitySha256=""' '.resourceSamples[0].dockerMemoryUsage="not-a-number"' '.resourceSamples[0].dockerMemoryUsage=98' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1GiB\n"' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1GiB\nInjected"' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1invalid"' '.resourceSamples[0].dockerCpuPercent="0.15%\n"' '.resourceSamples[0].dockerCpuPercent="0.15%\nInjected"'; do
   jq "$mutation" "$scratch/lifecycle-good.json" > "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
   if (cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run") > "$scratch/lifecycle-refusal.log" 2>&1; then
     printf 'Lifecycle verifier accepted broken receipt: %s\n' "$mutation" >&2
     exit 1
   fi
   lifecycle_controls=$((lifecycle_controls+1))
+done
+for unit in B kB KiB MB MiB GB GiB; do
+  jq --arg unit "$unit" '.resourceSamples[].dockerMemoryUsage=("0.5"+$unit+" / 1"+$unit)' "$scratch/lifecycle-good.json" > "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
+  (cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run")
 done
 printf 'Identity lifecycle verifier rejected %s invalid receipt controls.\n' "$lifecycle_controls"
 # The workflow must join the reconstructed SDK and all six actual native calls.
