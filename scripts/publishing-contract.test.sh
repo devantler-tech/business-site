@@ -25,7 +25,8 @@ ci_json="$(yq -o=json '.' "$root/.github/workflows/ci.yaml")" || fail 'cannot pa
 ci_gate_valid() {
   jq -e '
     .jobs.status as $gate |
-    $gate.if == "always()" and $gate.permissions == {} and
+    $gate.if == "always()" and $gate.permissions == {"actions":"read"} and
+    $gate.steps[0].with["check-workflow-startup"] == "true" and
     ($gate.needs | sort) == ([.jobs | keys[] | select(. != "status")] | sort) and
     ($gate.steps | length) == 2 and
     $gate.steps[0].if == null and
@@ -70,6 +71,8 @@ for broken_ci in \
   '.jobs.status.steps[0].uses |= sub("@[0-9a-f]{40}$"; "@main")' \
   '.jobs.status.needs |= map(select(. != "build-docs"))' \
   '.jobs.status.steps[0].with["job-results"] |= sub("needs.build-docs.result"; "ignored")' \
+  '.jobs.status.permissions = {}' \
+  '.jobs.status.steps[0].with |= del(.["check-workflow-startup"])' \
   '.jobs.status.if = "success()"' \
   '.jobs.status.steps |= .[0:1]' \
   '.jobs.status.steps[1].if = "true"' \
