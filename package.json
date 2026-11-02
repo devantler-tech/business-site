@@ -38,7 +38,7 @@
     "htmlhint": "1.9.2",
     "js-yaml": "^5.5.0",
     "parse5": "8.0.1",
-    "secretlint": "13.0.7"
+    "secretlint": "13.1.0"
   },
   "overrides": {
     "uuid": "^14.0.0",
