@@ -118,8 +118,10 @@ original build records and inspects the original saved image without a rebuild
 or service execution. A later caller with changed retained build records is refused.
 
 Only explicit `publish` enters a separate privileged job and repeats admission.
-Registry authentication and the existing image tag are checked before any source
-release mutation. Registry reads accept both single-image manifests and image
+Registry authentication and absence of the image tag are checked before any source
+release mutation. Every occupied image tag is refused, including a matching earlier
+publication; this first-release path never adopts an existing registry image.
+Registry reads accept both single-image manifests and image
 indexes; an occupied index cannot be mistaken for an absent tag. Release inventory
 reads make at most 100 explicit page requests of at most 100 records each. A short
 page proves completion; a full hundredth page is refused without another request.
@@ -127,6 +129,15 @@ Failed, malformed or incomplete reads authorize no write.
 After anonymous source readback, credentials are refreshed and the image tag is
 checked again before a push. This preflight does not make the two services atomic:
 later network, registry or signature failures can still leave a source-only release.
+The original image must have no target-repository digest before publication. After
+its own successful push, the publisher reads exactly one new target-repository
+digest from Docker's metadata for that original image. The complete registry
+manifest must hash to that digest before signing; matching only its config is
+insufficient. No Docker progress text is interpreted as a digest. A completed
+source-only release can resume with the same original while the image tag is absent.
+Once any image occupies the tag, a rerun is refused. A partial image publication
+therefore needs a separately reviewed recovery or new version; it is not silently
+adopted, overwritten or treated as a completed release.
 The fixed `identity-v4.20.0-devantler.1` release stages the two original source
 archives and `identity-source.json` in a draft before publication. Every existing
 asset must already match before additions; source-bound drafts can resume only

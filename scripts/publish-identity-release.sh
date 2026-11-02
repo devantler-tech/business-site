@@ -76,6 +76,19 @@ registry_read() {
 }
 registry_authenticate
 registry_read "$image_tag"
+[[ "$status" == 404 ]] || fail 'image tag already exists; existing images are never adopted'
+# The original image is positively owned by this invocation. Accept only a new
+# target-repository digest introduced by its own successful Docker push, not a
+# registry manifest that merely claims the same config digest.
+read_local_registry_digests() {
+  local output="$1"
+  docker image inspect --format '{{json .RepoDigests}}' "$image" >"$output.raw" || fail 'original image registry metadata'
+  jq -ces 'select(length==1)|.[0]|if .==null then [] else . end|
+    select(type=="array" and length<=100 and all(.[];type=="string" and length<=512 and (test("[[:cntrl:]]")|not)))' \
+    "$output.raw" >"$output" || fail 'original image registry metadata shape'
+}
+read_local_registry_digests "$work/local-registry-before.json"
+jq -e --arg prefix "$image_name@" 'all(.[];startswith($prefix)|not)' "$work/local-registry-before.json" >/dev/null || fail 'original image already has target registry identity'
 # A successful matching-refs list proves tag absence; an arbitrary failed view
 # is never interpreted as permission to create or overwrite a ref.
 gh api --hostname github.com "repos/$repo/git/matching-refs/tags/$tag" >"$work/tags.json"
@@ -165,14 +178,16 @@ source_offer="$(sha256sum "$work/offer/identity-source.json" | cut -d' ' -f1)"
 # absence must not overwrite an image that appeared during publication.
 registry_authenticate
 registry_read "$image_tag"
-if [[ "$status" == 404 ]]; then
-  docker tag "$image" "$image_name:$image_tag"
-  local_tag=true
-  docker push "$image_name:$image_tag"
-  registry_read "$image_tag"
-  [[ "$status" == 200 ]] || fail 'published image is unavailable'
-fi
-readonly published="$image_name@$digest"
+[[ "$status" == 404 ]] || fail 'image tag appeared during source publication'
+docker tag "$image" "$image_name:$image_tag"
+local_tag=true
+docker push "$image_name:$image_tag"
+read_local_registry_digests "$work/local-registry-after.json"
+pushed_digest="$(jq -er --arg prefix "$image_name@" 'map(select(startswith($prefix)))|select(length==1)|.[0]|ltrimstr($prefix)|select(test("^sha256:[0-9a-f]{64}$"))' "$work/local-registry-after.json")" || fail 'unique original push digest'
+readonly pushed_digest
+registry_read "$image_tag"
+[[ "$status" == 200 && "$digest" == "$pushed_digest" ]] || fail 'registry manifest differs from original push'
+readonly published="$image_name@$pushed_digest"
 identity="https://github.com/$repo/.github/workflows/publish-identity.yaml@refs/heads/main"
 annotations=(-a "source=$source" -a "caller=$GITHUB_SHA" -a "ciRunId=$run" -a "ciRunAttempt=$attempt" -a "sourceOfferSha256=$source_offer")
 cosign sign --yes "${annotations[@]}" "$published"

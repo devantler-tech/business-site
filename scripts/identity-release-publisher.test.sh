@@ -100,6 +100,7 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  if [[ ! -f "$FIXTURE/pushed" && "$KIND" != registry-conflict && !( "$KIND" == registry-late-conflict && "$reads" -ge 2 ) ]];then printf 404;printf '{}\n' >"$output";exit 0;fi
  cp "$FIXTURE/manifest.json" "$output"
  if [[ "$KIND" == registry-conflict || "$KIND" == registry-late-conflict ]];then jq '.config.digest="sha256:different"' "$output" >"$FIXTURE/new";mv "$FIXTURE/new" "$output";fi
+ if [[ "$KIND" == pushed-layer-conflict ]];then jq '.layers[0].digest=("sha256:"+("6"*64))' "$output" >"$FIXTURE/new";mv "$FIXTURE/new" "$output";fi
  sha=$(shasum -a 256 "$output"|awk '{print $1}')
  printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
  printf 200
@@ -120,7 +121,25 @@ case "$1" in
  login) cat >/dev/null;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
   # All three anonymous source reads must finish before any image upload.
   [[ "$(grep -c 'curl https://github.com/' "$FIXTURE/calls")" == 3 ]] || exit 96
-  touch "$FIXTURE/pushed";;image) [[ "$2" == rm ]] || exit 97;;*) exit 98;;esac
+  touch "$FIXTURE/pushed";;image)
+  if [[ "$2" == inspect ]];then
+    [[ "$#" == 5 && "$3" == --format && "$4" == '{{json .RepoDigests}}' && "$5" == "sha256:$(printf '%064d' 0 | tr 0 b)" ]] || exit 97
+    if [[ -f "$FIXTURE/pushed" || "$KIND" == preexisting-local-digest ]];then
+      sha=$(shasum -a 256 "$FIXTURE/original-manifest.json"|awk '{print $1}')
+      case "$KIND" in
+      pushed-digest-missing) printf '[]\n';;
+      pushed-digest-duplicate) jq -n --arg sha "$sha" '["ghcr.io/devantler-tech/business-site-identity@sha256:"+$sha,"ghcr.io/devantler-tech/business-site-identity@sha256:"+("6"*64)]';;
+      *) jq -n --arg sha "$sha" '["ghcr.io/devantler-tech/business-site-identity@sha256:"+$sha]';;
+      esac
+    else
+      case "$KIND" in
+      null-local-digests) printf 'null\n';;
+      false-local-digests) printf 'false\n';;
+      multi-local-digests) printf '[]\n[]\n';;
+      *) printf '[]\n';;
+      esac
+    fi
+  else [[ "$2" == rm ]] || exit 97;fi;;*) exit 98;;esac
 FIXTURE
 cat >"$scratch/bin/cosign" <<'FIXTURE'
 #!/usr/bin/env bash
@@ -139,9 +158,9 @@ case "$1" in
 FIXTURE
 chmod +x "$scratch/bin/"{gh,curl,docker,cosign}
 successful() {
-  [[ "$1" == valid || "$1" == draft-resume || "$1" == published-retry || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-retry || "$1" == boundary-inventory ]]
+  [[ "$1" == valid || "$1" == draft-resume || "$1" == source-only-resume || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-source-only-resume || "$1" == boundary-inventory || "$1" == null-local-digests ]]
 }
-for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory; do
+for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory source-only-resume paged-source-only-resume registry-layer-conflict pushed-layer-conflict pushed-digest-missing pushed-digest-duplicate preexisting-local-digest null-local-digests false-local-digests multi-local-digests; do
   fixture="$scratch/$kind"
   mkdir -p "$fixture/runner/identity-forge.fixture/restored/native/"{zitadel-handoff,zitadel-offline-replay,zitadel-base-source} "$fixture/runner/identity-forge.fixture/saved"
   work="$fixture/runner/identity-forge.fixture"
@@ -169,14 +188,18 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
   esac
   jq -n '{baseManifestSha256:("8"*64)}' >"$work/base-auth.json"
   jq -n '{schemaVersion:2,config:{digest:("sha256:"+("b"*64))},layers:[{digest:("sha256:"+("7"*64))}]}' >"$fixture/manifest.json"
+  cp "$fixture/manifest.json" "$fixture/original-manifest.json"
+  if [[ "$kind" == registry-layer-conflict ]];then
+    jq '.layers[0].digest=("sha256:"+("6"*64))' "$fixture/manifest.json" >"$fixture/new";mv "$fixture/new" "$fixture/manifest.json"
+  fi
   if [[ "$kind" == draft-resume || "$kind" == draft-conflict || "$kind" == paged-resume || "$kind" == paged-duplicate ]]; then
     cp "$native/zitadel-offline-replay/inputs.tar" "$fixture/inputs.tar"
     digest="$input_sha"
     if [[ "$kind" == draft-conflict ]]; then digest="${base_sha}"; fi
     jq -n --arg digest "sha256:$digest" '{id:789,tag_name:"identity-v4.20.0-devantler.1",target_commitish:("a"*40),draft:true,prerelease:false,immutable:false,assets:[{id:100,name:"inputs.tar",digest:$digest}]}' >"$fixture/release.json"
-  elif [[ "$kind" == published-retry || "$kind" == paged-retry ]]; then
+  elif [[ "$kind" == published-retry || "$kind" == paged-retry || "$kind" == registry-layer-conflict || "$kind" == source-only-resume || "$kind" == paged-source-only-resume ]]; then
     cp "$scratch/valid/"{release.json,inputs.tar,base-source.tar,identity-source.json} "$fixture/"
-    touch "$fixture/pushed"
+    if [[ "$kind" != source-only-resume && "$kind" != paged-source-only-resume ]];then touch "$fixture/pushed";fi
   fi
   : >"$fixture/calls"
   if env PATH="$scratch/bin:$PATH" FIXTURE="$fixture" KIND="$kind" RUNNER_TEMP="$fixture/runner" IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=publish IDENTITY_CI_RUN_ID=123 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_ACTOR=devantler GH_TOKEN=fixture bash "$root/scripts/publish-identity-release.sh" >"$fixture/stdout" 2>"$fixture/stderr"; then
@@ -200,7 +223,7 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
     fi
     test ! -f "$fixture/runner/identity-publication.json"
     if [[ "$kind" == bad-retention || "$kind" == bad-profile || "$kind" == bad-authority ]]; then test ! -s "$fixture/calls"; fi
-    if [[ "$kind" == registry-conflict || "$kind" == registry-error || "$kind" == bad-bearer || "$kind" == registry-token-error || "$kind" == registry-login-error || "$kind" == registry-transport-error || "$kind" == registry-oci-index || "$kind" == registry-docker-index ]];then
+    if [[ "$kind" == registry-conflict || "$kind" == registry-error || "$kind" == bad-bearer || "$kind" == registry-token-error || "$kind" == registry-login-error || "$kind" == registry-transport-error || "$kind" == registry-oci-index || "$kind" == registry-docker-index || "$kind" == published-retry || "$kind" == paged-retry || "$kind" == registry-layer-conflict || "$kind" == preexisting-local-digest || "$kind" == false-local-digests || "$kind" == multi-local-digests ]];then
       if grep -Eq '^gh release (create|upload|edit) ' "$fixture/calls";then echo "registry preflight failure mutated source: $kind" >&2;exit 1;fi
     fi
     if [[ "$kind" == paged-duplicate || "$kind" == malformed-inventory || "$kind" == failed-inventory || "$kind" == oversized-inventory ]]; then
@@ -216,7 +239,15 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
         exit 1
       fi
     fi
-    if [[ "$kind" != attestation-conflict ]]; then test ! -f "$fixture/pushed"; fi
+    case "$kind" in
+    published-retry|paged-retry|registry-layer-conflict)
+      if grep -Eq '^docker push |^cosign ' "$fixture/calls";then echo "occupied image was adopted: $kind" >&2;exit 1;fi ;;
+    pushed-*)
+      test -f "$fixture/pushed"
+      if grep -q '^cosign ' "$fixture/calls";then echo "unbound pushed manifest was signed: $kind" >&2;exit 1;fi ;;
+    attestation-conflict) : ;;
+    *) test ! -f "$fixture/pushed" ;;
+    esac
   fi
   if [[ "$kind" == oversized-inventory ]];then
     if grep -q '^inventory-page 101$' "$fixture/calls";then echo 'release inventory fetched beyond its request bound' >&2;exit 1;fi
