@@ -7,6 +7,9 @@ complete OCI/layer/package/descriptor joins, original modes, private read-only
 capsule, external seal and deterministic archive readback. It never executes
 retained content, verifies OpenPGP/image signatures, publishes or activates users.
 Keep those four proof fields false; publisher admission remains separate.
+Its explicit base-transport unpacker requires both external seals and the same
+closed capsule plan, rejects noncanonical transport and preserves source archives
+as opaque data in a new private reservation. It grants no distribution authority.
 Its explicit `prepare-handoff` operation binds the original local archives and
 raw native witness bytes to caller-supplied source/run metadata. Preserve its
 closed input roles, complete stable snapshots and exclusive manifest output.

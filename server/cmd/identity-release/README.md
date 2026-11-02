@@ -22,6 +22,7 @@ storage; every resulting byte still has to match the original frozen digest.
 identity-release capture-base-source --output /absolute/new-capsule
 identity-release verify-base-source --input /absolute/capsule --sha256 EXTERNAL_MANIFEST_SHA256
 identity-release pack-base-source --input /absolute/capsule --sha256 EXTERNAL_MANIFEST_SHA256 --output /absolute/new-base-source.tar
+identity-release unpack-base-source --input /absolute/base-source.tar --archive-sha256 EXTERNAL_ARCHIVE_SHA256 --sha256 EXTERNAL_MANIFEST_SHA256 --output /absolute/new-capsule
 ```
 
 The source set is closed: three original OCI metadata bodies, thirteen original
@@ -41,6 +42,13 @@ requires the external manifest seal. Output must be new; failed partial output
 cannot be resumed or overwritten. Packing rechecks the complete capsule before
 and after writing, reads back the actual closed transport file, and uses fixed
 USTAR metadata. It does not rebuild or parse a Docker-save candidate archive.
+
+Explicit unpacking requires both independent transport and capsule seals. It
+uses the same frozen member plan and complete capsule verifier, with canonical
+transport readback rejecting altered headers, padding, ordering or trailing data.
+Only a new private destination is accepted. Source archives remain opaque files;
+no retained program or nested source archive is executed. A failed private
+reservation is ineligible and cannot be resumed or overwritten.
 
 The descriptor's original OpenPGP armor is retained, **not verified**. The command
 does not verify the base image signature, public source-release availability or

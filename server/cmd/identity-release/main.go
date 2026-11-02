@@ -17,6 +17,7 @@ const releaseUsage = `Explicit source-data operations (ordinary invocation is in
   identity-release capture-base-source --output /new/private/capsule
   identity-release verify-base-source --input /private/capsule --sha256 <external-manifest-sha256>
   identity-release pack-base-source --input /private/capsule --sha256 <external-manifest-sha256> --output /new/base-source.tar
+  identity-release unpack-base-source --input /private/base-source.tar --archive-sha256 <external-archive-sha256> --sha256 <external-manifest-sha256> --output /new/private/capsule
   identity-release prepare-handoff --input /native/job-root --source-sha <commit> --run-id <run> --run-attempt <attempt> --output /new/handoff.json
 No URL/profile override, authenticated request, image publication or portal activation is supported.
 `
@@ -30,7 +31,7 @@ func runRelease(ctx context.Context, args []string, out io.Writer) error {
 	if op == "prepare-handoff" {
 		return runHandoff(args[1:], out)
 	}
-	if op != "capture-base-source" && op != "verify-base-source" && op != "pack-base-source" {
+	if op != "capture-base-source" && op != "verify-base-source" && op != "pack-base-source" && op != "unpack-base-source" {
 		return fmt.Errorf("unknown explicit source operation")
 	}
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
@@ -38,7 +39,10 @@ func runRelease(ctx context.Context, args []string, out io.Writer) error {
 	}
 	f := flag.NewFlagSet(op, flag.ContinueOnError)
 	f.SetOutput(io.Discard)
-	var input, seal, output string
+	var input, seal, output, archiveSeal string
+	if op == "unpack-base-source" {
+		f.StringVar(&archiveSeal, "archive-sha256", "", "external archive seal")
+	}
 	if op != "capture-base-source" {
 		f.StringVar(&input, "input", "", "physical private capsule")
 		f.StringVar(&seal, "sha256", "", "external manifest seal")
@@ -76,6 +80,9 @@ func runRelease(ctx context.Context, args []string, out io.Writer) error {
 		_, err = verifyBaseCapsule(p, input, seal)
 	case "pack-base-source":
 		archiveSHA, err = packBaseCapsule(p, input, seal, output)
+	case "unpack-base-source":
+		err = unpackBaseCapsule(p, input, archiveSeal, seal, output)
+		archiveSHA = archiveSeal
 	}
 	if err != nil {
 		return err
