@@ -85,6 +85,15 @@ func materialWrite(t *testing.T, directory, name string, data []byte) {
 	}
 }
 
+func materialFixtureSettings(t *testing.T, directory string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(directory, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
 func materialCertificate(t *testing.T, hostname string, expiry time.Time) ([]byte, []byte, []byte) {
 	t.Helper()
 	caPublic, caKey, err := ed25519.GenerateKey(rand.Reader)
@@ -258,10 +267,7 @@ func TestMaterializeRejectsAmbiguousSettings(t *testing.T) {
 	for _, suffix := range []string{`,"databaseUser":"other"}`, `,"admin":"forbidden"}`, `,"databaseHost":true}`, `} {}`, `,"databaseAdminUser":"identity_initializer"}`, `,"phase":"setup"}`} {
 		t.Run(suffix, func(t *testing.T) {
 			input, output := materialFixture(t, "serve")
-			data, err := os.ReadFile(filepath.Join(input, "settings.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			data := materialFixtureSettings(t, input)
 			data = append(data[:len(data)-1], suffix...)
 			materialWrite(t, input, "settings.json", data)
 			if err := Materialize("serve", input, output); err == nil {
@@ -290,16 +296,13 @@ func TestMaterializeRejectsInvalidNativeSettings(t *testing.T) {
 	for name, value := range map[string]any{"databaseUser": "postgres", "databaseName": "postgres", "databaseHost": true, "schemaVersion": "unknown", "portalCallback": "http://site.example.invalid/portal/callback"} {
 		t.Run(name, func(t *testing.T) {
 			input, output := materialFixture(t, "serve")
-			data, err := os.ReadFile(filepath.Join(input, "settings.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			data := materialFixtureSettings(t, input)
 			var settings map[string]any
 			if json.Unmarshal(data, &settings) != nil {
 				t.Fatal("bad fixture")
 			}
 			settings[name] = value
-			data, err = json.Marshal(settings)
+			data, err := json.Marshal(settings)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -329,10 +332,7 @@ func TestMaterializeRequiresEveryPhaseMemberAndSetting(t *testing.T) {
 				}
 			})
 		}
-		data, err := os.ReadFile(filepath.Join(input, "settings.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
+		data := materialFixtureSettings(t, input)
 		var settings map[string]string
 		if json.Unmarshal(data, &settings) != nil {
 			t.Fatal("bad fixture")
