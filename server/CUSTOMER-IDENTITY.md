@@ -92,8 +92,10 @@ line breaks or unresolved environment references. No input value is expanded.
 Setup alone also requires `bootstrap-password` and these additional string
 settings: `instanceName`, `organizationName`, `humanUsername`, `humanFirstName`,
 `humanLastName`, `humanEmail`. Its fresh human has an unverified email and must
-change the initial password. That password also requires lowercase, uppercase,
-digit and symbol classes. Ordinary service refuses every bootstrap/admin input.
+change the initial password. That password is limited to 32–72 bytes and requires
+the selected native ASCII lowercase, uppercase and digit classes, plus a character
+outside ASCII letters/digits. This retains the selected bcrypt input limit without
+applying it to database passwords. Ordinary service refuses every bootstrap/admin input.
 No OIDC application credential is needed before supported API provisioning exists.
 
 All input fields, certificate material and stable file snapshots are checked
@@ -115,9 +117,10 @@ later phase. No environment override or extra native argument is approved by thi
 offline preparation. Inputs may not contain the output directory.
 
 A refusal prints only a fixed diagnostic. An occupied output is never modified.
-If a write fails, cleanup removes only unchanged files created through the retained
+If a write fails, cleanup removes only file identities created through the retained
 output descriptor; an empty failed reservation is kept rather than deleting a
-possibly replaced directory. Never consume a failed or partial output. Offline
+possibly replaced directory. A private reservation has one writer; no protection
+against arbitrary concurrent same-user edits is promised. Never consume a failed or partial output. Offline
 certificate/configuration checks do not prove a database handshake, persisted
 policies, native execution, mail, customer authentication or deployment. Those
 remain the separate runtime and acceptance work in #305/#302.

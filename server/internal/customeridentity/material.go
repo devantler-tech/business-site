@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -181,19 +180,19 @@ func materialPasswordValid(value []byte) bool {
 
 // materialBootstrapPassword also satisfies the selected native complexity classes.
 func materialBootstrapPassword(value []byte) bool {
-	if !materialPasswordValid(value) {
+	if !materialPasswordValid(value) || len(value) > 72 {
 		return false
 	}
 	lower, upper, digit, symbol := false, false, false, false
-	for _, character := range string(value) {
+	for _, character := range value {
 		switch {
-		case unicode.IsLower(character):
+		case character >= 'a' && character <= 'z':
 			lower = true
-		case unicode.IsUpper(character):
+		case character >= 'A' && character <= 'Z':
 			upper = true
-		case unicode.IsDigit(character):
+		case character >= '0' && character <= '9':
 			digit = true
-		case !unicode.IsLetter(character) && !unicode.IsSpace(character):
+		default:
 			symbol = true
 		}
 	}

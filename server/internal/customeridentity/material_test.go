@@ -421,3 +421,65 @@ func TestMaterializeCompiledCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestMaterializeBootstrapMatchesNativePasswordConsumer(t *testing.T) {
+	cases := map[string]struct {
+		password string
+		allowed  bool
+	}{
+		"72 bytes":               {strings.Repeat("a", 69) + "A1!", true},
+		"73 bytes":               {strings.Repeat("a", 70) + "A1!", false},
+		"unicode digit only":     {strings.Repeat("a", 30) + "A١!", false},
+		"unicode uppercase only": {strings.Repeat("a", 30) + "Ä1!", false},
+		"unicode lowercase only": {strings.Repeat("A", 30) + "ä1!", false},
+		"native unicode symbol":  {strings.Repeat("a", 30) + "A1é", true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			input, output := materialFixture(t, "setup")
+			materialWrite(t, input, "bootstrap-password", []byte(tc.password))
+			err := Materialize("setup", input, output)
+			if (err == nil) != tc.allowed {
+				t.Fatal("bootstrap preflight differs from native password consumer")
+			}
+		})
+	}
+	if !materialPasswordValid([]byte(strings.Repeat("a", 100) + "A1!")) {
+		t.Fatal("database credential inherited bootstrap hash limit")
+	}
+}
+
+type materialListingProbe struct {
+	file  *os.File
+	limit int
+}
+
+func (probe *materialListingProbe) ReadDir(limit int) ([]os.DirEntry, error) {
+	probe.limit = limit
+	return probe.file.ReadDir(limit)
+}
+
+func TestMaterializeBoundsDirectoryListingBeforeRefusal(t *testing.T) {
+	directory := t.TempDir()
+	for index := range 100 {
+		if err := os.WriteFile(filepath.Join(directory, strings.Repeat("a", index+1)), []byte("fictional"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file, err := os.Open(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	probe := &materialListingProbe{file: file}
+	if materialDirectoryMembers(probe, []string{"one", "two"}) == nil {
+		t.Fatal("extra members accepted")
+	}
+	if probe.limit < 1 || probe.limit > 3 {
+		t.Fatal("directory read exceeded expected membership plus one")
+	}
+}

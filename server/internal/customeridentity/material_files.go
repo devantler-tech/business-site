@@ -45,9 +45,20 @@ func materialMembers(root *os.Root, names []string) error {
 	if err != nil {
 		return errMaterial
 	}
-	entries, err := directory.ReadDir(-1)
+	listingErr := materialDirectoryMembers(directory, names)
 	closeErr := directory.Close()
-	if err != nil || closeErr != nil || len(entries) != len(names) {
+	if listingErr != nil || closeErr != nil {
+		return errMaterial
+	}
+	return nil
+}
+
+// materialDirectoryMembers rejects incomplete and extra native directory entries.
+func materialDirectoryMembers(directory interface {
+	ReadDir(int) ([]os.DirEntry, error)
+}, names []string) error {
+	entries, err := directory.ReadDir(len(names) + 1)
+	if (err != nil && err != io.EOF) || len(entries) != len(names) {
 		return errMaterial
 	}
 	allowed := map[string]bool{}
@@ -159,7 +170,7 @@ func (snapshot *materialSnapshot) close() {
 }
 
 // materialWriteOutputs reserves a new private directory after complete validation.
-// On failure, only unchanged files created here are removed through its pinned root.
+// On failure, only file identities created here are removed through its pinned root.
 // The empty failed reservation is retained; a replacement directory is never removed.
 func materialWriteOutputs(path string, outputs map[string][]byte, snapshot *materialSnapshot) (err error) {
 	parent := filepath.Dir(path)
