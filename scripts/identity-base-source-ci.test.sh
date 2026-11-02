@@ -19,7 +19,8 @@ check() {
     any($j.steps[]; .name=="Verify actual retained schema inputs and replay") and
     ([$j.steps[].name]|index("Verify actual retained schema inputs and replay") < index("Bind the original local archives and native witnesses") and index("Bind the original local archives and native witnesses") < index("Preserve build diagnostics, not unadmitted service distribution")) and
     any(.jobs.changes.steps[]; .id=="filter" and (.with.filters|contains("server/cmd/identity-release/**"))) and
-    all($j.steps[]|select(.uses//""|startswith("actions/upload-artifact@"));
+    ([$j.steps[]|select(.name=="Preserve build diagnostics, not unadmitted service distribution" and (.uses//""|startswith("actions/upload-artifact@")))]|length)==1 and
+    all($j.steps[]|select(.name=="Preserve build diagnostics, not unadmitted service distribution");
       (.with.path|contains("/zitadel-handoff/handoff.json")) and
       (.with.path|contains("candidate-image.tar")|not) and
       (.with.path|contains("inputs.tar")|not) and

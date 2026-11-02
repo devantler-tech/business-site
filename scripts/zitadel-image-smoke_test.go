@@ -699,3 +699,125 @@ func TestImageSmokeRejectsLateBaseNoticeReplacement(t *testing.T) {
 		})
 	}
 }
+
+func TestSavedImageVerifierNeverRebuildsOrRunsTheCandidate(t *testing.T) {
+	for _, kind := range []string{"valid", "foreign", "presence-error", "load-error", "payload", "extra", "config", "archive"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			original := filepath.Join(t.TempDir(), "original")
+			base := imageSmokeDouble(t, build, "")
+			if err := imageSmoke(build, repo, original, base); err != nil {
+				t.Fatal(err)
+			}
+			native := t.TempDir()
+			imageTestWrite(t, native, "zitadel-build/build-receipt.json", mustImageTestRead(t, build, "build-receipt.json"))
+			if err := os.Rename(original, filepath.Join(native, "zitadel-image")); err != nil {
+				t.Fatal(err)
+			}
+			out := filepath.Join(t.TempDir(), "verified")
+			loads, removals := 0, 0
+			savedOwner := ""
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				if name != "docker" || args[0] == "build" || args[0] == "start" || args[0] == "run" || args[0] == "image" && args[1] == "save" {
+					t.Fatalf("saved verifier executed forbidden operation: %s %v", name, args)
+				}
+				if args[0] == "image" && args[1] == "ls" {
+					if kind == "presence-error" {
+						return []byte(""), fmt.Errorf("unavailable")
+					}
+					if kind == "foreign" {
+						return []byte("sha256:" + strings.Repeat("b", 64) + "\n"), nil
+					}
+					return nil, nil
+				}
+				if args[0] == "image" && args[1] == "load" {
+					loads++
+					if kind == "load-error" {
+						return []byte("Loaded image"), fmt.Errorf("failed load")
+					}
+				}
+				if args[0] == "image" && args[1] == "rm" {
+					removals++
+				}
+				if args[0] == "create" {
+					for i, arg := range args {
+						if arg == "--label" {
+							savedOwner = strings.TrimPrefix(args[i+1], "org.devantler-tech.identity-smoke-owner=")
+						}
+					}
+					if err := os.CopyFS(filepath.Join(out, "context"), os.DirFS(filepath.Join(native, "zitadel-image/context"))); err != nil {
+						t.Fatal(err)
+					}
+					if err := filepath.WalkDir(filepath.Join(native, "zitadel-image/context"), func(p string, d os.DirEntry, e error) error {
+						if e != nil {
+							return e
+						}
+						if d.IsDir() {
+							return nil
+						}
+						rel, e := filepath.Rel(filepath.Join(native, "zitadel-image/context"), p)
+						if e != nil {
+							return e
+						}
+						st, e := os.Stat(p)
+						if e != nil {
+							return e
+						}
+						return os.Chmod(filepath.Join(out, "context", rel), st.Mode().Perm())
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				raw, err := base(d, name, args...)
+				if err == nil && args[0] == "inspect" {
+					var all []map[string]any
+					if err = json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					all[0]["Config"].(map[string]any)["Labels"] = map[string]string{"org.devantler-tech.identity-smoke-owner": savedOwner}
+					all[0]["State"].(map[string]any)["Status"] = "created"
+					raw = imageTestJSON(t, all)
+				}
+				if err == nil && args[0] == "image" && args[1] == "inspect" && kind == "config" {
+					var all []map[string]any
+					if err = json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					all[0]["Architecture"] = "arm64"
+					return imageTestJSON(t, all), nil
+				}
+				if err == nil && args[0] == "cp" && strings.HasSuffix(args[1], ":/app/.") {
+					if kind == "payload" {
+						imageTestWrite(t, args[2], "zitadel", []byte("changed"))
+					}
+					if kind == "extra" {
+						imageTestWrite(t, args[2], "extra", []byte("extra"))
+					}
+				}
+				return raw, err
+			}
+			if kind == "archive" {
+				imageTestWrite(t, filepath.Join(native, "zitadel-image"), "candidate-image.tar", []byte("changed"))
+			}
+			err := imageVerifySaved(native, repo, out, run)
+			if kind == "valid" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if loads != 1 || removals != 0 {
+					t.Fatal("successful original must be retained for explicit publication")
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("unverified saved candidate accepted")
+			}
+			if kind == "foreign" || kind == "presence-error" || kind == "archive" {
+				if loads != 0 || removals != 0 {
+					t.Fatal("foreign image mutated")
+				}
+			}
+		})
+	}
+}

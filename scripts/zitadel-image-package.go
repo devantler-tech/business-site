@@ -370,6 +370,15 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 		return 0
 	}
 	fail := func(err error) int { _, _ = fmt.Fprintln(diagnostic, "identity-image:", err); return 1 }
+	if args[0] == "--verify-saved" {
+		if len(args) != 7 || args[1] != "--native" || args[3] != "--notices" || args[5] != "--output" {
+			return fail(fmt.Errorf("expected explicit saved-image native, notices and output arguments"))
+		}
+		if err := imageVerifySaved(args[2], args[4], args[6], imageExecute); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	if args[0] == "--browser-worker" {
 		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
 			return fail(fmt.Errorf("explicit native browser worker required"))

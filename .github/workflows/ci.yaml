@@ -53,6 +53,10 @@ jobs:
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
               - 'server/cmd/identity-release/**'
+              - 'third_party/debian-source-signers/**'
+              - 'scripts/*identity-release*'
+              - 'scripts/verify-identity-original.sh'
+              - '.github/workflows/publish-identity.yaml'
               - 'scripts/retain-zitadel-base-source.sh'
               - 'scripts/identity-base-source-ci.test.sh'
               - 'tools/zitadel-pnpm-source/**'
@@ -656,10 +660,42 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
+      - name: Setup frozen-base signature verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
+      - name: Verify frozen base signatures for original transport
+        run: |
+          seal="$(jq -er .manifestSha256 "$RUNNER_TEMP/zitadel-base-source/evidence/capture.json")"
+          "$RUNNER_TEMP/identity-release" verify-base-auth --input "$RUNNER_TEMP/zitadel-base-source/capsule" --sha256 "$seal" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-base-auth" > "$RUNNER_TEMP/zitadel-base-auth.json"
       - name: Bind the original local archives and native witnesses
         run: |
           mkdir -m 700 -- "$RUNNER_TEMP/zitadel-handoff"
           "$RUNNER_TEMP/identity-release" prepare-handoff --input "$RUNNER_TEMP" --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --output "$RUNNER_TEMP/zitadel-handoff/handoff.json"
+      - name: Seal the original publication carrier
+        run: |
+          mkdir -m 700 -- "$RUNNER_TEMP/identity-carrier"
+          "$RUNNER_TEMP/identity-release" pack-carrier --input "$RUNNER_TEMP" --output "$RUNNER_TEMP/identity-carrier/carrier.tar" > "$RUNNER_TEMP/identity-carrier/carrier.json"
+      - name: Read back the original saved candidate without rebuilding
+        run: |
+          test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 4194304
+          work="$(mktemp -d "$RUNNER_TEMP/identity-forge.XXXXXX")"
+          mkdir -m 700 "$work/restored"
+          archive="$(jq -er .archiveSha256 "$RUNNER_TEMP/identity-carrier/carrier.json")"
+          manifest="$(jq -er .handoffSha256 "$RUNNER_TEMP/identity-carrier/carrier.json")"
+          "$RUNNER_TEMP/identity-release" unpack-carrier --input "$RUNNER_TEMP/identity-carrier/carrier.tar" --sha256 "$archive" --manifest-sha256 "$manifest" --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --output "$work/restored/native"
+          IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=dry-run bash scripts/verify-identity-original.sh
+      - name: Retain the admitted original publication carrier
+        if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: identity-original-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/identity-carrier/carrier.tar
+            ${{ runner.temp }}/identity-carrier/carrier.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
       - name: Preserve build diagnostics, not unadmitted service distribution
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -788,6 +824,8 @@ jobs:
         run: bash scripts/runtime-verification.test.sh
       - name: Verify default-off release authority and immutable caller wiring
         run: bash scripts/runtime-publisher-contract.test.sh
+      - name: Verify original identity publication boundaries
+        run: bash scripts/identity-release-contract.test.sh
 
   # Tool installation and quality observers have no database dependency.
   test-portal-quality:

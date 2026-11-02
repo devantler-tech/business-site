@@ -47,7 +47,7 @@ release_valid() {
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and
     .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@af042c540ce8db4d64add98c34b5c57691e0e812" and

@@ -570,7 +570,16 @@
     "vedhæftede",
     "opgaver",
     "vurderer",
-    "tidsplan"
+    "tidsplan",
+    "BADSIG",
+    "ERRSIG",
+    "GOODSIG",
+    "gpgv",
+    "NEWSIG",
+    "NODATA",
+    "REVKEYSIG",
+    "tmpfs",
+    "VALIDSIG"
   ],
   "overrides": [
     {
