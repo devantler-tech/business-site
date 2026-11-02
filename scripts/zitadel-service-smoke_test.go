@@ -3,14 +3,345 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"io"
+	"log"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+func lifecycleTestCertificate(t *testing.T, name string) (tls.Certificate, []byte) {
+	t.Helper()
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Fictional lifecycle fixture CA"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	caDER, err := x509.CreateCertificate(rand.Reader, ca, ca, caKey.Public(), caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf := &x509.Certificate{SerialNumber: big.NewInt(2), DNSNames: []string{name}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, ca, key.Public(), caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tls.Certificate{Certificate: [][]byte{leafDER, caDER}, PrivateKey: key}, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+}
+
+func TestLifecycleTLSVerifiesTheOwnedService(t *testing.T) {
+	certificate, roots := lifecycleTestCertificate(t, "identity.fixture.localhost")
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host != "identity.fixture.localhost:8080" || r.TLS == nil {
+			t.Error("fictional authority or TLS was lost")
+		}
+		_, _ = io.WriteString(w, `{"ready":true}`)
+	}))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS13}
+	server.StartTLS()
+	defer server.Close()
+	client, err := lifecycleTLSClient(server.Listener.Addr().String(), roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseIdleConnections()
+	data, err := serviceGet(client, "https://identity.fixture.localhost:8080", "/debug/ready")
+	if err != nil || string(data) != `{"ready":true}` {
+		t.Fatalf("verified fictional TLS service refused: %q %v", data, err)
+	}
+}
+
+func TestLifecycleTLSRefusesWrongCAHostnameAndPlaintext(t *testing.T) {
+	for _, kind := range []string{"wrong-ca", "wrong-hostname", "plaintext"} {
+		t.Run(kind, func(t *testing.T) {
+			name := "identity.fixture.localhost"
+			if kind == "wrong-hostname" {
+				name = "different.fixture.localhost"
+			}
+			certificate, roots := lifecycleTestCertificate(t, name)
+			if kind == "wrong-ca" {
+				_, roots = lifecycleTestCertificate(t, name)
+			}
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "private fictional response") }))
+			server.Config.ErrorLog = log.New(io.Discard, "", 0)
+			if kind == "plaintext" {
+				server.Start()
+			} else {
+				server.TLS = &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS13}
+				server.StartTLS()
+			}
+			defer server.Close()
+			client, err := lifecycleTLSClient(server.Listener.Addr().String(), roots)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.CloseIdleConnections()
+			data, err := serviceGet(client, "https://identity.fixture.localhost:8080", "/debug/ready")
+			if err == nil || data != nil || strings.Contains(err.Error(), "private fictional") || strings.Contains(err.Error(), server.Listener.Addr().String()) {
+				t.Fatalf("unverified transport accepted or private diagnostic exposed: %q %v", data, err)
+			}
+		})
+	}
+}
+
+func TestLifecycleTLSRefusesMissingTrustAndEscapedRequests(t *testing.T) {
+	_, roots := lifecycleTestCertificate(t, "identity.fixture.localhost")
+	for _, invalid := range [][]byte{nil, []byte("not a certificate"), append([]byte("ignored leading data\n"), roots...), append([]byte("-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n"), roots...), append(append([]byte{}, roots...), []byte("trailing data")...), append(append([]byte{}, roots...), roots...)} {
+		if client, err := lifecycleTLSClient("127.0.0.1:8080", invalid); err == nil || client != nil {
+			t.Fatal("missing or ambiguous trust accepted")
+		}
+	}
+	certificate, roots := lifecycleTestCertificate(t, "identity.fixture.localhost")
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "must not reach an escaped authority")
+	}))
+	server.Config.ErrorLog = log.New(io.Discard, "", 0)
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS13}
+	server.StartTLS()
+	defer server.Close()
+	client, err := lifecycleTLSClient(server.Listener.Addr().String(), roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseIdleConnections()
+	for _, destination := range []string{"https://other.fixture.localhost:8080/debug/ready", "https://identity.fixture.localhost:8443/debug/ready"} {
+		response, err := client.Get(destination)
+		if response != nil {
+			_ = response.Body.Close()
+		}
+		if err == nil {
+			t.Fatal("escaped fixture request accepted")
+		}
+	}
+	plaintext := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "plaintext must not be accepted")
+	}))
+	defer plaintext.Close()
+	plainClient, err := lifecycleTLSClient(plaintext.Listener.Addr().String(), roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plainClient.CloseIdleConnections()
+	response, err := plainClient.Get("http://identity.fixture.localhost:8080/debug/ready")
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("plaintext request reached the listening HTTP fixture")
+	}
+}
+
+func TestLifecycleTLSRequiresCanonicalPrivateNumericEndpoint(t *testing.T) {
+	_, roots := lifecycleTestCertificate(t, "identity.fixture.localhost")
+	for _, target := range []string{"database:8080", "8.8.8.8:8080", "169.254.169.254:8080", "[::1]:8080", "127.0.0.1:0", "127.0.0.1:65536", "127.0.0.1:+8080", "127.0.0.1:08080"} {
+		client, err := lifecycleTLSClient(target, roots)
+		if client != nil {
+			client.CloseIdleConnections()
+		}
+		if err == nil || client != nil {
+			t.Fatalf("invalid fixture endpoint accepted: %q", target)
+		}
+	}
+}
+
+func TestLifecyclePrivateInputAdmission(t *testing.T) {
+	for _, mutation := range []string{"unchanged", "missing", "changed", "extra", "symlink", "hard-link", "mode", "root-mode"} {
+		t.Run(mutation, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(root, "serve.json")
+			original := []byte(`{"private":"fictional-input-must-not-appear"}`)
+			if err = os.WriteFile(name, original, 0444); err != nil {
+				t.Fatal(err)
+			}
+			expected := map[string]lifecycleInput{"serve.json": {SHA256: imageHash(original), Mode: 0444}}
+			switch mutation {
+			case "missing":
+				err = os.Remove(name)
+			case "changed":
+				if err = os.Remove(name); err == nil {
+					err = os.WriteFile(name, []byte(`{"private":"substituted"}`), 0444)
+				}
+			case "extra":
+				err = os.WriteFile(filepath.Join(root, "other.json"), original, 0444)
+			case "symlink", "hard-link":
+				outside := filepath.Join(t.TempDir(), "outside.json")
+				if err = os.WriteFile(outside, original, 0444); err == nil {
+					if err = os.Remove(name); err == nil {
+						if mutation == "symlink" {
+							err = os.Symlink(outside, name)
+						} else {
+							err = os.Link(outside, name)
+						}
+					}
+				}
+			case "mode":
+				err = os.Chmod(name, 0644)
+			case "root-mode":
+				err = os.Chmod(root, 0755)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = lifecycleValidateInputs(root, expected)
+			if mutation == "unchanged" {
+				if err != nil {
+					t.Fatalf("complete private inputs refused: %v", err)
+				}
+			} else if err == nil || strings.Contains(err.Error(), root) || strings.Contains(err.Error(), "fictional-input") {
+				t.Fatalf("invalid inputs accepted or diagnostic exposed private data: %v", err)
+			}
+		})
+	}
+}
+
+func TestLifecycleMaterialSeparatesBootstrapFromServing(t *testing.T) {
+	material, err := lifecycleMaterials(strings.Repeat("a", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(material.files) != 18 || len(material.files["master.key"]) != 32 || material.human != "operator_aaaaaaaaaaaaaaaa@example.invalid" {
+		t.Fatal("incomplete fictional private material")
+	}
+	var documents [3]map[string]any
+	for index, name := range []string{"init.json", "setup.json", "serve.json"} {
+		if err = json.Unmarshal(material.files[name], &documents[index]); err != nil {
+			t.Fatal(err)
+		}
+		db := documents[index]["Database"].(map[string]any)["postgres"].(map[string]any)
+		if db["DSN"] != "" || db["Host"] != "database.fixture.localhost" || db["Database"] != material.database || db["User"].(map[string]any)["Username"] != material.app {
+			t.Fatal("database identity or explicit-field selection differs")
+		}
+		for _, role := range []string{"Admin", "User"} {
+			ssl := db[role].(map[string]any)["SSL"].(map[string]any)
+			if ssl["Mode"] != "verify-full" || ssl["RootCert"] != "/fixture/ca.pem" {
+				t.Fatal("native database certificate/hostname verification missing")
+			}
+		}
+		admin := db["Admin"].(map[string]any)
+		if index == 0 {
+			if admin["Username"] != material.admin || len(admin["Password"].(string)) < 32 {
+				t.Fatal("initialization lacks explicit private authority")
+			}
+		} else if admin["Username"] != "" || admin["Password"] != "" {
+			t.Fatal("database bootstrap authority escaped into setup/serve")
+		}
+	}
+	adminPassword := documents[0]["Database"].(map[string]any)["postgres"].(map[string]any)["Admin"].(map[string]any)["Password"].(string)
+	var steps map[string]any
+	if err = json.Unmarshal(material.files["steps.json"], &steps); err != nil {
+		t.Fatal(err)
+	}
+	instance := steps["FirstInstance"].(map[string]any)
+	human := instance["Org"].(map[string]any)["Human"].(map[string]any)
+	if instance["Skip"] != false || human["UserName"] != material.human || human["Email"].(map[string]any)["Verified"] != false || human["Email"].(map[string]any)["Address"] != material.human || human["PasswordChangeRequired"] != true {
+		t.Fatal("explicit unverified fictional bootstrap differs")
+	}
+	humanPassword := human["Password"].(string)
+	for index, name := range []string{"setup.json", "serve.json"} {
+		if strings.Contains(string(material.files[name]), adminPassword) || strings.Contains(string(material.files[name]), humanPassword) || strings.Contains(string(material.files[name]), material.human) {
+			t.Fatal("bootstrap secret/identity escaped the isolated setup input")
+		}
+		document := documents[index+1]
+		if document["ExternalSecure"] != true || document["TLS"].(map[string]any)["Enabled"] != true || document["DefaultInstance"].(map[string]any)["LoginPolicy"].(map[string]any)["AllowRegister"] != false || document["DefaultInstance"].(map[string]any)["Restrictions"].(map[string]any)["DisallowPublicOrgRegistration"] != true {
+			t.Fatal("TLS or closed registration configuration missing")
+		}
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(material.files["ca.pem"]) {
+		t.Fatal("fixture root missing")
+	}
+	for _, pair := range []struct{ prefix, hostname string }{{"service", "identity.fixture.localhost"}, {"database", "database.fixture.localhost"}} {
+		certificate, e := tls.X509KeyPair(material.files[pair.prefix+".crt"], material.files[pair.prefix+".key"])
+		if e != nil {
+			t.Fatal(e)
+		}
+		leaf, e := x509.ParseCertificate(certificate.Certificate[0])
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: pair.hostname}); e != nil {
+			t.Fatalf("native fixture certificate/name invalid: %v", e)
+		}
+		if _, e = leaf.Verify(x509.VerifyOptions{Roots: pool, DNSName: "other.fixture.localhost"}); e == nil {
+			t.Fatal("certificate accepts another endpoint")
+		}
+	}
+}
+
+func TestLifecycleWritesOnlyCompleteFreshPrivateInputs(t *testing.T) {
+	for _, mutation := range []string{"unchanged", "missing-steps", "renamed-steps", "extra-input", "occupied-directory"} {
+		t.Run(mutation, func(t *testing.T) {
+			material, err := lifecycleMaterials(strings.Repeat("b", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			switch mutation {
+			case "missing-steps":
+				delete(material.files, "steps.json")
+			case "renamed-steps":
+				material.files["defaults.json"] = material.files["steps.json"]
+				delete(material.files, "steps.json")
+			case "extra-input":
+				material.files["other.json"] = []byte(`{}`)
+			case "occupied-directory":
+				if err = os.WriteFile(filepath.Join(root, "do-not-remove"), []byte("preserve"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bindings, err := lifecycleWriteInputs(root, material)
+			if mutation == "unchanged" {
+				if err != nil || len(bindings) != 18 {
+					t.Fatalf("complete fresh input write refused: %v", err)
+				}
+				if err = lifecycleValidateInputs(root, bindings); err != nil {
+					t.Fatal(err)
+				}
+				if bindings["admin-client.env"].Mode != 0600 || bindings["serve.json"].Mode != 0444 {
+					t.Fatal("private host/readonly mounted input modes differ")
+				}
+			} else {
+				if err == nil || bindings != nil {
+					t.Fatal("missing, renamed, extra or occupied input accepted")
+				}
+				entries, e := os.ReadDir(root)
+				if e != nil || (mutation != "occupied-directory" && len(entries) != 0) || (mutation == "occupied-directory" && (len(entries) != 1 || entries[0].Name() != "do-not-remove")) {
+					t.Fatal("refused input changed the directory")
+				}
+			}
+		})
+	}
+}
 
 func TestServiceHTTPDiagnosticDoesNotExposeResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

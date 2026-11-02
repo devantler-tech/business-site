@@ -1,11 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +28,329 @@ import (
 )
 
 const serviceAuthority = "fixture.localhost:8080"
+
+const lifecycleAuthority = "identity.fixture.localhost:8080"
+
+// lifecycleInput binds a private fixture file without retaining its contents in
+// the public diagnostic representation.
+type lifecycleInput struct {
+	SHA256 string
+	Mode   os.FileMode
+}
+
+// lifecycleMaterial keeps generated fictional authority private to the fixture;
+// its unexported fields are not a publication or runtime configuration API.
+type lifecycleMaterial struct {
+	files                       map[string][]byte
+	admin, app, database, human string
+}
+
+// lifecycleWriteInputs requires the complete closed profile and a fresh private
+// directory before writing any input that native setup could otherwise default.
+func lifecycleWriteInputs(root string, material lifecycleMaterial) (map[string]lifecycleInput, error) {
+	bad := func() (map[string]lifecycleInput, error) {
+		return nil, fmt.Errorf("fresh complete private lifecycle input directory required")
+	}
+	if _, err := lifecyclePrivateRoot(root); err != nil {
+		return bad()
+	}
+	names := []string{"ca.pem", "service.crt", "service.key", "database.crt", "database.key", "master.key", "untrusted-ca.pem", "init.json", "setup.json", "serve.json", "init-wrong-ca.json", "init-wrong-host.json", "init-plaintext.json", "steps.json", "database.env", "admin-client.env", "app-client.env", "database-hba.conf"}
+	if len(material.files) != len(names) {
+		return bad()
+	}
+	bindings := map[string]lifecycleInput{}
+	for _, name := range names {
+		data, found := material.files[name]
+		if !found || len(data) == 0 || len(data) > 65536 {
+			return bad()
+		}
+		mode := os.FileMode(0444)
+		if strings.HasSuffix(name, ".env") {
+			mode = 0600
+		}
+		bindings[name] = lifecycleInput{SHA256: imageHash(data), Mode: mode}
+	}
+	directory, err := os.Open(root)
+	if err != nil {
+		return bad()
+	}
+	entries, readError := directory.ReadDir(1)
+	closeError := directory.Close()
+	if len(entries) != 0 || readError != io.EOF || closeError != nil {
+		return bad()
+	}
+	for _, name := range names {
+		if err = imageWrite(root, name, material.files[name], bindings[name].Mode); err != nil {
+			return bad()
+		}
+	}
+	if err = lifecycleValidateInputs(root, bindings); err != nil {
+		return bad()
+	}
+	return bindings, nil
+}
+
+// lifecycleMaterials generates fresh fictional secrets and a local CA, separating
+// initialization authority, bootstrap steps and the ordinary serving document.
+func lifecycleMaterials(owner string) (lifecycleMaterial, error) {
+	bad := func() (lifecycleMaterial, error) {
+		return lifecycleMaterial{}, fmt.Errorf("fresh complete fictional lifecycle material required")
+	}
+	if !regexp.MustCompile(`^[a-f0-9]{32}$`).MatchString(owner) {
+		return bad()
+	}
+	m := lifecycleMaterial{files: map[string][]byte{}, admin: "bootstrap_" + owner[:16], app: "identity_" + owner[:16], database: "identity_" + owner[:16], human: "operator_" + owner[:16] + "@example.invalid"}
+	password := func() (string, error) {
+		var entropy [16]byte
+		if _, err := rand.Read(entropy[:]); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Fixture!A1%x", entropy), nil
+	}
+	adminPassword, err := password()
+	if err != nil {
+		return bad()
+	}
+	appPassword, err := password()
+	if err != nil {
+		return bad()
+	}
+	humanPassword, err := password()
+	if err != nil {
+		return bad()
+	}
+	master := make([]byte, 32)
+	if _, err = rand.Read(master); err != nil {
+		return bad()
+	}
+	m.files["master.key"] = master
+	serial := func() (*big.Int, error) { return rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128)) }
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return bad()
+	}
+	caSerial, err := serial()
+	if err != nil || caSerial.Sign() == 0 {
+		return bad()
+	}
+	now := time.Now()
+	ca := &x509.Certificate{SerialNumber: caSerial, Subject: pkix.Name{CommonName: "Fictional identity lifecycle CA"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(6 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	caDER, err := x509.CreateCertificate(rand.Reader, ca, ca, caKey.Public(), caKey)
+	if err != nil {
+		return bad()
+	}
+	m.files["ca.pem"] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+	for _, endpoint := range []struct{ prefix, hostname string }{{"service", "identity.fixture.localhost"}, {"database", "database.fixture.localhost"}} {
+		key, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if e != nil {
+			return bad()
+		}
+		number, e := serial()
+		if e != nil || number.Sign() == 0 {
+			return bad()
+		}
+		leaf := &x509.Certificate{SerialNumber: number, DNSNames: []string{endpoint.hostname}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(6 * time.Hour), KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+		der, e := x509.CreateCertificate(rand.Reader, leaf, ca, key.Public(), caKey)
+		if e != nil {
+			return bad()
+		}
+		keyDER, e := x509.MarshalPKCS8PrivateKey(key)
+		if e != nil {
+			return bad()
+		}
+		m.files[endpoint.prefix+".crt"] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+		m.files[endpoint.prefix+".key"] = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	}
+	// The negative connection probe trusts an unrelated, fresh CA, never the host store.
+	wrongKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return bad()
+	}
+	wrongSerial, err := serial()
+	if err != nil || wrongSerial.Sign() == 0 {
+		return bad()
+	}
+	wrong := *ca
+	wrong.SerialNumber = wrongSerial
+	wrong.Subject.CommonName = "Untrusted fictional lifecycle CA"
+	wrongDER, err := x509.CreateCertificate(rand.Reader, &wrong, &wrong, wrongKey.Public(), wrongKey)
+	if err != nil {
+		return bad()
+	}
+	m.files["untrusted-ca.pem"] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: wrongDER})
+	config := func(initialization bool, host, root, mode string) map[string]any {
+		ssl := func() map[string]any { return map[string]any{"Mode": mode, "RootCert": root, "Cert": "", "Key": ""} }
+		admin := map[string]any{"ExistingDatabase": "postgres", "Username": "", "Password": "", "SSL": ssl()}
+		if initialization {
+			admin["Username"], admin["Password"] = m.admin, adminPassword
+		}
+		return map[string]any{
+			"Port": 8080, "ExternalDomain": "identity.fixture.localhost", "ExternalPort": 8080, "ExternalSecure": true,
+			"TLS":             map[string]any{"Enabled": true, "CertPath": "/fixture/service.crt", "KeyPath": "/fixture/service.key"},
+			"Database":        map[string]any{"postgres": map[string]any{"DSN": "", "Host": host, "Port": 5432, "Database": m.database, "User": map[string]any{"Username": m.app, "Password": appPassword, "SSL": ssl()}, "Admin": admin}},
+			"DefaultInstance": map[string]any{"LoginPolicy": map[string]any{"AllowUsernamePassword": true, "AllowRegister": false, "AllowExternalIDP": false, "ForceMFA": true}, "Restrictions": map[string]bool{"DisallowPublicOrgRegistration": true}, "Features": map[string]any{"LoginV2": map[string]bool{"Required": false}}, "DomainPolicy": map[string]bool{"UserLoginMustBeDomain": false}},
+			"Telemetry":       map[string]bool{"Enabled": false}, "ServicePing": map[string]bool{"Enabled": false},
+			"Machine": map[string]any{"Identification": map[string]any{"Webhook": map[string]bool{"Enabled": false}, "PrivateIP": map[string]bool{"Enabled": false}, "Hostname": map[string]bool{"Enabled": true}}},
+			"Log":     map[string]string{"Level": "warn"},
+		}
+	}
+	for name, document := range map[string]map[string]any{
+		"init.json":            config(true, "database.fixture.localhost", "/fixture/ca.pem", "verify-full"),
+		"setup.json":           config(false, "database.fixture.localhost", "/fixture/ca.pem", "verify-full"),
+		"serve.json":           config(false, "database.fixture.localhost", "/fixture/ca.pem", "verify-full"),
+		"init-wrong-ca.json":   config(true, "database.fixture.localhost", "/fixture/untrusted-ca.pem", "verify-full"),
+		"init-wrong-host.json": config(true, "other.database.fixture.localhost", "/fixture/ca.pem", "verify-full"),
+		"init-plaintext.json":  config(true, "database.fixture.localhost", "/fixture/ca.pem", "disable"),
+	} {
+		m.files[name], err = json.Marshal(document)
+		if err != nil {
+			return bad()
+		}
+	}
+	m.files["steps.json"], err = json.Marshal(map[string]any{"FirstInstance": map[string]any{"Skip": false, "InstanceName": "Fictional lifecycle instance", "Org": map[string]any{"Name": "Fictional lifecycle organization", "Human": map[string]any{"UserName": m.human, "FirstName": "Fictional", "LastName": "Operator", "NickName": "", "DisplayName": "Fictional lifecycle operator", "PreferredLanguage": "en", "Gender": 0, "Email": map[string]any{"Address": m.human, "Verified": false}, "Password": humanPassword, "PasswordChangeRequired": true}}}})
+	if err != nil {
+		return bad()
+	}
+	m.files["database.env"] = []byte("POSTGRES_USER=" + m.admin + "\nPOSTGRES_PASSWORD=" + adminPassword + "\nPGDATA=/var/lib/postgresql/data/pgdata\nPOSTGRES_INITDB_ARGS=--auth-host=scram-sha-256\n")
+	client := func(user, pass, database string) []byte {
+		return []byte("PGHOST=database.fixture.localhost\nPGPORT=5432\nPGUSER=" + user + "\nPGPASSWORD=" + pass + "\nPGDATABASE=" + database + "\nPGSSLMODE=verify-full\nPGSSLROOTCERT=/fixture/ca.pem\nPGCONNECT_TIMEOUT=5\nPGAPPNAME=fictional-lifecycle-probe\n")
+	}
+	m.files["admin-client.env"] = client(m.admin, adminPassword, "postgres")
+	m.files["app-client.env"] = client(m.app, appPassword, m.database)
+	m.files["database-hba.conf"] = []byte("local all all trust\nhostnossl all all 0.0.0.0/0 reject\nhostnossl all all ::/0 reject\nhostssl all all 0.0.0.0/0 scram-sha-256\nhostssl all all ::/0 scram-sha-256\n")
+	return m, nil
+}
+
+// lifecyclePrivateRoot admits only the caller's physical, private directory.
+func lifecyclePrivateRoot(root string) (os.FileInfo, error) {
+	bad := func() (os.FileInfo, error) { return nil, fmt.Errorf("owned private lifecycle directory required") }
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return bad()
+	}
+	physical, err := filepath.EvalSymlinks(root)
+	before, statError := os.Lstat(root)
+	if err != nil || statError != nil || physical != root || before.Mode() != os.ModeDir|0700 {
+		return bad()
+	}
+	owner, ok := before.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != uint32(os.Getuid()) {
+		return bad()
+	}
+	return before, nil
+}
+
+// lifecycleValidateInputs rechecks complete membership, ownership, modes and byte
+// bindings; native configuration semantics remain a separate execution check.
+func lifecycleValidateInputs(root string, expected map[string]lifecycleInput) error {
+	bad := func() error { return fmt.Errorf("complete owned private lifecycle inputs required") }
+	if len(expected) < 1 || len(expected) > 32 {
+		return bad()
+	}
+	before, err := lifecyclePrivateRoot(root)
+	if err != nil {
+		return bad()
+	}
+	checkMembers := func() error {
+		directory, e := os.Open(root)
+		if e != nil {
+			return bad()
+		}
+		entries, readError := directory.ReadDir(33)
+		extra, endError := directory.ReadDir(1)
+		closeError := directory.Close()
+		if (readError != nil && readError != io.EOF) || len(entries) != len(expected) || len(extra) != 0 || endError != io.EOF || closeError != nil {
+			return bad()
+		}
+		for _, entry := range entries {
+			if _, found := expected[entry.Name()]; !found {
+				return bad()
+			}
+		}
+		return nil
+	}
+	if err = checkMembers(); err != nil {
+		return err
+	}
+	for name, binding := range expected {
+		if !regexp.MustCompile(`^[a-z][a-z0-9.-]{0,63}$`).MatchString(name) || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(binding.SHA256) || (binding.Mode != 0444 && binding.Mode != 0600) {
+			return bad()
+		}
+		path := filepath.Join(root, name)
+		entry, e := os.Lstat(path)
+		if e != nil || entry.Mode() != binding.Mode {
+			return bad()
+		}
+		metadata, valid := entry.Sys().(*syscall.Stat_t)
+		if !valid || metadata.Uid != uint32(os.Getuid()) || metadata.Nlink != 1 {
+			return bad()
+		}
+		data, e := imageRead(root, name, 65536)
+		after, afterError := os.Lstat(path)
+		if e != nil || afterError != nil || !os.SameFile(entry, after) || entry.Size() != after.Size() || !entry.ModTime().Equal(after.ModTime()) || after.Mode() != binding.Mode || imageHash(data) != binding.SHA256 {
+			return bad()
+		}
+	}
+	if err = checkMembers(); err != nil {
+		return err
+	}
+	after, err := os.Lstat(root)
+	if err != nil || !os.SameFile(before, after) || after.Mode() != before.Mode() {
+		return bad()
+	}
+	return nil
+}
+
+// lifecycleTransport confines even plaintext or redirected request attempts to
+// the fixture's explicitly verified HTTPS authority.
+type lifecycleTransport struct{ transport *http.Transport }
+
+// RoundTrip rejects authority changes before the underlying transport can dial.
+func (t *lifecycleTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.URL == nil || request.URL.Scheme != "https" || request.URL.Host != lifecycleAuthority || request.URL.User != nil || (request.Host != "" && request.Host != lifecycleAuthority) {
+		return nil, fmt.Errorf("lifecycle request escaped its verified authority")
+	}
+	return t.transport.RoundTrip(request)
+}
+
+// CloseIdleConnections releases the retained fixture transport's connections.
+func (t *lifecycleTransport) CloseIdleConnections() { t.transport.CloseIdleConnections() }
+
+// The native caller selects the inspected private endpoint with serviceTarget.
+// Loopback is also admitted here for real TLS unit fixtures; no DNS or ambient
+// proxy participates, and this transport cannot select an endpoint itself.
+func lifecycleTLSClient(target string, roots []byte) (*http.Client, error) {
+	host, port, err := net.SplitHostPort(target)
+	ip := net.ParseIP(host)
+	p, portError := strconv.Atoi(port)
+	if err != nil || portError != nil || p < 1 || p > 65535 || strconv.Itoa(p) != port || ip == nil || ip.To4() == nil || ip.String() != host || (!ip.IsPrivate() && !ip.IsLoopback()) {
+		return nil, fmt.Errorf("lifecycle numeric fixture endpoint required")
+	}
+	if len(roots) == 0 || len(roots) > 32768 {
+		return nil, fmt.Errorf("one bounded lifecycle trust root required")
+	}
+	trimmed := bytes.TrimSpace(roots)
+	block, rest := pem.Decode(trimmed)
+	if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 || len(bytes.TrimSpace(rest)) != 0 || !bytes.Equal(trimmed, bytes.TrimSpace(pem.EncodeToMemory(block))) {
+		return nil, fmt.Errorf("one complete lifecycle trust root required")
+	}
+	root, err := x509.ParseCertificate(block.Bytes)
+	now := time.Now()
+	if err != nil || !root.IsCA || !root.BasicConstraintsValid || root.KeyUsage&x509.KeyUsageCertSign == 0 || now.Before(root.NotBefore) || !now.Before(root.NotAfter) || root.CheckSignatureFrom(root) != nil {
+		return nil, fmt.Errorf("valid self-signed lifecycle CA required")
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(root)
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: "identity.fixture.localhost", MinVersion: tls.VersionTLS13},
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if network != "tcp" || address != lifecycleAuthority {
+				return nil, fmt.Errorf("lifecycle connection escaped its inspected endpoint")
+			}
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp4", target)
+		},
+	}
+	return &http.Client{Timeout: 5 * time.Second, Transport: &lifecycleTransport{transport}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, nil
+}
 
 // Docker does not publish ports for an internal-only network. Native Linux
 // can reach its bridge directly; bind that connection to the inspected owned
