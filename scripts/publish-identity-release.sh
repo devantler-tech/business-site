@@ -4,7 +4,8 @@ set -euo pipefail
 export LC_ALL=C
 umask 077
 readonly repo=devantler-tech/business-site tag=identity-v4.20.0-devantler.1
-readonly image_name=ghcr.io/devantler-tech/business-site-identity image_tag=4.20.0-devantler.1
+readonly image_name=ghcr.io/devantler-tech/business-site-identity
+# fail preserves partial-state failure instead of issuing a publication receipt.
 fail() {
   printf 'identity publication: refused %s\n' "$1" >&2
   exit 1
@@ -17,6 +18,8 @@ jq -e '.schemaVersion==1 and .profile=="identity-saved-image-v1" and .imageRetai
 image="$(jq -er '.localImageId|select(test("^sha256:[0-9a-f]{64}$"))' "$work/saved/saved-image.json")" || fail 'saved image config identity'
 # Only the positively absent-then-loaded image belongs to this invocation.
 local_tag=false
+# cleanup removes only the positively owned local image/reference and temporary
+# registry request files; any cleanup error prevents a successful exit.
 cleanup() {
   result=$?
   if [[ "$local_tag" == true ]]; then
@@ -33,6 +36,10 @@ attempt="$(jq -er .ciRunAttempt "$work/forge.json")"
 source="$(jq -er '.sourceSha|select(test("^[0-9a-f]{40}$"))' "$work/forge.json")"
 jq -e --arg caller "$GITHUB_SHA" --arg run "$IDENTITY_CI_RUN_ID" '.callerSha==$caller and .ciRunId==$run and .forgeAdmission==true and .imagePublished==false and .portalActivated==false' "$work/forge.json" >/dev/null || fail 'forge admission changed'
 [[ "$run" =~ ^[1-9][0-9]{0,14}$ && "$attempt" =~ ^[1-9][0-9]{0,5}$ ]] || fail 'original run binding'
+# This upload reference belongs to one original CI candidate, not a shared
+# version alias. It is still mutable: GHCR does not make our read/push atomic.
+# The supported publication/deployment identity is the verified digest below.
+readonly image_tag="original-$run-$attempt-${image#sha256:}"
 # Re-read main and the current original attempt immediately before the first write.
 gh api --hostname github.com "repos/$repo/commits/main" >"$work/main-write.json"
 jq -e --arg source "$GITHUB_SHA" '.sha==$source' "$work/main-write.json" >/dev/null || fail 'main changed before publication'
@@ -49,6 +56,7 @@ for name in inputs.tar base-source.tar; do
 done
 # Registry credentials and existing-tag conflicts must fail before reserving
 # the immutable source version. Keep tokens in private files and stdin only.
+# registry_authenticate obtains bounded registry credentials without logging them.
 registry_authenticate() {
   local bearer
   [[ "${GITHUB_ACTOR:-}" =~ ^[A-Za-z0-9_-]+$ && "${GH_TOKEN:-}" =~ ^[A-Za-z0-9_]+$ ]] || fail 'registry credential shape'
@@ -63,7 +71,8 @@ registry_authenticate() {
   unset bearer
   printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin || fail 'registry authentication'
 }
-# Read status explicitly; network failure is not absence.
+# registry_read distinguishes observed absence from transport failure and binds
+# a returned manifest body to its config and advertised content digest.
 registry_read() {
   status="$(curl --config "$work/registry-read.config" --max-time 60 --max-filesize 8388608 --dump-header "$work/registry-headers" --output "$work/registry-manifest.json" --write-out '%{http_code}' "https://ghcr.io/v2/devantler-tech/business-site-identity/manifests/$1")" || fail 'registry read failed'
   [[ "$status" == 200 || "$status" == 404 ]] || fail 'registry response is not readable or absent'
@@ -80,6 +89,7 @@ registry_read "$image_tag"
 # The original image is positively owned by this invocation. Accept only a new
 # target-repository digest introduced by its own successful Docker push, not a
 # registry manifest that merely claims the same config digest.
+# read_local_registry_digests checks one document's cardinality and digest-entry shapes.
 read_local_registry_digests() {
   local output="$1"
   docker image inspect --format '{{json .RepoDigests}}' "$image" >"$output.raw" || fail 'original image registry metadata'
@@ -99,6 +109,7 @@ fi
 # Drafts need not have a tag ref yet. Read explicit, shape-checked API pages
 # until a short page proves completion. Refuse a full hundredth page without
 # fetching beyond the request budget; incomplete inventory authorizes no write.
+# read_release_inventory reaches a short terminating page within the fixed budget.
 read_release_inventory() {
   local output="$1" page=1 count
   : >"$output.pages"
@@ -174,8 +185,8 @@ for name in inputs.tar base-source.tar identity-source.json; do
   cmp "$work/offer/$name" "$work/public-readback/$name" || fail 'public corresponding source differs'
 done
 source_offer="$(sha256sum "$work/offer/identity-source.json" | cut -d' ' -f1)"
-# Refresh credentials and rebind the tag after source readback; an earlier
-# absence must not overwrite an image that appeared during publication.
+# Refresh credentials and refuse a conflict visible after source readback.
+# This is not CAS protection against another writer to the same upload reference.
 registry_authenticate
 registry_read "$image_tag"
 [[ "$status" == 404 ]] || fail 'image tag appeared during source publication'

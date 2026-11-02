@@ -26,6 +26,8 @@ const releaseUsage = `Explicit source-data operations (ordinary invocation is in
 No URL/profile override, authenticated request, image publication or portal activation is supported.
 `
 
+// runRelease leaves ordinary invocation inert and dispatches only the explicit
+// source/transport operations; it exposes no image-publication or activation API.
 func runRelease(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 || (len(args) == 1 && (args[0] == "--help" || args[0] == "-h")) {
 		_, err := io.WriteString(out, releaseUsage)

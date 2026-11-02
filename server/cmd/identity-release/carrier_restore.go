@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 )
 
+// carrierRestoreMember creates one new private member, verifies its full bytes
+// and mirrors them into the independent canonical-archive digest.
 func carrierRestoreMember(root *os.Root, tr io.Reader, canonical io.Writer, spec sourceFile) (resultErr error) {
 	file, err := root.OpenFile(spec.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
@@ -27,10 +29,14 @@ func carrierRestoreMember(root *os.Root, tr io.Reader, canonical io.Writer, spec
 	return file.Chmod(os.FileMode(spec.Mode))
 }
 
+// carrierMatchesHeader accepts only the declared regular member's exact role,
+// size and mode; archive headers cannot expand the restoration layout.
 func carrierMatchesHeader(header *tar.Header, spec sourceFile) bool {
 	return header != nil && header.Name == spec.Path && header.Typeflag == tar.TypeReg && header.Size == spec.Bytes && header.Mode == int64(spec.Mode)
 }
 
+// unpackCarrier binds a closed carrier to external seals and the caller's
+// original CI identity, then re-observes the restored candidate before success.
 func unpackCarrier(input, archiveSeal, manifestSeal, source, run string, attempt uint64, output string) (receipt carrierReceipt, resultErr error) {
 	if !filepath.IsAbs(input) || filepath.Clean(input) != input || !sourceDigest.MatchString(archiveSeal) ||
 		!sourceDigest.MatchString(manifestSeal) || !handoffRevision.MatchString(source) || !handoffRun.MatchString(run) || attempt == 0 || attempt > 1000000 {

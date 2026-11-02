@@ -35,10 +35,14 @@ type carrierReceipt struct {
 	PortalActivated      bool   `json:"portalActivated"`
 }
 
+// carrierPaths fixes the witness and original-archive roles; caller metadata
+// cannot add executable payloads or select a different transport inventory.
 func carrierPaths() []string {
 	return append(append([]string{}, handoffWitnesses...), "zitadel-offline-replay/inputs.tar", "zitadel-base-source/base-source.tar", "zitadel-image/candidate-image.tar")
 }
 
+// carrierManifest admits one canonical original handoff with closed roles,
+// modes and byte budgets while preserving its false publication fields.
 func carrierManifest(body []byte) (handoffDocument, error) {
 	var doc handoffDocument
 	if err := sourceJSON(body, &doc); err != nil {
@@ -82,6 +86,8 @@ func carrierManifest(body []byte) (handoffDocument, error) {
 	return doc, nil
 }
 
+// carrierJoinRoot re-observes the restored archives and witnesses independently
+// before comparing their complete canonical handoff with the transported one.
 func carrierJoinRoot(input string, doc handoffDocument, body []byte) error {
 	observed, err := observeHandoff(input)
 	if err != nil {
@@ -95,10 +101,14 @@ func carrierJoinRoot(input string, doc handoffDocument, body []byte) error {
 	return nil
 }
 
+// carrierHeader fixes the tar representation so metadata variations cannot
+// produce a different carrier with an otherwise identical member inventory.
 func carrierHeader(f sourceFile) *tar.Header {
 	return &tar.Header{Name: f.Path, Mode: int64(f.Mode), Size: f.Bytes, Typeflag: tar.TypeReg, ModTime: time.Unix(0, 0), Format: tar.FormatUSTAR}
 }
 
+// carrierOriginal streams one original member while checking its byte seal and
+// filesystem snapshot before and after the copy through the same descriptor.
 func carrierOriginal(root *os.Root, f sourceFile, writer io.Writer) (resultErr error) {
 	st, err := root.Lstat(f.Path)
 	if err != nil || !st.Mode().IsRegular() || !sourceSingleLink(st) || st.Size() != f.Bytes || uint32(st.Mode().Perm()) != f.Mode {
@@ -124,6 +134,8 @@ func carrierOriginal(root *os.Root, f sourceFile, writer io.Writer) (resultErr e
 	return nil
 }
 
+// packCarrier preserves one complete original candidate in a bounded canonical
+// archive and reads back its actual bytes before issuing a transport receipt.
 func packCarrier(input, output string) (receipt carrierReceipt, resultErr error) {
 	if !filepath.IsAbs(input) || filepath.Clean(input) != input {
 		return receipt, fmt.Errorf("physical original root required")
@@ -228,6 +240,8 @@ func packCarrier(input, output string) (receipt carrierReceipt, resultErr error)
 	return receipt, nil
 }
 
+// runCarrier keeps packing and restoration explicit; restoration additionally
+// requires external seals and the original source/run identity from the caller.
 func runCarrier(args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] != "pack-carrier" && args[0] != "unpack-carrier" {
 		return fmt.Errorf("explicit carrier operation required")

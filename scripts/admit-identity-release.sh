@@ -3,6 +3,7 @@
 set -euo pipefail
 export LC_ALL=C
 readonly repo=devantler-tech/business-site
+# fail stops admission without treating absent or malformed evidence as permission.
 fail() {
   printf 'identity release: refused %s\n' "$1" >&2
   exit 1
@@ -14,6 +15,7 @@ readonly caller=$GITHUB_SHA run=$IDENTITY_CI_RUN_ID
 work="$(mktemp -d "$RUNNER_TEMP/identity-forge.XXXXXX")"
 complete=false
 trap 'if [[ "$complete" != true ]]; then rm -rf "$work"; fi' EXIT
+# read_json bounds a primary API response and requires one complete object.
 read_json() {
   (
     ulimit -f 8192
@@ -27,6 +29,7 @@ read_json "actions/runs/$run" "$work/run-before.json"
 source="$(jq -er '.head_sha|select(test("^[0-9a-f]{40}$"))' "$work/run-before.json")" || fail 'original source identity'
 attempt="$(jq -er '.run_attempt|tostring' "$work/run-before.json")"
 [[ "$attempt" =~ ^[1-9][0-9]{0,5}$ ]] || fail 'current original attempt'
+# check_run binds the current successful main-push producer, including its attempt.
 check_run() {
   jq -e --arg source "$source" --arg repo "$repo" --argjson run "$run" --argjson attempt "$attempt" '
  .id==$run and .run_attempt==$attempt and .repository.full_name==$repo and .head_repository.full_name==$repo and

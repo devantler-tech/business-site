@@ -84,6 +84,13 @@ if [[ "$url" == https://github.com/* ]];then
 elif [[ "$url" == https://ghcr.io/v2/* ]];then
  reads=0;[[ ! -f "$FIXTURE/registry-reads" ]] || read -r reads <"$FIXTURE/registry-reads"
  reads=$((reads+1));printf '%s\n' "$reads" >"$FIXTURE/registry-reads"
+ if [[ "$KIND" == foreign-version-race && "$reads" == 2 ]];then touch "$FIXTURE/foreign-version";fi
+ if [[ "$KIND" == foreign-version-present && "$url" == */manifests/4.20.0-devantler.1 ]];then
+  jq '.config.digest=("sha256:"+("6"*64))' "$FIXTURE/manifest.json" >"$output"
+  sha=$(shasum -a 256 "$output"|awk '{print $1}')
+  printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
+  printf 200;exit 0
+ fi
  if [[ "$KIND" == registry-transport-error ]];then exit 28;fi
  if [[ "$KIND" == registry-error ]];then printf 503;exit 0;fi
  if [[ "$KIND" == registry-oci-index || "$KIND" == registry-docker-index ]];then
@@ -121,6 +128,7 @@ case "$1" in
  login) cat >/dev/null;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
   # All three anonymous source reads must finish before any image upload.
   [[ "$(grep -c 'curl https://github.com/' "$FIXTURE/calls")" == 3 ]] || exit 96
+  if [[ "$2" == ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.1 && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
   touch "$FIXTURE/pushed";;image)
   if [[ "$2" == inspect ]];then
     [[ "$#" == 5 && "$3" == --format && "$4" == '{{json .RepoDigests}}' && "$5" == "sha256:$(printf '%064d' 0 | tr 0 b)" ]] || exit 97
@@ -158,9 +166,9 @@ case "$1" in
 FIXTURE
 chmod +x "$scratch/bin/"{gh,curl,docker,cosign}
 successful() {
-  [[ "$1" == valid || "$1" == draft-resume || "$1" == source-only-resume || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-source-only-resume || "$1" == boundary-inventory || "$1" == null-local-digests ]]
+  [[ "$1" == valid || "$1" == draft-resume || "$1" == source-only-resume || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-source-only-resume || "$1" == boundary-inventory || "$1" == null-local-digests || "$1" == foreign-version-race || "$1" == foreign-version-present ]]
 }
-for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory source-only-resume paged-source-only-resume registry-layer-conflict pushed-layer-conflict pushed-digest-missing pushed-digest-duplicate preexisting-local-digest null-local-digests false-local-digests multi-local-digests; do
+for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory source-only-resume paged-source-only-resume registry-layer-conflict pushed-layer-conflict pushed-digest-missing pushed-digest-duplicate preexisting-local-digest null-local-digests false-local-digests multi-local-digests foreign-version-race foreign-version-present; do
   fixture="$scratch/$kind"
   mkdir -p "$fixture/runner/identity-forge.fixture/restored/native/"{zitadel-handoff,zitadel-offline-replay,zitadel-base-source} "$fixture/runner/identity-forge.fixture/saved"
   work="$fixture/runner/identity-forge.fixture"
@@ -202,12 +210,19 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
     if [[ "$kind" != source-only-resume && "$kind" != paged-source-only-resume ]];then touch "$fixture/pushed";fi
   fi
   : >"$fixture/calls"
+  if [[ "$kind" == foreign-version-present ]];then touch "$fixture/foreign-version";fi
   if env PATH="$scratch/bin:$PATH" FIXTURE="$fixture" KIND="$kind" RUNNER_TEMP="$fixture/runner" IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=publish IDENTITY_CI_RUN_ID=123 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_ACTOR=devantler GH_TOKEN=fixture bash "$root/scripts/publish-identity-release.sh" >"$fixture/stdout" 2>"$fixture/stderr"; then
     successful "$kind" || {
       printf 'publisher accepted %s\n' "$kind" >&2
       exit 1
     }
     jq -e '.sourceOfferPublished==true and .imagePublished==true and .signatureVerified==true and .portalActivated==false' "$fixture/runner/identity-publication.json" >/dev/null
+    if [[ "$kind" == foreign-version-race || "$kind" == foreign-version-present ]];then
+      if [[ -f "$fixture/foreign-version-overwritten" ]];then echo 'publisher overwrote a shared version alias' >&2;exit 1;fi
+      expected_ref="ghcr.io/devantler-tech/business-site-identity:original-123-2-$(printf '%064d' 0 | tr 0 b)"
+      grep -Fxq "docker push $expected_ref" "$fixture/calls" || { echo 'publisher did not use the original-CI upload reference' >&2;exit 1; }
+      if grep -Eq '^docker (push|tag|image rm) .*business-site-identity:4\.20\.0-devantler\.1' "$fixture/calls";then echo 'publisher wrote the shared version alias' >&2;exit 1;fi
+    fi
     first_write="$(awk '/^gh release (create|upload|edit) / {print NR;exit}' "$fixture/calls")"
     if [[ -n "$first_write" ]];then
       first_registry="$(awk '/^curl https:\/\/ghcr.io\/v2\// {print NR;exit}' "$fixture/calls")"

@@ -16,6 +16,8 @@ type sealedArchive struct {
 	name     string
 }
 
+// openSealedArchive joins a bounded seal observation to the descriptor used for
+// restoration, refusing a different filesystem snapshot between those reads.
 func openSealedArchive(input, digest string, limit int64) (_ *sealedArchive, resultErr error) {
 	parent, err := os.OpenRoot(filepath.Dir(input))
 	if err != nil {
@@ -46,6 +48,8 @@ func openSealedArchive(input, digest string, limit int64) (_ *sealedArchive, res
 	return &sealedArchive{parent: parent, file: file, original: original, name: name}, nil
 }
 
+// unchanged requires both the open descriptor and its pathname to retain the
+// original snapshot metadata after the archive has been consumed.
 func (a *sealedArchive) unchanged() error {
 	current, statErr := a.file.Stat()
 	entry, entryErr := a.parent.Lstat(a.name)
@@ -55,6 +59,8 @@ func (a *sealedArchive) unchanged() error {
 	return nil
 }
 
+// close preserves failures from either retained descriptor instead of reporting
+// successful restoration after an incomplete close.
 func (a *sealedArchive) close() error { return errors.Join(a.file.Close(), a.parent.Close()) }
 
 // reserveSourceRoot creates only a new private leaf. Failed reservations remain
@@ -71,6 +77,8 @@ func reserveSourceRoot(output string) (string, *os.Root, error) {
 	return name, root, err
 }
 
+// makeBaseCapsuleDirs creates only the closed base-source layout in an already
+// reserved private root; pre-existing members remain an error.
 func makeBaseCapsuleDirs(root *os.Root) error {
 	for _, dir := range []string{"metadata", "layers", "sources", "notices", "status"} {
 		if err := root.Mkdir(dir, 0700); err != nil {

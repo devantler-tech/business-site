@@ -32,6 +32,8 @@ var sourceSigners = []sourceSigner{
 	{"0x310180050905E40C", 63002, "da7fa00bcc69561d4414243edcbfd64b83dd9a289969ac94cbef57a3664c811f", "55781DAB34E61A09EFB88BE19DB0235556F8CFAD", "7B27A3F1A6E18CD9588B4AE8310180050905E40C"},
 }
 
+// sourcePGPStatus requires successful verification and one exact frozen signing
+// and primary-key pair; it does not establish current certificate validity.
 func sourcePGPStatus(raw []byte, key sourceSigner, success bool) error {
 	if !success || len(raw) > 1<<20 {
 		return fmt.Errorf("descriptor signature command failed")
@@ -60,12 +62,16 @@ func sourcePGPStatus(raw []byte, key sourceSigner, success bool) error {
 
 type authBoundedBuffer struct{ bytes.Buffer }
 
+// Write bounds each verifier stream before it can accumulate unbounded output.
 func (b *authBoundedBuffer) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 1<<20 {
 		return 0, fmt.Errorf("signature output bound exceeded")
 	}
 	return b.Buffer.Write(p)
 }
+
+// sourceAuthCommand caps a verifier's lifetime and both output streams while
+// keeping diagnostic text separate from the bytes interpreted as a verdict.
 func sourceAuthCommand(ctx context.Context, stdin []byte, name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -80,6 +86,9 @@ func sourceAuthCommand(ctx context.Context, stdin []byte, name string, args ...s
 	}
 	return out.Bytes(), err
 }
+
+// runBaseAuth verifies frozen descriptor and image signatures from the admitted
+// capsule, keeping these observations separate from image-admission authority.
 func runBaseAuth(ctx context.Context, args []string, out io.Writer) (resultErr error) {
 	f := flag.NewFlagSet("verify-base-auth", flag.ContinueOnError)
 	f.SetOutput(io.Discard)

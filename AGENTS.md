@@ -265,7 +265,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and retains only that new exact image for publication. Explicit publish mode
   repeats admission with separate write permissions, verifies anonymous source
   retrieval before image push and verifies the signed digest/provenance afterward.
-  Conflicting tags/assets are never overwritten. No deployment or portal activation
+  Existing source conflicts and observed upload-reference conflicts are refused.
+  Publication uses an original-CI upload reference and a verified signed digest,
+  without a shared OCI version alias or an atomic registry-tag reservation claim.
+  No deployment or portal activation
   is performed; read ADR 0028 and the identity-release README.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client

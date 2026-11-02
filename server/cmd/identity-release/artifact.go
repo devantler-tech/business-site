@@ -102,6 +102,8 @@ func restoreArtifact(input, seal, source, run string, attempt uint64, output str
 	return unpackCarrier(filepath.Join(name, "carrier.tar"), receipt.ArchiveSHA256, receipt.HandoffSHA256, source, run, attempt, filepath.Join(name, "native"))
 }
 
+// runArtifact requires explicit external artifact and original-run bindings,
+// emitting a receipt only after the complete ZIP and carrier restoration pass.
 func runArtifact(args []string, out io.Writer) error {
 	f := flag.NewFlagSet("restore-artifact", flag.ContinueOnError)
 	f.SetOutput(io.Discard)

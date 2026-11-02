@@ -118,37 +118,46 @@ original build records and inspects the original saved image without a rebuild
 or service execution. A later caller with changed retained build records is refused.
 
 Only explicit `publish` enters a separate privileged job and repeats admission.
-Registry authentication and absence of the image tag are checked before any source
-release mutation. Every occupied image tag is refused, including a matching earlier
-publication; this first-release path never adopts an existing registry image.
+Registry authentication and observed absence of the original candidate's upload
+reference are checked before any source release mutation. That reference is
+`original-<CI run>-<attempt>-<original image config digest hex>`. A reference observed
+as occupied is refused, including a matching earlier publication; this first-release
+path never adopts an existing registry image. No shared OCI version alias is written.
+The supported publication and deployment reference is the verified signed digest.
 Registry reads accept both single-image manifests and image
 indexes; an occupied index cannot be mistaken for an absent tag. Release inventory
 reads make at most 100 explicit page requests of at most 100 records each. A short
 page proves completion; a full hundredth page is refused without another request.
 Failed, malformed or incomplete reads authorize no write.
-After anonymous source readback, credentials are refreshed and the image tag is
-checked again before a push. This preflight does not make the two services atomic:
-later network, registry or signature failures can still leave a source-only release.
+After anonymous source readback, credentials are refreshed and the upload reference
+is checked again before a push. GHCR's separate read and ordinary push are not
+conditional creation. The workflow concurrency group serializes cooperating executions;
+it does not enforce package-level sole-writer access. An uncoordinated writer to the
+same upload reference is outside this release's supported scope. The reference is
+mutable and carries no deployment authority. This path does not claim global tag
+immutability or atomicity between GitHub and GHCR. Later network, registry or
+signature failures can still leave a source-only release.
 The original image must have no target-repository digest before publication. After
 its own successful push, the publisher reads exactly one new target-repository
 digest from Docker's metadata for that original image. The complete registry
 manifest must hash to that digest before signing; matching only its config is
 insufficient. No Docker progress text is interpreted as a digest. A completed
-source-only release can resume with the same original while the image tag is absent.
-Once any image occupies the tag, a rerun is refused. A partial image publication
+source-only release can resume with the same original while its upload reference is
+observed as absent. A rerun that observes an occupied upload reference is refused.
+A partial image publication
 therefore needs a separately reviewed recovery or new version; it is not silently
-adopted, overwritten or treated as a completed release.
+adopted or treated as a completed release.
 The fixed `identity-v4.20.0-devantler.1` release stages the two original source
 archives and `identity-source.json` in a draft before publication. Every existing
 asset must already match before additions; source-bound drafts can resume only
 with the same original. Staging reads use the validated release database ID,
 because REST by-tag cannot find drafts. The published release must be actually
 immutable and its tag must retain the original source. Complete anonymous retrieval and immutable
-asset digest readback must pass before the saved image is pushed to
-`ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.1`, signed and attested.
+asset digest readback must pass before the saved image is pushed under its original-CI
+upload reference in `ghcr.io/devantler-tech/business-site-identity`, signed and attested.
 The exact registry digest, signer, original source/run and source-offer digest
-are independently verified. Existing mismatched tags/assets are refused; nothing
-is clobbered. Before a release or tag reserves the version, an expired carrier
+are independently verified. Existing mismatched source tags/assets and observed
+upload-reference conflicts are refused. Before a source release or source tag reserves the version, an expired carrier
 requires a new native build, never a reconstruction from diagnostics. Once the fixed source release exists,
 only the same retained original can complete it. If that original expires before
 image publication, recovery requires a reviewed new version/source-offer profile;

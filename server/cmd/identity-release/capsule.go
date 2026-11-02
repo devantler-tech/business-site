@@ -60,6 +60,8 @@ func sourceOutputPath(name string) (string, error) {
 	return filepath.Join(parent, filepath.Base(name)), nil
 }
 
+// captureBaseCapsule collects the complete frozen originals before reserving a
+// fresh destination, then independently reads back the sealed private capsule.
 func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, output string) (seal string, resultErr error) {
 	name, err := sourceOutputPath(output)
 	if err != nil {

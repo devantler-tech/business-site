@@ -15,7 +15,7 @@ the existing archives and original handoff witnesses. Transport validation
 preserves their complete bytes and recorded modes. Original producer receipts
 keep their false/unknown publication claims.
 
-A manual main-only workflow defaults to nonpublishing verification. It binds the
+A manual main-only workflow defaults to verification without publication. It binds the
 source, complete successful original CI run/attempt, native job and immutable
 artifact digest before reading carrier data. Verification has read permissions.
 The original source must be an ancestor of current caller main; complete retained
@@ -42,10 +42,19 @@ before publishing. Draft staging uses a validated release database ID; the REST
 by-tag lookup is only for published releases. Actual immutable sealing and the
 source-bound tag are required. Both original source archives and a source/run/
 digest manifest must be fully retrievable anonymously before the saved image is
-pushed or signed. Existing mismatched tags/assets are refused rather than
-overwritten. Image provenance binds the same source, original run, archive and
+pushed or signed. Existing mismatched source tags/assets and observed upload-reference
+conflicts are refused. Image provenance binds the same source, original run, archive and
 source-offer digests; registry readback verifies the actual signed digest.
 The ordinary public-runtime publisher excludes identity tags.
+
+The supported image reference is its verified signed digest. Upload uses a reference
+derived from the original CI run, attempt and original image configuration; it does
+not write a shared human version alias. This is the narrowed scope recorded after
+review in [#308](https://github.com/devantler-tech/business-site/issues/308#issuecomment-6579732899).
+The upload reference remains mutable. Observed-absence checks and workflow concurrency
+are not a GHCR conditional-create operation or package-level sole-writer enforcement.
+Uncoordinated writers to the same upload reference are outside the supported scope;
+neither that reference nor its apparent absence supplies deployment authority.
 
 ## Boundaries and recovery
 
