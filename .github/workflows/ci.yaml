@@ -656,12 +656,17 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
+      - name: Bind the original local archives and native witnesses
+        run: |
+          mkdir -m 700 -- "$RUNNER_TEMP/zitadel-handoff"
+          "$RUNNER_TEMP/identity-release" prepare-handoff --input "$RUNNER_TEMP" --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --output "$RUNNER_TEMP/zitadel-handoff/handoff.json"
       - name: Preserve build diagnostics, not unadmitted service distribution
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zitadel-linux-build-evidence
           path: |
+            ${{ runner.temp }}/zitadel-handoff/handoff.json
             ${{ runner.temp }}/zitadel-base-source/evidence/capture.json
             ${{ runner.temp }}/zitadel-base-source/evidence/verify.json
             ${{ runner.temp }}/zitadel-base-source/evidence/pack.json

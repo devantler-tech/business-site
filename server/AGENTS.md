@@ -7,6 +7,11 @@ complete OCI/layer/package/descriptor joins, original modes, private read-only
 capsule, external seal and deterministic archive readback. It never executes
 retained content, verifies OpenPGP/image signatures, publishes or activates users.
 Keep those four proof fields false; publisher admission remains separate.
+Its explicit `prepare-handoff` operation binds the original local archives and
+raw native witness bytes to caller-supplied source/run metadata. Preserve its
+closed input roles, complete stable snapshots and exclusive manifest output.
+It neither repeats the native engines nor authenticates the supplied CI identity;
+all publication and activation claims stay false. No raw archive upload is added.
 `cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
 Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
 importing portal authority or entering the frozen identity service's graph.

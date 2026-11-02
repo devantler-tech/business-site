@@ -17,6 +17,7 @@ const releaseUsage = `Explicit source-data operations (ordinary invocation is in
   identity-release capture-base-source --output /new/private/capsule
   identity-release verify-base-source --input /private/capsule --sha256 <external-manifest-sha256>
   identity-release pack-base-source --input /private/capsule --sha256 <external-manifest-sha256> --output /new/base-source.tar
+  identity-release prepare-handoff --input /native/job-root --source-sha <commit> --run-id <run> --run-attempt <attempt> --output /new/handoff.json
 No URL/profile override, authenticated request, image publication or portal activation is supported.
 `
 
@@ -26,6 +27,9 @@ func runRelease(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	op := args[0]
+	if op == "prepare-handoff" {
+		return runHandoff(args[1:], out)
+	}
 	if op != "capture-base-source" && op != "verify-base-source" && op != "pack-base-source" {
 		return fmt.Errorf("unknown explicit source operation")
 	}

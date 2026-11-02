@@ -91,6 +91,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
   CI retains build diagnostics only; successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+  The explicit local handoff command binds the existing archives and original
+  native witness bytes to caller-supplied run metadata. CI uploads only that
+  bounded manifest; raw unadmitted archives stay local. It grants no publication
+  or authenticated-provenance authority. Read `server/cmd/identity-release/README.md`.
   The separately compiled pinned vulnerability checker analyzes the actual Linux
   binary against the official database; preserve its failure status and retained
   text diagnostics. Both output streams enter the retained report without changing
