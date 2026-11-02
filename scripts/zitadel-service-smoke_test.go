@@ -17,8 +17,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -808,5 +810,116 @@ func TestLifecycleModeRemainsExplicitAndPlatformBound(t *testing.T) {
 		if imageRun([]string{"--lifecycle-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic) == 0 || !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required") {
 			t.Fatal("lifecycle mode does not use the actual native-platform guard")
 		}
+	}
+}
+
+func TestLifecycleCleanupRefusesReplacedPrivateDirectory(t *testing.T) {
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(parent, "reserved")
+	if err = os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &lifecycleSession{root: root, rootInfo: original, specs: map[string]lifecycleContainerSpec{}}
+	if err = os.Rename(root, root+"-moved"); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := filepath.Join(root, "unrelated.txt")
+	if err = os.WriteFile(foreign, []byte("preserve unrelated replacement"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.cleanup(); err == nil {
+		t.Fatal("cleanup accepted a replacement directory")
+	}
+	if _, err = os.Stat(foreign); err != nil {
+		t.Fatal("cleanup removed unrelated replacement data")
+	}
+}
+
+func TestLifecycleTLSFilesCanBeStagedAgainWithoutRoot(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Fatal("the actual restart copy control requires a non-root process")
+	}
+	base := t.TempDir()
+	inputs, output := filepath.Join(base, "inputs"), filepath.Join(base, "output")
+	for _, directory := range []string{inputs, output} {
+		if err := os.Mkdir(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"database.crt", "database.key"} {
+		if err := os.WriteFile(filepath.Join(inputs, name), []byte("fictional "+name), 0444); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stage := "umask 077\n" + strings.NewReplacer("/fixture/", inputs+"/", "/var/lib/postgresql/data/.fixture-tls/", output+"/").Replace(lifecycleDatabaseTLSStage)
+	for trial := 0; trial < 2; trial++ {
+		if _, err := exec.Command("sh", "-ec", stage).CombinedOutput(); err != nil {
+			t.Fatalf("actual non-root TLS staging failed on start %d: %v", trial+1, err)
+		}
+	}
+	for _, pair := range []struct{ input, output string }{{"database.crt", "server.crt"}, {"database.key", "server.key"}} {
+		actual, err := os.ReadFile(filepath.Join(output, pair.output))
+		if err != nil || string(actual) != "fictional "+pair.input {
+			t.Fatal("staged TLS bytes changed")
+		}
+		info, err := os.Stat(filepath.Join(output, pair.output))
+		if err != nil || info.Mode() != 0600 {
+			t.Fatal("persistent TLS file has unsafe permissions")
+		}
+	}
+}
+
+func TestLifecycleCleanupRemovesOnlyItsSealedInputs(t *testing.T) {
+	for _, foreign := range []bool{false, true} {
+		t.Run(strconv.FormatBool(foreign), func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			original, err := os.Stat(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			material, err := lifecycleMaterials(strings.Repeat("b", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bindings, err := lifecycleWriteInputs(root, material)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := &lifecycleSession{root: root, rootInfo: original, bindings: bindings, specs: map[string]lifecycleContainerSpec{}}
+			if foreign {
+				if err = os.WriteFile(filepath.Join(root, "unrelated.txt"), []byte("preserve"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = s.cleanup()
+			if foreign {
+				if err == nil {
+					t.Fatal("cleanup admitted unknown private-directory contents")
+				}
+				if _, e := os.Stat(filepath.Join(root, "unrelated.txt")); e != nil {
+					t.Fatal("unknown private-directory contents were removed")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			} else if _, e := os.Stat(root); !os.IsNotExist(e) {
+				t.Fatal("owned private directory was not removed")
+			}
+		})
 	}
 }

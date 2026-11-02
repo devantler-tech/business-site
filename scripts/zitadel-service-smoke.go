@@ -1209,6 +1209,7 @@ func lifecycleInspect(raw []byte, id, owner, network, state string, spec lifecyc
 // lifecycleSession owns only random, positively inspected fixture resources.
 // Private command output is never written to the public evidence directory.
 type lifecycleSession struct {
+	rootInfo                                        os.FileInfo
 	run                                             imageCommand
 	owner, root, network, volume, database, service string
 	bindings                                        map[string]lifecycleInput
@@ -1373,6 +1374,12 @@ func (s *lifecycleSession) query(admin bool, statement string) ([]byte, error) {
 	return bytes.TrimSpace(raw), nil
 }
 
+// lifecycleDatabaseTLSStage is shared by both database starts and the actual
+// non-root file-copy control. The host inputs remain sealed and read-only.
+const lifecycleDatabaseTLSStage = `cp /fixture/database.crt /var/lib/postgresql/data/.fixture-tls/server.crt
+ cp /fixture/database.key /var/lib/postgresql/data/.fixture-tls/server.key
+ chmod 0600 /var/lib/postgresql/data/.fixture-tls/server.key /var/lib/postgresql/data/.fixture-tls/server.crt`
+
 // databaseStart reuses one owned local volume. The server key is derived inside
 // that volume under UID999 with mode0600; the sealed host input stays read-only.
 func (s *lifecycleSession) databaseStart(imageID string, initialized bool) error {
@@ -1385,10 +1392,9 @@ func (s *lifecycleSession) databaseStart(imageID string, initialized bool) error
  chmod 0700 /var/lib/postgresql/data
  umask 077
  mkdir -p /var/lib/postgresql/data/.fixture-tls
- cp /fixture/database.crt /var/lib/postgresql/data/.fixture-tls/server.crt
- cp /fixture/database.key /var/lib/postgresql/data/.fixture-tls/server.key
- chmod 0600 /var/lib/postgresql/data/.fixture-tls/server.key
+ ` + lifecycleDatabaseTLSStage + `
  test "$(stat -c '%u:%g:%a' /var/lib/postgresql/data/.fixture-tls/server.key)" = 999:999:600
+ test "$(stat -c '%u:%g:%a' /var/lib/postgresql/data/.fixture-tls/server.crt)" = 999:999:600
  exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_min_protocol_version=TLSv1.3 -c ssl_cert_file=/var/lib/postgresql/data/.fixture-tls/server.crt -c ssl_key_file=/var/lib/postgresql/data/.fixture-tls/server.key -c hba_file=/fixture/database-hba.conf`
 	if initialized {
 		script = "test -f /var/lib/postgresql/data/pgdata/PG_VERSION\n" + script
@@ -1470,12 +1476,40 @@ func (s *lifecycleSession) cleanup() error {
 		}
 	}
 	if !failed && s.root != "" {
-		if _, err := lifecyclePrivateRoot(s.root); err != nil {
-			failed = true
-		} else if os.RemoveAll(s.root) != nil {
+		current, err := lifecyclePrivateRoot(s.root)
+		if err != nil || s.rootInfo == nil || !os.SameFile(s.rootInfo, current) {
 			failed = true
 		} else {
-			s.root = ""
+			// A held root confines each unlink to the reserved directory even
+			// if its path is renamed. Never recursively erase unknown contents.
+			handle, openError := os.OpenRoot(s.root)
+			if openError != nil {
+				failed = true
+			} else {
+				opened, statError := handle.Stat(".")
+				if statError != nil || !os.SameFile(s.rootInfo, opened) {
+					failed = true
+				} else if len(s.bindings) > 0 && lifecycleValidateInputs(s.root, s.bindings) != nil {
+					failed = true
+				} else {
+					for name := range s.bindings {
+						if handle.Remove(name) != nil {
+							failed = true
+						}
+					}
+				}
+				if handle.Close() != nil {
+					failed = true
+				}
+				current, statError = lifecyclePrivateRoot(s.root)
+				if !failed && (statError != nil || !os.SameFile(s.rootInfo, current) || os.Remove(s.root) != nil) {
+					failed = true
+				}
+				if !failed {
+					s.root = ""
+					s.rootInfo = nil
+				}
+			}
 		}
 	}
 	if failed {
@@ -1568,6 +1602,10 @@ func imageLifecycle(image, owner, repo, output string, run imageCommand) (result
 	s.root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return fmt.Errorf("physical private lifecycle workspace unavailable")
+	}
+	s.rootInfo, err = lifecyclePrivateRoot(s.root)
+	if err != nil {
+		return err
 	}
 	if strings.ContainsAny(s.root, ",\n\r") {
 		return fmt.Errorf("closed lifecycle mount paths required")
