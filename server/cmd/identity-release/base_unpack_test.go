@@ -61,7 +61,7 @@ func TestBaseTransportRefusesAlteredMemberStructureWithMatchingOuterHash(t *test
 				entries[0], entries[1] = entries[1], entries[0]
 			case "pax":
 				entries[0].header.Format = tar.FormatPAX
-				entries[0].header.PAXRecords = map[string]string{"comment": "noncanonical"}
+				entries[0].header.PAXRecords = map[string]string{"comment": "not canonical"}
 			}
 			var changed bytes.Buffer
 			tw := tar.NewWriter(&changed)
@@ -112,7 +112,7 @@ func TestBaseTransportRoundTripUsesOriginalCapsuleAndCanonicalArchive(t *testing
 	}
 }
 
-func TestBaseTransportRefusesIndependentSealsAndNoncanonicalBytes(t *testing.T) {
+func TestBaseTransportRefusesIndependentSealsAndAlteredBytes(t *testing.T) {
 	for _, kind := range []string{"archive-seal", "capsule-seal", "truncated", "trailing", "linked", "existing", "inside"} {
 		t.Run(kind, func(t *testing.T) {
 			p, input, seal := capturedBaseFixture(t)

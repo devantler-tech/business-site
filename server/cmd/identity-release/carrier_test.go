@@ -117,7 +117,7 @@ func TestOriginalCarrierRefusesWrongBindingsAndExistingDestinations(t *testing.T
 				}
 			}
 			if err := runRelease(context.Background(), args, &bytes.Buffer{}); err == nil {
-				t.Fatal("unbound or noncanonical carrier accepted")
+				t.Fatal("unbound or malformed carrier accepted")
 			}
 		})
 	}

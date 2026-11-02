@@ -115,7 +115,7 @@ func unpackCarrier(input, archiveSeal, manifestSeal, source, run string, attempt
 		return receipt, err
 	}
 	if fmt.Sprintf("%x", canonical.Sum(nil)) != archiveSeal {
-		return receipt, fmt.Errorf("noncanonical original carrier")
+		return receipt, fmt.Errorf("original carrier is not canonical")
 	}
 	current, err := file.Stat()
 	entry, entryErr := parent.Lstat(filepath.Base(input))

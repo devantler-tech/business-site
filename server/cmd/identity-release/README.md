@@ -83,7 +83,7 @@ identity-release prepare-handoff --input /absolute/native-job-root --source-sha 
 
 `pack-carrier` retains the fixed 14 witnesses, three original archives and their
 handoff manifest, bounded to 1.25 GiB. `unpack-carrier` preserves bytes and modes,
-rejects noncanonical or unexpected members and repeats the existing handoff join.
+rejects malformed or unexpected members and repeats the existing handoff join.
 `restore-artifact` first authenticates the complete Actions ZIP against the digest
 from the primary API, permits only `carrier.tar` and `carrier.json`, and requires
 the externally authenticated source/run/attempt before restoration. It never
@@ -151,7 +151,7 @@ and the deployed invitation/login/MFA/recovery/revocation/isolation journey.
   separate from /app notices; recheck it before export and after reload.
   Its size, digest and successful reload enter the receipt; they are not a registry identity,
   corresponding-source offer or distribution admission. The bounded
-  diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
+  diagnostic is `cli-version-smoke`, with admission and license closure unknown.
   The separate explicit service profile also cold-starts the same image with an
   ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes
   no host ports and reads actual Linux process restrictions and RSS/peak

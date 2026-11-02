@@ -85,7 +85,7 @@ func unpackBaseCapsule(p baseProfile, input, archiveSeal, capsuleSeal, output st
 		return err
 	}
 	if fmt.Sprintf("%x", canonical.Sum(nil)) != archiveSeal {
-		return fmt.Errorf("noncanonical base transport")
+		return fmt.Errorf("base transport is not canonical")
 	}
 	_, err = verifyBaseCapsule(p, name, capsuleSeal)
 	return err

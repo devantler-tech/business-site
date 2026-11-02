@@ -92,7 +92,7 @@ func TestArtifactRestorationAuthenticatesOuterBytesAndClosedRoles(t *testing.T) 
 			err := runRelease(context.Background(), args, &bytes.Buffer{})
 			if kind != "valid" {
 				if err == nil {
-					t.Fatal("unadmitted artifact accepted")
+					t.Fatal("not admitted artifact accepted")
 				}
 				return
 			}
