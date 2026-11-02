@@ -32,6 +32,13 @@ case "$4" in
  *) exit 98 ;;
 esac
 FIXTURE
+cat >"$scratch/bin/df" <<'FIXTURE'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$#" == 2 && "$1" == -Pk && "$2" == "$FIXTURE/runner" ]] || exit 95
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf 'fixture 20000000 0 %s 0%% /fictional\n' "${DISK_FREE_KB:-8388608}"
+FIXTURE
 cat >"$scratch/runner/identity-release" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -39,7 +46,7 @@ set -euo pipefail
 mkdir -p "${13}/native"
 printf '{}\n'
 FIXTURE
-chmod +x "$scratch/bin/gh" "$scratch/runner/identity-release"
+chmod +x "$scratch/bin/gh" "$scratch/bin/df" "$scratch/runner/identity-release"
 reset_fixture() {
   cp "$scratch/run-good.json" "$scratch/run.json"
   cp "$scratch/jobs-good.json" "$scratch/jobs.json"
@@ -64,6 +71,12 @@ admit || {
   exit 1
 }
 test "$(wc -l <"$scratch/env" | tr -d ' ')" == 1
+for available in 0 8388607 invalid; do
+  reset_fixture
+  refuse "DISK_FREE_KB=$available"
+  test ! -s "$scratch/calls"
+  test ! -f "$scratch/downloaded"
+done
 for context in GITHUB_EVENT_NAME=pull_request GITHUB_REF=refs/heads/other GITHUB_REPOSITORY=other/site GITHUB_SHA=main IDENTITY_CI_RUN_ID=0; do
   reset_fixture
   refuse "$context"
@@ -101,4 +114,4 @@ refuse
 reset_fixture
 printf '{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}\n' >"$scratch/main-after.json"
 refuse
-printf 'identity forge: PASS — actual bounded API admission and 28 refusal controls\n'
+printf 'identity forge: PASS — actual bounded API admission and 31 refusal controls\n'
