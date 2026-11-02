@@ -19,8 +19,8 @@ const ordinaryRequestFormExpectation = `<main id="main"><div class="intro"><h1>@
 <label for="request-product">@QUESTION@</label>
 <select id="request-product" name="product" required aria-describedby="request-assessment">@OPTIONS@</select>
 <p id="request-assessment">@ASSESSMENT@</p>
-<label for="request-title">@PROJECT@</label><input id="request-title" name="title" value="Fictional request" maxlength="240" data-character-limit="120" required aria-describedby="title-limit"><p id="title-limit" class="field-limit">@TITLELIMIT@</p>
-<label for="request-brief">@GOAL@</label><textarea id="request-brief" name="brief" rows="7" maxlength="2400" data-character-limit="1200" required aria-describedby="brief-limit request-privacy">Synthetic link-validation content</textarea><p id="brief-limit" class="field-limit">@BRIEFLIMIT@</p>
+<label for="request-title">@PROJECT@</label><input id="request-title" name="title" value="Fictional request" maxlength="240" data-character-limit="120" required aria-describedby="title-limit"><p id="title-limit" class="field-limit">@TITLE_LIMIT@</p>
+<label for="request-brief">@GOAL@</label><textarea id="request-brief" name="brief" rows="7" maxlength="2400" data-character-limit="1200" required aria-describedby="brief-limit request-privacy">Synthetic link-validation content</textarea><p id="brief-limit" class="field-limit">@BRIEF_LIMIT@</p>
 <p id="request-privacy">@PRIVACY@</p>
 <button type="submit">@SEND@</button>
 </form>
@@ -31,7 +31,7 @@ func ordinaryRequestExpectation(lang, selected string, invalid bool) string {
 	words := []string{
 		"@LANG@", "en", "@TITLE@", "Your project requests", "@INTRO@", "Tell us what you would like to build. Sending a request is free and does not start paid work.",
 		"@QUESTION@", "What would you like to build?", "@ASSESSMENT@", "For other requests, we first assess whether we can help. Any work, price and timeline need a separate agreement.",
-		"@PROJECT@", "Project title", "@TITLELIMIT@", "A short title (up to 120 characters).", "@GOAL@", "What should the project help with?", "@BRIEFLIMIT@", "Describe the goal and needs briefly (up to 1,200 characters).",
+		"@PROJECT@", "Project title", "@TITLE_LIMIT@", "A short title (up to 120 characters).", "@GOAL@", "What should the project help with?", "@BRIEF_LIMIT@", "Describe the goal and needs briefly (up to 1,200 characters).",
 		"@PRIVACY@", "Do not include passwords, payment details or sensitive personal information.", "@SEND@", "Send request", "@REQUESTS@", "Your requests", "@BACK@", "Back to your workspace",
 	}
 	labels := []string{"Website", "Web app", "Service or integration", "Other requests"}
@@ -40,7 +40,7 @@ func ordinaryRequestExpectation(lang, selected string, invalid bool) string {
 		words = []string{
 			"@LANG@", "da", "@TITLE@", "Dine projektforespørgsler", "@INTRO@", "Fortæl os, hvad du gerne vil bygge. Det er gratis at sende en forespørgsel og starter ikke betalt arbejde.",
 			"@QUESTION@", "Hvad vil du bygge?", "@ASSESSMENT@", "Ved andre opgaver vurderer vi først, om vi kan hjælpe. Arbejde, pris og tidsplan kræver en særskilt aftale.",
-			"@PROJECT@", "Projektets navn", "@TITLELIMIT@", "En kort titel (højst 120 tegn).", "@GOAL@", "Hvad skal projektet hjælpe med?", "@BRIEFLIMIT@", "Beskriv mål og behov kort (højst 1.200 tegn).",
+			"@PROJECT@", "Projektets navn", "@TITLE_LIMIT@", "En kort titel (højst 120 tegn).", "@GOAL@", "Hvad skal projektet hjælpe med?", "@BRIEF_LIMIT@", "Beskriv mål og behov kort (højst 1.200 tegn).",
 			"@PRIVACY@", "Medtag ikke adgangskoder, betalingsoplysninger eller følsomme personoplysninger.", "@SEND@", "Send forespørgsel", "@REQUESTS@", "Dine forespørgsler", "@BACK@", "Tilbage til dit arbejdsområde",
 		}
 		labels = []string{"Hjemmeside", "Webapp", "Service eller integration", "Andre opgaver"}
