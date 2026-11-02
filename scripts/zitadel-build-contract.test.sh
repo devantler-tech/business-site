@@ -302,8 +302,9 @@ check() {
       (.run | contains("corepack prepare pnpm@10.30.3 --activate"))) and
     any($job.steps[]; .name == "Fetch the frozen public upstream input" and
       (.run | contains("8afa5dd37a8e723efb9eace8d09fd5c1cccef694"))) and
-    ([$job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))] | length == 1) and
-    all($job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"));
+    ([$job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))] | length == 2) and
+    ([$job.steps[] | select(.name == "Preserve build diagnostics, not unadmitted service distribution" and (.uses // "" | startswith("actions/upload-artifact@")))] | length == 1) and
+    all($job.steps[] | select(.name == "Preserve build diagnostics, not unadmitted service distribution");
       .if == "always()" and .with["if-no-files-found"] == "error" and
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and

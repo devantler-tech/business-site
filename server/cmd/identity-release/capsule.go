@@ -60,6 +60,8 @@ func sourceOutputPath(name string) (string, error) {
 	return filepath.Join(parent, filepath.Base(name)), nil
 }
 
+// captureBaseCapsule collects the complete frozen originals before reserving a
+// fresh destination, then independently reads back the sealed private capsule.
 func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, output string) (seal string, resultErr error) {
 	name, err := sourceOutputPath(output)
 	if err != nil {
@@ -80,10 +82,8 @@ func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, o
 		return "", err
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	for _, dir := range []string{"metadata", "layers", "sources", "notices", "status"} {
-		if err = root.Mkdir(dir, 0700); err != nil {
-			return "", err
-		}
+	if err = makeBaseCapsuleDirs(root); err != nil {
+		return "", err
 	}
 	files := baseSourceFiles(p)
 	if len(files) != 41 || len(raw) != len(files) {
