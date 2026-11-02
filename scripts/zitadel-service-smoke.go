@@ -31,11 +31,11 @@ const serviceAuthority = "fixture.localhost:8080"
 
 const lifecycleAuthority = "identity.fixture.localhost:8080"
 
-// lifecycleInput binds a private fixture file without retaining its contents in
-// the public diagnostic representation.
+// lifecycleInput keeps private fixture bytes in memory for integrity comparison;
+// credentials are neither hashed as password verifiers nor serialized.
 type lifecycleInput struct {
-	SHA256 string
-	Mode   os.FileMode
+	contents []byte
+	Mode     os.FileMode
 }
 
 // lifecycleMaterial keeps generated fictional authority private to the fixture;
@@ -68,7 +68,7 @@ func lifecycleWriteInputs(root string, material lifecycleMaterial) (map[string]l
 		if strings.HasSuffix(name, ".env") {
 			mode = 0600
 		}
-		bindings[name] = lifecycleInput{SHA256: imageHash(data), Mode: mode}
+		bindings[name] = lifecycleInput{contents: bytes.Clone(data), Mode: mode}
 	}
 	directory, err := os.Open(root)
 	if err != nil {
@@ -272,7 +272,7 @@ func lifecycleValidateInputs(root string, expected map[string]lifecycleInput) er
 		return err
 	}
 	for name, binding := range expected {
-		if !regexp.MustCompile(`^[a-z][a-z0-9.-]{0,63}$`).MatchString(name) || !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(binding.SHA256) || (binding.Mode != 0444 && binding.Mode != 0600) {
+		if !regexp.MustCompile(`^[a-z][a-z0-9.-]{0,63}$`).MatchString(name) || len(binding.contents) < 1 || len(binding.contents) > 65536 || (binding.Mode != 0444 && binding.Mode != 0600) {
 			return bad()
 		}
 		path := filepath.Join(root, name)
@@ -286,7 +286,7 @@ func lifecycleValidateInputs(root string, expected map[string]lifecycleInput) er
 		}
 		data, e := imageRead(root, name, 65536)
 		after, afterError := os.Lstat(path)
-		if e != nil || afterError != nil || !os.SameFile(entry, after) || entry.Size() != after.Size() || !entry.ModTime().Equal(after.ModTime()) || after.Mode() != binding.Mode || imageHash(data) != binding.SHA256 {
+		if e != nil || afterError != nil || !os.SameFile(entry, after) || entry.Size() != after.Size() || !entry.ModTime().Equal(after.ModTime()) || after.Mode() != binding.Mode || !bytes.Equal(data, binding.contents) {
 			return bad()
 		}
 	}

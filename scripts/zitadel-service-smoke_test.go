@@ -179,7 +179,7 @@ func TestLifecyclePrivateInputAdmission(t *testing.T) {
 			if err = os.WriteFile(name, original, 0444); err != nil {
 				t.Fatal(err)
 			}
-			expected := map[string]lifecycleInput{"serve.json": {SHA256: imageHash(original), Mode: 0444}}
+			expected := map[string]lifecycleInput{"serve.json": {contents: bytes.Clone(original), Mode: 0444}}
 			switch mutation {
 			case "missing":
 				err = os.Remove(name)
@@ -340,6 +340,57 @@ func TestLifecycleWritesOnlyCompleteFreshPrivateInputs(t *testing.T) {
 				if e != nil || (mutation != "occupied-directory" && len(entries) != 0) || (mutation == "occupied-directory" && (len(entries) != 1 || entries[0].Name() != "do-not-remove")) {
 					t.Fatal("refused input changed the directory")
 				}
+			}
+		})
+	}
+}
+
+// TestLifecycleByteSnapshotsRejectCallerAndFileMutation preserves the original
+// binding when caller-owned input slices change, including same-size rewrites.
+func TestLifecycleByteSnapshotsRejectCallerAndFileMutation(t *testing.T) {
+	for _, rewrite := range []bool{false, true} {
+		t.Run(strconv.FormatBool(rewrite), func(t *testing.T) {
+			material, err := lifecycleMaterials(strings.Repeat("b", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			bindings, err := lifecycleWriteInputs(root, material)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(root, "master.key")
+			before, err := os.Stat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			material.files["master.key"][0] ^= 1
+			if rewrite {
+				if err = os.Chmod(name, 0600); err == nil {
+					err = os.WriteFile(name, material.files["master.key"], 0600)
+				}
+				if err == nil {
+					err = os.Chmod(name, 0444)
+				}
+				if err == nil {
+					err = os.Chtimes(name, before.ModTime(), before.ModTime())
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = lifecycleValidateInputs(root, bindings)
+			if (rewrite && err == nil) || (!rewrite && err != nil) {
+				t.Fatal("caller mutation changed the captured private byte binding")
+			}
+			if err != nil && (strings.Contains(err.Error(), root) || strings.Contains(err.Error(), "master.key")) {
+				t.Fatal("private input diagnostic disclosed its location")
 			}
 		})
 	}
