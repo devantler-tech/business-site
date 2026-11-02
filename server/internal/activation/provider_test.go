@@ -117,7 +117,7 @@ func TestInvalidLeaseCannotInitialize(t *testing.T) {
 
 // productionClient exercises the real SDK and maintained decoder without a
 // staging lease; a cancelled process still owns no continuing authority.
-func productionClient(t *testing.T, ctx context.Context) (*openfeature.Client, *openfeature.EvaluationAPI) {
+func productionClient(ctx context.Context, t *testing.T) (*openfeature.Client, *openfeature.EvaluationAPI) {
 	t.Helper()
 	t.Setenv("PORTAL_IDENTITY_PROFILE", "production")
 	t.Setenv("PORTAL_IDENTITY_LEASE_UNTIL", "")
@@ -144,7 +144,7 @@ func productionClient(t *testing.T, ctx context.Context) (*openfeature.Client, *
 // TestProductionUsesTheSDKAndOnlyIdentity covers the actual decoder, false
 // values, malformed/wrong-type data and unsafe caller fallbacks on other keys.
 func TestProductionUsesTheSDKAndOnlyIdentity(t *testing.T) {
-	client, _ := productionClient(t, context.Background())
+	client, _ := productionClient(context.Background(), t)
 	if !enabled(t, client) {
 		t.Fatal("explicit production identity did not reach the real SDK")
 	}
@@ -175,7 +175,7 @@ func TestProductionUsesTheSDKAndOnlyIdentity(t *testing.T) {
 func TestProductionCancellationShutdownAndConflictingLeaseDeny(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	client, _ := productionClient(t, ctx)
+	client, _ := productionClient(ctx, t)
 	if !enabled(t, client) {
 		t.Fatal("positive control missing")
 	}
@@ -183,7 +183,7 @@ func TestProductionCancellationShutdownAndConflictingLeaseDeny(t *testing.T) {
 	if enabled(t, client) {
 		t.Fatal("cancelled production context retained authority")
 	}
-	client, api := productionClient(t, context.Background())
+	client, api := productionClient(context.Background(), t)
 	t.Setenv("PORTAL_IDENTITY_LEASE_UNTIL", time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano))
 	if enabled(t, client) {
 		t.Fatal("production borrowed a staging lease")
