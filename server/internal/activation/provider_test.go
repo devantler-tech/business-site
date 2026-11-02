@@ -200,7 +200,7 @@ func TestProductionCancellationShutdownAndConflictingLeaseDeny(t *testing.T) {
 	}
 }
 
-// TestProductionSelectionFailsGenerically requires explicit unconflicted and
+// TestProductionSelectionFailsGenerically requires explicit compatible and
 // typed operator input before registering a production provider.
 func TestProductionSelectionFailsGenerically(t *testing.T) {
 	for _, test := range []struct{ profile, lease, flag string }{{"", "", on}, {"unknown", "", on}, {"production", "invalid", on}, {"production", "", ""}, {"production", "", "true"}, {"production", "", "{private invalid value"}, {"production", "", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`}} {
@@ -214,13 +214,17 @@ func TestProductionSelectionFailsGenerically(t *testing.T) {
 	t.Setenv("PORTAL_IDENTITY_PROFILE", "production")
 	t.Setenv("PORTAL_IDENTITY_LEASE_UNTIL", "")
 	t.Setenv("PORTAL_IDENTITY_FLAG", on)
-	if _, err := NewProduction(nil); err == nil {
-		t.Fatal("nil production lifetime accepted")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewProduction(ctx); err == nil {
-		t.Fatal("cancelled production lifetime accepted")
+	for _, invalid := range []struct {
+		name string
+		ctx  context.Context
+	}{{"nil", nil}, {"cancelled", ctx}} {
+		t.Run(invalid.name, func(t *testing.T) {
+			if _, err := NewProduction(invalid.ctx); err == nil {
+				t.Fatal("invalid production lifetime accepted")
+			}
+		})
 	}
 	if _, err := New(context.Background()); err == nil {
 		t.Fatal("legacy staging constructor accepted production selection")

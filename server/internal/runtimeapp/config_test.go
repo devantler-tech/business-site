@@ -92,7 +92,7 @@ func TestProductionIdentitySelectionRequiresCompleteDependencies(t *testing.T) {
 	if _, err := IdentityProvider(context.Background(), Config{}); err == nil {
 		t.Fatal("production selection without private dependencies accepted")
 	}
-	values := map[string]string{"PORTAL_DATABASE_URL": "postgres://runtime:fictional@db.example.invalid/app?sslmode=verify-full", "PORTAL_OIDC_ISSUER": "https://broker.example.invalid", "PORTAL_OIDC_CLIENT_ID": "portal", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": "/private/fixture-secret"}
+	values := map[string]string{"PORTAL_DATABASE_URL": "postgres://runtime:private@db.example.invalid/app?sslmode=verify-full", "PORTAL_OIDC_ISSUER": "https://broker.example.invalid", "PORTAL_OIDC_CLIENT_ID": "portal", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": "/private/fixture-secret"}
 	cfg, err := ReadConfig(func(key string) string { return values[key] })
 	if err != nil {
 		t.Fatal(err)
