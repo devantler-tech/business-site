@@ -18,6 +18,10 @@ keep their false/unknown publication claims.
 A manual main-only workflow defaults to nonpublishing verification. It binds the
 source, complete successful original CI run/attempt, native job and immutable
 artifact digest before reading carrier data. Verification has read permissions.
+The original source must be an ancestor of current caller main; complete retained
+build records are compared with trusted caller source. Source and caller revisions
+remain separate provenance fields, allowing unrelated main updates without
+silently accepting changed build tools.
 Only the explicit publish mode enters a separate privileged job, which repeats
 admission from trusted caller source. Neither job executes retained source or
 builds an image. The existing source engine verifies corresponding source and
@@ -43,9 +47,14 @@ The ordinary public-runtime publisher excludes identity tags.
 
 The carrier has a 1.25 GiB total bound and one-day retention; it is not durable
 corresponding-source hosting. Public release assets retain the offered sources.
-An expired or incomplete carrier requires a new native run, never a reconstruction
-from diagnostics. A partial source-only release may be completed only when its
-existing immutable contents match; it grants no image or activation claim.
+Before anything is published for the fixed version, an expired or incomplete
+carrier requires a new native run, never a reconstruction from diagnostics.
+A partial source-only release may be completed only with that same retained
+original and matching immutable contents; it grants no image or activation claim.
+If its original expires before image publication, recovery requires a reviewed
+new version and source-offer profile. A different run cannot overwrite or resume
+the old version's run-bound assets. This initial release has no durable-original
+recovery path; one-day retention is an explicit operational limitation.
 
 The publisher has no deployment, credential, user-provisioning, payment, customer
 intake or portal-activation operation. #305 owns the complete identity runtime;

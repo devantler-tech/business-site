@@ -1,0 +1,105 @@
+name: Publish - Original Customer Identity
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci-run-id:
+        description: Successful original main CI containing the one-day original carrier
+        required: true
+        type: string
+      mode:
+        description: Verify only, or publish the admitted original source and image
+        required: true
+        type: choice
+        default: dry-run
+        options: [dry-run, publish]
+
+permissions: {}
+concurrency:
+  group: identity-original-publication
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+      IDENTITY_CI_RUN_ID: ${{ inputs.ci-run-id }}
+      IDENTITY_RELEASE_MODE: dry-run
+    steps:
+      - name: Checkout the immutable trusted caller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup the trusted verifier compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: false
+      - name: Setup signature verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
+      - name: Compile the trusted original reader
+        working-directory: server
+        run: go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/identity-release" ./cmd/identity-release
+      - name: Verify the original CI, archives, signatures, source and saved payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prepare-identity-release.sh
+
+  publish:
+    needs: verify
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'publish' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+      packages: write
+      id-token: write
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+      IDENTITY_CI_RUN_ID: ${{ inputs.ci-run-id }}
+      IDENTITY_RELEASE_MODE: publish
+    steps:
+      - name: Checkout the immutable trusted caller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Setup the trusted verifier compiler
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache: false
+      - name: Setup signature verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
+      - name: Compile the trusted original reader
+        working-directory: server
+        run: go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/identity-release" ./cmd/identity-release
+      - name: Repeat original admission with the publishing caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prepare-identity-release.sh
+      - name: Publish and independently verify matching source before the original signed image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish-identity-release.sh
+      - name: Retain the public publication receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: identity-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/identity-publication.json
+          if-no-files-found: error
+          retention-days: 30

@@ -547,3 +547,167 @@ func imageSmoke(build, repo, output string, run imageCommand, probes ...func(str
 	}
 	return imageWrite(output, "image-smoke.json", append(b, '\n'), 0444)
 }
+
+// imageVerifySaved inspects the already exercised original. It never compiles,
+// builds, starts or exports an identity image. A successful result leaves only
+// the newly loaded exact image for the caller's explicit publication operation.
+func imageVerifySaved(native, notices, output string, run imageCommand) (result error) {
+	output, err := imageOutputPath(filepath.Join(native, "zitadel-image"), notices, output)
+	if err != nil {
+		return err
+	}
+	if _, err = imageOutputPath(filepath.Join(native, "zitadel-build"), notices, output); err != nil {
+		return err
+	}
+	raw, err := imageRead(filepath.Join(native, "zitadel-image"), "image-smoke.json", 8<<20)
+	if err != nil {
+		return err
+	}
+	var original struct {
+		SchemaVersion                 int `json:"schemaVersion"`
+		Profile, UpstreamCommit, Base string
+		LocalImageID                  string      `json:"localImageId"`
+		CandidateArchive              imageFile   `json:"candidateArchive"`
+		CandidateReloaded             bool        `json:"candidateReloaded"`
+		ContextSHA256                 string      `json:"contextSha256"`
+		BaseRootFS                    imageRootFS `json:"baseRootFS"`
+	}
+	if err = imageDecode(raw, &original); err != nil || original.SchemaVersion != 1 || original.Profile != "cli-version-smoke" || original.UpstreamCommit != imagePin || original.Base != imageBase || !original.CandidateReloaded || !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(original.LocalImageID) || !imageBaseRootFSValid(original.BaseRootFS) {
+		return fmt.Errorf("original saved-image receipt differs")
+	}
+	candidate, err := imageSealCandidate(filepath.Join(native, "zitadel-image"))
+	if err != nil || candidate != original.CandidateArchive {
+		return fmt.Errorf("original saved-image archive differs")
+	}
+	// A failed inspection is not evidence of absence. The complete, successful
+	// ID listing must show no image with the expected immutable config digest.
+	listing, err := run(30*time.Second, "docker", "image", "ls", "--all", "--no-trunc", "--quiet")
+	if err != nil {
+		return fmt.Errorf("saved-image absence query failed")
+	}
+	for _, id := range strings.Fields(string(listing)) {
+		if !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(id) || id == original.LocalImageID {
+			return fmt.Errorf("original saved-image ID already exists or listing is malformed")
+		}
+	}
+	if err = os.Mkdir(output, 0700); err != nil {
+		return err
+	}
+	var nonce [16]byte
+	if _, err = rand.Read(nonce[:]); err != nil {
+		return err
+	}
+	owner := hex.EncodeToString(nonce[:])
+	label := "org.devantler-tech.identity-smoke-owner"
+	ownedImage, ownedContainer := "", ""
+	defer func() {
+		if ownedContainer != "" {
+			if _, e := run(30*time.Second, "docker", "rm", ownedContainer); e != nil {
+				result = fmt.Errorf("%v; owned saved-image container cleanup failed", result)
+			}
+		}
+		if result != nil && ownedImage != "" {
+			if _, e := run(30*time.Second, "docker", "image", "rm", ownedImage); e != nil {
+				result = fmt.Errorf("%w; owned saved-image cleanup failed", result)
+			}
+		}
+	}()
+	_, loadErr := run(3*time.Minute, "docker", "image", "load", "--input", filepath.Join(native, "zitadel-image/candidate-image.tar"))
+	inspection, inspectErr := run(30*time.Second, "docker", "image", "inspect", original.LocalImageID)
+	var images []imageInspect
+	if inspectErr != nil || imageDecode(inspection, &images) != nil || len(images) != 1 || images[0].ID != original.LocalImageID {
+		return fmt.Errorf("loaded original config identity differs")
+	}
+	// This ID was positively absent before this load; no preexisting image is
+	// adopted even when it happens to carry an earlier invocation's owner label.
+	ownedImage = images[0].ID
+	if loadErr != nil {
+		return fmt.Errorf("saved-image load failed: %w", loadErr)
+	}
+	loaded := images[0]
+	if loaded.Os != "linux" || loaded.Architecture != "amd64" || loaded.Config.WorkingDir != "/app" || !imageSafeConfig(loaded.Config) || !reflect.DeepEqual(loaded.RootFS, original.BaseRootFS) {
+		return fmt.Errorf("loaded original image configuration differs")
+	}
+	created, err := run(30*time.Second, "docker", "create", "--label", label+"="+owner, "--pull=never", "--platform=linux/amd64", "--network=none", "--user=65532:65532", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=32", "--memory=256m", "--cpus=1", loaded.ID)
+	if err != nil {
+		return err
+	}
+	container := strings.TrimSpace(string(created))
+	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(container) {
+		return fmt.Errorf("invalid saved-image container identity")
+	}
+	inspection, err = run(30*time.Second, "docker", "inspect", container)
+	if err != nil {
+		return err
+	}
+	var all []imageContainer
+	if imageDecode(inspection, &all) != nil || len(all) != 1 || all[0].ID != container || all[0].Image != loaded.ID || all[0].Config.Labels[label] != owner {
+		return fmt.Errorf("saved-image container ownership differs")
+	}
+	ownedContainer = container
+	if _, err = imageInspectContainer(inspection, container, loaded.ID, "created"); err != nil {
+		return err
+	}
+	extracted := filepath.Join(output, "extracted")
+	if err = os.Mkdir(extracted, 0700); err != nil {
+		return err
+	}
+	if _, err = run(time.Minute, "docker", "cp", container+":/app/.", extracted); err != nil {
+		return err
+	}
+	if err = imageVerifyContext(extracted, original.ContextSHA256); err != nil {
+		return fmt.Errorf("saved original payload differs: %w", err)
+	}
+	if err = imageCaptureBaseNotices(output, container, run); err != nil {
+		return err
+	}
+	// Reconstruct only a verification view of the copied payload. This does not
+	// recreate a completed build or manufacture producer notice inventories.
+	view := filepath.Join(output, "view")
+	if err = os.Mkdir(view, 0700); err != nil {
+		return err
+	}
+	for _, name := range []string{"build-receipt.json", "notices/console-notices-inventory.json", "notices/console-notices-supplement-inventory.json", "notices/login-icons-inventory.json", "notices/text-font-notices-inventory.json", "notices/copied-asset-notices-inventory.json", "notices/console-third-party-notices.txt", "notices/console-notices-supplement.txt", "notices/go-toolchain-notices.txt", "notices/zitadel-root-license.txt", "notices/go-module-notices.txt", "notices/text-font-notices.txt", "notices/copied-asset-notices.txt", "zitadel"} {
+		b, e := imageRead(extracted, name, 512<<20)
+		if e != nil {
+			return e
+		}
+		target := filepath.Base(name)
+		if name == "zitadel" {
+			target = "service/zitadel"
+		}
+		if err = imageWrite(view, target, b, 0444); err != nil {
+			return err
+		}
+	}
+	expected, err := imageRead(filepath.Join(native, "zitadel-build"), "build-receipt.json", 8<<20)
+	if err != nil {
+		return err
+	}
+	actual, err := imageRead(extracted, "build-receipt.json", 8<<20)
+	if err != nil || !bytes.Equal(actual, expected) {
+		return fmt.Errorf("saved image build receipt differs from original CI")
+	}
+	seal, err := imagePackage(view, notices, filepath.Join(output, "verified-context"))
+	if err != nil || seal != original.ContextSHA256 {
+		return fmt.Errorf("saved image source/notice package differs: %v", err)
+	}
+	after, err := imageSealCandidate(filepath.Join(native, "zitadel-image"))
+	if err != nil || after != candidate {
+		return fmt.Errorf("saved archive changed during verification")
+	}
+	receipt := struct {
+		SchemaVersion               int    `json:"schemaVersion"`
+		Profile                     string `json:"profile"`
+		LocalImageID                string `json:"localImageId"`
+		ContextSHA256               string `json:"contextSha256"`
+		ImageRetainedForPublication bool   `json:"imageRetainedForPublication"`
+		ImagePublished              bool   `json:"imagePublished"`
+		PortalActivated             bool   `json:"portalActivated"`
+	}{1, "identity-saved-image-v1", loaded.ID, seal, true, false, false}
+	body, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return err
+	}
+	return imageWrite(output, "saved-image.json", append(body, '\n'), 0444)
+}

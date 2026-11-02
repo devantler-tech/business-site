@@ -19,6 +19,10 @@ const releaseUsage = `Explicit source-data operations (ordinary invocation is in
   identity-release pack-base-source --input /private/capsule --sha256 <external-manifest-sha256> --output /new/base-source.tar
   identity-release unpack-base-source --input /private/base-source.tar --archive-sha256 <external-archive-sha256> --sha256 <external-manifest-sha256> --output /new/private/capsule
   identity-release prepare-handoff --input /native/job-root --source-sha <commit> --run-id <run> --run-attempt <attempt> --output /new/handoff.json
+  identity-release pack-carrier --input /native/job-root --output /new/carrier.tar
+  identity-release unpack-carrier --input /private/carrier.tar --sha256 <archive> --manifest-sha256 <handoff> --source-sha <commit> --run-id <run> --run-attempt <attempt> --output /new/native
+  identity-release restore-artifact --input /private/artifact.zip --sha256 <primary-api-digest> --source-sha <commit> --run-id <run> --run-attempt <attempt> --output /new/transport
+  identity-release verify-base-auth --input /private/base --sha256 <manifest> --repository /trusted/caller --output /new/evidence
 No URL/profile override, authenticated request, image publication or portal activation is supported.
 `
 
@@ -28,6 +32,15 @@ func runRelease(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	op := args[0]
+	if op == "verify-base-auth" {
+		return runBaseAuth(ctx, args[1:], out)
+	}
+	if op == "restore-artifact" {
+		return runArtifact(args[1:], out)
+	}
+	if op == "pack-carrier" || op == "unpack-carrier" {
+		return runCarrier(args, out)
+	}
 	if op == "prepare-handoff" {
 		return runHandoff(args[1:], out)
 	}

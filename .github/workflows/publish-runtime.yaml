@@ -8,7 +8,7 @@ permissions: {}
 
 jobs:
   admit:
-    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true' && !github.event.release.draft && !github.event.release.prerelease }}
+    if: ${{ github.repository == 'devantler-tech/business-site' && github.event_name == 'release' && vars.RUNTIME_PUBLICATION_ENABLED == 'true' && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, 'identity-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
