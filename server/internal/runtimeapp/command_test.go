@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-// Exercise the compiled command rather than replacing its OpenFeature client.
+// Exercise ordinary, staging and production selections in the compiled command
+// rather than replacing its OpenFeature client.
 // All federation/store traffic stays inside disposable, synthetic TLS fixtures.
 func TestActualExecutableStagingIdentity(t *testing.T) {
 	dir := t.TempDir()
@@ -61,17 +62,26 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		"PORTAL_CLIENT_SECRET_FILE=" + secret, "SSL_CERT_FILE=" + ca}
 	on := `{"defaultVariant":"on","variants":[{"name":"on","value":true}]}`
 	for _, tc := range []struct {
-		name, flag string
-		want       int
-		projected  bool
+		name, flag, profile                                              string
+		want                                                             int
+		projected, ordinary, refuse, conflictingLease, missingDependency bool
 	}{
-		{"explicit identity after slow startup", on, 200, false},
-		{"missing flag", "", 404, false},
-		{"false", `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, 404, false},
-		{"malformed", "{invalid", 404, false},
-		{"wrong type", `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, 404, false},
-		{"explicit projected identity", on, 200, true},
-		{"projected identity remains off", "", 404, true},
+		{name: "explicit identity after slow startup", flag: on, want: 200},
+		{name: "missing flag", want: 404},
+		{name: "false", flag: `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, want: 404},
+		{name: "malformed", flag: "{invalid", want: 404},
+		{name: "wrong type", flag: `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, want: 404},
+		{name: "explicit projected identity", flag: on, want: 200, projected: true},
+		{name: "projected identity remains off", want: 404, projected: true},
+		{name: "ordinary complete dependencies remain off", want: 404, ordinary: true},
+		{name: "production without staging lease", flag: on, profile: "production", want: 200},
+		{name: "production projected secret", flag: on, profile: "production", want: 200, projected: true},
+		{name: "production disabled", flag: `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, profile: "production", want: 404},
+		{name: "production missing flag", profile: "production", refuse: true},
+		{name: "production malformed flag", flag: "{invalid", profile: "production", refuse: true},
+		{name: "production conflicting lease", flag: on, profile: "production", refuse: true, conflictingLease: true},
+		{name: "unknown production profile", flag: on, profile: "unknown", refuse: true},
+		{name: "production missing private dependency", flag: on, profile: "production", refuse: true, missingDependency: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
@@ -91,9 +101,35 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 				}
 				env = append(env, "PORTAL_CLIENT_SECRET_PROJECTION_FILE="+projection)
 			}
-			env = append(env, "PORTAL_IDENTITY_FLAG="+tc.flag, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano),
+			env = append(env, "PORTAL_IDENTITY_PROFILE="+tc.profile, "PORTAL_IDENTITY_FLAG="+tc.flag,
 				"portal-requests="+on, "portal-triage="+on, "portal-proposals="+on,
 				"portal-proposal-sharing="+on, "portal-proposal-acceptance="+on)
+			if (!tc.ordinary && tc.profile == "") || tc.conflictingLease {
+				env = append(env, "PORTAL_IDENTITY_LEASE_UNTIL="+until.UTC().Format(time.RFC3339Nano))
+			}
+			if tc.missingDependency {
+				filtered := []string{}
+				for _, value := range env {
+					if !strings.HasPrefix(value, "PORTAL_OIDC_CLIENT_ID=") {
+						filtered = append(filtered, value)
+					}
+				}
+				env = filtered
+			}
+			if tc.refuse {
+				process := launchActualCommand(t, binary, public, "127.0.0.1:0", env)
+				want := "startup-activation-unavailable"
+				if tc.missingDependency {
+					want = "startup-config-unavailable"
+				}
+				if address, err := process.awaitReady(); address != "" || err == nil || err.Error() != want {
+					t.Fatal("invalid production configuration opened a listener or disclosed unclassified diagnostics")
+				}
+				if err := process.stop(); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
 			address, stop := startActualCommand(t, binary, public, env)
 			defer stop()
 			commandStatus(t, address, "/portal/sign-in", tc.want)
@@ -105,7 +141,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-acceptance", 404)
 			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
 			// The ordinary transport retains the actual shared-provider expiry proof.
-			if tc.want == 200 && !tc.projected {
+			if tc.want == 200 && !tc.projected && tc.profile == "" {
 				<-time.After(time.Until(until) + time.Millisecond)
 				commandStatus(t, address, "/portal/sign-in", 404)
 				commandStatus(t, address, "/", 200)

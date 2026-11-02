@@ -28,16 +28,24 @@ type Config struct {
 	secretProjected                                bool
 }
 
-// IdentityProvider keeps ordinary startup closed. Explicit staging additionally
-// requires complete validated private dependencies and a bounded operator lease.
+// IdentityProvider keeps ordinary startup closed. An explicit production profile
+// is separate from bounded staging; both require complete private dependencies.
 func IdentityProvider(ctx context.Context, c Config) (openfeature.FeatureProvider, error) {
-	if os.Getenv("PORTAL_IDENTITY_FLAG") == "" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" {
+	profile := os.Getenv("PORTAL_IDENTITY_PROFILE")
+	if profile == "" && os.Getenv("PORTAL_IDENTITY_FLAG") == "" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" {
 		return openfeature.NoopProvider{}, nil
 	}
 	if c == (Config{}) {
 		return nil, activation.ErrInvalid
 	}
-	return activation.New(ctx)
+	switch profile {
+	case "":
+		return activation.New(ctx)
+	case "production":
+		return activation.NewProduction(ctx)
+	default:
+		return nil, activation.ErrInvalid
+	}
 }
 
 // readSecret accepts root-confined projected secrets within their mount, but not

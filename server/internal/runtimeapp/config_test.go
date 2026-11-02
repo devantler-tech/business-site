@@ -82,3 +82,32 @@ func TestExplicitIdentityProjectionSelection(t *testing.T) {
 		})
 	}
 }
+
+// TestProductionIdentitySelectionRequiresCompleteDependencies uses the actual
+// runtime selector without opening any real broker or database in this unit test.
+func TestProductionIdentitySelectionRequiresCompleteDependencies(t *testing.T) {
+	t.Setenv("PORTAL_IDENTITY_PROFILE", "production")
+	t.Setenv("PORTAL_IDENTITY_LEASE_UNTIL", "")
+	t.Setenv("PORTAL_IDENTITY_FLAG", `{"defaultVariant":"on","variants":[{"name":"on","value":true}]}`)
+	if _, err := IdentityProvider(context.Background(), Config{}); err == nil {
+		t.Fatal("production selection without private dependencies accepted")
+	}
+	values := map[string]string{"PORTAL_DATABASE_URL": "postgres://runtime:private@db.example.invalid/app?sslmode=verify-full", "PORTAL_OIDC_ISSUER": "https://broker.example.invalid", "PORTAL_OIDC_CLIENT_ID": "portal", "PORTAL_CALLBACK_URL": "https://app.example.invalid/portal/callback", "PORTAL_CLIENT_SECRET_FILE": "/private/fixture-secret"}
+	cfg, err := ReadConfig(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := IdentityProvider(context.Background(), cfg)
+	if err != nil || p == nil {
+		t.Fatal("explicit production selection fell back to missing staging lease")
+	}
+	if state, ok := p.(interface{ Shutdown() }); ok {
+		t.Cleanup(state.Shutdown)
+	}
+	for _, profile := range []string{"unknown", "Production", "staging"} {
+		t.Setenv("PORTAL_IDENTITY_PROFILE", profile)
+		if _, err := IdentityProvider(context.Background(), cfg); err == nil || err.Error() != "portal activation is invalid" {
+			t.Fatal("unknown activation profile accepted or diagnostics disclosed input")
+		}
+	}
+}
