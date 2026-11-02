@@ -520,8 +520,17 @@ func serviceMountStatus(b []byte) (serviceMounts, error) {
 }
 
 func serviceProcessStatus(b []byte, pid int) (serviceProcess, error) {
+	return restrictedProcessStatus(b, pid, "zitadel", 65532)
+}
+
+// restrictedProcessStatus measures one actual namespace-init process while
+// retaining the same capability, seccomp and memory checks for each component.
+func restrictedProcessStatus(b []byte, pid int, name string, uid int) (serviceProcess, error) {
 	bad := func() (serviceProcess, error) {
 		return serviceProcess{}, fmt.Errorf("actual service process restrictions or measurements differ")
+	}
+	if !((name == "zitadel" && uid == 65532) || (name == "postgres" && uid == 999)) {
+		return bad()
 	}
 	fields := map[string][]string{}
 	for _, line := range strings.Split(string(b), "\n") {
@@ -534,7 +543,8 @@ func serviceProcessStatus(b []byte, pid int) (serviceProcess, error) {
 		}
 		fields[key] = strings.Fields(value)
 	}
-	for key, expected := range map[string]string{"Name": "zitadel", "Pid": strconv.Itoa(pid), "Uid": "65532 65532 65532 65532", "Gid": "65532 65532 65532 65532", "NoNewPrivs": "1", "Seccomp": "2", "CapInh": "0000000000000000", "CapPrm": "0000000000000000", "CapEff": "0000000000000000", "CapBnd": "0000000000000000", "CapAmb": "0000000000000000"} {
+	identity := strings.TrimSpace(strings.Repeat(strconv.Itoa(uid)+" ", 4))
+	for key, expected := range map[string]string{"Name": name, "Pid": strconv.Itoa(pid), "Uid": identity, "Gid": identity, "NoNewPrivs": "1", "Seccomp": "2", "CapInh": "0000000000000000", "CapPrm": "0000000000000000", "CapEff": "0000000000000000", "CapBnd": "0000000000000000", "CapAmb": "0000000000000000"} {
 		if strings.Join(fields[key], " ") != expected {
 			return bad()
 		}
@@ -557,7 +567,7 @@ func serviceProcessStatus(b []byte, pid int) (serviceProcess, error) {
 	if !a || !c || !d || peak < rss {
 		return bad()
 	}
-	return serviceProcess{PID: pid, Name: "zitadel", UID: 65532, GID: 65532, RSSKiB: rss, PeakRSSKiB: peak, Threads: threads, EffectiveCapabilities: fields["CapEff"][0], BoundingCapabilities: fields["CapBnd"][0], NoNewPrivileges: true, SeccompMode: 2}, nil
+	return serviceProcess{PID: pid, Name: name, UID: uid, GID: uid, RSSKiB: rss, PeakRSSKiB: peak, Threads: threads, EffectiveCapabilities: fields["CapEff"][0], BoundingCapabilities: fields["CapBnd"][0], NoNewPrivileges: true, SeccompMode: 2}, nil
 }
 
 const serviceTmpfs = "rw,noexec,nosuid,nodev,size=16777216,uid=65532,gid=65532,mode=0700"
@@ -1035,4 +1045,835 @@ func serviceBrowser(pid int, image, repo, output string, run imageCommand) error
 		return err
 	}
 	return imageWrite(output, "browser-binding.json", append(bound, '\n'), 0444)
+}
+
+// lifecyclePhaseArgs admits a complete sealed private profile, then gives each
+// native phase only its own inputs. The ordinary start has no bootstrap document.
+func lifecyclePhaseArgs(phase, root string, bindings map[string]lifecycleInput) ([]string, error) {
+	if strings.ContainsAny(root, ",\n\r") {
+		return nil, fmt.Errorf("closed lifecycle mount paths required")
+	}
+	if err := lifecycleValidateInputs(root, bindings); err != nil {
+		return nil, err
+	}
+	config := ""
+	files := []string{"ca.pem", "service.crt", "service.key"}
+	command := []string{}
+	switch phase {
+	case "init-user", "init", "init-wrong-ca", "init-wrong-host", "init-plaintext":
+		config = "init.json"
+		if strings.HasPrefix(phase, "init-") && phase != "init-user" {
+			config = phase + ".json"
+		}
+		command = []string{"init"}
+		if phase == "init-user" {
+			command = append(command, "user")
+		}
+		if phase == "init-wrong-ca" {
+			files = append(files, "untrusted-ca.pem")
+		}
+	case "setup":
+		config = "setup.json"
+		files = append(files, "steps.json", "master.key")
+		command = []string{"setup", "--steps", "/fixture/steps.json", "--masterkeyFile", "/fixture/master.key", "--tlsMode", "enabled"}
+	case "serve":
+		config = "serve.json"
+		files = append(files, "master.key")
+		command = []string{"start", "--masterkeyFile", "/fixture/master.key", "--tlsMode", "enabled"}
+	default:
+		return nil, fmt.Errorf("unsupported lifecycle phase")
+	}
+	files = append(files, config)
+	args := []string{}
+	for _, name := range files {
+		args = append(args, "--mount=type=bind,src="+filepath.Join(root, name)+",dst=/fixture/"+name+",readonly")
+	}
+	return append(args, append([]string{"--", "--config", "/fixture/" + config}, command...)...), nil
+}
+
+// lifecycleIdentitySnapshot accepts only the two intended fictional creation
+// events. Its seal can detect replacement across restart without retaining raw
+// event payloads, which can contain password-derived material.
+func lifecycleIdentitySnapshot(raw []byte, material lifecycleMaterial) (string, error) {
+	var snapshot struct {
+		Instances, Humans, Verified int
+		InstanceID                  string `json:"instanceId"`
+		HumanID                     string `json:"humanId"`
+		InstanceName                string `json:"instanceName"`
+		UserName                    string `json:"userName"`
+		Email                       string `json:"email"`
+		HumanInstanceID             string `json:"humanInstanceId"`
+		InstanceAggregateID         string `json:"instanceAggregateId"`
+		InstanceSequence            int64  `json:"instanceSequence"`
+		HumanSequence               int64  `json:"humanSequence"`
+	}
+	bad := func() (string, error) {
+		return "", fmt.Errorf("complete intended fictional instance and unverified identity required")
+	}
+	var document map[string]json.RawMessage
+	if len(raw) > 4096 || imageDecode(raw, &document) != nil || len(document) != 12 {
+		return bad()
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&snapshot) != nil || snapshot.Instances != 1 || snapshot.Humans != 1 || snapshot.Verified != 0 || snapshot.InstanceName != "Fictional lifecycle instance" || snapshot.UserName != material.human || snapshot.Email != material.human || snapshot.InstanceID != snapshot.HumanInstanceID || snapshot.InstanceID != snapshot.InstanceAggregateID || snapshot.InstanceSequence <= 0 || snapshot.HumanSequence <= 0 || !regexp.MustCompile(`^[1-9][0-9]{0,19}$`).MatchString(snapshot.InstanceID) || !regexp.MustCompile(`^[1-9][0-9]{0,19}$`).MatchString(snapshot.HumanID) {
+		return bad()
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		return bad()
+	}
+	return imageHash(encoded), nil
+}
+
+// lifecycleContainerSpec is the complete permitted container interface for one
+// fixture phase. It is compared with Docker's effective inspection before use.
+type lifecycleContainerSpec struct {
+	image, imageID, user, workdir string
+	entrypoint, command           []string
+	tmpfs                         map[string]string
+	memory                        int64
+	inputs                        map[string]string // destination -> physical read-only input
+	volume                        string
+}
+
+// lifecycleInspect refuses an unexpected writable mount, credential environment,
+// namespace, image, execution mode or owner before any native phase is started.
+func lifecycleInspect(raw []byte, id, owner, network, state string, spec lifecycleContainerSpec) (imageContainer, error) {
+	bad := func() (imageContainer, error) {
+		return imageContainer{}, fmt.Errorf("owned restricted lifecycle container required")
+	}
+	var all []imageContainer
+	if imageDecode(raw, &all) != nil || len(all) != 1 {
+		return bad()
+	}
+	c := all[0]
+	h := c.HostConfig
+	if c.ID != id || c.Image != spec.imageID || c.Config.Image != spec.image || c.Config.User != spec.user || c.Config.WorkingDir != spec.workdir || !reflect.DeepEqual(c.Config.Entrypoint, spec.entrypoint) || !reflect.DeepEqual(c.Config.Cmd, spec.command) || c.Config.Labels["org.devantler-tech.identity-smoke-owner"] != owner || !h.ReadonlyRootfs || h.Privileged || h.PublishAllPorts || !reflect.DeepEqual(h.CapDrop, []string{"ALL"}) || len(h.CapAdd) != 0 || !reflect.DeepEqual(h.SecurityOpt, []string{"no-new-privileges"}) || h.NetworkMode != network || h.PidMode != "" || h.IpcMode != "private" || h.PidsLimit != 128 || h.Memory != spec.memory || h.NanoCpus != 2000000000 || len(h.Binds) != 0 || len(h.Devices) != 0 || len(h.PortBindings) != 0 || !reflect.DeepEqual(h.Tmpfs, spec.tmpfs) || c.State.Status != state || c.State.Dead || c.State.OOMKilled || len(c.NetworkSettings.Networks) > 1 {
+		return bad()
+	}
+	if state != "created" && state != "running" && state != "exited" {
+		return bad()
+	}
+	if state == "running" && (!c.State.Running || c.State.Pid <= 1 || len(c.NetworkSettings.Networks) != 1) {
+		return bad()
+	}
+	if state != "running" && (c.State.Running || c.State.Pid != 0) {
+		return bad()
+	}
+	for _, entry := range c.Config.Env {
+		if strings.HasPrefix(entry, "ZITADEL_") {
+			return bad()
+		}
+	}
+	for _, n := range c.NetworkSettings.Networks {
+		if n.NetworkID != network && !(state != "running" && n.NetworkID == "") {
+			return bad()
+		}
+	}
+	seen := map[string]bool{}
+	for _, rawMount := range c.Mounts {
+		var mount struct {
+			Type, Source, Destination, Name, Driver string
+			RW                                      bool
+		}
+		if json.Unmarshal(rawMount, &mount) != nil || seen[mount.Destination] {
+			return bad()
+		}
+		seen[mount.Destination] = true
+		if source, ok := spec.inputs[mount.Destination]; ok {
+			if mount.Type != "bind" || mount.Source != source || mount.RW {
+				return bad()
+			}
+		} else if mount.Destination == "/var/lib/postgresql/data" && spec.volume != "" {
+			if mount.Type != "volume" || mount.Name != spec.volume || mount.Driver != "local" || !mount.RW {
+				return bad()
+			}
+		} else if _, ok := spec.tmpfs[mount.Destination]; !ok || mount.Type != "tmpfs" || !mount.RW {
+			return bad()
+		}
+	}
+	for destination := range spec.inputs {
+		if !seen[destination] {
+			return bad()
+		}
+	}
+	if spec.volume != "" && !seen["/var/lib/postgresql/data"] {
+		return bad()
+	}
+	// Some Docker versions omit tmpfs entries from Mounts; HostConfig is still
+	// checked exactly, and native process mount inspection is separate evidence.
+	return c, nil
+}
+
+// lifecycleSession owns only random, positively inspected fixture resources.
+// Private command output is never written to the public evidence directory.
+type lifecycleSession struct {
+	run                                             imageCommand
+	owner, root, network, volume, database, service string
+	bindings                                        map[string]lifecycleInput
+	material                                        lifecycleMaterial
+	specs                                           map[string]lifecycleContainerSpec
+}
+
+// inspect rebinds a resource's actual owner and full restrictions on every use.
+func (s *lifecycleSession) inspect(id, state string) (imageContainer, error) {
+	spec, ok := s.specs[id]
+	if !ok {
+		return imageContainer{}, fmt.Errorf("unowned lifecycle container")
+	}
+	raw, err := s.run(30*time.Second, "docker", "inspect", id)
+	if err != nil {
+		return imageContainer{}, fmt.Errorf("lifecycle container inspection failed")
+	}
+	return lifecycleInspect(raw, id, s.owner, s.network, state, spec)
+}
+
+// create starts no process until the daemon's effective restrictions are read
+// back. Every private mount is individually read-only; no private directory is
+// passed through to ordinary serving.
+func (s *lifecycleSession) create(spec lifecycleContainerSpec, extra ...string) (string, error) {
+	if err := lifecycleValidateInputs(s.root, s.bindings); err != nil {
+		return "", err
+	}
+	args := []string{"create", "--pull=never", "--platform=linux/amd64", "--label=org.devantler-tech.identity-smoke-owner=" + s.owner, "--network=" + s.network, "--user=" + spec.user, "--workdir=" + spec.workdir, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=" + strconv.FormatInt(spec.memory, 10), "--cpus=2", "--entrypoint=" + spec.entrypoint[0]}
+	for destination, options := range spec.tmpfs {
+		args = append(args, "--tmpfs="+destination+":"+options)
+	}
+	for destination, source := range spec.inputs {
+		args = append(args, "--mount=type=bind,src="+source+",dst="+destination+",readonly")
+	}
+	if spec.volume != "" {
+		args = append(args, "--mount=type=volume,src="+spec.volume+",dst=/var/lib/postgresql/data")
+	}
+	args = append(args, extra...)
+	args = append(args, spec.image)
+	args = append(args, spec.command...)
+	raw, err := s.run(30*time.Second, "docker", args...)
+	if err != nil {
+		return "", fmt.Errorf("lifecycle container creation failed")
+	}
+	id := strings.TrimSpace(string(raw))
+	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(id) {
+		return "", fmt.Errorf("invalid lifecycle container identity")
+	}
+	// Record only after a separate minimal ownership read, so cleanup never
+	// acts on an arbitrary identifier returned by an unsuccessful producer.
+	actual, err := s.run(30*time.Second, "docker", "inspect", id)
+	var all []imageContainer
+	if err != nil || imageDecode(actual, &all) != nil || len(all) != 1 || all[0].ID != id || all[0].Config.Labels["org.devantler-tech.identity-smoke-owner"] != s.owner {
+		return "", fmt.Errorf("lifecycle container ownership unconfirmed")
+	}
+	s.specs[id] = spec
+	if _, err = s.inspect(id, "created"); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// remove retires only a recorded and freshly reverified owner-bound resource.
+func (s *lifecycleSession) remove(id string) error {
+	if _, ok := s.specs[id]; !ok {
+		return fmt.Errorf("unowned lifecycle cleanup refused")
+	}
+	raw, err := s.run(30*time.Second, "docker", "inspect", id)
+	var all []imageContainer
+	if err != nil || imageDecode(raw, &all) != nil || len(all) != 1 || all[0].ID != id || all[0].Config.Labels["org.devantler-tech.identity-smoke-owner"] != s.owner {
+		return fmt.Errorf("lifecycle cleanup ownership unknown")
+	}
+	if _, err = s.run(time.Minute, "docker", "rm", "--force", id); err != nil {
+		return fmt.Errorf("owned lifecycle container cleanup failed")
+	}
+	delete(s.specs, id)
+	return nil
+}
+
+// phase runs a real native command against its sealed phase-specific profile.
+// A negative result requires the intended transport error and a non-OOM exit;
+// an unrelated crash, timeout or unhealthy database cannot pass a TLS control.
+func (s *lifecycleSession) phase(image, phase string, negative []string) error {
+	plan, err := lifecyclePhaseArgs(phase, s.root, s.bindings)
+	if err != nil {
+		return err
+	}
+	spec := lifecycleContainerSpec{image: image, imageID: image, user: "65532:65532", workdir: "/app", entrypoint: []string{"/app/zitadel"}, tmpfs: map[string]string{"/tmp": serviceTmpfs}, memory: 1073741824, inputs: map[string]string{}}
+	marker := -1
+	for i, arg := range plan {
+		if arg == "--" {
+			marker = i
+			break
+		}
+		parts := strings.Split(strings.TrimPrefix(arg, "--mount="), ",")
+		if len(parts) != 4 || parts[0] != "type=bind" || parts[3] != "readonly" {
+			return fmt.Errorf("closed lifecycle mount plan required")
+		}
+		spec.inputs[strings.TrimPrefix(parts[2], "dst=")] = strings.TrimPrefix(parts[1], "src=")
+	}
+	if marker < 0 {
+		return fmt.Errorf("native lifecycle command missing")
+	}
+	spec.command = plan[marker+1:]
+	id, err := s.create(spec)
+	if err != nil {
+		return err
+	}
+	if phase == "serve" {
+		if _, err = s.run(30*time.Second, "docker", "start", id); err != nil {
+			return fmt.Errorf("ordinary identity startup failed")
+		}
+		if _, err = s.inspect(id, "running"); err != nil {
+			return err
+		}
+		s.service = id
+		return nil
+	}
+	output, executionError := s.run(4*time.Minute, "docker", "start", "--attach", id)
+	actual, err := s.inspect(id, "exited")
+	if err != nil {
+		return err
+	}
+	if len(negative) == 0 {
+		if executionError != nil || actual.State.ExitCode != 0 {
+			return fmt.Errorf("native lifecycle %s phase failed", phase)
+		}
+	} else {
+		matched := false
+		for _, fragment := range negative {
+			if strings.Contains(strings.ToLower(string(output)), fragment) {
+				matched = true
+			}
+		}
+		if actual.State.ExitCode == 0 || !matched {
+			return fmt.Errorf("native lifecycle transport refusal unproven")
+		}
+	}
+	return s.remove(id)
+}
+
+// query uses a private env file, not secret command arguments. Statements and
+// returned values are a closed fixture interface, never arbitrary user input.
+func (s *lifecycleSession) query(admin bool, statement string) ([]byte, error) {
+	if err := lifecycleValidateInputs(s.root, s.bindings); err != nil {
+		return nil, err
+	}
+	if _, err := s.inspect(s.database, "running"); err != nil {
+		return nil, err
+	}
+	name := "app-client.env"
+	if admin {
+		name = "admin-client.env"
+	}
+	raw, err := s.run(20*time.Second, "docker", "exec", "--user=999:999", "--env-file", filepath.Join(s.root, name), s.database, "psql", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1", "--command", statement)
+	if err != nil {
+		return nil, fmt.Errorf("verified lifecycle database query refused")
+	}
+	if len(raw) > 4096 {
+		return nil, fmt.Errorf("lifecycle query output exceeds its bound")
+	}
+	return bytes.TrimSpace(raw), nil
+}
+
+// databaseStart reuses one owned local volume. The server key is derived inside
+// that volume under UID999 with mode0600; the sealed host input stays read-only.
+func (s *lifecycleSession) databaseStart(imageID string, initialized bool) error {
+	spec := lifecycleContainerSpec{image: serviceDatabaseImage, imageID: imageID, user: "999:999", workdir: "/", entrypoint: []string{"/bin/sh"}, memory: 536870912, volume: s.volume, tmpfs: map[string]string{"/tmp": "rw,noexec,nosuid,nodev,size=16777216,uid=999,gid=999,mode=0700", "/var/run/postgresql": "rw,noexec,nosuid,nodev,size=1048576,uid=999,gid=999,mode=0700"}, inputs: map[string]string{}}
+	for _, name := range []string{"ca.pem", "database.crt", "database.key", "database-hba.conf"} {
+		spec.inputs["/fixture/"+name] = filepath.Join(s.root, name)
+	}
+	script := `test "$(id -u):$(id -g)" = 999:999
+ test "$(stat -c '%u:%g' /var/lib/postgresql/data)" = 999:999
+ chmod 0700 /var/lib/postgresql/data
+ umask 077
+ mkdir -p /var/lib/postgresql/data/.fixture-tls
+ cp /fixture/database.crt /var/lib/postgresql/data/.fixture-tls/server.crt
+ cp /fixture/database.key /var/lib/postgresql/data/.fixture-tls/server.key
+ chmod 0600 /var/lib/postgresql/data/.fixture-tls/server.key
+ test "$(stat -c '%u:%g:%a' /var/lib/postgresql/data/.fixture-tls/server.key)" = 999:999:600
+ exec /usr/local/bin/docker-entrypoint.sh postgres -c ssl=on -c ssl_min_protocol_version=TLSv1.3 -c ssl_cert_file=/var/lib/postgresql/data/.fixture-tls/server.crt -c ssl_key_file=/var/lib/postgresql/data/.fixture-tls/server.key -c hba_file=/fixture/database-hba.conf`
+	if initialized {
+		script = "test -f /var/lib/postgresql/data/pgdata/PG_VERSION\n" + script
+	} else {
+		script = "test ! -e /var/lib/postgresql/data/pgdata/PG_VERSION\n" + script
+	}
+	spec.command = []string{"-ec", script}
+	extra := []string{"--network-alias=database.fixture.localhost", "--network-alias=other.database.fixture.localhost"}
+	if initialized {
+		extra = append(extra, "--env=PGDATA=/var/lib/postgresql/data/pgdata")
+	} else {
+		extra = append(extra, "--env-file="+filepath.Join(s.root, "database.env"))
+	}
+	id, err := s.create(spec, extra...)
+	if err != nil {
+		return err
+	}
+	s.database = id
+	if _, err = s.run(30*time.Second, "docker", "start", id); err != nil {
+		return fmt.Errorf("owned TLS database start failed")
+	}
+	deadline := time.Now().Add(time.Minute)
+	for {
+		if _, err = s.inspect(id, "running"); err != nil {
+			return err
+		}
+		if initialized {
+			_, err = s.query(false, "SELECT 1")
+		} else {
+			_, err = s.query(true, "SELECT 1")
+		}
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("owned TLS database did not become ready")
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// cleanup never searches by a broad Docker filter. It removes only resources
+// returned to this session and rechecks their exact ownership immediately first.
+func (s *lifecycleSession) cleanup() error {
+	failed := false
+	for id := range s.specs {
+		if s.remove(id) != nil {
+			failed = true
+		}
+	}
+	if s.volume != "" {
+		raw, err := s.run(30*time.Second, "docker", "volume", "inspect", s.volume)
+		var volumes []struct {
+			Name, Driver    string
+			Labels, Options map[string]string
+		}
+		if err != nil || imageDecode(raw, &volumes) != nil || len(volumes) != 1 || volumes[0].Name != s.volume || volumes[0].Driver != "local" || volumes[0].Labels["org.devantler-tech.identity-smoke-owner"] != s.owner || len(volumes[0].Options) != 0 {
+			failed = true
+		} else if _, err = s.run(30*time.Second, "docker", "volume", "rm", s.volume); err != nil {
+			failed = true
+		} else {
+			s.volume = ""
+		}
+	}
+	if s.network != "" {
+		raw, err := s.run(30*time.Second, "docker", "network", "inspect", s.network)
+		var networks []struct {
+			ID         string
+			Internal   bool
+			Labels     map[string]string
+			Containers map[string]json.RawMessage
+		}
+		if err != nil || imageDecode(raw, &networks) != nil || len(networks) != 1 || networks[0].ID != s.network || !networks[0].Internal || networks[0].Labels["org.devantler-tech.identity-smoke-owner"] != s.owner || len(networks[0].Containers) != 0 {
+			failed = true
+		} else if _, err = s.run(30*time.Second, "docker", "network", "rm", s.network); err != nil {
+			failed = true
+		} else {
+			s.network = ""
+		}
+	}
+	if !failed && s.root != "" {
+		if _, err := lifecyclePrivateRoot(s.root); err != nil {
+			failed = true
+		} else if os.RemoveAll(s.root) != nil {
+			failed = true
+		} else {
+			s.root = ""
+		}
+	}
+	if failed {
+		return fmt.Errorf("owned lifecycle cleanup incomplete")
+	}
+	return nil
+}
+
+// ready verifies the actual service certificate and discovery authority on the
+// owned network. No browser warning, host trust store or plaintext fallback is used.
+func (s *lifecycleSession) ready() (*http.Client, string, error) {
+	actual, err := s.inspect(s.service, "running")
+	if err != nil {
+		return nil, "", err
+	}
+	target, err := serviceTarget(actual, s.network)
+	if err != nil {
+		return nil, "", err
+	}
+	client, err := lifecycleTLSClient(target, s.material.files["ca.pem"])
+	if err != nil {
+		return nil, "", err
+	}
+	base := "https://" + lifecycleAuthority
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		if _, err = serviceGet(client, base, "/debug/ready"); err == nil {
+			break
+		}
+		if _, err = s.inspect(s.service, "running"); err != nil {
+			client.CloseIdleConnections()
+			return nil, "", err
+		}
+		if time.Now().After(deadline) {
+			client.CloseIdleConnections()
+			return nil, "", fmt.Errorf("verified TLS service readiness failed")
+		}
+		time.Sleep(time.Second)
+	}
+	raw, err := serviceGet(client, base, "/.well-known/openid-configuration")
+	var document struct {
+		Issuer        string `json:"issuer"`
+		Authorization string `json:"authorization_endpoint"`
+		Token         string `json:"token_endpoint"`
+	}
+	if err != nil || json.Unmarshal(raw, &document) != nil || document.Issuer != base || document.Authorization != base+"/oauth/v2/authorize" || document.Token != base+"/oauth/v2/token" {
+		client.CloseIdleConnections()
+		return nil, "", fmt.Errorf("verified lifecycle OIDC discovery differs")
+	}
+	return client, target, nil
+}
+
+// imageLifecycle is a separate opt-in native acceptance fixture. It reuses the
+// original image; it does not authenticate a real customer or authorize deployment.
+func imageLifecycle(image, owner, repo, output string, run imageCommand) (result error) {
+	if !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(image) || !regexp.MustCompile(`^[a-f0-9]{32}$`).MatchString(owner) {
+		return fmt.Errorf("original image and fresh fixture owner required")
+	}
+	source, err := imageRead(repo, "scripts/zitadel-service-smoke.go", 1<<20)
+	if err != nil {
+		return err
+	}
+	originalRun := run
+	deadline := time.Now().Add(12 * time.Minute)
+	run = func(duration time.Duration, name string, args ...string) ([]byte, error) {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, fmt.Errorf("native lifecycle execution budget exhausted")
+		}
+		if duration > remaining {
+			duration = remaining
+		}
+		return originalRun(duration, name, args...)
+	}
+	s := &lifecycleSession{run: run, owner: owner, specs: map[string]lifecycleContainerSpec{}}
+	defer func() {
+		s.run = originalRun
+		if err := s.cleanup(); err != nil {
+			if result == nil {
+				result = err
+			} else {
+				result = fmt.Errorf("%w; %s", result, err)
+			}
+		}
+	}()
+	root, err := os.MkdirTemp("", "identity-lifecycle-"+owner+"-")
+	if err != nil {
+		return fmt.Errorf("private lifecycle workspace unavailable")
+	}
+	s.root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("physical private lifecycle workspace unavailable")
+	}
+	if strings.ContainsAny(s.root, ",\n\r") {
+		return fmt.Errorf("closed lifecycle mount paths required")
+	}
+	s.material, err = lifecycleMaterials(owner)
+	if err != nil {
+		return err
+	}
+	s.bindings, err = lifecycleWriteInputs(s.root, s.material)
+	if err != nil {
+		return err
+	}
+	started := time.Now().UTC()
+	if _, err = run(3*time.Minute, "docker", "pull", "--platform=linux/amd64", serviceDatabaseImage); err != nil {
+		return fmt.Errorf("pinned lifecycle database unavailable")
+	}
+	raw, err := run(30*time.Second, "docker", "image", "inspect", serviceDatabaseImage)
+	var images []struct {
+		ID string `json:"Id"`
+	}
+	if err != nil || json.Unmarshal(raw, &images) != nil || len(images) != 1 || !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(images[0].ID) {
+		return fmt.Errorf("pinned lifecycle database identity unknown")
+	}
+	databaseImageID := images[0].ID
+	label := "org.devantler-tech.identity-smoke-owner=" + owner
+	raw, err = run(30*time.Second, "docker", "network", "create", "--internal", "--label", label, "identity-lifecycle-"+owner)
+	if err != nil {
+		return fmt.Errorf("owned lifecycle network unavailable")
+	}
+	network := strings.TrimSpace(string(raw))
+	if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(network) {
+		return fmt.Errorf("invalid lifecycle network identity")
+	}
+	raw, err = run(30*time.Second, "docker", "network", "inspect", network)
+	var networks []struct {
+		ID         string
+		Internal   bool
+		Labels     map[string]string
+		Containers map[string]json.RawMessage
+	}
+	if err != nil || imageDecode(raw, &networks) != nil || len(networks) != 1 || networks[0].ID != network || !networks[0].Internal || networks[0].Labels["org.devantler-tech.identity-smoke-owner"] != owner || len(networks[0].Containers) != 0 {
+		return fmt.Errorf("lifecycle network isolation unconfirmed")
+	}
+	s.network = network
+	volume := "identity-lifecycle-" + owner
+	raw, err = run(30*time.Second, "docker", "volume", "create", "--driver=local", "--label", label, volume)
+	if err != nil || strings.TrimSpace(string(raw)) != volume {
+		return fmt.Errorf("owned lifecycle volume unavailable")
+	}
+	raw, err = run(30*time.Second, "docker", "volume", "inspect", volume)
+	var volumes []struct {
+		Name, Driver    string
+		Labels, Options map[string]string
+	}
+	if err != nil || imageDecode(raw, &volumes) != nil || len(volumes) != 1 || volumes[0].Name != volume || volumes[0].Driver != "local" || volumes[0].Labels["org.devantler-tech.identity-smoke-owner"] != owner || len(volumes[0].Options) != 0 {
+		return fmt.Errorf("lifecycle volume ownership unconfirmed")
+	}
+	s.volume = volume
+	if err = s.databaseStart(databaseImageID, false); err != nil {
+		return err
+	}
+	roleCount := "SELECT count(*) FROM pg_roles WHERE rolname='" + s.material.app + "'"
+	for _, control := range []struct {
+		phase     string
+		fragments []string
+	}{{"init-wrong-ca", []string{"unknown authority"}}, {"init-wrong-host", []string{"certificate is valid for", "certificate is not valid for"}}, {"init-plaintext", []string{"no encryption", "pg_hba.conf rejects"}}} {
+		if err = s.phase(image, control.phase, control.fragments); err != nil {
+			return err
+		}
+		count, e := s.query(true, roleCount)
+		if e != nil || string(count) != "0" {
+			return fmt.Errorf("refused TLS initialization changed database authority")
+		}
+	}
+	if err = s.phase(image, "init-user", nil); err != nil {
+		return err
+	}
+	checkpoint, e := s.query(true, "SELECT (SELECT count(*) FROM pg_roles WHERE rolname='"+s.material.app+"')::text || '|' || (SELECT count(*) FROM pg_database WHERE datname='"+s.material.database+"')::text")
+	if e != nil || string(checkpoint) != "1|0" {
+		return fmt.Errorf("native phase-boundary interruption checkpoint differs")
+	}
+	if err = s.phase(image, "init", nil); err != nil {
+		return err
+	}
+	if err = s.phase(image, "setup", nil); err != nil {
+		return err
+	}
+	if _, err = s.query(true, "ALTER ROLE "+s.material.admin+" NOLOGIN"); err != nil {
+		return err
+	}
+	if _, err = s.query(true, "SELECT 1"); err == nil {
+		return fmt.Errorf("retired database administrator can still log in")
+	}
+	privileges, e := s.query(false, "SELECT (NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls AND NOT pg_has_role(current_user,'"+s.material.admin+"','MEMBER'))::text FROM pg_roles WHERE rolname=current_user")
+	if e != nil || string(privileges) != "true" {
+		return fmt.Errorf("ordinary database application authority differs")
+	}
+	const snapshotSQL = `WITH i AS (SELECT * FROM eventstore.events2 WHERE event_type='instance.added' AND aggregate_type='instance'), u AS (SELECT * FROM eventstore.events2 WHERE event_type='user.human.added' AND aggregate_type='user') SELECT json_build_object('instances',(SELECT count(*) FROM eventstore.events2 WHERE event_type='instance.added'),'humans',(SELECT count(*) FROM eventstore.events2 WHERE event_type='user.human.added'),'verified',(SELECT count(*) FROM eventstore.events2 WHERE event_type='user.human.email.verified'),'instanceId',(SELECT instance_id FROM i),'humanId',(SELECT aggregate_id FROM u),'instanceName',(SELECT payload->>'name' FROM i),'userName',(SELECT payload->>'userName' FROM u),'email',(SELECT payload->>'email' FROM u),'humanInstanceId',(SELECT instance_id FROM u),'instanceAggregateId',(SELECT aggregate_id FROM i),'instanceSequence',(SELECT sequence FROM i),'humanSequence',(SELECT sequence FROM u))`
+	raw, err = s.query(false, snapshotSQL)
+	if err != nil {
+		return err
+	}
+	before, err := lifecycleIdentitySnapshot(raw, s.material)
+	if err != nil {
+		return err
+	}
+	for trial := 0; trial < 2; trial++ {
+		if trial == 1 {
+			for _, id := range []string{s.service, s.database} {
+				if _, err = run(time.Minute, "docker", "stop", "--time=20", id); err != nil {
+					return fmt.Errorf("durable lifecycle shutdown failed")
+				}
+				actual, e := s.inspect(id, "exited")
+				if e != nil || actual.State.ExitCode != 0 {
+					return fmt.Errorf("durable lifecycle shutdown unclean")
+				}
+				if err = s.remove(id); err != nil {
+					return err
+				}
+			}
+			if err = s.databaseStart(databaseImageID, true); err != nil {
+				return err
+			}
+		}
+		if err = s.phase(image, "serve", nil); err != nil {
+			return err
+		}
+		client, target, e := s.ready()
+		if e != nil {
+			return e
+		}
+		client.CloseIdleConnections()
+		badCA, e := lifecycleTLSClient(target, s.material.files["untrusted-ca.pem"])
+		if e != nil {
+			return e
+		}
+		_, e = serviceGet(badCA, "https://"+lifecycleAuthority, "/debug/ready")
+		badCA.CloseIdleConnections()
+		if e == nil {
+			return fmt.Errorf("native service accepted an untrusted CA")
+		}
+		badName, e := lifecycleTLSClient(target, s.material.files["ca.pem"])
+		if e != nil {
+			return e
+		}
+		badName.Transport.(*lifecycleTransport).transport.TLSClientConfig.ServerName = "other.identity.fixture.localhost"
+		_, e = serviceGet(badName, "https://"+lifecycleAuthority, "/debug/ready")
+		badName.CloseIdleConnections()
+		if e == nil {
+			return fmt.Errorf("native service accepted the wrong TLS hostname")
+		}
+		plain := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if network != "tcp" || address != lifecycleAuthority {
+				return nil, fmt.Errorf("plaintext refusal probe escaped")
+			}
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, "tcp4", target)
+		}}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("plaintext redirect refused") }}
+		_, e = serviceGet(plain, "http://"+lifecycleAuthority, "/debug/ready")
+		plain.CloseIdleConnections()
+		if e == nil {
+			return fmt.Errorf("native TLS service accepted plaintext")
+		}
+		raw, e = s.query(false, snapshotSQL)
+		if e != nil {
+			return e
+		}
+		after, e := lifecycleIdentitySnapshot(raw, s.material)
+		if e != nil || after != before {
+			return fmt.Errorf("durable identity changed across ordinary start or restart")
+		}
+		ip, _, e := net.SplitHostPort(target)
+		if e != nil {
+			return e
+		}
+		connections, e := s.query(false, "SELECT count(*) FROM pg_stat_activity a JOIN pg_stat_ssl t USING(pid) WHERE a.usename=current_user AND a.client_addr='"+ip+"'::inet AND t.ssl AND t.version='TLSv1.3'")
+		count, parseError := strconv.Atoi(string(connections))
+		if e != nil || parseError != nil || count < 1 {
+			return fmt.Errorf("ordinary service database TLS connection unproven")
+		}
+		if _, e = s.query(true, "SELECT 1"); e == nil {
+			return fmt.Errorf("database administrator login revived")
+		}
+	}
+	resources, err := s.resources()
+	if err != nil {
+		return err
+	}
+	usage, err := run(30*time.Second, "docker", "exec", "--user=999:999", s.database, "du", "-sk", "/var/lib/postgresql/data")
+	fields := strings.Fields(string(usage))
+	if err != nil || len(fields) != 2 || fields[1] != "/var/lib/postgresql/data" {
+		return fmt.Errorf("durable fixture size unknown")
+	}
+	diskKiB, err := strconv.ParseInt(fields[0], 10, 64)
+	if err != nil || diskKiB <= 0 || diskKiB > 262144 {
+		return fmt.Errorf("durable fixture exceeds declared 256MiB observation budget")
+	}
+	afterSource, err := imageRead(repo, "scripts/zitadel-service-smoke.go", 1<<20)
+	if err != nil || imageHash(afterSource) != imageHash(source) {
+		return fmt.Errorf("lifecycle fixture changed during execution")
+	}
+	s.run = originalRun
+	if err = s.cleanup(); err != nil {
+		return err
+	}
+	receipt := struct {
+		SchemaVersion             int                       `json:"schemaVersion"`
+		Profile                   string                    `json:"profile"`
+		Image                     string                    `json:"localImageId"`
+		Upstream                  string                    `json:"upstreamCommit"`
+		Source                    string                    `json:"serviceSourceSha256"`
+		Database                  string                    `json:"databaseImage"`
+		Started                   time.Time                 `json:"startedAt"`
+		Elapsed                   int64                     `json:"elapsedMilliseconds"`
+		DiskKiB                   int64                     `json:"databaseVolumeKiB"`
+		Identity                  string                    `json:"fictionalIdentitySha256"`
+		VerifiedTLS               bool                      `json:"verifiedTls"`
+		PhaseSeparation           bool                      `json:"phaseSeparation"`
+		AdministratorRevoked      bool                      `json:"administratorRevoked"`
+		DurableRestart            bool                      `json:"durableRestart"`
+		PhaseBoundaryInterruption bool                      `json:"phaseBoundaryInterruption"`
+		Samples                   []lifecycleResourceSample `json:"resourceSamples"`
+		AuthenticationProof       bool                      `json:"authenticationProof"`
+		Cleanup                   string                    `json:"cleanup"`
+		Scope                     string                    `json:"observationScope"`
+	}{1, "isolated-tls-durable-lifecycle", image, imagePin, imageHash(source), serviceDatabaseImage, started, time.Since(started).Milliseconds(), diskKiB, before, true, true, true, true, true, resources, false, "complete", "two owned containers; initialization/setup, two ordinary starts and three idle rounds with a one-second minimum delay between rounds; process measurements are namespace-init only, container measurements include children; 12-minute execution plus bounded owned cleanup; not Dex, portal, authentication, load sizing or backup/restore"}
+	raw, err = json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return err
+	}
+	return imageWrite(output, "lifecycle-smoke.json", append(raw, '\n'), 0444)
+}
+
+// lifecycleResourceSample separates a namespace-init process observation from
+// Docker's whole-container accounting; process RSS is never summed across forks.
+type lifecycleResourceSample struct {
+	Component         string    `json:"component"`
+	ObservedAt        time.Time `json:"observedAt"`
+	PID               int       `json:"namespaceInitPid"`
+	UID               int       `json:"namespaceInitUid"`
+	ProcessRSSKiB     int64     `json:"namespaceInitRssKiB"`
+	ProcessPeakRSSKiB int64     `json:"namespaceInitPeakRssKiB"`
+	ProcessThreads    int64     `json:"namespaceInitThreads"`
+	DockerMemoryUsage string    `json:"dockerMemoryUsage"`
+	DockerCPUPercent  string    `json:"dockerCpuPercent"`
+	DockerPIDs        int       `json:"dockerPids"`
+}
+
+// lifecycleStats accepts only Docker's small numeric memory/CPU/PID projection,
+// not arbitrary daemon output or container names that could disclose host details.
+func lifecycleStats(raw []byte) error {
+	parts := strings.Split(strings.TrimSpace(string(raw)), "|")
+	if len(raw) > 200 || len(parts) != 3 || !regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?(?:B|kB|KiB|MB|MiB|GB|GiB) / [0-9]+(?:\.[0-9]+)?(?:B|kB|KiB|MB|MiB|GB|GiB)$`).MatchString(parts[0]) || !regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?%$`).MatchString(parts[1]) {
+		return fmt.Errorf("numeric component resource observation required")
+	}
+	pids, err := strconv.Atoi(parts[2])
+	if err != nil || pids < 1 || pids > 128 {
+		return fmt.Errorf("bounded component PID observation required")
+	}
+	return nil
+}
+
+// resources collects three declared idle samples of both included components.
+// Every process comes from the freshly inspected container's actual host PID.
+func (s *lifecycleSession) resources() ([]lifecycleResourceSample, error) {
+	samples := []lifecycleResourceSample{}
+	for trial := 0; trial < 3; trial++ {
+		for _, component := range []struct {
+			id, name string
+			uid      int
+		}{{s.service, "zitadel", 65532}, {s.database, "postgres", 999}} {
+			actual, err := s.inspect(component.id, "running")
+			if err != nil {
+				return nil, err
+			}
+			raw, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(actual.State.Pid), "status"))
+			if err != nil {
+				return nil, fmt.Errorf("native component process observation unavailable")
+			}
+			process, err := restrictedProcessStatus(raw, actual.State.Pid, component.name, component.uid)
+			if err != nil {
+				return nil, err
+			}
+			if component.name == "zitadel" {
+				raw, err = os.ReadFile(filepath.Join("/proc", strconv.Itoa(actual.State.Pid), "mountinfo"))
+				if err != nil {
+					return nil, fmt.Errorf("native service mount observation unavailable")
+				}
+				if _, err = serviceMountStatus(raw); err != nil {
+					return nil, err
+				}
+			}
+			raw, err = s.run(20*time.Second, "docker", "stats", "--no-stream", "--format", "{{.MemUsage}}|{{.CPUPerc}}|{{.PIDs}}", component.id)
+			if err != nil || lifecycleStats(raw) != nil {
+				return nil, fmt.Errorf("native component container observation unavailable")
+			}
+			parts := strings.Split(strings.TrimSpace(string(raw)), "|")
+			pids, _ := strconv.Atoi(parts[2])
+			after, err := s.inspect(component.id, "running")
+			if err != nil || after.State.Pid != actual.State.Pid {
+				return nil, fmt.Errorf("component changed during resource observation")
+			}
+			samples = append(samples, lifecycleResourceSample{component.name, time.Now().UTC(), process.PID, process.UID, process.RSSKiB, process.PeakRSSKiB, process.Threads, parts[0], parts[1], pids})
+		}
+		if trial < 2 {
+			time.Sleep(time.Second)
+		}
+	}
+	return samples, nil
 }

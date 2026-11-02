@@ -622,3 +622,191 @@ func TestActualProcessRestrictionsAndMeasuredMemory(t *testing.T) {
 		})
 	}
 }
+
+func TestLifecyclePhaseMountsSeparateBootstrapAuthority(t *testing.T) {
+	owner := strings.Repeat("a", 32)
+	root, pathError := filepath.EvalSymlinks(t.TempDir())
+	if pathError != nil {
+		t.Fatal(pathError)
+	}
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	material, err := lifecycleMaterials(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := lifecycleWriteInputs(root, material)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phase := range []string{"init-user", "init", "setup", "serve", "init-wrong-ca", "init-wrong-host", "init-plaintext"} {
+		t.Run(phase, func(t *testing.T) {
+			args, err := lifecyclePhaseArgs(phase, root, bindings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			joined := strings.Join(args, "\n")
+			if strings.Contains(joined, "--env") || strings.Contains(joined, "--masterkeyFromEnv") || strings.Contains(joined, "start-from-init") {
+				t.Fatal("implicit authority in native phase")
+			}
+			if phase == "serve" && (strings.Contains(joined, "init.json") || strings.Contains(joined, "setup.json") || strings.Contains(joined, "steps.json") || strings.Contains(joined, "admin-client.env")) {
+				t.Fatal("bootstrap authority reached ordinary service")
+			}
+			if phase == "setup" && (strings.Contains(joined, "init.json") || strings.Contains(joined, "admin-client.env")) {
+				t.Fatal("database administrator reached setup")
+			}
+			if !strings.Contains(joined, "readonly") || !strings.Contains(joined, "/fixture/ca.pem") {
+				t.Fatal("sealed trust input missing")
+			}
+			if phase == "init-user" && !strings.HasSuffix(joined, "init\nuser") {
+				t.Fatal("interruption checkpoint is not the real native user phase")
+			}
+			if phase == "serve" && !strings.Contains(joined, "start\n--masterkeyFile\n/fixture/master.key\n--tlsMode\nenabled") {
+				t.Fatal("ordinary native TLS start differs")
+			}
+		})
+	}
+	if _, err := lifecyclePhaseArgs("unknown", root, bindings); err == nil {
+		t.Fatal("unknown native command accepted")
+	}
+	if err := os.Remove(filepath.Join(root, "steps.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lifecyclePhaseArgs("init", root, bindings); err == nil {
+		t.Fatal("incomplete private profile reached the native defaulting command")
+	}
+}
+
+func TestLifecycleIdentitySnapshotRejectsMissingOrChangedBootstrap(t *testing.T) {
+	material, err := lifecycleMaterials(strings.Repeat("a", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := `{"instances":1,"humans":1,"verified":0,"instanceId":"123","humanId":"456","instanceName":"Fictional lifecycle instance","userName":"` + material.human + `","email":"` + material.human + `","humanInstanceId":"123","instanceAggregateId":"123","instanceSequence":1,"humanSequence":2}`
+	seal, err := lifecycleIdentitySnapshot([]byte(valid), material)
+	if err != nil || len(seal) != 64 {
+		t.Fatalf("complete fictional bootstrap was rejected: %v", err)
+	}
+	for _, mutation := range []struct{ from, to string }{
+		{`"instances":1`, `"instances":0`}, {`"instances":1`, `"instances":2`},
+		{`"humans":1`, `"humans":2`}, {`"verified":0`, `"verified":1`},
+		{`"humanInstanceId":"123"`, `"humanInstanceId":"789"`},
+		{`"instanceAggregateId":"123"`, `"instanceAggregateId":"789"`},
+		{`"Fictional lifecycle instance"`, `"Default instance"`},
+		{`"email":"` + material.human + `"`, `"email":"default@example.invalid"`},
+		{`"userName":"` + material.human + `"`, `"userName":"default"`},
+		{`"humanSequence":2`, `"humanSequence":0`},
+	} {
+		if _, err := lifecycleIdentitySnapshot([]byte(strings.Replace(valid, mutation.from, mutation.to, 1)), material); err == nil {
+			t.Errorf("invalid bootstrap snapshot accepted: %s", mutation.from)
+		}
+	}
+	changed := strings.Replace(valid, `"humanId":"456"`, `"humanId":"457"`, 1)
+	if other, err := lifecycleIdentitySnapshot([]byte(changed), material); err != nil || seal == other {
+		t.Fatal("replacement fictional user was not distinguishable after restart")
+	}
+	if _, err := lifecycleIdentitySnapshot([]byte(strings.TrimSuffix(valid, "}")+`,"passwordHash":"never retain"}`), material); err == nil {
+		t.Fatal("unexpected private payload accepted")
+	}
+}
+
+func TestLifecycleInspectionRejectsAuthorityAndMountChanges(t *testing.T) {
+	owner, network, id, image := strings.Repeat("a", 32), strings.Repeat("b", 64), strings.Repeat("c", 64), "sha256:"+strings.Repeat("d", 64)
+	spec := lifecycleContainerSpec{image: image, imageID: image, user: "65532:65532", workdir: "/app", entrypoint: []string{"/app/zitadel"}, command: []string{"--config", "/fixture/serve.json", "start"}, tmpfs: map[string]string{"/tmp": serviceTmpfs}, memory: 1073741824, inputs: map[string]string{"/fixture/serve.json": "/private/serve.json"}}
+	var c imageContainer
+	c.ID, c.Image = id, image
+	c.Config.Image, c.Config.User, c.Config.WorkingDir = image, spec.user, spec.workdir
+	c.Config.Entrypoint, c.Config.Cmd = spec.entrypoint, spec.command
+	c.Config.Labels = map[string]string{"org.devantler-tech.identity-smoke-owner": owner}
+	c.HostConfig.ReadonlyRootfs = true
+	c.HostConfig.CapDrop = []string{"ALL"}
+	c.HostConfig.SecurityOpt = []string{"no-new-privileges"}
+	c.HostConfig.NetworkMode = network
+	c.HostConfig.IpcMode = "private"
+	c.HostConfig.PidsLimit = 128
+	c.HostConfig.Memory = spec.memory
+	c.HostConfig.NanoCpus = 2000000000
+	c.HostConfig.Tmpfs = spec.tmpfs
+	c.State.Status = "created"
+	c.Mounts = []json.RawMessage{json.RawMessage(`{"Type":"bind","Source":"/private/serve.json","Destination":"/fixture/serve.json","RW":false}`)}
+	encode := func(c imageContainer) []byte {
+		b, e := json.Marshal([]imageContainer{c})
+		if e != nil {
+			t.Fatal(e)
+		}
+		return b
+	}
+	if _, err := lifecycleInspect(encode(c), id, owner, network, "created", spec); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*imageContainer){
+		"writable root":             func(c *imageContainer) { c.HostConfig.ReadonlyRootfs = false },
+		"host namespace":            func(c *imageContainer) { c.HostConfig.PidMode = "host" },
+		"bootstrap command":         func(c *imageContainer) { c.Config.Cmd = []string{"start-from-init"} },
+		"administrator environment": func(c *imageContainer) { c.Config.Env = []string{"ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=fictional"} },
+		"writable private input": func(c *imageContainer) {
+			c.Mounts = []json.RawMessage{json.RawMessage(`{"Type":"bind","Source":"/private/serve.json","Destination":"/fixture/serve.json","RW":true}`)}
+		},
+		"extra bootstrap mount": func(c *imageContainer) {
+			c.Mounts = append(c.Mounts, json.RawMessage(`{"Type":"bind","Source":"/private/steps.json","Destination":"/fixture/steps.json","RW":false}`))
+		},
+		"missing private input": func(c *imageContainer) { c.Mounts = nil },
+		"unowned image":         func(c *imageContainer) { c.Image = "sha256:" + strings.Repeat("e", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed imageContainer
+			if err := json.Unmarshal(encode(c), &changed); err == nil {
+				t.Fatal("wrong fixture encoding")
+			}
+			var copy []imageContainer
+			if err := json.Unmarshal(encode(c), &copy); err != nil {
+				t.Fatal(err)
+			}
+			changed = copy[0]
+			mutate(&changed)
+			if _, err := lifecycleInspect(encode(changed), id, owner, network, "created", spec); err == nil {
+				t.Fatal("unsafe effective container accepted")
+			}
+		})
+	}
+}
+
+func TestLifecycleDatabaseProcessHasItsOwnIdentityAndMeasurements(t *testing.T) {
+	status := strings.ReplaceAll(strings.Replace(serviceStatusFixture, "zitadel", "postgres", 1), "65532", "999")
+	process, err := restrictedProcessStatus([]byte(status), 12345, "postgres", 999)
+	if err != nil || process.Name != "postgres" || process.UID != 999 || process.RSSKiB != 47104 {
+		t.Fatalf("actual database process could not be measured separately: %v", err)
+	}
+	for _, bad := range []string{strings.Replace(status, "999\t999\t999\t999", "0\t0\t0\t0", 1), strings.Replace(status, "postgres", "zitadel", 1), strings.Replace(status, "NoNewPrivs:\t1", "NoNewPrivs:\t0", 1)} {
+		if _, err := restrictedProcessStatus([]byte(bad), 12345, "postgres", 999); err == nil {
+			t.Fatal("wrong database process restrictions accepted")
+		}
+	}
+}
+
+func TestLifecycleResourceOutputIsNumericAndBounded(t *testing.T) {
+	if err := lifecycleStats([]byte("98.4MiB / 1GiB|0.15%|8\n")); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{"", "not observed", "98MiB / 1GiB|NaN%|8", "98MiB / 1GiB|1%|0", "98MiB / 1GiB|1%|129", "98MiB / 1GiB|1%|8|unexpected", "secret / value|1%|8", "98MiB / 1GiB|-1%|8"} {
+		if lifecycleStats([]byte(raw)) == nil {
+			t.Errorf("invalid component measurement accepted: %q", raw)
+		}
+	}
+}
+
+func TestLifecycleModeRemainsExplicitAndPlatformBound(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	for _, args := range [][]string{{"--lifecycle-smoke"}, {"--lifecycle-smoke", "--browser-smoke", "--build", "missing", "--repository", "missing", "--output", "missing"}, {"--lifecycle-smoke=false"}} {
+		if imageRun(args, &out, &diagnostic) == 0 {
+			t.Fatal("implicit or incomplete lifecycle invocation accepted")
+		}
+	}
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+		diagnostic.Reset()
+		if imageRun([]string{"--lifecycle-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic) == 0 || !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required") {
+			t.Fatal("lifecycle mode does not use the actual native-platform guard")
+		}
+	}
+}
