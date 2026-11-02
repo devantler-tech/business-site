@@ -19,6 +19,7 @@ import (
 var errMaterial = errors.New("customer identity private material refused")
 
 var materialIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_]{2,62}$`)
+var materialReference = regexp.MustCompile(`^\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)
 
 // Materialize prepares one private native ZITADEL phase without executing it.
 // Inputs are closed owner-only files. Outputs are not deployment or login proof.
@@ -142,7 +143,7 @@ func materialDocuments(phase string, settings map[string]string, files map[strin
 	provider["Database"] = map[string]any{"postgres": map[string]any{"DSN": "", "Host": host.Host, "Port": 5432, "Database": settings["databaseName"], "User": map[string]any{"Username": settings["databaseUser"], "Password": string(files["database-password"]), "SSL": ssl()}, "Admin": admin}}
 	outputs := map[string][]byte{"ca.pem": bytes.Clone(files["database-ca.pem"])}
 	if phase != "init" {
-		if len(files["master.key"]) != 32 || materialServiceTLS(idp, files) != nil {
+		if len(files["master.key"]) != 32 || materialReference.Match(files["master.key"]) || materialServiceTLS(idp, files) != nil {
 			return nil, errMaterial
 		}
 		for _, name := range []string{"master.key", "tls.crt", "tls.key"} {

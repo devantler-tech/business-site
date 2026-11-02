@@ -83,7 +83,8 @@ must differ from the application identity and password. It receives no master ke
 human bootstrap credential or service private key.
 
 Setup and ordinary service additionally require `master.key` (exactly 32 raw
-bytes), `tls.crt`, `tls.key` and `service-ca.pem`. The current certificate chain
+bytes, never a complete unresolved environment reference), `tls.crt`, `tls.key`
+and `service-ca.pem`. The current certificate chain
 must validate for the exact ZITADEL issuer hostname with the supplied service CA,
 and the private key must match. Database and service trust remain separate inputs.
 Passwords are opaque valid UTF-8 of 32–1024 bytes, without surrounding whitespace,

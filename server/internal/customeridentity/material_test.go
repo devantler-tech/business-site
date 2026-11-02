@@ -483,3 +483,15 @@ func TestMaterializeBoundsDirectoryListingBeforeRefusal(t *testing.T) {
 		t.Fatal("directory read exceeded expected membership plus one")
 	}
 }
+
+func TestMaterializeRefusesUnresolvedRawMasterKey(t *testing.T) {
+	input, output := materialFixture(t, "serve")
+	reference := []byte("${" + strings.Repeat("A", 29) + "}")
+	if len(reference) != 32 {
+		t.Fatal("invalid reference control")
+	}
+	materialWrite(t, input, "master.key", reference)
+	if Materialize("serve", input, output) == nil {
+		t.Fatal("unresolved reference accepted as raw master key")
+	}
+}
