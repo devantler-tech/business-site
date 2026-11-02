@@ -13,7 +13,7 @@ import (
 func TestRequestTemplateSelection(t *testing.T) {
 	options := regexp.MustCompile(`<option value="([^"]+)"([^>]*)>`)
 	for _, lang := range []string{"en", "da"} {
-		for _, product := range []string{"website", "app", "service"} {
+		for _, product := range []string{"website", "app", "service", "other"} {
 			t.Run(lang+"/"+product, func(t *testing.T) {
 				response := httptest.NewRecorder()
 				request := httptest.NewRequest("GET", "/portal/requests/new?lang="+lang, nil)
@@ -31,7 +31,7 @@ func TestRequestTemplateSelection(t *testing.T) {
 					t.Fatal("rendered offering selector is incomplete")
 				}
 				matches := options.FindAllStringSubmatch(body[start:start+end], -1)
-				if len(matches) != 3 {
+				if len(matches) != 4 {
 					t.Fatal("rendered offering options changed")
 				}
 				selected := 0

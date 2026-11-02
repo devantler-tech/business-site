@@ -137,7 +137,8 @@ activated.
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
-v13 (durable membership incarnations), and v14 (expiring work-approval evidence)
+v13 (durable membership incarnations), v14 (expiring work-approval evidence),
+and v15 (the case-by-case other-request category)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.

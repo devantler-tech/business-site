@@ -55,7 +55,7 @@ states. They exercise the selected complete expectations, not renderer-derived
 expected values. The maintained inventory has no compiled-fragment consumer or
 fragment-only acceptance grammar.
 
-## Frozen provenance and ordinary invoice display
+## Frozen provenance and ordinary private screens
 
 The original immutable reference is `a1be78797e7886e3eb57605792027af6d4811add`.
 Its fixture is `portal_links_test.go` blob
@@ -75,7 +75,20 @@ identical recording digest is
 `4b63e182146ca253ce135d26c49f2b21f706755b0b21fc5a2d7335c56a1b1cb3`.
 Only triage cases 12–14/27–29 and the 12 credit bodies differ from the original.
 Missing or malformed ordinary references fail without historical fallback.
-Validation never generates its own expected values.
+Validation never generates its own expected values from the application renderer.
+
+Ordinary request validation retains all 38 states. The 12 new/invalid forms
+(three original categories in both languages) use the independently authored
+complete main-document expectation in `other_requests_reference_test.go`. It
+spells out the four options, selected value, case-by-case assessment, native
+form controls, text limits, privacy guidance and return links. The other 26
+unchanged bodies retain their original immutable references. No production
+renderer or reverse projection produces these expectations. Missing, truncated
+or malformed ordinary tables fail closed. Task mode always retains all
+original body and frame references, and rejects the newer ordinary forms.
+Mutation controls reject absent/incorrect options, selection, assessment text
+and its accessible association; the separate Other-request HTTP tests cover
+its receipt and operator views. This does not renew the retired comparison.
 
 ## Historical comparison boundary
 

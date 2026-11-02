@@ -125,6 +125,12 @@ as well as every earlier managed relation. It does not grant the web permissions
 See [the approval boundary](WORK-APPROVALS.md); this migration adds no endpoint
 or client-work execution authority.
 
+v15 extends only the immutable request table's product check to accept
+`website`, `app`, `service` and `other`. Earlier migration bytes/checksums,
+existing requests, indexes and runtime grants are preserved. Unknown categories
+still fail the database constraint. This adds no priced product, payment or
+execution authority and enables no release gate.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
