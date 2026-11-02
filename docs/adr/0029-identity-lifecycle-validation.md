@@ -35,8 +35,8 @@ Both service and database connections require the fixture CA and the exact
 certificate hostname. Native wrong-CA, wrong-hostname and plaintext controls must
 fail. A positive database check separates transport refusal from an unavailable
 database. The alternate database hostname resolves to that same owned endpoint.
-The PostgreSQL key is copied into its own persistent volume under UID999 with
-mode0600; the sealed host input remains read-only.
+The PostgreSQL key is copied into its own persistent volume under UID 999 with
+mode 0600; the sealed host input remains read-only.
 
 ## Persistence and observation limits
 

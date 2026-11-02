@@ -519,6 +519,7 @@ func serviceMountStatus(b []byte) (serviceMounts, error) {
 	return serviceMounts{RootReadOnly: true, TmpfsBytes: 16777216, UID: 65532, GID: 65532, Mode: "0700", NoExec: true, NoSuid: true, NoDev: true}, nil
 }
 
+// serviceProcessStatus retains the ordinary ZITADEL process restriction profile.
 func serviceProcessStatus(b []byte, pid int) (serviceProcess, error) {
 	return restrictedProcessStatus(b, pid, "zitadel", 65532)
 }
@@ -1381,7 +1382,7 @@ const lifecycleDatabaseTLSStage = `cp /fixture/database.crt /var/lib/postgresql/
  chmod 0600 /var/lib/postgresql/data/.fixture-tls/server.key /var/lib/postgresql/data/.fixture-tls/server.crt`
 
 // databaseStart reuses one owned local volume. The server key is derived inside
-// that volume under UID999 with mode0600; the sealed host input stays read-only.
+// that volume under UID 999 with mode 0600; the sealed host input stays read-only.
 func (s *lifecycleSession) databaseStart(imageID string, initialized bool) error {
 	spec := lifecycleContainerSpec{image: serviceDatabaseImage, imageID: imageID, user: "999:999", workdir: "/", entrypoint: []string{"/bin/sh"}, memory: 536870912, volume: s.volume, tmpfs: map[string]string{"/tmp": "rw,noexec,nosuid,nodev,size=16777216,uid=999,gid=999,mode=0700", "/var/run/postgresql": "rw,noexec,nosuid,nodev,size=1048576,uid=999,gid=999,mode=0700"}, inputs: map[string]string{}}
 	for _, name := range []string{"ca.pem", "database.crt", "database.key", "database-hba.conf"} {
