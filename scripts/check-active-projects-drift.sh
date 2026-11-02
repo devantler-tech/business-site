@@ -133,7 +133,6 @@ die_missing() {
 # here rather than queried, so add a repo when it is archived/renamed, together
 # with what to link instead.
 retired_repo_urls=(
-  "https://github.com/devantler-tech/agent-skills|https://github.com/devantler-tech/agent-plugins"
   "https://github.com/devantler-tech/reusable-workflows|https://github.com/devantler-tech/.github"
   "https://github.com/devantler-tech/actions|https://github.com/devantler-tech/.github"
   "https://github.com/devantler-tech/maintenance|https://github.com/devantler-tech/.github"
