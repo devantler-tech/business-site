@@ -26,7 +26,7 @@ func restoreArtifact(input, seal, source, run string, attempt uint64, output str
 	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
 	original, err := readHandoffSnapshot(parent, filepath.Base(input), carrierLimit+8<<20, false, 0444)
 	if err != nil || original.file.SHA256 != seal {
-		return receipt, fmt.Errorf("Actions artifact digest differs")
+		return receipt, fmt.Errorf("original actions artifact digest differs")
 	}
 	file, err := sourceOpenRegular(parent, filepath.Base(input))
 	if err != nil {

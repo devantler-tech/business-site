@@ -59,11 +59,12 @@ func carrierManifest(body []byte) (handoffDocument, error) {
 	total := int64(len(body))
 	for i, f := range doc.Files {
 		bound := int64(8 << 20)
-		if i == len(paths)-3 {
+		switch i {
+		case len(paths) - 3:
 			bound = carrierLimit
-		} else if i == len(paths)-2 {
+		case len(paths) - 2:
 			bound = 16 << 20
-		} else if i == len(paths)-1 {
+		case len(paths) - 1:
 			bound = 1 << 30
 		}
 		if f.Path != paths[i] || f.Bytes < 1 || f.Bytes > bound || !sourceDigest.MatchString(f.SHA256) ||

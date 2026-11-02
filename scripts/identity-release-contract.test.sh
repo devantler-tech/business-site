@@ -35,7 +35,7 @@ STEP
 )"$'\n'
 carrier_valid() {
   jq -e --arg base "$expected_base" --arg seal "$expected_seal" --arg readback "$expected_readback" '
- .jobs["build-zitadel-linux"] as $job | $job.steps as $s |
+ . as $workflow | .jobs["build-zitadel-linux"] as $job | $job.steps as $s | ($s|map(.name)) as $names |
  $job.permissions=={contents:"read"} and
  any(.jobs.changes.steps[];.id=="filter" and (.with.filters|contains("scripts/verify-identity-original.sh")) and (.with.filters|contains("third_party/debian-source-signers/**"))) and
  ([$s[]|select(.uses//""|startswith("actions/upload-artifact@"))]|length)==2 and
@@ -46,7 +46,6 @@ carrier_valid() {
  .with=={name:"identity-original-\u0024{{ github.run_id }}-\u0024{{ github.run_attempt }}",path:"\u0024{{ runner.temp }}/identity-carrier/carrier.tar\n\u0024{{ runner.temp }}/identity-carrier/carrier.json\n","compression-level":0,"if-no-files-found":"error","retention-days":1} and .["continue-on-error"]==null) and
  all(["Verify frozen base signatures for original transport","Bind the original local archives and native witnesses","Read back the original saved candidate without rebuilding","Seal the original publication carrier"][];
  . as $name | [$s[]|select(.name==$name)] as $matches | ($matches|length)==1 and $matches[0].if==null and ($matches[0]["continue-on-error"]==null or $matches[0]["continue-on-error"]==false)) and
- ($s|map(.name)) as $names |
  ($names|index("Scan the actual frozen identity executable")) < ($names|index("Verify frozen base signatures for original transport")) and
  ($names|index("Verify frozen base signatures for original transport")) < ($names|index("Bind the original local archives and native witnesses")) and
  ($names|index("Bind the original local archives and native witnesses")) < ($names|index("Seal the original publication carrier")) and
@@ -55,7 +54,7 @@ carrier_valid() {
  any($s[];.name=="Verify frozen base signatures for original transport" and .run==$base) and
  any($s[];.name=="Seal the original publication carrier" and .run==$seal) and
  any($s[];.name=="Read back the original saved candidate without rebuilding" and .run==$readback) and
- any(.jobs["test-repository-contracts"].steps[];.run=="bash scripts/identity-release-contract.test.sh" and .if==null and .["continue-on-error"]==null)
+ any($workflow.jobs["test-repository-contracts"].steps[];.run=="bash scripts/identity-release-contract.test.sh" and .if==null and .["continue-on-error"]==null)
  ' >/dev/null
 }
 publisher_valid() {
