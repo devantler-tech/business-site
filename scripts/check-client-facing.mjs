@@ -14,7 +14,7 @@ const catalogue = JSON.parse(readFileSync(new URL('../src/data/public-products.j
 const anchors = {
   ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'], '.github': ['-reusable-workflows-', '-actions-'],
-  'agent-plugins': ['-agent-skills--', '-agent-plugins---'],
+  'agent-plugins': ['-agent-plugins---'],
   'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
 };
 
