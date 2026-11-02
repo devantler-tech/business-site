@@ -118,6 +118,12 @@ original build records and inspects the original saved image without a rebuild
 or service execution. A later caller with changed retained build records is refused.
 
 Only explicit `publish` enters a separate privileged job and repeats admission.
+Registry authentication and the existing image tag are checked before any source
+release mutation. The complete release inventory is paginated, with a bound of
+100 pages of at most 100 records; failed or malformed reads authorize no write.
+After anonymous source readback, credentials are refreshed and the image tag is
+checked again before a push. This preflight does not make the two services atomic:
+later network, registry or signature failures can still leave a source-only release.
 The fixed `identity-v4.20.0-devantler.1` release stages the two original source
 archives and `identity-source.json` in a draft before publication. Every existing
 asset must already match before additions; source-bound drafts can resume only
@@ -176,7 +182,7 @@ and the deployed invitation/login/MFA/recovery/revocation/isolation journey.
   enabling the two unusable fictional providers; no external action is followed.
   Login/registration links are reached by native Tab, and the picker by Enter.
   The unchanged operator journey has 100s; the additional presentation phase has
-  120s, within a 4min worker wrapper. That same phase independently requires twenty
+  120s, within a five-minute worker wrapper. That same phase independently requires twenty
   SMTP cases (chooser and nine unsaved preset editors in both themes), including
   unchanged defaults, native Enter, loaded envelope glyphs and each screenshot.
   Console observations wait for the frozen fixture's native background transition

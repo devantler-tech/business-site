@@ -47,6 +47,35 @@ for name in inputs.tar base-source.tar; do
   expected="$(jq -er --arg name "$name" '.archives[]|select(.name==$name)|.sha256' "$work/offer/identity-source.json")"
   [[ "$(sha256sum "$work/offer/$name" | cut -d' ' -f1)" == "$expected" ]] || fail 'source offer bytes changed'
 done
+# Registry credentials and existing-tag conflicts must fail before reserving
+# the immutable source version. Keep tokens in private files and stdin only.
+registry_authenticate() {
+  local bearer
+  [[ "${GITHUB_ACTOR:-}" =~ ^[A-Za-z0-9_-]+$ && "${GH_TOKEN:-}" =~ ^[A-Za-z0-9_]+$ ]] || fail 'registry credential shape'
+  printf 'silent\nshow-error\nurl = "https://ghcr.io/token?service=ghcr.io&scope=repository:devantler-tech/business-site-identity:pull,push"\nheader = "Authorization: Basic %s"\n' "$(printf '%s:%s' "$GITHUB_ACTOR" "$GH_TOKEN" | base64 | tr -d '\n')" >"$work/registry-auth.config"
+  chmod 600 "$work/registry-auth.config"
+  curl --fail --config "$work/registry-auth.config" --max-time 30 --max-filesize 1048576 --output "$work/registry-token.json" || fail 'registry authentication request'
+  # RFC 6750 section 2.1 permits standard and URL-safe base64 characters.
+  # Absolute anchors also refuse line breaks, quotes and configuration injection.
+  bearer="$(jq -er '.token|select(type=="string" and test("\\A[A-Za-z0-9._~+/-]+=*\\z"))' "$work/registry-token.json")" || fail 'registry bearer token shape'
+  printf 'silent\nshow-error\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"\n' "$bearer" >"$work/registry-read.config"
+  chmod 600 "$work/registry-read.config"
+  unset bearer
+  printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin || fail 'registry authentication'
+}
+# Read status explicitly; network failure is not absence.
+registry_read() {
+  status="$(curl --config "$work/registry-read.config" --max-time 60 --max-filesize 8388608 --dump-header "$work/registry-headers" --output "$work/registry-manifest.json" --write-out '%{http_code}' "https://ghcr.io/v2/devantler-tech/business-site-identity/manifests/$1")" || fail 'registry read failed'
+  [[ "$status" == 200 || "$status" == 404 ]] || fail 'registry response is not readable or absent'
+  if [[ "$status" == 200 ]]; then
+    jq -e --arg image "$image" '.schemaVersion==2 and .config.digest==$image and (.layers|length)>0' "$work/registry-manifest.json" >/dev/null || fail 'existing registry image differs'
+    digest="$(awk 'tolower($1)=="docker-content-digest:" {gsub("\r", "", $2); print $2}' "$work/registry-headers")"
+    [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ && "sha256:$(sha256sum "$work/registry-manifest.json" | cut -d' ' -f1)" == "$digest" ]] || fail 'registry manifest digest differs'
+    if [[ "$1" == sha256:* && "$1" != "$digest" ]]; then fail 'registry digest address differs'; fi
+  fi
+}
+registry_authenticate
+registry_read "$image_tag"
 # A successful matching-refs list proves tag absence; an arbitrary failed view
 # is never interpreted as permission to create or overwrite a ref.
 gh api --hostname github.com "repos/$repo/git/matching-refs/tags/$tag" >"$work/tags.json"
@@ -54,10 +83,17 @@ jq -e 'type=="array" and length<=1' "$work/tags.json" >/dev/null || fail 'ambigu
 if jq -e 'length==1' "$work/tags.json" >/dev/null; then
   jq -e --arg ref "refs/tags/$tag" --arg source "$source" '.[0].ref==$ref and .[0].object.type=="commit" and .[0].object.sha==$source' "$work/tags.json" >/dev/null || fail 'existing source tag differs'
 fi
-# Drafts need not have a tag ref yet. A complete bounded release list admits
-# an existing draft independently; a failed view never means release absence.
-gh api --hostname github.com "repos/$repo/releases?per_page=100" >"$work/releases.json"
-jq -e 'type=="array" and length<100' "$work/releases.json" >/dev/null || fail 'complete bounded release inventory'
+# Drafts need not have a tag ref yet. Read every API page before deciding that
+# a release is absent; a failed or malformed page cannot authorize a write.
+read_release_inventory() {
+  local output="$1"
+  gh api --hostname github.com --paginate --slurp "repos/$repo/releases?per_page=100" >"$output.pages" || fail 'release inventory retrieval'
+  jq -ces 'select(length==1)|.[0]|
+    select(type=="array" and length>0 and length<=100 and
+      all(.[];type=="array" and length<=100 and all(.[];type=="object" and (.tag_name|type)=="string")))|
+    add' "$output.pages" >"$output" || fail 'complete bounded release inventory'
+}
+read_release_inventory "$work/releases.json"
 jq --arg tag "$tag" '[.[]|select(.tag_name==$tag)]' "$work/releases.json" >"$work/matching-releases.json"
 jq -e 'length<=1' "$work/matching-releases.json" >/dev/null || fail 'duplicate source release'
 if jq -e 'length==0' "$work/matching-releases.json" >/dev/null; then
@@ -71,8 +107,7 @@ Follow the retained source build instructions and scoped third-party licenses.
 Bit-for-bit reproducibility and portal activation are not claimed.
 NOTES
   gh release create "$tag" --repo "$repo" --target "$source" --title 'Customer identity 4.20.0 — corresponding source' --notes-file "$work/release-notes.md" --draft --latest=false
-  gh api --hostname github.com "repos/$repo/releases?per_page=100" >"$work/releases-created.json"
-  jq -e 'type=="array" and length<100' "$work/releases-created.json" >/dev/null || fail 'complete created release inventory'
+  read_release_inventory "$work/releases-created.json"
   jq -ce --arg tag "$tag" '[.[]|select(.tag_name==$tag)]|select(length==1)|.[0]' "$work/releases-created.json" >"$work/release.json" || fail 'unique created source draft'
 else
   jq '.[0]' "$work/matching-releases.json" >"$work/release.json"
@@ -116,31 +151,11 @@ for name in inputs.tar base-source.tar identity-source.json; do
   cmp "$work/offer/$name" "$work/public-readback/$name" || fail 'public corresponding source differs'
 done
 source_offer="$(sha256sum "$work/offer/identity-source.json" | cut -d' ' -f1)"
-# The registry token is kept in private files and never enters provenance or
-# command-line arguments. Read status explicitly; network failure is not 404.
-[[ "${GITHUB_ACTOR:-}" =~ ^[A-Za-z0-9_-]+$ && "${GH_TOKEN:-}" =~ ^[A-Za-z0-9_]+$ ]] || fail 'registry credential shape'
-printf 'silent\nshow-error\nurl = "https://ghcr.io/token?service=ghcr.io&scope=repository:devantler-tech/business-site-identity:pull,push"\nheader = "Authorization: Basic %s"\n' "$(printf '%s:%s' "$GITHUB_ACTOR" "$GH_TOKEN" | base64 | tr -d '\n')" >"$work/registry-auth.config"
-chmod 600 "$work/registry-auth.config"
-curl --fail --config "$work/registry-auth.config" --max-time 30 --max-filesize 1048576 --output "$work/registry-token.json"
-# RFC 6750 section 2.1 permits standard and URL-safe base64 characters.
-# Absolute anchors also refuse line breaks, quotes and configuration injection.
-bearer="$(jq -er '.token|select(type=="string" and test("\\A[A-Za-z0-9._~+/-]+=*\\z"))' "$work/registry-token.json")" || fail 'registry bearer token shape'
-printf 'silent\nshow-error\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"\n' "$bearer" >"$work/registry-read.config"
-chmod 600 "$work/registry-read.config"
-unset bearer
-registry_read() {
-  status="$(curl --config "$work/registry-read.config" --max-time 60 --max-filesize 8388608 --dump-header "$work/registry-headers" --output "$work/registry-manifest.json" --write-out '%{http_code}' "https://ghcr.io/v2/devantler-tech/business-site-identity/manifests/$1")" || fail 'registry read failed'
-  [[ "$status" == 200 || "$status" == 404 ]] || fail 'registry response is not readable or absent'
-  if [[ "$status" == 200 ]]; then
-    jq -e --arg image "$image" '.schemaVersion==2 and .config.digest==$image and (.layers|length)>0' "$work/registry-manifest.json" >/dev/null || fail 'existing registry image differs'
-    digest="$(awk 'tolower($1)=="docker-content-digest:" {gsub("\r", "", $2); print $2}' "$work/registry-headers")"
-    [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ && "sha256:$(sha256sum "$work/registry-manifest.json" | cut -d' ' -f1)" == "$digest" ]] || fail 'registry manifest digest differs'
-    if [[ "$1" == sha256:* && "$1" != "$digest" ]]; then fail 'registry digest address differs'; fi
-  fi
-}
+# Refresh credentials and rebind the tag after source readback; an earlier
+# absence must not overwrite an image that appeared during publication.
+registry_authenticate
 registry_read "$image_tag"
 if [[ "$status" == 404 ]]; then
-  printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
   docker tag "$image" "$image_name:$image_tag"
   local_tag=true
   docker push "$image_name:$image_tag"
@@ -148,8 +163,6 @@ if [[ "$status" == 404 ]]; then
   [[ "$status" == 200 ]] || fail 'published image is unavailable'
 fi
 readonly published="$image_name@$digest"
-# Authenticate registry operations even on an idempotent same-original retry.
-printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 identity="https://github.com/$repo/.github/workflows/publish-identity.yaml@refs/heads/main"
 annotations=(-a "source=$source" -a "caller=$GITHUB_SHA" -a "ciRunId=$run" -a "ciRunAttempt=$attempt" -a "sourceOfferSha256=$source_offer")
 cosign sign --yes "${annotations[@]}" "$published"
