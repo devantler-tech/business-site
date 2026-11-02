@@ -6,6 +6,12 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 mkdir "$scratch/bin" "$scratch/runner"
+cat >"$scratch/bin/df" <<'FIXTURE'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$#" == 2 && "$1" == -Pk && "$2" == "$RUNNER_TEMP" ]] || exit 97
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\nfixture 16777216 0 %s 0%% /fixture\n' "$DISK_KIB"
+FIXTURE
 source_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 jq -n --arg source "$source_sha" '{id:123,run_attempt:2,repository:{full_name:"devantler-tech/business-site"},head_repository:{full_name:"devantler-tech/business-site"},head_sha:$source,head_branch:"main",path:".github/workflows/ci.yaml",event:"push",status:"completed",conclusion:"success"}' >"$scratch/run-good.json"
 jq -n '{total_count:1,jobs:[{name:"build-zitadel-linux",status:"completed",conclusion:"success",steps:(["Scan the actual frozen identity executable","Verify frozen base signatures for original transport","Bind the original local archives and native witnesses","Read back the original saved candidate without rebuilding","Seal the original publication carrier","Retain the admitted original publication carrier","one","two","three","four","five","six"]|map({name:.,status:"completed",conclusion:"success"}))}]}' >"$scratch/jobs-good.json"
@@ -35,11 +41,12 @@ FIXTURE
 cat >"$scratch/runner/identity-release" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'restore-artifact\n' >>"$FIXTURE/reader-calls"
 [[ "$#" == 13 && "$1" == restore-artifact && "$2" == --input && "$4" == --sha256 && "$6" == --source-sha && "$7" == aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa && "$8" == --run-id && "$9" == 123 && "${10}" == --run-attempt && "${11}" == 2 && "${12}" == --output ]] || exit 96
 mkdir -p "${13}/native"
 printf '{}\n'
 FIXTURE
-chmod +x "$scratch/bin/gh" "$scratch/runner/identity-release"
+chmod +x "$scratch/bin/df" "$scratch/bin/gh" "$scratch/runner/identity-release"
 reset_fixture() {
   cp "$scratch/run-good.json" "$scratch/run.json"
   cp "$scratch/jobs-good.json" "$scratch/jobs.json"
@@ -47,9 +54,10 @@ reset_fixture() {
   rm -f "$scratch/downloaded" "$scratch/run-after.json" "$scratch/artifact-after.json" "$scratch/main-after.json"
   : >"$scratch/env"
   : >"$scratch/calls"
+  : >"$scratch/reader-calls"
 }
 admit() {
-  env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" RUNNER_TEMP="$scratch/runner" GITHUB_ENV="$scratch/env" GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_SHA="$source_sha" IDENTITY_CI_RUN_ID=123 "$@" bash "$root/scripts/admit-identity-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
+  env PATH="$scratch/bin:$PATH" FIXTURE="$scratch" DISK_KIB=8388608 RUNNER_TEMP="$scratch/runner" GITHUB_ENV="$scratch/env" GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_SHA="$source_sha" IDENTITY_CI_RUN_ID=123 "$@" bash "$root/scripts/admit-identity-release.sh" >"$scratch/stdout" 2>"$scratch/stderr"
 }
 refuse() {
   if admit "$@"; then
@@ -64,6 +72,12 @@ admit || {
   exit 1
 }
 test "$(wc -l <"$scratch/env" | tr -d ' ')" == 1
+test "$(wc -l <"$scratch/reader-calls" | tr -d ' ')" == 1
+reset_fixture
+refuse DISK_KIB=8388607
+grep -Fq 'original carrier verification needs 8 GiB disposable disk headroom' "$scratch/stderr"
+test ! -s "$scratch/calls"
+test ! -s "$scratch/reader-calls"
 for context in GITHUB_EVENT_NAME=pull_request GITHUB_REF=refs/heads/other GITHUB_REPOSITORY=other/site GITHUB_SHA=main IDENTITY_CI_RUN_ID=0; do
   reset_fixture
   refuse "$context"
@@ -101,4 +115,4 @@ refuse
 reset_fixture
 printf '{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}\n' >"$scratch/main-after.json"
 refuse
-printf 'identity forge: PASS — actual bounded API admission and 28 refusal controls\n'
+printf 'identity forge: PASS — actual bounded API admission, disk headroom and refusal controls\n'
