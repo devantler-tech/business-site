@@ -1,6 +1,17 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/identity-release` explicitly retains and verifies the frozen identity base's
+original source data; read its README. Preserve its embedded closed profile,
+complete OCI/layer/package/descriptor joins, original modes, private read-only
+capsule, external seal and deterministic archive readback. It never executes
+retained content, verifies OpenPGP/image signatures, publishes or activates users.
+Keep those four proof fields false; publisher admission remains separate.
+Its explicit `prepare-handoff` operation binds the original local archives and
+raw native witness bytes to caller-supplied source/run metadata. Preserve its
+closed input roles, complete stable snapshots and exclusive manifest output.
+It neither repeats the native engines nor authenticates the supplied CI identity;
+all publication and activation claims stay false. No raw archive upload is added.
 `cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
 Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
 importing portal authority or entering the frozen identity service's graph.
@@ -10,6 +21,9 @@ and narrow evidence fields; it never grants image or portal activation.
 The explicit `restore-go-inputs` operation admits only the three sealed source
 capsules and fixed trust policy into a new owned native cache. Preserve literal
 conflict refusal, physical input/output separation and failed-write cleanup.
+Its separate sealed file proxy enumerates only verified retained versions, never
+claims upstream latest, and preserves native deprecation/retraction/checksum
+checks. Keep writable native caches separate and prohibit network/direct fallbacks.
 Its network-denied native Go reader is not full generation/compilation replay;
 both overall proof flags must remain false until issue #343's full acceptance.
 Its separate native generator checkpoint reads fourteen actual executables before
@@ -93,7 +107,7 @@ tests or the loopback visual gateway as Google/Microsoft login or production
 ingress/cookie proof.
 
 Use the exact Go version in `go.mod` with `GOTOOLCHAIN=local`; run `gofmt`,
-`go mod verify`, `go vet ./...`, both complementary ordinary race/coverage cohorts
+`go mod verify`, `go vet ./...`, all three complementary ordinary race/coverage cohorts
 and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 `-skip`/`-run` commands and complete result check; preserve `-p=1`, `-count=1`,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
@@ -123,6 +137,10 @@ the declared compiler, preserving its native rules, project scope and fix mode.
 The analyzer regression exercises all actual module packages and a genuine format
 diagnostic against the pinned container's rule snapshot; native container proof is
 still separate. Never replace it with a disabled scanner or ignored failures.
+OSV's supported executable override rebuilds the same scanner version with the
+module-selected stable compiler before analysis. Preserve its complete target,
+arguments and exit status; run `bash scripts/scan-go-source.test.sh` from the
+repository root. A compiler-selection or analysis error is never a clean scan.
 Lychee's test-only preprocessor renders all six actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
@@ -273,6 +291,11 @@ database expiry and current operator workspace/role after the last SDK wait, und
 the request transaction. Capture the maintained store/codec snapshot before taking
 that transaction, avoiding a second connection while one is held; the snapshot
 alone is never authority. No worker/API/MCP or production activation is added.
+
+v15 extends only the existing request-product constraint with `other` after
+unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
+Both languages show the category and case-by-case assessment boundary; the
+existing independent false-default identity/request gates remain mandatory.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

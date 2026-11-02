@@ -1,0 +1,1172 @@
+package main
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+)
+
+// A retired technology family cannot survive outside the selected catalogue,
+// including compiler packages and escaped bundle references.
+func TestCopiedNativeGraphicsCannotRemainUnaccounted(t *testing.T) {
+	for _, location := range []string{"source", "console-output", "embedded-output", "compiler"} {
+		t.Run(location, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("valid control failed before adding an unaccounted native graphic: %v", err)
+			}
+			if location == "compiler" {
+				var stream bytes.Buffer
+				found := false
+				for _, line := range strings.Split(strings.TrimSpace(string(mustTextRead(t, build, "packages.jsonl"))), "\n") {
+					var p map[string]any
+					if err := json.Unmarshal([]byte(line), &p); err != nil {
+						t.Fatal(err)
+					}
+					if p["ImportPath"] == "github.com/zitadel/zitadel/internal/api/ui/console" {
+						p["EmbedFiles"] = append(p["EmbedFiles"].([]any), "static/assets/images/unaccounted.png")
+						found = true
+					}
+					body, err := json.Marshal(p)
+					if err != nil {
+						t.Fatal(err)
+					}
+					stream.Write(body)
+					stream.WriteByte('\n')
+				}
+				if !found {
+					t.Fatal("Console compiler control is absent")
+				}
+				if err := os.WriteFile(filepath.Join(build, "packages.jsonl"), stream.Bytes(), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				prefix := map[string]string{"source": "console/src/", "console-output": "console/dist/console/", "embedded-output": "internal/api/ui/console/static/"}[location]
+				name := filepath.Join(build, "prepared/source", prefix, "assets/images/unaccounted.png")
+				if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(name, []byte("unaccounted native graphic"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unaccounted native graphic was accepted")
+			}
+		})
+	}
+}
+
+func TestCopiedFrameworkGraphicsCannotRemain(t *testing.T) {
+	for _, prefix := range []string{"docs/img/tech/", "console/dist/console/assets/docs/img/tech/", "static/assets/docs/img/tech/", "unrelated/assets/docs/img/tech/"} {
+		t.Run(prefix, func(t *testing.T) {
+			if err := neutralProviderOutput(prefix+"angular.svg", nil); err == nil {
+				t.Fatal("retired framework graphic was accepted")
+			}
+		})
+	}
+	for _, slash := range []string{"/", `\/`, `\u002f`, `\x2f`} {
+		t.Run(slash, func(t *testing.T) {
+			body := []byte(strings.Join([]string{"assets", "docs", "img", "tech", "angular.svg"}, slash))
+			if err := neutralProviderOutput("chunk.js", body); err == nil {
+				t.Fatal("retired framework reference was accepted")
+			}
+		})
+	}
+}
+
+// Observe the complete native source/output trees, not just selected artwork.
+func TestCopiedFrameworkGraphicsCannotHideInSourceOrEitherOutput(t *testing.T) {
+	cases := map[string]string{
+		"apps/docs/public/img/tech/extra.svg":                            "unadmitted technology source",
+		"console/dist/console/assets/docs/img/tech/angular.svg":          "retired output",
+		"internal/api/ui/console/static/assets/docs/img/tech/extra.webp": "undeclared embedded output",
+		"console/dist/console/framework.js":                              `const icon="./assets/docs/img/tech/angular.svg";`,
+		"internal/api/ui/console/static/framework.css":                   `.icon{background:url(assets/docs/img/tech/angular.svg)}`,
+		"console/dist/console/framework-escaped.js":                      `const icon="assets\\/docs\\/img\\/tech\\/angular.svg";`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			put(t, filepath.Join(build, "prepared/source", name), []byte(body))
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined technology source or generated output was accepted")
+			}
+		})
+	}
+}
+
+func TestCopiedFrameworkConsumersMustRemainBound(t *testing.T) {
+	for _, attack := range []string{"missing", "changed", "linked"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			name := filepath.Join(build, "prepared/source/apps/docs/frameworks.json")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			if attack == "changed" {
+				put(t, name, []byte("unbound framework selection"))
+			} else {
+				if err := os.Remove(name); err != nil {
+					t.Fatal(err)
+				}
+				if attack == "linked" {
+					target := filepath.Join(build, "same-framework-bytes")
+					put(t, target, []byte("fixed framework metadata"))
+					if err := os.Symlink(target, name); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined native framework metadata was accepted")
+			}
+		})
+	}
+}
+
+// Retired decorative marks must fail in every source, output and compiler
+// package, including escaped bundle references outside the retained catalogue.
+func TestCopiedMDIMarksCannotHideOutsideTheRetainedCatalogue(t *testing.T) {
+	for _, name := range []string{"openid.svg", "jwt.svg"} {
+		for _, prefix := range []string{"console/src/assets/mdi/", "console/dist/console/assets/mdi/", "static/assets/mdi/"} {
+			t.Run(prefix+name, func(t *testing.T) {
+				if err := neutralProviderOutput(prefix+name, nil); err == nil {
+					t.Fatal("retired MDI mark was accepted")
+				}
+			})
+		}
+		for _, slash := range []string{"/", `\/`, `\u002f`, `\x2f`} {
+			t.Run(slash+name, func(t *testing.T) {
+				body := []byte("assets" + slash + "mdi" + slash + name)
+				if err := neutralProviderOutput("chunk.js", body); err == nil {
+					t.Fatal("retired MDI reference was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Retained MDI evidence must observe each actual body and both copies, rather
+// than accepting a catalogue that describes inputs the collector never reads.
+func TestCopiedMDIRetentionObservesItsCompleteInputs(t *testing.T) {
+	for _, attack := range []string{"source", "console-output", "embedded-output", "terms", "consumer", "missing-source", "linked-source"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			body := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>`)
+			terms := []byte("Complete fictional fixture terms.\n")
+			consumer := []byte("fixed native consumer\n")
+			policy.MDI = []mdiProvenance{{Path: "console/src/assets/mdi/fixture.svg", Bytes: len(body), SHA256: digest(body), GitBlob: blob(body), PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/fixture.svg", PrimarySHA256: digest(body), Author: "Fixture author", Notice: "Pictogrammers-LICENSE"}}
+			policy.MDINotices = []inputRecord{{"Pictogrammers-LICENSE", digest(terms)}}
+			policy.MDIConsumers = []inputRecord{{"console/src/app/fixture-mdi.html", digest(consumer)}}
+			paths := []string{"console/src/assets/mdi/fixture.svg", "console/dist/console/assets/mdi/fixture.svg", "internal/api/ui/console/static/assets/mdi/fixture.svg"}
+			for _, name := range paths {
+				put(t, filepath.Join(build, "prepared/source", name), body)
+			}
+			put(t, filepath.Join(build, "prepared/source/console/src/app/fixture-mdi.html"), consumer)
+			put(t, filepath.Join(notices, "Pictogrammers-LICENSE"), terms)
+			appendCopiedCompilerMember(t, build, "static/assets/mdi/fixture.svg")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("valid MDI baseline: %v", err)
+			}
+			target := map[string]string{"source": filepath.Join(build, "prepared/source", paths[0]), "console-output": filepath.Join(build, "prepared/source", paths[1]), "embedded-output": filepath.Join(build, "prepared/source", paths[2]), "terms": filepath.Join(notices, "Pictogrammers-LICENSE"), "consumer": filepath.Join(build, "prepared/source/console/src/app/fixture-mdi.html"), "missing-source": filepath.Join(build, "prepared/source", paths[0]), "linked-source": filepath.Join(build, "prepared/source", paths[0])}[attack]
+			if attack == "missing-source" || attack == "linked-source" {
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+				if attack == "linked-source" {
+					if err := os.Symlink(filepath.Join(build, "prepared/source", paths[1]), target); err != nil {
+						t.Fatal(err)
+					}
+				}
+			} else {
+				put(t, target, []byte("changed\n"))
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("incomplete or changed MDI evidence was accepted")
+			}
+		})
+	}
+}
+
+// An undeclared translation must not disappear from the closed copied-asset
+// selection merely because the original collector recognized only icon paths.
+func TestCopiedTranslationsRejectUndeclaredSourceOutputAndCompilerMembers(t *testing.T) {
+	for _, member := range []string{"source", "console-output", "embedded-output", "compiler"} {
+		t.Run(member, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			if _, err := copiedObserve(b, n, r, readAt, p); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			if member == "compiler" {
+				appendTranslationCompilerMember(t, b)
+			} else {
+				name := map[string]string{
+					"source":          "console/src/assets/i18n/zz.json",
+					"console-output":  "console/dist/console/assets/i18n/zz.json",
+					"embedded-output": "internal/api/ui/console/static/assets/i18n/zz.json",
+				}[member]
+				filename := filepath.Join(b, "prepared/source", name)
+				if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filename, []byte(`{"HELLO":"Undeclared translation"}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := copiedObserve(b, n, r, readAt, p); err == nil {
+				t.Fatal("undeclared translation was omitted from asset admission")
+			}
+		})
+	}
+}
+
+// Append an undeclared translation to the native-shaped Console compiler record.
+func appendTranslationCompilerMember(t *testing.T, build string) {
+	appendCopiedCompilerMember(t, build, "static/assets/i18n/zz.json")
+}
+
+// Mutate only the Console record in a complete fixture stream, preserving other
+// records so the test exercises catalogue filtering rather than malformed JSON.
+func appendCopiedCompilerMember(t *testing.T, build, member string) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(mustTextRead(t, build, "packages.jsonl")))
+	var stream bytes.Buffer
+	for {
+		var record map[string]any
+		if err := decoder.Decode(&record); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if record["ImportPath"] == "github.com/zitadel/zitadel/internal/api/ui/console" {
+			record["EmbedFiles"] = append(record["EmbedFiles"].([]any), member)
+		}
+		if err := json.NewEncoder(&stream).Encode(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(build, "packages.jsonl"), stream.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Every retired preset path must fail even when it is outside the retained
+// catalogue, where a subset-only compiler comparison would overlook it.
+func TestCopiedSMTPGraphicsCannotReturnInCompleteCompilerObservation(t *testing.T) {
+	for _, name := range []string{"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"} {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			// These paths are outside the copied catalogue. The complete compiler
+			// observation must reject them before selecting its catalogue subset.
+			appendCopiedCompilerMember(t, build, "static/assets/images/smtp/"+name)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("retired SMTP compiler member was hidden by catalogue filtering")
+			}
+		})
+	}
+}
+
+// Retired paths in an unrelated package must be checked before the Console
+// package filter, which must not hide another package's retired resources.
+func TestCopiedCompilerStreamRejectsRetiredImagesOutsideConsole(t *testing.T) {
+	paths := []string{
+		"static/assets/images/smtp/aws-ses.svg", "static/assets/images/smtp/brevo.svg",
+		"static/assets/images/smtp/google.png", "static/assets/images/smtp/mailchimp.svg",
+		"static/assets/images/smtp/mailgun.svg", "static/assets/images/smtp/mailjet.svg",
+		"static/assets/images/smtp/outlook.svg", "static/assets/images/smtp/postmark.png",
+		"static/assets/images/smtp/sendgrid.png", "static/assets/images/idp/google.png",
+		"resources/images/idp/apple.svg",
+		"static/assets/docs/img/tech/angular.svg",
+	}
+	for _, position := range []string{"before", "after"} {
+		for _, member := range paths {
+			t.Run(position+"/"+member, func(t *testing.T) {
+				build, notices, recipe, policy := copiedFixture(t)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+					t.Fatalf("valid baseline: %v", err)
+				}
+				stream := mustTextRead(t, build, "packages.jsonl")
+				record, err := json.Marshal(map[string]any{
+					"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+					"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+					"EmbedPatterns": []string{"static"}, "EmbedFiles": []string{member},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				combined := append(append(record, '\n'), stream...)
+				if position == "after" {
+					combined = append(stream, append(record, '\n')...)
+				}
+				put(t, filepath.Join(build, "packages.jsonl"), combined)
+				if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+					t.Fatal("retired image in another compiler package was accepted")
+				}
+			})
+		}
+	}
+}
+
+// Unrelated packages may embed ordinary assets with matching relative names;
+// they must not expand or otherwise change the Console catalogue comparison.
+func TestCopiedCompilerCatalogueComparisonRemainsConsoleScoped(t *testing.T) {
+	build, notices, recipe, policy := copiedFixture(t)
+	stream := mustTextRead(t, build, "packages.jsonl")
+	record, err := json.Marshal(map[string]any{
+		"ImportPath":    "github.com/zitadel/zitadel/internal/other",
+		"Dir":           filepath.Join(build, "prepared/source/internal/other"),
+		"EmbedPatterns": []string{"static"},
+		"EmbedFiles":    []string{"static/assets/icons/line-awesome/css/example.css", "static/application-info.txt"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(build, "packages.jsonl"), append(stream, append(record, '\n')...))
+	if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+		t.Fatalf("unrelated compiler package changed the Console catalogue: %v", err)
+	}
+}
+
+func TestCopiedTranslationsRejectChangedMissingLinkedMalformedAndUncompiledInputs(t *testing.T) {
+	for _, mode := range []string{"changed-source", "missing-source", "linked-source", "changed-output", "missing-output", "uncompiled", "changed-scope", "missing-contribution", "malformed", "duplicate", "non-object", "invalid-utf8"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			if _, err := copiedObserve(b, n, r, readAt, p); err != nil {
+				t.Fatalf("valid baseline: %v", err)
+			}
+			source := filepath.Join(b, "prepared/source/console/src/assets/i18n/en.json")
+			output := filepath.Join(b, "prepared/source/internal/api/ui/console/static/assets/i18n/en.json")
+			var err error
+			switch mode {
+			case "changed-source":
+				err = os.WriteFile(source, []byte(`{"HELLO":"Substituted"}`), 0600)
+			case "missing-source":
+				err = os.Remove(source)
+			case "linked-source":
+				if err = os.Remove(source); err == nil {
+					err = os.Symlink(output, source)
+				}
+			case "changed-output":
+				err = os.WriteFile(output, []byte(`{"HELLO":"Substituted"}`), 0600)
+			case "missing-output":
+				err = os.Remove(output)
+			case "uncompiled":
+				raw := mustTextRead(t, b, "packages.jsonl")
+				err = os.WriteFile(filepath.Join(b, "packages.jsonl"), bytes.ReplaceAll(raw, []byte("static/assets/i18n/en.json"), []byte("static/unselected.json")), 0600)
+			case "changed-scope":
+				err = os.WriteFile(filepath.Join(b, "prepared/source/LICENSING.md"), []byte("Different scope"), 0600)
+			case "missing-contribution":
+				err = os.Remove(filepath.Join(b, "prepared/source/CONTRIBUTING.md"))
+			default:
+				payload := map[string][]byte{
+					"malformed":    []byte(`{"HELLO":`),
+					"duplicate":    []byte(`{"GREETING":{"HELLO":"one","HELLO":"two"}}`),
+					"non-object":   []byte(`["not a translation object"]`),
+					"invalid-utf8": {'{', '"', 'X', '"', ':', '"', 0xff, '"', '}'},
+				}[mode]
+				// Deliberately re-seal this synthetic catalogue and both outputs so
+				// only structural validation can reject the malformed translation.
+				var cat copiedCatalogue
+				if err = json.Unmarshal(mustTextRead(t, n, "catalogue.json"), &cat); err != nil {
+					t.Fatal(err)
+				}
+				for i := range cat.Assets {
+					a := &cat.Assets[i]
+					if a.Family != "translations" {
+						continue
+					}
+					a.Bytes, a.SHA256, a.GitBlob = len(payload), digest(payload), blob(payload)
+					for _, name := range append([]string{a.Path}, a.Outputs...) {
+						if err = os.WriteFile(filepath.Join(b, "prepared/source", name), payload, 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				encoded, encodeErr := json.Marshal(cat)
+				if encodeErr != nil {
+					t.Fatal(encodeErr)
+				}
+				err = os.WriteFile(filepath.Join(n, "catalogue.json"), encoded, 0600)
+				p.CatalogueHash = digest(encoded)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := copiedObserve(b, n, r, readAt, p); err == nil {
+				t.Fatal("incomplete translation admission succeeded")
+			}
+		})
+	}
+}
+
+// This miniature distribution exercises original archives, actual filesystem
+// copies and compiler observations. Native CI separately exercises the frozen
+// 1,858-member distribution; these are deliberately not native-font fixtures.
+func copiedFixture(t *testing.T) (string, string, string, copiedPolicy) {
+	t.Helper()
+	b, fonts, recipe, fontPolicy := textFixture(t)
+	n := t.TempDir()
+	put := func(root, name string, body []byte) {
+		t.Helper()
+		if e := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0755); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(filepath.Join(root, name), body, 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	cat := copiedCatalogue{SchemaVersion: 1, UpstreamCommit: upstream}
+	lock := []byte("frozen original package selection")
+	put(b, "prepared/source/pnpm-lock.yaml", lock)
+	cat.LockSHA256 = digest(lock)
+	terms := []byte("Original complete MIT grant\nCopyright fixture author\n")
+	put(n, "MIT.txt", terms)
+	cat.Notices = []inputRecord{{"MIT.txt", digest(terms)}}
+	for _, context := range []struct{ source, notice, body string }{
+		{"LICENSE", "ZITADEL-LICENSE", "Complete fixture source license\n"},
+		{"LICENSING.md", "ZITADEL-LICENSING.md", "Complete fixture licensing scope\n"},
+		{"CONTRIBUTING.md", "ZITADEL-CONTRIBUTING.md", "Complete fixture translation contribution context\n"},
+	} {
+		put(b, "prepared/source/"+context.source, []byte(context.body))
+		put(n, context.notice, []byte(context.body))
+		cat.Notices = append(cat.Notices, inputRecord{context.notice, digest([]byte(context.body))})
+	}
+	packages := mustTextRead(t, b, "packages.jsonl")
+	var compiler []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(packages)), "\n") {
+		var p map[string]any
+		if e := json.Unmarshal([]byte(line), &p); e != nil {
+			t.Fatal(e)
+		}
+		compiler = append(compiler, p)
+	}
+	for _, family := range []string{"line-awesome", "material-icons", "flag-icons", "translations"} {
+		body := []byte("original " + family)
+		if family == "translations" {
+			body = []byte(`{"GREETING":{"HELLO":"Hello, fixture"}}`)
+		}
+		name := map[string]string{"line-awesome": "console/src/assets/icons/line-awesome/css/example.css", "material-icons": "package/dist/fonts/MaterialIcons-Regular.woff2", "flag-icons": "package/flags/4x3/dk.svg", "translations": "console/src/assets/i18n/en.json"}[family]
+		out := map[string]string{"line-awesome": "assets/icons/line-awesome/css/example.css", "material-icons": "media/MaterialIcons-Regular-EXAMPLE.woff2", "flag-icons": "media/dk-EXAMPLE.svg", "translations": "assets/i18n/en.json"}[family]
+		a := copiedAsset{Family: family, Path: name, Bytes: len(body), SHA256: digest(body), Outputs: []string{"console/dist/console/" + out, "internal/api/ui/console/static/" + out}}
+		if family == "line-awesome" || family == "translations" {
+			a.GitBlob = blob(body)
+			if family == "line-awesome" {
+				a.OriginalBlob = a.GitBlob
+			}
+			put(b, "prepared/source/"+name, body)
+		} else {
+			packageName, version := "flag-icons", "7.5.0"
+			if family == "material-icons" {
+				packageName, version = "material-design-icons-iconfont", "6.7.0"
+			}
+			metadata := []byte(fmt.Sprintf(`{"name":%q,"version":%q}`, packageName, version))
+			resolved := "node_modules/.pnpm/" + packageName + "@" + version + "/node_modules/" + packageName
+			put(b, "prepared/source/"+resolved+"/package.json", metadata)
+			put(b, "prepared/source/"+resolved+"/LICENSE", terms)
+			put(b, "prepared/source/"+resolved+"/"+strings.TrimPrefix(name, "package/"), body)
+			if e := os.MkdirAll(filepath.Join(b, "prepared/source/console/node_modules"), 0755); e != nil {
+				t.Fatal(e)
+			}
+			if e := os.Symlink("../../"+resolved, filepath.Join(b, "prepared/source/console/node_modules/"+packageName)); e != nil {
+				t.Fatal(e)
+			}
+			var compressed bytes.Buffer
+			g := gzip.NewWriter(&compressed)
+			tw := tar.NewWriter(g)
+			for _, member := range []struct {
+				name string
+				body []byte
+			}{{name, body}, {"package/LICENSE", terms}} {
+				if e := tw.WriteHeader(&tar.Header{Name: member.name, Mode: 0644, Size: int64(len(member.body)), Typeflag: tar.TypeReg}); e != nil {
+					t.Fatal(e)
+				}
+				if _, e := tw.Write(member.body); e != nil {
+					t.Fatal(e)
+				}
+			}
+			if e := tw.Close(); e != nil {
+				t.Fatal(e)
+			}
+			if e := g.Close(); e != nil {
+				t.Fatal(e)
+			}
+			archive := compressed.Bytes()
+			sum := sha512.Sum512(archive)
+			archivePath := "archives/" + digest(archive) + ".tgz"
+			put(b, archivePath, archive)
+			cat.Archives = append(cat.Archives, copiedArchive{Family: family, Path: archivePath, SHA256: digest(archive), Integrity: "sha512-" + base64.StdEncoding.EncodeToString(sum[:]), LicensePath: "package/LICENSE", Notice: "MIT.txt", PackageJSONSHA256: digest(metadata)})
+		}
+		cat.Assets = append(cat.Assets, a)
+		for _, output := range a.Outputs {
+			put(b, "prepared/source/"+output, body)
+		}
+		compiler[1]["EmbedFiles"] = append(compiler[1]["EmbedFiles"].([]any), "static/"+out)
+		f, e := os.OpenFile(filepath.Join(b, "generated.sha256"), os.O_APPEND|os.O_WRONLY, 0600)
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, output := range a.Outputs {
+			fmt.Fprintf(f, "%s  %s\n", a.SHA256, output)
+		}
+		if e = f.Close(); e != nil {
+			t.Fatal(e)
+		}
+	}
+	var stream bytes.Buffer
+	for _, p := range compiler {
+		raw, _ := json.Marshal(p)
+		stream.Write(raw)
+		stream.WriteByte('\n')
+	}
+	put(b, "packages.jsonl", stream.Bytes())
+	// The pre-existing text collector records the icon-font bytes separately;
+	// this batch adds the original grants rather than silently relabeling them.
+	var fc textCatalogue
+	json.Unmarshal(mustTextRead(t, fonts, "catalogue.json"), &fc)
+	for _, output := range cat.Assets[1].Outputs {
+		fc.DeferredIconOutputs = append(fc.DeferredIconOutputs, inputRecord{output, cat.Assets[1].SHA256})
+	}
+	fb, _ := json.Marshal(fc)
+	put(fonts, "catalogue.json", fb)
+	fontPolicy.CatalogueHash = digest(fb)
+	put(b, "zitadel-copied-assets.go", []byte("selected copied-asset verifier"))
+	encoded, _ := json.Marshal(cat)
+	put(n, "catalogue.json", encoded)
+	neutralPath := "console/src/fixture-provider.html"
+	neutralBody := []byte(`<i class="neutral-provider-icon" aria-hidden="true"></i>`)
+	put(b, "prepared/source/"+neutralPath, neutralBody)
+	put(b, "prepared/source/console/src/fixture-smtp.html", []byte("fixed SMTP consumer"))
+	put(b, "prepared/source/apps/docs/frameworks.json", []byte("fixed framework metadata"))
+	return b, n, recipe, copiedPolicy{CatalogueHash: digest(encoded), Assets: 4, Outputs: 8, TextNotices: fonts, TextPolicy: fontPolicy, ProviderConsumers: []inputRecord{{neutralPath, digest(neutralBody)}}, SMTPConsumers: []inputRecord{{"console/src/fixture-smtp.html", digest([]byte("fixed SMTP consumer"))}}, FrameworkConsumers: []inputRecord{{"apps/docs/frameworks.json", digest([]byte("fixed framework metadata"))}}}
+}
+
+func TestCopiedAssetsRetainOriginalTermsAndExactCompilerCopies(t *testing.T) {
+	b, n, r, p := copiedFixture(t)
+	state, e := copiedObserve(b, n, r, readAt, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(state.Assets) != 4 || !bytes.Contains(state.Raw, []byte("Copyright fixture author")) || !bytes.Contains(state.Raw, []byte("Original complete MIT grant")) || !bytes.Contains(state.Raw, []byte("Complete fixture translation contribution context")) || bytes.Contains(state.Raw, []byte("Hello, fixture")) {
+		t.Fatal("selected original attribution was lost")
+	}
+	if state.ImageAdmission != "unknown" || state.LicenseClosure != "unknown" {
+		t.Fatal("asset attribution widened release authority")
+	}
+}
+
+func TestCopiedAssetsRejectMissingChangedExtraAndUncompiledCopies(t *testing.T) {
+	for _, mode := range []string{"missing", "changed", "extra", "uncompiled", "changed-original", "changed-grant"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			name := filepath.Join(b, "prepared/source/internal/api/ui/console/static/assets/icons/line-awesome/css/example.css")
+			switch mode {
+			case "missing":
+				os.Remove(name)
+			case "changed":
+				os.WriteFile(name, []byte("substituted output"), 0600)
+			case "extra":
+				os.WriteFile(filepath.Join(filepath.Dir(name), "unexpected.css"), []byte("extra"), 0600)
+			case "uncompiled":
+				raw := mustTextRead(t, b, "packages.jsonl")
+				os.WriteFile(filepath.Join(b, "packages.jsonl"), bytes.ReplaceAll(raw, []byte("static/assets/icons/line-awesome/css/example.css"), []byte("static/unselected.css")), 0600)
+			case "changed-original":
+				os.WriteFile(filepath.Join(b, "prepared/source/console/src/assets/icons/line-awesome/css/example.css"), []byte("substituted original"), 0600)
+			case "changed-grant":
+				os.WriteFile(filepath.Join(n, "MIT.txt"), []byte("MIT label only"), 0600)
+			}
+			if _, e := copiedObserve(b, n, r, readAt, p); e == nil {
+				t.Fatal("incomplete distribution accepted")
+			}
+		})
+	}
+}
+
+func TestCopiedConnectedPackageBoundaryRejectsSubstitutions(t *testing.T) {
+	for _, mode := range []string{"escape", "unclean-target", "linked-parent", "package-metadata", "connected-source", "alias-race"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedFixture(t)
+			alias := filepath.Join(b, "prepared/source/console/node_modules/flag-icons")
+			resolved := filepath.Join(b, "prepared/source/node_modules/.pnpm/flag-icons@7.5.0/node_modules/flag-icons")
+			reader := textReader(readAt)
+			switch mode {
+			case "escape":
+				os.Remove(alias)
+				os.Symlink("/tmp/outside", alias)
+			case "unclean-target":
+				os.Remove(alias)
+				os.Symlink("../../missing/../node_modules/.pnpm/flag-icons@7.5.0/node_modules/flag-icons", alias)
+			case "linked-parent":
+				parent := filepath.Dir(alias)
+				os.Rename(parent, parent+"-real")
+				os.Symlink(parent+"-real", parent)
+			case "package-metadata":
+				os.WriteFile(filepath.Join(resolved, "package.json"), []byte(`{"name":"other","version":"7.5.0"}`), 0600)
+			case "connected-source":
+				os.WriteFile(filepath.Join(resolved, "flags/4x3/dk.svg"), []byte("substitution"), 0600)
+			case "alias-race":
+				reader = func(root, name string, limit int64) ([]byte, error) {
+					body, e := readAt(root, name, limit)
+					if strings.Contains(name, "flag-icons@7.5.0/") && strings.HasSuffix(name, "package.json") {
+						os.Remove(alias)
+						os.Symlink("/tmp/outside", alias)
+					}
+					return body, e
+				}
+			}
+			if _, e := copiedObserve(b, n, r, reader, p); e == nil {
+				t.Fatal("substituted connected package admitted")
+			}
+		})
+	}
+}
+
+// Exercise the real 19 Console / 8 Login path layout with small synthetic bytes.
+// Archive decoding, compiler membership and generated-file receipts stay real.
+func copiedNativeFixture(t *testing.T) (string, string, string, copiedPolicy) {
+	t.Helper()
+	b, n, r, p := copiedFixture(t)
+	put := func(root, name string, body []byte) {
+		t.Helper()
+		if e := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0755); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(filepath.Join(root, name), body, 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	p.NativeGraphics = append([]copiedNativeDefinition{}, copiedNativeFrozen...)
+	for _, notice := range copiedNativeTermsFrozen {
+		body := []byte("Complete original fixture context " + notice.Path + "\n")
+		put(n, notice.Path, body)
+		p.NativeTerms = append(p.NativeTerms, inputRecord{notice.Path, digest(body)})
+	}
+	brand := []byte("Complete original fixture trademark policy; not a new grant\n")
+	p.NativeBrandPolicy = inputRecord{copiedNativeBrandFrozen.Path, digest(brand)}
+	put(b, "prepared/source/"+p.NativeBrandPolicy.Path, brand)
+	members, e := decodeStatik(mustTextRead(t, b, "prepared/source/"+statikPath))
+	if e != nil {
+		t.Fatal(e)
+	}
+	var packages []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(mustTextRead(t, b, "packages.jsonl"))), "\n") {
+		var pkg map[string]any
+		if e := json.Unmarshal([]byte(line), &pkg); e != nil {
+			t.Fatal(e)
+		}
+		packages = append(packages, pkg)
+	}
+	manifest := mustTextRead(t, b, "generated.sha256")
+	for i := range p.NativeGraphics {
+		a := &p.NativeGraphics[i]
+		body := []byte("unchanged original graphic " + a.Path)
+		a.Bytes, a.SHA256, a.GitBlob = len(body), digest(body), blob(body)
+		put(b, "prepared/source/"+a.Path, body)
+		if strings.HasPrefix(a.Path, "console/src/") {
+			name := strings.TrimPrefix(a.Path, "console/src/")
+			for _, prefix := range []string{"console/dist/console/", "internal/api/ui/console/static/"} {
+				output := prefix + name
+				put(b, "prepared/source/"+output, body)
+				manifest = append(manifest, []byte(a.SHA256+"  "+output+"\n")...)
+			}
+			packages[1]["EmbedFiles"] = append(packages[1]["EmbedFiles"].([]any), "static/"+name)
+		} else {
+			members[strings.TrimPrefix(a.Path, "internal/api/ui/login/static/")] = body
+			manifest = append(manifest, []byte(a.SHA256+"  "+a.Path+"\n")...)
+		}
+	}
+	archive := textStatikFixture(t, members)
+	manifest = bytes.ReplaceAll(manifest, []byte(digest(mustTextRead(t, b, "prepared/source/"+statikPath))), []byte(digest(archive)))
+	put(b, "prepared/source/"+statikPath, archive)
+	put(b, "generated.sha256", manifest)
+	var stream bytes.Buffer
+	for _, pkg := range packages {
+		body, _ := json.Marshal(pkg)
+		stream.Write(body)
+		stream.WriteByte('\n')
+	}
+	put(b, "packages.jsonl", stream.Bytes())
+	copiedFinishFixture(t, b, n, r, p)
+	return b, n, r, p
+}
+
+func TestNativeFrozenScopeStaysSeparateFromExistingCatalogue(t *testing.T) {
+	console, login, historical := 0, 0, 0
+	identities := map[string]bool{}
+	for _, a := range copiedFrozen.NativeGraphics {
+		if strings.HasPrefix(a.Path, "console/src/") {
+			console++
+		} else if strings.HasPrefix(a.Path, "internal/api/ui/login/static/resources/themes/zitadel/") {
+			login++
+		} else {
+			t.Fatal("unselected native source")
+		}
+		identities[a.SHA256] = true
+		if a.DeclaredRevision != upstream {
+			historical++
+		}
+	}
+	if console != 19 || login != 8 || historical != 3 || len(identities) != 25 || copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 {
+		t.Fatal("reviewed native scope or existing catalogue changed")
+	}
+}
+
+func TestNativeGraphicsBindOriginalsCopiesAndCompiledArchive(t *testing.T) {
+	b, n, r, p := copiedNativeFixture(t)
+	inv, raw, e := copiedCapture(b, n, r, readAt, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	console, login := 0, 0
+	for _, a := range inv.NativeGraphics {
+		if a.DeclaredNoticeSHA256 == "" || a.DeclaredRevision == "" {
+			t.Fatal("missing repository declaration context")
+		}
+		switch a.Component {
+		case "console":
+			console++
+			if len(a.Outputs) != 2 || a.StatikMember != "" || a.StatikSHA256 != "" {
+				t.Fatal("Console copy binding lost or confused with Login archive")
+			}
+		case "login":
+			login++
+			if len(a.Outputs) != 0 || a.StatikMember == "" || a.StatikSHA256 != digest(mustTextRead(t, b, "prepared/source/"+statikPath)) {
+				t.Fatal("Login decoded-member/archive binding lost")
+			}
+		default:
+			t.Fatal("unbound native component")
+		}
+	}
+	if console != 19 || login != 8 || len(inv.Assets) != 4 || inv.ImageAdmission != "unknown" || inv.LicenseClosure != "unknown" || inv.Reproducible {
+		t.Fatal("native set, existing catalogue or release authority changed")
+	}
+	for _, body := range []string{"Complete original fixture trademark policy", "Complete original fixture context ZITADEL-Console-2020-LICENSE", "Complete original fixture context ZITADEL-Console-2022-LICENSE", "Complete fixture source license", "not independent authorship"} {
+		if !bytes.Contains(raw, []byte(body)) {
+			t.Fatalf("original context missing: %s", body)
+		}
+	}
+}
+
+func TestNativeGraphicProvenanceRejectsIncompleteOrSubstitutedObservations(t *testing.T) {
+	for _, mode := range []string{"missing-source", "coherent-substitution", "source-link", "missing-copy", "changed-copy", "missing-archive-member", "changed-archive-member", "extra-archive-member", "extra-login-source", "historical-terms", "historical-link", "brand-policy", "source-license", "duplicate", "wrong-revision", "missing-policy-row"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedNativeFixture(t)
+			if _, e := copiedObserve(b, n, r, readAt, p); e != nil {
+				t.Fatal("valid observation failed before mutation", e)
+			}
+			name := p.NativeGraphics[0].Path
+			source := filepath.Join(b, "prepared/source")
+			put := func(root, path string, body []byte) {
+				t.Helper()
+				if e := os.WriteFile(filepath.Join(root, path), body, 0600); e != nil {
+					t.Fatal(e)
+				}
+			}
+			switch mode {
+			case "missing-source":
+				os.Remove(filepath.Join(source, name))
+			case "coherent-substitution":
+				for _, path := range []string{name, "console/dist/console/" + strings.TrimPrefix(name, "console/src/"), "internal/api/ui/console/static/" + strings.TrimPrefix(name, "console/src/")} {
+					put(source, path, []byte("coherently wrong original"))
+				}
+			case "source-link":
+				os.Remove(filepath.Join(source, name))
+				if e := os.Symlink(filepath.Join(source, p.NativeGraphics[1].Path), filepath.Join(source, name)); e != nil {
+					t.Fatal(e)
+				}
+			case "missing-copy":
+				os.Remove(filepath.Join(source, "console/dist/console/"+strings.TrimPrefix(name, "console/src/")))
+			case "changed-copy":
+				put(source, "internal/api/ui/console/static/"+strings.TrimPrefix(name, "console/src/"), []byte("substituted compiled copy"))
+			case "missing-archive-member", "changed-archive-member", "extra-archive-member":
+				members, e := decodeStatik(mustTextRead(t, source, statikPath))
+				if e != nil {
+					t.Fatal(e)
+				}
+				member := "resources/themes/zitadel/favicon.ico"
+				if mode == "missing-archive-member" {
+					delete(members, member)
+				} else if mode == "changed-archive-member" {
+					members[member] = []byte("substituted decoded original")
+				} else {
+					members["resources/themes/zitadel/unaccounted.png"] = []byte("not declared")
+				}
+				put(source, statikPath, textStatikFixture(t, members))
+			case "extra-login-source":
+				put(source, "internal/api/ui/login/static/resources/themes/zitadel/unaccounted.png", []byte("not declared"))
+			case "historical-terms":
+				put(n, p.NativeTerms[0].Path, []byte("partial terms"))
+			case "historical-link":
+				os.Remove(filepath.Join(n, p.NativeTerms[0].Path))
+				if e := os.Symlink(filepath.Join(n, p.NativeTerms[1].Path), filepath.Join(n, p.NativeTerms[0].Path)); e != nil {
+					t.Fatal(e)
+				}
+			case "brand-policy":
+				put(source, p.NativeBrandPolicy.Path, []byte("changed brand policy"))
+			case "source-license":
+				put(source, "LICENSE", []byte("different repository declaration"))
+			case "duplicate":
+				p.NativeGraphics[1] = p.NativeGraphics[0]
+			case "wrong-revision":
+				p.NativeGraphics[0].DeclaredRevision = strings.Repeat("1", 40)
+			case "missing-policy-row":
+				p.NativeGraphics = p.NativeGraphics[1:]
+			}
+			if _, e := copiedObserve(b, n, r, readAt, p); e == nil {
+				t.Fatal("incomplete native provenance accepted")
+			}
+		})
+	}
+}
+
+func TestNativeCompletedCaptureRejectsMissingCompilerOrGeneratedBindings(t *testing.T) {
+	for _, mode := range []string{"console-compiler", "login-compiler", "original-manifest", "copy-manifest", "statik-manifest"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedNativeFixture(t)
+			if _, _, e := copiedCapture(b, n, r, readAt, p); e != nil {
+				t.Fatal(e)
+			}
+			if strings.HasSuffix(mode, "compiler") {
+				data := mustTextRead(t, b, "packages.jsonl")
+				if mode == "login-compiler" {
+					data = bytes.ReplaceAll(data, []byte(`"generate.go","statik.go"`), []byte(`"generate.go"`))
+				} else {
+					data = bytes.ReplaceAll(data, []byte(`,"static/assets/icons/android-chrome-192x192.png"`), nil)
+				}
+				if bytes.Equal(data, mustTextRead(t, b, "packages.jsonl")) {
+					t.Fatal("compiler mutation did not match actual fixture")
+				}
+				os.WriteFile(filepath.Join(b, "packages.jsonl"), data, 0600)
+			} else {
+				name := map[string]string{"original-manifest": "internal/api/ui/login/static/resources/themes/zitadel/favicon.ico", "copy-manifest": "console/dist/console/assets/icons/android-chrome-192x192.png", "statik-manifest": statikPath}[mode]
+				data := mustTextRead(t, b, "generated.sha256")
+				var kept []string
+				for _, line := range strings.Split(string(data), "\n") {
+					if !strings.HasSuffix(line, "  "+name) {
+						kept = append(kept, line)
+					}
+				}
+				changed := []byte(strings.Join(kept, "\n"))
+				if bytes.Equal(data, changed) {
+					t.Fatal("manifest mutation did not match actual fixture")
+				}
+				os.WriteFile(filepath.Join(b, "generated.sha256"), changed, 0600)
+			}
+			// Compiler omissions must fail the direct observation too, before any
+			// saved-state comparison. Generated receipts are checked at capture.
+			if mode == "console-compiler" {
+				if _, e := copiedObserve(b, n, r, readAt, p); e == nil {
+					t.Fatal("Console compiler omission accepted")
+				}
+			} else if mode == "login-compiler" {
+				if _, e := textObserve(b, p.TextNotices, r, readAt, p.TextPolicy); e == nil {
+					t.Fatal("Login compiler omission accepted")
+				}
+			}
+			if _, _, e := copiedCapture(b, n, r, readAt, p); e == nil {
+				t.Fatal("native completed binding omitted without rejection")
+			}
+		})
+	}
+}
+
+func TestNativeCompletedReadbackBindsSavedInventoryWithoutRepair(t *testing.T) {
+	b, n, r, p := copiedNativeFixture(t)
+	previous := copiedFrozen
+	copiedFrozen = p
+	defer func() { copiedFrozen = previous }()
+	args := []string{"--copied-assets", "--inventory", "--build", b, "--notices", n, "--recipe", r}
+	var out, diagnostic bytes.Buffer
+	if code := run(args, &out, &diagnostic); code != 0 {
+		t.Fatalf("capture exit%d: %s", code, diagnostic.String())
+	}
+	name := filepath.Join(b, "copied-asset-notices-inventory.json")
+	if e := os.WriteFile(name, out.Bytes(), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.Rename(filepath.Join(b, "build-receipt.pending"), filepath.Join(b, "build-receipt.json")); e != nil {
+		t.Fatal(e)
+	}
+	args[1] = "--verify"
+	out.Reset()
+	diagnostic.Reset()
+	if code := run(args, &out, &diagnostic); code != 0 {
+		t.Fatalf("completed readback exit%d: %s", code, diagnostic.String())
+	}
+	valid := mustTextRead(t, b, "copied-asset-notices-inventory.json")
+	if !bytes.Equal(out.Bytes(), valid) {
+		t.Fatal("readback did not return the exact saved inventory")
+	}
+	changed := bytes.ReplaceAll(valid, []byte(`"statikMember": "resources/themes/zitadel/favicon.ico"`), []byte(`"statikMember": "resources/themes/zitadel/wrong.ico"`))
+	if bytes.Equal(valid, changed) {
+		t.Fatal("native saved-binding mutation missed")
+	}
+	if e := os.WriteFile(name, changed, 0600); e != nil {
+		t.Fatal(e)
+	}
+	out.Reset()
+	diagnostic.Reset()
+	if code := run(args, &out, &diagnostic); code == 0 || out.Len() != 0 || !bytes.Equal(changed, mustTextRead(t, b, "copied-asset-notices-inventory.json")) {
+		t.Fatal("completed native mismatch accepted, emitted output or repaired input")
+	}
+}
+
+func copiedCapturedFixture(t *testing.T) (string, string, string, copiedPolicy) {
+	t.Helper()
+	b, n, r, p := copiedFixture(t)
+	copiedFinishFixture(t, b, n, r, p)
+	return b, n, r, p
+}
+
+func copiedFinishFixture(t *testing.T, b, n, r string, p copiedPolicy) {
+	t.Helper()
+	fs, e := textObserve(b, p.TextNotices, r, readAt, p.TextPolicy)
+	if e != nil {
+		t.Fatal(e)
+	}
+	before, _ := json.Marshal(fs)
+	if e = os.WriteFile(filepath.Join(b, textBefore), before, 0600); e != nil {
+		t.Fatal(e)
+	}
+	fi, raw, e := textCapture(b, p.TextNotices, r, readAt, p.TextPolicy)
+	if e != nil {
+		t.Fatal(e)
+	}
+	encoded, _ := json.MarshalIndent(fi, "", "  ")
+	encoded = append(encoded, '\n')
+	if e = os.WriteFile(filepath.Join(b, "text-font-notices-inventory.json"), encoded, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.WriteFile(filepath.Join(b, textRaw), raw, 0600); e != nil {
+		t.Fatal(e)
+	}
+	s, e := copiedObserve(b, n, r, readAt, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	before, _ = json.Marshal(s)
+	if e = os.WriteFile(filepath.Join(b, "copied-assets.before.json"), before, 0600); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestCopiedCaptureBindsCompletedSourceAndBinary(t *testing.T) {
+	b, n, r, p := copiedCapturedFixture(t)
+	inv, raw, e := copiedCapture(b, n, r, readAt, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if inv.BinarySHA256 != digest([]byte("compiled binary")) || len(inv.Assets) != 4 || !bytes.Contains(raw, []byte("Original complete MIT grant")) {
+		t.Fatal("capture lost original terms or final binary identity")
+	}
+	if inv.ImageAdmission != "unknown" || inv.LicenseClosure != "unknown" || inv.Reproducible {
+		t.Fatal("capture widened release authority")
+	}
+}
+
+func TestCopiedCaptureRejectsIncompleteFinalBindings(t *testing.T) {
+	for _, mode := range []string{"snapshot", "generated", "font-inventory", "font-notice", "binary", "ambiguous-receipt"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedCapturedFixture(t)
+			switch mode {
+			case "snapshot":
+				os.WriteFile(filepath.Join(b, "copied-assets.before.json"), []byte(`{}`), 0600)
+			case "generated":
+				v := mustTextRead(t, b, "generated.sha256")
+				v = bytes.ReplaceAll(v, []byte(digest([]byte("original line-awesome"))), []byte(strings.Repeat("0", 64)))
+				os.WriteFile(filepath.Join(b, "generated.sha256"), v, 0600)
+			case "font-inventory":
+				os.WriteFile(filepath.Join(b, "text-font-notices-inventory.json"), []byte(`{}`), 0600)
+			case "font-notice":
+				os.WriteFile(filepath.Join(b, textRaw), []byte("replaced original notice"), 0600)
+			case "binary":
+				os.WriteFile(filepath.Join(b, "service/zitadel"), []byte("changed binary"), 0600)
+			case "ambiguous-receipt":
+				os.WriteFile(filepath.Join(b, "build-receipt.json"), mustTextRead(t, b, "build-receipt.pending"), 0600)
+			}
+			if _, _, e := copiedCapture(b, n, r, readAt, p); e == nil {
+				t.Fatal("incomplete final asset binding accepted")
+			}
+		})
+	}
+}
+
+func TestIconAttributionPreservesAvailableRecordsWithoutInventingOthers(t *testing.T) {
+	font := textNameFixture([]testTextName{{0, "Copyright original icon author", nil}, {5, "Version 1", nil}})
+	names, e := fontAttributionNames(font, false)
+	if e != nil || len(names) != 2 || names[0].Text != "Copyright original icon author" || names[1].Text != "Version 1" {
+		t.Fatal("original available icon attribution was lost", e)
+	}
+	if _, e = textFontNames(font); e == nil {
+		t.Fatal("text-font completeness was weakened")
+	}
+}
+
+func TestCopiedCompletedCLIRequiresExactSavedInventoryAndStaysReadOnly(t *testing.T) {
+	for _, mode := range []string{"valid", "missing", "malformed", "changed-binding", "extra-bytes", "symlink", "fifo"} {
+		t.Run(mode, func(t *testing.T) {
+			b, n, r, p := copiedCapturedFixture(t)
+			previous := copiedFrozen
+			copiedFrozen = p
+			defer func() { copiedFrozen = previous }()
+			args := []string{"--copied-assets", "--inventory", "--build", b, "--notices", n, "--recipe", r}
+			var out, diagnostic bytes.Buffer
+			if code := run(args, &out, &diagnostic); code != 0 {
+				t.Fatalf("capture exit%d: %s", code, diagnostic.String())
+			}
+			name := filepath.Join(b, "copied-asset-notices-inventory.json")
+			if e := os.WriteFile(name, out.Bytes(), 0600); e != nil {
+				t.Fatal(e)
+			}
+			if e := os.Rename(filepath.Join(b, "build-receipt.pending"), filepath.Join(b, "build-receipt.json")); e != nil {
+				t.Fatal(e)
+			}
+			want := append([]byte{}, out.Bytes()...)
+			switch mode {
+			case "missing":
+				os.Remove(name)
+			case "malformed":
+				os.WriteFile(name, []byte(`{"broken":`), 0600)
+			case "changed-binding":
+				os.WriteFile(name, bytes.ReplaceAll(want, []byte(digest([]byte("compiled binary"))), []byte(strings.Repeat("f", 64))), 0600)
+			case "extra-bytes":
+				os.WriteFile(name, append(want, '\n'), 0600)
+			case "symlink":
+				os.Remove(name)
+				os.Symlink(filepath.Join(b, "copied-assets.before.json"), name)
+			case "fifo":
+				os.Remove(name)
+				if e := syscall.Mkfifo(name, 0600); e != nil {
+					t.Fatal(e)
+				}
+			}
+			before := map[string][]byte{}
+			for _, f := range []string{"copied-asset-notices.txt", "copied-assets.before.json", "build-receipt.json", "service/zitadel"} {
+				before[f] = mustTextRead(t, b, f)
+			}
+			out.Reset()
+			diagnostic.Reset()
+			args[1] = "--verify"
+			code := run(args, &out, &diagnostic)
+			if mode == "valid" {
+				if code != 0 || !bytes.Equal(out.Bytes(), want) {
+					t.Fatalf("read-only verification differs: exit%d %s", code, diagnostic.String())
+				}
+			} else if code == 0 || out.Len() != 0 {
+				t.Fatal("incomplete saved inventory emitted success")
+			}
+			for f, want := range before {
+				if !bytes.Equal(mustTextRead(t, b, f), want) {
+					t.Fatal("verification changed retained evidence", f)
+				}
+			}
+		})
+	}
+}
+
+// Source and both generated copies independently refuse retired images and
+// literal or escaped references; absence in one view cannot clear another.
+func TestCopiedProviderGraphicsCannotReturnInSourceOrEitherCompilerCopy(t *testing.T) {
+	cases := map[string]string{
+		"console/src/assets/images/idp/google.png":                    "retired source",
+		"console/src/assets/images/idp/extra.webp":                    "additional source",
+		"internal/api/ui/login/static/resources/images/idp/extra.svg": "additional login source",
+		"console/dist/console/assets/images/idp/google.png":           "retired output",
+		"console/dist/console/assets/images/idp/extra.webp":           "additional output",
+		"internal/api/ui/console/static/assets/images/idp/google.png": "retired embedded copy",
+		"console/dist/console/provider.js":                            `const icon="./assets/images/idp/google.png";`,
+		"internal/api/ui/console/static/provider.css":                 `.icon{background:url(./assets/images/idp/apple.svg)}`,
+		"console/dist/console/escaped.js":                             `const icon="assets\/images\/idp\/google.png";`,
+		"console/src/assets/images/smtp/google.png":                   "retired SMTP source",
+		"console/src/assets/images/smtp/extra.webp":                   "additional SMTP source",
+		"console/dist/console/assets/images/smtp/google.png":          "retired SMTP output",
+		"internal/api/ui/console/static/assets/images/smtp/extra.svg": "additional SMTP embedded output",
+		"console/dist/console/smtp.js":                                `const icon="./assets/images/smtp/google.png";`,
+		"internal/api/ui/console/static/smtp.css":                     `.icon{background:url(./assets/images/smtp/outlook.svg)}`,
+		"console/dist/console/smtp-escaped.js":                        `const icon="assets\/images\/smtp\/google.png";`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			put(t, filepath.Join(build, "prepared/source", name), []byte(body))
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("retired provider image or URL omitted from output observation")
+			}
+		})
+	}
+}
+
+// Missing or changed native form consumers must fail their frozen bindings,
+// even when all selected artwork outputs still appear complete.
+func TestCopiedSMTPConsumersMustRemainBound(t *testing.T) {
+	for _, attack := range []string{"missing", "changed"} {
+		t.Run(attack, func(t *testing.T) {
+			build, notices, recipe, policy := copiedFixture(t)
+			name := filepath.Join(build, "prepared/source/console/src/fixture-smtp.html")
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err != nil {
+				t.Fatal(err)
+			}
+			if attack == "missing" {
+				if err := os.Remove(name); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(name, []byte("unbound SMTP defaults"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := copiedObserve(build, notices, recipe, readAt, policy); err == nil {
+				t.Fatal("unexamined SMTP consumer accepted")
+			}
+		})
+	}
+}
+
+// The retained MDI policy supplements the original catalogue; it must not change
+// the old catalogue's identities or accidentally restore an unresolved mark.
+func TestCopiedMDIProductionPolicyIsClosedAndKeepsExistingCatalogue(t *testing.T) {
+	if copiedFrozen.Assets != 1858 || copiedFrozen.Outputs != 3716 || len(copiedFrozen.MDI) != 25 || len(copiedFrozen.MDINotices) != 2 || len(copiedFrozen.MDIConsumers) != 5 || len(copiedFrozen.FrameworkConsumers) != 8 {
+		t.Fatal("frozen catalogue or complete MDI policy changed")
+	}
+	previous := ""
+	pictogrammers, mail := 0, 0
+	for _, a := range copiedFrozen.MDI {
+		if a.Path <= previous || strings.HasSuffix(a.Path, "/openid.svg") || strings.HasSuffix(a.Path, "/jwt.svg") {
+			t.Fatal("duplicate, unordered or unresolved MDI member")
+		}
+		previous = a.Path
+		if a.Notice == "Google-Mail-LICENSE" {
+			mail++
+			if a.Path != "console/src/assets/mdi/mail.svg" || a.SHA256 != a.PrimarySHA256 {
+				t.Fatal("Mail primary identity differs")
+			}
+		} else if a.Notice == "Pictogrammers-LICENSE" {
+			pictogrammers++
+			if a.SHA256 == a.PrimarySHA256 {
+				t.Fatal("modified native wrapper incorrectly equals primary")
+			}
+		} else {
+			t.Fatal("unknown MDI grant")
+		}
+	}
+	if pictogrammers != 24 || mail != 1 {
+		t.Fatal("MDI provenance family incomplete")
+	}
+}

@@ -77,9 +77,9 @@ test('ordinary builds cannot select historical company facts', () => {
   assert.doesNotMatch(JSON.stringify(companyCopyFor()), /PMV|personally owned small business|personligt ejet mindre virksomhed/i);
 });
 
-for (const identity of [false, true]) for (const offer of [false, true]) for (const scope of [false, true]) {
-  test(`ordinary pricing is permanent without changing other releases (${identity}/${offer}/${scope})`, () => {
-    const copy = createBusinessCopy(identity, offer, scope);
+for (const identity of [false, true]) for (const offer of [false, true]) {
+  test(`ordinary pricing is permanent without changing other releases (${identity}/${offer}/permanent)`, () => {
+    const copy = createBusinessCopy(identity, offer);
     assert.match(copy.en.priceNote, /Prices include 25% Danish VAT[.]/);
     assert.match(copy.da.priceNote, /Priserne er inkl[.] 25 % moms[.]/);
     assert.equal(copy.en.registrationType, 'Sole proprietorship');

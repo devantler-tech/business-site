@@ -5,10 +5,186 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/mod/module"
 )
+
+// verifierBootstrapFixture uses a real native Go ZIP and independent checksums.
+func verifierBootstrapFixture(t *testing.T) (verifierBootstrapInputs, identity) {
+	t.Helper()
+	zip, mod, sum, modSum := modulePayload(t, "golang.org/x/mod", "v0.42.0", []string{"go.mod", "module/module.go", "LICENSE", "PATENTS"})
+	dep := identity{Path: "golang.org/x/mod", Version: "v0.42.0", Sum: sum, GoModSum: modSum}
+	inputs := verifierBootstrapInputs{ToolSource: t.TempDir(), Cache: t.TempDir(), SourceSHA256: strings.Repeat("1", 64), ToolSourceSHA256: strings.Repeat("2", 64)}
+	inputs.Composition = filepath.Join(t.TempDir(), "composition.json")
+	compositions := []struct {
+		ImportPath, Name string
+		GoFiles          []string
+	}{
+		{"github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources", "main", []string{"capture.go", "generator_sources.go", "generators.go", "graph_metadata.go", "json_fields.go", "main.go", "payload.go", "restore.go", "selection.go"}},
+		{"github.com/devantler-tech/business-site/server/cmd/zitadel-bsr-sources", "main", []string{"files.go", "main.go", "package.go", "validation.go"}},
+	}
+	composition, err := json.Marshal(compositions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, inputs.Composition, composition)
+	for _, command := range compositions {
+		for _, file := range command.GoFiles {
+			writeFixture(t, filepath.Join(inputs.ToolSource, "server/cmd", filepath.Base(command.ImportPath), file), []byte("package main\n"))
+		}
+	}
+	writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module github.com/devantler-tech/business-site/server\n\ngo 1.27.3\n\nrequire golang.org/x/mod v0.42.0\n"))
+	writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.sum"), []byte(dep.Path+" "+dep.Version+" "+sum+"\n"+dep.Path+" "+dep.Version+"/go.mod "+modSum+"\n"))
+	prefix := "cache/download/golang.org/x/mod/@v/v0.42.0"
+	body, err := os.ReadFile(zip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, filepath.Join(inputs.Cache, prefix+".zip"), body)
+	writeFixture(t, filepath.Join(inputs.Cache, prefix+".mod"), mod)
+	writeFixture(t, filepath.Join(inputs.Cache, prefix+".info"), []byte("{\"Version\":\"v0.42.0\"}\n"))
+	return inputs, dep
+}
+
+// TestVerifierBootstrapRetainsOnlyOriginalInputs distinguishes the private
+// bootstrap dependency from the service graph and from an already built tool.
+func TestVerifierBootstrapRetainsOnlyOriginalInputs(t *testing.T) {
+	inputs, dep := verifierBootstrapFixture(t)
+	capsule := filepath.Join(filepath.Dir(inputs.Composition), "capsule")
+	got, err := captureVerifierBootstrap(inputs, capsule, dep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Files != 4 || got.GoVerifiersRebuilt || !got.VerifierBootstrapCaptured || got.SourceManifestSHA256 != inputs.SourceSHA256 {
+		t.Fatal("bootstrap receipt widened its proof")
+	}
+	if _, err := verifyVerifierBootstrap(inputs, capsule, got.ManifestSHA256, dep); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "native")
+	restored, err := restoreVerifierBootstrap(inputs, capsule, got.ManifestSHA256, output, dep)
+	if err != nil || !restored.VerifierBootstrapRestored || restored.GoVerifiersRebuilt {
+		t.Fatalf("original bootstrap cannot be restored: %v", err)
+	}
+	for _, suffix := range []string{".zip", ".mod", ".info"} {
+		original, err := os.ReadFile(filepath.Join(inputs.Cache, "cache/download/golang.org/x/mod/@v/v0.42.0"+suffix))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := os.ReadFile(filepath.Join(output, "cache/download/golang.org/x/mod/@v/v0.42.0"+suffix))
+		if err != nil || !bytes.Equal(body, original) {
+			t.Fatal("native cache changed original input")
+		}
+	}
+}
+
+// TestVerifierBootstrapRefusesIncompleteCapture preserves existing output and
+// refuses missing, linked, changed, or wrong-version inputs without a receipt.
+func TestVerifierBootstrapRefusesIncompleteCapture(t *testing.T) {
+	for _, kind := range []string{"missing-zip", "changed-zip", "linked-mod", "bad-info", "missing-terms", "wrong-module", "replacement", "wrong-sum", "bad-source-seal", "bad-tool-seal", "bad-composition", "existing-output"} {
+		t.Run(kind, func(t *testing.T) {
+			inputs, dep := verifierBootstrapFixture(t)
+			output := filepath.Join(t.TempDir(), "capsule")
+			prefix := filepath.Join(inputs.Cache, "cache/download/golang.org/x/mod/@v/v0.42.0")
+			switch kind {
+			case "missing-zip":
+				if err := os.Remove(prefix + ".zip"); err != nil {
+					t.Fatal(err)
+				}
+			case "changed-zip":
+				writeFixture(t, prefix+".zip", []byte("changed"))
+			case "linked-mod":
+				if err := os.Remove(prefix + ".mod"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(inputs.ToolSource, "server/go.mod"), prefix+".mod"); err != nil {
+					t.Fatal(err)
+				}
+			case "bad-info":
+				writeFixture(t, prefix+".info", []byte("{\"Version\":\"v0.41.0\"}\n"))
+			case "missing-terms":
+				zip, _, sum, _ := modulePayload(t, dep.Path, dep.Version, []string{"go.mod", "module/module.go", "LICENSE"})
+				body, err := os.ReadFile(zip)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFixture(t, prefix+".zip", body)
+				// Recomputing the transport/content hashes cannot supply omitted terms.
+				dep.Sum = sum
+				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.sum"), []byte(dep.Path+" "+dep.Version+" "+sum+"\n"+dep.Path+" "+dep.Version+"/go.mod "+dep.GoModSum+"\n"))
+			case "wrong-module":
+				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module other.example/server\n\ngo 1.27.3\nrequire golang.org/x/mod v0.42.0\n"))
+			case "replacement":
+				f, err := os.OpenFile(filepath.Join(inputs.ToolSource, "server/go.mod"), os.O_APPEND|os.O_WRONLY, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = f.WriteString("replace golang.org/x/mod => ../replacement\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = f.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "wrong-sum":
+				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.sum"), []byte("golang.org/x/mod v0.42.0 h1:wrong\n"))
+			case "bad-source-seal":
+				inputs.SourceSHA256 = "not-a-seal"
+			case "bad-tool-seal":
+				inputs.ToolSourceSHA256 = "not-a-seal"
+			case "bad-composition":
+				writeFixture(t, inputs.Composition, []byte("[]"))
+			case "existing-output":
+				writeFixture(t, filepath.Join(output, "keep"), []byte("keep"))
+			}
+			got, err := captureVerifierBootstrap(inputs, output, dep)
+			if err == nil || got.ManifestSHA256 != "" {
+				t.Fatal("invalid bootstrap capture emitted success")
+			}
+			if kind == "existing-output" {
+				if body, err := os.ReadFile(filepath.Join(output, "keep")); err != nil || string(body) != "keep" {
+					t.Fatal("existing output changed")
+				}
+			} else if _, err := os.Lstat(output); !os.IsNotExist(err) {
+				t.Fatal("failed capture left partial output")
+			}
+		})
+	}
+}
+
+// writeFixture writes a complete regular fixture or fails at the actual write.
+func TestVerifierBootstrapRefusesChangedBytesDuringConsumption(t *testing.T) {
+	inputs, dep := verifierBootstrapFixture(t)
+	capsule := filepath.Join(t.TempDir(), "capsule")
+	receipt, err := captureVerifierBootstrap(inputs, capsule, dep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "native")
+	copier := func(root *os.Root, source, output, target string, limit int64) (fileRecord, error) {
+		if !strings.HasSuffix(source, ".zip") {
+			return copyAt(root, source, output, target, limit)
+		}
+		file := filepath.Join(capsule, source)
+		original, err := os.ReadFile(file)
+		if err != nil {
+			return fileRecord{}, err
+		}
+		writeFixture(t, file, []byte("different bytes during the copy"))
+		got, err := copyAt(root, source, output, target, limit)
+		writeFixture(t, file, original)
+		return got, err
+	}
+	got, err := restoreVerifierBootstrapWithCopier(inputs, capsule, receipt.ManifestSHA256, output, dep, copier)
+	if err == nil || got.ManifestSHA256 != "" {
+		t.Fatal("restoration trusted copied bytes without their authenticated original record")
+	}
+	if _, err := os.Lstat(output); !os.IsNotExist(err) {
+		t.Fatal("failed consumption retained partial native output")
+	}
+}
 
 // writeFixture writes a complete regular fixture or fails at the actual write.
 func writeFixture(t *testing.T, name string, body []byte) {

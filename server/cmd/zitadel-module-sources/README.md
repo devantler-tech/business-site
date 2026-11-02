@@ -34,6 +34,21 @@ GOTOOLCHAIN=local go build -trimpath -buildvcs=false \
   --source-sha256 SOURCE_SEAL --output /absolute/fresh-native-inputs
 ```
 
+The separate `capture-verifier-bootstrap` operation takes `--tool-source`,
+`--source-sha256`, `--tool-source-sha256`, `--cache`, `--composition` and `--output`.
+It retains only the original x/mod 0.42.0 ZIP/mod/info and the successful native
+Go package observation. The restored module and checksum file must admit the
+fixed version and complete checksums, without replacements. The two exact
+command paths and thirteen original Go files must match; captured fields cannot
+choose another package or destination. The archive retains complete LICENSE
+and PATENTS bodies, with native ZIP/h1 and closed-file verification.
+`verify-verifier-bootstrap` instead takes `--package` and external `--sha256`,
+plus the same tool-source/source seals. `restore-verifier-bootstrap` adds a fresh
+`--output`, populated only at fixed native download-cache paths. Copied bytes
+must equal the original authenticated records, even if an input changes and is
+subsequently restored. These component receipts keep `goVerifiersRebuilt:false`.
+Only the outer Linux replay can prove reconstruction and actual service use.
+
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
 alongside `--capture-source`. It requires the reviewed command identity, exact
 tool compiler and an unchanged executable digest. CI builds that command before
@@ -109,6 +124,27 @@ are mapped into explicit native Go cache paths; no compiled cache, extracted
 module tree or `.ziphash` is trusted. The CLI cannot override the frozen catalogue,
 service checksums or official checksum key. Failed restoration clears its receipt
 and removes only its new output, preserving existing paths and input capsules.
+
+It also creates a separate sealed `go-proxy` from the exact verified ZIP/mod/info
+bytes. Its deterministic version lists enumerate only complete retained generator
+sources with authenticated native checksum evidence. Graph-only metadata remains
+available for exact graph reads, but cannot nominate a version for outside-module
+installation. Native Go performs its own
+version ordering, deprecation/retraction and checksum checks against this finite
+file-only snapshot. This is not proof of the original or current upstream latest
+resolver result. No `@latest` response or timestamp-based selection is invented.
+The portable receipt identifies `moduleProxyScope: retained-snapshot`; it contains
+no host-specific URL. The native consumer encodes its own fixed `go-proxy` path
+with no HTTP/direct fallback; writable native caches stay separate. Identical
+inputs must retain byte-identical receipts across different scratch locations.
+
+Restoration never copies or synthesizes `.ziphash`. Before its existing native
+`go mod verify`, the retained builder consumes the exact selected service set
+with native Go inside the prepared project. It checks the complete returned
+identities/checksums and unchanged frozen `go.mod`/`go.sum`, allowing Go to create
+its own derived cache markers. This project-checksum read does not establish
+standalone signed-log availability for service-only modules; generator reads
+outside the project retain their separate signed-log proof.
 
 CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.10 inside a network
 namespace, dropping root privileges before native module reads. It compares every

@@ -1,0 +1,706 @@
+{
+  "schemaVersion": 1,
+  "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
+  "fonts": [
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Black.ttf",
+      "bytes": 69500,
+      "sha256": "abf64cfa14645043a7c33f76435125f8b3de79c510adb938a1c16085518d4341",
+      "gitBlob": "4340502d93c09da91560c862cabf3f6055704149",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Black.ttf",
+        "console/dist/console/media/Lato-Black-TAIY5HNG.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Black.ttf",
+        "internal/api/ui/console/static/media/Lato-Black-TAIY5HNG.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-BlackItalic.ttf",
+      "bytes": 72000,
+      "sha256": "e1eb271de3a571d566e534d3e521cfa46becfc789821257bc347455167d586f3",
+      "gitBlob": "4df1555e6f982bdefe51bb08f91494d7801cf0f0",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-BlackItalic.ttf",
+        "console/dist/console/media/Lato-BlackItalic-GCJLWQZK.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-BlackItalic.ttf",
+        "internal/api/ui/console/static/media/Lato-BlackItalic-GCJLWQZK.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Bold.ttf",
+      "bytes": 73332,
+      "sha256": "d7f0b7f2570f2f28b504da1181b4d71b1420b10be2c4fd690927f1c8ee3b19c3",
+      "gitBlob": "016068b486e1bd1d73743185c2752b7b1b843701",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Bold.ttf",
+        "console/dist/console/media/Lato-Bold-FQAMFF6T.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Bold.ttf",
+        "internal/api/ui/console/static/media/Lato-Bold-FQAMFF6T.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-BoldItalic.ttf",
+      "bytes": 77732,
+      "sha256": "e38611f4c0ff3251a58fe751991c39784d8f9be420b004891e0b9277228ec32f",
+      "gitBlob": "a05d50320511f7ecb6076343707068c68d189981",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-BoldItalic.ttf",
+        "console/dist/console/media/Lato-BoldItalic-V5SVMGLA.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-BoldItalic.ttf",
+        "internal/api/ui/console/static/media/Lato-BoldItalic-V5SVMGLA.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Italic.ttf",
+      "bytes": 75792,
+      "sha256": "3be26bf6973f49df6a7dfd130041017354342bfbb023e6b9610b42daeba6de34",
+      "gitBlob": "0d0f69ea0399fa45ad6e5791dc402fedf3a1a151",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Italic.ttf",
+        "console/dist/console/media/Lato-Italic-O3RS6P2F.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Italic.ttf",
+        "internal/api/ui/console/static/media/Lato-Italic-O3RS6P2F.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Light.ttf",
+      "bytes": 77208,
+      "sha256": "fb5343c4375c38b1c3026336d355335e6a5b8531cbc9c6506eb4b6f6d67c152f",
+      "gitBlob": "dfa72ce808fbb783042da88ce1bae5d9adb54fb6",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Light.ttf",
+        "console/dist/console/media/Lato-Light-X3DPBLSO.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Light.ttf",
+        "internal/api/ui/console/static/media/Lato-Light-X3DPBLSO.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-LightItalic.ttf",
+      "bytes": 49080,
+      "sha256": "6d5176f3babd0ccba79845088f8e9ede5dbb7b408fb40161963daa95a71cef2e",
+      "gitBlob": "12f2b6c7d1475fe5a3506b8517f0cba76814f82c",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-LightItalic.ttf",
+        "console/dist/console/media/Lato-LightItalic-7G6A7QZI.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-LightItalic.ttf",
+        "internal/api/ui/console/static/media/Lato-LightItalic-7G6A7QZI.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Regular.ttf",
+      "bytes": 75152,
+      "sha256": "e82542aed8293f49fc83c4aaea566b1f6b4fc7a9ab5da11e6fb9bc0973b5324b",
+      "gitBlob": "bb2e8875a993f9c7d9e45d0eeffa839550cc6287",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Regular.ttf",
+        "console/dist/console/media/Lato-Regular-IKI7JDBO.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Regular.ttf",
+        "internal/api/ui/console/static/media/Lato-Regular-IKI7JDBO.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-Thin.ttf",
+      "bytes": 69976,
+      "sha256": "fee1bd1daaa5efbcb93c8d074c61378dce155df0d32e00199b6a9457e427bc45",
+      "gitBlob": "ba58da1a13d2259ee2d585d4d3cbd7657c03dabd",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-Thin.ttf",
+        "console/dist/console/media/Lato-Thin-4WSSSFRL.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-Thin.ttf",
+        "internal/api/ui/console/static/media/Lato-Thin-4WSSSFRL.ttf"
+      ]
+    },
+    {
+      "path": "console/src/assets/fonts/lato/Lato-ThinItalic.ttf",
+      "bytes": 48864,
+      "sha256": "8130560da30ad6f19994fd410f71985acafca1576592235161ffb75757635594",
+      "gitBlob": "4d82766d190747a5d5438d288f936f5114764759",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "console/dist/console/assets/fonts/lato/Lato-ThinItalic.ttf",
+        "console/dist/console/media/Lato-ThinItalic-4SHMQZ4F.ttf",
+        "internal/api/ui/console/static/assets/fonts/lato/Lato-ThinItalic.ttf",
+        "internal/api/ui/console/static/media/Lato-ThinItalic-4SHMQZ4F.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Bold.ttf",
+      "bytes": 287936,
+      "sha256": "af2ea7b99dfa8102105df9ddbf0aa58893169d9bf5befe54fb9d8f12549c477d",
+      "gitBlob": "7f2bddb59f8e7c960eb02395ff4377fea4499c27",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Bold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-BoldItalic.ttf",
+      "bytes": 209784,
+      "sha256": "ffd600561e9bc58f6ad014fb74e8790134dd735f40e504059aa3717fe7be6e11",
+      "gitBlob": "c4b6a52103c649adc8c9d2971e95d8b39d9b5b4b",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-BoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Italic.ttf",
+      "bytes": 270524,
+      "sha256": "187f3d67223972f22229cfcfaf1c26aef0f06db1e8130e1bbb8056b10d67af83",
+      "gitBlob": "130fa71044843bdcec28ae508d0d5fb30aabb4fa",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Italic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Regular.ttf",
+      "bytes": 278168,
+      "sha256": "419e240303f11800c2b0d24b19bd361831be1789142586aeca5bf078a1e7733e",
+      "gitBlob": "5222968fb5f03ab2e7fca0ecfffc901642143069",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/PT_Sans/PTSans-Regular.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Black.ttf",
+      "bytes": 162888,
+      "sha256": "ba91d1908910fe9e8ffa0146e8116e6de5741108a528ef31ec3a6bb45ec8d598",
+      "gitBlob": "03e4d80c78b3c036a6f0e4b2ba8f085a043802f1",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Black.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-BlackItalic.ttf",
+      "bytes": 160968,
+      "sha256": "a8df87666b3e208d9b5c6a93abd14540b49f36a3423ca1578bb3583df6be123f",
+      "gitBlob": "130434e413646ea52fcae88c756d4d92bc238c6b",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-BlackItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Bold.ttf",
+      "bytes": 163276,
+      "sha256": "33873225d1aa99f6dcacf5af464ea4f96ddb16e4db1c71afdee4c0dab1c7c4a2",
+      "gitBlob": "87632314945512979b60651cfdf58ec1540d3150",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Bold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-BoldItalic.ttf",
+      "bytes": 161484,
+      "sha256": "d1016e40ccec6fa22e1d76ad5850fa91cab3d809a5497cd029e02b201bb9b90c",
+      "gitBlob": "9c16440f02348b39951260a06459447e6447b438",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-BoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraBold.ttf",
+      "bytes": 163384,
+      "sha256": "c3879904d762f7a5599149b42d50b3acbad0f8d9799f3971ebc95484018cb0ea",
+      "gitBlob": "64928cdf7cc33ed0d8e84de47e3fe680183519b4",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraBold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraBoldItalic.ttf",
+      "bytes": 161576,
+      "sha256": "b0a578d9d7cf1cb26b0c295680912e7f15591855fb0acb722de0cbc6e58888f0",
+      "gitBlob": "3728328072b93ae19dd2f398893e681b5edb3f29",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraBoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraLight.ttf",
+      "bytes": 163504,
+      "sha256": "088a7ea5034be2e7ce1e07ef603105da4d36c95e7fed002f61bf704329ee5a49",
+      "gitBlob": "99a3abbe493e786ca07deb8d05877f517468f10c",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraLight.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraLightItalic.ttf",
+      "bytes": 161532,
+      "sha256": "64717cb98cf9d99547d2f66eadba3e9c1d7fc68c40b4fe07ddae59b91b95e2fd",
+      "gitBlob": "1931863a1d2467a3bb9a90339367e9df3ac63784",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ExtraLightItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Italic.ttf",
+      "bytes": 161320,
+      "sha256": "9439f38363893ce8937c4bbde29047ffa8729f07f025229e41f9b21da87dbb32",
+      "gitBlob": "7bca5ad54540c6e1b55416e1a524bc26a016e5d3",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Italic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Light.ttf",
+      "bytes": 163404,
+      "sha256": "79b7dc3b96da214096c6990fe9b0f0ac1e40b49cc2677e28910ea83ab43c991b",
+      "gitBlob": "43aa156f267f90a60f97600645ff0c795407c9c6",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Light.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-LightItalic.ttf",
+      "bytes": 161564,
+      "sha256": "4b5db083877347a47cb42ea867530dc4e17736b15bf9f0a63ba967a8ec1c9ef0",
+      "gitBlob": "d88c549e83ed02545f028e32e6d3adfa83e89eb2",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-LightItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Medium.ttf",
+      "bytes": 163392,
+      "sha256": "fcf7e9e80aef735fb8f02be8a25f9de6d05ccc319be1ed154154c81e492e75e4",
+      "gitBlob": "5428c9c6dd788af7e626be91d6986d07cf6ae1b6",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Medium.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-MediumItalic.ttf",
+      "bytes": 161432,
+      "sha256": "b89574605ff94ab22ae2ea6e6a4d764e09dbfd73cbb000aa0a2dc8def24e37e9",
+      "gitBlob": "ba0598a9ebfbb4723c66fab53896991932fa0da1",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-MediumItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Regular.ttf",
+      "bytes": 163388,
+      "sha256": "f6eaeb48224229bf83b2b8972647947f137fb4ae1f87dd0af54d68356d2bb678",
+      "gitBlob": "acb571564a8c3b98cd081d600f95b2389b3095f8",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Regular.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-SemiBold.ttf",
+      "bytes": 163388,
+      "sha256": "b1123d01524e81d216a80eb0d000e3be37f14a89c251940f477400ace7fef138",
+      "gitBlob": "6de54f7ff7ec380e01408afefad110e5afbc6064",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-SemiBold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-SemiBoldItalic.ttf",
+      "bytes": 161624,
+      "sha256": "bbe9d2c33b82ee7c9453267bd79753e78e01a8f807ff52c9a5d36a25459ecee9",
+      "gitBlob": "9555af6ff602bbf56fc088d4f80b84cc0f6cb106",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-SemiBoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Thin.ttf",
+      "bytes": 163208,
+      "sha256": "84bb819d7c3c89305fc406a3c70a3163fb42a67be2b7d72e065e2ed75b6bc6ef",
+      "gitBlob": "b8e542a7110ad6a326dbe3b30bf45c4489a9710f",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-Thin.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ThinItalic.ttf",
+      "bytes": 161196,
+      "sha256": "fd31433d59c8c2dd9369e0d171d435bbb03e58c3fbae008b326d20a6f3b4fe26",
+      "gitBlob": "7f0c0e91e807ecef3bb9b7278e99031f5385b580",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Raleway/Raleway-ThinItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Black.ttf",
+      "bytes": 171072,
+      "sha256": "354fb9e77252254f3b3b6224cf9a131ac8ed798e13015176125a2c697a19f801",
+      "gitBlob": "2d452383651a6ef279743a9926b90234b8b79366",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Black.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-BlackItalic.ttf",
+      "bytes": 177120,
+      "sha256": "328578810a5a24e2e64737b54f4d37fd3bec81c9d38d16ba07e3638a68488143",
+      "gitBlob": "29a4359ed0ba945a1af87078f3c0f08d298b0285",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-BlackItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Bold.ttf",
+      "bytes": 170348,
+      "sha256": "c9cc991deb5d27f267830a19f2301eb164d9e61ec08669c1a1a291c5620ff40a",
+      "gitBlob": "d998cf5b468413ca1c950096dc9d0f5dfdb1359f",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Bold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-BoldItalic.ttf",
+      "bytes": 174520,
+      "sha256": "e408e93bc15805661247698520f1ab944bbc2899fbd9ca71edc1b24dea6565f7",
+      "gitBlob": "b4e22103936078c50cdc7ddf7a3e2d51dd2d3c44",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-BoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Italic.ttf",
+      "bytes": 173516,
+      "sha256": "2c0958e0c7e9b63f36f672d3cccba14ca0d7ce2e3d6945b38e4ef3de35b79691",
+      "gitBlob": "5b390ff950e6539bdfd4d84265fdb01e0c35f291",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Italic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Light.ttf",
+      "bytes": 170012,
+      "sha256": "db02096a91c20ab62d459001a1059bc8d78caa35d637dc91494c4440815a6ac1",
+      "gitBlob": "35267989deca17116c70c987e90035303e2e3404",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Light.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-LightItalic.ttf",
+      "bytes": 176184,
+      "sha256": "d0347d3f1cf3ad62f4574fdb08c5db4f9979d83426aa5d13046eccf26aa88e9b",
+      "gitBlob": "46e9bf7c95adb27c042d0646deb1f8a3beb8087e",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-LightItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Medium.ttf",
+      "bytes": 171656,
+      "sha256": "e35252aa3dc2e84e9d7211586fee9aede2a426d3230c8b131881d985f16ff836",
+      "gitBlob": "f714a514d94e495095e2f1e525a341eade187c17",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Medium.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-MediumItalic.ttf",
+      "bytes": 176428,
+      "sha256": "552fa6bfc8f4ad480ba69feb9745f31d77fa88c12826a1bbd3c5eb0beefa22bb",
+      "gitBlob": "5dc6a2dc6c38c1b1ee54b0ad5072c6e29968ed24",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-MediumItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Regular.ttf",
+      "bytes": 171272,
+      "sha256": "017c0be9aaa6d0359737e1fa762ad304c0e0107927faff5a6c1f415c7f5244ed",
+      "gitBlob": "2b6392ffe8712b9c5450733320cd220d6c0f4bce",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Regular.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Thin.ttf",
+      "bytes": 171500,
+      "sha256": "dcac562815b575e6b821bae5fd245fea6590bb3b597fd5b96eae6acccb21d03c",
+      "gitBlob": "4e797cf7ef9758a9209fae4e0b07e6b186b2c69d",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-Thin.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-ThinItalic.ttf",
+      "bytes": 175872,
+      "sha256": "32296be48f3e03c62ddbca97b5b1096b602c259a160e4fbe1dc76ba76c034418",
+      "gitBlob": "eea836f4a37fea4afe61d6483692dc431a9b1c20",
+      "declaredLicense": "Apache-2.0",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/Roboto/Roboto-ThinItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Black.ttf",
+      "bytes": 69484,
+      "sha256": "8944da5a861ece00185fa173ea65324e7d4797aa863c6fa0f03e066805974b6c",
+      "gitBlob": "a4a924f9bd1b28c44981ac4ece2fb625a60c2da3",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Black.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-BlackItalic.ttf",
+      "bytes": 71948,
+      "sha256": "1bb6ac346b9b152fa093d54030efcd073e28e51ec007cfb76c201f96fd74de67",
+      "gitBlob": "d6f8945018e31062e8776dd777a65b04626aa63d",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-BlackItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Bold.ttf",
+      "bytes": 73316,
+      "sha256": "7b720599f8aed3bac5b9531fecf6750c8fa7e593b727739bc0692fcc0f55b678",
+      "gitBlob": "b63a14d6aeec11bce432820914e73db28e489634",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Bold.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-BoldItalic.ttf",
+      "bytes": 77680,
+      "sha256": "6100468364df6d34709a91fd933c49c008affa486b5a35e796fa0341591e89fb",
+      "gitBlob": "8f9a50d135d1481a483bc8bf78f4b359a7ec5db7",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-BoldItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Italic.ttf",
+      "bytes": 75744,
+      "sha256": "118c8f4fa60ac74abb899962311cf15781aababb3634225d1b8f889fa16fd026",
+      "gitBlob": "49e9f2c3e371b71e2e7d58d03ed5d705e5f13ffc",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Italic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Light.ttf",
+      "bytes": 77192,
+      "sha256": "8f186e57fe440c5c010120c754944a9d5b33e612c3a311dd642435119aafcf70",
+      "gitBlob": "9c0a7053621b248d8b6589dcaa0854ef49c33985",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Light.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-LightItalic.ttf",
+      "bytes": 49064,
+      "sha256": "d5c5d73229ca60988eb7e446f231fc88c231ec26ca4e972535bc27183478abfa",
+      "gitBlob": "53b140bc94a0b8e1f18e0efcf316abe89a49b2fc",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-LightItalic.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Regular.ttf",
+      "bytes": 75136,
+      "sha256": "ea8979c22cf1d830e3ff939aadd49cc4d78c851e3cb59d2aa95ea10ee752d5d1",
+      "gitBlob": "33eba8b192384487f04951539f13bf1f8dd9f9cb",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Regular.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-Thin.ttf",
+      "bytes": 69968,
+      "sha256": "286925bc1fd8578a711a1e209e0bb3e3e883b7300db7f8d3335624aeaf71b778",
+      "gitBlob": "0c599a043df780b2096ab7c0a09ef5700ff4131f",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-Thin.ttf"
+      ]
+    },
+    {
+      "path": "internal/api/ui/login/static/resources/fonts/lato/Lato-ThinItalic.ttf",
+      "bytes": 48848,
+      "sha256": "2419776061ba8b3e9f4e6c8539735e540df848186d38a3a5d001129fc5314022",
+      "gitBlob": "7db3a8cccbe4c363597dcd560ab72224317c3762",
+      "declaredLicense": "OFL-1.1",
+      "outputs": [
+        "internal/api/ui/login/static/resources/fonts/lato/Lato-ThinItalic.ttf"
+      ]
+    }
+  ],
+  "deferredIconOutputs": [
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-brands-400.eot",
+      "sha256": "c0e323872bfa597c4ff4f580b46415a86ade6fd6485592e4605383669d7b1b4c"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-brands-400.ttf",
+      "sha256": "fbc9870278f1a9ba97f8c15ce9b065a6312a1a7232f619b5cd11bf117fee9395"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-brands-400.woff",
+      "sha256": "14c633773bd885e7553b31688925829b2eb40ab5080f644bc180eeb14862e493"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-brands-400.woff2",
+      "sha256": "ff70c9bc4650cf5e6b12d1feaa7af29ebf0681993fc0c5ffe3658cea0dbd5403"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-regular-400.eot",
+      "sha256": "7dc456f0be714bdeca84b1e2f2124a62a0c020abf8315c5124147f876c5966a7"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-regular-400.ttf",
+      "sha256": "4b6ab8d0826f891a0bd559493a9837448d2c2ac8ae1bab3850b008111afbd29c"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-regular-400.woff",
+      "sha256": "7711fabca2d07d9322442f29543531b7e96703a65cebc45890846d020b392f6c"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-regular-400.woff2",
+      "sha256": "51ca2c00a3e30945e52227147fed9e296dde03af3c4d7589e8e95ca5740037db"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-solid-900.eot",
+      "sha256": "8a57f8a90a863c736b625f2dd2089408f6711dc9f232fa9337f109d85584a58f"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-solid-900.ttf",
+      "sha256": "07ce355990b27cd096df9864e0c102573f0cae020d611aee2578aa3d797e4230"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-solid-900.woff",
+      "sha256": "a0d21b2ab40d48860c6ae95e00c9e9ca12ecb34c23ba3b882ed81340d4509c67"
+    },
+    {
+      "path": "console/dist/console/assets/icons/line-awesome/fonts/la-solid-900.woff2",
+      "sha256": "10a68e01209d939afa9318ee71601b0a6e10f025d4cd6d98a492d340b73941fb"
+    },
+    {
+      "path": "console/dist/console/media/MaterialIcons-Regular-2G4ZMI5K.woff2",
+      "sha256": "5743ed3d91616a10fca2bc2ba0f6f0707300c05bdc65bc6d9d4fb2cd75253ffe"
+    },
+    {
+      "path": "console/dist/console/media/MaterialIcons-Regular-7JMLZOL7.ttf",
+      "sha256": "29c11fa532ebb58db7ef59c860e4eb935bc2921a8654172d8e889e51f85c6004"
+    },
+    {
+      "path": "console/dist/console/media/MaterialIcons-Regular-CSYLW52G.woff",
+      "sha256": "11ec382a38dccab945e4d039c5844bd57dfce602a7adebcd19879e40a1be8126"
+    },
+    {
+      "path": "console/dist/console/media/MaterialIcons-Regular-VFZ645RH.eot",
+      "sha256": "e69d687a39a1a51b23deb7072cff63a6f31c0ac736f4ab11271116f36096dbba"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-brands-400.eot",
+      "sha256": "c0e323872bfa597c4ff4f580b46415a86ade6fd6485592e4605383669d7b1b4c"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-brands-400.ttf",
+      "sha256": "fbc9870278f1a9ba97f8c15ce9b065a6312a1a7232f619b5cd11bf117fee9395"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-brands-400.woff",
+      "sha256": "14c633773bd885e7553b31688925829b2eb40ab5080f644bc180eeb14862e493"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-brands-400.woff2",
+      "sha256": "ff70c9bc4650cf5e6b12d1feaa7af29ebf0681993fc0c5ffe3658cea0dbd5403"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-regular-400.eot",
+      "sha256": "7dc456f0be714bdeca84b1e2f2124a62a0c020abf8315c5124147f876c5966a7"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-regular-400.ttf",
+      "sha256": "4b6ab8d0826f891a0bd559493a9837448d2c2ac8ae1bab3850b008111afbd29c"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-regular-400.woff",
+      "sha256": "7711fabca2d07d9322442f29543531b7e96703a65cebc45890846d020b392f6c"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-regular-400.woff2",
+      "sha256": "51ca2c00a3e30945e52227147fed9e296dde03af3c4d7589e8e95ca5740037db"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-solid-900.eot",
+      "sha256": "8a57f8a90a863c736b625f2dd2089408f6711dc9f232fa9337f109d85584a58f"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-solid-900.ttf",
+      "sha256": "07ce355990b27cd096df9864e0c102573f0cae020d611aee2578aa3d797e4230"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-solid-900.woff",
+      "sha256": "a0d21b2ab40d48860c6ae95e00c9e9ca12ecb34c23ba3b882ed81340d4509c67"
+    },
+    {
+      "path": "internal/api/ui/console/static/assets/icons/line-awesome/fonts/la-solid-900.woff2",
+      "sha256": "10a68e01209d939afa9318ee71601b0a6e10f025d4cd6d98a492d340b73941fb"
+    },
+    {
+      "path": "internal/api/ui/console/static/media/MaterialIcons-Regular-2G4ZMI5K.woff2",
+      "sha256": "5743ed3d91616a10fca2bc2ba0f6f0707300c05bdc65bc6d9d4fb2cd75253ffe"
+    },
+    {
+      "path": "internal/api/ui/console/static/media/MaterialIcons-Regular-7JMLZOL7.ttf",
+      "sha256": "29c11fa532ebb58db7ef59c860e4eb935bc2921a8654172d8e889e51f85c6004"
+    },
+    {
+      "path": "internal/api/ui/console/static/media/MaterialIcons-Regular-CSYLW52G.woff",
+      "sha256": "11ec382a38dccab945e4d039c5844bd57dfce602a7adebcd19879e40a1be8126"
+    },
+    {
+      "path": "internal/api/ui/console/static/media/MaterialIcons-Regular-VFZ645RH.eot",
+      "sha256": "e69d687a39a1a51b23deb7072cff63a6f31c0ac736f4ab11271116f36096dbba"
+    }
+  ]
+}

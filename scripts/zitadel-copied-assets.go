@@ -1,0 +1,1035 @@
+// Output-bound provenance for the frozen Console's copied icons, flags and translations.
+package main
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+	"unicode/utf8"
+)
+
+type copiedAsset struct {
+	Family       string   `json:"family"`
+	Path         string   `json:"path"`
+	Bytes        int      `json:"bytes"`
+	SHA256       string   `json:"sha256"`
+	GitBlob      string   `json:"gitBlob,omitempty"`
+	OriginalBlob string   `json:"originalBlob,omitempty"`
+	OriginalPath string   `json:"originalPath,omitempty"`
+	Outputs      []string `json:"outputs"`
+}
+type copiedArchive struct {
+	Family            string `json:"family"`
+	Path              string `json:"path"`
+	SHA256            string `json:"sha256"`
+	Integrity         string `json:"integrity"`
+	LicensePath       string `json:"licensePath"`
+	Notice            string `json:"notice"`
+	PackageJSONSHA256 string `json:"packageJsonSha256"`
+}
+type copiedCatalogue struct {
+	SchemaVersion  int             `json:"schemaVersion"`
+	UpstreamCommit string          `json:"upstreamCommit"`
+	LockSHA256     string          `json:"lockSha256"`
+	Assets         []copiedAsset   `json:"assets"`
+	Archives       []copiedArchive `json:"archives"`
+	Notices        []inputRecord   `json:"notices"`
+}
+type copiedNativeDefinition struct {
+	Path             string `json:"path"`
+	Bytes            int    `json:"bytes"`
+	SHA256           string `json:"sha256"`
+	GitBlob          string `json:"gitBlob"`
+	DeclaredRevision string `json:"declaredRevision"`
+	DeclaredNotice   string `json:"declaredNotice"`
+}
+
+type copiedNativeBinding struct {
+	copiedNativeDefinition
+	Component            string   `json:"component"`
+	DeclaredNoticeSHA256 string   `json:"declaredNoticeSha256"`
+	Outputs              []string `json:"outputs,omitempty"`
+	StatikMember         string   `json:"statikMember,omitempty"`
+	StatikSHA256         string   `json:"statikSha256,omitempty"`
+}
+
+// Historical repository declarations are retained as context, not as a
+// certification of primary authorship or a new trademark/whole-image grant.
+var copiedNativeFrozen = []copiedNativeDefinition{
+	{Path: "console/src/assets/icons/android-chrome-192x192.png", Bytes: 17828, SHA256: "55136584844c823e026df289ed61c44cdcba8966c1d414bf3461ab216dd2273c", GitBlob: "f22bd442e631e91a1941f4f9d8b37c1ea4181ed1", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/android-chrome-512x512.png", Bytes: 137768, SHA256: "a07753d92a5557c9e7d798a1d3d14e484a4c0a189dfd63f50bb66092e9f56c5f", GitBlob: "6987ed11b45db3179879b2e0892a7afcdd891249", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/apple-touch-icon.png", Bytes: 18112, SHA256: "75693042742e1f01dbbb563a6b8a876147dd5a29335aa54581a2c11c07377630", GitBlob: "481610201581ee936684e3deb1b286d307803892", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/favicon-16x16.png", Bytes: 1551, SHA256: "c4731c9ca66e57ed050a1283839dccc862a9f4aa5e47baff0b8573b539070356", GitBlob: "4f45702ca9479bc35c6aeac617199db27bfad7c9", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/favicon-32x32.png", Bytes: 2050, SHA256: "145622f6496a4b962e549ae1f960af39460498a7fd4805b701df50073da1a7b9", GitBlob: "a598da05ebaac026fa3c1ca01fcf3accc4efe813", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/icons/mstile-150x150.png", Bytes: 13206, SHA256: "9d68ac849f56a58c3e855e747f26a1099531dd8f3c04e98a851619932130849d", GitBlob: "ab518480e61be1a08fec9d736f64593926abe563", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/account-circle-outline-dark.png", Bytes: 1323, SHA256: "aba5cb004c6b1d195b71fd47441d36e0c4495d1cd74b4e574395c204e86a5daf", GitBlob: "eb92d2726fba66eea5e0d6e1225c5fccd714c476", DeclaredRevision: "92a294f5c81243ebac8381eef2db8484116a2b7b", DeclaredNotice: "ZITADEL-Console-2020-LICENSE"},
+	{Path: "console/src/assets/images/account-circle-outline.png", Bytes: 1384, SHA256: "f3030d2e58220063897f2f48c30dd95b0024d66c8fb551c3a95233a22445193f", GitBlob: "32dd883e89062f365e36afe43d934fd0a8c9b6b5", DeclaredRevision: "92a294f5c81243ebac8381eef2db8484116a2b7b", DeclaredNotice: "ZITADEL-Console-2020-LICENSE"},
+	{Path: "console/src/assets/images/transparent.png", Bytes: 629, SHA256: "600e8f2dd9f2068591ec375f9c698fe00f29b8c0f0dab40cd309c6ea2f8992bd", GitBlob: "02e3907e410c144fb2fff3e77b2c581098cf25e3", DeclaredRevision: "08ae39ae1957289c74b9e6cfc5b30e198d42ce8f", DeclaredNotice: "ZITADEL-Console-2022-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-dark.svg", Bytes: 6640, SHA256: "a08d5944f4f533dae2bbc10a06b4ea3a1b2cdf3d781a4951f4eb3a93ad4ecdd6", GitBlob: "c0308b345a31449a4e15ea1ec4aaa52ae3f78393", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-light.svg", Bytes: 6451, SHA256: "f71dfb88bd1408f515d02188c1c63483aa1a37e9bac65d78d1651f45cabe8e0b", GitBlob: "32f7e518059c5b86b9c3d07fbd2f13e0f7708617", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-dark-icon.svg", Bytes: 8678, SHA256: "6767d70158d40a666378108c1fc22cfd10f2295615c68c35c104605973e6a07c", GitBlob: "36da0d39f6e18ed80f20438082c34377222d80a5", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-dark.svg", Bytes: 8684, SHA256: "58171395669d0cadae8387af03516ef2151b340cac81abab7ed290b23989e650", GitBlob: "4d3181174e771eb1178985c0fe5a6c465c80d189", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-light-icon.svg", Bytes: 8243, SHA256: "b71bb9d338a88e5a58bde447d3b7c04c0c609fa4365f044c094086cfb573616f", GitBlob: "8f04c2c3369014eb1acf578d4361bd9c6d8785be", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-logo-solo-light.svg", Bytes: 8297, SHA256: "a4fde328acc63dec77fa54b05cb338bf439efe04b2bf659bf75b48cecbea7ae7", GitBlob: "df44ec5398d7f9af68250b6ae432375deaf80d16", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/images/zitadel-social-preview25.png", Bytes: 450993, SHA256: "ae3348e95a6dfb7274ebdab03cf67a2e97c3d3c3d6cb66fe9faaee461ae7126e", GitBlob: "89b47ae4552c63723336893b700f1f2254d232cf", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/logo_blackfont_transparentbg.png", Bytes: 33093, SHA256: "ee9b1c89f252f16f3c4b7e231b387e5f84989f8380ba081bd58f420195c77ecf", GitBlob: "67a957500f1cc54edf76dd8aa8949ab16cb1acac", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/assets/logo_whitefont_transparentbg.png", Bytes: 32831, SHA256: "0f81dc1e70e08c5caef4eb749613c3f1567b551edf39a6472d52286cf8783842", GitBlob: "48d5a9da16e583b5d4eb7979e6a2ad5a1d59b6b9", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "console/src/favicon.ico", Bytes: 38078, SHA256: "a1760389cf0eee45ef51059a632eb5ed886f686484846d3308847c8e1643a546", GitBlob: "de1ff1f956df4196dab40f550384f2bb86983b4f", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/favicon.ico", Bytes: 38078, SHA256: "81df5686ac4e7fe348779ce3bd61fe94ae2eea1762bd1f1756f92ea3c5970da9", GitBlob: "0b13cbabf6c535ee6f055df18ec7470eedbebc3e", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/flavor-spikes01-narrow.png", Bytes: 255525, SHA256: "9a90c3b6629af513c611c0095d7e4d3a3d9528e43f2eab6607fc03287a4e64f1", GitBlob: "05d02618f5593e2e1a80bca222f6e1cd15f946f2", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/flavor-spikes01-wide.png", Bytes: 951339, SHA256: "8a612025cd3869d5139a88eb5bc33cb7ba6dbcd38a68b3613affcd3b1c7a90a2", GitBlob: "a7542c611799887031d7bfe5b5c74ff53790bb5d", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/gradientdeco-full.svg", Bytes: 369928, SHA256: "b4bc86cd3277adfdbe6fb2eef34872f0d138db55c7d063aa2d0e3e990140712b", GitBlob: "bd2418a23b16ae2ffdbe38a78dd0ac283fbeac8d", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/logo-dark.svg", Bytes: 6640, SHA256: "a08d5944f4f533dae2bbc10a06b4ea3a1b2cdf3d781a4951f4eb3a93ad4ecdd6", GitBlob: "c0308b345a31449a4e15ea1ec4aaa52ae3f78393", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/logo-light.svg", Bytes: 6451, SHA256: "f71dfb88bd1408f515d02188c1c63483aa1a37e9bac65d78d1651f45cabe8e0b", GitBlob: "32f7e518059c5b86b9c3d07fbd2f13e0f7708617", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/select_arrow_dark.svg", Bytes: 385, SHA256: "73d8b8e3415ede2bdcfa513edd3aa7f03c28d7b7c0c363f9c118fc9eb91d8745", GitBlob: "43f22f29822558ad9f57ecdcc41d5e892492bc9b", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+	{Path: "internal/api/ui/login/static/resources/themes/zitadel/select_arrow_light.svg", Bytes: 383, SHA256: "33a02c87c6dc725365699fb35da09c23e3657d36f754ec7debaca22434420258", GitBlob: "6a62ac0c49dbd1f331b4347f0e5ba2f56ed868c8", DeclaredRevision: "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", DeclaredNotice: "ZITADEL-LICENSE"},
+}
+
+var copiedNativeTermsFrozen = []inputRecord{
+	{"ZITADEL-Console-2020-LICENSE", "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"},
+	{"ZITADEL-Console-2022-LICENSE", "5fc72d30e91d6320cd4f5bfb94c74619b31be3d2a7436cda08f28a4267391a6d"},
+}
+
+var copiedNativeBrandFrozen = inputRecord{
+	"apps/docs/content/legal/policies/brand-trademark-policy.mdx",
+	"2a10fc0db4659c4265e8c0cf374ca527327bef7735b93af471d99d5ee2c84e74",
+}
+
+type copiedPolicy struct {
+	CatalogueHash      string
+	Assets, Outputs    int
+	TextNotices        string
+	TextPolicy         textPolicy
+	ProviderConsumers  []inputRecord
+	SMTPConsumers      []inputRecord
+	FrameworkConsumers []inputRecord
+	MDI                []mdiProvenance
+	MDINotices         []inputRecord
+	MDIConsumers       []inputRecord
+	NativeGraphics     []copiedNativeDefinition
+	NativeTerms        []inputRecord
+	NativeBrandPolicy  inputRecord
+}
+
+var copiedFrozen = copiedPolicy{CatalogueHash: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Assets: 1858, Outputs: 3716, ProviderConsumers: neutralProviderConsumers(), SMTPConsumers: neutralSMTPConsumers(), FrameworkConsumers: neutralFrameworkConsumers(), MDI: mdiFrozen, MDIConsumers: neutralMDIConsumers(), MDINotices: []inputRecord{{"Pictogrammers-LICENSE", "f3bc8715bad84b26396bb42d2abd11f919cf58163be158eab79ecbaabf84cdf2"}, {"Google-Mail-LICENSE", "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"}}, NativeGraphics: copiedNativeFrozen, NativeTerms: copiedNativeTermsFrozen, NativeBrandPolicy: copiedNativeBrandFrozen}
+
+func init() { iconExtensions["--copied-assets"] = runCopiedAssets }
+
+// Inventory creation is exclusive and pending-only. Completed verification
+// checks both retained files before emitting anything and never repairs them.
+func runCopiedAssets(args []string, out, diagnostic io.Writer) int {
+	fail := func(e error) int { fmt.Fprintln(diagnostic, "copied-assets:", e); return 1 }
+	values := map[string]string{}
+	mode := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if _, ok := values[a]; ok {
+			return fail(fmt.Errorf("duplicate argument"))
+		}
+		switch a {
+		case "--snapshot", "--inventory", "--verify":
+			if mode != "" {
+				return fail(fmt.Errorf("ambiguous mode"))
+			}
+			mode = a
+			values[a] = "true"
+		case "--build", "--notices", "--recipe":
+			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
+				return fail(fmt.Errorf("missing argument value"))
+			}
+			i++
+			values[a] = args[i]
+		default:
+			return fail(fmt.Errorf("unexpected argument"))
+		}
+	}
+	if mode == "" || len(values) != 4 {
+		return fail(fmt.Errorf("expected mode, build, notices and recipe"))
+	}
+	build, notices, recipe := values["--build"], values["--notices"], values["--recipe"]
+	policy := copiedFrozen
+	if policy.TextNotices == "" {
+		policy.TextNotices = filepath.Join(filepath.Dir(notices), "zitadel-text-fonts")
+		policy.TextPolicy = textFrozen
+	}
+	var value any
+	if mode == "--snapshot" {
+		s, e := copiedObserve(build, notices, recipe, readAt, policy)
+		if e != nil {
+			return fail(e)
+		}
+		value = s
+	} else {
+		if mode == "--verify" {
+			if _, e := os.Lstat(filepath.Join(build, "build-receipt.pending")); !os.IsNotExist(e) {
+				return fail(fmt.Errorf("verification requires completed build"))
+			}
+		}
+		if mode == "--inventory" {
+			if _, e := os.Lstat(filepath.Join(build, "build-receipt.pending")); e != nil {
+				return fail(fmt.Errorf("capture requires pending build"))
+			}
+		}
+		inv, raw, e := copiedCapture(build, notices, recipe, readAt, policy)
+		if e != nil {
+			return fail(e)
+		}
+		value = inv
+		if mode == "--verify" {
+			retained, e := readAt(build, "copied-asset-notices.txt", 2<<20)
+			if e != nil || !bytes.Equal(retained, raw) {
+				return fail(fmt.Errorf("retained copied-asset notices differ"))
+			}
+		} else {
+			root, e := os.OpenRoot(build)
+			if e != nil {
+				return fail(e)
+			}
+			defer root.Close()
+			file, e := root.OpenFile("copied-asset-notices.txt", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if e != nil {
+				return fail(e)
+			}
+			n, e := file.Write(raw)
+			closeErr := file.Close()
+			if e != nil || closeErr != nil || n != len(raw) {
+				return fail(fmt.Errorf("incomplete copied-asset notice capture"))
+			}
+		}
+	}
+	encoded, e := json.MarshalIndent(value, "", "  ")
+	if e != nil {
+		return fail(e)
+	}
+	encoded = append(encoded, '\n')
+	if mode == "--verify" {
+		retained, e := readAt(build, "copied-asset-notices-inventory.json", 8<<20)
+		if e != nil || !bytes.Equal(retained, encoded) {
+			return fail(fmt.Errorf("retained copied-asset inventory differs"))
+		}
+	}
+	if n, e := out.Write(encoded); e != nil || n != len(encoded) {
+		return fail(fmt.Errorf("incomplete copied-asset inventory output"))
+	}
+	return 0
+}
+
+type copiedBinding struct {
+	copiedAsset
+	Names []textFontName `json:"names,omitempty"`
+}
+type copiedAlias struct {
+	Family   string `json:"family"`
+	Path     string `json:"path"`
+	Target   string `json:"target"`
+	Resolved string `json:"resolved"`
+}
+type copiedState struct {
+	SchemaVersion  int                   `json:"schemaVersion"`
+	Inputs         []inputRecord         `json:"inputs"`
+	Assets         []copiedBinding       `json:"assets"`
+	Raw            []byte                `json:"checkedNoticeBytes"`
+	ImageAdmission string                `json:"imageAdmission"`
+	LicenseClosure string                `json:"licenseClosure"`
+	Aliases        []copiedAlias         `json:"aliases"`
+	NativeGraphics []copiedNativeBinding `json:"nativeGraphics"`
+}
+
+type copiedInventory struct {
+	SchemaVersion  int                   `json:"schemaVersion"`
+	UpstreamCommit string                `json:"upstreamCommit"`
+	Profile        string                `json:"profile"`
+	Inputs         []inputRecord         `json:"inputs"`
+	Assets         []copiedBinding       `json:"assets"`
+	RawDiagnostic  string                `json:"rawDiagnostic"`
+	Bytes          int                   `json:"bytes"`
+	SHA256         string                `json:"sha256"`
+	BinarySHA256   string                `json:"binarySha256"`
+	ImageAdmission string                `json:"imageAdmission"`
+	LicenseClosure string                `json:"licenseClosure"`
+	Reproducible   bool                  `json:"reproducible"`
+	Aliases        []copiedAlias         `json:"aliases"`
+	NativeGraphics []copiedNativeBinding `json:"nativeGraphics"`
+}
+
+// The existing font collector supplies the canonical preparation/toolchain,
+// recipe and final binary/receipt join. Compare its complete retained outputs,
+// rather than trusting a digest claimed by either saved inventory.
+func copiedCapture(build, notices, recipe string, read textReader, policy copiedPolicy) (copiedInventory, []byte, error) {
+	fail := func(e error) (copiedInventory, []byte, error) { return copiedInventory{}, nil, e }
+	state, e := copiedObserve(build, notices, recipe, read, policy)
+	if e != nil {
+		return fail(e)
+	}
+	before, e := read(build, "copied-assets.before.json", 8<<20)
+	if e != nil {
+		return fail(e)
+	}
+	var saved copiedState
+	if textDecode(before, &saved) != nil || !reflect.DeepEqual(saved, state) {
+		return fail(fmt.Errorf("copied-asset inputs changed across compilation"))
+	}
+	fontInventory, fontRaw, e := textCapture(build, policy.TextNotices, recipe, read, policy.TextPolicy)
+	if e != nil {
+		return fail(e)
+	}
+	encoded, e := json.MarshalIndent(fontInventory, "", "  ")
+	if e != nil {
+		return fail(e)
+	}
+	encoded = append(encoded, '\n')
+	retained, e := read(build, "text-font-notices-inventory.json", 4<<20)
+	if e != nil || !bytes.Equal(retained, encoded) {
+		return fail(fmt.Errorf("retained text-font inventory differs"))
+	}
+	retainedRaw, e := read(build, textRaw, 2<<20)
+	if e != nil || !bytes.Equal(retainedRaw, fontRaw) {
+		return fail(fmt.Errorf("retained text-font notices differ"))
+	}
+	generated, e := read(build, "generated.sha256", 8<<20)
+	if e != nil {
+		return fail(e)
+	}
+	manifest := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSuffix(string(generated), "\n"), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) != 2 || !textHex(parts[0], 64) || !textPath(parts[1]) || manifest[parts[1]] != "" {
+			return fail(fmt.Errorf("incomplete generated asset manifest"))
+		}
+		manifest[parts[1]] = parts[0]
+	}
+	for _, asset := range state.Assets {
+		for _, name := range asset.Outputs {
+			if manifest[name] != asset.SHA256 {
+				return fail(fmt.Errorf("generated copied-asset manifest differs"))
+			}
+		}
+	}
+	for _, asset := range state.NativeGraphics {
+		if asset.Component == "console" {
+			for _, name := range asset.Outputs {
+				if manifest[name] != asset.SHA256 {
+					return fail(fmt.Errorf("native Console generated manifest differs"))
+				}
+			}
+		} else if asset.Component == "login" {
+			if manifest[asset.Path] != asset.SHA256 || manifest[statikPath] != asset.StatikSHA256 {
+				return fail(fmt.Errorf("native Login generated manifest differs"))
+			}
+		} else {
+			return fail(fmt.Errorf("unknown native graphics component"))
+		}
+	}
+	state.Inputs = append(state.Inputs, inputRecord{"copied-assets.before.json", digest(before)}, inputRecord{"generated.sha256", digest(generated)}, inputRecord{"text-font-notices-inventory.json", digest(retained)}, inputRecord{textRaw, digest(retainedRaw)})
+	for _, in := range fontInventory.Inputs {
+		if in.Path == "build-receipt.json" {
+			state.Inputs = append(state.Inputs, in)
+		}
+	}
+	inv := copiedInventory{SchemaVersion: 1, UpstreamCommit: upstream, Profile: "api-login-v1-console", Inputs: state.Inputs, Assets: state.Assets, RawDiagnostic: "copied-asset-notices.txt", Bytes: len(state.Raw), SHA256: digest(state.Raw), BinarySHA256: fontInventory.BinarySHA256, ImageAdmission: "unknown", LicenseClosure: "unknown", Aliases: state.Aliases, NativeGraphics: state.NativeGraphics}
+	return inv, state.Raw, nil
+}
+
+// copiedObserve authenticates the frozen source, notice and package inputs before
+// joining their selected assets to the generated output. Incomplete input fails.
+func copiedObserve(build, notices, recipe string, read textReader, policy copiedPolicy) (copiedState, error) {
+	state := copiedState{SchemaVersion: 1, ImageAdmission: "unknown", LicenseClosure: "unknown"}
+	fail := func(e error) (copiedState, error) { return copiedState{}, e }
+	checked := map[string][]byte{}
+	get := func(root, name, key string, limit int64) ([]byte, error) {
+		if b, ok := checked[key]; ok {
+			return b, nil
+		}
+		b, e := read(root, name, limit)
+		if e != nil {
+			return nil, fmt.Errorf("incomplete copied-asset input %s: %w", key, e)
+		}
+		checked[key] = b
+		state.Inputs = append(state.Inputs, inputRecord{key, digest(b)})
+		return b, nil
+	}
+	body, e := get(notices, "catalogue.json", "catalogue.json", 2<<20)
+	if e != nil {
+		return fail(e)
+	}
+	var cat copiedCatalogue
+	if digest(body) != policy.CatalogueHash || textDecode(body, &cat) != nil || cat.SchemaVersion != 1 || cat.UpstreamCommit != upstream || len(cat.Assets) != policy.Assets || len(cat.Archives) != 2 || len(cat.Notices) == 0 || len(cat.Notices) > 8 {
+		return fail(fmt.Errorf("frozen copied-asset catalogue differs"))
+	}
+	lock, e := get(build, "prepared/source/pnpm-lock.yaml", "prepared/source/pnpm-lock.yaml", 4<<20)
+	if e != nil || !textHex(cat.LockSHA256, 64) || digest(lock) != cat.LockSHA256 {
+		return fail(fmt.Errorf("selected original package lock differs"))
+	}
+	if len(policy.ProviderConsumers) == 0 || len(policy.ProviderConsumers) > 18 {
+		return fail(fmt.Errorf("neutral consumer policy incomplete"))
+	}
+	if len(policy.SMTPConsumers) == 0 || len(policy.SMTPConsumers) > 5 {
+		return fail(fmt.Errorf("neutral SMTP consumer policy incomplete"))
+	}
+	if len(policy.FrameworkConsumers) == 0 || len(policy.FrameworkConsumers) > 8 {
+		return fail(fmt.Errorf("neutral framework consumer policy incomplete"))
+	}
+	seenConsumers := map[string]bool{}
+	consumers := append(append([]inputRecord{}, policy.ProviderConsumers...), policy.SMTPConsumers...)
+	consumers = append(consumers, policy.FrameworkConsumers...)
+	if len(policy.MDI) > 25 || len(policy.MDI) > 0 && (len(policy.MDINotices) == 0 || len(policy.MDINotices) > 2 || len(policy.MDIConsumers) == 0 || len(policy.MDIConsumers) > 5) || len(policy.MDI) == 0 && (len(policy.MDINotices) != 0 || len(policy.MDIConsumers) != 0) {
+		return fail(fmt.Errorf("MDI provenance policy incomplete"))
+	}
+	seenMDI := map[string]bool{}
+	for _, mdi := range policy.MDIConsumers {
+		if seenMDI[mdi.Path] {
+			return fail(fmt.Errorf("duplicate MDI consumer"))
+		}
+		seenMDI[mdi.Path] = true
+		overlap := false
+		for _, existing := range consumers {
+			if existing.Path != mdi.Path {
+				continue
+			}
+			if existing != mdi || mdi.Path != "console/src/app/modules/idp-table/idp-table.component.html" && mdi.Path != "console/src/app/modules/policies/idp-settings/idp-settings.component.html" {
+				return fail(fmt.Errorf("ambiguous shared decoration consumer"))
+			}
+			overlap = true
+		}
+		if !overlap {
+			consumers = append(consumers, mdi)
+		}
+	}
+	for _, consumer := range consumers {
+		if !textPath(consumer.Path) || !textHex(consumer.SHA256, 64) || seenConsumers[consumer.Path] {
+			return fail(fmt.Errorf("neutral consumer policy differs"))
+		}
+		seenConsumers[consumer.Path] = true
+		body, err := get(build, "prepared/source/"+consumer.Path, "neutral-source/"+consumer.Path, 1<<20)
+		if err != nil || digest(body) != consumer.SHA256 {
+			return fail(fmt.Errorf("neutral provider consumer changed"))
+		}
+	}
+	var raw bytes.Buffer
+	fmt.Fprintln(&raw, "Frozen Console copied-asset attribution. This inventory is not full distribution or image admission.")
+	terms := map[string][]byte{}
+	for _, n := range cat.Notices {
+		if !textPath(n.Path) || !textHex(n.SHA256, 64) || terms[n.Path] != nil {
+			return fail(fmt.Errorf("ambiguous original notice"))
+		}
+		b, e := get(notices, n.Path, "notices/"+n.Path, 1<<20)
+		if e != nil || len(b) == 0 || digest(b) != n.SHA256 {
+			return fail(fmt.Errorf("original notice differs"))
+		}
+		terms[n.Path] = b
+		fmt.Fprintf(&raw, "\nFULL ORIGINAL RECORD %s\n", n.Path)
+		raw.Write(b)
+		raw.WriteByte('\n')
+	}
+	packages := map[string]string{}
+	source := filepath.Join(build, "prepared/source")
+	for _, a := range cat.Archives {
+		decoded, sriErr := base64.StdEncoding.DecodeString(strings.TrimPrefix(a.Integrity, "sha512-"))
+		if (a.Family != "material-icons" && a.Family != "flag-icons") || packages[a.Family] != "" || !textHex(a.SHA256, 64) || a.Path != "archives/"+a.SHA256+".tgz" || a.LicensePath != "package/LICENSE" || terms[a.Notice] == nil || !textHex(a.PackageJSONSHA256, 64) || sriErr != nil || len(decoded) != 64 || a.Integrity != "sha512-"+base64.StdEncoding.EncodeToString(decoded) {
+			return fail(fmt.Errorf("ambiguous original package archive"))
+		}
+		alias, e := copiedPackageAlias(source, a.Family)
+		if e != nil {
+			return fail(e)
+		}
+		metadata, e := get(source, alias.Resolved+"/package.json", "package/"+a.Family+"/package.json", 1<<20)
+		if e != nil || digest(metadata) != a.PackageJSONSHA256 {
+			return fail(fmt.Errorf("connected package metadata differs"))
+		}
+		if _, e = jsonObject(metadata); e != nil {
+			return fail(e)
+		}
+		var identity struct{ Name, Version string }
+		if e = json.Unmarshal(metadata, &identity); e != nil {
+			return fail(e)
+		}
+		wantName, wantVersion := copiedPackageIdentity(a.Family)
+		if identity.Name != wantName || identity.Version != wantVersion {
+			return fail(fmt.Errorf("connected package identity differs"))
+		}
+		license, e := get(source, alias.Resolved+"/LICENSE", "package/"+a.Family+"/LICENSE", 1<<20)
+		if e != nil || !bytes.Equal(license, terms[a.Notice]) {
+			return fail(fmt.Errorf("original package license differs"))
+		}
+		packages[a.Family] = alias.Resolved
+		state.Aliases = append(state.Aliases, alias)
+		fmt.Fprintf(&raw, "\nCATALOGUE ORIGINAL PACKAGE ARCHIVE %s: SHA256 %s; %s. Connected originals below are checked byte-for-byte; complete archive capture/replay is verified by the selected-pnpm source boundary.\n", a.Path, a.SHA256, a.Integrity)
+	}
+	expected, sourceNames, compiled := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	seen := map[string]bool{}
+	for _, a := range cat.Assets {
+		key := a.Family + ":" + a.Path
+		if !textPath(a.Path) || a.Bytes < 1 || a.Bytes > 4<<20 || !textHex(a.SHA256, 64) || seen[key] || len(a.Outputs) != 2 {
+			return fail(fmt.Errorf("invalid selected copied asset"))
+		}
+		seen[key] = true
+		var original []byte
+		if a.Family == "translations" {
+			if !strings.HasPrefix(a.Path, "console/src/assets/i18n/") || !strings.HasSuffix(a.Path, ".json") || !textHex(a.GitBlob, 40) || a.OriginalBlob != "" || a.OriginalPath != "" {
+				return fail(fmt.Errorf("incomplete unmodified translation source identity"))
+			}
+			original, e = get(build, "prepared/source/"+a.Path, "source/"+a.Path, 4<<20)
+			if e != nil || blob(original) != a.GitBlob || !utf8.Valid(original) {
+				return fail(fmt.Errorf("original translation bytes differ"))
+			}
+			if _, e = jsonObject(original); e != nil {
+				return fail(fmt.Errorf("invalid translation object: %w", e))
+			}
+			for _, context := range []struct{ source, notice string }{
+				{"LICENSE", "ZITADEL-LICENSE"},
+				{"LICENSING.md", "ZITADEL-LICENSING.md"},
+				{"CONTRIBUTING.md", "ZITADEL-CONTRIBUTING.md"},
+			} {
+				body, e := get(build, "prepared/source/"+context.source, "source/"+context.source, 1<<20)
+				if e != nil || terms[context.notice] == nil || !bytes.Equal(body, terms[context.notice]) {
+					return fail(fmt.Errorf("original translation licensing context differs"))
+				}
+			}
+			sourceNames[a.Path] = true
+		} else if a.Family == "line-awesome" {
+			if !strings.HasPrefix(a.Path, "console/src/assets/icons/line-awesome/") || !textHex(a.GitBlob, 40) || !textHex(a.OriginalBlob, 40) {
+				return fail(fmt.Errorf("incomplete Line Awesome source identity"))
+			}
+			original, e = get(build, "prepared/source/"+a.Path, "source/"+a.Path, 4<<20)
+			if e != nil || blob(original) != a.GitBlob {
+				return fail(fmt.Errorf("original Line Awesome bytes differ"))
+			}
+			sourceNames[a.Path] = true
+			if a.OriginalBlob != a.GitBlob {
+				if a.OriginalPath == "" || terms[a.OriginalPath] == nil || blob(terms[a.OriginalPath]) != a.OriginalBlob {
+					return fail(fmt.Errorf("modified CSS lacks its original source record"))
+				}
+				fmt.Fprintf(&raw, "\nMODIFIED SOURCE %s: frozen ZITADEL blob %s differs from retained original %s (%s). Both complete sources are retained.\n", a.Path, a.GitBlob, a.OriginalPath, a.OriginalBlob)
+			} else if a.OriginalPath != "" {
+				return fail(fmt.Errorf("ambiguous unmodified asset source"))
+			}
+		} else {
+			pkg := packages[a.Family]
+			if pkg == "" || !strings.HasPrefix(a.Path, "package/") || a.GitBlob != "" || a.OriginalBlob != "" || a.OriginalPath != "" {
+				return fail(fmt.Errorf("unsupported copied-asset origin"))
+			}
+			original, e = get(source, pkg+"/"+strings.TrimPrefix(a.Path, "package/"), "package/"+a.Family+"/"+a.Path, 4<<20)
+			if e != nil {
+				return fail(e)
+			}
+		}
+		if len(original) != a.Bytes || digest(original) != a.SHA256 {
+			return fail(fmt.Errorf("selected original asset differs: %s", a.Path))
+		}
+		for i, out := range a.Outputs {
+			prefix := []string{"console/dist/console/", "internal/api/ui/console/static/"}[i]
+			if !textPath(out) || !strings.HasPrefix(out, prefix) || !copiedSelected(strings.TrimPrefix(out, prefix)) || expected[out] {
+				return fail(fmt.Errorf("ambiguous selected asset output"))
+			}
+			if i == 1 && strings.TrimPrefix(out, prefix) != strings.TrimPrefix(a.Outputs[0], "console/dist/console/") {
+				return fail(fmt.Errorf("unpaired selected output"))
+			}
+			expected[out] = true
+			b, e := get(build, "prepared/source/"+out, "output/"+out, 4<<20)
+			if e != nil || !bytes.Equal(original, b) {
+				return fail(fmt.Errorf("selected output differs: %s", out))
+			}
+			if i == 1 {
+				compiled[out] = true
+			}
+		}
+		fmt.Fprintf(&raw, "\nSOURCE %s (%s)\nSHA256 %s; %d bytes\nOUTPUTS %s\n", a.Path, a.Family, a.SHA256, a.Bytes, strings.Join(a.Outputs, ", "))
+		binding := copiedBinding{copiedAsset: a}
+		if strings.HasSuffix(a.Path, ".ttf") {
+			binding.Names, e = fontAttributionNames(original, false)
+			if e != nil {
+				return fail(e)
+			}
+			for _, n := range binding.Names {
+				fmt.Fprintf(&raw, "\nORIGINAL FONT NAME %d (platform %d, encoding %d, language 0x%04x; bytes %d:%d; SHA256 %s)\n%s\n", n.ID, n.Platform, n.Encoding, n.Language, n.Offset, n.Bytes, n.SHA256, n.Text)
+			}
+		}
+		state.Assets = append(state.Assets, binding)
+	}
+	if len(expected) != policy.Outputs {
+		return fail(fmt.Errorf("selected copied-output count differs"))
+	}
+	mdi, err := copiedMDIObserve(build, notices, policy, get, sourceNames, expected, compiled, &raw)
+	if err != nil {
+		return fail(err)
+	}
+	state.Assets = append(state.Assets, mdi...)
+	if len(expected) != policy.Outputs+2*len(policy.MDI) {
+		return fail(fmt.Errorf("MDI copied-output count differs"))
+	}
+	state.NativeGraphics, err = copiedNativeObserve(build, notices, policy, get, terms, sourceNames, expected, compiled, &raw)
+	if err != nil {
+		return fail(err)
+	}
+	nativeConsole := 0
+	for _, asset := range state.NativeGraphics {
+		if asset.Component == "console" {
+			nativeConsole++
+		}
+	}
+	if len(expected) != policy.Outputs+2*len(policy.MDI)+2*nativeConsole {
+		return fail(fmt.Errorf("native graphics copied-output count differs"))
+	}
+	if e = copiedFilesystemSet(filepath.Join(build, "prepared/source"), expected, sourceNames, func(name string) ([]byte, error) { return get(build, "prepared/source/"+name, "output/"+name, 64<<20) }); e != nil {
+		return fail(e)
+	}
+	compiler, e := get(build, "packages.jsonl", "packages.jsonl", 64<<20)
+	if e != nil {
+		return fail(e)
+	}
+	if e = copiedCompilerSet(compiler, build, compiled); e != nil {
+		return fail(e)
+	}
+	for _, before := range state.Aliases {
+		after, e := copiedPackageAlias(source, before.Family)
+		if e != nil || after != before {
+			return fail(fmt.Errorf("connected package alias changed during observation"))
+		}
+	}
+	if _, e = get(filepath.Dir(recipe), filepath.Base(recipe), "build-recipe", 1<<20); e != nil {
+		return fail(e)
+	}
+	if _, e = get(filepath.Dir(recipe), "zitadel-copied-assets.go", "verifier/zitadel-copied-assets.go", 1<<20); e != nil {
+		return fail(e)
+	}
+	if raw.Len() > 2<<20 {
+		return fail(fmt.Errorf("excessive copied-asset notice text"))
+	}
+	state.Raw = raw.Bytes()
+	sort.Slice(state.Inputs, func(i, j int) bool { return state.Inputs[i].Path < state.Inputs[j].Path })
+	return state, nil
+}
+
+// Native graphics retain exact selected bytes and complete declared context.
+// The historical repository declarations do not certify original authorship,
+// authorize own-service branding, or change the separate image-admission gate.
+func copiedNativeObserve(build, notices string, policy copiedPolicy, get func(string, string, string, int64) ([]byte, error), currentTerms map[string][]byte, sourceNames, expected, compiled map[string]bool, raw *bytes.Buffer) ([]copiedNativeBinding, error) {
+	if len(policy.NativeGraphics) == 0 {
+		if len(policy.NativeTerms) != 0 || policy.NativeBrandPolicy != (inputRecord{}) {
+			return nil, fmt.Errorf("native graphics policy incomplete")
+		}
+		return nil, nil
+	}
+	if len(policy.NativeGraphics) != 27 || len(policy.NativeTerms) != 2 || policy.NativeBrandPolicy.Path != copiedNativeBrandFrozen.Path || !textHex(policy.NativeBrandPolicy.SHA256, 64) {
+		return nil, fmt.Errorf("native graphics policy differs")
+	}
+	terms := map[string][]byte{}
+	for _, name := range []string{"LICENSE", "LICENSING.md", "CONTRIBUTING.md"} {
+		body, err := get(build, "prepared/source/"+name, "native-context/"+name, 1<<20)
+		notice := "ZITADEL-" + name
+		if err != nil || len(body) == 0 || !bytes.Equal(body, currentTerms[notice]) {
+			return nil, fmt.Errorf("native source declaration context differs")
+		}
+		terms[notice] = body
+	}
+	brand, err := get(build, "prepared/source/"+policy.NativeBrandPolicy.Path, "native-context/brand-policy", 1<<20)
+	if err != nil || len(brand) == 0 || digest(brand) != policy.NativeBrandPolicy.SHA256 {
+		return nil, fmt.Errorf("native brand-policy context differs")
+	}
+	fmt.Fprintln(raw, "\nNATIVE GRAPHICS CONTEXT: repository declarations and unmodified upstream identification, not a new trademark grant or primary-authorship certification. Current root license, licensing scope and contribution context are retained above. Own-service branding remains a separate decision.")
+	fmt.Fprintln(raw, "\nFULL FROZEN BRAND POLICY")
+	raw.Write(brand)
+	raw.WriteByte('\n')
+	legacyRevisions := map[string]string{"ZITADEL-Console-2020-LICENSE": "92a294f5c81243ebac8381eef2db8484116a2b7b", "ZITADEL-Console-2022-LICENSE": "08ae39ae1957289c74b9e6cfc5b30e198d42ce8f"}
+	legacy := map[string]bool{}
+	for _, notice := range policy.NativeTerms {
+		if legacyRevisions[notice.Path] == "" || legacy[notice.Path] || !textHex(notice.SHA256, 64) {
+			return nil, fmt.Errorf("ambiguous native historical terms")
+		}
+		body, err := get(notices, notice.Path, "native-terms/"+notice.Path, 1<<20)
+		if err != nil || len(body) == 0 || digest(body) != notice.SHA256 {
+			return nil, fmt.Errorf("native historical terms differ")
+		}
+		terms[notice.Path], legacy[notice.Path] = body, true
+		fmt.Fprintf(raw, "\nFULL HISTORICAL REPOSITORY DECLARATION %s at %s/LICENSE\n", notice.Path, legacyRevisions[notice.Path])
+		raw.Write(body)
+		raw.WriteByte('\n')
+	}
+	seen, loginMembers, usedLegacy := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	var members map[string][]byte
+	var archiveSHA string
+	var result []copiedNativeBinding
+	for _, asset := range policy.NativeGraphics {
+		if !textPath(asset.Path) || asset.Bytes < 1 || asset.Bytes > 4<<20 || !textHex(asset.SHA256, 64) || !textHex(asset.GitBlob, 40) || !textHex(asset.DeclaredRevision, 40) || seen[asset.Path] || terms[asset.DeclaredNotice] == nil {
+			return nil, fmt.Errorf("incomplete native graphic identity")
+		}
+		if asset.DeclaredNotice == "ZITADEL-LICENSE" {
+			if asset.DeclaredRevision != upstream {
+				return nil, fmt.Errorf("native root declaration revision differs")
+			}
+		} else if legacyRevisions[asset.DeclaredNotice] != asset.DeclaredRevision {
+			return nil, fmt.Errorf("native historical declaration revision differs")
+		} else {
+			usedLegacy[asset.DeclaredNotice] = true
+		}
+		seen[asset.Path] = true
+		body, err := get(build, "prepared/source/"+asset.Path, "native-source/"+asset.Path, 4<<20)
+		if err != nil || len(body) != asset.Bytes || digest(body) != asset.SHA256 || blob(body) != asset.GitBlob {
+			return nil, fmt.Errorf("native selected original differs: %s", asset.Path)
+		}
+		binding := copiedNativeBinding{copiedNativeDefinition: asset, DeclaredNoticeSHA256: digest(terms[asset.DeclaredNotice])}
+		switch {
+		case strings.HasPrefix(asset.Path, "console/src/"):
+			name := strings.TrimPrefix(asset.Path, "console/src/")
+			if !copiedGraphic(name) || name != "favicon.ico" && !strings.HasPrefix(name, "assets/") || sourceNames[asset.Path] {
+				return nil, fmt.Errorf("ambiguous native Console source")
+			}
+			sourceNames[asset.Path] = true
+			binding.Component = "console"
+			binding.Outputs = []string{"console/dist/console/" + name, "internal/api/ui/console/static/" + name}
+			for i, output := range binding.Outputs {
+				if expected[output] {
+					return nil, fmt.Errorf("duplicate native Console output")
+				}
+				copy, err := get(build, "prepared/source/"+output, "native-output/"+output, 4<<20)
+				if err != nil || !bytes.Equal(copy, body) {
+					return nil, fmt.Errorf("native Console copy differs")
+				}
+				expected[output] = true
+				if i == 1 {
+					compiled[output] = true
+				}
+			}
+		case strings.HasPrefix(asset.Path, "internal/api/ui/login/static/resources/themes/zitadel/"):
+			const prefix = "internal/api/ui/login/static/"
+			name := strings.TrimPrefix(asset.Path, prefix)
+			if !copiedGraphic(name) || strings.TrimPrefix(name, "resources/themes/zitadel/") != filepath.Base(name) {
+				return nil, fmt.Errorf("ambiguous native Login resource")
+			}
+			if members == nil {
+				archive, err := get(build, "prepared/source/"+statikPath, "native-statik/"+statikPath, 32<<20)
+				if err != nil {
+					return nil, err
+				}
+				members, err = decodeStatik(archive)
+				if err != nil {
+					return nil, err
+				}
+				archiveSHA = digest(archive)
+			}
+			if !bytes.Equal(members[name], body) {
+				return nil, fmt.Errorf("native Login decoded member differs")
+			}
+			loginMembers[name] = true
+			binding.Component, binding.StatikMember, binding.StatikSHA256 = "login", name, archiveSHA
+		default:
+			return nil, fmt.Errorf("unsupported native graphics source")
+		}
+		fmt.Fprintf(raw, "\nRETAINED NATIVE GRAPHIC %s\nSHA256 %s; Git blob %s; %d bytes; selected unchanged at %s.\nDECLARED CONTEXT %s/LICENSE; retained complete context %s (%s). This records the repository declaration, not independent authorship or another component's grant.\nOUTPUTS %s; STATIK %s\n", asset.Path, asset.SHA256, asset.GitBlob, asset.Bytes, upstream, asset.DeclaredRevision, asset.DeclaredNotice, binding.DeclaredNoticeSHA256, strings.Join(binding.Outputs, ", "), binding.StatikMember)
+		result = append(result, binding)
+	}
+	if len(usedLegacy) != len(legacy) {
+		return nil, fmt.Errorf("unused native historical terms")
+	}
+	for name := range members {
+		if strings.HasPrefix(name, "resources/themes/zitadel/") && copiedGraphic(name) && !loginMembers[name] {
+			return nil, fmt.Errorf("unaccounted native Login member")
+		}
+	}
+	if len(loginMembers) > 0 {
+		prefix := "internal/api/ui/login/static/resources/themes/zitadel"
+		if err := filepath.WalkDir(filepath.Join(build, "prepared/source", prefix), func(name string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+				return fmt.Errorf("special native Login source")
+			}
+			relative, err := filepath.Rel(filepath.Join(build, "prepared/source/internal/api/ui/login/static"), name)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if copiedGraphic(relative) && !loginMembers[relative] {
+				return fmt.Errorf("unaccounted native Login source")
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// These are the complete observed output families, not catalogue-driven globs:
+// an additional asset in one of these classes must receive a new frozen review.
+func copiedSelected(name string) bool {
+	return copiedGraphic(name) || strings.HasPrefix(name, "assets/icons/line-awesome/") || strings.HasPrefix(name, "assets/i18n/") || strings.HasPrefix(name, "assets/mdi/") || strings.HasPrefix(name, "media/MaterialIcons-Regular-") || strings.HasPrefix(name, "media/") && strings.HasSuffix(name, ".svg")
+}
+
+// Select graphics by format throughout the Console output, independently of
+// the retained catalogue. An undeclared graphic cannot hide in a new directory.
+func copiedGraphic(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".svg", ".png", ".ico", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".apng", ".tif", ".tiff":
+		return true
+	}
+	return false
+}
+
+// These are the native Angular asset inputs, including its separately copied
+// favicon. Other application source is still sealed by the prepared-tree owner;
+// this observation does not turn uncompiled application files into asset inputs.
+func copiedNativeSourceSet(source string, sourceNames map[string]bool) error {
+	for _, prefix := range []string{"console/src/assets", "console/src/favicon.ico"} {
+		if _, err := os.Lstat(filepath.Join(source, prefix)); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		if err := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+				return fmt.Errorf("special native graphic source")
+			}
+			relative, err := filepath.Rel(source, name)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if copiedGraphic(relative) && !sourceNames[relative] {
+				return fmt.Errorf("unaccounted native graphic source: %s", relative)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// copiedMDIObserve preserves complete terms and joins each retained native
+// wrapper to both generated copies and the complete Console compiler selection.
+// Primary hashes and attribution describe provenance, never trademark endorsement.
+func copiedMDIObserve(build, notices string, policy copiedPolicy, get func(string, string, string, int64) ([]byte, error), sourceNames, expected, compiled map[string]bool, raw *bytes.Buffer) ([]copiedBinding, error) {
+	terms := map[string]bool{}
+	for _, notice := range policy.MDINotices {
+		if !textPath(notice.Path) || !textHex(notice.SHA256, 64) || terms[notice.Path] {
+			return nil, fmt.Errorf("ambiguous MDI original terms")
+		}
+		body, err := get(notices, notice.Path, "mdi-notices/"+notice.Path, 1<<20)
+		if err != nil || len(body) == 0 || digest(body) != notice.SHA256 {
+			return nil, fmt.Errorf("MDI original terms differ")
+		}
+		terms[notice.Path] = true
+		fmt.Fprintf(raw, "\nFULL ORIGINAL MDI TERMS %s\n", notice.Path)
+		raw.Write(body)
+		raw.WriteByte('\n')
+	}
+	var result []copiedBinding
+	usedTerms, seen := map[string]bool{}, map[string]bool{}
+	for _, asset := range policy.MDI {
+		if !textPath(asset.Path) || !strings.HasPrefix(asset.Path, "console/src/assets/mdi/") || strings.TrimPrefix(asset.Path, "console/src/assets/mdi/") != filepath.Base(asset.Path) || !strings.HasSuffix(asset.Path, ".svg") || asset.Bytes < 1 || asset.Bytes > 4<<20 || !textHex(asset.SHA256, 64) || !textHex(asset.GitBlob, 40) || !textHex(asset.PrimarySHA256, 64) || asset.Author == "" || len(asset.Author) > 128 || strings.ContainsAny(asset.Author, "\r\n") || !terms[asset.Notice] || seen[asset.Path] {
+			return nil, fmt.Errorf("incomplete MDI provenance identity")
+		}
+		if !strings.HasPrefix(asset.PrimaryPath, "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/") && asset.PrimaryPath != "https://github.com/google/material-design-icons/blob/6d7ca43bd6e6668531a00fcaca06d921b63dd716/symbols/web/mail/materialsymbolsoutlined/mail_24px.svg" {
+			return nil, fmt.Errorf("unbound MDI primary origin")
+		}
+		seen[asset.Path], usedTerms[asset.Notice] = true, true
+		body, err := get(build, "prepared/source/"+asset.Path, "mdi-source/"+asset.Path, 4<<20)
+		if err != nil || len(body) != asset.Bytes || digest(body) != asset.SHA256 || blob(body) != asset.GitBlob {
+			return nil, fmt.Errorf("retained MDI original differs")
+		}
+		sourceNames[asset.Path] = true
+		name := strings.TrimPrefix(asset.Path, "console/src/")
+		outputs := []string{"console/dist/console/" + name, "internal/api/ui/console/static/" + name}
+		for i, output := range outputs {
+			if expected[output] {
+				return nil, fmt.Errorf("duplicate retained MDI output")
+			}
+			copy, err := get(build, "prepared/source/"+output, "mdi-output/"+output, 4<<20)
+			if err != nil || !bytes.Equal(copy, body) {
+				return nil, fmt.Errorf("retained MDI output differs")
+			}
+			expected[output] = true
+			if i == 1 {
+				compiled[output] = true
+			}
+		}
+		fmt.Fprintf(raw, "\nRETAINED MDI SOURCE %s\nSHA256 %s; Git blob %s; %d bytes. Native wrapper retained unchanged.\nPRIMARY %s\nPRIMARY SHA256 %s; author %s; complete terms %s. Native wrapper differs from primary: %t. Both native source and its modification/provenance record are retained; no trademark endorsement is implied.\nOUTPUTS %s\n", asset.Path, asset.SHA256, asset.GitBlob, asset.Bytes, asset.PrimaryPath, asset.PrimarySHA256, asset.Author, asset.Notice, asset.SHA256 != asset.PrimarySHA256, strings.Join(outputs, ", "))
+		result = append(result, copiedBinding{copiedAsset: copiedAsset{Family: "mdi", Path: asset.Path, Bytes: asset.Bytes, SHA256: asset.SHA256, GitBlob: asset.GitBlob, Outputs: outputs}})
+	}
+	if len(usedTerms) != len(terms) {
+		return nil, fmt.Errorf("unused MDI terms")
+	}
+	return result, nil
+}
+
+// copiedFilesystemSet rejects linked, special and unexpected copied-asset members
+// and any retired provider artwork in the actual source and generated outputs.
+func copiedFilesystemSet(source string, expected, sourceNames map[string]bool, observe func(string) ([]byte, error)) error {
+	if err := neutralProviderSourceFamilies(source); err != nil {
+		return err
+	}
+	if err := copiedNativeSourceSet(source, sourceNames); err != nil {
+		return err
+	}
+	prefixes := []string{"console/src/assets/icons/line-awesome", "console/src/assets/i18n", "console/dist/console", "internal/api/ui/console/static"}
+	for name := range sourceNames {
+		if strings.HasPrefix(name, "console/src/assets/mdi/") {
+			prefixes = append(prefixes, "console/src/assets/mdi")
+			break
+		}
+	}
+	for _, prefix := range prefixes {
+		e := filepath.WalkDir(filepath.Join(source, prefix), func(name string, entry fs.DirEntry, e error) error {
+			if e != nil {
+				return e
+			}
+			relative, e := filepath.Rel(source, name)
+			if e != nil {
+				return e
+			}
+			relative = filepath.ToSlash(relative)
+			if entry.IsDir() {
+				return nil
+			}
+			if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+				return fmt.Errorf("special copied-asset path")
+			}
+			if strings.HasPrefix(prefix, "console/src/") {
+				if !sourceNames[relative] {
+					return fmt.Errorf("unexpected copied source: %s", relative)
+				}
+			} else {
+				if err := neutralProviderOutput(relative, nil); err != nil {
+					return err
+				}
+				switch strings.ToLower(filepath.Ext(relative)) {
+				case ".html", ".js", ".css", ".json", ".map", ".scss", ".svg":
+					body, err := observe(relative)
+					if err != nil {
+						return err
+					}
+					if err = neutralProviderOutput(relative, body); err != nil {
+						return err
+					}
+				}
+				member := strings.TrimPrefix(relative, prefix+"/")
+				if copiedSelected(member) && !expected[relative] {
+					return fmt.Errorf("unexpected copied output: %s", relative)
+				}
+			}
+			return nil
+		})
+		if e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// copiedCompilerSet rejects failed observations and retired images throughout
+// the compiler stream, while comparing catalogue membership only for Console.
+func copiedCompilerSet(data []byte, build string, expected map[string]bool) error {
+	d := json.NewDecoder(bytes.NewReader(data))
+	seen := false
+	for {
+		var raw json.RawMessage
+		e := d.Decode(&raw)
+		if e == io.EOF {
+			break
+		}
+		if e != nil {
+			return e
+		}
+		if _, e = jsonObject(raw); e != nil {
+			return e
+		}
+		var p struct {
+			ImportPath, Dir           string
+			EmbedPatterns, EmbedFiles []string
+			Incomplete                bool
+			Error                     json.RawMessage
+			DepsErrors                []json.RawMessage
+		}
+		if e = json.Unmarshal(raw, &p); e != nil || p.Incomplete || len(p.Error) > 0 && string(p.Error) != "null" || len(p.DepsErrors) > 0 {
+			return fmt.Errorf("failed compiler observation")
+		}
+		// Retired graphics must be absent from every compiled package, before
+		// selecting the Console package or its retained catalogue subset.
+		for _, name := range p.EmbedFiles {
+			if err := neutralProviderOutput(name, nil); err != nil {
+				return err
+			}
+		}
+		if p.ImportPath != "github.com/zitadel/zitadel/internal/api/ui/console" {
+			continue
+		}
+		if seen || p.Dir != filepath.Join(build, "prepared/source/internal/api/ui/console") || !reflect.DeepEqual(p.EmbedPatterns, []string{"static"}) {
+			return fmt.Errorf("ambiguous Console compiler selection")
+		}
+		seen = true
+		all, selected := map[string]bool{}, map[string]bool{}
+		for _, name := range p.EmbedFiles {
+			if !textPath(name) || all[name] {
+				return fmt.Errorf("invalid compiler member")
+			}
+			all[name] = true
+			if strings.HasPrefix(name, "static/") && copiedSelected(strings.TrimPrefix(name, "static/")) {
+				selected["internal/api/ui/console/"+name] = true
+			}
+		}
+		if !reflect.DeepEqual(selected, expected) {
+			return fmt.Errorf("copied-asset compiler set differs")
+		}
+	}
+	if !seen {
+		return fmt.Errorf("missing copied-asset compiler selection")
+	}
+	return nil
+}
+
+func copiedPackageIdentity(family string) (string, string) {
+	if family == "flag-icons" {
+		return "flag-icons", "7.5.0"
+	}
+	if family == "material-icons" {
+		return "material-design-icons-iconfont", "6.7.0"
+	}
+	return "", ""
+}
+
+// Allow the same confined single-hop pnpm boundary used by the existing notice
+// collector. Originals are inspected after the actual frontend build, before
+// compilation; full original-archive verification remains the source adapter's
+// separate capture/replay boundary, rather than a second tar interpreter here.
+func copiedPackageAlias(source, family string) (copiedAlias, error) {
+	name, version := copiedPackageIdentity(family)
+	if name == "" {
+		return copiedAlias{}, fmt.Errorf("unsupported connected package")
+	}
+	alias := "console/node_modules/" + name
+	for _, parent := range []string{"console", "console/node_modules"} {
+		st, e := os.Lstat(filepath.Join(source, parent))
+		if e != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 {
+			return copiedAlias{}, fmt.Errorf("linked or unavailable package parent")
+		}
+	}
+	target, e := os.Readlink(filepath.Join(source, alias))
+	if e != nil || target == "" || len(target) > 4096 || filepath.IsAbs(target) {
+		return copiedAlias{}, fmt.Errorf("invalid connected package alias")
+	}
+	resolved := filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(alias), target)))
+	want := "node_modules/.pnpm/" + name + "@" + version + "/node_modules/" + name
+	if resolved != want || target != "../../"+want {
+		return copiedAlias{}, fmt.Errorf("escaping or unselected connected package")
+	}
+	return copiedAlias{Family: family, Path: alias, Target: target, Resolved: resolved}, nil
+}

@@ -6,18 +6,18 @@ import { readJournal } from "./journal.mjs";
 import { validateJournalFeed, feedAssetPaths } from "./journal-feed.mjs";
 
 const root = new URL("../../",import.meta.url);
-const generated = new URL(".astro/journal-feed.json",root);
+const generated = new URL(".generated/journal-feed.json",root);
 /** @param {string|Buffer} bytes */
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 
 /** Capture the real XML and its image dependency closure within the existing renderer boundary. */
 export function captureJournalFeedReference() {
   const fingerprint = readingFingerprint();
-  assert.equal(readFileSync(new URL(".astro/journal-reading-input.txt",root),"utf8"),fingerprint,"Journal feed source changed during rendering");
-  const xml = readFileSync(new URL("dist/blog/rss.xml",root),"utf8");
+  assert.equal(readFileSync(new URL(".generated/journal-reading-input.txt",root),"utf8"),fingerprint,"Journal feed source changed during rendering");
+  const xml = readFileSync(new URL(".generated/content/blog/rss.xml",root),"utf8");
   const paths = feedAssetPaths(validateJournalFeed(xml,readJournal()));
   const assets = paths.map(filename => {
-    const bytes = readFileSync(new URL(`dist/${filename}`,root));
+    const bytes = readFileSync(new URL(`.generated/content/${filename}`,root));
     return {filename,source:bytes.toString("base64"),digest:digest(bytes)};
   });
   assert.equal(readingFingerprint(),fingerprint,"Journal feed source changed during capture");

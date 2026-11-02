@@ -33,8 +33,8 @@ export function vatPriceMarker(locale: Locale): string {
 }
 
 export const linkedInUrl = 'https://www.linkedin.com/in/nikolai-emil-damm-14a786150/';
-/** Homepage copy for the independent identity, offer and customer-scope decisions. */
-function createScopedCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled: boolean) {
+/** Permanent customer invitation with independent identity and offer choices. */
+export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean) {
 const previewCopy = {
   en: {
     title: 'Websites & software for businesses | Devantler Tech',
@@ -48,7 +48,7 @@ const previewCopy = {
     headline: 'I build websites\nand useful software.',
     intro: 'Devantler Tech is my independent software business on Funen, Denmark. I build websites, web apps and services for businesses—and I’m the person you’ll talk to about your project.',
     primary: 'Tell me what you need', secondary: 'Explore services',
-    availability: 'Planning projects from November 2026',
+    availability: 'Planning projects from January 2027',
     promise: ['Clear scope, room to grow', 'Build + optional hosting', 'Direct contact with the developer'],
     developerRole: 'Developer behind Devantler Tech · Funen, Denmark',
     developerNote: 'You’ll work directly with me, from our first conversation to the handover.',
@@ -61,6 +61,14 @@ const previewCopy = {
       { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
       { title: 'A web service', description: 'Connect a process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
     ],
+    otherRequest: {
+      title: 'Other requests',
+      description: 'Have a project that doesn’t fit a website, web app or web service? Tell me what you have in mind.',
+      assessment: 'Assessed individually',
+      includes: ['A conversation about your needs', 'An honest assessment of whether I can help', 'A proposal if the project is a good fit'],
+      boundary: 'I assess each request individually. If I can help, we agree the scope, timing and price before work begins.',
+      action: 'Discuss your request',
+    },
     priceNote: 'Prices are indicative and in DKK. Domains, external tools and usage-based charges are additional unless included in your quote. Hosted projects include routine maintenance in the agreed monthly price; capacity, backups and human support terms are specified in your quote. Prices include 25% Danish VAT.',
     hostingTitle: 'Hosting that fits the project—not the other way around.',
     hostingText: 'Every client project hosted on my platform includes optimization, accessibility improvements, bug fixes and routine upkeep in the agreed monthly price. We agree a rounded total based on hosting costs plus a fixed service fee to me. New features and larger iterations require a new agreement, including any change in running costs.',
@@ -117,7 +125,7 @@ const previewCopy = {
     headline: 'Jeg bygger hjemmesider\nog nyttig software.',
     intro: 'Devantler Tech er min uafhængige softwarevirksomhed på Fyn. Jeg bygger hjemmesider, webapps og services til virksomheder—og det er mig, du taler med om dit projekt.',
     primary: 'Fortæl om dit behov', secondary: 'Se ydelserne',
-    availability: 'Planlægger projekter fra november 2026',
+    availability: 'Planlægger projekter fra januar 2027',
     promise: ['Klart omfang, plads til at vokse', 'Udvikling og valgfri hosting', 'Direkte kontakt med udvikleren'],
     developerRole: 'Udvikleren bag Devantler Tech · Fyn, Danmark',
     developerNote: 'Du samarbejder direkte med mig, fra vores første samtale til overdragelsen.',
@@ -130,6 +138,14 @@ const previewCopy = {
       { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
       { title: 'En webservice', description: 'Forbind en proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
     ],
+    otherRequest: {
+      title: 'Andre opgaver',
+      description: 'Passer dit projekt ikke til en hjemmeside, webapp eller webservice? Fortæl mig, hvad du har i tankerne.',
+      assessment: 'Vurderes individuelt',
+      includes: ['En samtale om dit behov', 'En ærlig vurdering af, om jeg kan hjælpe', 'Et forslag, hvis projektet er et godt match'],
+      boundary: 'Jeg vurderer hver opgave individuelt. Hvis jeg kan hjælpe, aftaler vi omfang, tidsplan og pris, før arbejdet begynder.',
+      action: 'Lad os tale om din opgave',
+    },
     priceNote: 'Priserne er vejledende og i danske kroner. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris; kapacitet, backup og menneskelig support beskrives i tilbuddet. Priserne er inkl. 25 % moms.',
     hostingTitle: 'Hosting, der passer til projektet—ikke omvendt.',
     hostingText: 'Alle kundeprojekter, der hostes på min platform, har optimering, forbedret tilgængelighed, fejlrettelser og almindelig vedligeholdelse med i den aftalte månedspris. Vi aftaler et afrundet beløb baseret på hostingudgifter plus et fast honorar til mig. Nye funktioner og større videreudvikling kræver en ny aftale, også om eventuelle ændringer i driftsudgifterne.',
@@ -181,7 +197,6 @@ const selected = revisedOffer ? previewCopy : {
   da: { ...previewCopy.da, ...publishedOffer.copy.da },
 } as const;
 
-if (!customerScopeEnabled) return selected;
 return {
   en: {
     ...selected.en,
@@ -196,9 +211,4 @@ return {
     steps: selected.da.steps.map((step, index) => index === 0 ? { ...step, text: customerScopeCopy.da.firstStep } : step),
   },
 };
-}
-
-/** Build shared bilingual copy without reading framework or private company inputs. */
-export function createBusinessCopy(companyIdentityEnabled: boolean, revisedOffer: boolean, customerScopeEnabled = false) {
-  return createScopedCopy(companyIdentityEnabled, revisedOffer, customerScopeEnabled);
 }

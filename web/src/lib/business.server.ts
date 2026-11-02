@@ -1,4 +1,4 @@
-import { FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE } from "$app/env/private";
+import { FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY } from "$app/env/private";
 import { companyFacts } from "../../../src/components/business/company-copy";
 import { createBusinessCopy, guideOffers, linkedInUrl, vatPriceMarker } from "../../../src/components/business/business-copy";
 import { createClientCopy } from "../../../src/components/business/client-copy";
@@ -8,11 +8,10 @@ const company = companyFacts();
 
 export const business = {
   companyEnabled: FEATURE_COMPANY_IDENTITY,
-  customerScopeEnabled: FEATURE_CUSTOMER_SCOPE,
   inquiryUrl: FEATURE_COMPANY_IDENTITY ? `mailto:${company.email}` : linkedInUrl,
-  copy: createBusinessCopy(FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE),
+  copy: createBusinessCopy(FEATURE_COMPANY_IDENTITY, FEATURE_OFFER_COPY),
   client: createClientCopy(FEATURE_OFFER_COPY),
-  supporting: createSupportingCopy(FEATURE_OFFER_COPY, FEATURE_CUSTOMER_SCOPE),
+  supporting: createSupportingCopy(FEATURE_OFFER_COPY),
   offers: guideOffers(),
   vatMarker: (locale: "en" | "da") => vatPriceMarker(locale),
 };
@@ -24,7 +23,6 @@ export function businessFrame(locale: "en" | "da") {
   return {
     identity: FEATURE_COMPANY_IDENTITY ? company : null,
     inquiryUrl: business.inquiryUrl,
-    customerScopeEnabled: FEATURE_CUSTOMER_SCOPE,
     footer: { identity: t.footerIdentity, note: t.footer, registration: t.registrationType,
       about: t.aboutNav, projects: t.projectsNav, contact: t.contact },
   };

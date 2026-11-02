@@ -1,11 +1,7 @@
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
-import interRegular from "@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf?inline";
-import interMedium from "@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf?inline";
-import interSemibold from "@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf?inline";
-import interBold from "@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf?inline";
-import monoRegular from "@expo-google-fonts/roboto-mono/400Regular/RobotoMono_400Regular.ttf?inline";
-import monoMedium from "@expo-google-fonts/roboto-mono/500Medium/RobotoMono_500Medium.ttf?inline";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import type { Cv, Entry, Role, SkillGroup } from "../data/cv";
 
 // A4 in PostScript points.
@@ -38,16 +34,18 @@ const COLOR = {
   white: "#ffffff",
 };
 
-// Fonts and the portrait are imported as data URIs so the renderer has no filesystem layout to depend on.
+// Resolve the maintained font packages directly during the native content build.
 const dataUriToBuffer = (uri: string) => Buffer.from(uri.slice(uri.indexOf(",") + 1), "base64");
+const require = createRequire(import.meta.url);
+const font = (path: string) => readFileSync(require.resolve(path));
 
 const FONTS = {
-  sans: interRegular,
-  sansMedium: interMedium,
-  sansSemibold: interSemibold,
-  sansBold: interBold,
-  mono: monoRegular,
-  monoMedium: monoMedium,
+  sans: font("@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf"),
+  sansMedium: font("@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf"),
+  sansSemibold: font("@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf"),
+  sansBold: font("@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf"),
+  mono: font("@expo-google-fonts/roboto-mono/400Regular/RobotoMono_400Regular.ttf"),
+  monoMedium: font("@expo-google-fonts/roboto-mono/500Medium/RobotoMono_500Medium.ttf"),
 };
 type FontName = keyof typeof FONTS;
 
@@ -64,7 +62,7 @@ const STYLE = {
   entryTitle: { font: "sansSemibold", size: 10.2, color: COLOR.text },
   entryMeta: { font: "sansMedium", size: 8.3, color: COLOR.muted },
   period: { font: "monoMedium", size: 7.3, color: COLOR.accentOnWhite },
-  body: { font: "sans", size: 8.8, color: COLOR.text, lineGap: 1.8 },
+  body: { font: "sans", size: 8.8, color: COLOR.text, lineGap: 1.2 },
   link: { font: "mono", size: 7.3, color: COLOR.accentOnWhite },
   sideLabel: { font: "sansBold", size: 6.6, color: COLOR.accent, characterSpacing: 1.3 },
   sideValue: { font: "sans", size: 7.8, color: COLOR.sidebarText, lineGap: 1.6 },
@@ -104,11 +102,15 @@ class CvRenderer {
 
   // Sidebar sections flow across pages in this order, each drawn on the first page with room for it.
   private readonly sidebarQueue: Array<[title: string, body: (y: number) => number]>;
+  private readonly cv: Cv;
+  private readonly photo: Buffer;
 
   constructor(
-    private readonly cv: Cv,
-    private readonly photo: Buffer,
+    cv: Cv,
+    photo: Buffer,
   ) {
+    this.cv = cv;
+    this.photo = photo;
     this.updatedAt = new Date(cv.updated);
     this.sidebarQueue = [
       ["Contact", (y) => this.sideContact(y)],
@@ -137,7 +139,7 @@ class CvRenderer {
         ModDate: this.updatedAt,
       },
     });
-    for (const [name, data] of Object.entries(FONTS)) this.doc.registerFont(name, dataUriToBuffer(data));
+    for (const [name, data] of Object.entries(FONTS)) this.doc.registerFont(name, data);
   }
 
   render(): Promise<Buffer> {
@@ -239,7 +241,7 @@ class CvRenderer {
         if (block.bullet) this.circle(x + 3, this.y + STYLE.body.size * 0.55, 1.4, COLOR.accentOnWhite);
         this.y += this.text(block.text, block.x, this.y, block.width, block.style, block.link ? { link: block.link } : {});
       }
-      this.y += 8;
+      this.y += 6;
     });
   }
 

@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "profile": "frozen-identity-base-source-v1",
+  "image": "gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3",
+  "metadata": [
+    {
+      "path": "metadata/index.json",
+      "url": "https://gcr.io/v2/distroless/static-debian13/manifests/sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3",
+      "bytes": 1788,
+      "sha256": "e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3"
+    },
+    {
+      "path": "metadata/amd64.json",
+      "url": "https://gcr.io/v2/distroless/static-debian13/manifests/sha256:2293b36c7c9082bf4115aab724b4d2cddec82c8eba39bf27ac0517e159acf150",
+      "bytes": 2864,
+      "sha256": "2293b36c7c9082bf4115aab724b4d2cddec82c8eba39bf27ac0517e159acf150"
+    },
+    {
+      "path": "metadata/config.json",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110",
+      "bytes": 2938,
+      "sha256": "55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110"
+    }
+  ],
+  "layers": [
+    {
+      "path": "layers/2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8",
+      "bytes": 124525,
+      "sha256": "2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8"
+    },
+    {
+      "path": "layers/c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0",
+      "bytes": 12675,
+      "sha256": "c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0"
+    },
+    {
+      "path": "layers/218cf840d0d95a86231eb9d33d26ac8a520a4299c6096cb70a0c2fb2a87c9e0a.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:218cf840d0d95a86231eb9d33d26ac8a520a4299c6096cb70a0c2fb2a87c9e0a",
+      "bytes": 288057,
+      "sha256": "218cf840d0d95a86231eb9d33d26ac8a520a4299c6096cb70a0c2fb2a87c9e0a"
+    },
+    {
+      "path": "layers/f6069939f718601b38d25ec5ed5631ed047e4da24acec2e252f8f29d251be718.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:f6069939f718601b38d25ec5ed5631ed047e4da24acec2e252f8f29d251be718",
+      "bytes": 254668,
+      "sha256": "f6069939f718601b38d25ec5ed5631ed047e4da24acec2e252f8f29d251be718"
+    },
+    {
+      "path": "layers/d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28",
+      "bytes": 32093,
+      "sha256": "d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28"
+    },
+    {
+      "path": "layers/2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a",
+      "bytes": 67,
+      "sha256": "2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a"
+    },
+    {
+      "path": "layers/7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212",
+      "bytes": 188,
+      "sha256": "7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212"
+    },
+    {
+      "path": "layers/3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4",
+      "bytes": 123,
+      "sha256": "3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4"
+    },
+    {
+      "path": "layers/52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296",
+      "bytes": 162,
+      "sha256": "52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296"
+    },
+    {
+      "path": "layers/dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112",
+      "bytes": 80,
+      "sha256": "dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112"
+    },
+    {
+      "path": "layers/b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a",
+      "bytes": 351,
+      "sha256": "b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a"
+    },
+    {
+      "path": "layers/ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795",
+      "bytes": 311,
+      "sha256": "ebddc55facdc6b1f7e0f30816a5fc7cc62f38abdf76c0a8b0a0ce52085754795"
+    },
+    {
+      "path": "layers/c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab.tar.gz",
+      "url": "https://gcr.io/v2/distroless/static-debian13/blobs/sha256:c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab",
+      "bytes": 143338,
+      "sha256": "c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab"
+    }
+  ],
+  "packages": [
+    {
+      "name": "base-files",
+      "version": "13.8+deb13u7",
+      "source": "base-files"
+    },
+    {
+      "name": "netbase",
+      "version": "6.5",
+      "source": "netbase"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026c-0+deb13u1",
+      "source": "tzdata"
+    },
+    {
+      "name": "media-types",
+      "version": "13.0.0",
+      "source": "media-types"
+    },
+    {
+      "name": "ca-certificates",
+      "version": "20250419",
+      "source": "ca-certificates"
+    },
+    {
+      "name": "tzdata-legacy",
+      "version": "2026c-0+deb13u1",
+      "source": "tzdata"
+    }
+  ],
+  "descriptors": [
+    {
+      "name": "base-files",
+      "version": "13.8+deb13u7",
+      "descriptor": {
+        "path": "sources/base-files_13.8+deb13u7.dsc",
+        "url": "https://deb.debian.org/debian/pool/main/b/base-files/base-files_13.8+deb13u7.dsc",
+        "bytes": 1247,
+        "sha256": "6240b5a02fc32bd6d925bb7776e00c467e80d930f8cf3c4a20c299ce692dc7e4"
+      },
+      "archives": [
+        {
+          "path": "sources/base-files_13.8+deb13u7.tar.xz",
+          "url": "https://deb.debian.org/debian/pool/main/b/base-files/base-files_13.8+deb13u7.tar.xz",
+          "bytes": 83444,
+          "sha256": "be32803b9408ac9aa46b96f68c83ee45e88d04d89854a87999986efc4cb34c69"
+        }
+      ]
+    },
+    {
+      "name": "netbase",
+      "version": "6.5",
+      "descriptor": {
+        "path": "sources/netbase_6.5.dsc",
+        "url": "https://deb.debian.org/debian/pool/main/n/netbase/netbase_6.5.dsc",
+        "bytes": 899,
+        "sha256": "e8691899f57c06fcc383b0f2214b662137df539227d9d7811dc8223f32ebe4c7"
+      },
+      "archives": [
+        {
+          "path": "sources/netbase_6.5.tar.xz",
+          "url": "https://deb.debian.org/debian/pool/main/n/netbase/netbase_6.5.tar.xz",
+          "bytes": 32544,
+          "sha256": "9116047aebbaa1698934052d01c6e09b4c3aed643e93df63d2ddcbec243c26d1"
+        }
+      ]
+    },
+    {
+      "name": "tzdata",
+      "version": "2026c-0+deb13u1",
+      "descriptor": {
+        "path": "sources/tzdata_2026c-0+deb13u1.dsc",
+        "url": "https://deb.debian.org/debian/pool/main/t/tzdata/tzdata_2026c-0+deb13u1.dsc",
+        "bytes": 2466,
+        "sha256": "b18d6eddfb23971bacbf569a2641cda837002a813d8e8940d8792ea7ba8e2d4e"
+      },
+      "archives": [
+        {
+          "path": "sources/tzdata_2026c.orig.tar.gz",
+          "url": "https://deb.debian.org/debian/pool/main/t/tzdata/tzdata_2026c.orig.tar.gz",
+          "bytes": 475694,
+          "sha256": "e4a178a4477f3d0ea77cc31828ff72aa38feff8d61aa13e7e99e142e9d902be4"
+        },
+        {
+          "path": "sources/tzdata_2026c.orig.tar.gz.asc",
+          "url": "https://deb.debian.org/debian/pool/main/t/tzdata/tzdata_2026c.orig.tar.gz.asc",
+          "bytes": 833,
+          "sha256": "26cd02e034eed682aa911d224bca3247ff15914df317e3bb0b1a01dc557b46fe"
+        },
+        {
+          "path": "sources/tzdata_2026c-0+deb13u1.debian.tar.xz",
+          "url": "https://deb.debian.org/debian/pool/main/t/tzdata/tzdata_2026c-0+deb13u1.debian.tar.xz",
+          "bytes": 127148,
+          "sha256": "48cd3f42cee2b8ec62ca9c2f4c43cf6c0ec05e1a5ae97f4ed771635811b82f29"
+        }
+      ]
+    },
+    {
+      "name": "media-types",
+      "version": "13.0.0",
+      "descriptor": {
+        "path": "sources/media-types_13.0.0.dsc",
+        "url": "https://deb.debian.org/debian/pool/main/m/media-types/media-types_13.0.0.dsc",
+        "bytes": 1647,
+        "sha256": "a664c287e8d358da16bae998374c546cf0eaf3e0416f7059a56818eefe018546"
+      },
+      "archives": [
+        {
+          "path": "sources/media-types_13.0.0.tar.xz",
+          "url": "https://deb.debian.org/debian/pool/main/m/media-types/media-types_13.0.0.tar.xz",
+          "bytes": 62960,
+          "sha256": "bcd40584a3e092fd33e45f324e10652a400fea3b0e206d286d1c2d6414d763e7"
+        }
+      ]
+    },
+    {
+      "name": "ca-certificates",
+      "version": "20250419",
+      "descriptor": {
+        "path": "sources/ca-certificates_20250419.dsc",
+        "url": "https://deb.debian.org/debian/pool/main/c/ca-certificates/ca-certificates_20250419.dsc",
+        "bytes": 1766,
+        "sha256": "3fc919369a3b84e34a959faa8bdffb9bd2c5a7d4a948a4b07a09a5d43e257030"
+      },
+      "archives": [
+        {
+          "path": "sources/ca-certificates_20250419.tar.xz",
+          "url": "https://deb.debian.org/debian/pool/main/c/ca-certificates/ca-certificates_20250419.tar.xz",
+          "bytes": 277504,
+          "sha256": "33b44ef78653ecd3f0f2f13e5bba6be466be2e7da72182f737912b81798ba5d2"
+        }
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "imagePath": "usr/share/common-licenses/GPL-2",
+      "path": "notices/GPL-2.txt",
+      "layerSha256": "2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8",
+      "bytes": 17984,
+      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "usr/share/doc/base-files/copyright",
+      "path": "notices/base-files-copyright.txt",
+      "layerSha256": "2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8",
+      "bytes": 1696,
+      "sha256": "c84c664bce3a83eaa327bb9e354c0df588bc535b5e95474aab7ca3cce74937cd",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "usr/share/doc/ca-certificates/copyright",
+      "path": "notices/ca-certificates-copyright.txt",
+      "layerSha256": "c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab",
+      "bytes": 18940,
+      "sha256": "e85e1bcad3a915dc7e6f41412bc5bdeba275cadd817896ea0451f2140a93967c",
+      "imageMode": 365
+    },
+    {
+      "imagePath": "usr/share/doc/media-types/copyright",
+      "path": "notices/media-types-copyright.txt",
+      "layerSha256": "d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28",
+      "bytes": 268,
+      "sha256": "5ded7c53199b6a1d089b0b7e231d77e5c84081c7156b372b3f11ad9c1c2c5cc7",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "usr/share/doc/netbase/copyright",
+      "path": "notices/netbase-copyright.txt",
+      "layerSha256": "c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0",
+      "bytes": 1234,
+      "sha256": "795b66147ea5ad692991caa7008ece551fb0fa88b9c53656223bd1518dc58ab2",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "usr/share/doc/tzdata-legacy/copyright",
+      "path": "notices/tzdata-legacy-copyright.txt",
+      "layerSha256": "f6069939f718601b38d25ec5ed5631ed047e4da24acec2e252f8f29d251be718",
+      "bytes": 375,
+      "sha256": "cb61132bc0fc7b26ef5a82ee18b2fb644a1362f4f286ed980ff22e408471f59a",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "usr/share/doc/tzdata/copyright",
+      "path": "notices/tzdata-copyright.txt",
+      "layerSha256": "218cf840d0d95a86231eb9d33d26ac8a520a4299c6096cb70a0c2fb2a87c9e0a",
+      "bytes": 375,
+      "sha256": "cb61132bc0fc7b26ef5a82ee18b2fb644a1362f4f286ed980ff22e408471f59a",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/base-files",
+      "path": "status/base-files",
+      "layerSha256": "2cc7ee286bf3a9e6af5f71756d7fc8e22e23ce65fec9047d774511ffcef79fa8",
+      "bytes": 734,
+      "sha256": "e13087b841618232056233ebbb6602001a88d80e7cb4fc457e05aea4391d648a",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/ca-certificates",
+      "path": "status/ca-certificates",
+      "layerSha256": "c4bc6f35ff5e25aa1afe7a148a0b6f10a760f54e298f86a4a4d44b91f1afbfab",
+      "bytes": 793,
+      "sha256": "3f458b5dba442fcd79618e5f3f9c5dd24d0efca831ada4a28eeb746c4b6b6c6a",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/media-types",
+      "path": "status/media-types",
+      "layerSha256": "d6b1b89eccacc15c2420b2776d72c1dae334a00805ed9af54bf2f71e4d536f28",
+      "bytes": 883,
+      "sha256": "60e871d56cfcc834fe0a8d0436f98996e1bb196d3ddf8f2109d0f05266a816ce",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/netbase",
+      "path": "status/netbase",
+      "layerSha256": "c172f21841dff4c8cf45cde46589c1c2616cefe7e819965e92e6d3475c428aa0",
+      "bytes": 484,
+      "sha256": "1b44f4feb536c195a150c6b83001dfa016cb40f35ed1a5972248eddd8677a254",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/tzdata",
+      "path": "status/tzdata",
+      "layerSha256": "218cf840d0d95a86231eb9d33d26ac8a520a4299c6096cb70a0c2fb2a87c9e0a",
+      "bytes": 764,
+      "sha256": "8b6fc5270988a7e726b25f4951d357375a93f33f56d9f4662bc1888b214d5c61",
+      "imageMode": 420
+    },
+    {
+      "imagePath": "var/lib/dpkg/status.d/tzdata-legacy",
+      "path": "status/tzdata-legacy",
+      "layerSha256": "f6069939f718601b38d25ec5ed5631ed047e4da24acec2e252f8f29d251be718",
+      "bytes": 1408,
+      "sha256": "2bad0a0af92242f51a04b52f78d9dde32049b0e37ca525e2c6f3bd7282c8f647",
+      "imageMode": 420
+    }
+  ]
+}

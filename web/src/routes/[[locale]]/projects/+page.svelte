@@ -15,7 +15,7 @@
   <main id="main" class="container projects-page">
     <div class="opening"><h1>{data.title}</h1><p>{data.text.pageIntro}</p></div>
     <div data-client-portfolio data-featured-portfolio>
-      <nav class="project-index" aria-label={data.projectIndex}><a href="#open-title">{data.text.tools}</a><a href="#family-title">{data.text.work}</a><a href="#research">{data.researchTitle}</a></nav>
+      <nav class="project-index" aria-label={data.projectIndex}><a href="#open-title">{data.text.tools}</a><a href="#family-title">{data.text.work}</a></nav>
       <section aria-labelledby="open-title">
         <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span><span class="legacy-anchor" id="more-public-products" aria-hidden="true"></span>
         <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">01</p><h2 id="open-title">{data.text.tools}</h2><p>{data.text.toolsIntro}</p><p class="checked">{data.text.checked}: <time datetime={data.checkedAt}>{data.checkedAt.replace("T", " ").replace("Z", " UTC")}</time></p></div><enhanced:img src="../../../../../src/assets/editorial/workflows.webp?w=440" alt="" /></div>
@@ -53,10 +53,11 @@
         <article data-hosting-project class="hosting"><span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span><h3>{t.platformTitle}</h3><p>{t.platformText}</p></article>
       </section>
       <aside id="engineering-checks" class="quality-bridge"><p>{t.qualityBridge}</p><a href={`${home}#quality`}>{t.qualityAction}<span aria-hidden="true">↗</span></a></aside>
-      <section id="research" aria-labelledby="research-title">
-        <div class="research-heading"><div class="section-heading"><p class="eyebrow">{t.researchLabel}</p><h2 id="research-title">{data.researchTitle}</h2><p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{data.thesis}<span aria-hidden="true">↗</span></a></div><enhanced:img src="../../../../../src/assets/editorial/data-research.webp?w=480;760" alt="" /></div>
-        <details><summary>{t.details}</summary><div class="research-detail" lang="en"><h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p><h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><enhanced:img src="../../../../../src/assets/data-space-as-a-data-mesh.png?w=480;960" alt="Data Space as a Data Mesh" /></div></details>
-      </section>
+      <details id="research"><summary>{data.text.earlierLinks}</summary><div class="research-detail">
+        <span class="legacy-anchor" id="research-title" aria-hidden="true"></span>
+        <p>{t.researchText}</p><a href="/pdfs/thesis.pdf">{data.thesis}<span aria-hidden="true">↗</span></a>
+        <div lang="en"><h3 id="-data-product-">{t.researchBackground}</h3><p>{t.researchBackgroundText}</p><h3 id="-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces">{t.researchDiagram}</h3><enhanced:img src="../../../../../src/assets/data-space-as-a-data-mesh.png?w=480;960" alt="Data Space as a Data Mesh" /></div>
+      </div></details>
     </div>
     <CustomerScope locale={data.locale} href={`${home}#contact`} label={data.contact} />
   </main>
@@ -74,7 +75,7 @@
   h2 { font-size: clamp(1.8rem, 3vw, 2.65rem); } h3 { font-size: 1.3rem; }
   .section-heading > p:not(.eyebrow) { margin-top: 1rem; }
   .catalogue-heading { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 3rem; align-items: center; }
-  .catalogue-heading :global(img), .research-heading :global(img) { width: 100%; height: auto; border-radius: 8px; }
+  .catalogue-heading :global(img) { width: 100%; height: auto; border-radius: 8px; }
   .collection { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 3rem; margin-top: 2.5rem; }
   .product { min-width: 0; padding-block: 1.5rem; border-top: 1px solid var(--line); }
   .product .number { display: block; font-size: .8rem; color: var(--accent); margin-bottom: .6rem; }
@@ -97,7 +98,6 @@
   .scope { margin-top: 1rem; max-width: 900px; }
   .quality-bridge { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem 2rem; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 4rem; scroll-margin-top: 2rem; }
   .quality-bridge p { color: var(--ink); font-weight: 600; }
-  .research-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: center; }
   details { margin-top: 2rem; border-block: 1px solid var(--line); }
   summary { min-height: 44px; padding-block: 1rem; cursor: pointer; font-weight: 600; }
   summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
@@ -115,6 +115,6 @@
   .hosting { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 3rem; margin-top: 2.5rem; padding: 1.5rem 0 0; border-top: 1px solid var(--line); }
   .hosting .legacy-anchor { grid-column: 1 / -1; }
   .hosting h3 { font-size: 1.15rem; } .hosting p { font-size: .9rem; }
-  @media (max-width: 760px) { .projects-page { padding-block: 2.5rem; } section { padding-block: 2.5rem; } .collection, .featured, .research-heading, .hosting { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading :global(picture), .catalogue-heading :global(img) { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 2rem; padding-block: 2rem; } .ksail-story { padding-left: 1.25rem; } }
+  @media (max-width: 760px) { .projects-page { padding-block: 2.5rem; } section { padding-block: 2.5rem; } .collection, .featured, .hosting { grid-template-columns: 1fr; gap: 1.5rem; } .catalogue-heading { grid-template-columns: 1fr; gap: 0; } .catalogue-heading :global(picture), .catalogue-heading :global(img) { display: none; } .quality-bridge { padding: 1rem; margin-bottom: 2.5rem; } .collection { gap: 0; } .featured { gap: 2rem; padding-block: 2rem; } .ksail-story { padding-left: 1.25rem; } }
   @media (max-width: 520px) { .work-example { grid-template-columns: minmax(0, 1fr) 96px; gap: 0 1rem; } .work-example h3 { font-size: 1.1rem; } .work-preview > span { font-size: .7rem; } }
 </style>

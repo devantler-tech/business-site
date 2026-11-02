@@ -5,7 +5,7 @@ import { parse } from "parse5";
 import { readingFingerprint } from "./journal-reading.mjs";
 
 const root = new URL("../../",import.meta.url);
-const generated = new URL(".astro/public-discovery.json",root);
+const generated = new URL(".generated/public-discovery.json",root);
 /** @param {string|Buffer} bytes */
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 /** @param {import('parse5').DefaultTreeAdapterMap['node']} node @returns {import('parse5').DefaultTreeAdapterMap['element'][]} */
@@ -53,17 +53,17 @@ function validate(value) {
   return value;
 }
 
-/** Capture the freshly generated CV and the exact maintained public dependencies, not all dist/public. */
+/** Capture the freshly generated CV and the exact maintained public dependencies, not all .generated/content/public. */
 export function capturePublicDiscoveryReference() {
   const fingerprint = readingFingerprint();
-  assert.equal(readFileSync(new URL(".astro/journal-reading-input.txt",root),"utf8"),fingerprint,"Public discovery source changed during rendering");
-  const images = all(parse(artifactBytes(new URL("dist/index.html",root)).toString())).filter(node => node.tagName === "meta" && attr(node,"property") === "og:image");
+  assert.equal(readFileSync(new URL(".generated/journal-reading-input.txt",root),"utf8"),fingerprint,"Public discovery source changed during rendering");
+  const images = all(parse(artifactBytes(new URL(".generated/content/index.html",root)).toString())).filter(node => node.tagName === "meta" && attr(node,"property") === "og:image");
   assert.equal(images.length,1,"Public discovery requires one authoritative sharing image");
   const sharingImage = attr(images[0],"content");
   assert.match(sharingImage ?? "",/^https:\/\/devantler\.tech\/_astro\/profile\.[A-Za-z0-9_-]+\.webp$/,"Public discovery sharing image must remain local");
   const paths = ["pdfs/nikolai-emil-damm-cv.pdf","pdfs/thesis.pdf","favicon.png","robots.txt",new URL(/** @type {string} */ (sharingImage)).pathname.slice(1)];
   const assets = paths.map(filename => {
-    const file = new URL(`dist/${filename}`,root);
+    const file = new URL(`.generated/content/${filename}`,root);
     const bytes = artifactBytes(file);
     return {filename,source:bytes.toString("base64"),digest:digest(bytes)};
   });

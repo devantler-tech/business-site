@@ -3,6 +3,7 @@
   import { getContext } from "svelte";
   import { businessFrameContext, type BusinessFrame } from "./business-frame";
   import themeScript from "../../../src/components/business/theme.js?url";
+  import favicon from "../../../public/favicon.png?url";
   import sharingImage from "virtual:business-sharing";
   let {
     locale,
@@ -67,7 +68,7 @@
   <link rel="alternate" hreflang="en" href={`https://devantler.tech/${suffix}`} />
   {#if !englishOnly}<link rel="alternate" hreflang="da" href={`https://devantler.tech/da/${suffix}`} />{/if}
   <link rel="alternate" hreflang="x-default" href={`https://devantler.tech/${suffix}`} />
-  <link rel="sitemap" href="/sitemap-index.xml" /><link rel="icon" href="/favicon.png" />
+  <link rel="sitemap" href="/sitemap-index.xml" /><link rel="icon" type="image/png" href={favicon} />
   <script src={themeScript}></script>
 </svelte:head>
 

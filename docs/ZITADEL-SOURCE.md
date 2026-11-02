@@ -2,6 +2,7 @@
 
 The explicit offline preparer produces the frozen ZITADEL 4.20.0 source without
 the unadmitted Ailerons font assets or the JSONPath machine-ID metadata selector.
+It also applies the exact pinned security dependency updates described below.
 It does not fetch, compile, publish an image,
 configure an account or activate the portal. Ordinary builds never invoke it.
 
@@ -32,7 +33,7 @@ The result contains:
 
 - `source/`: committed source with two font files, two font-face sources and their
   two imports removed, plus the narrowly modified machine-ID function described
-  below. Every unrelated source file is preserved, including the
+  below, and the two pinned dependency metadata files. Every unrelated source file is preserved, including the
   native API, protobuf, assets, statik, console and pack build graph.
 - `source-preparation.json`: the upstream revision, preparation recipe/input
   hashes and exact modified paths. Overall license closure and image admission
@@ -54,6 +55,121 @@ The exact removed font bytes are identified in
 An applicable distribution grant was not established for them. This is an
 admission decision, not a finding of infringement.
 
+The `native-neutral-provider-icons-v1` profile retains the provider names, native
+authentication/registration links and form/event bindings. It replaces decoration
+in eleven Console HTML, two Login HTML and five SCSS consumers with the existing
+Line Awesome and Login arrow glyphs, then removes exactly nine Console and seven
+Login image paths. No artwork, font, glyph, dependency or licence grant is added.
+The thirty-four original inputs and all eighteen transformed consumers have fixed
+identities. The four removed Apple SVGs are the only executable paths subtracted
+from the complete surviving-mode comparison.
+
+The native slots are 28 pixels in the table, 36 in the chooser/editors and 46 in
+Login/registration with a centered 25-pixel glyph. Decoration is hidden from
+assistive technology and adds no focus stop. Surviving ZITADEL-brand dark/light
+rules remain active. The complete copied-asset census rejects provider images
+and stale URLs in either Console output, while the existing statik decoder
+checks the actual Login archive and registration template. These observations
+are bound across compilation; they do not enable social federation or admit the
+remaining branding/distribution under #384/#308.
+
+The separate `native-neutral-smtp-icons-v1` profile uses the existing Line Awesome
+envelope in the SMTP chooser and all nine preset editors. Fourteen original inputs
+are fixed independently: five HTML/SCSS/settings consumers and nine retired images.
+The chooser retains its ten labelled native links, including generic SMTP. All
+connection defaults remain unchanged, including Amazon's native route key and
+Outlook's OAuth settings. The decorative slots remain 36 and 48 pixels.
+The complete source, both generated Console copies and every compiler-selected
+embedded path reject retired SMTP images; this check precedes catalogue filtering.
+The copied-asset catalogue still has 1,858 originals and 3,716 outputs, with a
+separate five-consumer SMTP binding alongside the unchanged eighteen IdP consumers.
+
+The separate `native-neutral-mdi-icons-v1` profile binds the entire frozen
+27-file MDI family. It retains 25 standard graphics unchanged and their immutable
+primary origins, author attributions, native wrapper identities and full original
+Pictogrammers/Google Mail terms. The 24 Pictogrammers-derived native wrappers
+remain distinct from their primary SVG byte identities; the Mail SVG matches its
+primary bytes. A primary hash is provenance, not a claim that this build fetched
+or compiled a second primary tree. The complete native originals are retained in
+the prepared-source offer and checked against both generated Console copies and
+the full compiler stream. No trademark endorsement or new own-code grant follows.
+
+Only OpenID/JWT decoration is replaced, using the already-admitted arrow/key
+font glyphs in five native consumers and six visible slots. Their labels, native
+links, forms and event bindings remain unchanged; the inert JWT attribute on the
+LDAP text icon is removed without changing its visible LDAP control. The two
+unresolved SVGs and their app registrations are removed. Slots are 28 pixels in
+the table, 36 in the chooser and 48 in each native protocol editor. Missing,
+changed, linked or extra MDI inputs/copies and retired escaped references refuse.
+The original 1,858/3,716 catalogue remains pinned; this extension adds 25 retained
+originals, 50 generated copies and 25 actual Console embeds. The complete copied
+inventory therefore observes 1,883/3,766/1,883, with 26 unique final consumers
+across the overlapping provider, SMTP and MDI profiles.
+
+The native worker additionally requires eight MDI cases: chooser, two fictional
+configured table rows and both unsaved protocol editors in each theme. OIDC/JWT
+fixture configurations are never linked to the Login policy; the original exact
+two-provider Login/registration proof remains separate. These cases share the
+existing 120-second presentation phase and five-minute wrapper. Their native
+rendering and screenshot bindings must pass; synthetic unit inputs are separate.
+Source/image admission and remaining graphics families stay open under
+#384/#308.
+
+The separate `native-neutral-framework-icons-v1` profile checks 52 original
+Git inputs, retires all 44 technology images and updates eight consumers. It
+removes only the 39 image properties from `apps/docs/frameworks.json`: all 35
+entries, 24 selectable IDs, descriptions, documentation links and client/SDK
+flags remain in their original order. The three TypeScript mapping/filter paths
+retain their native behavior. Quickstart cards, the autocomplete panel and the
+selected-framework card reuse the existing Line Awesome code glyph, with visible
+names; Quickstart also exposes the name as its native link label. No new artwork,
+font, renderer or framework catalogue is introduced.
+
+The native image-copy task clears obsolete docs outputs without copying from
+the retired technology directory. This preserves the Angular build sequence
+when a source archive omits that empty directory. The real native package command
+is exercised from the directory-free restored layout.
+
+The complete copied-asset observation binds all eight changed files, refuses
+technology images in the original source or either generated copy, and examines
+every compiler package before selecting the unchanged catalogue. Escaped bundle
+references also refuse. The 1,883/3,766/1,883 retained inventory stays unchanged;
+the combined profiles now bind 34 distinct consumers. Complete source preparation
+contains 9,528 files and 261,324,795 bytes after native API serialization, while
+the 58-record, 40-tool and 45-notice boundaries remain intact.
+
+Six additional native browser cases observe Quickstart, the Angular selection
+card and filtered autocomplete in light and dark themes. They run in a separate
+60-second phase before the unchanged provider phase, using the same fictional
+operator and restricted image. Native Tab/Enter follows the Angular Quickstart
+destination; native ArrowDown/Enter selects `angular` in the existing combobox
+without creating a project or application. The popup is selected through the
+native combobox `aria-controls` relationship, supporting the locked Angular
+inline popover and its global-overlay fallback. Finite page/popup transitions
+must settle before capture; a failed framework observation retains only its
+fictional fixture screenshot and fixed diagnostic fields. Loaded glyphs, visible
+names, settled themes, original controls, confined resources and all six source-bound PNGs are
+required. Synthetic observer controls do not replace those real visits. No
+federation, production TLS, invitation, MFA or portal-activation claim follows.
+
+The native browser/service gate runs immediately after the clean build and its
+executable scan, before the independent retained-source rebuild and complete
+network-denied replay. Those later gates and their receipt checks remain
+mandatory for CI success; early browser failure never implies replay success.
+
+The native fictional-browser worker requires twenty additional SMTP observations:
+the chooser and nine unsaved editors in light and dark themes. It checks native
+Enter navigation, rendered envelope fonts, labels, defaults, confined resources
+and source-bound screenshots. It neither saves a configuration nor sends mail.
+Both Console observation scripts also require the frozen fixture's computed page
+background to match the requested theme with no pending or running transition.
+The normal readiness poll waits for the native animation; it does not alter CSS
+or disable animations to obtain a screenshot.
+These cases share the existing 120-second presentation phase; the 100-second
+operator journey retains its phase budget within the five-minute wrapper. Unit observations are
+not native rendering proof. A real native build/browser run must pass before
+readiness; no source transform grants image or portal admission.
+
 The `machine-id-no-jsonpath-v1` preparation profile removes the only linked use of
 `github.com/jarcoal/jpath`. The exact selected module archive did not establish an
 applicable distribution grant. This is an unresolved rights question, not a claim
@@ -64,12 +180,42 @@ back to a different machine ID. Metadata responses without a selector retain the
 exact raw bytes; hostname, private-IP and configured machine-ID behavior is unchanged.
 
 The transform checks the complete original and resulting `internal/id/sonyflake.go`
-bytes. Upstream `go.mod` and `go.sum` remain unchanged; a declaration there is not
+bytes. The JSONPath module remains declared in `go.mod` and `go.sum`; a declaration there is not
 evidence of linkage. The actual Linux compiler graph and final binary build metadata
 must both exclude the module, including replacements, before a success receipt.
 Reintroducing JSONPath support requires a separately admitted implementation and
 compatibility validation, not removal of these exclusion checks. This restriction
 does not change the portal → customer Dex → ZITADEL login architecture.
+
+The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1` dependency profile applies the exact native Go
+1.26.10 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
+`gorilla/csrf` 1.7.3: three module lines and six added checksums. Complete original and resulting hashes are checked
+offline. The preparer runs only the maintained standard-library Go decoration
+transform with `GOTOOLCHAIN=local`; it never downloads a compiler or executes
+upstream Go source. Other dependency selections,
+the compiler and the upstream 4096-bit RSA key limit are preserved. Original unused
+checksum entries remain as produced by the native updates. The selected modules,
+compiler metadata and notice catalogue must agree on all three patched versions. Dirty input
+checkout metadata is ignored and preserved, just like other working-copy files.
+The login interceptor explicitly marks requests as plaintext only when the existing
+external TLS setting is disabled. The patched library's HTTPS Origin/Referer and
+token checks remain active for TLS-facing deployments; cross-origin and missing-token
+requests are rejected in either mode.
+
+Native CI builds pinned `govulncheck` 1.8.0 with the separate verifier compiler,
+then analyzes the actual frozen Linux executable in binary mode against
+`https://vuln.go.dev`. Findings and analysis errors fail the job before later
+image/replay proof; the ordinary text diagnostic is retained in the existing
+compact evidence. Do not use JSON mode as a success gate or suppress a finding.
+Standard output and standard error share that retained report, including early
+scanner errors; redirection preserves the checker's original exit status.
+The actual packaged executable preserves function symbols and omits only DWARF
+debug data. A complete native symbol read must identify its main entrypoint before
+the checker runs; empty, failed or partial symbol reads cannot produce a build receipt.
+Binary symbol analysis is scoped to the executable's build configuration and
+cannot establish exploitability, complete source reachability or admission;
+the selected-version checks remain independent. See the
+[official checker documentation](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
 
 Retain the upstream root and component licenses and this modification recipe in
 corresponding source. Before distributing an image, #308 still requires a clean
@@ -162,7 +308,7 @@ All input identities and the four embedded paths are inspectable there. Once
 the build has completed, repeat its inventory without changing that output:
 
 ```sh
-go run scripts/zitadel-login-icons.go --inventory \
+go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go --inventory \
   --build "$work/linux-build" --notices third_party/zitadel-login-icons
 ```
 
@@ -172,13 +318,145 @@ substituted, linked, malformed or incomplete selected evidence fails with no
 success inventory. The ordinary website build never invokes this tool.
 
 ```sh
-(cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
+(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)
 ```
 
 These local tests use frozen public font/vector fixtures, real ZIP/Go-syntax
 decoding and adverse inputs. They do not replace the separate clean Linux build
 or actual post-merge inventory collection. The interface and limits are recorded
 in [ADR 0022](adr/0022-output-bound-login-icon-inventory.md).
+
+## Same-build text-font attribution
+
+The same entrypoint's explicit `--text-fonts` mode retains the frozen 54 text
+fonts: twenty Lato, twelve Roboto, four PT Sans and eighteen Raleway files.
+`third_party/zitadel-text-fonts/catalogue.json` binds each original upstream Git
+blob, complete file digest and expected generated path. Its output set was
+collected from the actual native build at source `817d236be97217caac6abc6f4a8fdf896185699f`,
+CI `40480523774`, artifact `12725125374`; the collector rechecks actual bytes on
+every build. The catalogue is independently bound to upstream commit
+`8afa5dd37a8e723efb9eace8d09fd5c1cccef694`, not to current replacement fonts.
+
+The parser retains all five selected Windows Unicode BMP, en-US records
+(platform 3, encoding 1, language `0x0409`, name IDs 0, 3, 5, 13 and 14), including
+full copyright, reserved-name, identity/version and license strings. Each string
+keeps its original byte span and SHA-256. This is explicitly English metadata,
+not an inventory of every language or a font-rendering validation. Duplicate or
+overlapping tables, ambiguous records, incomplete strings and invalid UTF-16
+fail. Text is never truncated to a display excerpt.
+
+The retained raw notice includes all original declarations, the exact Lato
+`OFL.txt` from the prepared source, and the complete Apache License 2.0 text.
+The original Lato document's copyright header stays labelled as Lato's; each
+other font retains its own embedded copyright and reserved-name declarations.
+The selected older Roboto files declare Apache-2.0. The twelve declarations
+must not be replaced by the terms of a contemporary Roboto distribution.
+
+Before compilation, `--snapshot` checks the actual source fonts, 84 selected
+copies, decoded Login V1 archive, both compiler package selections, preparation,
+recipe, verifier sources and retained terms. After compilation, `--inventory`
+requires that same snapshot, the generated manifest and the final binary's
+receipt. The 44 Login resources must occur byte for byte in the decoded archive;
+the twenty embedded Console text-font paths must be selected by the compiler.
+The other twenty Console generated copies must also match. Thirty-two existing
+Console icon-font copies are separately byte-bound to close the observed font
+set; their attribution/admission remains a distinct review under #308.
+
+`text-font-notices.txt` and `text-font-notices-inventory.json` enter the closed
+image package. The inventory binds the raw text, exact binary and final receipt;
+the retained-input replay receipt binds that inventory. The two verifier files,
+catalogue and Apache text are literal corresponding-source records. The original
+Lato OFL is already part of the complete prepared source.
+
+```sh
+go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go \
+  --text-fonts --verify --build /private/build \
+  --recipe "$PWD/scripts/build-zitadel-linux.sh" --notices "$PWD/third_party/zitadel-text-fonts"
+```
+
+Verification is read-only and requires completed evidence. No-argument operation
+and normal website builds remain inert. Fixture controls cover failures;
+hosted native output supplies actual build evidence. This increment preserves
+`licenseClosure: unknown`, `imageAdmission: unknown` and `reproducible: false`.
+It does not establish a distribution-wide grant, public source retrieval,
+signed image release, production federation or portal activation. See
+[ADR 0025](adr/0025-output-bound-text-font-notices.md).
+
+## Copied Console icons, flags and translations
+
+The explicit `--copied-assets` companion retains the complete 1,561-member Line
+Awesome subtree, four Material Icons formats, 271 flag SVGs and 22 translation
+JSON files. Its frozen catalogue closes 1,858 original identities, 3,716 generated paths and 1,858
+selected Console embeds. This includes the 32 icon-font outputs that the
+text-font collector records separately; combining the inventories preserves
+their existing byte identities and adds their original attribution.
+
+The three original grants are retained verbatim: the complete Icons8 license
+with MIT selected, Material Icons' original Apache-2.0 text, and the flag-icons
+MIT text and copyright. Both original Line Awesome CSS files are retained
+beside their differing frozen ZITADEL identities. Available selected copyright,
+identity, version and license name records from the four TTF inputs retain
+their source spans and complete strings; absent icon-font records are not
+invented. The five-record requirement for the separate text-font profile stays
+unchanged. See [the frozen provenance](../third_party/zitadel-copied-assets/README.md).
+
+The translations contribute 3,281,240 unchanged original bytes. Each strict UTF-8
+JSON object has a frozen Git-blob and byte identity, two exact generated copies
+and a selected Console embed. The complete frozen source LICENSE, LICENSING.md
+and CONTRIBUTING.md are retained and compared with the prepared source. These
+describe the source's default license, exceptions and contribution context;
+they are not independent certification of every contributor's rights. The
+complete JSON bodies stay in corresponding source, rather than notice text.
+
+Before compilation, the snapshot checks the actual connected pnpm aliases,
+exact package metadata, frozen lock, original license and asset bytes, paired
+generated files and compiler selection. Package links allow only the selected
+single-hop pnpm destinations, and are checked again after observation. Full
+original-archive capture and integrity verification remain the existing
+selected-pnpm source adapter's later boundary; this collector does not replace
+that adapter or reinterpret its archives.
+
+After compilation, capture requires the unchanged snapshot and generated
+manifest, and independently repeats the text-font collector's completed
+preparation/toolchain/recipe/binary/receipt join. The retained font inventory
+and notice must also agree exactly. Pending-only capture creates the copied
+notice exclusively. Completed `--verify` compares both retained notice and
+inventory, emits nothing on failure, and makes no repair.
+
+```sh
+go run scripts/zitadel-login-icons.go scripts/zitadel-text-fonts.go scripts/zitadel-copied-assets.go \
+  --copied-assets --verify --build /private/build \
+  --recipe "$PWD/scripts/build-zitadel-linux.sh" --notices "$PWD/third_party/zitadel-copied-assets"
+```
+
+The copied notice and inventory enter the closed 17-file restricted image
+payload; the retained-input replay receipt binds the new inventory. The helper,
+catalogue, three grants, two original CSS files and three source contexts are ten of the 28 literal
+source/build records. The complete prepared upstream profile stays unchanged.
+Fixture controls and a full frozen-byte/compiler-record replay are diagnostic
+checks; only the hosted build observes actual compilation and native execution.
+
+The separate native-graphics observation closes the remaining 27 unchanged
+graphics: 19 Console source identities with 38 exact copies and 19 compiler
+embeds, and eight Login theme identities with exact decoded statik members.
+It preserves complete frozen root/scope/contribution and trademark-policy
+context, plus the two historical root license originals for the three unchanged
+utility PNGs. See the provenance README above for immutable revision details.
+The `nativeGraphics` inventory is separate from both the existing 1,883-member
+Console catalogue/MDI set and the Login font inventory's MIT label. All graphic
+formats throughout Console asset inputs and output trees are checked; the
+selected Login theme source and decoded member sets are closed too.
+
+No prepared upstream bytes, branding choices, modification date or profile
+change. The notice capsule grows from 43 to 45 originals while 58 build records,
+40 tool-source members and four restoration targets stay unchanged. The same
+47 native browser cases remain applicable; this evidence-only increment does
+not claim additional custom-branding, nil-policy or failed-fetch browser cases.
+
+This scope does not clear complete distribution
+licensing, durable public corresponding-source retrieval, signed image release,
+production federation or portal activation. `licenseClosure`, `imageAdmission`
+and reproducibility remain unchanged. See [ADR 0026](adr/0026-output-bound-copied-console-assets.md).
 
 ## Same-build Angular notice capture
 
@@ -441,28 +719,57 @@ These operations do not install dependencies or run the upstream build. A
 prepared-source round trip establishes only that source snapshot's correspondence.
 The Linux builder's optional `--capture-source` flag invokes `--capture-build`
 immediately before installation. It retains the preparation receipt, original and
-serialized API configuration, seven-input hash record, five exact recipes/input
-files, including the console download helper, build guide and a dated modification
-record. That date belongs to the frozen
+serialized API configuration, seven-input hash record, existing third-party
+catalogues and terms, and a dated modification record. It also retains every one
+of the 37 approved authored paths and three scoped terms documents listed in
+`third_party/zitadel-build-tools/scope.json`. Twelve existing aliases are reused.
+The Console supplement catalogue and historical public-suffix original are also
+retained at their literal paths. The closed inventory contains 58 records within
+the unchanged 64-record bound. That date belongs to the frozen
 modification set, not capture time; update it when the declared modifications change.
 Tests recapture identical inputs two simulated days apart to preserve stable seals.
 A complete file manifest
-keeps those fourteen records separate from the upstream source. The completed build
+keeps those fifty-eight records separate from the upstream source. The completed build
 receipt binds the preserved source/archive identities to its actual binary and
-recipe, after a full post-build readback. Default invocation omits this capture.
+recipe, after a full post-build readback. The two notice originals remain inert
+records; retaining them does not assemble the complete 45-input notice offer or
+establish release admission. Default invocation omits this capture.
 CI explicitly enables it and unpacks the actual archive into a new reservation.
 Only the compact manifest, round-trip result and completed build receipt enter
 diagnostics; the source archive, recipe bodies and executable remain excluded.
 
 `--restore-build <snapshot> <manifest-sha256> <new-build-root>` restores the
 checked source files and their executable modes into the original native layout.
-It retains all fourteen literal records and places only the four fixed build inputs at
+It retains all fifty-eight literal records and places only the four fixed build inputs at
 their original locations. It does not execute retained recipes or record-supplied
 paths. Existing output, an output inside the snapshot, incomplete records and
 changed, missing or extra bytes fail. The snapshot is rechecked after copying.
 This operation authenticates the externally sealed file set, not an arbitrary
 snapshot's suitability for the frozen build; empty directories are not source
 members, while valid empty files remain preserved.
+
+`--verify-build-records <snapshot> <manifest-sha256> <repository>` independently
+rechecks the complete sealed snapshot and the current repository bodies selected
+by the literal capture map. Missing, linked, unsupported-mode or changed records
+fail without a success result. Both fresh capture and prepared/native replay
+perform this readback before completing their build receipt. Retained records
+remain 0644 audit data: no script, Dockerfile or helper module is executed or
+restored over the upstream service module. Only the four existing fixed native
+inputs receive additional restoration destinations. The scoped grant is unchanged;
+this capture does not complete bootstrap-dependency or image admission.
+
+`--restore-tools <snapshot> <manifest-sha256> <new-tool-source-root>` restores
+the 37 approved authored files and three scoped terms documents at their original
+paths, including `server/go.mod`, `server/go.sum` and both verifier command
+directories. Its fresh private root is separate from the sealed snapshot and
+the upstream service module. All restored files remain inert 0644 data.
+`--verify-tools <snapshot> <manifest-sha256> <tool-source-root>` rechecks that exact
+closed layout, complete bodies, canonical modes and private root. Missing, extra,
+linked, changed or executable files fail without a successful receipt. Existing
+outputs are preserved, and failed restoration removes only its own reservation.
+The receipt binds the upstream source seal and complete restored member digest;
+`goVerifiersRebuilt` remains false. These operations do not acquire dependencies,
+run a compiler or change the native replay's executable inputs.
 
 The Linux entrypoint also accepts the mutually exclusive
 `--build --prepared-source <snapshot> --prepared-sha256 <manifest-sha256>
@@ -639,7 +946,9 @@ The capsule is rechecked after console generation; successful ordered request
 records, source manifest, helper source, compiled adapter, launcher and immutable installer
 identities are bound to the completed build receipt. The helper source is retained
 as a literal source/build record. The native pnpm adapter and both SDK manifests
-are three additional records, making fourteen in total.
+are three of the fifty-eight literal records. The text-font entrypoint, its
+companion, frozen catalogue and Apache text are four further records; the
+original Lato OFL is already retained in the complete prepared source.
 
 ### Selected pnpm originals and native cache reconstruction
 
@@ -669,6 +978,138 @@ network-denied native compilation. Both `dependencyInputsCaptured` and
 native consumption receipts, but uploads only compact manifests and diagnostics;
 the original binaries and archives remain excluded. Full replay remains #343.
 
+## Complete native retained-input replay
+
+The explicit replay command assembles this build's prepared source, selected
+service and generator Go originals, authenticated graph metadata, pnpm originals,
+schema originals, console originals, notice originals and the fixed source-verifier bootstrap,
+plus their original build receipt. It
+selects those fixed components rather than archiving the build directory. Prior
+compiled output, installed workspaces, side-effect caches and ambient stores are
+excluded. The same closed archive engine uses a distinct `retained-build-inputs`
+profile, preserving private/read-only capsule modes. That transport profile
+cannot declare prepared build records or enter prepared-source restoration.
+External manifest/archive seals bind the actual pack/unpack round trip.
+
+```sh
+bash scripts/replay-zitadel-inputs.sh \
+  --build /physical/owned/original-build \
+  --module-source-verifier /physical/owned/zitadel-module-sources \
+  --bsr-source-verifier /physical/owned/zitadel-bsr-sources \
+  --verifier-go /physical/original-go1.27.3/bin/go \
+  --output /physical/owned/new-offline-replay
+```
+
+The existing builder's exclusive `--retained-inputs`/`--retained-sha256` mode
+reuses prepared-source and recipe admission. The original receipt binds the
+separately supplied verifier executables and the compiler digest observed before
+their original builds; command/compiler metadata and byte digests must agree.
+Original executables authenticate bootstrap data, while the service replay uses
+only reconstructed executables. Maintained native verifiers authenticate every
+capsule and its source/recipe joins before reconstruction. Go receives original
+ZIP/mod/info and signed checksum records, never extracted trees or trusted ZIP
+hash markers. pnpm receives original archives and verified native indexes, never
+an installed workspace. Schema restoration receives the checked original cache.
+Console installation still consumes the retained three original downloads.
+
+The outer command checks an independently reachable network control, creates a
+new network namespace and verifies different namespace identity, the original
+nonroot UID/GID, no new privileges and zero effective/bounding capabilities.
+It also observes the network control fail there. The complete existing native
+pipeline first restores the exact approved tool-source layout and checksum-pinned
+x/mod ZIP/mod/info into fresh private caches. The supplied original Go 1.27.3
+compiler rebuilds the two fixed commands with identical flags. Their successful
+native package compositions and executable bytes must equal the original build.
+A separate empty-cache control must refuse acquisition. The reconstructed module
+verifier rechecks the capsule; only these rebuilt binaries then enter service
+replay. Source, bootstrap, compiler and binary identities are rechecked at the
+final boundary, with a separate reconstruction receipt.
+The complete existing native
+install, generation, console, service compilation and notice pipeline then runs
+inside that namespace with fresh owned compiler/acquisition stores and empty
+ambient configuration. pnpm explicitly uses offline installation, Go remote
+proxy/VCS acquisition is disabled and its public checksum verification remains
+enabled. There is no fallback to the network or an old compiled cache.
+
+Pinned Go installs still query module deprecation metadata. The restored native
+file-only proxy supplies exact verified ZIP/mod/info bytes and deterministic
+lists of complete generator-source versions with native checksum evidence,
+separately from writable acquisition caches. Graph-only metadata is retained for
+exact graph reads and is not advertised as an install candidate. Go keeps
+its native deprecation/retraction ordering and checksum checks. The resolver scope
+is the retained snapshot, not authenticated original/current upstream latest;
+no `@latest` response or timestamp-based authority is synthesized.
+
+Before the existing `go mod verify`, native Go consumes the exact selected
+service modules against the prepared project's unchanged frozen checksums. The
+complete returned identities/checksums must match the retained selection; Go
+creates its own derived cache markers. No `.ziphash` is copied or synthesized.
+This project-checksum read is separate from generator reads outside the project,
+which require their retained signed-log evidence.
+
+Both notice phases explicitly select the reconstructed `go-input-native/go-modules`
+cache with `--retained-go-cache`; ordinary builds retain their `go-modules` layout.
+Neither mode accepts an arbitrary cache root or falls back to the other layout.
+Module/package paths, checksums, complete terms and origin inputs remain checked.
+The retained marker enters the final build receipt before either notice inventory
+binds its bytes; completion only renames that unchanged receipt.
+
+Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities
+and the caller-selected original Go 1.27.3 distribution remain explicit build-tool
+boundaries. This does not claim a hermetic OS/toolchain distribution.
+The separate `selected-pnpm-sdk-bootstrap` component retains the unchanged SDK
+lock's 132 original archives, source/recipe/tool bindings, complete installed-file
+observations and supplemental terms. Built-in verification authenticates these
+inputs before native npm seeds a fresh cache from local originals and reconstructs
+the SDK offline. No old `node_modules` or npm cache is copied. Empty and partial
+cache controls must fail after the positive reconstruction succeeds.
+The retained native caller receives `--pnpm-source-sdk` pointing at this newly
+reconstructed SDK. Its complete source, installation and original capsule are
+rechecked before and after native operations. Six actual operations surround the
+same native build: restore, inspect, verify, recapture, verify and restore. Recapture
+uses only authenticated original archives through the existing capture callback.
+The caller source root has forty members, the build inventory has 58 records,
+source restoration has four targets and the notice capsule holds 45 originals.
+The separate SDK component adds to none of these sets. Its receipts remain scoped; complete offline replay is asserted only by the
+existing restricted caller after every build and notice check passes.
+Notice inputs use the separate `identity-notice-originals-v1` capsule. Its closed
+45-file plan retains original notices, attributions, catalogues, the historical
+public-suffix source and copied CSS. The five guidance READMEs and three authored
+tool-grant documents are outside that plan. It preserves the existing 58 build
+records and independently joins thirteen original-input records; it does not
+enlarge the source-restoration targets or the authored-code licence grant.
+
+Capture binds the capsule to the already sealed source snapshot, prepared
+profile and native recipe without introducing a cyclic source record. Each
+capture, restore and late readback observes the complete fixed membership,
+original bytes and modes. Raw/restored directories are private. The real replay
+runs the native builder from its authenticated 40-member tool-source layout,
+where none of the five checkout notice directories exists. Every native notice
+collector and both build-record readers consume the restored original root.
+Missing capsules, changed originals or receipt bindings fail before a completed
+receipt; a pristine checkout cannot rescue them. Connected builds separately
+recheck their original checkout so late changes remain refusals. Compact capsule
+manifests and readback summaries are retained as evidence; this mechanism does
+not itself prove native success or legal/source-offer completeness.
+
+The [identity build-tool scope](../third_party/zitadel-build-tools/README.md) grants
+AGPL-3.0-only for its exact authored file list and terms, without licensing the
+remaining application. Check it with `bash scripts/check-zitadel-build-tools-license.sh`.
+The approved tool source and x/mod originals support this verifier reconstruction.
+The approved tool source, scoped terms and selected bootstrap inputs are retained
+and reconstructed through the existing archive owners. Durable source-offer
+assembly and distribution admission remain #308.
+
+Only after successful full native compilation, complete same-build notice
+inventories, source/recipe/toolchain joins and final unchanged-input readback does
+the outer command emit `native-retained-input-replay-v1`, with both whole-build
+proof flags true. Inner component receipts retain their narrower false flags.
+Failures retain private diagnosis and no replay success receipt. CI retains only
+compact manifests, receipts and logs, excluding the full archive, caches and
+service executable. Neither a fixture nor an assembled archive proves native
+success. Reproducible binary equality, image admission, complete license/source
+offering, deployed resource measurements and portal activation remain separate.
+
 ## Local restricted image CLI test
 
 The explicit image test packages the actual successful Linux build and observes
@@ -676,7 +1117,7 @@ its version command inside a restricted container. Run it on native Linux amd64
 with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
 
 ```sh
-go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go \
+go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go \
   --smoke --build "$work/linux-build" --repository "$PWD" \
   --output "$work/local-image-test"
 ```
@@ -684,18 +1125,22 @@ go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go \
 The output must be new and outside both input trees. A parent-directory alias
 does not permit output inside them. No arguments perform no work. Ordinary
 website builds and publishers do not invoke this entrypoint. The selected Linux
-CI job invokes it after its actual native build and retains only the compact
-`image-smoke.json` diagnostic alongside the existing build evidence.
+CI job invokes the stronger `--browser-smoke` profile after its actual native
+build. It retains the existing image/service diagnostics, separate browser
+receipt and binding, and three fictional-fixture screenshots alongside the
+existing build evidence. The CLI-only and HTTP-only profiles remain explicit
+alternatives; neither reports browser acceptance.
 
 The notice collector's read-only `--verify` mode repeats the actual completed
 build capture, compares every retained diagnostic and final inventory, and
 emits the unchanged inventory only when every check passes. It requires the
 final build receipt; pending or ambiguous evidence is refused. The image test
-uses that mode and the existing login-icon verifier before packaging.
+uses that mode, the existing login-icon verifier, read-only text-font verification
+and read-only copied-asset verification before packaging.
 
 The closed context contains the checked executable, unchanged build receipt,
-three notice inventories, five complete retained notice outputs and three
-retained login-icon materials. Its manifest binds all thirteen payload files,
+five notice inventories, seven complete retained notice outputs and three
+retained login-icon materials. Its manifest binds all seventeen payload files,
 sizes, modes and digests. A dedicated Dockerfile uses the existing immutable
 distroless static base and UID/GID 65532. The actual image payload is copied back
 from the owned stopped container and compared with that sealed context; matching
@@ -711,6 +1156,40 @@ container and local image are removed by their inspected, owner-bound immutable
 identities. No tag or container name is overwritten or reclaimed. Cleanup or receipt-write failure
 cannot produce a success diagnostic.
 
+After all requested service/browser probes succeed, the command saves that exact
+image config ID with `docker image save --output` to `candidate-image.tar` in its
+private output directory. It refuses existing destinations, empty/nonregular,
+linked or over-1-GiB files and incomplete reads, then seals its size, SHA-256 and
+read-only mode. It removes the original container/image and confirms that no
+image carrying this invocation's unique ownership label remains, including
+intermediate/dangling images. Only then does it load the archive, inspect the
+same config ID and complete selected configuration, recheck the archive bytes,
+and remove the reloaded owned image. Load output text is never identity proof.
+Any failed export, absence check, reload, readback or cleanup prevents success.
+
+The image inspection also requires `RootFS.type` to be `layers`, the thirteen
+ordered DiffIDs from pinned amd64 config
+`55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
+and exactly three application layers for WORKDIR and the two COPY instructions.
+Missing, shortened, substituted or extra
+layers refuse before execution. Reload inspection compares this complete
+filesystem identity too. The receipt retains it as `baseRootFS`; those
+uncompressed DiffIDs are distinct from compressed registry layer digests.
+This check binds the candidate to the frozen base filesystem. It does not
+itself verify an upstream signature, retain base-package source, or complete
+the base's separate distribution assessment.
+
+The receipt's `candidateArchive` and `candidateReloaded` fields bind this local
+handoff to the exercised image. The archive is opaque to this helper: Docker
+performs save/load; no second archive parser is introduced. Its tar digest,
+Docker config identity and a future registry manifest digest are distinct.
+A future publisher must verify the bytes before loading and independently join
+its registry manifest/config/payload after publication. It must use this tested
+candidate rather than rebuild it or add metadata that changes its config ID.
+The local archive grants no distribution authority and is deliberately absent
+from the diagnostic upload. Actual hosted Docker execution is separate from
+the process-double controls for failure handling and ordering.
+
 The diagnostic records the local image identity, context and recipe digests,
 payload file bindings, configured user, inspected restrictions, exact output,
 exit and cleanup. `cli-version-smoke` does not establish a daemon's effective
@@ -724,3 +1203,197 @@ by this test. No customer credentials or configuration are supplied.
 false. Remaining terms and corresponding source remain #326/#308; complete
 restricted services and actual invitation/login acceptance remain #305/#302.
 The portal and identity publication remain off.
+
+## Native versioned source offer
+
+The explicit preparer's `native-source-offer-v1` profile adds an unconditional
+`Source code` anchor to both frozen native footers. The destination is
+`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1`.
+Both templates retain a 2026-11-01 modification notice. Existing privacy/terms
+links, branding conditions and theme controls remain; none controls the source
+anchor's availability. The complete prepared profile is
+`6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181`:
+9,528 files and 261,325,366 bytes before installation. Its two additional changed
+paths and fixed destination enter the preparation record and dated source records.
+
+The native browser worker requires four additional observations: Login and
+Console, each in light and dark themes. It reaches the real anchor with Tab,
+checks its exact destination and visible unobstructed bounds, captures a separate
+PNG, and rechecks the same page and focused anchor afterward. The host verifies
+the closed four-case set and every PNG digest; the earlier 47 screenshots remain
+separate. The fixture follows no external source link and proves no public
+availability. This profile neither publishes source nor admits distribution.
+The corresponding immutable release and anonymous retrieval must be verified
+before image distribution or a network-facing deployment uses this offer.
+
+## Isolated service process test
+
+Replacing `--smoke` with `--service-smoke` retains the complete CLI/package
+checks and cold-starts that same immutable local image against a digest-pinned
+PostgreSQL 17 fixture. Both containers use fictional, disposable state. The
+network is internal and neither container publishes a host port. The native Linux
+probe connects directly to the inspected service's private IPv4 endpoint on that
+owned network. It retains `fixture.localhost:8080` as the HTTP/OIDC authority without
+DNS resolution; other authorities, ports and redirect destinations are refused.
+Docker can retain a requested host mapping without publishing it on an internal-only
+network ([upstream report](https://github.com/moby/moby/discussions/53256)); the probe
+does not rely on that mapping or add an externally connected network.
+HTTP and a pre-verified fictional administrator
+are deliberate local fixture choices, not the maintained production identity
+policy. No real credentials, mail, invitations, accounts or remote services enter
+this test. It does not change the dormant configuration preparer.
+
+The service has a read-only root, UID/GID 65532, dropped capabilities,
+no-new-privileges and built-in seccomp. Its one explicitly configured application
+mount is a 16 MiB non-executable `/tmp` tmpfs. Docker's ordinary managed kernel
+mounts remain separate; this is not a complete writable-filesystem audit.
+The fixture limits it to 128 PIDs, 1 GiB and two CPUs;
+these ceilings are not measured production sizing. The test requires actual
+readiness, issuer-bound OIDC discovery and embedded Console HTTP delivery, then
+reads three actual native Linux process samples. Those samples must show the
+single service process, all four UID/GID slots, empty capability sets,
+no-new-privileges, seccomp filter mode, RSS, peak RSS and thread count. Each sample
+also reads that process's actual Linux mount table: the root must be read-only,
+and `/tmp` must be a 16 MiB tmpfs owned by 65532:65532, mode 0700, with noexec,
+nosuid and nodev. Missing or ambiguous entries, a hidden child mount or failed
+kernel reads refuse the result. Docker's legacy `--tmpfs` can appear only in
+`HostConfig.Tmpfs`, rather than the regular `Mounts` list; either representation
+retains this mandatory independent kernel check. Raw mount tables stay private
+and are not retained in the diagnostic. These are
+container-process measurements, not build RSS or whole-stack consumption.
+
+The diagnostic binds the inspected image, upstream revision and harness source.
+It records startup time, process measurements and cleanup without raw container
+configuration, environment values, database contents, authentication tokens or
+service logs. The test requires normal service shutdown and removes only its
+verified owner-bound service, database and network; the outer image test removes
+its own image. A failure is never converted to a successful receipt.
+
+`browserProof` and `authenticationProof` stay false. Console HTTP delivery does
+not prove fallback font appearance, a successful browser login, invitation/MFA/
+recovery, Dex, verified TLS, backups or production resource sizing. Those remain
+under #308/#305/#302, alongside independent image/source publication and admission.
+
+## Native browser presentation
+
+`--browser-smoke` adds a real Chrome/WebDriver journey to the same restricted
+service fixture. The hosted Ubuntu runner provides Chrome and its matching
+driver; the receipt records the actual browser version. No browser automation
+package is installed into the identity distribution. The explicit Go worker
+uses WebDriver's native form controls and screenshots, not a projected HTML
+fixture or modified upstream page.
+
+The browser and driver run as the invoking non-root user, with no-new-privileges,
+inside the inspected identity service's internal network namespace. Only the
+network namespace changes. Native Chrome sandbox protections remain enabled;
+no certificate-warning or sandbox bypass is used. The `fixture.localhost` authority
+maps to that namespace's loopback interface. The browser must independently report
+a secure context and available WebCrypto. The
+[standard local-origin exception](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts#potentially_trustworthy_origins)
+supplies this development-only property without pretending that HTTP is verified
+production TLS. No host port or external network is added.
+
+The journey starts at Console, observes the actual Login V1 username form,
+submits the fictional fixture operator through the native password form, then
+requires the authenticated Console header and navigation. Each page must finish
+rendering with its selected font face actually loaded, no failed font faces or
+Ailerons resources, and resources confined to the fictional origin. Three
+screenshots and their byte hashes make the presentation independently inspectable.
+Console capture additionally waits for its native navigation animations to settle
+and a full-sized navigation link to be visible, within the viewport and unobstructed
+at its center. Mere authenticated component presence cannot admit a clipped first frame.
+If the native form offers optional MFA enrollment, this presentation-only fixture
+may use its explicit deferral button once. The unchanged native form and its exact
+same-origin enrollment action must be observed first. Mandatory enrollment is
+never deferred, and the optional action is never submitted twice. The harness
+waits for the native transition and still requires the authenticated Console
+within the worker deadline. The receipt records that choice and keeps `mfaProof` false.
+Production MFA requirements are unchanged. An incomplete journey may retain only
+fixed stage/error labels, counts and observation booleans, never DOM text, URLs or
+form values. Requests have a 30-second budget covering the 20-second navigation
+limit; readiness polls use one second. The operator journey has a 100-second
+bound. The separate neutral-provider presentation phase has a 120-second bound,
+and the outer worker wrapper allows four minutes.
+Driver session closure, process exit and private profile cleanup are mandatory.
+The outer Go harness rechecks the runner source, screenshot bytes and receipt,
+then binds the browser result to the inspected local image and upstream source.
+
+This is English Login V1/Console presentation with an ephemeral fictional
+administrator. It does not prove portal federation, invitation delivery, MFA,
+recovery, production TLS, durable storage or full-stack sizing. The separate
+HTTP/process receipt keeps `browserProof` and `authenticationProof` false;
+the browser receipt carries only its own observed journey. Image admission,
+complete notice closure, durable corresponding source and signed image/source
+publication remain required before runtime distribution and activation.
+
+The explicit restricted browser fixture also requires ten neutral-provider presentation
+observations: light/dark picker (nine entries), configured table (two fictional
+providers), Google editor, Login and registration. Both providers are created only
+in the disposable fixture through the authenticated operator’s same-origin native
+API. The fixture preserves all seventeen writable login-policy values except
+enabling external providers, verifies the two links, and never follows federation
+actions or enables local registration. The browser retains no bearer, auth-request
+URL, response body or real account data in its receipt. Native Tab reaches both
+Login/registration links; Enter activates the Google chooser route. Registration
+navigation preserves the existing native authentication request's exact
+`authRequestID` parameter rather than opening an unbound options page. Every case
+requires loaded glyphs, neutral geometry, labels, native targets, theme and confined
+resources, with ten bound PNGs in addition to the original three pages. These
+settings and editor observations require their own rendered native Console frame;
+they do not reuse the home screen's navigation-bar requirement. The original
+operator home observation retains that requirement. After native theme-button
+interaction, the worker scrolls the native viewport to the observed controls and
+requires their glyphs and links to fit inside it; it injects no DOM or styles.
+These checks cover two actual table variants and one actual editor; the other variants
+remain bound by their exact transformed source hashes. This remains presentation
+evidence, not completed federation, invitations, MFA or portal activation.
+
+The same owned container supplies six original Debian copyright bodies and the
+complete GPL-2 text they reference through seven explicit Docker copies. The
+closed, bounded readback checks original byte lengths, hashes and modes before
+export and again after reload; the receipt records their actual image paths.
+These originals are retained separately under `base-notices/`, alongside the
+RootFS prefix evidence. They were already shipped by the base, rather than
+new notices added to the application package. This is notice preservation and
+filesystem evidence, not complete base corresponding-source admission.
+
+The frozen ca-certificates copyright is a regular file with original mode 0555,
+while the other six copied terms files are 0644. Preserve and verify each
+member's actual mode rather than normalizing or assuming one mode for all
+notices. The native source inspection and the original tar headers bind this
+distinction; the executable bit is not permission to execute a copyright file.
+
+The native source-offer screenshots require their own settled-theme observation
+before and after capture. Console's two theme buttons both toggle, including the
+selected button. The source-offer journey therefore uses nonactivating WebDriver
+keyboard input to establish that control as its origin, then genuine reverse Tab
+to reach the source link. It neither clicks the theme control nor borrows an
+earlier view's theme result. Existing provider/editor observations retain their
+independent theme and transition checks.
+
+## Original base sources
+
+The otherwise inert [`identity-release` command](../server/cmd/identity-release/README.md)
+retains the frozen base's original OCI index/amd64 manifest/config, thirteen
+compressed layers, five Debian source descriptors, seven source archives/signature
+files, six installed-package records and seven complete notice bodies. Its closed
+41-file source set plus manifest preserves each original image mode separately
+from the read-only transport mode. Every original length and digest is pinned.
+The native CI caller captures, verifies and deterministically packs this set with
+the server's original Go compiler before selecting the frozen service compiler.
+It retains only four compact evidence files in ordinary build diagnostics, not
+the raw source archive or a newly distributed image.
+
+Complete metadata/layer/package/version/checksum joins and independent capsule
+readback are required. Missing, extra, linked, substituted or writable files fail;
+the archive is read back after closing and the whole source capsule is checked
+again. Acquisition has no authenticated input or arbitrary URL/profile option.
+An ordinary invocation neither fetches nor writes anything. Original source
+archives remain opaque data throughout these operations.
+
+OpenPGP armor is retained without a signature-verification claim. This command
+also does not verify the base image signature or public source availability.
+`baseImageSignatureVerified`, `openpgpVerified`, `sourceReleaseVerified` and
+`imageAdmission` remain false. Durable corresponding source, a separately
+authorized signed publisher, complete image/source pairing and the real deployed
+customer journey remain open in #308, #305 and #302.

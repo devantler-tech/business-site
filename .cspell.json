@@ -70,6 +70,16 @@
     "trimpath",
     "ziphash",
     "Nlink",
+    "DiffID",
+    "dpkg",
+    "netbase",
+    "NONBLOCK",
+    "nonroot",
+    "OpenPGP",
+    "RootFS",
+    "Typeflag",
+    "tzdata",
+    "USTAR",
     "envoyproxy",
     "protoc",
     "authoption",
@@ -398,6 +408,7 @@
     "mailadresse",
     "medtag",
     "memprovider",
+    "modfile",
     "modtaget",
     "mørk",
     "navn",
@@ -556,7 +567,10 @@
     "ugyldiggjort",
     "ugyldiggørelse",
     "understøttes",
-    "vedhæftede"
+    "vedhæftede",
+    "opgaver",
+    "vurderer",
+    "tidsplan"
   ],
   "overrides": [
     {

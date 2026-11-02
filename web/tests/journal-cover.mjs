@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 export function assertSameJournalCover(candidate, reference) {
   const identity = /** @param {string | undefined} src */ (src) => {
     assert.ok(src);
-    const match = /\/(journal-[a-z0-9-]+)\.[A-Za-z0-9_-]+\.(?:webp|jpg|avif)$/.exec(src);
+    const match = /(?:^|\/)(journal-[a-z0-9-]+)(?:\.[A-Za-z0-9_-]+)?\.(?:webp|jpg|avif)$/.exec(src);
     assert.ok(match, `unrecognized optimized Journal asset: ${src}`);
     return match[1];
   };

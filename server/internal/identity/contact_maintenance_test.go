@@ -265,6 +265,9 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 // Ordinary billing screens evolve independently of the rejected experiment.
 // Task-mode consumers always retain the original immutable body oracle.
 func maintenanceBodyReferences(name string, task bool) []string {
+	if !task && name == "requests.html" {
+		return maintenanceOrdinaryRequestDigests
+	}
 	if !task && (name == "triage.html" || name == "credits.html") {
 		return maintenanceOrdinaryBillingDigests[name]
 	}

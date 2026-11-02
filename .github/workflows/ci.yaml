@@ -44,10 +44,17 @@ jobs:
               - 'scripts/testdata/zitadel-source/**'
               - 'scripts/testdata/zitadel-metadata-profile/**'
               - 'third_party/zitadel-login-icons/**'
+              - 'third_party/zitadel-text-fonts/**'
+              - 'third_party/zitadel-copied-assets/**'
+              - 'third_party/zitadel-build-tools/**'
               - 'third_party/zitadel-console-notices/**'
               - 'third_party/zitadel-go-module-notices/**'
+              - 'third_party/zitadel-pnpm-sdk/**'
               - 'server/cmd/zitadel-module-sources/**'
               - 'server/cmd/zitadel-bsr-sources/**'
+              - 'server/cmd/identity-release/**'
+              - 'scripts/retain-zitadel-base-source.sh'
+              - 'scripts/identity-base-source-ci.test.sh'
               - 'tools/zitadel-pnpm-source/**'
               - 'server/go.mod'
               - 'server/go.sum'
@@ -62,7 +69,6 @@ jobs:
               - 'scripts/**'
               - '*.json'
               - '.npmrc'
-              - 'astro.config.mjs'
               - 'docs/**'
               - 'deploy/**'
               - '.github/workflows/**'
@@ -132,55 +138,26 @@ jobs:
       - name: Install candidate frontend dependencies
         working-directory: web
         run: npm ci
-      - name: Verify the isolated Svelte frontend in both release states
+      - name: Verify the Svelte frontend and independent business settings
         run: bash scripts/check-svelte-frontend.sh
       - name: Verify the retained frontend decision samples
         run: bash scripts/check-frontend-research.sh
-      - name: Build enabled preview
-        working-directory: .
-        env:
-          FEATURE_PREVIEW_BANNER: "true"
-        run: npm run build
-      - name: Build client-facing portfolio preview
-        working-directory: .
-        env:
-          FEATURE_CLIENT_PORTFOLIO: "true"
-        run: npm run build
-      - name: Build customer-scope preview
-        working-directory: .
-        env:
-          FEATURE_CUSTOMER_SCOPE: "true"
-        run: npm run build
-      - name: Build revised hosting-offer preview
-        working-directory: .
-        env:
-          FEATURE_OFFER_COPY: "true"
-        run: npm run build
-      - name: Build legacy revised hosting-offer preview
-        working-directory: .
-        env:
-          FEATURE_CLIENT_PORTFOLIO: "false"
-          FEATURE_FEATURED_PORTFOLIO: "false"
-          FEATURE_OFFER_COPY: "true"
-        run: npm run build
-      - name: Build featured portfolio preview
-        working-directory: .
-        env:
-          FEATURE_FEATURED_PORTFOLIO: "true"
-        run: npm run build
+      - name: Verify native content and publication refusals
+        run: |
+          node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs scripts/package-profile-contract.test.mjs
+          node --test scripts/theme.test.mjs scripts/visitor-privacy.test.mjs scripts/journal-navigation.test.mjs
+          node --test scripts/customer-scope-rollout.test.mjs scripts/vat-prices-retirement.test.mjs
+          bash scripts/journal-history.test.sh
       - name: Build
         working-directory: .
         env:
           FEATURE_PREVIEW_BANNER: "false"
-          FEATURE_CLIENT_PORTFOLIO: "false"
           FEATURE_COMPANY_IDENTITY: "false"
-          FEATURE_CUSTOMER_SCOPE: "false"
           FEATURE_OFFER_COPY: "false"
-          FEATURE_FEATURED_PORTFOLIO: "false"
         run: npm run build
       - name: Build entirely unset production
         working-directory: .
-        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY -u FEATURE_CUSTOMER_SCOPE npm run build
+        run: env -u FEATURE_CLIENT_PORTFOLIO -u FEATURE_PREVIEW_BANNER -u FEATURE_OFFER_COPY -u FEATURE_FEATURED_PORTFOLIO -u FEATURE_COMPANY_IDENTITY npm run build
       - name: Verify the published Journal presentation
         working-directory: .
         run: node scripts/check-journal-presentation.mjs dist
@@ -193,9 +170,7 @@ jobs:
         working-directory: .
         env:
           FEATURE_COMPANY_IDENTITY: "true"
-          FEATURE_SVELTE_FRONTEND: "true"
           FEATURE_OFFER_COPY: "false"
-          FEATURE_CUSTOMER_SCOPE: "false"
           COMPANY_POSTAL_ADDRESS: "Example Road 1\n1234 Exampletown"
         run: npm run build
       - name: Verify the actual public artifact excludes portal identity
@@ -298,7 +273,9 @@ jobs:
 
   test-zitadel-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Both complete refusal suites reached five minutes on the hosted runner;
+    # keep a bounded allowance for setup and finalization as well.
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -306,6 +283,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Setup provider-test Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Verify native provider presentation controls
+        run: node scripts/zitadel-provider-browser.test.mjs
       - name: Setup the prepared-source test compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -339,35 +322,75 @@ jobs:
         run: |
           test "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 12582912
           test "$(awk '/MemTotal:/ {print $2}' /proc/meminfo)" -ge 12582912
+      - name: Verify the exact identity build-tool license scope
+        run: bash scripts/zitadel-build-tools-license.test.sh
       - name: Setup the source verifier compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: server/go.mod
           cache: false
+      - name: Build the pinned identity vulnerability checker
+        run: GOBIN="$RUNNER_TEMP/identity-analysis" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - name: Prepare original verifier compiler and private caches
+        run: |
+          test "$(go env GOVERSION)" = go1.27.3
+          mkdir -m 700 "$RUNNER_TEMP/verifier-modules" "$RUNNER_TEMP/verifier-build-cache" "$RUNNER_TEMP/verifier-go-path"
+          compiler="$(realpath "$(command -v go)")"
+          compiler_sha="$(shasum -a 256 "$compiler" | awk '{print $1}')"
+          {
+            echo "IDENTITY_VERIFIER_GO=$compiler"
+            echo "IDENTITY_VERIFIER_GO_SHA256=$compiler_sha"
+            echo "IDENTITY_VERIFIER_CACHE=$RUNNER_TEMP/verifier-modules"
+            echo "GOMODCACHE=$RUNNER_TEMP/verifier-modules"
+            echo "GOCACHE=$RUNNER_TEMP/verifier-build-cache"
+            echo "GOPATH=$RUNNER_TEMP/verifier-go-path"
+            echo "GOENV=off"
+            echo "GOWORK=off"
+            echo "GOFLAGS="
+            echo "GOOS=linux"
+            echo "GOARCH=amd64"
+            echo "GOAMD64=v1"
+            echo "GOEXPERIMENT="
+            echo "GOFIPS140=off"
+          } >> "$GITHUB_ENV"
+      - name: Retain and verify the frozen identity base sources
+        working-directory: server
+        run: |
+          go test -race ./cmd/identity-release
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/identity-release" ./cmd/identity-release
+          bash ../scripts/retain-zitadel-base-source.test.sh
+          bash ../scripts/retain-zitadel-base-source.sh --capture --command "$RUNNER_TEMP/identity-release" --output "$RUNNER_TEMP/zitadel-base-source"
       - name: Verify selected Go source retention
         working-directory: server
         run: |
           go test -race ./cmd/zitadel-module-sources
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-module-sources" ./cmd/zitadel-module-sources
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-module-sources" ./cmd/zitadel-module-sources
       - name: Verify selected schema source retention
         working-directory: server
         run: |
           go test -race ./cmd/zitadel-bsr-sources
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-bsr-sources" ./cmd/zitadel-bsr-sources
+          CGO_ENABLED=0 "$IDENTITY_VERIFIER_GO" build -trimpath -buildvcs=false -o "$RUNNER_TEMP/zitadel-bsr-sources" ./cmd/zitadel-bsr-sources
+      - name: Observe actual verifier package compositions
+        working-directory: server
+        run: |
+          test "$(shasum -a 256 "$IDENTITY_VERIFIER_GO" | awk '{print $1}')" = "$IDENTITY_VERIFIER_GO_SHA256"
+          "$IDENTITY_VERIFIER_GO" list -json ./cmd/zitadel-module-sources ./cmd/zitadel-bsr-sources > "$RUNNER_TEMP/verifier-packages.jsonl"
+          jq -s -e 'if length==2 and all(.[]; .Name=="main" and .Incomplete!=true and .Error==null and ((.DepsErrors // [])|length)==0) then map({ImportPath,Name,GoFiles}) else error("incomplete native verifier composition") end' "$RUNNER_TEMP/verifier-packages.jsonl" > "$RUNNER_TEMP/verifier-composition.json"
       - name: Setup the frozen identity Go compiler
+        # Preserve the original compiler path above; the service remains frozen.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.10"
           cache: false
       - name: Verify the bounded login icon inventory
         working-directory: scripts
-        run: go test -race zitadel-login-icons.go zitadel-login-icons_test.go
+        run: go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go
       - name: Verify the bounded console notice capture
         working-directory: scripts
         run: go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go
       - name: Verify local identity image packaging and execution controls
         working-directory: scripts
-        run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go
+        run: go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go
       - name: Verify sealed source snapshots and closed archive controls
         working-directory: scripts
         run: go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go
@@ -397,7 +420,79 @@ jobs:
           git -C "$RUNNER_TEMP/zitadel-upstream" fetch --no-write-fetch-head --depth=1 https://github.com/zitadel/zitadel.git +refs/tags/v4.20.0:refs/tags/v4.20.0
           test "$(git -C "$RUNNER_TEMP/zitadel-upstream" rev-parse 'refs/tags/v4.20.0^{commit}')" = 8afa5dd37a8e723efb9eace8d09fd5c1cccef694
       - name: Build the complete native Linux service and embedded console
-        run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+        run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-bootstrap-cache "$IDENTITY_VERIFIER_CACHE" --verifier-composition "$RUNNER_TEMP/verifier-composition.json" --verifier-compiler-sha256 "$IDENTITY_VERIFIER_GO_SHA256" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
+      - name: Scan the actual frozen identity executable
+        run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" 2>&1'
+      # Catch native UI failures before the independent rebuild/replay work.
+      - name: Exercise the local restricted identity image
+        run: |
+          command -v google-chrome
+          command -v chromedriver
+          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+      - name: Verify actual identity browser evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-browser.go | cut -d ' ' -f 1)"
+          receipt="$(sha256sum "$RUNNER_TEMP/zitadel-image/browser-smoke.json" | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --arg receipt "$receipt" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            .schemaVersion == 1 and .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and .browserReceiptSha256 == $receipt and
+            .browserSourceSha256 == $source and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-binding.json" >/dev/null
+          jq -e --arg source "$source" '
+            .schemaVersion == 1 and .profile == "fictional-native-browser" and
+            .browserSourceSha256 == $source and (.browserVersion | type == "string" and length > 0) and
+            .browserSandboxDisabled == false and .cleanup == "complete" and
+            .portalFederation == false and .productionTLS == false and .invitationProof == false and
+            .mfaProof == false and (.optionalMFADeferred | type == "boolean") and
+            (.pages | map(.kind)) == ["login","password","console"] and
+            (.providerIcons | map(.kind+"/"+.theme)) == ["picker/light","table/light","editor-google/light","picker/dark","table/dark","editor-google/dark","login/light","registration/light","login/dark","registration/dark"] and
+            all(.providerIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.smtpIcons | map(.kind+"/"+.theme)) == ["picker/light","amazon/light","brevo/light","google/light","mailchimp/light","mailgun/light","mailjet/light","outlook/light","postmark/light","sendgrid/light","picker/dark","amazon/dark","brevo/dark","google/dark","mailchimp/dark","mailgun/dark","mailjet/dark","outlook/dark","postmark/dark","sendgrid/dark"] and
+            all(.smtpIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.mdiIcons | map(.kind+"/"+.theme)) == ["mdi-picker/light","mdi-table/light","editor-oidc/light","editor-jwt/light","mdi-picker/dark","mdi-table/dark","editor-oidc/dark","editor-jwt/dark"] and
+            all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.frameworkIcons | map(.kind+"/"+.theme)) == ["framework-quickstart/light","framework-selected/light","framework-picker/light","framework-quickstart/dark","framework-selected/dark","framework-picker/dark"] and
+            all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
+            (.sourceOffer | map(.kind+"/"+.theme)) == ["console/light","console/dark","login/light","login/dark"] and
+            all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1") and
+            all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null
+      - name: Verify actual identity service evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            def positiveInt: if type == "number" then . == floor and . > 0 else false end;
+            $image[0].schemaVersion == 1 and $image[0].profile == "cli-version-smoke" and
+            ($image[0].baseNotices|length) == 7 and
+            all($image[0].baseNotices[]; (.imagePath|startswith("/usr/share/")) and .file.bytes > 0 and (.file.sha256|test("^[0-9a-f]{64}$"))) and
+            .schemaVersion == 1 and .profile == "isolated-service-smoke" and
+            .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and
+            .serviceSourceSha256 == $source and
+            .databaseImage == "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826" and
+            (.readyMilliseconds | positiveInt) and .readyMilliseconds < 240000 and
+            (.processSamples | length) == 3 and
+            all(.processSamples[]; .pid | positiveInt) and
+            (.processSamples | map(.pid) | unique | length) == 1 and
+            all(.processSamples[];
+              .name == "zitadel" and .uid == 65532 and .gid == 65532 and
+              (.rssKiB | positiveInt) and (.peakRssKiB | positiveInt) and
+              .peakRssKiB >= .rssKiB and .peakRssKiB < 1048576 and
+              (.threads | positiveInt) and .threads <= 128 and
+              .effectiveCapabilities == "0000000000000000" and
+              .boundingCapabilities == "0000000000000000" and
+              .noNewPrivileges == true and .seccompMode == 2 and
+              .mounts.rootReadOnly == true and .mounts.tmpfsBytes == 16777216 and
+              .mounts.uid == 65532 and .mounts.gid == 65532 and .mounts.mode == "0700" and
+              .mounts.noExec == true and .mounts.noSuid == true and .mounts.noDev == true) and
+            .readOnlyRoot == true and .configuredTmpfsPaths == ["/tmp"] and
+            .network == "internal-two-container-direct" and .transport == "fictional-http-only" and
+            .oidcDiscovery == true and .embeddedConsoleHTTP == true and
+            .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
+            .imageAdmission == "unknown" and .licenseClosure == "unknown"
+          ' "$RUNNER_TEMP/zitadel-image/service-smoke.json" >/dev/null
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -486,6 +581,48 @@ jobs:
           ' "$RUNNER_TEMP/zitadel-build/go-graph-metadata-roundtrip.json" >/dev/null
       - name: Read back restored Go inputs without networking
         run: bash scripts/readback-zitadel-go-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources"
+      - name: Replay the complete retained identity build without networking
+        run: bash scripts/replay-zitadel-inputs.sh --build "$RUNNER_TEMP/zitadel-build" --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-go "$IDENTITY_VERIFIER_GO" --output "$RUNNER_TEMP/zitadel-offline-replay"
+      - name: Verify retained notice originals
+        run: |
+          jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            .profile=="native-retained-input-replay-v1" and
+            .checkoutNoticeOriginalsUnavailable==true and
+            .noticeOriginals==$original[0].sourceSnapshot.noticeOriginals and
+            .noticeOriginals.schemaVersion==1 and .noticeOriginals.profile=="identity-notice-originals-v1" and
+            .noticeOriginals.files==45 and .noticeOriginals.bytes>0 and
+            .noticeOriginals.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .noticeOriginals.preparedProfileSha256==$original[0].sourceSnapshot.preparedProfileSha256 and
+            .noticeOriginals.recipeSha256==$original[0].recipeSha256 and
+            (.noticeOriginals.manifestSha256|test("^[0-9a-f]{64}$")) and
+            .noticeOriginals.originalInputsReadbackPassed==true and
+            .imageAdmission=="unknown" and .licenseClosure=="unknown"
+          ' "$RUNNER_TEMP/zitadel-offline-replay/replay-receipt.json" >/dev/null
+      - name: Verify native SDK reconstruction and operations
+        run: |
+          jq -e --slurpfile original "$RUNNER_TEMP/zitadel-build/build-receipt.json" '
+            .profile=="native-retained-input-replay-v1" and .nativeOfflineReplayProved==true and
+            .sdkReconstruction.schemaVersion==1 and .sdkReconstruction.profile=="identity-pnpm-sdk-bootstrap-v1" and
+            .sdkReconstruction.packages==132 and .sdkReconstruction.sdkReconstructed==true and
+            .sdkReconstruction.installationMatched==true and .sdkReconstruction.compositionMatched==true and
+            .sdkReconstruction.emptyCacheRefused==true and .sdkReconstruction.partialCacheRefused==true and
+            .sdkReconstruction.nativeOfflineReplayProved==false and
+            (.sdkReconstruction | del(.installationMatched,.compositionMatched,.emptyCacheRefused,.partialCacheRefused)+{sdkReconstructed:false})==$original[0].sourceSnapshot.sdkBootstrap and
+            .sdkReconstruction.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .sdkReconstruction.toolSourceSha256==$original[0].sourceSnapshot.toolSource.toolSourceSha256 and
+            .sdkReconstruction.recipeSha256==$original[0].recipeSha256 and
+            .sdkNativeOperations.schemaVersion==1 and .sdkNativeOperations.profile=="identity-native-pnpm-sdk-operations-v1" and
+            .sdkNativeOperations.sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and
+            .sdkNativeOperations.recipeSha256==$original[0].recipeSha256 and
+            .sdkNativeOperations.sdkBootstrapManifestSha256==.sdkReconstruction.manifestSha256 and
+            .sdkNativeOperations.originalPnpmManifestSha256==$original[0].sourceSnapshot.pnpmSources.manifestSha256 and
+            (.sdkNativeOperations.recapturedPnpmManifestSha256|test("^[0-9a-f]{64}$")) and
+            .sdkNativeOperations.operations==["restore","inspect","verify","capture","verify","restore"] and
+            (.sdkNativeOperations.receipts|keys)==["capture","inspect","restore","restoreRecapture","verify","verifyRecapture"] and
+            all(.sdkNativeOperations.receipts[]; test("^[0-9a-f]{64}$")) and
+            .sdkNativeOperations.nativeOperationsPassed==true and .sdkNativeOperations.nativeOfflineReplayProved==false and
+            .imageAdmission=="unknown" and .licenseClosure=="unknown"
+          ' "$RUNNER_TEMP/zitadel-offline-replay/replay-receipt.json" >/dev/null
       - name: Verify and restore the actual selected pnpm sources
         run: |
           seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -519,17 +656,26 @@ jobs:
               .connectedMatchesOffline == true and .emptyCacheRefused == true and
               .missingMemberRefused == true and .changedMemberRefused == true)
           ' "$RUNNER_TEMP/zitadel-build/bsr-schema-replay.json" >/dev/null
-      - name: Exercise the local restricted identity image
-        run: go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go --smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+      - name: Bind the original local archives and native witnesses
+        run: |
+          mkdir -m 700 -- "$RUNNER_TEMP/zitadel-handoff"
+          "$RUNNER_TEMP/identity-release" prepare-handoff --input "$RUNNER_TEMP" --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --output "$RUNNER_TEMP/zitadel-handoff/handoff.json"
       - name: Preserve build diagnostics, not unadmitted service distribution
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zitadel-linux-build-evidence
           path: |
+            ${{ runner.temp }}/zitadel-handoff/handoff.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/capture.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/verify.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/pack.json
+            ${{ runner.temp }}/zitadel-base-source/evidence/base-source.json
             ${{ runner.temp }}/zitadel-build/build-receipt.json
             ${{ runner.temp }}/zitadel-build/packages.jsonl
             ${{ runner.temp }}/zitadel-build/login-icons-inventory.json
+            ${{ runner.temp }}/zitadel-build/text-font-notices-inventory.json
+            ${{ runner.temp }}/zitadel-build/copied-asset-notices-inventory.json
             ${{ runner.temp }}/zitadel-build/console-notices-inventory.json
             ${{ runner.temp }}/zitadel-build/console-notices-supplement-inventory.json
             ${{ runner.temp }}/zitadel-build/*.txt
@@ -537,6 +683,13 @@ jobs:
             ${{ runner.temp }}/zitadel-build/*.sha256
             ${{ runner.temp }}/zitadel-build/source-snapshot/source-manifest.json
             ${{ runner.temp }}/zitadel-build/source-roundtrip.json
+            ${{ runner.temp }}/zitadel-build/selected-notice-originals/notice-originals.json
+            ${{ runner.temp }}/zitadel-build/notice-originals.json
+            ${{ runner.temp }}/zitadel-build/notice-originals-readback.json
+            ${{ runner.temp }}/zitadel-build/notice-checkout-readback.json
+            ${{ runner.temp }}/zitadel-build/verifier-tool-source.json
+            ${{ runner.temp }}/zitadel-build/selected-verifier-bootstrap/manifest.json
+            ${{ runner.temp }}/zitadel-build/verifier-bootstrap-capture.json
             ${{ runner.temp }}/zitadel-build/prepared-build-receipt.json
             ${{ runner.temp }}/zitadel-build/selected-go-sources/manifest.json
             ${{ runner.temp }}/zitadel-build/go-module-source-roundtrip.json
@@ -552,6 +705,7 @@ jobs:
             ${{ runner.temp }}/zitadel-build/go-input-readback.json
             ${{ runner.temp }}/zitadel-build/go-input-native/manifest.json
             ${{ runner.temp }}/zitadel-build/selected-pnpm-sources/manifest.json
+            ${{ runner.temp }}/zitadel-build/selected-pnpm-sdk-bootstrap/manifest.json
             ${{ runner.temp }}/zitadel-build/pnpm-source-roundtrip.json
             ${{ runner.temp }}/zitadel-build/pnpm-installation-check.json
             ${{ runner.temp }}/zitadel-build/selected-bsr-sources/manifest.json
@@ -562,6 +716,46 @@ jobs:
             ${{ runner.temp }}/zitadel-build/console-originals-roundtrip.json
             ${{ runner.temp }}/zitadel-build/console-consumption-roundtrip.json
             ${{ runner.temp }}/zitadel-image/image-smoke.json
+            ${{ runner.temp }}/zitadel-image/base-notices/*.txt
+            ${{ runner.temp }}/zitadel-image/service-smoke.json
+            ${{ runner.temp }}/zitadel-image/browser-smoke.json
+            ${{ runner.temp }}/zitadel-image/browser-binding.json
+            ${{ runner.temp }}/zitadel-image/browser-incomplete.json
+            ${{ runner.temp }}/zitadel-image/login.png
+            ${{ runner.temp }}/zitadel-image/password.png
+            ${{ runner.temp }}/zitadel-image/console.png
+            ${{ runner.temp }}/zitadel-image/provider-*.png
+            ${{ runner.temp }}/zitadel-image/smtp-*.png
+            ${{ runner.temp }}/zitadel-image/mdi-*.png
+            ${{ runner.temp }}/zitadel-image/framework-*.png
+            ${{ runner.temp }}/zitadel-image/source-offer-*.png
+            ${{ runner.temp }}/zitadel-offline-replay/replay-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/sdk-reconstruction.json
+            ${{ runner.temp }}/zitadel-offline-replay/sdk-bootstrap-final.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/pnpm-sdk-operations.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-reconstruction.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-tool-source.json
+            ${{ runner.temp }}/zitadel-offline-replay/verifier-bootstrap-restored.json
+            ${{ runner.temp }}/zitadel-offline-replay/notice-originals-bootstrap.json
+            ${{ runner.temp }}/zitadel-offline-replay/notice-originals-bootstrap-final.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/notice-originals.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/notice-originals-readback.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-retention.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-archive.json
+            ${{ runner.temp }}/zitadel-offline-replay/input-roundtrip.json
+            ${{ runner.temp }}/zitadel-offline-replay/roundtrip/source-manifest.json
+            ${{ runner.temp }}/zitadel-offline-replay/native-replay.log
+            ${{ runner.temp }}/zitadel-offline-replay/native/build-receipt.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-go-service-readback.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-bsr-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/retained-pnpm-restoration.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/console-notices-supplement-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/login-icons-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/text-font-notices-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/copied-asset-notices-inventory.json
+            ${{ runner.temp }}/zitadel-offline-replay/native/build-info.txt
           if-no-files-found: error
           retention-days: 7
 
@@ -584,6 +778,8 @@ jobs:
           bash scripts/publishing-contract.test.sh
           bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
+      - name: Verify Go source scanner compiler selection
+        run: bash scripts/scan-go-source.test.sh
       - name: Verify source, current original CI and unextracted archive admission
         env:
           GOTOOLCHAIN: local
@@ -592,6 +788,64 @@ jobs:
         run: bash scripts/runtime-verification.test.sh
       - name: Verify default-off release authority and immutable caller wiring
         run: bash scripts/runtime-publisher-contract.test.sh
+
+  # Tool installation and quality observers have no database dependency.
+  test-portal-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      LC_ALL: C
+      GOTOOLCHAIN: local
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Setup Node.js for portal quality
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frontend dependencies
+        working-directory: .
+        run: npm ci
+      - name: Verify locked checker provisioning and stalled-registry failure controls
+        working-directory: .
+        run: node --test scripts/portal-quality-provisioning.test.mjs
+      - name: Verify actual Go-template HTML quality and retained attribute failures
+        working-directory: .
+        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
+      - name: Verify compatible embedded Go analysis and genuine finding rejection
+        working-directory: .
+        run: node --test scripts/portal-go-analyzer-quality.test.mjs
+      - name: Verify rendered portal targets and ordinary document passthrough
+        working-directory: .
+        run: bash scripts/portal-links-preprocess.test.sh
+      - name: Verify exact fictional credential examples and adjacent leak rejection
+        working-directory: .
+        run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
+      - name: Verify portal copy and API vocabulary with retained typo failures
+        working-directory: .
+        run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
+      - name: Verify package documentation with all selected Go files
+        working-directory: .
+        env:
+          GOBIN: ${{ runner.temp }}/portal-quality-tools
+        run: |
+          go install github.com/mgechev/revive@v1.16.0
+          PORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh
+      - name: Verify complete ordinary-suite composition
+        working-directory: .
+        run: node --test scripts/identity-cohorts.test.mjs
 
   test-portal-identity:
     runs-on: ubuntu-latest
@@ -630,43 +884,13 @@ jobs:
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      - name: Setup Node.js for portal quality
+      - name: Setup Node.js for cohort verification
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Install frontend dependencies
-        working-directory: .
-        run: npm ci
-      - name: Verify locked checker provisioning and stalled-registry failure controls
-        working-directory: .
-        run: node --test scripts/portal-quality-provisioning.test.mjs
       - name: Test actual served request-character controls
         working-directory: .
         run: node --test scripts/portal-request-limits.test.mjs
-      - name: Verify actual Go-template HTML quality and retained attribute failures
-        working-directory: .
-        run: npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs
-      - name: Verify compatible embedded Go analysis and genuine finding rejection
-        working-directory: .
-        run: node --test scripts/portal-go-analyzer-quality.test.mjs
-      - name: Verify rendered portal targets and ordinary document passthrough
-        working-directory: .
-        run: bash scripts/portal-links-preprocess.test.sh
-      - name: Verify exact fictional credential examples and adjacent leak rejection
-        working-directory: .
-        run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
-      - name: Verify portal copy and API vocabulary with retained typo failures
-        working-directory: .
-        run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
-      - name: Verify package documentation with all selected Go files
-        working-directory: .
-        env:
-          GOBIN: ${{ runner.temp }}/portal-quality-tools
-        run: |
-          go install github.com/mgechev/revive@v1.16.0
-          PORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh
       - name: Provision isolated test database roles
         env:
           PGPASSWORD: fixture-only
@@ -682,17 +906,17 @@ jobs:
           go mod verify
           test -z "$(gofmt -l .)"
           go vet ./...
-      - name: Verify complete ordinary-suite composition
-        working-directory: .
-        run: node --test scripts/identity-cohorts.test.mjs
       - name: List the complete compiled ordinary test inventory
         run: go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl
       - name: Test broker and durable access boundary
         shell: bash
-        run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl
+        run: go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl
       - name: Test work approval and review boundary
         shell: bash
         run: go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl
+      - name: Test private and operator flows
+        shell: bash
+        run: go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl
       - name: Verify every ordinary test ran exactly once
         run: node ../scripts/identity-cohorts.mjs
       - name: Scan reachable Go vulnerabilities
@@ -700,7 +924,7 @@ jobs:
 
   # Separate setup/build budget; identity and quality must finish successfully first.
   test-combined-runtime:
-    needs: [test-portal-identity]
+    needs: [test-portal-quality, test-portal-identity]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -771,23 +995,6 @@ jobs:
           package="$(find runtime-dist -maxdepth 1 -type d -name 'package.*')"
           test -n "$package" && test "$(printf '%s\n' "$package" | wc -l)" -eq 1
           docker build --file Dockerfile --label "org.opencontainers.image.source=https://github.com/devantler-tech/business-site" --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" --tag business-site:test "$package"
-      - name: Build actual Svelte public runtime candidate
-        working-directory: .
-        run: bash scripts/package-runtime.sh --release --default --svelte
-      - name: Exercise Svelte package and its extracted archive with private routes off
-        working-directory: .
-        run: |
-          node scripts/runtime-smoke.test.mjs runtime-svelte-default-dist
-          extracted="$(mktemp -d)"
-          tar -xzf runtime-svelte-default-dist/business-site-runtime.tar.gz -C "$extracted"
-          node scripts/runtime-smoke.test.mjs "$extracted"
-      - name: Upload verified Svelte public runtime candidate
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: business-site-svelte-runtime
-          path: runtime-svelte-default-dist/business-site-runtime.tar.gz
-          if-no-files-found: error
-          retention-days: 7
       - name: Exercise actual restricted container
         working-directory: .
         env:
@@ -803,7 +1010,7 @@ jobs:
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/package-runtime.sh --release --production-template --svelte
+        run: bash scripts/package-runtime.sh --release --production-template
       - name: Exercise production template with private fictional disclosure
         working-directory: .
         run: node scripts/runtime-smoke.test.mjs runtime-production-dist
@@ -868,10 +1075,11 @@ jobs:
       - test-zitadel-source
       - build-zitadel-linux
       - test-portal-identity
+      - test-portal-quality
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@7bf35c4fb0c2ccd8d1c08585e6ec5979a819d18e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -884,6 +1092,7 @@ jobs:
             ${{ needs.test-zitadel-source.result }}
             ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-quality.result }}
             ${{ needs.test-combined-runtime.result }}
 
   status:
@@ -902,12 +1111,13 @@ jobs:
       - test-zitadel-source
       - build-zitadel-linux
       - test-portal-identity
+      - test-portal-quality
       - test-combined-runtime
       - validation
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@7bf35c4fb0c2ccd8d1c08585e6ec5979a819d18e
+        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -920,6 +1130,7 @@ jobs:
             ${{ needs.test-zitadel-source.result }}
             ${{ needs.build-zitadel-linux.result }}
             ${{ needs.test-portal-identity.result }}
+            ${{ needs.test-portal-quality.result }}
             ${{ needs.test-combined-runtime.result }}
             ${{ needs.validation.result }}
             ${{ needs.publish-container.result }}
@@ -986,7 +1197,7 @@ jobs:
       - name: Setup Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1002,7 +1213,8 @@ jobs:
           tag="$image:staging-$RUN_ID-$RUN_ATTEMPT"
           docker tag business-site:production-test "$tag"
           docker push "$tag"
-          ref="$(docker image inspect "$tag" --format '{{index .RepoDigests 0}}')"
+          ref="$(docker image inspect "$tag" --format '{{json .RepoDigests}}' |
+            jq -er --arg image "$image" 'map(select(startswith($image + "@"))) | unique | select(length == 1) | .[0]')"
           [[ "$ref" =~ ^ghcr.io/devantler-tech/business-site@sha256:[0-9a-f]{64}$ ]]
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Sign and verify source-bound digest and build provenance

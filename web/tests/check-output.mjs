@@ -29,6 +29,7 @@ for (const [path, locale, title] of pages) {
   assert.ok(!html.includes('href="https://devantler.tech/blog/"'), "migrated Journal archive actions stay local");
   if (!isHome) assert.ok(html.includes("/pdfs/nikolai-emil-damm-cv.pdf"));
   if (isHome) {
+    assert.doesNotMatch(html, /earlier research|tidligere forskning/i, "Home introduces selected professional work");
     for (const section of ["hero-title", "quality-title", "services", "work", "process", "contact"]) {
       assert.ok(html.includes(`id="${section}"`), `missing homepage destination ${section}`);
     }

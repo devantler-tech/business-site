@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { readPublicDiscoveryReference } from "../../src/data/public-discovery-reference.mjs";
 
-const file = new URL("../../.astro/public-discovery.json",import.meta.url);
+const file = new URL("../../.generated/public-discovery.json",import.meta.url);
 const original = readFileSync(file,"utf8"), valid = JSON.parse(original);
 const digest = (/** @type {string|Buffer} */ bytes) => createHash("sha256").update(bytes).digest("hex");
 try {

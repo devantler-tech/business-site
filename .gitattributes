@@ -1,0 +1,3 @@
+# Preserve this immutable upstream notice's original CRLF bytes. Keep the
+# ordinary whitespace checks while recognizing its original line endings.
+third_party/zitadel-copied-assets/Pictogrammers-LICENSE -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

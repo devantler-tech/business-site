@@ -37,6 +37,8 @@ func (o *primingChecksumOps) WriteCache(name string, data []byte) {
 	o.cache[name] = append([]byte(nil), data...)
 }
 
+// generatorSourceFixture joins fictional module payloads to a locally signed
+// test checksum log. Its signatures establish fixture integrity, not upstream provenance.
 func generatorSourceFixture(t *testing.T) (build, checkpointSeal, sourceSeal, verifier string) {
 	t.Helper()
 	build = physicalGeneratorTestDirectory(t)
@@ -47,7 +49,7 @@ func generatorSourceFixture(t *testing.T) (build, checkpointSeal, sourceSeal, ve
 	}
 	payloads := map[string]identity{}
 	for _, id := range modules {
-		zip, mod, sum, modSum := modulePayload(t, id.Path, id.Version, []string{"go.mod", "example.go"})
+		zip, mod, sum, modSum := modulePayload(t, id.Path, id.Version, []string{"go.mod", "main.go"})
 		id.Sum, id.GoModSum = sum, modSum
 		payloads[id.Path+"@"+id.Version] = id
 		prefix, err := modulePrefix(id)

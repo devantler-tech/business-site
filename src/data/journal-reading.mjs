@@ -6,13 +6,13 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, parseFragment, serialize } from "parse5";
 import { readJournal, journalPaths } from "./journal.mjs";
-import { parseFrontmatter } from "@astrojs/internal-helpers/frontmatter";
-import { markdownToMdast, mdxToMdast } from "satteri";
+import { parseFrontmatter } from "./frontmatter.mjs";
+import { markdownToMdast } from "satteri";
 import { bundleJournalDiagrams } from "./journal-diagrams.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const generated = join(root, ".astro", "journal-reading.json");
-const input = join(root, ".astro", "journal-reading-input.txt");
+const generated = join(root, ".generated", "journal-reading.json");
+const input = join(root, ".generated", "journal-reading-input.txt");
 /** @typedef {{nodeName:string,tagName?:string,value?:string,attrs?:{name:string,value:string}[],childNodes?:MarkupNode[],parentNode?:MarkupNode|null}} MarkupNode */
 /** @param {MarkupNode} node @returns {MarkupNode[]} */
 const all = node => [node, ...(node.childNodes ?? []).flatMap(all)];
@@ -42,7 +42,7 @@ export function guidePaths() {
 }
 
 /** @param {string} path */
-function guideMetadata(path) {
+export function guideMetadata(path) {
   const file = articleSource(path);
   const {frontmatter} = parseFrontmatter(readFileSync(join(root, file), "utf8"));
   assert.ok(typeof frontmatter.title === "string" && frontmatter.title.trim() && typeof frontmatter.description === "string" && frontmatter.description.trim(), "Guide title and description required");
@@ -50,7 +50,7 @@ function guideMetadata(path) {
 }
 
 /** @param {string} path */
-function articleSource(path) {
+export function articleSource(path) {
   const stem = `src/content/docs${path === "/templates/" ? "/templates/index" : path.slice(0, -1)}`;
   const file = [stem + ".md", stem + ".mdx"].find(file => existsSync(join(root, file)));
   assert.ok(file, "Journal reading source required");
@@ -61,16 +61,16 @@ function articleSource(path) {
 export function authoredDiagrams(path) {
   const file = articleSource(path);
   const source = parseFrontmatter(readFileSync(join(root, file), "utf8")).content;
-  const tree = file.endsWith(".mdx") ? mdxToMdast(source) : markdownToMdast(source);
+  const tree = markdownToMdast(source);
   /** @param {any} node @returns {string[]} */
   const visit = node => node.type === "code" && node.lang === "mermaid" ? [node.value] : (node.children ?? []).flatMap(visit);
   return visit(tree);
 }
 
 /**
- * Project the maintained Astro reading output, never render a second Markdown body.
+ * Inspect the native compiled reading output before it can enter the public app.
  * Unsupported interactive content is rejected rather than silently omitted.
- * @param {string} html Actual Astro artifact.
+ * @param {string} html Actual compiled content artifact.
  * @param {{title:string,description:string,date?:string,href:string}} post Authored metadata.
  * @param {readonly string[]} expectedDiagrams Independently parsed authored definitions.
  * @param {"journal"|"guide"} kind The actual source collection's date/navigation contract.
@@ -193,7 +193,7 @@ export function readingFingerprint() {
       } else { assert.ok(info.isFile(), "Journal renderer input must be a file"); hash.update(readFileSync(descriptor)); }
     } finally { closeSync(descriptor); }
   }
-  for (const path of ["src", "public", "astro.config.mjs", "package.json", "package-lock.json", "web/package.json", "web/package-lock.json", "web/src/lib/journal-diagrams.js"]) visit(path);
+  for (const path of ["src", "public", "package.json", "package-lock.json", "web/package.json", "web/package-lock.json", "web/src/lib/journal-diagrams.js"]) visit(path);
   const env = {...process.env};
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX", "GIT_NAMESPACE"]) delete env[key];
   for (const path of [...readingPaths(), ...guidePaths()]) {
@@ -206,11 +206,11 @@ export function readingFingerprint() {
 
 /** Record the source boundary before the authoritative renderer starts. */
 export function prepareReadingReference() {
-  mkdirSync(join(root, ".astro"), {recursive:true});
+  mkdirSync(join(root, ".generated"), {recursive:true});
   writeFileSync(input, readingFingerprint());
 }
 
-/** Capture only reviewed reading bytes/assets after a successful Astro render. */
+/** Capture only reviewed reading bytes/assets after a successful native content build. */
 export async function captureReadingReference() {
   const fingerprint = readingFingerprint();
   assert.equal(readFileSync(input, "utf8"), fingerprint, "Journal source changed during rendering");
@@ -222,7 +222,7 @@ export async function captureReadingReference() {
   /** @param {string} href */
   const projectAsset = href => {
     assert.match(href, /^(?:\/_astro\/[A-Za-z0-9._-]+\.(?:webp|png|jpg|css)|\/author-avatar\.png)$/, "Journal unsupported body asset");
-    const bytes = readFileSync(join(root, "dist", href));
+    const bytes = readFileSync(join(root, ".generated/content", href));
     if (href.endsWith(".css")) assert.ok(!/@import|url\(\s*["']?(?!data:)[^"')\s]/i.test(bytes.toString()), "Journal stylesheet has unsupported dependencies");
     const filename = `_app/immutable/assets/reading-${digest(bytes).slice(0, 16)}-${basename(href)}`;
     if (!assets.some(asset => asset.filename === filename)) assets.push({filename,source:bytes.toString("base64"),digest:digest(bytes)});
@@ -231,7 +231,7 @@ export async function captureReadingReference() {
   /** @param {{title:string,description:string,date?:string,href:string}} post @param {"journal"|"guide"} kind */
   const projectReading = (post, kind) => {
     const path = new URL(post.href).pathname;
-    const reading = extractReading(readFileSync(join(root, "dist", path, "index.html"), "utf8"), post, authoredDiagrams(path), kind);
+    const reading = extractReading(readFileSync(join(root, ".generated/content", path, "index.html"), "utf8"), post, authoredDiagrams(path), kind);
     const fragment = parseFragment(reading.html);
     for (const node of all(fragment)) for (const item of node.attrs ?? []) {
       if (node.tagName === "a" && item.name === "href" && !item.value.startsWith("#")) {
@@ -259,6 +259,16 @@ export async function captureReadingReference() {
   };
   const readings = readJournal().filter(post => paths.includes(new URL(post.href).pathname)).map(post => projectReading(post, "journal"));
   const guides = technicalPaths.map(path => projectReading(guideMetadata(path), "guide"));
+  // Keep canonical sharing/schema image URLs reachable too, not only body images.
+  const metadataImages = new Set(["/author.png"]);
+  for (const reading of readings) for (const json of reading.structuredData) {
+    for (const item of JSON.parse(json)["@graph"] ?? []) if (item.image) metadataImages.add(new URL(item.image).pathname);
+  }
+  for (const href of metadataImages) {
+    assert.match(href,/^(?:\/author\.png|\/_astro\/[A-Za-z0-9._-]+\.(?:webp|png|jpg))$/,"Reading metadata image must be local");
+    const bytes = readFileSync(join(root,".generated/content",href));
+    assets.push({filename:href.slice(1),source:bytes.toString("base64"),digest:digest(bytes)});
+  }
   const bundle = [...readings, ...guides].some(reading => reading.diagrams.length) ? await bundleJournalDiagrams() : null;
   if (bundle) assets.push(...bundle.assets);
   assert.equal(readingFingerprint(), fingerprint, "Journal source changed during diagram bundling");
@@ -282,7 +292,7 @@ export function readReadingReference() {
   assert.ok(value.guides.every((/** @type {{html:string,headings:unknown[]}} */ guide) => typeof guide.html === "string" && guide.html.trim() && Array.isArray(guide.headings)), "Guide complete reading body required");
   assert.ok(value.assets?.length, "Journal asset inventory is missing");
   for (const asset of value.assets) {
-    assert.match(asset.filename, /^_app\/immutable\/assets\/(?:reading-[a-f0-9]{16}-[A-Za-z0-9._-]+|reading-diagrams\/[A-Za-z0-9_-]+\.js)$/);
+    assert.match(asset.filename, /^(?:_app\/immutable\/assets\/(?:reading-[a-f0-9]{16}-[A-Za-z0-9._-]+|reading-diagrams\/[A-Za-z0-9_-]+\.js)|_astro\/[A-Za-z0-9._-]+\.(?:webp|png|jpg)|author\.png)$/);
     assert.equal(digest(Buffer.from(asset.source, "base64")), asset.digest, "Journal asset digest mismatch");
   }
   const filenames = new Set(value.assets.map((/** @type {{filename:string}} */ asset) => `/${asset.filename}`));

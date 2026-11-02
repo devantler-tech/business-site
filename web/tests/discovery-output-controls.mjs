@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { artifact, assertDiscovery } from "./discovery-output.mjs";
 
-const healthy=artifact("web/build"), baseline=artifact("dist");
+const healthy=artifact("web/build"), baseline=artifact(".generated/content");
 assertDiscovery(healthy,baseline);
 /** @param {Map<string,Buffer>} files @param {string} path @param {string|RegExp} before @param {string} after */
 const replace = (files,path,before,after) => {

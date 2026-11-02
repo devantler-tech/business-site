@@ -7,15 +7,22 @@ export LC_ALL=C
 # Report a failed build invariant and terminate without a success receipt.
 fail() { printf 'zitadel-linux: %s\n' "$1" >&2; exit 1; }
 requested=0 capture_source=0 source_repo='' output='' module_verifier='' bsr_verifier='' prepared_source='' prepared_sha='' console_inputs='' console_sha='' source_manifest=''
+retained_inputs='' retained_sha='' verifier_cache='' verifier_composition='' verifier_compiler_sha='' supplied_pnpm_sdk=''
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --build) [[ "$requested" -eq 0 ]] || fail 'duplicate opt-in'; requested=1; shift ;;
     --capture-source) [[ "$capture_source" -eq 0 ]] || fail 'duplicate source capture'; capture_source=1; shift ;;
     --module-source-verifier) [[ -z "$module_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid module source verifier'; module_verifier="$2"; shift 2 ;;
     --bsr-source-verifier) [[ -z "$bsr_verifier" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid schema source verifier'; bsr_verifier="$2"; shift 2 ;;
+    --verifier-bootstrap-cache) [[ -z "$verifier_cache" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid verifier bootstrap cache'; verifier_cache="$2"; shift 2 ;;
+    --verifier-composition) [[ -z "$verifier_composition" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid verifier composition'; verifier_composition="$2"; shift 2 ;;
+    --verifier-compiler-sha256) [[ -z "$verifier_compiler_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid original verifier compiler seal'; verifier_compiler_sha="$2"; shift 2 ;;
     --source) [[ -z "$source_repo" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid source'; source_repo="$2"; shift 2 ;;
     --prepared-source) [[ -z "$prepared_source" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid prepared source'; prepared_source="$2"; shift 2 ;;
     --prepared-sha256) [[ -z "$prepared_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid prepared source seal'; prepared_sha="$2"; shift 2 ;;
+    --retained-inputs) [[ -z "$retained_inputs" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid retained inputs'; retained_inputs="$2"; shift 2 ;;
+    --retained-sha256) [[ -z "$retained_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid retained input seal'; retained_sha="$2"; shift 2 ;;
+    --pnpm-source-sdk) [[ -z "$supplied_pnpm_sdk" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid native pnpm SDK directory'; supplied_pnpm_sdk="$2"; shift 2 ;;
     --console-inputs) [[ -z "$console_inputs" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid console inputs'; console_inputs="$2"; shift 2 ;;
     --console-sha256) [[ -z "$console_sha" && "$#" -ge 2 && "$2" =~ ^[0-9a-f]{64}$ ]] || fail 'invalid console input seal'; console_sha="$2"; shift 2 ;;
     --output) [[ -z "$output" && "$#" -ge 2 && -n "$2" ]] || fail 'invalid output'; output="$2"; shift 2 ;;
@@ -23,7 +30,10 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 [[ "$requested" -eq 1 && -n "$output" ]] || fail 'explicit build and output are required'
-if [[ -n "$prepared_source" ]]; then
+if [[ -n "$retained_inputs$retained_sha" ]]; then
+  [[ -n "$retained_inputs" && -n "$retained_sha" && -z "$source_repo$prepared_source$prepared_sha$console_inputs$console_sha" && "$capture_source" -eq 0 ]] || fail 'retained inputs require a complete exclusive capsule/seal pair'
+  [[ -n "$supplied_pnpm_sdk" ]] || fail 'retained replay requires its explicit native pnpm SDK directory'
+elif [[ -n "$prepared_source" ]]; then
   [[ -z "$source_repo" && -n "$prepared_sha" && "$capture_source" -eq 0 ]] || fail 'prepared source requires its seal and excludes original source or capture'
 else
   [[ -n "$source_repo" && -z "$prepared_sha" ]] || fail 'exactly one complete source mode is required'
@@ -31,12 +41,19 @@ fi
 if [[ -n "$console_inputs$console_sha" ]]; then
   [[ -n "$prepared_source" && -n "$console_inputs" && -n "$console_sha" && "$capture_source" -eq 0 ]] || fail 'console replay requires a complete capsule/seal pair with prepared source'
 fi
-if [[ "$capture_source" -eq 1 ]]; then
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   [[ "$module_verifier" = /* && -f "$module_verifier" && -x "$module_verifier" && ! -L "$module_verifier" ]] || fail 'source capture requires an explicit regular executable module verifier'
   [[ "$bsr_verifier" = /* && -f "$bsr_verifier" && -x "$bsr_verifier" && ! -L "$bsr_verifier" ]] || fail 'source capture requires an explicit regular executable schema verifier'
   for tool in curl sudo unshare setpriv id realpath; do command -v "$tool" >/dev/null || fail "missing source capture tool: $tool"; done
 else
-  [[ -z "$module_verifier" && -z "$bsr_verifier" ]] || fail 'source verifiers require source capture'
+  [[ -z "$module_verifier" && -z "$bsr_verifier" ]] || fail 'source verifiers require source capture or retained inputs'
+fi
+if [[ "$capture_source" -eq 1 ]]; then
+  [[ "$verifier_cache" = /* && -d "$verifier_cache" && ! -L "$verifier_cache" && "$verifier_cache" = "$(cd "$verifier_cache" && pwd -P)" ]] || fail 'capture requires its original physical verifier cache'
+  [[ "$verifier_composition" = /* && -f "$verifier_composition" && ! -L "$verifier_composition" ]] || fail 'capture requires original native verifier compositions'
+  [[ "$verifier_compiler_sha" =~ ^[0-9a-f]{64}$ ]] || fail 'capture requires the original compiler digest'
+else
+  [[ -z "$verifier_cache$verifier_composition$verifier_compiler_sha" ]] || fail 'verifier bootstrap acquisition is capture-only'
 fi
 for tool in bash git jq shasum node pnpm go time readelf find sort cmp comm diff grep sed awk; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
@@ -60,9 +77,74 @@ go_root="$(go env GOROOT)"
 [[ "$go_root" = /* && -d "$go_root" && ! -L "$go_root" ]] || fail 'selected Go distribution is unavailable'
 [[ "$(node --version)" = v22.23.3 ]] || fail 'Node 22.23.3 is required'
 [[ "$(pnpm --version)" = 10.30.3 ]] || fail 'pnpm 10.30.3 is required'
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+retained_receipt=''
+pnpm_sdk="$root/tools/zitadel-pnpm-source"
+sdk_bootstrap='' sdk_bootstrap_sha='' sdk_context_source='' sdk_context_tools=''
+sdk_recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
+check_sdk_bootstrap_readback() {
+  [[ -n "$sdk_bootstrap" ]] || return 0
+  node "$pnpm_sdk/index.mjs" bootstrap-verify --capsule "$sdk_bootstrap" --sha256 "$sdk_bootstrap_sha" \
+    --source-sha256 "$sdk_context_source" --tool-source-sha256 "$sdk_context_tools" --recipe-sha256 "$sdk_recipe_hash" --sdk-root "$pnpm_sdk" >"$output/sdk-bootstrap-readback.pending"
+  cmp "$output/sdk-bootstrap-capture.pending" "$output/sdk-bootstrap-readback.pending" || fail 'SDK bootstrap readback differs'
+}
+run_pnpm_sdk() {
+  if [[ -n "$retained_inputs" ]]; then
+    node "$pnpm_sdk/index.mjs" "$@" --sdk-bootstrap "$sdk_bootstrap" --sdk-bootstrap-sha256 "$sdk_bootstrap_sha" \
+      --sdk-source-sha256 "$sdk_context_source" --sdk-tool-source-sha256 "$sdk_context_tools" --sdk-recipe-sha256 "$sdk_recipe_hash"
+  else
+    node "$pnpm_sdk/index.mjs" "$@"
+  fi
+}
+# A supplied lock-pinned SDK must have the retained authored source as its own.
+# Retained mode also requires it to be the one reconstructed from the capsule (#422).
+check_pnpm_sdk_source() {
+  [[ -n "$supplied_pnpm_sdk" ]] || return 0
+  local member
+  for member in index.mjs package.json package-lock.json; do
+    [[ -f "$pnpm_sdk/$member" && ! -L "$pnpm_sdk/$member" ]] || fail 'physical native pnpm SDK source required'
+    cmp "$root/tools/zitadel-pnpm-source/$member" "$pnpm_sdk/$member" || fail 'native pnpm SDK source differs from retained tool source'
+  done
+}
+if [[ -n "$supplied_pnpm_sdk" ]]; then
+  [[ -n "$retained_inputs" && "$supplied_pnpm_sdk" = /* && -d "$supplied_pnpm_sdk" && ! -L "$supplied_pnpm_sdk" && "$supplied_pnpm_sdk" = "$(cd "$supplied_pnpm_sdk" && pwd -P)" ]] || fail 'native pnpm SDK directory requires physical retained mode'
+  pnpm_sdk="$supplied_pnpm_sdk"
+  check_pnpm_sdk_source
+fi
+notice_root="$root" notice_snapshot='' notice_seal='' notice_summary=null
+notice_args=()
+# These summaries describe complete original-byte readback, never legal closure.
+check_notice_summary() {
+  jq -e --arg source "$notice_seal" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
+    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .recipeSha256==$recipe and .files==45 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
+}
+check_notice_readback() {
+  [[ -n "$notice_snapshot" ]] || return 0
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-notice-originals "$notice_root" "$notice_snapshot" "$notice_seal" >"$output/notice-originals-readback.json" || fail 'retained notice originals changed'
+  check_notice_summary "$output/notice-originals-readback.json"
+  cmp "$output/notice-originals.json" "$output/notice-originals-readback.json" || fail 'notice-original readback differs'
+  if [[ "$capture_source" -eq 1 ]]; then
+    go run "$root/scripts/zitadel-source-bundle.go" --verify-notice-checkout "$root" "$notice_snapshot" "$notice_seal" >"$output/notice-checkout-readback.json" || fail 'connected notice originals changed'
+    cmp "$output/notice-originals.json" "$output/notice-checkout-readback.json" || fail 'connected notice-original readback differs'
+  fi
+}
+if [[ -n "$retained_inputs" ]]; then
+  [[ "$retained_inputs" = /* && -d "$retained_inputs" && ! -L "$retained_inputs" && "$retained_inputs" = "$(cd "$retained_inputs" && pwd -P)" ]] || fail 'retained inputs must be a physical absolute directory'
+  go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" | jq -e '.phase == "retained-build-inputs"' >/dev/null || fail 'complete sealed retained inputs are required'
+  retained_receipt="$retained_inputs/source/build-receipt.json"
+  jq -e '.schemaVersion==1 and .platform=="linux/amd64" and .profile=="api-login-v1-console" and .sourceSnapshot.dependencyInputsCaptured==false and .sourceSnapshot.nativeOfflineReplayProved==false' "$retained_receipt" >/dev/null || fail 'retained build profile differs'
+  prepared_source="$retained_inputs/source/source-snapshot"
+  prepared_sha="$(jq -er '.sourceSnapshot.manifestSha256' "$retained_receipt")"
+  sdk_bootstrap="$retained_inputs/source/selected-pnpm-sdk-bootstrap" sdk_context_source="$prepared_sha"
+  sdk_context_tools="$(jq -er '.sourceSnapshot.toolSource.toolSourceSha256|select(test("^[0-9a-f]{64}$"))' "$retained_receipt")"
+  sdk_bootstrap_sha="$(jq -er '.sourceSnapshot.sdkBootstrap.manifestSha256|select(test("^[0-9a-f]{64}$"))' "$retained_receipt")"
+  jq -e --arg source "$prepared_sha" --arg tools "$sdk_context_tools" --arg recipe "$sdk_recipe_hash" \
+    '.sourceSnapshot.sdkBootstrap|.schemaVersion==1 and .profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .recipeSha256==$recipe and .packages==132 and .sdkReconstructed==false and .nativeOfflineReplayProved==false' "$retained_receipt" >/dev/null || fail 'retained SDK bootstrap context differs'
+  console_inputs="$retained_inputs/source/selected-console-originals"
+  console_sha="$(jq -er '.consoleDownloads.manifestSha256' "$retained_receipt")"
+fi
 input_root="${source_repo:-$prepared_source}"
 [[ -d "$input_root" && ! -e "$output" && ! -L "$output" ]] || fail 'input must exist and output must be new'
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 input_root="$(cd "$input_root" && pwd -P)"
 if [[ -n "$source_repo" ]]; then source_repo="$input_root"; else prepared_source="$input_root"; fi
 parent="$(cd "$(dirname "$output")" && pwd -P)"
@@ -70,6 +152,7 @@ name="$(basename "$output")"
 [[ "$name" != . && "$name" != .. ]] || fail 'invalid output name'
 output="$parent/$name"
 [[ "$output" != "$input_root/"* ]] || fail 'output must be outside input source'
+[[ -z "$retained_inputs" || ( "$output" != "$retained_inputs" && "$output" != "$retained_inputs/"* ) ]] || fail 'output must be outside retained inputs'
 if [[ -n "$console_inputs" ]]; then
   [[ "$console_inputs" = /* && -d "$console_inputs" && ! -L "$console_inputs" ]] || fail 'console capsule must be an existing physical absolute directory'
   [[ "$console_inputs" = "$(cd "$console_inputs" && pwd -P)" ]] || fail 'console capsule path must be physical and clean'
@@ -85,12 +168,17 @@ fi
 complete=0
 trap 'if [[ "$complete" -ne 1 ]]; then printf "Incomplete build retained for diagnosis: %s\n" "$output" >&2; fi' EXIT
 trap 'exit 1' HUP INT TERM
+if [[ -n "$retained_inputs" ]]; then
+  jq -c '.sourceSnapshot.sdkBootstrap' "$retained_receipt" >"$output/sdk-bootstrap-capture.pending"
+  check_sdk_bootstrap_readback
+fi
 module_verifier_hash='' bsr_verifier_hash=''
 # Both source modes acquire schemas from an owned cache and empty configuration;
 # source restoration must not inherit a host cache or an account's credentials.
 export BUF_CACHE_DIR="$output/buf-cache" XDG_CONFIG_HOME="$output/bsr-config"
 unset BUF_TOKEN
-mkdir -m 700 "$BUF_CACHE_DIR" "$XDG_CONFIG_HOME"
+mkdir -m 700 "$XDG_CONFIG_HOME"
+if [[ -z "$retained_inputs" ]]; then mkdir -m 700 "$BUF_CACHE_DIR"; fi
 # Check the separately compiled command without changing the service compiler.
 verifier_digest() {
   local name="$1" executable="$2" command="$3"
@@ -101,22 +189,35 @@ verifier_digest() {
     END {exit !(compiler && command)}' "$output/$name-source-verifier.txt" || fail 'verifier command or compiler differs'
   shasum -a 256 "$executable" | awk '{print $1}'
 }
-if [[ "$capture_source" -eq 1 ]]; then
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   # The reviewed command is built separately with the repository compiler. Do
   # not switch or auto-download toolchains inside the frozen upstream build.
   module_verifier_hash="$(verifier_digest go-module "$module_verifier" zitadel-module-sources)"
   bsr_verifier_hash="$(verifier_digest bsr "$bsr_verifier" zitadel-bsr-sources)"
   [[ "$module_verifier_hash" =~ ^[0-9a-f]{64}$ && "$bsr_verifier_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'verifier digest unavailable'
-  mkdir -m 700 "$output/bsr-tools"
+  if [[ "$capture_source" -eq 1 ]]; then mkdir -m 700 "$output/bsr-tools"; fi
+  if [[ -n "$retained_inputs" ]]; then
+    jq -e --arg module "$module_verifier_hash" --arg bsr "$bsr_verifier_hash" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
+      '.sourceSnapshot.goModuleVerifier.sha256==$module and .sourceSnapshot.bsrVerifier.sha256==$bsr and .recipeSha256==$recipe' "$retained_receipt" >/dev/null || fail 'retained verifier or recipe identity differs'
+  fi
 fi
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
 version=4.20.0
 source_date=2026-10-22T07:05:44Z
 started="$(date -u +%s)"
+if [[ -n "$retained_inputs" ]]; then
+  notice_snapshot="$prepared_source" notice_seal="$prepared_sha" notice_root="$output/notice-originals"
+  go run "$root/scripts/zitadel-source-bundle.go" --restore-notice-originals "$retained_inputs/source/selected-notice-originals" "$notice_snapshot" "$notice_seal" "$notice_root" >"$output/notice-originals.json" || fail 'retained notice-original restoration failed'
+  check_notice_summary "$output/notice-originals.json"
+  jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.noticeOriginals' "$output/notice-originals.json" >/dev/null || fail 'notice originals differ from the completed build receipt'
+  notice_args=("$notice_root")
+  check_notice_readback
+  notice_summary="$(cat "$output/notice-originals.json")"
+fi
 if [[ -z "$prepared_source" ]]; then
   bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
 fi
-jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1"' "$output/prepared/source-preparation.json" >/dev/null
+jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
 if [[ -z "$prepared_source" ]]; then
@@ -135,25 +236,91 @@ export npm_config_userconfig="$output/npmrc" npm_config_globalconfig="$output/np
 export npm_config_store_dir="$output/pnpm-store"
 export npm_config_engine_strict=false npm_config_registry=https://registry.npmjs.org/
 export npm_config_side_effects_cache=false
-mkdir "$GOCACHE" "$GOMODCACHE" "$GOPATH" "$npm_config_cache" "$npm_config_store_dir"
+mkdir "$GOCACHE" "$npm_config_cache"
+if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_store_dir"; fi
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .records == 14 and .bytes == 261683913' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files == 9528 and .records == 58 and .bytes == 261325366' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
-  go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/prepared-input-check" >"$output/prepared-input.pending"
+  go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/prepared-input-check" "${notice_args[@]}" >"$output/prepared-input.pending"
   jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal' "$output/prepared-input.pending" >/dev/null || fail 'prepared source or retained recipes differ from this native builder'
   prepared_input_json="$(jq '. + {nativeOfflineReplayProved:false}' "$output/prepared-input.pending")"
 fi
+# Restore only authenticated originals. No extracted module tree, ZIP hash,
+# compiled cache, installed workspace or prior side-effects cache is trusted.
+if [[ -n "$retained_inputs" ]]; then
+  service="$(jq -er '.sourceSnapshot.goModules.manifestSha256' "$retained_receipt")"
+  generators="$(jq -er '.sourceSnapshot.generatorGoSources.manifestSha256' "$retained_receipt")"
+  metadata="$(jq -er '.sourceSnapshot.goGraphMetadata.manifestSha256' "$retained_receipt")"
+  "$module_verifier" restore-go-inputs --service "$retained_inputs/source/selected-go-sources" --service-sha256 "$service" \
+    --generators "$retained_inputs/source/selected-generator-go-sources" --generators-sha256 "$generators" \
+    --metadata "$retained_inputs/source/go-graph-metadata" --metadata-sha256 "$metadata" --source-sha256 "$prepared_sha" \
+    --output "$output/go-input-native" >"$output/retained-go-restoration.json"
+  jq -e --arg source "$prepared_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .selectedGoInputsRestored==true and .modules>0 and .moduleProxyScope=="retained-snapshot" and (has("moduleProxyURL")|not) and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false' "$output/retained-go-restoration.json" >/dev/null || fail 'retained Go inputs did not restore completely'
+  export GOMODCACHE="$output/go-input-native/go-modules" GOPATH="$output/go-input-native/go-path"
+  # Native pinned installs still query deprecation metadata. Resolve only the
+  # closed retained file snapshot, without any HTTP/direct proxy alternative.
+  # Keep local transport location out of the portable receipt. Encode each path
+  # component, including GOPROXY separators, before rejoining directory slashes.
+  GOPROXY="$(jq -nr --arg target "$output/go-input-native/go-proxy" '$target|split("/")|map(@uri)|join("/")|"file://"+.')"
+  export GOPROXY
+  bsr_seal="$(jq -er '.sourceSnapshot.bsrSources.manifestSha256' "$retained_receipt")"
+  "$bsr_verifier" verify --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" >"$output/retained-bsr-verification.json"
+  jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.bsrSources' "$output/retained-bsr-verification.json" >/dev/null || fail 'retained schema source join differs'
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" '.sourceManifestSha256==$source and .recipeSha256==$original[0].recipeSha256' "$retained_inputs/source/selected-bsr-sources/manifest.json" >/dev/null || fail 'schema capsule belongs to another source or recipe'
+  "$bsr_verifier" restore --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --output "$BUF_CACHE_DIR" >"$output/retained-bsr-restoration.json"
+  "$bsr_verifier" check-cache --package "$retained_inputs/source/selected-bsr-sources" --sha256 "$bsr_seal" --cache "$BUF_CACHE_DIR" >/dev/null
+  pnpm_seal="$(jq -er '.sourceSnapshot.pnpmSources.manifestSha256' "$retained_receipt")"
+  # The SDK consumes the versioned CAFS root; native pnpm appends v10 to its
+  # configured store base. Preserve that native boundary in both directions.
+  mkdir -m 700 "$npm_config_store_dir"
+  run_pnpm_sdk restore --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
+    --scratch "$output/pnpm-restoration-work" --store "$npm_config_store_dir/v10" >"$output/retained-pnpm-restoration.json"
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
+    '.nativeStoreRestored==true and .sourceManifestSha256==$source and del(.nativeStoreRestored)==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-restoration.json" >/dev/null || fail 'retained pnpm source join differs'
+  export GOVCS='*:off' npm_config_offline=true
+fi
 source_snapshot_json=null
+check_text_notice_records() {
+  local records="$1" member
+  for member in zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go; do
+    cmp "$root/scripts/$member" "$records/recipes/$member" || fail 'font verifier differs from retained source'
+  done
+  for member in catalogue.json Apache-2.0.txt; do
+    cmp "$notice_root/third_party/zitadel-text-fonts/$member" "$records/third_party/zitadel-text-fonts/$member" || fail 'font catalogue or terms differ from retained source'
+  done
+  for member in catalogue.json Line-Awesome-LICENSE.md Material-Icons-LICENSE Flag-Icons-LICENSE original-line-awesome.css original-line-awesome.min.css ZITADEL-LICENSE ZITADEL-LICENSING.md ZITADEL-CONTRIBUTING.md; do
+    cmp "$notice_root/third_party/zitadel-copied-assets/$member" "$records/third_party/zitadel-copied-assets/$member" || fail 'copied asset catalogue, original CSS or terms differ from retained source'
+  done
+}
 if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "0ada792a70475609fd59e746b22dab31f664719cabf86decab1d37d1a207b12d" and .files == 9599 and .bytes == 261683913 and .records == 14 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files == 9528 and .bytes == 261325366 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
+  notice_snapshot="$output/source-snapshot" notice_seal="$source_manifest" notice_root="$output/selected-notice-originals"
+  go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$notice_snapshot" "$notice_seal" "$notice_root" >"$output/notice-originals.json" || fail 'complete notice-original capture failed'
+  check_notice_summary "$output/notice-originals.json"
+  notice_args=("$notice_root")
+  check_notice_readback
+  notice_summary="$(cat "$output/notice-originals.json")"
+  go run "$root/scripts/zitadel-source-bundle.go" --restore-tools "$output/source-snapshot" "$source_manifest" "$output/verifier-tool-source" >"$output/verifier-tool-source.json"
+  tool_source_sha="$(jq -er '.toolSourceSha256' "$output/verifier-tool-source.json")"
+  sdk_bootstrap="$output/selected-pnpm-sdk-bootstrap" sdk_context_source="$source_manifest" sdk_context_tools="$tool_source_sha"
+  node "$pnpm_sdk/index.mjs" bootstrap-capture --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" --recipe-sha256 "$sdk_recipe_hash" \
+    --output "$sdk_bootstrap" --scratch "$output/sdk-bootstrap-work" >"$output/sdk-bootstrap-capture.pending"
+  jq -e --arg source "$source_manifest" --arg tools "$tool_source_sha" --arg recipe "$sdk_recipe_hash" \
+    '.schemaVersion==1 and .profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .recipeSha256==$recipe and .packages==132 and .sdkReconstructed==false and .nativeOfflineReplayProved==false and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$output/sdk-bootstrap-capture.pending" >/dev/null || fail 'complete original SDK bootstrap required'
+  sdk_bootstrap_sha="$(jq -er .manifestSha256 "$output/sdk-bootstrap-capture.pending")"
+  check_sdk_bootstrap_readback
+  "$module_verifier" capture-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" \
+    --cache "$verifier_cache" --composition "$verifier_composition" --output "$output/selected-verifier-bootstrap" >"$output/verifier-bootstrap-capture.json"
+  jq -e --arg source "$source_manifest" --arg tools "$tool_source_sha" '.schemaVersion==1 and .sourceManifestSha256==$source and .toolSourceSha256==$tools and .files==4 and .verifierBootstrapCaptured==true and .goVerifiersRebuilt==false' "$output/verifier-bootstrap-capture.json" >/dev/null || fail 'complete original verifier bootstrap required'
+  check_text_notice_records "$output/source-snapshot/records"
   go run "$root/scripts/zitadel-source-bundle.go" --pack "$output/source-snapshot" "$source_manifest" "$output/prepared-source.tar" >"$output/source-archive.pending"
   jq -e --arg manifest "$source_manifest" '.manifestSha256 == $manifest and (.archiveSha256 | test("^[0-9a-f]{64}$"))' "$output/source-archive.pending" >/dev/null || fail 'incomplete prepared-source archive'
   for member in index.mjs package.json package-lock.json; do
@@ -166,6 +333,44 @@ run_phase() {
   # pipefail preserves a failing process even when its final log says success.
   command time -v -o "$output/$name.resources.txt" "$@" 2>&1 | tee "$output/$name.log"
 }
+# BEGIN native service consumption
+# consume_retained_service_go authenticates the selected ZIPs with native Go,
+# letting Go create its own cache markers against the frozen project checksums.
+# Its readback receipt proves this component only; whole-build flags stay false.
+consume_retained_service_go() {
+  local records="$retained_inputs/source/selected-go-sources/records"
+  local expected="$output/retained-go-service-expected.json" manifest_seal actual_manifest source_seal
+  local native_result="$output/retained-go-service-download.jsonl" id
+  local service_ids=()
+  manifest_seal="$(jq -er '.manifestSha256|select(test("^[0-9a-f]{64}$"))' "$output/retained-go-restoration.json")"
+  actual_manifest="$(shasum -a 256 "$output/go-input-native/manifest.json" | awk '{print $1}')" || fail 'restored native module manifest read failed'
+  [[ "$actual_manifest" =~ ^[0-9a-f]{64}$ && "$actual_manifest" = "$manifest_seal" ]] || fail 'restored native module manifest changed'
+  source_seal="$(jq -er '.sourceManifestSha256|select(test("^[0-9a-f]{64}$"))' "$output/retained-go-restoration.json")"
+  jq '[.modules[].effective|{Path,Version,Sum,GoModSum}]|unique_by([.Path,.Version])|sort_by(.Path,.Version)' \
+    "$retained_inputs/source/selected-go-sources/manifest.json" >"$expected"
+  jq -er '.[]|.Path+"@"+.Version' "$expected" >"$output/retained-go-service-identities.txt"
+  while IFS= read -r id; do service_ids+=("$id"); done <"$output/retained-go-service-identities.txt"
+  [[ "${#service_ids[@]}" -gt 0 ]] || fail 'empty retained service module set'
+  if ! cmp "$records/go.mod" go.mod || ! cmp "$records/go.sum" go.sum; then fail 'frozen service module records changed'; fi
+  # Go authenticates the exact original ZIPs against this project's frozen
+  # checksums and creates its own derived cache markers. Never copy or invent
+  # .ziphash, and never replace the subsequent native go mod verify command.
+  if ! go mod download -json "${service_ids[@]}" >"$native_result"; then
+    fail 'native service module consumption failed'
+  fi
+  jq -se --slurpfile expected "$expected" '
+    all(.[];has("Error")|not) and
+    (map({Path,Version,Sum,GoModSum})|sort_by(.Path,.Version))==$expected[0]
+  ' "$native_result" >/dev/null || fail 'native service module readback differs'
+  if ! cmp "$records/go.mod" go.mod || ! cmp "$records/go.sum" go.sum; then fail 'native reader changed frozen service module records'; fi
+  jq -n --arg source "$source_seal" --arg manifest "$manifest_seal" --slurpfile modules "$expected" '
+    {schemaVersion:1,sourceManifestSha256:$source,restorationManifestSha256:$manifest,
+     serviceModules:($modules[0]|length),nativeCacheReadbackPassed:true,sourceChecksumsUnchanged:true,
+     dependencyInputsCaptured:false,nativeOfflineReplayProved:false}
+  ' >"$output/retained-go-service-readback.pending"
+  mv "$output/retained-go-service-readback.pending" "$output/retained-go-service-readback.json"
+}
+# END native service consumption
 # Retain the actual native executables, never a package-manager launcher.
 save_bsr_tool() {
   local phase="$1" input="$2" expected="$3" resolved
@@ -207,10 +412,12 @@ without_network() {
   rm "$marker"
   return "$status"
 }
-run_phase install pnpm install --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
-if [[ "$capture_source" -eq 1 ]]; then
+install_options=()
+if [[ -n "$retained_inputs" ]]; then install_options+=(--offline); fi
+run_phase install pnpm install "${install_options[@]}" --store-dir "$npm_config_store_dir" --side-effects-cache=false --frozen-lockfile --filter @zitadel/zitadel --filter '@zitadel/console...'
+if [[ "$capture_source" -eq 1 || -n "$retained_inputs" ]]; then
   pnpm --filter @zitadel/zitadel --filter '@zitadel/console...' list --depth -1 --json >"$output/pnpm-selected-projects.json" || fail 'native installed workspace observation failed'
-  node "$root/tools/zitadel-pnpm-source/index.mjs" inspect --build "$output" >"$output/pnpm-installation-check.json"
+  run_pnpm_sdk inspect --build "$output" >"$output/pnpm-installation-check.json"
   jq -e '.schemaVersion == 1 and .profile == "native-installation-selection-v1" and .packages > 0 and .selectedPNPMSourcesCaptured == false and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false' "$output/pnpm-installation-check.json" >/dev/null || fail 'incomplete early native installation check'
 fi
 [[ "$(pnpm --version)" = 10.30.3 && "$(cd console && pnpm --version)" = 10.30.3 ]] || fail 'nested pnpm version changed'
@@ -302,6 +509,7 @@ find console/src internal/api/ui/login/static "$console" "$embedded" \( -type f 
 font_status=0
 grep -riE 'aileron' "$console" "$embedded" internal/api/ui/login/static/resources/themes/zitadel/css >"$output/font-references.txt" || font_status=$?
 [[ "$font_status" -eq 1 ]] || fail 'font reference survived or scan failed'
+if [[ -n "$retained_inputs" ]]; then consume_retained_service_go; fi
 go mod verify
 shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 go list -deps -json . >"$output/packages.jsonl"
@@ -330,13 +538,19 @@ while IFS= read -r reference; do
   while [[ "$reference" == ./* ]]; do reference="${reference#./}"; done
   grep -Fx "static/$reference" "$output/console-embed.txt" >/dev/null || fail 'referenced console resource is not embedded'
 done <"$output/console-references.txt"
-go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices.before.json"
+go run "$root/scripts/zitadel-console-notices.go" --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$notice_root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$notice_root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices.before.json"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --text-fonts --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$notice_root/third_party/zitadel-text-fonts" >"$output/text-fonts.before.json"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" --copied-assets --snapshot --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$notice_root/third_party/zitadel-copied-assets" >"$output/copied-assets.before.json"
 shasum -a 256 internal/api/ui/login/statik/statik.go >"$output/login-statik.before.sha256"
 mkdir "$output/service"
 binary="$output/service/zitadel"
 run_phase compile go build -buildvcs=false -o "$binary" \
-  -ldflags="-s -w -X github.com/zitadel/zitadel/cmd/build.version=$version -X github.com/zitadel/zitadel/cmd/build.commit=$pin -X github.com/zitadel/zitadel/cmd/build.date=$source_date" .
+  -ldflags="-w -X github.com/zitadel/zitadel/cmd/build.version=$version -X github.com/zitadel/zitadel/cmd/build.commit=$pin -X github.com/zitadel/zitadel/cmd/build.date=$source_date" .
 [[ -s "$binary" && -x "$binary" && ! -L "$binary" ]] || fail 'service binary missing'
+# The security checker needs function symbols; stripped binaries degrade to a
+# module-level report. Keep the table in the same executable that is packaged.
+go tool nm "$binary" >"$output/binary-symbols.txt"
+grep -Eq '^[[:space:]]*[[:xdigit:]]+[[:space:]]+T[[:space:]]+main\.main$' "$output/binary-symbols.txt" || fail 'service function symbols missing'
 readelf -h "$binary" >"$output/elf.txt"
 grep -q 'Advanced Micro Devices X86-64' "$output/elf.txt" || fail 'wrong ELF architecture'
 readelf -l "$binary" >"$output/elf-program.txt"
@@ -353,8 +567,9 @@ shasum -a 256 -c "$output/inputs.sha256" >/dev/null
 # Recheck the same private module cache after compilation, before final capture.
 go mod verify
 find "$console" "$embedded" internal/api/ui/login/static internal/api/ui/login/statik internal/notification/statik internal/statik -type f -exec shasum -a 256 {} + | sort >"$output/generated.sha256"
-shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/third_party/zitadel-login-icons/"* >"$output/login-icon-verifier.sha256"
-shasum -a 256 "$root/scripts/zitadel-console-notices.go" "$root/third_party/zitadel-console-notices/"* "$root/third_party/zitadel-go-module-notices/catalogue.json" >"$output/console-notice-verifier.sha256"
+shasum -a 256 "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" >"$output/login-icon-verifier.sha256"
+shasum -a 256 "$root/scripts/zitadel-console-notices.go" >"$output/console-notice-verifier.sha256"
+check_notice_readback
 binary_hash="$(shasum -a 256 "$binary" | awk '{print $1}')"
 recipe_hash="$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')"
 [[ "$binary_hash" =~ ^[0-9a-f]{64}$ && "$recipe_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'incomplete receipt digests'
@@ -377,12 +592,11 @@ if [[ "$capture_source" -eq 1 ]]; then
   "$module_verifier" verify-graph-metadata --package "$output/go-graph-metadata" --sha256 "$graph_metadata" --source-sha256 "$source_manifest" >"$output/go-graph-metadata-readback.json"
   cmp "$output/go-graph-metadata-capture.pending" "$output/go-graph-metadata-readback.json" || fail 'Go graph metadata readback differs'
   # The source capsule retains original registry archives, not generated install
-  # outputs or a global cache. Its native SDK is acquired separately by CI.
-  pnpm_tool="$root/tools/zitadel-pnpm-source/index.mjs"
-  node "$pnpm_tool" capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
+  # outputs or a global cache. Retained mode reconstructs its native SDK from them.
+  run_pnpm_sdk capture --build "$output" --source-sha256 "$source_manifest" --output "$output/selected-pnpm-sources" --scratch "$output/pnpm-source-work" >"$output/pnpm-source-capture.pending"
   jq -e --arg source "$source_manifest" '.schemaVersion == 1 and .sourceManifestSha256 == $source and .packages > 0 and .archives > 0 and .files > 0 and .selectedPNPMSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/pnpm-source-capture.pending" >/dev/null || fail 'incomplete selected pnpm source capture'
   pnpm_manifest="$(jq -er .manifestSha256 "$output/pnpm-source-capture.pending")"
-  node "$pnpm_tool" verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
+  run_pnpm_sdk verify --capsule "$output/selected-pnpm-sources" --sha256 "$pnpm_manifest" --scratch "$output/pnpm-source-readback-work" >"$output/pnpm-source-readback.pending"
   cmp "$output/pnpm-source-capture.pending" "$output/pnpm-source-readback.pending" || fail 'selected pnpm source readback differs'
   for member in index.mjs package.json package-lock.json; do
     cmp "$root/tools/zitadel-pnpm-source/$member" "$output/source-snapshot/records/recipes/zitadel-pnpm-source/$member" || fail 'native pnpm adapter changed during build'
@@ -390,7 +604,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Retain only the complete service-selected graph, after compilation and the
   # final module verification. The command's checksum-bound dependency is
   # tooling, not an extra service module or a complete offline-replay closure.
-  "$module_verifier" --capture --build "$output" --catalogue "$root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources" >"$output/go-module-source-capture.pending"
+  "$module_verifier" --capture --build "$output" --catalogue "$notice_root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources" >"$output/go-module-source-capture.pending"
   jq -e '.schemaVersion == 1 and .modules == 231 and .files == 466 and .selectedServiceGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/go-module-source-capture.pending" >/dev/null || fail 'incomplete selected Go source capture'
   go_modules_manifest="$(jq -er .manifestSha256 "$output/go-module-source-capture.pending")"
   "$module_verifier" --verify "$output/selected-go-sources" --sha256 "$go_modules_manifest" >"$output/go-module-source-readback.pending"
@@ -463,22 +677,79 @@ if [[ "$capture_source" -eq 1 ]]; then
     if length == 2 and map(.phase) == ["api","console"]
     then {schemaVersion:1,platform:"linux/amd64",sourceManifestSha256:$source,bsrManifestSha256:$package,recipeSha256:$recipe,compilers:.,networkDenialProved:true,nonRootReplay:true,noNewPrivilegesReplay:true,schemaOfflineReplayProved:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}
     else error("incomplete schema compiler replay") end' "$output/bsr-replay-compilers.pending" >"$output/bsr-schema-replay.json"
-  go run "$root/scripts/zitadel-source-bundle.go" --verify "$output/source-snapshot" "$source_manifest" >"$output/source-readback.pending"
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$output/source-snapshot" "$source_manifest" "$root" "${notice_args[@]}" >"$output/source-readback.pending"
   archive_hash="$(shasum -a 256 "$output/prepared-source.tar" | awk '{print $1}')"
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
+  check_text_notice_records "$output/source-snapshot/records"
   source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  check_sdk_bootstrap_readback
+  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],sdkBootstrap:$sdk[0],verifierCompiler:{go:"1.27.3",sha256:$compiler}}')"
+  source_snapshot_json="$(jq --argjson originals "$notice_summary" '. + {noticeOriginals:$originals}' <<<"$source_snapshot_json")"
+fi
+if [[ -n "$retained_inputs" ]]; then
+  # Exercise the reconstructed SDK around this same denied-network build. Only
+  # authenticated originals supply recapture; no second compiler build is added.
+  run_pnpm_sdk verify --capsule "$retained_inputs/source/selected-pnpm-sources" --sha256 "$pnpm_seal" \
+    --scratch "$output/pnpm-original-check-work" >"$output/retained-pnpm-verification.json"
+  jq -e --slurpfile original "$retained_receipt" '.==$original[0].sourceSnapshot.pnpmSources' "$output/retained-pnpm-verification.json" >/dev/null || fail 'original pnpm readback differs'
+  run_pnpm_sdk recapture --build "$output" --source-sha256 "$prepared_sha" --output "$output/recaptured-pnpm-sources" --scratch "$output/pnpm-recapture-work" \
+    --original-capsule "$retained_inputs/source/selected-pnpm-sources" --original-sha256 "$pnpm_seal" --original-scratch "$output/pnpm-original-recapture-check" >"$output/pnpm-recapture.json"
+  jq -e --arg source "$prepared_sha" --slurpfile original "$retained_receipt" \
+    '.schemaVersion==1 and .sourceManifestSha256==$source and .packages==$original[0].sourceSnapshot.pnpmSources.packages and .selectedPNPMSourcesCaptured==true and .dependencyInputsCaptured==false and .nativeOfflineReplayProved==false and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$output/pnpm-recapture.json" >/dev/null || fail 'native pnpm recapture incomplete'
+  recaptured_pnpm_sha="$(jq -er .manifestSha256 "$output/pnpm-recapture.json")"
+  run_pnpm_sdk verify --capsule "$output/recaptured-pnpm-sources" --sha256 "$recaptured_pnpm_sha" --scratch "$output/pnpm-recapture-check-work" >"$output/pnpm-recapture-verification.json"
+  cmp "$output/pnpm-recapture.json" "$output/pnpm-recapture-verification.json" || fail 'native pnpm recapture readback differs'
+  mkdir -m 700 "$output/pnpm-recapture-store"
+  run_pnpm_sdk restore --capsule "$output/recaptured-pnpm-sources" --sha256 "$recaptured_pnpm_sha" \
+    --scratch "$output/pnpm-recapture-restore-work" --store "$output/pnpm-recapture-store/v10" >"$output/pnpm-recapture-restoration.json"
+  jq -e --slurpfile capture "$output/pnpm-recapture.json" '.nativeStoreRestored==true and del(.nativeStoreRestored)==$capture[0]' "$output/pnpm-recapture-restoration.json" >/dev/null || fail 'recaptured native store restoration differs'
+  check_sdk_bootstrap_readback
+  jq -n --arg source "$prepared_sha" --arg recipe "$sdk_recipe_hash" --arg sdk "$sdk_bootstrap_sha" --arg original "$pnpm_seal" --arg recaptured "$recaptured_pnpm_sha" \
+    --arg restore "$(shasum -a 256 "$output/retained-pnpm-restoration.json" | awk '{print $1}')" \
+    --arg inspect "$(shasum -a 256 "$output/pnpm-installation-check.json" | awk '{print $1}')" \
+    --arg verify "$(shasum -a 256 "$output/retained-pnpm-verification.json" | awk '{print $1}')" \
+    --arg capture "$(shasum -a 256 "$output/pnpm-recapture.json" | awk '{print $1}')" \
+    --arg verifyRecapture "$(shasum -a 256 "$output/pnpm-recapture-verification.json" | awk '{print $1}')" \
+    --arg restoreRecapture "$(shasum -a 256 "$output/pnpm-recapture-restoration.json" | awk '{print $1}')" \
+    '{schemaVersion:1,profile:"identity-native-pnpm-sdk-operations-v1",sourceManifestSha256:$source,recipeSha256:$recipe,sdkBootstrapManifestSha256:$sdk,originalPnpmManifestSha256:$original,recapturedPnpmManifestSha256:$recaptured,operations:["restore","inspect","verify","capture","verify","restore"],receipts:{restore:$restore,inspect:$inspect,verify:$verify,capture:$capture,verifyRecapture:$verifyRecapture,restoreRecapture:$restoreRecapture},nativeOperationsPassed:true,nativeOfflineReplayProved:false}' >"$output/pnpm-sdk-operations.json"
+  jq -e '(.receipts|keys)==["capture","inspect","restore","restoreRecapture","verify","verifyRecapture"] and all(.receipts[]; test("^[0-9a-f]{64}$"))' "$output/pnpm-sdk-operations.json" >/dev/null || fail 'complete native SDK operation digests required'
 fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
     '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
+if [[ -n "$retained_inputs" ]]; then
+  jq --argjson originals "$notice_summary" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" --slurpfile operations "$output/pnpm-sdk-operations.json" '. + {retainedInputsRestored:true,noticeOriginals:$originals,sdkBootstrap:$sdk[0],sdkNativeOperations:$operations[0]}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
+  mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
+fi
+# Both inventories bind these final bytes. After capture, only rename the receipt.
 [[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
-go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$root/third_party/zitadel-go-module-notices" >"$output/console-notices-inventory.pending"
-go run "$root/scripts/zitadel-login-icons.go" --inventory --build "$output" --notices "$root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
+go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$notice_root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$notice_root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices-inventory.pending"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --inventory --build "$output" --notices "$notice_root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --text-fonts --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$notice_root/third_party/zitadel-text-fonts" >"$output/text-font-notices-inventory.pending"
+mv "$output/text-font-notices-inventory.pending" "$output/text-font-notices-inventory.json"
+go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" --copied-assets --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$notice_root/third_party/zitadel-copied-assets" >"$output/copied-asset-notices-inventory.pending"
+mv "$output/copied-asset-notices-inventory.pending" "$output/copied-asset-notices-inventory.json"
 mv "$output/login-icons-inventory.pending" "$output/login-icons-inventory.json"
 mv "$output/console-notices-inventory.pending" "$output/console-notices-inventory.json"
 mv "$output/console-notices-supplement-inventory.pending" "$output/console-notices-supplement-inventory.json"
+if [[ -n "$retained_inputs" ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify "$retained_inputs" "$retained_sha" >/dev/null || fail 'retained inputs changed during build'
+fi
+if [[ "$capture_source" -eq 1 ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-tools "$output/source-snapshot" "$source_manifest" "$output/verifier-tool-source" >"$output/verifier-tool-source-final.json"
+  cmp "$output/verifier-tool-source.json" "$output/verifier-tool-source-final.json" || fail 'tool source changed during build'
+  "$module_verifier" verify-verifier-bootstrap --tool-source "$output/verifier-tool-source" --source-sha256 "$source_manifest" --tool-source-sha256 "$tool_source_sha" \
+    --package "$output/selected-verifier-bootstrap" --sha256 "$(jq -er .manifestSha256 "$output/verifier-bootstrap-capture.json")" >"$output/verifier-bootstrap-final.json"
+  cmp "$output/verifier-bootstrap-capture.json" "$output/verifier-bootstrap-final.json" || fail 'verifier bootstrap changed during build'
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$output/source-snapshot" "$source_manifest" "$root" "${notice_args[@]}" >/dev/null || fail 'repository source differs from the captured build records'
+elif [[ -n "$prepared_source" ]]; then
+  go run "$root/scripts/zitadel-source-bundle.go" --verify-build-records "$prepared_source" "$prepared_sha" "$root" "${notice_args[@]}" >/dev/null || fail 'repository source differs from the restored build records'
+fi
+check_notice_readback
+check_pnpm_sdk_source
+check_sdk_bootstrap_readback
 mv "$output/build-receipt.pending" "$output/build-receipt.json"
 complete=1
 printf 'Complete native build evidence only: %s\n' "$output"

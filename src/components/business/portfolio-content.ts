@@ -1,6 +1,7 @@
 export const portfolioText = {
   da: {
   pageIntro: 'Udvalgt arbejde — fra en offentlig hjemmeside til værktøjer, der løser konkrete problemer.',
+  earlierLinks: 'Tidligere projektlinks',
   sourceAvailable: 'Kildekode tilgængelig — se projektets licens.',
   reuse: 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.',
   work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
@@ -9,6 +10,7 @@ export const portfolioText = {
 },
   en: {
   pageIntro: 'Selected work — from a public website to tools that solve practical problems.',
+  earlierLinks: 'Earlier project links',
   sourceAvailable: 'Source-available — see the project’s licence.',
   reuse: 'Each project has its own licence. Check its terms before reuse.',
   work: 'Selected work', intro: 'A public website you can visit and explore.',
@@ -43,6 +45,6 @@ export const ksailStories = {
 export const legacyAnchors: Record<string, string[]> = {
   ksail: ['️-ksail---'], 'khoist': ['data-product-controller', '-data-product-controller--'],
   'world-at-ruin': ['️-world-at-ruin--'], '.github': ['-reusable-workflows-', '-actions-'],
-  'agent-skills': ['-agent-skills--'], 'agent-plugins': ['-agent-plugins---'],
+  'agent-plugins': ['-agent-skills--', '-agent-plugins---'],
   'provider-upjet-unifi': ['-unifi-provider---'], 'kyverno-policies': ['️-kyverno-policies--'],
 };

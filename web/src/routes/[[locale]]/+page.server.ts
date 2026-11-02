@@ -1,10 +1,9 @@
 import { error } from "@sveltejs/kit";
-import { FEATURE_SVELTE_FRONTEND } from "$app/env/private";
 import { business } from "#lib/business.server.ts";
 import { professionalWork } from "../../../../src/components/business/professional-work";
 
 export const load = ({ params }: { params: { locale?: string } }) => {
-  if (!FEATURE_SVELTE_FRONTEND || (params.locale !== undefined && params.locale !== "da")) error(404);
+  if ((params.locale !== undefined && params.locale !== "da")) error(404);
   const locale: "en" | "da" = params.locale === "da" ? "da" : "en";
   const t = business.copy[locale];
   const c = business.client[locale];
@@ -18,6 +17,7 @@ export const load = ({ params }: { params: { locale?: string } }) => {
       promise: t.promise, servicesTitle: t.servicesTitle, servicesIntro: t.servicesIntro,
       starting: t.starting, monthly: t.monthly, perMonth: t.perMonth, currency: t.currency,
       offers: business.offers.map((offer, i) => ({ ...offer, ...t.offerCopy[i] })),
+      otherRequest: t.otherRequest,
       vatMarker: business.vatMarker(locale),
       priceNote: t.priceNote, hostingTitle: t.hostingTitle, hostingText: t.hostingText, fitTitle: t.fitTitle, fitText: t.fitText,
       qualityEyebrow: c.qualityEyebrow, qualityTitle: c.qualityTitle, qualityIntro: c.qualityIntro,

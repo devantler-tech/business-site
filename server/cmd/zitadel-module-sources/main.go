@@ -9,7 +9,7 @@ import (
 )
 
 // The reviewed catalogue, not a CLI input, chooses the admitted service graph.
-const frozenCatalogue = "dfdff48e6a821277bfc9fa1b2a2133e316dfc8850c6f4fc13cdbf97625c17047"
+const frozenCatalogue = "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd"
 
 // run is inert without arguments and admits exactly one explicit operation.
 func run(args []string, stdout io.Writer) error {
@@ -18,6 +18,9 @@ func run(args []string, stdout io.Writer) error {
 	}
 	if args[0] == "restore-go-inputs" {
 		return runGoInputRestoration(args[1:], stdout)
+	}
+	if args[0] == "capture-verifier-bootstrap" || args[0] == "verify-verifier-bootstrap" || args[0] == "restore-verifier-bootstrap" {
+		return runVerifierBootstrap(args[0], args[1:], stdout)
 	}
 	if args[0] == "capture-graph-metadata" || args[0] == "verify-graph-metadata" {
 		return runGoGraphMetadata(args[0], args[1:], stdout)

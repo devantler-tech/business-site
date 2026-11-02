@@ -93,12 +93,11 @@ export const previewSupporting = {
 } as const;
 
 /** Select public supporting copy without reading framework or private environment. */
-export function createSupportingCopy(revisedOffer: boolean, customerScopeEnabled = false) {
+export function createSupportingCopy(revisedOffer: boolean) {
   const selected = revisedOffer ? previewSupporting : {
     en: { ...previewSupporting.en, ...publishedOffer.supporting.en },
     da: { ...previewSupporting.da, ...publishedOffer.supporting.da },
   };
-  if (!customerScopeEnabled) return selected;
   return {
     en: { ...selected.en, principles: selected.en.principles.map((item, index) => index === 2 ? { ...item, text: customerScopeCopy.en.principle } : item) },
     da: { ...selected.da, principles: selected.da.principles.map((item, index) => index === 2 ? { ...item, text: customerScopeCopy.da.principle } : item) },

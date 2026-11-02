@@ -8,52 +8,43 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 
 ## Layout and ownership
 
-- The Astro + Starlight application lives at the repository root: `src/`,
-  `public/`, `scripts/` and root package/configuration files.
-- `web/` is the SvelteKit public frontend. Its framework-native
-  `FEATURE_SVELTE_FRONTEND` setting is default-off and admits bilingual Home, About and Projects output,
-  with the two historical English project redirects, the English Journal's paginated main archive,
-  complete unpaginated topic and author archives,
-  all 15 complete Journal reading routes, and the six existing English technical guides,
-  including locally rendered diagrams and the complete template collection. Enabled company
-  identity also admits the two English/Danish company-information pages, with the address
-  confined to those disclosures and omitted when identity is disabled. The legacy
-  GitOps tenant-template URL redirects locally, preserving incoming heading bookmarks.
-  Follow `web/README.md`. The normal build selects the verified complete candidate only when
-  explicitly enabled and writes the same canonical `dist/` as the incumbent build. Production
-  publication explicitly selects Svelte, with main-only artifact previews and explicit Astro
-  recovery. Production-profile Go packaging also selects Svelte; the ordinary package remains
-  an Astro comparison. Only Svelte packages use the explicit `--svelte` option; omit it for the
-  ordinary Astro comparison. Both ignore ambient frontend settings.
+- `web/` is the sole public application, built with SvelteKit and Svelte. Root `src/`
+  and `public/` retain framework-neutral copy, authored Markdown, images and downloads.
+  Local builds, publication and both Go package profiles always use Svelte. The retired
+  frontend release flag has no effect; Astro applications, compiler and recovery option are removed.
+- English/Danish Home, About and Projects, the complete English Journal, all technical guides,
+  RSS, discovery assets and historical redirects are permanent. Preserve incoming heading
+  bookmarks and the existing green-orb favicon. Never invent Danish article or guide routes.
+- `src/data/build-content.mjs` compiles the maintained Markdown with Satteri, YAML metadata,
+  Expressive Code, Sharp and the existing CV renderer. It never evaluates MDX. Historical
+  `.mdx` filenames remain content inputs, not executable components. Technical template
+  cards come from the maintained template collection. Catalogue/CV legacy metadata remains
+  available to the cross-product drift guards; it is not another web application.
+- `scripts/build-journal-reference.sh` prepares source-bound content under ignored
+  `.generated/`; the normal build invokes it automatically. Use it before standalone
+  `web/` builds. Complete own-source Git history, before/after input fingerprints, exact
+  inventories, asset digests and independent refusal controls remain mandatory. Diagrams
+  use only their locally bundled Mermaid graph; ordinary code retains its native copy controls.
+  The `/_astro/` image URL namespace is retained for compatibility and has no Astro dependency.
+- `web/src/env.ts` retains strict, independent default-off company/offer settings. The postal
+  address is confined to the two enabled disclosure documents. Shared layout/load data never
+  carries it; runtime template placeholders remain escaped. Public invitation copy does not
+  activate Go portal capabilities. Read `web/README.md` for builds and verification.
 - Framework-neutral homepage and quality copy lives in `business-copy.ts` and `client-copy.ts`
-  under `src/components/business/`; the existing Astro adapters retain its release configuration.
-  The Svelte candidate preserves the three default-off company/offer/customer-scope settings
-  through its native server-only configuration. Shared layout/load data never carries the address;
-  the company-page HTML transform retains escaped text and the runtime's template placeholders.
-- Framework-neutral portfolio descriptions, presentation and bookmark aliases live in
-  `client-products.ts` and `portfolio-content.ts`; both frontends use the same ranking implementation
-  and complete dated snapshot. Projects also uses the shared bookmark-disclosure controller.
-- The Journal candidate reads the actual Astro collection at build time through `src/data/journal.mjs`,
-  using Astro's frontmatter parser and the published excerpt renderer. Both frames share archive
-  configuration, introductory copy and the native-link card controller. Technical routes
-  reuse their maintained Astro-rendered bodies, bookmarks, native code controls and table semantics;
-  only the original English routes are admitted. Admitted bodies reuse an
-  input-bound generated Astro reference; run `scripts/build-journal-reference.sh` before standalone
-  enabled candidate builds. The selected normal build prepares it automatically through the explicit
-  incumbent builder, never recursively through the normal publication entrypoint.
-  The reference also bundles the existing Mermaid dependency with the candidate's Vite toolchain.
-  Only diagram articles load that local module graph; ordinary code retains its separate copy controls.
-  Numeric archives and article slugs share explicit dispatch; unsupported nested article routes
-  fail the build. Never invent Danish article routes.
-  The enabled candidate retains the complete English `/blog/rss.xml` and its canonical image
-  dependencies through an input-bound generated reference and native prerendered endpoints.
-  Feed XML, images and discovery stay default-off; do not invent a Danish feed or add a browser parser.
-  The same input-bound reference captures the generated CV, maintained thesis PDF, favicon,
-  robots file and sharing portrait through inspected file descriptors. Native prerendered endpoints
-  retain these downloads locally. The final adapter output supplies canonical sitemap membership,
-  excluding redirects and noindex disclosures; never copy publisher CNAME or publication receipts.
-  All discovery assets and endpoints are absent when the candidate is false or unset.
+  under `src/components/business/`. Portfolio descriptions, presentation and bookmark aliases
+  live in `client-products.ts` and `portfolio-content.ts`; preserve complete dated rankings
+  and the shared bookmark-disclosure controller.
+- The adapter supplies canonical sitemap membership, excluding redirects/noindex disclosures.
+  The publication validator independently checks the full route inventory, local dependencies,
+  visitor privacy, forbidden private output and this build's complete file hashes/nonce.
+  Only the promoter adds CNAME; publication receipts remain publisher-owned.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
+- `third_party/zitadel-build-tools/scope.json` defines the exact 37 authored
+  identity-build files and three license documents granted under AGPL-3.0-only.
+  No directory-wide, whole-module or other application license is implied.
+  Preserve its closed scope, private SDK metadata and literal terms; source capture
+  and distribution admission remain separate. The CI-only scope checker and tests
+  are outside that grant and never activate or publish an identity.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
   production authentication, customer intake and payments remain disabled.
@@ -61,23 +52,73 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
   deployment, user-provisioning or portal-activation authority. Social logins are deferred.
 - `scripts/prepare-zitadel-source.sh` explicitly prepares the frozen upstream source
-  without the unadmitted Ailerons assets or JSONPath machine-ID selector. Configured
-  metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
+  without the unadmitted Ailerons assets or JSONPath machine-ID selector. Its fixed
+  neutral-provider profile replaces decoration in eighteen native consumers with
+  the already-admitted arrow fonts and removes sixteen provider image paths.
+  Provider labels, links, forms and surviving branding/theme rules stay intact.
+  The separate SMTP profile binds fourteen originals, changes five consumers and
+  removes nine image paths, reusing the existing envelope glyph. Preserve all nine
+  preset connection defaults and the native generic SMTP path. The complete compiler
+  stream is checked before catalogue selection; no retired SMTP path may hide outside it.
+  The separate MDI profile retains twenty-five standard graphics with immutable
+  provenance and complete original terms, replaces OpenID/JWT decoration in five
+  native consumers and retires only their two SVGs. Preserve the LDAP control and
+  both native protocol editors. The existing catalogue remains 1,858/3,716; the
+  MDI extension adds twenty-five originals and fifty actual generated copies.
+  The separate framework profile binds fifty-two immutable inputs, removes all
+  forty-four technology images and strips only image properties from the original
+  thirty-five-entry metadata. All twenty-four selectable IDs, documentation links,
+  filters and native selection behavior remain. Its three renderers use the existing
+  code glyph with visible names; all eight prepared consumers are read back before
+  observing complete source, output and compiler streams. Native browser evidence
+  includes Quickstart, selected Angular and keyboard autocomplete in both themes.
+  The native copy task only clears obsolete docs images; it never requires an
+  empty source directory to survive archive restoration.
+  The separate source-offer profile binds both original native footers and adds
+  their unconditional versioned corresponding-source link with dated change notices.
+  Preserve existing policy links, watermark and theme controls. Its source seal and
+  preparation receipt must describe the actual complete transformed tree; the URL
+  alone is not evidence that a source release exists.
+  The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
+  applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
+  1.7.3 dependency profile, preserving the upstream key-size limit and other
+  selections. The login interceptor marks only explicitly configured plaintext
+  mode for the patched CSRF library; production TLS checks stay enabled.
+  Configured metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
   Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.
 - `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
   CI retains build diagnostics only; successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+  The explicit local handoff command binds the existing archives and original
+  native witness bytes to caller-supplied run metadata. CI uploads only that
+  bounded manifest; raw unadmitted archives stay local. It grants no publication
+  or authenticated-provenance authority. Read `server/cmd/identity-release/README.md`.
+  The separately compiled pinned vulnerability checker analyzes the actual Linux
+  binary against the official database; preserve its failure status and retained
+  text diagnostics. Both output streams enter the retained report without changing
+  the checker exit status. Its verdict is not full admission or deployed acceptance.
 - `scripts/zitadel-source-bundle.go` is an explicit, otherwise inert source-input
   snapshot/archive verifier. Its prepared-source operation admits only the complete
   frozen tree after API serialization, preserving empty files and executable modes.
   Archive replay checks closed member identities without executing source. It does
   not yet supply dependency acquisition, native offline compilation or publication.
   The Linux builder's explicit `--capture-source` option captures before install,
-  retains fourteen literal build/modification records and rechecks the snapshot/archive
-  before binding their identities to the completed binary's build receipt. CI
+  retains fifty-eight literal build/modification records and rechecks the snapshot/archive
+  before binding their identities to the completed binary's build receipt.
+  These include all 37 approved authored paths and their three scoped terms documents,
+  using the existing aliases without duplicate source records. The Console supplement catalogue
+  and historical public-suffix original are retained as two additional inert records. Explicit
+  `--verify-build-records` rechecks the current literal repository inputs against
+  the sealed snapshot before a completed native receipt. Records remain inert
+  0644 audit data; the helper module never replaces the upstream service module. CI
   unpacks that actual archive; diagnostics exclude its full source bytes.
+  Explicit `--restore-tools` restores only the 37 approved authored paths and
+  three terms documents into a separate, fresh private tool-source tree at their
+  original paths. `--verify-tools` rechecks complete membership, bytes and modes
+  against the sealed snapshot. Both operations refuse partial or changed input;
+  neither compiles tools, restores bootstrap dependencies or admits distribution.
   Its explicit `--restore-build` operation restores the sealed files and literal
   records into a new native layout. The Linux builder's mutually exclusive
   `--prepared-source`/`--prepared-sha256` mode reuses the existing frozen capture
@@ -87,12 +128,43 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   complete dependency capture or native offline replay. Keep both modes' private
   Go/pnpm/schema acquisition caches, empty schema credentials/configuration,
   public checksum verification and confined records.
+- `scripts/replay-zitadel-inputs.sh` explicitly assembles only the nine sealed
+  input components and their original build receipt using the archive engine's
+  distinct retained-input profile. That profile preserves private capsule modes
+  and cannot impersonate prepared source. Inside the same network boundary,
+  reconstruct both source verifiers with the caller-selected original Go 1.27.3
+  compiler, the approved source layout and checksum-pinned x/mod originals.
+  Preserve original compiler, native package composition and exact binary hash
+  joins. Only rebuilt executables enter the service pipeline; original programs
+  authenticate bootstrap data and never serve as a replay fallback. The Linux builder's exclusive
+  `--retained-inputs`/`--retained-sha256` mode authenticates and reconstructs native
+  Go, pnpm and schema stores before the existing full pipeline. Retain exactly
+  45 notice originals in their source/profile/recipe-bound capsule, including
+  the thirteen original-input record joins. Every collector uses the restored
+  root; the authenticated native tool-source caller has no checkout notice
+  directories. Preserve connected checkout and restored-root late readbacks,
+  the 58-record boundary, four source-restoration targets and 40 approved tools.
+  Never rescue a missing capsule with checkout inputs. Only the outer
+  replay command may emit a whole-build success receipt, after that pipeline and
+  same-build notices finish in a separate network namespace as the original
+  nonroot user, with no new privileges and all capabilities dropped. Component
+  receipts remain scoped and false for whole-build proof. CI retains compact
+  evidence only; image/source-offer admission and portal activation stay separate.
+- `server/cmd/identity-release/` explicitly retains the frozen identity base's
+  original OCI metadata/layers, Debian source archives, package records and
+  notices. Read its README. Preserve complete checksum/closed-membership joins,
+  original modes, external seals and actual deterministic archive readback.
+  It never runs retained data, publishes an image or activates portal access;
+  signature, public-source and image-admission claims remain false.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI
   builds it before selecting the unchanged frozen identity compiler. The Linux
   builder requires its explicit executable path when source capture is enabled
   and binds its compiler, command identity and byte digest to the receipt.
+  Its separate verifier-bootstrap modes retain only original x/mod ZIP/mod/info
+  and successful native package membership, tied to the approved tool-source seal.
+  Closed-profile verification and restoration never assert tool reconstruction.
   Explicit capture retains the frozen service's 231 original/effective selections
   and 466 source/metadata files from that build's private cache. The root command's
   complete dependency set must equal the compiler stream. External-seal readback
@@ -103,6 +175,16 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `scripts/zitadel-login-icons.go` explicitly verifies the selected Login V1
   fonts, decoded statik members and retained notices. It is inactive without
   arguments and is mandatory in the Linux build, not the public website build.
+  Compile its `zitadel-text-fonts.go` companion too. Explicit `--text-fonts`
+  snapshot/capture/read-only verification preserves the 54 frozen text fonts,
+  84 actual copies and original attribution; its raw text and inventory enter
+  image packaging and retained-input replay. This does not admit an image or
+  activate the portal; read ADR 0025 and the source guide before changing it.
+  The `--copied-assets` companion also closes 1,858 icon/flag/translation originals,
+  3,716 generated copies and their actual Console embeds. Translation admission
+  retains the complete frozen license, licensing scope and contribution context,
+  checks strict UTF-8 JSON objects and keeps the full translation bodies in source,
+  rather than duplicating them into notice text. Read ADR 0026 before changing it.
 - `server/cmd/zitadel-bsr-sources/` is an otherwise inert, standard-library build
   command for the frozen three-module schema profile; read its README. It verifies
   native SHAKE256 content, both cache/export representations and a closed externally
@@ -129,8 +211,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   selection, complete original archive SRI, independent CAFS byte checks and
   native lifecycle classification. Restoration preserves verified literal indexes;
   it never transplants old installation metadata into the application. The
-  adapter and both SDK manifests are retained source/build records. Capture and
-  reconstruction do not establish an offline install or complete native replay.
+  adapter and both SDK manifests are retained source/build records. The separate
+  SDK bootstrap capsule retains all 132 original locked packages and supplemental
+  terms. Raw built-in verification must precede native npm reconstruction and every
+  SDK use; no ambient module path, configuration or cache may supply dependencies.
+  SDK reconstruction remains scoped evidence; only the complete restricted replay
+  caller can establish an offline application build. Read its README.
 - `scripts/zitadel-console-notices.go` captures the actual Angular notice text
   and its same-build bindings. The explicit Linux recipe brackets compilation
   with a checked snapshot; raw diagnostic capture is not complete license admission.
@@ -157,12 +243,54 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
   The opentype.js component checks one exact decoded source-map notice; logical
   source identifiers are inert data, never paths to read or URLs to fetch.
-- `Dockerfile.zitadel` and `scripts/zitadel-image-{package,smoke}.go` assemble an
-  explicit local identity image and exercise only its real version command. CI
+- `Dockerfile.zitadel` and `scripts/zitadel-{image-package,image-smoke,service-smoke}.go` assemble an
+  explicit local identity image and exercise its real version command. CI
   checks a closed package, the copied-back image payload and inspected container
-  restrictions, then removes only its owner-bound container and local image. The bounded
+  restrictions, then saves the exact exercised image to a bounded private archive. It removes
+  the original, confirms the complete owner-labelled image set is absent, reloads the sealed
+  archive and rechecks the same config identity and inspected configuration before final
+  owner-bound cleanup. The archive stays local and is excluded from diagnostic upload.
+  The inspected filesystem must contain the pinned base config's thirteen ordered
+  DiffIDs followed by exactly three application layers (WORKDIR and two COPY steps). Its `baseRootFS` readback
+  remains distinct from the archive, image-config and registry-manifest digests.
+  Copy and retain the six original base package copyrights and their referenced
+  complete GPL-2 text from that actual owned container. Keep their closed readback
+  separate from /app notices; recheck it before export and after reload.
+  Its size, digest and successful reload enter the receipt; they are not a registry identity,
+  corresponding-source offer or distribution admission. The bounded
   diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
-  This grants no image publication, daemon/database/login acceptance or activation.
+  The separate explicit service profile also cold-starts the same image with an
+  ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes
+  no host ports and reads actual Linux process restrictions and RSS/peak
+  measurements. Preserve its closed network, writable-path and owner-bound cleanup
+  controls. HTTP connects only to the inspected owned private endpoint; its fictional
+  authority is never resolved through DNS and redirects cannot leave that authority.
+  Read the actual process mount table too; Docker's legacy tmpfs option is not
+  guaranteed to appear among regular mount points. Keep the kernel read-only
+  root and bounded, non-executable, owner-bound tmpfs admission mandatory.
+  HTTP discovery/console availability is not browser, invitation, MFA, production
+  TLS, complete-stack acceptance or activation. No image is published.
+  The separately explicit `--browser-smoke` profile also uses the runner's Chrome
+  and matching WebDriver inside the owned service network namespace as a non-root
+  user. Its native browser sandbox remains enabled. It exercises only fictional
+  Login V1 and authenticated Console presentation, plus ten native neutral-provider
+  cases (light/dark chooser, two configured table rows, Google editor, login and
+  registration). Fixture-only native API setup preserves the login policy except
+  enabling the two unusable fictional providers; no external action is followed.
+  Login/registration links are reached by native Tab, and the picker by Enter.
+  The unchanged operator journey has 100s; the additional presentation phase has
+  120s, within a 4min worker wrapper. That same phase independently requires twenty
+  SMTP cases (chooser and nine unsaved preset editors in both themes), including
+  unchanged defaults, native Enter, loaded envelope glyphs and each screenshot.
+  Console observations wait for the frozen fixture's native background transition
+  to finish and its computed background color to match the requested theme.
+  It never saves a mail configuration or sends a message. It retains source/image-bound receipts
+  and screenshots; it grants no production login, mail, invitation or activation
+  clearance. The Go browser worker is reachable only through the explicit profile.
+  Four separate source-offer observations require genuine Tab focus, visibility,
+  the exact versioned destination and same-page readback after each new screenshot,
+  in Login and Console in both themes. They never follow the external URL inside
+  the fictional fixture; public retrieval is a separate publication requirement.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
   and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
 - Private portal presentation uses Go templates and native forms. Contact responses
@@ -210,6 +338,7 @@ node --test scripts/identity-cohorts.test.mjs
 bash scripts/npm-toolchain.test.sh
 bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
+bash scripts/scan-go-source.test.sh
 bash scripts/publishing-contract.test.sh
 bash scripts/site-publication.test.sh
 bash scripts/runtime-release.test.sh
@@ -220,11 +349,14 @@ node --test scripts/tenant-package.test.mjs
 node scripts/tenant-runtime-smoke.test.mjs
 bash scripts/package-go-notices.test.sh
 bash scripts/prepare-zitadel-source.test.sh
+# The preparer suite also runs the real immutable provider-input controls.
+bash scripts/zitadel-build-tools-license.test.sh
 bash scripts/build-zitadel-linux.test.sh
 bash scripts/zitadel-build-contract.test.sh
-(cd scripts && go test -race zitadel-login-icons.go zitadel-login-icons_test.go)
+(cd scripts && go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go)
 (cd scripts && go test -race zitadel-console-notices.go zitadel-console-notices_test.go zitadel-console-supplement_test.go zitadel-toolchain-notices_test.go zitadel-source-notices_test.go)
-(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-image-package_test.go zitadel-image-smoke_test.go)
+node scripts/zitadel-provider-browser.test.mjs
+(cd scripts && go test -race zitadel-image-package.go zitadel-image-smoke.go zitadel-service-smoke.go zitadel-browser.go zitadel-image-package_test.go zitadel-image-smoke_test.go zitadel-service-smoke_test.go zitadel-browser_test.go)
 (cd scripts && go test -race zitadel-source-bundle.go zitadel-source-bundle_test.go)
 (cd scripts && go test -race zitadel-console-assets.go zitadel-console-assets_test.go)
 npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
@@ -254,7 +386,7 @@ See docs/adr/0003-source-owned-publication.md.
 ## Content boundaries
 
 Read `docs/README.md` before editing public content. Pages and journal posts live in
-`src/content/docs/`; this inner Starlight collection is not the contributor-docs directory.
+`src/content/docs/`; this authored content collection is not the contributor-docs directory.
 Edit bilingual catalogue descriptions in `src/data/public-products.json`; set changes must also
 update the inventory in `src/content/docs/projects/active.mdx` and the dated stars snapshot.
 Keep KSail brief and linked to ksail.devantler.tech rather than duplicating its documentation.
@@ -262,7 +394,7 @@ Keep KSail brief and linked to ksail.devantler.tech rather than duplicating its 
 
 Write concise, reader-facing present-state copy, verified outcomes and a clear next step.
 Follow the editorial standard for posts and material updates; never invent experience or numbers.
-Unreleased UI/content stays behind a default-off `astro:env` release flag until reviewed activation
+Unreleased UI/content stays behind a default-off server-only Svelte release flag until reviewed activation
 and live proof; remove the flag once shipped. Never hand-edit generated output or edit a journal
 post during a project-description sync.
 
@@ -283,11 +415,13 @@ Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optiona
 plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
 net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
-VAT-inclusive prices and current company facts are permanent in both frontends and every package
+VAT-inclusive prices and current company facts are permanent in the frontend and every package
 profile. The source-owned publisher and production-template packager enable company identity and
-keep revised-offer/customer-scope releases disabled. The ordinary Astro comparison and explicit
-Astro recovery use the same approved price state; no historical no-VAT setting remains.
-This does not activate portal orders or expand eligible customer countries.
+the reviewed private/business customer invitation for Denmark and the EU; revised-offer copy stays
+disabled. Scope, price and applicable VAT are confirmed before agreement, and outside-EU projects
+require a separate assessment before any offer. Every package uses the same approved price state;
+no historical no-VAT setting remains.
+This public invitation does not authorize portal orders or change server-side country eligibility.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins, never inferred from the starter guide.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects

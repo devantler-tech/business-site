@@ -87,6 +87,61 @@ test('the final required check rejects absent or unsuccessful main publication',
   }
 });
 
+test('staging publication selects the exact repository digest and rejects ambiguous identity', async () => {
+  const yaml = await import('js-yaml');
+  const workflow = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
+  const publish = workflow.jobs['publish-container'].steps.find(step => step.id === 'image');
+  const expected = 'ghcr.io/devantler-tech/business-site@sha256:' + 'a'.repeat(64);
+  const other = 'business-site@sha256:' + 'b'.repeat(64);
+  // Only Docker is doubled: execute the actual workflow shell and real jq.
+  // The image can retain other repository identities after archive load/retag.
+  const docker = `docker() {
+    case "$1" in
+      tag) [[ "$2" == business-site:production-test && "$3" == ghcr.io/devantler-tech/business-site:staging-123-2 ]] ;;
+      push) [[ "$2" == ghcr.io/devantler-tech/business-site:staging-123-2 ]] && return "$PUSH_RESULT" ;;
+      image)
+        [[ "$2" == inspect && "$3" == ghcr.io/devantler-tech/business-site:staging-123-2 && "$4" == --format ]] || return 64
+        case "$5" in
+          '{{index .RepoDigests 0}}') printf '%s' "$REPO_DIGESTS" | jq -r '.[0]' ;;
+          '{{json .RepoDigests}}') printf '%s' "$REPO_DIGESTS" ;;
+          *) return 64 ;;
+        esac ;;
+      *) return 64 ;;
+    esac
+  }\n`;
+  for (const [digests, accepted, pushResult = '0'] of [
+    [[other, expected], true],
+    [[expected, other], true],
+    [[expected, expected], true],
+    [[], false],
+    [[other], false],
+    [[expected, 'ghcr.io/devantler-tech/business-site@sha256:' + 'c'.repeat(64)], false],
+    [['ghcr.io/devantler-tech/business-site-other@sha256:' + 'a'.repeat(64)], false],
+    [['ghcr.io/devantler-tech/business-site@sha256:invalid'], false],
+    [[expected, 'ghcr.io/devantler-tech/business-site@sha256:invalid'], false],
+    [null, false],
+    [[expected, null], false],
+    [[expected], false, '1'],
+  ]) {
+    const fixture = mkdtempSync(path.join(tmpdir(), 'staging-digest-'));
+    const output = path.join(fixture, 'output');
+    try {
+      const result = spawnSync('bash', ['-e', '-c', docker + publish.run], {
+        env: {
+          PATH: process.env.PATH, RUN_ID: '123', RUN_ATTEMPT: '2',
+          GITHUB_OUTPUT: output, REPO_DIGESTS: JSON.stringify(digests), PUSH_RESULT: pushResult,
+        },
+        timeout: 5000, encoding: 'utf8',
+      });
+      assert.equal(result.error, undefined);
+      assert.equal(result.status === 0, accepted, JSON.stringify({ digests, pushResult, stderr: result.stderr }));
+      assert.equal(existsSync(output) ? readFileSync(output, 'utf8') : '', accepted ? `ref=${expected}\n` : '');
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  }
+});
+
 for (const [name, example] of [['package', packageExample], ['container', containerExample]]) {
   for (const directories of [[], ['package.one'], ['package.with spaces'], ['package.one', 'package.two']]) {
     test(`${name} instructions handle ${directories.length ? directories.join(', ') : 'no generated package'}`, () => {
@@ -140,9 +195,11 @@ test('a confined non-root image is supplied for the actual runtime package', () 
 
 /** Reject skipped image validation, broad artifacts or incomplete success aggregation. */
 function assertCI(w) {
+  assert.equal(w.jobs['test-portal-quality'].if, undefined);
+  assert.ok(w.jobs['test-portal-quality']['continue-on-error'] == null || w.jobs['test-portal-quality']['continue-on-error'] === false);
   assert.equal(w.jobs['test-portal-identity'].if, undefined);
   assert.equal(w.jobs['test-combined-runtime'].if, undefined);
-  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-identity']);
+  assert.deepEqual(w.jobs['test-combined-runtime'].needs, ['test-portal-quality', 'test-portal-identity']);
   const steps = w.jobs['test-combined-runtime'].steps;
   const build = steps.findIndex(s => s.run?.includes('docker build --file Dockerfile'));
   const smoke = steps.findIndex(s => s.run === 'node scripts/container-smoke.test.mjs business-site:test runtime-dist');
@@ -179,6 +236,9 @@ test('CI must exercise and retain the actual container before distribution', asy
   const w = yaml.load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
   assertCI(w);
   for (const mutate of [
+    w => { w.jobs['test-portal-quality'].if = 'false'; },
+    w => { w.jobs['test-portal-quality']['continue-on-error'] = true; },
+    w => { w.jobs['test-combined-runtime'].needs = ['test-portal-identity']; },
     w => { w.jobs['test-portal-identity'].if = 'false'; },
     w => { w.jobs['test-combined-runtime'].if = 'false'; },
     w => { w.jobs['test-combined-runtime'].steps.find(s => s.run?.includes('docker build --file Dockerfile')).if = 'false'; },

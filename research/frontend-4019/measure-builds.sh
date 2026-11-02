@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-for spec in '1 astro' '1 svelte' '2 svelte' '2 astro' '3 astro' '3 svelte'; do
+for spec in '1 svelte' '2 svelte' '3 svelte'; do
   read -r trial sample <<< "$spec"
   (
     cd "$sample"

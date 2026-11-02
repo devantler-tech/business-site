@@ -21,7 +21,7 @@ done
 [[ "$requested" -eq 1 && -n "$source_repo" && -n "$output" ]] || fail 'explicit preparation, source and output are required'
 [[ -d "$source_repo" ]] || fail 'source repository is absent'
 [[ ! -e "$output" && ! -L "$output" ]] || fail 'output already exists'
-for tool in git tar shasum jq awk cmp find sort grep sed mktemp mkdir mv rm basename dirname; do
+for tool in git tar shasum jq awk cmp find sort grep sed mktemp mkdir mv rm basename dirname go; do
   command -v "$tool" >/dev/null || fail "missing tool: $tool"
 done
 pin=8afa5dd37a8e723efb9eace8d09fd5c1cccef694
@@ -57,6 +57,28 @@ cmp "$stage/expected-hashes" "$stage/actual-hashes" || fail 'archive contents di
 sort "$stage/paths" >"$stage/expected-paths"
 cmp "$stage/expected-paths" "$stage/actual-paths" || fail 'archive has missing or additional files'
 (cd "$stage/source" && shasum -a 256 -c "$root/scripts/zitadel-source-inputs.sha256") >/dev/null
+# Native provider decoration reuses the already-admitted arrow fonts. The exact
+# closed transform runs only inside this fresh exported stage, before generation.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --neutral-provider-icons --prepare --source "$stage/source" >"$stage/provider-icons.json"
+jq -e '.profile == "native-neutral-provider-icons-v1" and .changedFiles == 18 and .removedFiles == 16 and .consoleSlots == 27 and .loginSlots == 2' "$stage/provider-icons.json" >/dev/null
+# Reuse the Console's existing envelope glyph for the closed SMTP decoration profile.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --neutral-smtp-icons --prepare --source "$stage/source" >"$stage/smtp-icons.json"
+jq -e '.profile == "native-neutral-smtp-icons-v1" and .changedFiles == 5 and .removedFiles == 9 and .consoleSlots == 2 and .loginSlots == 0 and .settingsValues == 9' "$stage/smtp-icons.json" >/dev/null
+# Retain the standard MDI family and replace only its two unresolved marks.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --neutral-mdi-icons --prepare --source "$stage/source" >"$stage/mdi-icons.json"
+jq -e '.profile == "native-neutral-mdi-icons-v1" and .changedFiles == 5 and .removedFiles == 2 and .retainedFiles == 25 and .consoleSlots == 6' "$stage/mdi-icons.json" >/dev/null
+# Keep all framework metadata and native actions while retiring only decoration.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --neutral-framework-icons --prepare --source "$stage/source" >"$stage/framework-icons.json"
+jq -e '.profile == "native-neutral-framework-icons-v1" and .changedFiles == 8 and .removedFiles == 44 and .consoleSlots == 3 and .frameworks == 35 and .frameworkIDs == 24 and .imagePropertiesRemoved == 39 and (.changedPaths|length)==8 and (.removedPaths|length)==44' "$stage/framework-icons.json" >/dev/null
+# Both native user interfaces retain an unconditional offer for this release's
+# corresponding source. Publication must precede distribution of this image.
+GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
+  --source-offer --prepare --source "$stage/source" >"$stage/source-offer.json"
+jq -e '.profile == "native-source-offer-v1" and .changedFiles == 2 and .removedFiles == 0 and .consoleSlots == 1 and .loginSlots == 1 and (.changedPaths|length)==2 and .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"' "$stage/source-offer.json" >/dev/null
 console=console/src/styles.scss
 login=internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$stage/console"
@@ -91,6 +113,65 @@ awk '
 metadata_hash="$(shasum -a 256 "$stage/metadata" | awk '{print $1}')" || fail 'metadata transform hash failed'
 [[ "$metadata_hash" = 74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc ]] || fail 'metadata transform differs'
 mv "$stage/metadata" "$stage/source/$metadata"
+# The patched CSRF library requires an explicit marker for the already
+# configured plaintext development mode. TLS-facing requests retain its default.
+login_handler=internal/api/ui/login/login.go
+awk '
+  $0 == "\t\t\tcsrf.Protect(csrfCookieKey," {
+    print "\t\t\tif !externalSecure {"
+    print "\t\t\t\tr = csrf.PlaintextHTTPRequest(r)"
+    print "\t\t\t}"
+    changed++
+  }
+  { print }
+  END { if (changed != 1) exit 1 }
+' "$stage/source/$login_handler" >"$stage/login-handler" || fail 'login transport patch differs'
+[[ "$(shasum -a 256 "$stage/login-handler" | awk '{print $1}')" = 28da3dd3fd55002ea3239495cba504be6a355e9eed74133327aa564e634e812e ]] || fail 'login transport output differs'
+mv "$stage/login-handler" "$stage/source/$login_handler"
+# Apply the exact native Go 1.26.10 metadata for the selected security patches.
+# Keep all other selections and original checksums.
+awk '
+  $0 == "\tgithub.com/go-jose/go-jose/v4 v4.1.4" {
+    print "\tgithub.com/go-jose/go-jose/v4 v4.1.6"; jose++; next
+  }
+  $0 == "\tgolang.org/x/net v0.61.0" {
+    print "\tgolang.org/x/net v0.62.0"; net++; next
+  }
+  $0 == "\tgithub.com/gorilla/csrf v1.7.2" {
+    print "\tgithub.com/gorilla/csrf v1.7.3"; csrf++; next
+  }
+  { print }
+  END { if (jose != 1 || net != 1 || csrf != 1) exit 1 }
+' "$stage/source/go.mod" >"$stage/go.mod" || fail 'module patch differs'
+awk '
+  $0 == "github.com/gorilla/csrf v1.7.2 h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=" { originalCSRF++ }
+  $0 == "github.com/gorilla/csrf v1.7.2/go.mod h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk=" {
+    print
+    print "github.com/gorilla/csrf v1.7.3 h1:BHWt6FTLZAb2HtWT5KDBf6qgpZzvtbp9QWDRKZMXJC0="
+    print "github.com/gorilla/csrf v1.7.3/go.mod h1:F1Fj3KG23WYHE6gozCmBAezKookxbIvUJT+121wTuLk="
+    changedCSRF++; next
+  }
+  $0 == "github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=" { original++ }
+  $0 == "github.com/go-jose/go-jose/v4 v4.1.4/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=" {
+    print
+    print "github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4="
+    print "github.com/go-jose/go-jose/v4 v4.1.6/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08="
+    changed++; next
+  }
+  $0 == "golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=" { originalNet++ }
+  $0 == "golang.org/x/net v0.61.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=" {
+    print
+    print "golang.org/x/net v0.62.0 h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY="
+    print "golang.org/x/net v0.62.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI="
+    changedNet++; next
+  }
+  { print }
+  END { if (original != 1 || changed != 1 || originalNet != 1 || changedNet != 1 || originalCSRF != 1 || changedCSRF != 1) exit 1 }
+' "$stage/source/go.sum" >"$stage/go.sum" || fail 'checksum patch differs'
+[[ "$(shasum -a 256 "$stage/go.mod" | awk '{print $1}')" = d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50 ]] || fail 'patched module differs'
+[[ "$(shasum -a 256 "$stage/go.sum" | awk '{print $1}')" = 19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba ]] || fail 'patched checksums differ'
+mv "$stage/go.mod" "$stage/source/go.mod"
+mv "$stage/go.sum" "$stage/source/go.sum"
 rm -- "$stage/source/console/src/assets/ailerons.otf" \
   "$stage/source/console/src/styles/ailerons.scss" \
   "$stage/source/internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf" \
@@ -99,18 +180,25 @@ rm -- "$stage/source/console/src/assets/ailerons.otf" \
 (cd "$stage/source" && find . -type f ! -perm 0644 ! -perm 0755 -print) >"$stage/invalid-modes"
 [[ ! -s "$stage/invalid-modes" ]] || fail 'source has unexpected file permissions'
 awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' "$stage/tree" | sort >"$stage/expected-executables"
+# Only the four removed Apple SVG originals were executable.
+for removed in console/src/assets/images/idp/apple-dark.svg console/src/assets/images/idp/apple.svg \
+  internal/api/ui/login/static/resources/images/idp/apple-dark.svg internal/api/ui/login/static/resources/images/idp/apple.svg; do
+  grep -Fxv "$removed" "$stage/expected-executables" >"$stage/executables-next"
+  mv "$stage/executables-next" "$stage/expected-executables"
+done
 (cd "$stage/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$stage/actual-executables"
 cmp "$stage/expected-executables" "$stage/actual-executables" || fail 'source executable modes differ from committed source'
 recipe_hash="$(shasum -a 256 "$0" | awk '{print $1}')" || fail 'recipe hash read failed'
 input_hash="$(shasum -a 256 "$root/scripts/zitadel-source-inputs.sha256" | awk '{print $1}')" || fail 'input-manifest hash read failed'
 [[ "$recipe_hash" =~ ^[0-9a-f]{64}$ && "$input_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'receipt hash is incomplete'
-jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" \
+jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" --slurpfile frameworks "$stage/framework-icons.json" --slurpfile offer "$stage/source-offer.json" \
   '{schemaVersion:1,upstreamCommit:$pin,recipeSha256:$recipe,inputManifestSha256:$inputs,
     imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:"machine-id-no-jsonpath-v1",
+    dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1",
     removedFiles:["console/src/assets/ailerons.otf","console/src/styles/ailerons.scss",
       "internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf",
-      "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss"],
-    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go"]}' >"$stage/source-preparation.json"
+      "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss","console/src/assets/images/idp/apple-dark.svg","console/src/assets/images/idp/apple.svg","console/src/assets/images/idp/github-dark.svg","console/src/assets/images/idp/github.svg","console/src/assets/images/idp/gitlab.svg","console/src/assets/images/idp/google.png","console/src/assets/images/idp/ms.svg","console/src/assets/images/idp/oauth.svg","console/src/assets/images/idp/saml-icon.svg","internal/api/ui/login/static/resources/images/idp/apple-dark.svg","internal/api/ui/login/static/resources/images/idp/apple.svg","internal/api/ui/login/static/resources/images/idp/github-white.png","internal/api/ui/login/static/resources/images/idp/github.png","internal/api/ui/login/static/resources/images/idp/gitlab.png","internal/api/ui/login/static/resources/images/idp/google.png","internal/api/ui/login/static/resources/images/idp/ms.svg","console/src/assets/images/smtp/aws-ses.svg","console/src/assets/images/smtp/brevo.svg","console/src/assets/images/smtp/google.png","console/src/assets/images/smtp/mailchimp.svg","console/src/assets/images/smtp/mailgun.svg","console/src/assets/images/smtp/mailjet.svg","console/src/assets/images/smtp/outlook.svg","console/src/assets/images/smtp/postmark.png","console/src/assets/images/smtp/sendgrid.png","console/src/assets/mdi/openid.svg","console/src/assets/mdi/jwt.svg"],
+    changedFiles:["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html"],mdiProfile:"native-neutral-mdi-icons-v1",smtpProfile:"native-neutral-smtp-icons-v1",providerProfile:"native-neutral-provider-icons-v1"} | .removedFiles += $frameworks[0].removedPaths | .changedFiles += $frameworks[0].changedPaths | .frameworkProfile="native-neutral-framework-icons-v1" | .changedFiles += $offer[0].changedPaths | .sourceOfferProfile=$offer[0].profile | .sourceOfferURL=$offer[0].sourceOfferURL' >"$stage/source-preparation.json"
 # mkdir is the atomic output reservation: a concurrent creator wins, never gets
 # overwritten or becomes a directory into which mv silently nests our output.
 reserved=0 complete=0 interrupted=0

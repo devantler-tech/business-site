@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/zlib"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/binary"
@@ -23,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 const upstream = "8afa5dd37a8e723efb9eace8d09fd5c1cccef694"
@@ -88,10 +90,20 @@ type inventory struct {
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
+// Companion modes are available only in explicit source-file compositions.
+// Existing icon/text-font commands do not acquire an implicit new dependency.
+var iconExtensions = map[string]func([]string, io.Writer, io.Writer) int{}
+
 // run emits nothing in the inactive state, and emits JSON only after a complete check.
 func run(args []string, out, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0
+	}
+	if args[0] == "--text-fonts" {
+		return runTextFonts(args[1:], out, diagnostic)
+	}
+	if extension, ok := iconExtensions[args[0]]; ok {
+		return extension(args[1:], out, diagnostic)
 	}
 	fail := func(err error) int {
 		if _, e := fmt.Fprintln(diagnostic, "login-icons:", err); e != nil {
@@ -166,7 +178,7 @@ func readAt(root, relative string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := confined.Open(relative)
+	f, err := confined.OpenFile(relative, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	rootErr := confined.Close()
 	if err != nil {
 		return nil, err
@@ -385,6 +397,11 @@ func inspectWithRead(build, notices string, readInput func(string, string, int64
 	members, err := decodeStatik(statik)
 	if err != nil {
 		return result, err
+	}
+	for name, body := range members {
+		if err = neutralProviderOutput(name, body); err != nil {
+			return result, err
+		}
 	}
 	fontNames := []string{"lgn-icons.eot", "lgn-icons.svg", "lgn-icons.ttf", "lgn-icons.woff"}
 	if err = exactDirectory(build, sourcePrefix+iconRoot+"fonts", fontNames); err != nil {
@@ -957,4 +974,859 @@ func normalizePath(data string, transform bool) (string, error) {
 		return bad()
 	}
 	return out.String(), nil
+}
+
+// The neutral provider profile changes decoration only in one immutable upstream
+// source family. Archive data cannot select paths, replacements or commands.
+type neutralProviderInput struct {
+	path, sha256 string
+	mode         os.FileMode
+	kind         string
+	expected     string
+}
+
+var neutralProviderInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/idp-table/idp-table.component.html", sha256: "f4bd9cab64343c81bd37942e50caa7d0895804d1e650f0dbdb381b5e802805bf", mode: 0644, kind: "console", expected: "2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e"},
+	{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.html", sha256: "4f54262e2e976803dee6bb96839867a703da8b14796bdc3ef43c0d59004b416b", mode: 0644, kind: "console", expected: "41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8"},
+	{path: "console/src/app/modules/providers/provider-apple/provider-apple.component.html", sha256: "f4a37534bc2a7f440087d94962ae7ee9e9e218cc88a7a237823ac89b057b8da7", mode: 0644, kind: "console", expected: "bcd033476803838515de5f25057ac4df9749f26049bf4a0c2926acb83ea01b94"},
+	{path: "console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html", sha256: "06ae466d2c46902757041c68371887643f511b8887e4cd3c87d17115d711174d", mode: 0644, kind: "console", expected: "bb307b70f936d780f8584f01c4691efd042d43d95041df294f2af1f48ae94459"},
+	{path: "console/src/app/modules/providers/provider-github-es/provider-github-es.component.html", sha256: "35b3ad53ae12758b0d7911c9e287cceedd1882b4e032f6622c0d20ec95e142e2", mode: 0644, kind: "console", expected: "380b3dca85ef437d4446987a5e22020c1a7e1bec1bc874ff7942dd0e204a1efd"},
+	{path: "console/src/app/modules/providers/provider-github/provider-github.component.html", sha256: "278c76029f8d65ebdb251c32b7e93447bf8b10c61f4c33294ff60d1dd166876d", mode: 0644, kind: "console", expected: "2eca45dc2386dc08bdd6af010b3782f3e3f9531260db70f22117aa115e976205"},
+	{path: "console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html", sha256: "8d77282cde7e54bb17ae6418af74395dda950b26c346c67e38a5a21385e547ec", mode: 0644, kind: "console", expected: "99871b68ae002cd48b82de6ef6b7beeaa3f3f5f2dc9b0df66a398149e0929e9f"},
+	{path: "console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html", sha256: "084cbfa2681d78fa14c5123a073826b52ed31c62b4031669a956c5c97122e85f", mode: 0644, kind: "console", expected: "341c4a94d2817aed886fe8268c31f890188fb8468e25d09e6e987a511305449b"},
+	{path: "console/src/app/modules/providers/provider-google/provider-google.component.html", sha256: "ca58e0f11408808cf8906c84df4b39e05c38c52d24102298d65a11c07524b7ac", mode: 0644, kind: "console", expected: "8fae34c70584f876ab9dad8608830b5f95d430310d1b33bca04e847ea492c7e8"},
+	{path: "console/src/app/modules/providers/provider-oauth/provider-oauth.component.html", sha256: "7d23482c90f1e58196b78c26e9b2410de9b4c7834882354403150af477f70a93", mode: 0644, kind: "console", expected: "eae8329b095b5987d8340a386957fb67d5ec58488e97f221c03cbf8592d71266"},
+	{path: "console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html", sha256: "63d880c2bd57c367580f43533ea79ef73eb5764530c84189308ff679479131ad", mode: 0644, kind: "console", expected: "0b5410b7aa9b905e0f4c074e85eda06905d51cef28cf3f3ca49c6b2146a3acff"},
+	{path: "internal/api/ui/login/static/templates/login.html", sha256: "4db65e16a4a4dab0af1c19e9dfd4a9df6497327e4c158d461035b4d4cca24913", mode: 0644, kind: "login", expected: "d749528ee622c0d376afc918d4d205bf9d42b6c33243301e721a997be631d4bf"},
+	{path: "internal/api/ui/login/static/templates/register_option.html", sha256: "fb9793de2be4fa47191a2907e5de9deec1d7093eae27334d9d10eaf3ffc156d7", mode: 0644, kind: "login", expected: "160874790c22abfd44bc977b2d978a8fbae73dc0e4adfa52917b4b3854ec123b"},
+	{path: "console/src/app/modules/idp-table/idp-table.component.scss", sha256: "adf0930761ba3e329eefe3b685cd348935741cc99f43fc0d09ff1cbe6d328e2c", mode: 0644, kind: "table-style", expected: "3109087ad9a64409e4e30d6eab7ea7b8f48b3c7194042d0171d1ee9f9926efb8"},
+	{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.scss", sha256: "60f4249cdc02789825fa72bea4c26309e2b827ea64b618c82220113b8b376c12", mode: 0644, kind: "chooser-style", expected: "8e5bf3f536e63f9e3fab90a2be0c46e7239190e2cc7ea558a0fcd5f90e0b6217"},
+	{path: "console/src/app/modules/providers/providers.scss", sha256: "a85293c7b43639478d6646e6ef908e29ce00a9daddb5e06855a3728386111b17", mode: 0644, kind: "editor-style", expected: "fc44668ff48fa9442f5b592abeac0402da17bd177b5809b8c5e1ea8675b58413"},
+	{path: "internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss", sha256: "e5ad481b25c8722d3a1b5afc2592a057c773dfcbab63fd35c5764aedebf0916d", mode: 0644, kind: "login-style", expected: "a25666a0c03c21542c84ab72d228c5ce91c6e7b00a712289d44a4f720f613732"},
+	{path: "internal/api/ui/login/static/resources/themes/scss/styles/vars.scss", sha256: "61f59f9b4d8dda32cde72d269917f761c3eac54909265ee930b791d9a589a1dd", mode: 0644, kind: "variables", expected: "a15f2692a597e8a8c3848d62073db1d48dce82aea66d6cabfda1d2019825a25c"},
+	{path: "console/src/assets/images/idp/apple-dark.svg", sha256: "d375e51b38ccc427162e5a06c3263df659095b3924f3a5007c4cf7eb0c05974c", mode: 0755, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/apple.svg", sha256: "8b7b000b5be857e72b18e61874b9e9380035408f5550dc5b0899d965f7fac6a2", mode: 0755, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/github-dark.svg", sha256: "2d766668e8fbcfb5f98d6f86acc0767ed95ceb1431e37187389dd62d3bb73c24", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/github.svg", sha256: "12794390cce7d0682ffc783c785e4282305684431b30b29ed75c224da24035b4", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/gitlab.svg", sha256: "ffb42267e29f711ed2bdf66e7827303272ecf83d1a81ffb3d4e68110716cb133", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/ms.svg", sha256: "929f48f88c8ca7f3f5d294be47ec4caf51acc28ac25340c19a903125d7ecd84a", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/oauth.svg", sha256: "2a5c60a1e0d2ce7957f92ce741f6e0c95f61a9bb9042e88f6dcdce0df3fc6400", mode: 0644, kind: "retire", expected: ""},
+	{path: "console/src/assets/images/idp/saml-icon.svg", sha256: "8d6baf4e08d21cc1b53b01594dc979a38d33b9f8c44311cc7bdc4286bb4d4b75", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/apple-dark.svg", sha256: "d375e51b38ccc427162e5a06c3263df659095b3924f3a5007c4cf7eb0c05974c", mode: 0755, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/apple.svg", sha256: "8b7b000b5be857e72b18e61874b9e9380035408f5550dc5b0899d965f7fac6a2", mode: 0755, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/github-white.png", sha256: "60d03f0f1a09aafcc2df2e10b4ffd24eab44787b451f8fdb367c3baf589cf95a", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/github.png", sha256: "367d5cb2adc609451cf9127250edfe893837485e7c779d7dcb4e31234f59b001", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/gitlab.png", sha256: "d56b28d4ad3c65fb4e1a2fe79eee4b821f6e9ab3f01963fa5f1b71ec7c5b10cf", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire", expected: ""},
+	{path: "internal/api/ui/login/static/resources/images/idp/ms.svg", sha256: "929f48f88c8ca7f3f5d294be47ec4caf51acc28ac25340c19a903125d7ecd84a", mode: 0644, kind: "retire", expected: ""},
+}
+
+var neutralSMTPInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html", sha256: "01a6530916d5417a53b17b705d021647e2c59af0b8eff9e4b4895bbe44c5be24", mode: 0644, kind: "smtp-chooser", expected: "7adb2e384cb0af6db510f3c1b07a9b91729ea922a004e4b6fed6fbd98352b1fc"},
+	{path: "console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss", sha256: "5f44a3766ed3b14f69939811a6718270feb0a262a950f446b32b6ef179a51a18", mode: 0644, kind: "smtp-chooser-style", expected: "db4f7c1746b2f3f19a1de401ac5cf658439e59d3f045106ff4aa05dc4eb8a8eb"},
+	{path: "console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts", sha256: "3ba4f1c0d1060d5ea1f0dc2f936fe05928e5c4cdcf34264a68fd8cf858230167", mode: 0644, kind: "smtp-settings", expected: "f340db31d1e1d4db10e1646eb218b2e46fe7e6568e9801b26494f94602c168cd"},
+	{path: "console/src/app/modules/smtp-provider/smtp-provider.component.html", sha256: "fbfd6946b3bf85f1a1f363e6477300d14b564b060c34fd19ae5d136d97324ec6", mode: 0644, kind: "smtp-editor", expected: "3c6be2a65c023c2aa1fa0ab86dc54530e0db7d3d79880099be3772f062db579f"},
+	{path: "console/src/app/modules/smtp-provider/smtp-provider.scss", sha256: "c63a74b193724641f6d2c329759c3877fe41cdf3c1415766635ffe08f8b386ab", mode: 0644, kind: "smtp-editor-style", expected: "194fd266ef3301dcb35b6ead7d92d5ac9860685d52e1312f693dfa644300eb24"},
+	{path: "console/src/assets/images/smtp/aws-ses.svg", sha256: "91c0f2067ee1c2d3ba7b6e5f171968599074908e214823d654d7a6f5e17d9923", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/brevo.svg", sha256: "c4cb54430034449ef93447bada3bd1c05c5935a9af1c1d239700c37c55436252", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/google.png", sha256: "473e0563b5c8fc7adc05c37e60a8d73ccb975a383a0cbe7ddb76935b2dda3f53", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailchimp.svg", sha256: "df456abcbb2543864aa36ea3db7555502d5f091f77f16f974ea41e6de12894fd", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailgun.svg", sha256: "35647003fcc8bd00fbddcfa415e37a56633e0778f89ba6850c64b01b7f9706c9", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/mailjet.svg", sha256: "09d2104401c81e490b33cee16cc961993e4c21c755b5dc4043061c8a368dd893", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/outlook.svg", sha256: "11951b969a6169db6c92f03e93039ce66c1576886c462c03e0549dc872db7283", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/postmark.png", sha256: "81ac09ed4332ff08fa1eb4ce3f225176e8083835529cd4a7fe899cbde71d31fc", mode: 0644, kind: "retire"},
+	{path: "console/src/assets/images/smtp/sendgrid.png", sha256: "8e5559c9e74a4b5ea732f9dcbaa0cc24dae759317edd1aed02e9a572141cee7a", mode: 0644, kind: "retire"},
+}
+
+// Remove only decoration from the frozen metadata and its native renderers.
+// Complete original/output hashes are enforced by the surrounding fixed profile.
+func neutralFrameworkChange(input neutralProviderInput, text string) (string, int, error) {
+	fail := func() (string, int, error) { return "", 0, fmt.Errorf("native framework decoration differs") }
+	if input.kind == "framework-copy" {
+		old := "rm -rf src/assets/docs && mkdir -p src/assets/docs/img && cp -r ../apps/docs/public/img/tech src/assets/docs/img/"
+		if strings.Count(text, old) != 1 {
+			return fail()
+		}
+		return strings.Replace(text, old, "rm -rf src/assets/docs", 1), 0, nil
+	}
+	if input.kind == "framework-data" {
+		var rows []map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(text), &rows); err != nil || len(rows) != 35 {
+			return fail()
+		}
+		ids, images, properties := map[string]bool{}, map[string]bool{}, 0
+		for _, row := range rows {
+			if raw, ok := row["id"]; ok {
+				var id string
+				if json.Unmarshal(raw, &id) != nil || id == "" || ids[id] {
+					return fail()
+				}
+				ids[id] = true
+			}
+			for _, field := range []string{"imgSrcDark", "imgSrcLight"} {
+				if raw, ok := row[field]; ok {
+					var image string
+					if json.Unmarshal(raw, &image) != nil || !strings.HasPrefix(image, "/docs/img/tech/") {
+						return fail()
+					}
+					images[image] = true
+					properties++
+					delete(row, field)
+				} else if field == "imgSrcDark" {
+					return fail()
+				}
+			}
+		}
+		if len(ids) != 24 || len(images) != 32 || properties != 39 {
+			return fail()
+		}
+		body, err := json.MarshalIndent(rows, "", "  ")
+		if err != nil {
+			return "", 0, err
+		}
+		return string(append(body, '\n')), 0, nil
+	}
+	if input.kind == "framework-mapping" {
+		var lines []string
+		removed := 0
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "imgSrcDark") || strings.Contains(line, "imgSrcLight") {
+				removed++
+				continue
+			}
+			lines = append(lines, line)
+		}
+		want := 2
+		if strings.HasSuffix(input.path, "/quickstart.component.ts") {
+			want = 4
+		}
+		if removed != want {
+			return fail()
+		}
+		return strings.Join(lines, "\n"), 0, nil
+	}
+	indent, size, alt := "", 30, ""
+	switch input.kind {
+	case "framework-quickstart":
+		indent, size, alt = "        ", 20, ` alt="{{ framework.title }}"`
+	case "framework-picker":
+		indent = "                "
+	case "framework-change":
+		indent, size = "          ", 40
+	default:
+		return fail()
+	}
+	old := indent + "@if (framework.imgSrcDark) {\n" + indent + `  <img class="dark-only" [src]="framework.imgSrcDark"` + alt + " />\n" + indent + "}\n" +
+		indent + "@if (framework.imgSrcLight) {\n" + indent + `  <img class="light-only" [src]="framework.imgSrcLight"` + alt + " />\n" + indent + "}"
+	if strings.Count(text, old) != 1 {
+		return fail()
+	}
+	replacement := fmt.Sprintf(`%s<i class="neutral-framework-icon las la-code" style="font-size:%dpx" aria-hidden="true"></i>`, indent, size)
+	if input.kind == "framework-quickstart" {
+		replacement += "\n" + indent + `<span style="font-size:11px;line-height:1.1;text-align:center;max-width:56px">{{ framework.title }}</span>`
+		anchor := `class="quickstart-card card"`
+		if strings.Count(text, anchor) != 1 {
+			return fail()
+		}
+		text = strings.Replace(text, anchor, anchor+` [attr.aria-label]="framework.title"`, 1)
+	}
+	return strings.Replace(text, old, replacement, 1), 1, nil
+}
+
+// The complete frozen framework family binds eight native consumers and all
+// forty-four decoration originals before changing the private prepared source.
+var neutralFrameworkInputs = []neutralProviderInput{
+	{path: "console/package.json", sha256: "7b6cf1e24e3496ed7ad03868f8e46e18eab66c9988ba7e4bb22b57349366d810", mode: 0644, kind: "framework-copy", expected: "405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba"},
+	{path: "apps/docs/frameworks.json", sha256: "2fb8165ab168234975f710989a83b40b3bd86429b332d1d8c45bf4ea560063a1", mode: 0644, kind: "framework-data", expected: "99b5bdf71a12e209c754bb8e013ab56c5c624066d5caf3e71cafed64b1c4dac8"},
+	{path: "console/src/app/components/quickstart/quickstart.component.ts", sha256: "09fadb50be8d91ef67b1c6b16c4eca6f99b589c04b99b0370d6660472923ec4a", mode: 0644, kind: "framework-mapping", expected: "ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc"},
+	{path: "console/src/app/components/framework-change/framework-change.component.ts", sha256: "a957a2bc496b3280e7bfff7f964569dcf70c3acecf57790c60b830faec4dec36", mode: 0644, kind: "framework-mapping", expected: "790fb8e83d170014ae9f2e31068cf906f89a4228190a7213f3950844c7cb2c5a"},
+	{path: "console/src/app/pages/app-create/app-create.component.ts", sha256: "aecc9782aaaddd251d7803c7c764df44da89a17517fb4d94ef58daf9b36d216e", mode: 0644, kind: "framework-mapping", expected: "6ed83747af1fbbfb2e5fefda0f281d06a1be7eb5a0fb6437ac2949f293b7afe5"},
+	{path: "console/src/app/components/quickstart/quickstart.component.html", sha256: "0a4bc61a3d29e31cf4c2d97d119534f138b6655e9bef21ce75276ef142c7e552", mode: 0644, kind: "framework-quickstart", expected: "7c71cf66e4f1547ec223f909a74997a11de9e590d2931ef4bf6453091fd3e969"},
+	{path: "console/src/app/components/framework-autocomplete/framework-autocomplete.component.html", sha256: "15e53508e8fab200bac069651f92646fbaee86a1367598b126df7c1801de5078", mode: 0644, kind: "framework-picker", expected: "7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7"},
+	{path: "console/src/app/components/framework-change/framework-change.component.html", sha256: "0b64bd0df4b261c0046169b8b6d67890837c88033dbbcede2dd324cf2eb63991", mode: 0644, kind: "framework-change", expected: "0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712"},
+	{path: "apps/docs/public/img/tech/android.svg", sha256: "f386c9e7395801722109553d294180d2c4b1fc70fd72a74afcfe6c2d6721cfad", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/angular.svg", sha256: "8be939aa259d174d90fc7098e90834ddd012d2fa12169b90cb290021c3e54eb8", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/aspnet.png", sha256: "1f56642d45c5fb2602a49da2cd737c83106de1535dee461dbc1e54e12c745d29", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/astro.svg", sha256: "b9b247578095c6290018ad56d1ec66e524020b32154ae722464f4c3fd2dc6463", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/dart.svg", sha256: "0aa6f25efd6c22ed76805b604fe6d605b8c6a8ceebc024b7ba5dbc84f5d7670d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/django.png", sha256: "f0f569df3ac940fc90323ae0943fa0076957076728ff088b08ed932ca522a85f", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/django.svg", sha256: "4496111c58134c4fac30c5bbabbba1bd2a0d3fe351cd58a3079a00a92a1134a5", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/dotnet.svg", sha256: "f222062c4f59b7864163bd54d24fafc40f1e2f2513672e50bc08e5025d73e4e5", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/elixir.svg", sha256: "7c6576f2c84ba2326924f77c60e30d04b73ae0eba8130f03e93fc7b102c705ec", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/expressjs.svg", sha256: "356a6c1b25c3d1b41aa62d830a88669addd60e1dceec6281615a19bb5b30d142", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/fastapi.svg", sha256: "7ef41f6a363b00ff595e6d0b933c025c92cbfae29dc1df24b2f6eb8b476ee486", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/fastify.svg", sha256: "94ce2186b67f0627daffdf4000c84a83ba41ccc12f603e2e03e9e67d563b77dd", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flask.svg", sha256: "3cbd66e5e0e30d7241717d582aeb7419efddf65ff4a361ce5ae7ef79589b3885", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flasklight.svg", sha256: "3be7f1ef59209dae0b7cfb9d342fa7acf503e5a96068324a96b64339bdf06133", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/flutter.svg", sha256: "e5e83b93f5181249e9f0da7a017170d5716ed02c9fc2527cf55c6eb2d101916a", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/github.svg", sha256: "41cb449b4529dfd5a478e026a9e1a191ad6dcca5bc6e18f8125a848d0cba79e9", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/golang.svg", sha256: "1b5e8455f532b065aba5a3de4eef05c0f71520d469133832720cb23cb42d3a39", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/hono.svg", sha256: "9362f16d2faae430775434d204eb9032a8256ed913d50ad6b438a28395e97644", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/java.svg", sha256: "8e909af8ef74f273d5aae847694f9bf3e238a7b90272ffd02828244a17e72960", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/javascript.svg", sha256: "baa03265be69ef581f3c4a092feacb7390f7f00460b50fa041de1520dace02cb", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/laravel.svg", sha256: "dc4b656034018193478cd9a48afa7f307e33101787a20bac5fff2c0940101136", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nestjs.svg", sha256: "b968226a04dcc2f6201611fec5f91cb3f9a6b1c7357c02a17febd1495cad5719", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/net.svg", sha256: "f12658f6147f9964ec4321ec7fc57dbcbddf2ac424f91324459fef981e4fb3ab", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nextjs.svg", sha256: "e5351090db5ea00393a4a78f26ec0d4aa13b5b8612dd23f13bf522fb1184a4e4", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nextjslight.svg", sha256: "38e9550d76c4f3e83766e996d4f3a06b44de91c034d91869cd1b5975fb3cad2e", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nodejs.svg", sha256: "3013b930591ce102059b67654768d8f9f3e925b5946aea309fa48ac5f1967daa", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/nuxtjs.svg", sha256: "3444e11856b46d9366b88fb3d4a1c0c459509e308bda32b4fbe9ff031a7011ab", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/oauth.svg", sha256: "2a5c60a1e0d2ce7957f92ce741f6e0c95f61a9bb9042e88f6dcdce0df3fc6400", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/oauth2-proxy.svg", sha256: "debc497c05d548e223ee6b62b4cf00ec6835bdc3f0f66e8a826a5ff9d0037239", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/passportjs.svg", sha256: "ef49b64066461d228b1170c66f8b0978ff1682b4b5768974cae37e4a0c789c0a", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/php.svg", sha256: "ac13adaa9dd9bcb7ee4616e9c160465a19dd4edd4990487c8905111952865377", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/pylon.svg", sha256: "6c1a18e08f87aa3e4f7dec24053ddfb4b3211bc7a1a21903498bf436a230fe09", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/python.svg", sha256: "b11b5e52ebdb684ff127217a423a77758e436bc42f57ecdf3bfbf0da94acf4d0", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/qwik.svg", sha256: "613432e02e26c387b452707f64a158d89e6ac0cb86fea9664ad2a5fef250ff25", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/react.png", sha256: "73bba63208aaee9bbc79c4c73b09db0e3be093d79010814498711292fc4dd3f3", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/react.svg", sha256: "861e5e8674aa75062c766d13159dde8d989b7c5e28331d7e1c71614f5e96e580", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/ruby.svg", sha256: "a45c29a69b5a010ad5f7d83907e3adbe6d150294b28a5c7d1ce698175bab258f", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/rust.svg", sha256: "9a9549ea02d34dec3a610b8299f1b8121c7b10b14a44d3baec46ba15e9a06ca2", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/rustlight.svg", sha256: "c96d69ff0dab2c26c41e21a9ecfd42dfb64be562d601b1e7635347483ccfc3ad", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/solidstart.svg", sha256: "5d565263241241895577a0253acb9f4415abcda20d095be0f1b3a4b159933ef8", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/spring.svg", sha256: "b60e9c0ae66b8042926aceb5e88be565803b381afedd755227e1564031a1ea6d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/sveltekit.svg", sha256: "45a8cb356d778104650d314ac2c3c7907abdfcc5c15f09910fe7c1c96e865f6d", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/symfony.svg", sha256: "28a9f7b3bd61b421795d5a77c47b45411ace9a43b16ab01a07c7ebced928c881", mode: 0644, kind: "retire"},
+	{path: "apps/docs/public/img/tech/vue.svg", sha256: "05c69aeeda1250c36e4845230976e6664a08ed67cdf14c9cbdb97223dc6d082d", mode: 0644, kind: "retire"},
+}
+
+const identitySourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+
+var sourceOfferInputs = []neutralProviderInput{
+	{path: "console/src/app/modules/footer/footer.component.html", sha256: "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", mode: 0644, kind: "source-offer-console", expected: "018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f"},
+	{path: "internal/api/ui/login/static/templates/footer.html", sha256: "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", mode: 0644, kind: "source-offer-login", expected: "df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e"},
+}
+
+func init() {
+	iconExtensions["--neutral-provider-icons"] = runNeutralProviderIcons
+	iconExtensions["--neutral-smtp-icons"] = runNeutralSMTPIcons
+	iconExtensions["--neutral-mdi-icons"] = runNeutralMDIIcons
+	iconExtensions["--neutral-framework-icons"] = runNeutralFrameworkIcons
+	iconExtensions["--source-offer"] = runSourceOffer
+}
+
+func runSourceOffer(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "source-offer")
+}
+
+func runNeutralFrameworkIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "framework")
+}
+
+// runNeutralProviderIcons validates the complete frozen decoration profile before
+// replacing its eighteen consumers and retiring sixteen images in a confined export.
+func runNeutralProviderIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "provider")
+}
+
+// runNeutralSMTPIcons preserves the five SMTP consumers while retiring only its
+// closed nine-image family. Existing provider and Login profiles stay separate.
+func runNeutralSMTPIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "smtp")
+}
+
+// runNeutralMDIIcons retains the standard icon family while replacing only the
+// unresolved OpenID/JWT decorations in their five fixed native consumers.
+func runNeutralMDIIcons(args []string, out, diagnostic io.Writer) int {
+	return prepareNeutralIconProfile(args, out, diagnostic, "mdi")
+}
+
+// The profiles use the same confined, prevalidated stage writer. Their original
+// membership, transformations and receipt cardinalities are fixed independently.
+func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile string) int {
+	fail := func(err error) int { fmt.Fprintln(diagnostic, "provider-icons:", err); return 1 }
+	if profile != "provider" && profile != "smtp" && profile != "mdi" && profile != "framework" && profile != "source-offer" {
+		return fail(fmt.Errorf("unknown fixed icon profile"))
+	}
+	if len(args) != 3 || args[0] != "--prepare" || args[1] != "--source" || args[2] == "" {
+		return fail(fmt.Errorf("explicit preparation and source required"))
+	}
+	source, err := filepath.Abs(args[2])
+	if err != nil {
+		return fail(err)
+	}
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil || resolved != source {
+		return fail(fmt.Errorf("canonical source required"))
+	}
+	before, err := os.Lstat(source)
+	if err != nil || !before.IsDir() {
+		return fail(fmt.Errorf("source directory required"))
+	}
+	confined, err := os.OpenRoot(source)
+	if err != nil {
+		return fail(err)
+	}
+	defer confined.Close()
+	if _, err = confined.Lstat(".git"); !os.IsNotExist(err) {
+		return fail(fmt.Errorf("exported source required"))
+	}
+	opened, err := confined.Stat(".")
+	if err != nil || !os.SameFile(before, opened) {
+		return fail(fmt.Errorf("source directory changed"))
+	}
+	inputs := neutralProviderInputs
+	families := map[string][]string{
+		"console/src/assets/images/idp":                     {"apple-dark.svg", "apple.svg", "github-dark.svg", "github.svg", "gitlab.svg", "google.png", "ms.svg", "oauth.svg", "saml-icon.svg"},
+		"internal/api/ui/login/static/resources/images/idp": {"apple-dark.svg", "apple.svg", "github-white.png", "github.png", "gitlab.png", "google.png", "ms.svg"},
+	}
+	if profile == "smtp" {
+		inputs = neutralSMTPInputs
+		families = map[string][]string{"console/src/assets/images/smtp": {"aws-ses.svg", "brevo.svg", "google.png", "mailchimp.svg", "mailgun.svg", "mailjet.svg", "outlook.svg", "postmark.png", "sendgrid.png"}}
+	}
+	if profile == "mdi" {
+		inputs = neutralMDIInputs()
+		names := []string{"openid.svg", "jwt.svg"}
+		for _, asset := range mdiFrozen {
+			names = append(names, path.Base(asset.Path))
+		}
+		families = map[string][]string{"console/src/assets/mdi": names}
+	}
+	if profile == "framework" {
+		inputs = neutralFrameworkInputs
+		var names []string
+		for _, input := range inputs {
+			if input.kind == "retire" {
+				names = append(names, path.Base(input.path))
+			}
+		}
+		families = map[string][]string{"apps/docs/public/img/tech": names}
+	}
+	if profile == "source-offer" {
+		inputs = sourceOfferInputs
+		families = map[string][]string{}
+	}
+	for dir, names := range families {
+		if err = exactDirectory(source, dir, names); err != nil {
+			return fail(err)
+		}
+	}
+	originals, replacements := map[string][]byte{}, map[string][]byte{}
+	consoleSlots, loginSlots, settingsValues := 0, 0, 0
+	// Validate the complete original set before changing the private stage.
+	for _, input := range inputs {
+		body, e := neutralProviderRead(confined, input)
+		if e != nil || digest(body) != input.sha256 {
+			return fail(fmt.Errorf("original identity differs: %s", input.path))
+		}
+		originals[input.path] = body
+		if input.kind == "retire" || input.kind == "retain" {
+			continue
+		}
+		text := string(body)
+		switch input.kind {
+		case "source-offer-console":
+			old := `    <div class="theme">`
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("native Console footer slot differs"))
+			}
+			text = strings.Replace(text, old, "    <div class=\"footer-links\">\n      <a target=\"_blank\" rel=\"noopener noreferrer\" href=\""+identitySourceOfferURL+"\" external>Source code</a>\n    </div>\n\n"+old, 1)
+			text = "<!-- Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. -->\n" + text
+			consoleSlots++
+		case "source-offer-login":
+			if strings.Count(text, "</footer>") != 1 {
+				return fail(fmt.Errorf("native Login footer slot differs"))
+			}
+			text = strings.Replace(text, "</footer>", "  <a href=\""+identitySourceOfferURL+"\" rel=\"noopener noreferrer\" target=\"_blank\">Source code</a>\n</footer>", 1)
+			text = "{{/* Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. */}}\n" + text
+			loginSlots++
+		case "framework-copy", "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
+			var slots int
+			text, slots, e = neutralFrameworkChange(input, text)
+			if e != nil {
+				return fail(e)
+			}
+			consoleSlots += slots
+		case "mdi-registry", "mdi-table", "mdi-chooser", "mdi-editor-oidc", "mdi-editor-jwt":
+			var slots int
+			text, slots, e = neutralMDIChange(input, text)
+			if e != nil {
+				return fail(e)
+			}
+			consoleSlots += slots
+		case "smtp-chooser", "smtp-editor":
+			old := `<img class="smtp-logo" [src]="provider.image" [alt]="provider.description" />`
+			if input.kind == "smtp-editor" {
+				old = `<img class="smtp-logo" [src]="state.defaults.image" [alt]="state.defaults.description" />`
+			}
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("SMTP decoration slot differs"))
+			}
+			text = strings.Replace(text, old, `<i class="smtp-logo neutral-smtp-icon las la-envelope" aria-hidden="true"></i>`, 1)
+			consoleSlots++
+		case "smtp-settings":
+			var lines []string
+			declarations := 0
+			for _, line := range strings.Split(text, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "image: string;" {
+					declarations++
+					continue
+				}
+				if strings.HasPrefix(trimmed, "image: './assets/images/smtp/") {
+					settingsValues++
+					continue
+				}
+				lines = append(lines, line)
+			}
+			if declarations != 1 || settingsValues != 9 {
+				return fail(fmt.Errorf("SMTP decoration settings differ"))
+			}
+			text = strings.Join(lines, "\n")
+		case "smtp-chooser-style", "smtp-editor-style":
+			selector, size := ".new-smtp-wrapper", "36px"
+			if input.kind == "smtp-editor-style" {
+				selector, size = ".wizard-header", "48px"
+			}
+			text += "\n" + selector + " .neutral-smtp-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  font-size: " + size + ";\n  flex-shrink: 0;\n}\n"
+		case "console":
+			var lines []string
+			for _, line := range strings.Split(text, "\n") {
+				if strings.Contains(line, "src=\"./assets/images/idp/") {
+					if strings.Contains(line, " light\"") {
+						continue
+					}
+					indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+					line = indent + "<i class=\"idp-logo neutral-provider-icon las la-arrow-right\" aria-hidden=\"true\"></i>"
+					consoleSlots++
+				}
+				lines = append(lines, line)
+			}
+			text = strings.Join(lines, "\n")
+		case "login":
+			old := "<span class=\"logo\"></span>"
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("login decoration differs"))
+			}
+			text = strings.Replace(text, old, "<span class=\"logo lgn-icon-arrow-right-solid\" aria-hidden=\"true\"></span>", 1)
+			loginSlots++
+		case "table-style", "chooser-style", "editor-style":
+			size := "36px"
+			if input.kind == "table-style" {
+				size = "28px"
+			}
+			text += "\n.neutral-provider-icon {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: " + size + ";\n  height: " + size + ";\n  font-size: " + size + ";\n  margin-right: 1rem;\n  flex-shrink: 0;\n}\n"
+		case "login-style":
+			start := strings.Index(text, "\n  &.google {")
+			if start < 0 || !strings.HasSuffix(text, "\n}\n") {
+				return fail(fmt.Errorf("login provider styles differ"))
+			}
+			text = text[:start] + "\n}\n"
+			old := "  span.logo {\n"
+			if strings.Count(text, old) != 1 {
+				return fail(fmt.Errorf("login slot differs"))
+			}
+			text = strings.Replace(text, old, old+"    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n    font-size: 25px;\n", 1)
+		case "variables":
+			var lines []string
+			removed := 0
+			for _, line := range strings.Split(text, "\n") {
+				selected := false
+				for _, name := range []string{"google", "github", "gitlab", "azure", "apple"} {
+					if strings.Contains(line, "--"+name+"-image-src:") {
+						selected = true
+					}
+				}
+				if selected {
+					removed++
+					continue
+				}
+				lines = append(lines, line)
+			}
+			if removed != 10 {
+				return fail(fmt.Errorf("provider variables differ"))
+			}
+			text = strings.Join(lines, "\n")
+		default:
+			return fail(fmt.Errorf("unsupported fixed input"))
+		}
+		if text == string(body) {
+			return fail(fmt.Errorf("unchanged selected decoration"))
+		}
+		if digest([]byte(text)) != input.expected {
+			return fail(fmt.Errorf("neutral consumer identity differs"))
+		}
+		replacements[input.path] = []byte(text)
+	}
+	if profile == "smtp" && (len(originals) != 14 || len(replacements) != 5 || consoleSlots != 2 || loginSlots != 0 || settingsValues != 9) {
+		return fail(fmt.Errorf("incomplete neutral SMTP profile"))
+	}
+	if profile == "provider" && (len(originals) != 34 || len(replacements) != 18 || consoleSlots != 27 || loginSlots != 2 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral provider profile"))
+	}
+	if profile == "mdi" && (len(originals) != 32 || len(replacements) != 5 || consoleSlots != 6 || loginSlots != 0 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral MDI profile"))
+	}
+	if profile == "framework" && (len(originals) != 52 || len(replacements) != 8 || consoleSlots != 3 || loginSlots != 0 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete neutral framework profile"))
+	}
+	if profile == "source-offer" && (len(originals) != 2 || len(replacements) != 2 || consoleSlots != 1 || loginSlots != 1 || settingsValues != 0) {
+		return fail(fmt.Errorf("incomplete native source-offer profile"))
+	}
+	// Refuse a changed original before replacing any selected body.
+	for _, input := range inputs {
+		body, e := neutralProviderRead(confined, input)
+		if e != nil || !bytes.Equal(body, originals[input.path]) {
+			return fail(fmt.Errorf("original changed before preparation"))
+		}
+	}
+	for _, input := range inputs {
+		if input.kind == "retain" {
+			continue
+		}
+		if input.kind == "retire" {
+			if err = confined.Remove(input.path); err != nil {
+				return fail(err)
+			}
+			continue
+		}
+		// Replace a generated stage member atomically; never truncate a hard-linked
+		// original or follow a swapped destination link outside the admitted root.
+		temporary := path.Join(path.Dir(input.path), ".provider-icons-"+rand.Text())
+		file, e := confined.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if e != nil {
+			return fail(e)
+		}
+		_, e = file.Write(replacements[input.path])
+		if e == nil {
+			e = file.Chmod(0644)
+		}
+		closeErr := file.Close()
+		if e == nil {
+			e = closeErr
+		}
+		if e == nil {
+			e = confined.Rename(temporary, input.path)
+		}
+		if e != nil {
+			_ = confined.Remove(temporary)
+			return fail(e)
+		}
+	}
+	// Read the completed stage back before emitting either profile's success.
+	for _, input := range inputs {
+		if input.kind == "retire" {
+			if _, e := confined.Lstat(input.path); !os.IsNotExist(e) {
+				return fail(fmt.Errorf("retired decoration remains"))
+			}
+			continue
+		}
+		body, e := neutralProviderRead(confined, input)
+		want := replacements[input.path]
+		if input.kind == "retain" {
+			want = originals[input.path]
+		}
+		if e != nil || !bytes.Equal(body, want) {
+			return fail(fmt.Errorf("prepared decoration readback differs"))
+		}
+	}
+	after, err := os.Lstat(source)
+	if err != nil || !os.SameFile(before, after) || after.Mode() != before.Mode() {
+		return fail(fmt.Errorf("prepared source root changed"))
+	}
+	receipt := map[string]any{"schemaVersion": 1, "profile": "native-neutral-provider-icons-v1", "changedFiles": 18, "removedFiles": 16, "consoleSlots": consoleSlots, "loginSlots": loginSlots, "imageAdmission": "unknown", "licenseClosure": "unknown"}
+	if profile == "smtp" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["settingsValues"] = "native-neutral-smtp-icons-v1", 5, 9, settingsValues
+	}
+	if profile == "mdi" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"], receipt["retainedFiles"] = "native-neutral-mdi-icons-v1", 5, 2, 25
+	}
+	if profile == "framework" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-neutral-framework-icons-v1", 8, 44
+		receipt["frameworks"], receipt["frameworkIDs"], receipt["imagePropertiesRemoved"] = 35, 24, 39
+		changed, removed := []string{}, []string{}
+		for _, input := range inputs {
+			if input.kind == "retire" {
+				removed = append(removed, input.path)
+			} else {
+				changed = append(changed, input.path)
+			}
+		}
+		receipt["changedPaths"], receipt["removedPaths"] = changed, removed
+	}
+	if profile == "source-offer" {
+		receipt["profile"], receipt["changedFiles"], receipt["removedFiles"] = "native-source-offer-v1", 2, 0
+		receipt["sourceOfferURL"] = identitySourceOfferURL
+		receipt["changedPaths"] = []string{sourceOfferInputs[0].path, sourceOfferInputs[1].path}
+	}
+	body, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return fail(err)
+	}
+	if _, err = out.Write(append(body, '\n')); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// Read every selected member through the original open root; late path swaps
+// cannot redirect a subsequent read or write outside that source reservation.
+func neutralProviderRead(root *os.Root, input neutralProviderInput) ([]byte, error) {
+	parts := strings.Split(input.path, "/")
+	for i := range parts {
+		info, err := root.Lstat(path.Join(parts[:i+1]...))
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("unavailable or linked provider input")
+		}
+		if i < len(parts)-1 && !info.IsDir() {
+			return nil, fmt.Errorf("provider input parent differs")
+		}
+	}
+	file, err := root.OpenFile(input.path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || info.Mode() != input.mode || info.Size() > 1<<20 {
+		_ = file.Close()
+		return nil, fmt.Errorf("provider input mode or size differs")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	after, statErr := file.Stat()
+	closeErr := file.Close()
+	if err != nil || statErr != nil || closeErr != nil || int64(len(body)) != info.Size() || after.Mode() != info.Mode() || after.Size() != info.Size() || after.ModTime() != info.ModTime() {
+		return nil, fmt.Errorf("provider input read incomplete")
+	}
+	return body, nil
+}
+
+// neutralProviderConsumers returns the transformed consumers and their fixed
+// expected hashes, excluding retired images from the copied-asset policy.
+func neutralProviderConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralProviderInputs {
+		if input.kind != "retire" {
+			expected := input.expected
+			// These two consumers subsequently receive the separate MDI profile.
+			for _, mdi := range neutralMDIConsumers() {
+				if mdi.Path == input.path {
+					expected = mdi.SHA256
+				}
+			}
+			consumers = append(consumers, inputRecord{input.path, expected})
+		}
+	}
+	return consumers
+}
+
+// neutralSMTPConsumers keeps the SMTP source binding separate from the 18 IdP consumers.
+func neutralSMTPConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralSMTPInputs {
+		if input.kind != "retire" {
+			consumers = append(consumers, inputRecord{input.path, input.expected})
+		}
+	}
+	return consumers
+}
+
+// Metadata, the native copy task and six render/mapping consumers share one profile.
+func neutralFrameworkConsumers() []inputRecord {
+	var consumers []inputRecord
+	for _, input := range neutralFrameworkInputs {
+		if input.kind != "retire" {
+			consumers = append(consumers, inputRecord{input.path, input.expected})
+		}
+	}
+	return consumers
+}
+
+// Recognize the retired native provider families in output paths and text.
+// Repeated slash decoding covers the source compiler's escaped-string forms;
+// this is a closed-family check, not a general JavaScript or URL parser.
+func neutralProviderOutput(name string, body []byte) error {
+	lower := strings.ToLower(filepath.ToSlash(name))
+	if strings.Contains(lower, "docs/img/tech/") {
+		return fmt.Errorf("retired framework graphic remains")
+	}
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if strings.Contains(lower, "mdi/"+mark) {
+			return fmt.Errorf("retired MDI decoration remains")
+		}
+	}
+	for _, family := range []string{"idp", "smtp"} {
+		if strings.Contains(lower, "/images/"+family+"/") || strings.HasPrefix(lower, "images/"+family+"/") {
+			return fmt.Errorf("retired %s provider image output remains", family)
+		}
+	}
+	switch strings.ToLower(path.Ext(name)) {
+	case ".html", ".js", ".css", ".json", ".map", ".scss", ".svg":
+		text := strings.ToLower(string(body))
+		slash := strings.NewReplacer("\\/", "/", "\\u002f", "/", "\\x2f", "/")
+		for i := 0; i < 3; i++ {
+			text = slash.Replace(text)
+		}
+		if strings.Contains(text, "docs/img/tech/") {
+			return fmt.Errorf("retired framework image reference remains")
+		}
+		for _, mark := range []string{"openid.svg", "jwt.svg"} {
+			if strings.Contains(text, "mdi/"+mark) {
+				return fmt.Errorf("retired MDI decoration reference remains")
+			}
+		}
+		for _, family := range []string{"idp", "smtp"} {
+			if strings.Contains(text, "images/"+family+"/") {
+				return fmt.Errorf("retired %s provider image URL remains", family)
+			}
+		}
+	}
+	return nil
+}
+
+// The closed provider and framework image directories are retired. Missing parents are valid
+// in a restored tree; a linked, unreadable or nonempty family is never absence.
+func neutralProviderSourceFamilies(source string) error {
+	for _, family := range []string{"console/src/assets/images/idp", "internal/api/ui/login/static/resources/images/idp", "console/src/assets/images/smtp", "apps/docs/public/img/tech"} {
+		current := source
+		absent := false
+		for _, part := range strings.Split(family, "/") {
+			current = filepath.Join(current, part)
+			info, err := os.Lstat(current)
+			if os.IsNotExist(err) {
+				absent = true
+				break
+			}
+			if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("provider source family observation incomplete")
+			}
+		}
+		if absent {
+			continue
+		}
+		entries, err := os.ReadDir(current)
+		if err != nil || len(entries) != 0 {
+			return fmt.Errorf("retired provider source image remains")
+		}
+	}
+	for _, mark := range []string{"openid.svg", "jwt.svg"} {
+		if _, err := os.Lstat(filepath.Join(source, "console/src/assets/mdi", mark)); !os.IsNotExist(err) {
+			return fmt.Errorf("retired MDI source remains or cannot be observed")
+		}
+	}
+	return nil
+}
+
+// neutralMDIInputs closes all 27 native graphics and the five consumers after
+// the provider profile. Retained artwork remains byte-identical to upstream.
+func neutralMDIInputs() []neutralProviderInput {
+	inputs := []neutralProviderInput{
+		{path: "console/src/app/app.component.ts", sha256: "f266e00e6d404e94e58fad66972b3da6c74a4818992bbec91d59a8b151113c4e", mode: 0644, kind: "mdi-registry", expected: "235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab"},
+		{path: "console/src/app/modules/idp-table/idp-table.component.html", sha256: "2217a14c4f92e2341adcaf43e75e3c6f5a5fec8f14b40a10e5f54b4731f1d34e", mode: 0644, kind: "mdi-table", expected: "5c489734a039df3535d00e7761200621bfca99e25d63955b70a1d1e712f76544"},
+		{path: "console/src/app/modules/policies/idp-settings/idp-settings.component.html", sha256: "41b64b2ed1477508569367a19d11ece120cd95c0ccee7af3f4a27805d2896ad8", mode: 0644, kind: "mdi-chooser", expected: "015e783ee150d21280d7748ab897c1b709fb5e208777370059716f7b10766188"},
+		{path: "console/src/app/modules/providers/provider-oidc/provider-oidc.component.html", sha256: "fac7817b5db6d79d22d4a278ba4bd0e4151d30f137c448264c53899ac85b7a81", mode: 0644, kind: "mdi-editor-oidc", expected: "3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80"},
+		{path: "console/src/app/modules/providers/provider-jwt/provider-jwt.component.html", sha256: "19471a418b11da8bf48740dc16162ce93a7d12c69705a3af1012a4f4fe659bf8", mode: 0644, kind: "mdi-editor-jwt", expected: "5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9"},
+		{path: "console/src/assets/mdi/openid.svg", sha256: "05780f911a252dff978d08568675cbe24a53093fcbb04d5be9a9e1fa3e1c4f63", mode: 0644, kind: "retire"},
+		{path: "console/src/assets/mdi/jwt.svg", sha256: "24c9cd3a49a7459d14da7146832b4e986bfbd484bfc3cde7f485da8f6ccc5c03", mode: 0644, kind: "retire"},
+	}
+	for _, asset := range mdiFrozen {
+		inputs = append(inputs, neutralProviderInput{path: asset.Path, sha256: asset.SHA256, mode: 0644, kind: "retain", expected: asset.SHA256})
+	}
+	return inputs
+}
+
+// neutralMDIConsumers binds the completed decoration changes, excluding artwork.
+func neutralMDIConsumers() []inputRecord {
+	var result []inputRecord
+	for _, input := range neutralMDIInputs() {
+		if input.kind != "retain" && input.kind != "retire" {
+			result = append(result, inputRecord{input.path, input.expected})
+		}
+	}
+	return result
+}
+
+// neutralMDIChange replaces only fixed decorative slots and obsolete SVG
+// registrations. Native provider identifiers, forms, links and LDAP stay intact.
+func neutralMDIChange(input neutralProviderInput, text string) (string, int, error) {
+	if input.kind == "mdi-registry" {
+		var lines []string
+		removed := 0
+		for _, line := range strings.Split(text, "\n") {
+			if strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_openid',") || strings.Contains(line, "this.matIconRegistry.addSvgIcon('mdi_jwt',") {
+				removed++
+				continue
+			}
+			lines = append(lines, line)
+		}
+		if removed != 2 {
+			return "", 0, fmt.Errorf("MDI registrations differ")
+		}
+		return strings.Join(lines, "\n"), 0, nil
+	}
+	size, class := "48", "idp-logo"
+	if input.kind == "mdi-table" {
+		size, class = "28", "idp-icon"
+	}
+	if input.kind == "mdi-chooser" {
+		size, class = "36", "icon"
+	}
+	slots := 0
+	for _, mark := range []string{"openid", "jwt"} {
+		alt := mark
+		if input.kind == "mdi-table" && mark == "openid" {
+			alt = "oidc"
+		}
+		old := `<mat-icon class="` + class + `" svgIcon="mdi_` + mark + `" alt="` + alt + `" />`
+		count := strings.Count(text, old)
+		if count == 0 {
+			continue
+		}
+		if count != 1 {
+			return "", 0, fmt.Errorf("MDI decoration slot differs")
+		}
+		glyph := "la-arrow-right"
+		if mark == "jwt" {
+			glyph = "la-key"
+		}
+		replacement := `<i class="` + class + ` neutral-mdi-icon las ` + glyph + `" aria-hidden="true" style="display: inline-flex; align-items: center; justify-content: center; width: ` + size + `px; height: ` + size + `px; font-size: ` + size + `px;"></i>`
+		text = strings.Replace(text, old, replacement, 1)
+		slots++
+	}
+	if input.kind == "mdi-chooser" {
+		if strings.Count(text, ` svgIcon="mdi_jwt"`) != 1 {
+			return "", 0, fmt.Errorf("native LDAP decoration differs")
+		}
+		text = strings.Replace(text, ` svgIcon="mdi_jwt"`, "", 1)
+	}
+	if strings.Contains(text, "mdi_openid") || strings.Contains(text, "mdi_jwt") {
+		return "", 0, fmt.Errorf("retired MDI registration remains")
+	}
+	return text, slots, nil
+}
+
+// Shared by the native two-file login/font verifier and full copied-asset tool.
+// mdiProvenance binds retained native wrappers to their immutable primary origins.
+type mdiProvenance struct {
+	Path                                                        string
+	Bytes                                                       int
+	SHA256, GitBlob, PrimaryPath, PrimarySHA256, Author, Notice string
+}
+
+var mdiFrozen = []mdiProvenance{
+	{Path: "console/src/assets/mdi/account-cancel-outline.svg", Bytes: 922, SHA256: "8f6a46b284db9315478f57ec4c728ba363b1b298d45320ae5ea5121751be2972", GitBlob: "01ca0712bb2b1004767a9168bfa25649075663b4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/account-cancel-outline.svg", PrimarySHA256: "14d164d4a2ad635bf760f2de6b6c30ab2e8c4329ac69092b1ea4641dc3e0242c", Author: "Simran", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/account-check-outline.svg", Bytes: 627, SHA256: "3c7c793f99efe88f26f5e81f2d64f863d7128f41ab56c77da5f787b93b3fef83", GitBlob: "dd3d59285e24c4d78ce86a8ed8a6d765d7f87a3a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/account-check-outline.svg", PrimarySHA256: "a6f32eb17b2657c4e4b3975a60206d334b4b975586135357f4a676fc20389f78", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/api.svg", Bytes: 460, SHA256: "cc63969631086dcd9b6bd0f6468357ae101df4bafa725b1be082c2a0679a7273", GitBlob: "38dfa2a980511d9f45713b3eed026b7f9ebcb23a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/api.svg", PrimarySHA256: "4381cb06997f09c055ff42a4356579e6c558b2dd427b32e3a331722233c28b3c", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-decision-outline.svg", Bytes: 758, SHA256: "905827dc06b70f528f3554dbe3375b8649975dd41d77935d3400f3aefdcab684", GitBlob: "1ab13649c1956a42b98325b6c2980a18d5eb12e4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-decision-outline.svg", PrimarySHA256: "97c0ccb9ca07c47c0d93d16e2fea8174cb18e293f8248510703eefcff24d267b", Author: "Michael Richins", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-expand.svg", Bytes: 220, SHA256: "dbcf265c15ecaad1e1838e4b32c0fe435622f11d4e1f4114cf0d33a7b48407e8", GitBlob: "6e1f0076c90f2d3444bd8fe05fe8d2bc95e9df72", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-expand.svg", PrimarySHA256: "cce26ca5435273e9e075dd29db1143775287c427a2af2355573db74e6f8f33b0", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/arrow-right-bottom.svg", Bytes: 422, SHA256: "2a6ab46fac9c301964183127184a92c46c3c1bd35fa64cf6ddcd60724da03100", GitBlob: "33848b9af717542183f4c04a8fb97c5c3e404c43", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/arrow-right-bottom.svg", PrimarySHA256: "d3e7e17a0fd4c3021ef7ea609c491d3464fddb566fafd76810d8b195de19d3fa", Author: "Colton Wiscombe", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/broom.svg", Bytes: 531, SHA256: "ef5cbd4c4378386bc8326fcfbc36e750d78f1412aafcae4f446f59e5153dd9d6", GitBlob: "1e61d76750802eac462b64faa8b5ad13aa389966", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/broom.svg", PrimarySHA256: "7a4a63bfcd9c216cd7199ad74912f735a3315c692996bf71a2f3fdedbe4dc9aa", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/content-copy.svg", Bytes: 417, SHA256: "f24c47ca28e49c25e74d695ca635ab3747bca373dfeb4eeaaa88c98c461c5a5a", GitBlob: "0968db1a753b41d152c93f42459c8dd579d51ef3", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/content-copy.svg", PrimarySHA256: "5584bbc724b175dc9a197294266ec1c579b798149333ea65ebdd811fbd02e7c1", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/counter.svg", Bytes: 957, SHA256: "5d761bb9b8cddb5338aa41f2098319a69a130a59eade692843f420f2e8f5c4b5", GitBlob: "613b110ae6901043ae3538bb36cce5cf740b1d6f", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/counter.svg", PrimarySHA256: "17602cbe113282a867e9d390091ee46587a848b2675bb3384be57b0b024ebedf", Author: "Christopher Schreiner", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/format-letter-case-lower.svg", Bytes: 1199, SHA256: "a5016e35d22e5acea3bd00958730e98385ba09c934dd3ea7cf15ba36988cd7fc", GitBlob: "ea48e78a219aadd8142aefa9bd704027ffeacda5", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/format-letter-case-lower.svg", PrimarySHA256: "9317f9fe414593739b6556e08c08b52bb3ceb70eb016d3e118b0125a14e78dc4", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/format-letter-case-upper.svg", Bytes: 1195, SHA256: "ee0684e2c0f6365aace6b792afff8af4989a2dd0cf02587925cc8f086017f0a1", GitBlob: "36cb7e19d9ac010e6cb81512aa6043b51c492b0a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/format-letter-case-upper.svg", PrimarySHA256: "16a9661547440e57d9e7add82c11c51dd0b7a9150e914f5899a2cc6028942965", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lightbulb-off-outline.svg", Bytes: 682, SHA256: "1aa5a7e9e0defa5e8e10b3898150b390018342e1f17ae387aefebde7feac5134", GitBlob: "cc1a4f89e0c4ffba34a02273de8f431d19fe8b66", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lightbulb-off-outline.svg", PrimarySHA256: "26343d8b4c52c905072d32b9a38f7e3ac56f382ea458424c3c5877be4defcbc4", Author: "Hans Böhm", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lightbulb-on-outline.svg", Bytes: 728, SHA256: "2f4dfb3dd2b08c565991ae567dd2e574b34f5efdb59cb53634af06ec8314a238", GitBlob: "cc8b9f780d89ca8d6ab795aa6191567d94738078", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lightbulb-on-outline.svg", PrimarySHA256: "c1d233a37d67a340f9f42b578d70f447b4d5c22e7e96bed88dd74112f3348921", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lock-question.svg", Bytes: 1043, SHA256: "eaa5977b8c3aa7d0913f5e527b01c16d2e0c9d17471213b1c6ad3f41c6fca578", GitBlob: "99495d9fd525ab077a811ca9e5ef5a410232530b", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lock-question.svg", PrimarySHA256: "e2482adffc1aad0291d64280066d322d0f2f1ffcd5ce2f3d2176387d7287adf7", Author: "Simran", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/lock-reset.svg", Bytes: 876, SHA256: "f2ab09fdcdf9c5761b71202ff4674a8bc31abe80b5b6e26f36b65f3ccdffa0aa", GitBlob: "817a328bda95283f58c0988203d4a6365d5320c4", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/lock-reset.svg", PrimarySHA256: "e17c400d3b8308b1a0df55e60fdf211bed600a794eaeeb18137fc2962544b87e", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/mail.svg", Bytes: 309, SHA256: "05f47e61b392b3d9a8f0d9c6d11503f276841901efc5869a2b17f9f57b912870", GitBlob: "15e1d12d4e1a21ead0cf4a03f0dd10fb48d884a4", PrimaryPath: "https://github.com/google/material-design-icons/blob/6d7ca43bd6e6668531a00fcaca06d921b63dd716/symbols/web/mail/materialsymbolsoutlined/mail_24px.svg", PrimarySHA256: "05f47e61b392b3d9a8f0d9c6d11503f276841901efc5869a2b17f9f57b912870", Author: "Google", Notice: "Google-Mail-LICENSE"},
+	{Path: "console/src/assets/mdi/numeric.svg", Bytes: 538, SHA256: "613206599b8162ee3359e6478a914b1c768b14035cc82fec229462c876e32a09", GitBlob: "8bd26d9fcdbf2c34048d0aa8555323fa812b0c46", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/numeric.svg", PrimarySHA256: "b2516da37500d52f0a43ff84eb36900c0e75801cf5118a93af1daca4c2711b07", Author: "Austin Andrews", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/pin-outline.svg", Bytes: 391, SHA256: "0314936a951083cda9223396c9639a285547aab344413b493443c023c86f9aeb", GitBlob: "5d2799f9825abcb265690e7881449d16ebcec316", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/pin-outline.svg", PrimarySHA256: "6048039bfe70cb103571416b5621db086f15ac9165ed9a3e0ce4a0c398e87c3a", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/pin.svg", Bytes: 354, SHA256: "6da5256e2bf228878047406b37faf135103f36e46f189bd5151582ac52b5244b", GitBlob: "22840369872cd00f25b8b582929e63fc0e38d76b", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/pin.svg", PrimarySHA256: "2f17cf4653d23302a5dd5695e814057322df1af2747b77b608055b0e4d3be539", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/radar.svg", Bytes: 761, SHA256: "ea31f4277b0166f24c0e51e9ad33740aae72c905e2b3ea5557d8813a59c7c99e", GitBlob: "aadfaa5b51def0ae61acafcdfb498c53c4fbb8b1", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/radar.svg", PrimarySHA256: "dff0497a00d7d72ab5f8c76f0bd3f6f97f0c8e2e72f9eab023784a767837060c", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/shield-alert.svg", Bytes: 390, SHA256: "fed8d1d1d364858530cb82a87638a6a35f04bd8c54450d6c2c0a63d8af2391fe", GitBlob: "a8fcb7abfd2b9b9e9e0a44323b5cdbad0a107602", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/shield-alert.svg", PrimarySHA256: "1cb13b4fe587c416952eb3855eb083e4f6f8c6c3a1a0ed0ec5bf3c39fc590c4e", Author: "Peter Noble", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/shield-check.svg", Bytes: 198, SHA256: "9c17250755c41530f8e5d51ef030ebb2d8b71682be4aa3209363ed930d65998b", GitBlob: "1d6fa58b22d622419c9256580b96f3b43dfdb796", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/shield-check.svg", PrimarySHA256: "e64250b11f695be074c753f54c4e06146153b0f3ffce57d6285e1db38565f972", Author: "Google", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/symbol.svg", Bytes: 594, SHA256: "3dac682300a0ce63e54aa76349f800f4b82de7cb545ea824194a3e9c618e4421", GitBlob: "0ebc772f39ca73729ff46dd1a90c8c15f6a3bb3a", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/symbol.svg", PrimarySHA256: "93314ad702d3bf1b181f46bff8aa0f0e9a0d5a423ffbfbdec46269d3264008f5", Author: "Haley Halcyon", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/textbox-password.svg", Bytes: 756, SHA256: "9c635718c3c5d3774179afa2944b4fb170eaf0ecd6280b6d7efcbd40d1fe5eca", GitBlob: "6f0743b6fa2f90bf4d1583314bd7bd062c4db926", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/form-textbox-password.svg", PrimarySHA256: "38dc71188bac84dd81c70f6bea5c100e5172572c37cc9342a603cf75665d847c", Author: "Michael Richins", Notice: "Pictogrammers-LICENSE"},
+	{Path: "console/src/assets/mdi/usb-flash-drive-outline.svg", Bytes: 1037, SHA256: "9762ef5b6e151cf527c162f8de66f975298459ca4f13a176ee497af75dbcde40", GitBlob: "978edf050ae35760a214a82fddbcac955151cc4c", PrimaryPath: "https://github.com/Templarian/MaterialDesign-SVG/blob/9e04201d4557e729822fb57f62a316c3dea1d4a8/svg/usb-flash-drive-outline.svg", PrimarySHA256: "f809b8a5d9ef5681dcbe76459d6beef44275459c3f091bb413c58817315e193f", Author: "Yaroslav Bandura", Notice: "Pictogrammers-LICENSE"},
 }

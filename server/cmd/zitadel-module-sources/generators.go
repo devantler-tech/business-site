@@ -234,8 +234,8 @@ func observeGenerators(build string) (observations []generatorObservation, resul
 	// These literal inputs are independently fixed by the reviewed source profile.
 	// A checkpoint cannot silently bind locally changed tool-install instructions.
 	for name, expected := range map[string]string{
-		"prepared/source/go.mod":                "e67d24ece452f947049ecf12bfa19542881d02c41686ce6f26e10a64fa0bea5a",
-		"prepared/source/go.sum":                "48c0e5066bb716329885e25c059123814499b79220fd8d04ae7545121517a79a",
+		"prepared/source/go.mod":                "d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50",
+		"prepared/source/go.sum":                frozenIdentityGoSum,
 		"prepared/source/apps/api/project.json": "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
 	} {
 		body, err := readAt(root, name, inputLimit)

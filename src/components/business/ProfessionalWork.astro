@@ -1,9 +1,0 @@
----
-import WorkExample from './WorkExample.astro';
-import { copy, type Locale } from './content';
-import { professionalWork } from './professional-work';
-interface Props { locale: Locale }
-const { locale } = Astro.props;
-const item = { ...copy[locale].workItems[0], kind: professionalWork[locale].kind, text: professionalWork[locale].text };
----
-<WorkExample item={item} locale={locale} compact />

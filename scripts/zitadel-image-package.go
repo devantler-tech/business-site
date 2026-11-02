@@ -219,14 +219,14 @@ func imagePackage(build, repo, output string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, pending := range []string{"build-receipt.pending", "console-notices-inventory.pending", "console-notices-supplement-inventory.pending", "login-icons-inventory.pending"} {
+	for _, pending := range []string{"build-receipt.pending", "console-notices-inventory.pending", "console-notices-supplement-inventory.pending", "login-icons-inventory.pending", "text-font-notices-inventory.pending", "copied-asset-notices-inventory.pending"} {
 		if _, err := os.Lstat(filepath.Join(build, pending)); !os.IsNotExist(err) {
 			return "", fmt.Errorf("pending or unavailable build evidence")
 		}
 	}
 	data := map[string][]byte{}
 	evidence := map[string]imageEvidence{}
-	for _, name := range []string{"build-receipt.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "login-icons-inventory.json"} {
+	for _, name := range []string{"build-receipt.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json"} {
 		b, err := imageRead(build, name, 4<<20)
 		if err != nil {
 			return "", err
@@ -254,11 +254,16 @@ func imagePackage(build, repo, output string) (string, error) {
 	rh := imageHash(data["build-receipt.json"])
 	console := evidence["console-notices-inventory.json"]
 	icons := evidence["login-icons-inventory.json"]
+	fonts := evidence["text-font-notices-inventory.json"]
+	copied := evidence["copied-asset-notices-inventory.json"]
 	supplement := evidence["console-notices-supplement-inventory.json"]
-	if !imageBound(console.Inputs, "build-receipt.json", rh) || !imageBound(icons.Inputs, "build-receipt.json", rh) || supplement.NoticeInventorySHA256 != imageHash(data["notices/console-notices-inventory.json"]) {
+	if !imageBound(console.Inputs, "build-receipt.json", rh) || !imageBound(icons.Inputs, "build-receipt.json", rh) || !imageBound(fonts.Inputs, "build-receipt.json", rh) || fonts.BinarySHA256 != receipt.BinarySHA256 || supplement.NoticeInventorySHA256 != imageHash(data["notices/console-notices-inventory.json"]) {
 		return "", fmt.Errorf("unbound notice inventory")
 	}
-	for name, meta := range map[string]*imageText{"console-third-party-notices.txt": &console.imageText, "console-notices-supplement.txt": &supplement.imageText, "go-toolchain-notices.txt": console.Toolchain, "zitadel-root-license.txt": console.SourceLicense, "go-module-notices.txt": console.Modules} {
+	if !imageBound(copied.Inputs, "build-receipt.json", rh) || copied.BinarySHA256 != receipt.BinarySHA256 {
+		return "", fmt.Errorf("unbound copied-asset inventory")
+	}
+	for name, meta := range map[string]*imageText{"console-third-party-notices.txt": &console.imageText, "console-notices-supplement.txt": &supplement.imageText, "go-toolchain-notices.txt": console.Toolchain, "zitadel-root-license.txt": console.SourceLicense, "go-module-notices.txt": console.Modules, "text-font-notices.txt": &fonts.imageText, "copied-asset-notices.txt": &copied.imageText} {
 		if meta == nil || meta.RawDiagnostic != name || meta.Bytes < 1 {
 			return "", fmt.Errorf("missing required notice identity: %s", name)
 		}
@@ -315,7 +320,7 @@ func imageVerifyContext(root, seal string) error {
 		return fmt.Errorf("package manifest changed")
 	}
 	var m imageManifest
-	if err = imageDecode(b, &m); err != nil || m.SchemaVersion != 1 || m.UpstreamCommit != imagePin || m.Profile != "cli-version-smoke" || m.Base != imageBase || m.ImageAdmission != "unknown" || m.LicenseClosure != "unknown" || m.Reproducible || len(m.Files) != 13 {
+	if err = imageDecode(b, &m); err != nil || m.SchemaVersion != 1 || m.UpstreamCommit != imagePin || m.Profile != "cli-version-smoke" || m.Base != imageBase || m.ImageAdmission != "unknown" || m.LicenseClosure != "unknown" || m.Reproducible || len(m.Files) != 17 {
 		return fmt.Errorf("invalid package manifest")
 	}
 	want := map[string]bool{"package-manifest.json": true}
@@ -358,11 +363,22 @@ func imageVerifyContext(root, seal string) error {
 	})
 }
 
+// imageRun keeps invocation inert without arguments and admits only explicit
+// native smoke profiles or the namespace-bound internal browser worker.
 func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 	if len(args) == 0 {
 		return 0
 	}
 	fail := func(err error) int { _, _ = fmt.Fprintln(diagnostic, "identity-image:", err); return 1 }
+	if args[0] == "--browser-worker" {
+		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+			return fail(fmt.Errorf("explicit native browser worker required"))
+		}
+		if err := browserWorker(args[1], args[2], args[3]); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	values := map[string]string{}
 	for i := 0; i < len(args); i++ {
 		k := args[i]
@@ -370,7 +386,7 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("duplicate argument"))
 		}
 		switch k {
-		case "--smoke":
+		case "--smoke", "--service-smoke", "--browser-smoke":
 			values[k] = "true"
 		case "--build", "--repository", "--output":
 			if i+1 >= len(args) || args[i+1] == "" || strings.HasPrefix(args[i+1], "--") {
@@ -382,11 +398,17 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 			return fail(fmt.Errorf("unexpected argument"))
 		}
 	}
-	if values["--smoke"] != "" && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
+	if (values["--smoke"] != "" || values["--service-smoke"] != "" || values["--browser-smoke"] != "") && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
 		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
 			return fail(fmt.Errorf("native Linux amd64 Go 1.26.10 required"))
 		}
-		if err := imageSmoke(values["--build"], values["--repository"], values["--output"], imageExecute); err != nil {
+		var probes []func(string, string) error
+		if values["--service-smoke"] != "" || values["--browser-smoke"] != "" {
+			probes = append(probes, func(id, owner string) error {
+				return imageService(id, owner, values["--repository"], values["--output"], imageExecute, values["--browser-smoke"] != "")
+			})
+		}
+		if err := imageSmoke(values["--build"], values["--repository"], values["--output"], imageExecute, probes...); err != nil {
 			return fail(err)
 		}
 		return 0

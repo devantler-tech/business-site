@@ -9,6 +9,12 @@ APIs through its native JavaScript packages. The exact SDK dependencies and thei
 original integrity values are in `package-lock.json`, separately from the frozen
 identity application's lock and toolchain.
 
+The adapter's selected authored files have the explicit
+[AGPL-3.0-only build-tool scope](../../third_party/zitadel-build-tools/README.md).
+The package remains private; its dependency licenses and the terms of all other
+application source remain separate. This grant is not complete corresponding-source
+capture, a public source offer or identity image admission.
+
 ```sh
 npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts
 node --test tools/zitadel-pnpm-source/index.test.mjs
@@ -93,16 +99,22 @@ node tools/zitadel-pnpm-source/index.mjs verify \
   --capsule /physical/owned/selected-pnpm-sources --sha256 '<pnpm-seal>' \
   --scratch /physical/owned/new-verify-work
 
+mkdir -m 700 /physical/owned/new-native-store
 node tools/zitadel-pnpm-source/index.mjs restore \
   --capsule /physical/owned/selected-pnpm-sources --sha256 '<pnpm-seal>' \
   --scratch /physical/owned/new-restore-work \
-  --store /physical/owned/new-native-store
+  --store /physical/owned/new-native-store/v10
 ```
 
 Verification reinterprets originals with the same SDK. Restoration writes a new
 native CAFS store and byte-identical verified indexes, then independently checks
 its complete contents. Old `node_modules`, current-lock or modules files are
 evidence only; they are never transplanted into the replayed application.
+The SDK's store argument is the versioned CAFS root. Native pnpm's `--store-dir`
+argument is its parent base; pnpm 10.30.3 appends `v10`. The full retained-input
+builder restores into that versioned child while configuring pnpm with the fresh
+parent. Pointing both operations at the same directory leaves the native
+consumer looking in an empty nested store and fails offline installation.
 
 Source/build records retain this adapter and both SDK manifests. CI tests the
 native SDK under the frozen Linux Node version, captures from the actual build,
@@ -115,3 +127,45 @@ fixtures are not observed native Linux capture. Store reconstruction is not an
 offline application installation or a network-denied full build. Generator-Go
 closure and complete cold nonroot replay remain #343. Receipts keep
 `dependencyInputsCaptured` and `nativeOfflineReplayProved` false.
+
+## Cold native SDK reconstruction
+
+Explicit source capture also retains a separate `selected-pnpm-sdk-bootstrap`
+component. It preserves the unchanged SDK lock, all 132 original archives
+(including its four dev-marked entries), full SHA-512 SRI, actual original package
+names and native install paths, complete installed bytes/modes/bin links, native
+npm composition and the three [supplemental terms](../../third_party/zitadel-pnpm-sdk/README.md).
+An alias's install path and original manifest name remain distinct identities.
+The original dev flags are lock metadata, not a test-only classification:
+capture uses the pinned `bin-links` normalizer to match native executable bytes.
+The component's own seal binds the source manifest, forty-member authored tool
+source, build recipe and original Node/npm identities. The npm fields hash its
+command shim and package metadata, so they identify the version only; npm's other
+files are anchored by the checksum-pinned Node tarball CI installs, not by the seal.
+
+`bootstrap-verify` uses built-ins only: it does not load the native SDK. It checks
+closed membership, all archive/term/source bytes and context before any external
+SDK dependency executes. `bootstrap-restore` seeds a new native npm cache using
+only those verified local tarballs, then runs unchanged `npm ci --offline
+--ignore-scripts` in a new private SDK root. Native npm owns extraction, cache and
+bin linking. Complete installation bytes, normalized executable modes, in-root
+bin links and native composition must equal capture before SDK use. No ambient
+`NODE_PATH`, npm configuration, original installation or old cache supplies input.
+Every retained operation repeats raw verification around the lazy SDK load/use.
+
+The restricted replay caller runs this reconstruction inside its existing kernel
+network boundary, then proves empty and partial native caches cannot reconstruct
+it. The SDK performs restore, inspect, verify, recapture, verify and restore around
+one actual application build. Recapture uses the existing acquisition callback
+with verified original archives, never a new resolver or cache format. The build
+script enforces each operation before recording that they passed. CI joins the
+receipt to the same source, recipe and SDK seal and checks the shape of all six
+operation digests, but it does not recompute them: only the retained restoration
+receipt is uploaded. Uploads are compact manifests and receipts, never tarballs,
+caches or `node_modules`.
+
+SDK receipts keep `nativeOfflineReplayProved` false. Only the enclosing complete
+native replay may assert that result after its existing checks all succeed. This
+component leaves the 37 authored-file license scope, three scoped term records,
+58 build records, four source-restoration targets and 43-original notice family
+unchanged. It does not admit an image or activate customer access.

@@ -14,45 +14,77 @@ const workflow = load(readFileSync(".github/workflows/ci.yaml", "utf8"));
 const commands = [
   "node --test scripts/identity-cohorts.test.mjs",
   "go test -race -p=1 ./... -list '^(Test|Example|Fuzz)' -count=1 -timeout=90s -json > test-inventory.jsonl",
-  "go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^TestWork(Approval|Review)' | tee test-core.jsonl",
+  "go test -race -coverprofile=coverage-core.out -p=1 ./... -count=1 -timeout=90s -json -skip '^Test(Work(Approval|Review)|Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-core.jsonl",
   "go test -race -coverprofile=coverage-work.out -p=1 ./... -count=1 -timeout=90s -json -run '^TestWork(Approval|Review)' | tee test-work.jsonl",
+  "go test -race -coverprofile=coverage-private.out -p=1 ./... -count=1 -timeout=90s -json -run '^Test(Private|Operator|Proposal|Sharing|Consent|Acceptance|Invoice|Credit)' | tee test-private.jsonl",
   "node ../scripts/identity-cohorts.mjs",
 ];
+
+/** The observer's self-test needs npm; actual database evidence does not. */
+const commandJob = (w, index) => w.jobs[index === 0 ? "test-portal-quality" : "test-portal-identity"];
 
 /** Require every actual cohort command once, unconditionally and in execution order. */
 function checkWorkflow(w) {
   const job = w.jobs["test-portal-identity"];
+  const quality = w.jobs["test-portal-quality"];
+  assert.ok(quality);
+  assert.equal(quality.if, undefined);
+  assert.ok(quality["continue-on-error"] == null || quality["continue-on-error"] === false);
+  assert.deepEqual(w.jobs["test-combined-runtime"].needs, ["test-portal-quality", "test-portal-identity"]);
   assert.equal(job.if, undefined);
   assert.ok(job["continue-on-error"] == null || job["continue-on-error"] === false);
   let previous = job.steps.findIndex((s) => s.run === "bash scripts/check-go-contact.sh");
   assert.ok(previous >= 0);
   for (const [i, command] of commands.entries()) {
-    const steps = job.steps.filter((s) => s.run === command);
+    const owner = commandJob(w, i);
+    const steps = [quality, job].flatMap((portal) => portal.steps).filter((s) => s.run === command);
     assert.equal(steps.length, 1, `exactly one required invocation: ${command}`);
     const step = steps[0];
-    const index = job.steps.indexOf(step);
-    assert.ok(index > previous);
-    previous = index;
+    const index = owner.steps.indexOf(step);
+    if (i === 0) {
+      const install = quality.steps.findIndex(s => s.run === "npm ci");
+      assert.ok(install >= 0 && index > install);
+    } else {
+      assert.ok(index > previous);
+      previous = index;
+    }
     assert.equal(step.if, undefined);
     assert.ok(step["continue-on-error"] == null || step["continue-on-error"] === false);
-    assert.equal(step["working-directory"] ?? job.defaults?.run?.["working-directory"], i === 0 ? "." : "server");
-    if (i === 2 || i === 3) assert.equal(step.shell, "bash", "tee must preserve go failure through pipefail");
+    assert.equal(step["working-directory"] ?? owner.defaults?.run?.["working-directory"], i === 0 ? "." : "server");
+    if (i >= 2 && i <= 4) assert.equal(step.shell, "bash", "tee must preserve go failure through pipefail");
   }
 }
 
-test("both complete ordinary cohorts and their inventory/result checks are mandatory", () => checkWorkflow(workflow));
+test("all three complete ordinary cohorts and their inventory/result checks are mandatory", () => checkWorkflow(workflow));
 for (let i = 0; i < commands.length; i++) {
   for (const [fault, mutate] of [
     [
       "omitted",
       (w, step) => {
-        w.jobs["test-portal-identity"].steps = w.jobs["test-portal-identity"].steps.filter((s) => s !== step);
+        const job = commandJob(w, i);
+        job.steps = job.steps.filter((s) => s !== step);
       },
     ],
     [
       "duplicated",
       (w, step) => {
-        w.jobs["test-portal-identity"].steps.push(structuredClone(step));
+        commandJob(w, i).steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "duplicated in the other portal job",
+      (w, step) => {
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(structuredClone(step));
+      },
+    ],
+    [
+      "moved to the other portal job",
+      (w, step) => {
+        const owner = commandJob(w, i);
+        owner.steps = owner.steps.filter((s) => s !== step);
+        const other = w.jobs[i === 0 ? "test-portal-identity" : "test-portal-quality"];
+        other.steps.push(step);
       },
     ],
     [
@@ -76,7 +108,7 @@ for (let i = 0; i < commands.length; i++) {
   ])
     test(`workflow refuses ${fault} cohort boundary ${i}`, () => {
       const changed = structuredClone(workflow);
-      const step = changed.jobs["test-portal-identity"].steps.find((s) => s.run === commands[i]);
+      const step = commandJob(changed, i).steps.find((s) => s.run === commands[i]);
       assert.ok(step);
       mutate(changed, step);
       assert.throws(() => checkWorkflow(changed));
@@ -102,7 +134,17 @@ test("workflow refuses a pipeline without explicit bash pipefail", () => {
 });
 
 const pkg = "example.test/identity";
-const names = ["TestBroker", "TestWorkApproval", "TestWorkReview", "ExampleBroker", "FuzzBroker"];
+const privateNames = [
+  "TestPrivateReader",
+  "TestOperatorInbox",
+  "TestProposalMutation",
+  "TestSharingRead",
+  "TestConsentReceipt",
+  "TestAcceptance",
+  "TestInvoiceRead",
+  "TestCreditRead",
+];
+const names = ["TestBroker", "TestWorkApproval", "TestWorkReview", "ExampleBroker", "FuzzBroker", ...privateNames];
 const ordinary = names.filter((n) => !n.includes("/"));
 const event = (Action, extra = {}) => ({ Action, Package: pkg, ...extra });
 const inventory = [event("start"), ...ordinary.map((n) => event("output", { Output: `${n}\n` })), event("pass")];
@@ -114,31 +156,45 @@ function execution(selected) {
     event("pass"),
   ];
 }
-const core = execution(ordinary.filter((n) => !/^TestWork(Approval|Review)/.test(n)));
+const core = execution(["TestBroker", "ExampleBroker", "FuzzBroker"]);
 const work = execution(ordinary.filter((n) => /^TestWork(Approval|Review)/.test(n)));
+const privateFlows = execution(privateNames);
 const coverage = "mode: atomic\nexample.test/identity/broker.go:1.1,2.2 1 1\n";
 /** Serialize independent inventory, execution and coverage fixtures for the real verifier. */
-function check(i = inventory, c = core, w = work, profiles = [coverage, coverage]) {
+function check(i = inventory, c = core, w = work, profiles = [coverage, coverage, coverage], p = privateFlows) {
   return checkCohorts(
-    [i, c, w].map((events) => events.map((e) => JSON.stringify(e)).join("\n") + "\n"),
+    [i, c, w, p].map((events) => events.map((e) => JSON.stringify(e)).join("\n") + "\n"),
     profiles,
   );
 }
 test("actual compiled inventory includes examples and fuzz seeds exactly once across complementary cohorts", () => {
-  assert.deepEqual(check(), { packages: 1, tests: 5, core: 3, work: 2 });
+  assert.deepEqual(check(), { packages: 1, tests: 13, core: 3, work: 2, private: 8 });
 });
 test("all subtests stay within their selected parent and packages without test files remain explicit", () => {
   const empty = ["start", "skip"].map((Action) => ({ Action, Package: "example.test/no-tests" }));
   const nested = [event("run", { Test: "TestBroker/subcase" }), event("pass", { Test: "TestBroker/subcase" })];
   assert.deepEqual(
-    check([...inventory, ...empty], [...core.slice(0, -1), ...nested, event("pass"), ...empty], [...work, ...empty]),
-    { packages: 2, tests: 5, core: 3, work: 2 },
+    check(
+      [...inventory, ...empty],
+      [...core.slice(0, -1), ...nested, event("pass"), ...empty],
+      [...work, ...empty],
+      undefined,
+      [...privateFlows, ...empty],
+    ),
+    { packages: 2, tests: 13, core: 3, work: 2, private: 8 },
   );
 });
 for (const [fault, change] of [
   ["empty inventory", () => check([])],
   ["duplicate inventory", () => check([...inventory.slice(0, -1), inventory[1], event("pass")])],
   ["omitted cohort", () => check(inventory, core, [])],
+  ["omitted private cohort", () => check(inventory, core, work, undefined, [])],
+  [
+    "private test duplicated in core",
+    () => check(inventory, execution(["TestBroker", "ExampleBroker", "FuzzBroker", "TestPrivateReader"])),
+  ],
+  ["private test omitted", () => check(inventory, core, work, undefined, execution(privateNames.slice(1)))],
+  ["private cohort has foreign family", () => check(inventory, core, work, undefined, execution([...privateNames, "TestWorkApproval"]))],
   ["duplicated cohort", () => check(inventory, core, core)],
   ["omitted test", () => check(inventory, execution(ordinary.slice(0, 1)), work)],
   ["invented test", () => check(inventory, execution(["TestInvented"]), work)],
@@ -196,8 +252,10 @@ for (const [fault, change] of [
       ),
   ],
   ["one coverage profile", () => check(inventory, core, work, [coverage])],
-  ["wrong coverage mode", () => check(inventory, core, work, [coverage.replace("atomic", "set"), coverage])],
-  ["empty coverage", () => check(inventory, core, work, ["mode: atomic\n", coverage])],
+  ["missing private coverage", () => check(inventory, core, work, [coverage, coverage])],
+  ["wrong coverage mode", () => check(inventory, core, work, [coverage.replace("atomic", "set"), coverage, coverage])],
+  ["empty coverage", () => check(inventory, core, work, ["mode: atomic\n", coverage, coverage])],
+  ["invalid private coverage", () => check(inventory, core, work, [coverage, coverage, "mode: atomic\n"])],
 ])
   test(`result validation refuses ${fault}`, () => assert.throws(change));
 /** Serialize one independent Go event stream, including its final line terminator. */
@@ -207,7 +265,12 @@ function jsonLines(events) {
 
 /** Assert malformed evidence refusal without changing the other inputs. */
 function assertMalformed(text) {
-  assert.throws(() => checkCohorts([jsonLines(inventory), text, jsonLines(work)], [coverage, coverage]));
+  assert.throws(() =>
+    checkCohorts(
+      [jsonLines(inventory), text, jsonLines(work), jsonLines(privateFlows)],
+      [coverage, coverage, coverage],
+    ),
+  );
 }
 
 test("malformed or truncated test output is not evidence", () => {
@@ -247,8 +310,10 @@ test("actual CLI diagnostics identify refusals without echoing evidence or priva
     "test-inventory.jsonl": jsonLines(inventory),
     "test-core.jsonl": jsonLines(core),
     "test-work.jsonl": jsonLines(work),
+    "test-private.jsonl": jsonLines(privateFlows),
     "coverage-core.out": coverage,
     "coverage-work.out": coverage,
+    "coverage-private.out": coverage,
   }))
     fs.writeFileSync(join(dir, name), contents);
   /** Execute the real CLI in an owned private fixture directory. */

@@ -70,7 +70,7 @@
   article :global(th),article :global(td) { text-align:left; padding:.65rem; border-bottom:1px solid var(--line); }
   article :global(.expressive-code) { margin-block:1.5rem; min-width:0; }
   article :global(.expressive-code pre) { max-width:100%; overflow-x:auto; }
-  article :global(.expressive-code .copy [aria-live]) { position:absolute; right:0; top:100%; padding:.4rem; background:var(--paper); color:var(--ink); font-size:.8rem; max-width:18rem; }
+  article :global(.expressive-code .copy [aria-live]) { position:absolute; right:0; top:100%; padding:.4rem; background:var(--paper); color:var(--ink); font-size:.8rem; width:max-content; max-width:min(18rem,calc(100vw - 3rem)); }
   article :global(.expressive-code .copy [aria-live]:empty) { display:none; }
   article :global(hr) { margin-block:2rem; border:0; border-top:1px solid var(--line); }
   article :global(a) { overflow-wrap:anywhere; }

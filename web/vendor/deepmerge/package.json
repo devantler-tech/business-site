@@ -1,0 +1,13 @@
+{
+  "name": "@devantler-tech/deepmerge-build-patch",
+  "version": "4.3.1-devantler.1",
+  "private": true,
+  "main": "index.cjs",
+  "license": "SEE LICENSE IN NOTICE.md",
+  "engines": {
+    "node": "^24"
+  },
+  "dependencies": {
+    "is-mergeable-object": "1.1.0"
+  }
+}

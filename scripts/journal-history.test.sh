@@ -33,10 +33,8 @@ assert_date() {
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 const [root, fixture, expected] = process.argv.slice(2);
-const { getAllNewestCommitDate } = await import(pathToFileURL(`${root}/node_modules/@astrojs/starlight/dist/utils/git.js`));
-const { makeAPI } = await import(pathToFileURL(`${root}/node_modules/@astrojs/starlight/dist/utils/gitInlined.js`));
-const dates = getAllNewestCommitDate(fixture, `${fixture}/src/content/docs`);
-const actual = makeAPI(dates).getNewestCommitDate('src/content/docs/blog/history.md').toISOString();
+const { committedContentDate } = await import(pathToFileURL(`${root}/src/data/content-history.mjs`));
+const actual = committedContentDate('src/content/docs/blog/history.md', fixture);
 assert.equal(actual, expected, 'an unrelated commit must not become the article modification date');
 JS
 }
@@ -126,13 +124,13 @@ grep -q 'source history: FAIL' "$scratch/rejection" || fail 'partial traversal f
 # Exercise the actual build wrapper on shallow history. It must stop before any
 # renderer runs; a missing, ignored, skipped or late preflight is not protection.
 mkdir -p "$scratch/shallow/scripts" "$scratch/build-bin"
-cp "$root/scripts/build-astro-site.sh" "$scratch/shallow/scripts/build-astro-site.sh"
+cp "$root/scripts/build-business-site.sh" "$scratch/shallow/scripts/build-business-site.sh"
 cp "$guard" "$scratch/shallow/scripts/check-source-history.sh"
 real_bash="$(command -v bash)"
 cat > "$scratch/build-bin/bash" <<'SH'
 #!/bin/bash
 case "$1" in
-  scripts/check-source-history.sh|*/scripts/build-astro-site.sh) exec "$REAL_HISTORY_BASH" "$@" ;;
+  scripts/check-source-history.sh|*/scripts/build-business-site.sh) exec "$REAL_HISTORY_BASH" "$@" ;;
   *) exit 0 ;;
 esac
 SH
@@ -140,17 +138,15 @@ cat > "$scratch/build-bin/node" <<'SH'
 #!/bin/bash
 exit 0
 SH
-cat > "$scratch/build-bin/astro" <<'SH'
+cat > "$scratch/build-bin/npm" <<'SH'
 #!/bin/bash
 if [[ "${HISTORY_CHECK_RENDER_ENV:-false}" == true ]]; then
   "$REAL_HISTORY_NODE" --input-type=module - "$HISTORY_MODULE_ROOT" "$HISTORY_SOURCE_ROOT" <<'JS'
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 const [root, fixture] = process.argv.slice(2);
-const { getAllNewestCommitDate } = await import(pathToFileURL(`${root}/node_modules/@astrojs/starlight/dist/utils/git.js`));
-const { makeAPI } = await import(pathToFileURL(`${root}/node_modules/@astrojs/starlight/dist/utils/gitInlined.js`));
-const actual = makeAPI(getAllNewestCommitDate(fixture, `${fixture}/src/content/docs`))
-  .getNewestCommitDate('src/content/docs/blog/history.md').toISOString();
+const { committedContentDate } = await import(pathToFileURL(`${root}/src/data/content-history.mjs`));
+const actual = committedContentDate('src/content/docs/blog/history.md', fixture);
 assert.equal(actual, '2020-03-01T12:00:00.000Z', 'the actual renderer must use the same source history as its preflight');
 for (const variable of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
   'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_PREFIX', 'GIT_NAMESPACE']) {
@@ -164,13 +160,13 @@ fi
 touch "$HISTORY_RENDER_RECEIPT"
 exit 0
 SH
-chmod +x "$scratch/build-bin/bash" "$scratch/build-bin/node" "$scratch/build-bin/astro"
+chmod +x "$scratch/build-bin/bash" "$scratch/build-bin/node" "$scratch/build-bin/npm"
 # Verify the actual wrapper rejects shallow history before starting its renderer.
 build_rejected() {
   local output="$scratch/build-output" receipt="$scratch/renderer-started"
   rm -f "$receipt"
   if PATH="$scratch/build-bin:$PATH" HISTORY_RENDER_RECEIPT="$receipt" REAL_HISTORY_BASH="$real_bash" \
-      "$real_bash" "$scratch/shallow/scripts/build-astro-site.sh" > "$output" 2>&1; then return 1; fi
+      "$real_bash" "$scratch/shallow/scripts/build-business-site.sh" > "$output" 2>&1; then return 1; fi
   [[ ! -e "$receipt" ]] && grep -q 'source history: FAIL' "$output"
 }
 build_rejected || fail 'actual build renders with incomplete history'
@@ -184,20 +180,20 @@ fi
 grep -q 'source history: FAIL' "$scratch/selection-output" || fail 'common entrypoint failed outside history admission'
 for mutation in missing ignored skipped late; do
   case "$mutation" in
-    missing) sed '/^bash scripts\/check-source-history.sh$/d' "$root/scripts/build-astro-site.sh" ;;
-    ignored) sed 's|^bash scripts/check-source-history.sh$|bash scripts/check-source-history.sh \|\| true|' "$root/scripts/build-astro-site.sh" ;;
-    skipped) sed 's|^bash scripts/check-source-history.sh$|if false; then bash scripts/check-source-history.sh; fi|' "$root/scripts/build-astro-site.sh" ;;
-    late) sed '/^bash scripts\/check-source-history.sh$/d; /^astro build$/a\
+    missing) sed '/^bash scripts\/check-source-history.sh$/d' "$root/scripts/build-business-site.sh" ;;
+    ignored) sed 's|^bash scripts/check-source-history.sh$|bash scripts/check-source-history.sh \|\| true|' "$root/scripts/build-business-site.sh" ;;
+    skipped) sed 's|^bash scripts/check-source-history.sh$|if false; then bash scripts/check-source-history.sh; fi|' "$root/scripts/build-business-site.sh" ;;
+    late) sed '/^bash scripts\/check-source-history.sh$/d; /^SVELTE_PUBLIC_BUILD_NONCE=/a\
 bash scripts/check-source-history.sh
-' "$root/scripts/build-astro-site.sh" ;;
-  esac > "$scratch/shallow/scripts/build-astro-site.sh"
+' "$root/scripts/build-business-site.sh" ;;
+  esac > "$scratch/shallow/scripts/build-business-site.sh"
   if build_rejected; then fail "$mutation preflight regression escaped the build control"; fi
 done
 
-# Drive the real wrapper and actual Starlight collector with conflicting inherited
+# Drive the real wrapper and actual native content collector with conflicting inherited
 # Git settings. A safe preflight alone cannot protect an unsanitized renderer.
 mkdir -p "$fixture/scripts"
-cp "$root/scripts/build-astro-site.sh" "$fixture/scripts/build-astro-site.sh"
+cp "$root/scripts/build-business-site.sh" "$fixture/scripts/build-business-site.sh"
 cp "$guard" "$fixture/scripts/check-source-history.sh"
 real_node="$(command -v node)"
 receipt="$scratch/context-rendered"
@@ -205,7 +201,7 @@ if ! PATH="$scratch/build-bin:$PATH" REAL_HISTORY_BASH="$real_bash" REAL_HISTORY
     HISTORY_CHECK_RENDER_ENV=true HISTORY_MODULE_ROOT="$root" HISTORY_SOURCE_ROOT="$fixture" \
     HISTORY_RENDER_RECEIPT="$receipt" GIT_DIR="$scratch/shallow/.git" GIT_WORK_TREE="$scratch/shallow" \
     GIT_NO_REPLACE_OBJECTS=0 GIT_NO_LAZY_FETCH=0 \
-    "$real_bash" "$fixture/scripts/build-astro-site.sh" > "$scratch/context-output" 2>&1; then
+    "$real_bash" "$fixture/scripts/build-business-site.sh" > "$scratch/context-output" 2>&1; then
   cat "$scratch/context-output" >&2
   fail 'build preflight and renderer use different Git history'
 fi
@@ -227,14 +223,9 @@ const visit = node => {
 };
 visit(document);
 const date = node => node.attrs.find(attr => attr.name === 'datetime')?.value;
-const publication = times.find(node => node.attrs.some(attr => attr.name === 'class' && attr.value.includes('sl-blog-metadata-date')));
+const publication = times[0];
 assert.equal(date(publication), '2026-08-26T00:00:00.000Z', 'deployment must not replace the article publication date');
-const footer = times.filter(node => {
-  for (let parent = node.parentNode; parent; parent = parent.parentNode) {
-    if (parent.tagName === 'footer') return true;
-  }
-  return false;
-});
+const footer = times.slice(1);
 assert.equal(footer.length, 1, 'the committed article retains one native modification date');
 const timestamp = execFileSync('git', ['--no-replace-objects', '-C', root, 'log', '--format=%ct', '--max-count=1', '--', `src/content/docs/blog/${article}.mdx`], { encoding: 'utf8' }).trim();
 assert.match(timestamp, /^\d+$/);

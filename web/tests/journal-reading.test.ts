@@ -9,6 +9,28 @@ async function adapter() {
 const post = {title:"A real article",description:"A useful description",date:"2026-01-07T00:00:00.000Z",href:"https://devantler.tech/blog/building-ksail-from-shell-to-dotnet-to-go/"};
 const fixture = `<html><head><title>A real article | Devantler Tech</title><meta name="description" content="A useful description"><link rel="canonical" href="https://devantler.tech/blog/building-ksail-from-shell-to-dotnet-to-go/"></head><body><main><h1>A real article</h1><div class="sl-markdown-content"><p>Complete <strong>authored</strong> prose.</p><h2 id="the-problem">The problem</h2><div class="expressive-code"><pre><code><div class="ec-line">echo hello</div><div class="ec-line">echo world</div></code></pre><div class="copy"><button data-code="echo hello&#127;echo world" data-copied="Copied!" title="Copy to clipboard"></button><div aria-live="polite"></div></div></div><script type="module" src="/_astro/ec.fixture.js"></script></div><time datetime="2026-01-07T00:00:00.000Z">Jan 7, 2026</time><time datetime="2026-10-09T00:09:33.000Z">Oct 9, 2026</time><a rel="prev" href="/blog/newer/">A newer article</a><a rel="next" href="/blog/older/">An older article</a></main></body></html>`;
 
+test("native Markdown retains duplicate heading bookmarks, complete tables and usable code controls", async () => {
+  const { renderMarkdownBody } = await import("../../src/data/markdown.mjs");
+  const {html} = await renderMarkdownBody('## A problem\n\n## A problem\n\n| Name | Value |\n| --- | --- |\n| Retained | **Complete** |\n\n```bash\n# instructions\necho hello\n```');
+  assert.match(html, /id="a-problem"/);
+  assert.match(html, /id="a-problem-1"/);
+  assert.match(html, /href="#a-problem-1"/);
+  assert.match(html, /class="sl-heading-wrapper level-h2"/);
+  assert.match(html, /<td><strong>Complete<\/strong><\/td>/);
+  assert.match(html, /class="expressive-code"/);
+  assert.match(html, /data-code="echo hello"/);
+  assert.ok(!html.includes('<script'), "copying uses the retained Svelte controller");
+});
+
+test("native Markdown preserves authored diagrams and rejects executable MDX and script content", async () => {
+  const { renderMarkdownBody } = await import("../../src/data/markdown.mjs");
+  const {html} = await renderMarkdownBody('```mermaid\nflowchart LR\n A --> B\n```');
+  assert.match(html, /<pre class="mermaid">flowchart LR\n A --(?:&gt;|>) B<\/pre>/);
+  for (const input of ['import Unsafe from "unsafe";\n\n<Unsafe />', '<Unsafe />', '<script>alert(1)</script>', '<img src="x" onerror="alert(1)">', '<a href="java&#x09;script:alert(1)">Bad link</a>']) {
+    await assert.rejects(renderMarkdownBody(input), /unsupported|executable/i);
+  }
+});
+
 test("the reading bridge preserves actual prose, bookmarks, dates and title-labelled neighbours", async () => {
   const { extractReading } = await adapter();
   const reading = extractReading(fixture, post);

@@ -7,6 +7,13 @@ checks whole-file hashes, actual package/GoFiles membership, complete terms
 references and all external input bytes before retaining any output. Ordinary
 website builds and no-argument invocations remain inactive.
 
+The pinned dependency profile selects go-jose/v4 4.1.6 and golang.org/x/net 0.62.0.
+Their original/effective versions and checksums agree with the complete prepared
+module-file hashes. The retained go-jose root and nested license texts are
+byte-equal to 4.1.4; the complete x/net LICENSE and PATENTS are byte-equal to 0.61.0.
+This policy update still requires actual native compiler/binary validation and
+does not turn the catalogue into a vulnerability or distribution verdict.
+
 ## Source relationships
 
 | Selected material | Retained relationship |

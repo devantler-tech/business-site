@@ -13,6 +13,17 @@ import (
 	"testing"
 )
 
+// The selected-module catalogue and production reader policy ship together.
+func TestFrozenGoModuleCatalogueSeal(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "third_party", "zitadel-go-module-notices", "catalogue.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := noticeDigest(body); got != moduleCatalogueHash {
+		t.Fatalf("checked-in module catalogue is not admitted by the production reader: got %s, policy %s", got, moduleCatalogueHash)
+	}
+}
+
 // sourceLicenseFixture adds the immutable root terms to the normal build fixture.
 func sourceLicenseFixture(t *testing.T) (noticeFixture, []byte) {
 	t.Helper()
@@ -270,6 +281,95 @@ type moduleRootFixture struct {
 	catalogue string
 	hash      string
 	args      []string
+}
+
+// Replay reconstructs a new native cache; it does not transplant the original
+// cache or its hash markers. The explicit mode must retain the same checked text.
+func TestModuleNoticesUseExplicitRetainedCache(t *testing.T) {
+	f := moduleOriginFixture(t)
+	var original, retained, diagnostic bytes.Buffer
+	if noticeRunWithCatalogues(f.args, &original, &diagnostic, supplementCatalogueHash, f.hash) != 0 {
+		t.Fatal(&diagnostic)
+	}
+	for _, args := range [][]string{
+		append(append([]string(nil), f.args...), "--retained-go-cache"),
+		{"--snapshot", "--build", f.build, "--recipe", f.recipe, "--retained-go-cache"},
+		append(append([]string(nil), f.args...), "--retained-go-cache", "--retained-go-cache"),
+	} {
+		var out, diagnostic bytes.Buffer
+		if noticeRunWithCatalogues(args, &out, &diagnostic, supplementCatalogueHash, f.hash) == 0 || out.Len() != 0 {
+			t.Fatal("wrong or ambiguous cache selection admitted")
+		}
+	}
+	destination := filepath.Join(f.build, "go-input-native/go-modules")
+	if err := os.Mkdir(filepath.Dir(destination), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(f.build, "go-modules"), destination); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := os.ReadFile(filepath.Join(f.build, "packages.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph = bytes.ReplaceAll(graph, []byte(filepath.Join(f.build, "go-modules")), []byte(destination))
+	writeNotice(t, f.build, "packages.jsonl", graph)
+	args := append(append([]string(nil), f.args...), "--retained-go-cache")
+	if noticeRunWithCatalogues(args, &retained, &diagnostic, supplementCatalogueHash, f.hash) != 0 {
+		t.Fatalf("restored native cache refused: %s", &diagnostic)
+	}
+	var before, after noticeState
+	if err := json.Unmarshal(original.Bytes(), &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(retained.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	expected := bytes.ReplaceAll(before.Modules.Text, []byte("go-modules/"), []byte("go-input-native/go-modules/"))
+	if !bytes.Equal(expected, after.Modules.Text) || len(after.Modules.Evidence.Modules[0].Origins) != 1 {
+		t.Fatal("retained cache lost complete terms or attribution")
+	}
+	for _, module := range after.Modules.Evidence.Modules {
+		for _, component := range module.Components {
+			if !strings.HasPrefix(component.Source, "go-input-native/go-modules/") {
+				t.Fatal("retained text was read from another cache")
+			}
+		}
+	}
+	for _, fault := range []string{"implicit-cache", "mixed-cache", "linked-cache", "changed-ziphash"} {
+		t.Run(fault, func(t *testing.T) {
+			selected := args
+			switch fault {
+			case "implicit-cache":
+				selected = f.args
+			case "mixed-cache":
+				mixed := bytes.Replace(graph, []byte(destination+"/example.com/!dep"), []byte(filepath.Join(f.build, "go-modules/example.com/!dep")), 1)
+				writeNotice(t, f.build, "packages.jsonl", mixed)
+				t.Cleanup(func() { writeNotice(t, f.build, "packages.jsonl", graph) })
+			case "linked-cache":
+				if err := os.Rename(destination, destination+".real"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("go-modules.real", destination); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Remove(destination); err != nil {
+						t.Error(err)
+					}
+					if err := os.Rename(destination+".real", destination); err != nil {
+						t.Error(err)
+					}
+				})
+			case "changed-ziphash":
+				writeNotice(t, f.build, "go-input-native/go-modules/cache/download/example.com/!dep/@v/v1.2.3.ziphash", []byte("h1:changed"))
+			}
+			var out, diagnostic bytes.Buffer
+			if noticeRunWithCatalogues(selected, &out, &diagnostic, supplementCatalogueHash, f.hash) == 0 || out.Len() != 0 {
+				t.Fatalf("unsafe retained cache admitted: %s", &diagnostic)
+			}
+		})
+	}
 }
 
 // This literal small graph includes case escaping and the same original/effective

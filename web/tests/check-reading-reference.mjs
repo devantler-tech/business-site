@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { readReadingReference } from "../../src/data/journal-reading.mjs";
 
-const file = new URL("../../.astro/journal-reading.json", import.meta.url);
+const file = new URL("../../.generated/journal-reading.json", import.meta.url);
 const original = readFileSync(file, "utf8");
 const valid = JSON.parse(original);
 /** @typedef {NonNullable<typeof import("virtual:journal-reading").default>[number]} Reading */

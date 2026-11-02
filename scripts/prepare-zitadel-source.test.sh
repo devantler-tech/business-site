@@ -39,18 +39,38 @@ fi
 # Hydrate immutable objects through the independent archive, not another full copy.
 # A sparse working tree also proves that preparation never reads checkout bytes.
 git -C "$scratch/upstream" read-tree "$pin"
+bash "$root/scripts/zitadel-provider-icons.test.sh" "$scratch/upstream"
 mkdir "$scratch/pristine"
 git -C "$scratch/upstream" --no-replace-objects archive "$pin" | tar -x -C "$scratch/pristine"
 mkdir -p "$scratch/upstream/console/src"
 git -C "$scratch/upstream" show "$pin:console/src/styles.scss" >"$scratch/upstream/console/src/styles.scss"
+for member in go.mod go.sum; do
+  git -C "$scratch/upstream" show "$pin:$member" >"$scratch/upstream/$member"
+  printf '\nFICTIONAL-PRIVATE-MODULE-MARKER\n' >>"$scratch/upstream/$member"
+done
 
 # Dirty/untracked input bytes must neither leak into output nor be overwritten.
 printf '\nLOCAL-ONLY-FICTIONAL-MARKER\n' >>"$scratch/upstream/console/src/styles.scss"
 printf 'FICTIONAL-PRIVATE-INPUT\n' >"$scratch/upstream/local-only.txt"
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-before"
+shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-before"
 bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
+# Both native presentations must offer this immutable identity release even when
+# customer privacy links or the upstream watermark are disabled.
+test "$(shasum -a 256 "$scratch/prepared source/source/console/src/app/modules/footer/footer.component.html" | awk '{print $1}')" = \
+  018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f
+test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/static/templates/footer.html" | awk '{print $1}')" = \
+  df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after"
 cmp "$scratch/input-before" "$scratch/input-after"
+shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
+cmp "$scratch/modules-before" "$scratch/modules-after"
+# Independently collected with native Go 1.26.10 for the three selected patches,
+# without a toolchain change or unrelated selected dependency changes.
+test "$(shasum -a 256 "$scratch/prepared source/source/go.mod" | awk '{print $1}')" = \
+  d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50
+test "$(shasum -a 256 "$scratch/prepared source/source/go.sum" | awk '{print $1}')" = \
+  19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba
 test -f "$scratch/upstream/local-only.txt"
 test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
@@ -62,6 +82,18 @@ cp "$root/scripts/testdata/zitadel-metadata-profile/metadata_profile_test.go" \
 (cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
   go test -mod=readonly -count=1 ./internal/id -run '^TestCustomerMetadataProfile')
 rm -- "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
+
+# Compile the unchanged prepared interceptor with the real patched CSRF package.
+# Only unrelated instance/cookie-name policies are doubled in this focused probe.
+mkdir "$scratch/csrf-probe"
+cp "$root/scripts/testdata/zitadel-metadata-profile/login_csrf_test.go" "$scratch/csrf-probe/"
+{
+  printf 'package csrfprobe\nimport ("net/http"; "strings"; "github.com/gorilla/csrf")\n'
+  awk '/^func createCSRFInterceptor\(/ { active=1 } active {print} active && /^}/ {exit}' \
+    "$scratch/prepared source/source/internal/api/ui/login/login.go"
+} >"$scratch/csrf-probe/interceptor.go"
+printf 'module example.invalid/csrfprobe\n\ngo 1.26.0\n\nrequire github.com/gorilla/csrf v1.7.3\n' >"$scratch/csrf-probe/go.mod"
+(cd "$scratch/csrf-probe" && GOTOOLCHAIN=go1.26.10 go mod tidy && GOTOOLCHAIN=go1.26.10 go test -race -count=1 .)
 
 for path in \
   console/src/assets/ailerons.otf \
@@ -81,15 +113,136 @@ metadata=internal/id/sonyflake.go
 test "$(shasum -a 256 "$scratch/prepared source/source/$metadata" | awk '{print $1}')" = \
   74ad3d761a3101ec720429c664e55cf3083ad17903b762139717406114c62adc
 cp "$scratch/prepared source/source/$metadata" "$scratch/pristine/$metadata"
+test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/login.go" | awk '{print $1}')" = \
+  28da3dd3fd55002ea3239495cba504be6a355e9eed74133327aa564e634e812e
+cp "$scratch/prepared source/source/internal/api/ui/login/login.go" "$scratch/pristine/internal/api/ui/login/login.go"
+cp "$scratch/prepared source/source/go.mod" "$scratch/pristine/go.mod"
+cp "$scratch/prepared source/source/go.sum" "$scratch/pristine/go.sum"
+# Pin all eighteen independently observed neutral consumers; retain an exact
+# whole-tree comparison, not a projection of selected expected fields.
+cat >"$scratch/neutral-consumers.sha256" <<'PROVIDERS'
+5c489734a039df3535d00e7761200621bfca99e25d63955b70a1d1e712f76544  console/src/app/modules/idp-table/idp-table.component.html
+015e783ee150d21280d7748ab897c1b709fb5e208777370059716f7b10766188  console/src/app/modules/policies/idp-settings/idp-settings.component.html
+bcd033476803838515de5f25057ac4df9749f26049bf4a0c2926acb83ea01b94  console/src/app/modules/providers/provider-apple/provider-apple.component.html
+bb307b70f936d780f8584f01c4691efd042d43d95041df294f2af1f48ae94459  console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html
+380b3dca85ef437d4446987a5e22020c1a7e1bec1bc874ff7942dd0e204a1efd  console/src/app/modules/providers/provider-github-es/provider-github-es.component.html
+2eca45dc2386dc08bdd6af010b3782f3e3f9531260db70f22117aa115e976205  console/src/app/modules/providers/provider-github/provider-github.component.html
+99871b68ae002cd48b82de6ef6b7beeaa3f3f5f2dc9b0df66a398149e0929e9f  console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html
+341c4a94d2817aed886fe8268c31f890188fb8468e25d09e6e987a511305449b  console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html
+8fae34c70584f876ab9dad8608830b5f95d430310d1b33bca04e847ea492c7e8  console/src/app/modules/providers/provider-google/provider-google.component.html
+eae8329b095b5987d8340a386957fb67d5ec58488e97f221c03cbf8592d71266  console/src/app/modules/providers/provider-oauth/provider-oauth.component.html
+0b5410b7aa9b905e0f4c074e85eda06905d51cef28cf3f3ca49c6b2146a3acff  console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html
+d749528ee622c0d376afc918d4d205bf9d42b6c33243301e721a997be631d4bf  internal/api/ui/login/static/templates/login.html
+160874790c22abfd44bc977b2d978a8fbae73dc0e4adfa52917b4b3854ec123b  internal/api/ui/login/static/templates/register_option.html
+3109087ad9a64409e4e30d6eab7ea7b8f48b3c7194042d0171d1ee9f9926efb8  console/src/app/modules/idp-table/idp-table.component.scss
+8e5bf3f536e63f9e3fab90a2be0c46e7239190e2cc7ea558a0fcd5f90e0b6217  console/src/app/modules/policies/idp-settings/idp-settings.component.scss
+fc44668ff48fa9442f5b592abeac0402da17bd177b5809b8c5e1ea8675b58413  console/src/app/modules/providers/providers.scss
+a25666a0c03c21542c84ab72d228c5ce91c6e7b00a712289d44a4f720f613732  internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss
+a15f2692a597e8a8c3848d62073db1d48dce82aea66d6cabfda1d2019825a25c  internal/api/ui/login/static/resources/themes/scss/styles/vars.scss
+7adb2e384cb0af6db510f3c1b07a9b91729ea922a004e4b6fed6fbd98352b1fc  console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html
+db4f7c1746b2f3f19a1de401ac5cf658439e59d3f045106ff4aa05dc4eb8a8eb  console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss
+f340db31d1e1d4db10e1646eb218b2e46fe7e6568e9801b26494f94602c168cd  console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts
+3c6be2a65c023c2aa1fa0ab86dc54530e0db7d3d79880099be3772f062db579f  console/src/app/modules/smtp-provider/smtp-provider.component.html
+194fd266ef3301dcb35b6ead7d92d5ac9860685d52e1312f693dfa644300eb24  console/src/app/modules/smtp-provider/smtp-provider.scss
+235dc03feb62db25a22a0e3c2741e916ed40b659677febd691b362fed21bc2ab  console/src/app/app.component.ts
+3c97248b11a743f010ed71a85e18d019c0b71fb528674e664f4090c00e79ca80  console/src/app/modules/providers/provider-oidc/provider-oidc.component.html
+5d95c62b1cbc5a3195d01593233e485e71d1a6f15a856bc9f8515593ccab85c9  console/src/app/modules/providers/provider-jwt/provider-jwt.component.html
+99b5bdf71a12e209c754bb8e013ab56c5c624066d5caf3e71cafed64b1c4dac8  apps/docs/frameworks.json
+ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc  console/src/app/components/quickstart/quickstart.component.ts
+790fb8e83d170014ae9f2e31068cf906f89a4228190a7213f3950844c7cb2c5a  console/src/app/components/framework-change/framework-change.component.ts
+6ed83747af1fbbfb2e5fefda0f281d06a1be7eb5a0fb6437ac2949f293b7afe5  console/src/app/pages/app-create/app-create.component.ts
+7c71cf66e4f1547ec223f909a74997a11de9e590d2931ef4bf6453091fd3e969  console/src/app/components/quickstart/quickstart.component.html
+7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7  console/src/app/components/framework-autocomplete/framework-autocomplete.component.html
+0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712  console/src/app/components/framework-change/framework-change.component.html
+405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba  console/package.json
+018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f  console/src/app/modules/footer/footer.component.html
+df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e  internal/api/ui/login/static/templates/footer.html
+PROVIDERS
+(cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
+while read -r _hash path; do
+  cp "$scratch/prepared source/source/$path" "$scratch/pristine/$path"
+done <"$scratch/neutral-consumers.sha256"
+for path in \
+  console/src/assets/images/idp/apple-dark.svg\
+  console/src/assets/images/idp/apple.svg\
+  console/src/assets/images/idp/github-dark.svg\
+  console/src/assets/images/idp/github.svg\
+  console/src/assets/images/idp/gitlab.svg\
+  console/src/assets/images/idp/google.png\
+  console/src/assets/images/idp/ms.svg\
+  console/src/assets/images/idp/oauth.svg\
+  console/src/assets/images/idp/saml-icon.svg\
+  internal/api/ui/login/static/resources/images/idp/apple-dark.svg\
+  internal/api/ui/login/static/resources/images/idp/apple.svg\
+  internal/api/ui/login/static/resources/images/idp/github-white.png\
+  internal/api/ui/login/static/resources/images/idp/github.png\
+  internal/api/ui/login/static/resources/images/idp/gitlab.png\
+  internal/api/ui/login/static/resources/images/idp/google.png\
+  internal/api/ui/login/static/resources/images/idp/ms.svg\
+  console/src/assets/images/smtp/aws-ses.svg\
+  console/src/assets/images/smtp/brevo.svg\
+  console/src/assets/images/smtp/google.png\
+  console/src/assets/images/smtp/mailchimp.svg\
+  console/src/assets/images/smtp/mailgun.svg\
+  console/src/assets/images/smtp/mailjet.svg\
+  console/src/assets/images/smtp/outlook.svg\
+  console/src/assets/images/smtp/postmark.png\
+  console/src/assets/images/smtp/sendgrid.png\
+  console/src/assets/mdi/openid.svg\
+  console/src/assets/mdi/jwt.svg; do
+  test ! -e "$scratch/prepared source/source/$path"
+  rm -- "$scratch/pristine/$path"
+done
+# Enumerate all retired technology inputs from the immutable Git directory,
+# independently of the transform's receipt or input table.
+git -C "$scratch/upstream" ls-tree -r --name-only "$pin" -- apps/docs/public/img/tech >"$scratch/framework-original-paths"
+test "$(wc -l <"$scratch/framework-original-paths" | tr -d ' ')" -eq 44
+while IFS= read -r path; do
+  test ! -e "$scratch/prepared source/source/$path"
+  test ! -L "$scratch/prepared source/source/$path"
+  rm -- "$scratch/pristine/$path"
+done <"$scratch/framework-original-paths"
 diff -qr "$scratch/pristine" "$scratch/prepared source/source"
 rm -rf -- "$scratch/pristine"
 jq -e --arg pin "$pin" '
   .schemaVersion == 1 and .upstreamCommit == $pin and
   .imageAdmission == "unknown" and .licenseClosure == "unknown" and
-  (.removedFiles | length) == 4 and
+  (.removedFiles | length) == 75 and .providerProfile == "native-neutral-provider-icons-v1" and
+  .frameworkProfile == "native-neutral-framework-icons-v1" and
+  .sourceOfferProfile == "native-source-offer-v1" and
+  .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1" and
+  .smtpProfile == "native-neutral-smtp-icons-v1" and .mdiProfile == "native-neutral-mdi-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
-  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go"]
+  .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
+  .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html","console/package.json","apps/docs/frameworks.json","console/src/app/components/quickstart/quickstart.component.ts","console/src/app/components/framework-change/framework-change.component.ts","console/src/app/pages/app-create/app-create.component.ts","console/src/app/components/quickstart/quickstart.component.html","console/src/app/components/framework-autocomplete/framework-autocomplete.component.html","console/src/app/components/framework-change/framework-change.component.html","console/src/app/modules/footer/footer.component.html","internal/api/ui/login/static/templates/footer.html"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
+
+# Exercise the actual native pre-install capture boundary, not a substituted
+# fixture policy. Both complete-source and preparation-receipt pins must agree.
+mkdir "$scratch/native-capture"
+cp -R "$scratch/prepared source" "$scratch/native-capture/prepared"
+(
+  cd "$scratch/native-capture/prepared/source"
+  shasum -a 256 go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock >"$scratch/native-capture/inputs.sha256"
+  cp apps/api/project.json "$scratch/native-capture/api-project.original.json"
+  jq '.targets["generate-install"].options.parallel = false' apps/api/project.json >"$scratch/native-capture/api-project.serial.json"
+  cp "$scratch/native-capture/api-project.serial.json" apps/api/project.json
+)
+go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/native-snapshot" >"$scratch/native-capture.json"
+jq -e '.preparedProfileSha256=="6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files==9528 and .bytes==261325366 and .records==58' "$scratch/native-capture.json" >/dev/null
+native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
+# The actual sealed file layout contains no empty technology directory. Its
+# native pre-build command must succeed without restoring retired image inputs.
+test ! -d "$scratch/native-snapshot/source/apps/docs/public/img/tech"
+(cd "$scratch/native-snapshot/source/console" && npm run copy-docs-assets)
+go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$scratch/native-snapshot" "$native_seal" "$scratch/native-notice-originals" >"$scratch/native-notices.json"
+jq -e '.files==45 and .originalInputsReadbackPassed==true' "$scratch/native-notices.json" >/dev/null
+cp "$scratch/native-capture/prepared/source-preparation.json" "$scratch/native-preparation-original.json"
+jq '.mdiProfile="changed"' "$scratch/native-preparation-original.json" >"$scratch/native-capture/prepared/source-preparation.json"
+reject go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/changed-native-snapshot"
+test ! -e "$scratch/changed-native-snapshot"
+cp "$scratch/native-preparation-original.json" "$scratch/native-capture/prepared/source-preparation.json"
+rm -rf -- "$scratch/native-capture" "$scratch/native-snapshot"
 
 # Never overwrite a completed output or a pre-existing directory/symlink.
 shasum -a 256 "$scratch/prepared source/source-preparation.json" >"$scratch/receipt-before"
@@ -134,7 +287,12 @@ mkdir "$scratch/metadata-bin"
 cat >"$scratch/metadata-bin/awk" <<'WRAPPER'
 #!/usr/bin/env bash
 for arg in "$@"; do
-  if [[ "$arg" == */internal/id/sonyflake.go ]]; then
+  if [[ "$arg" == */internal/api/ui/login/login.go && -n "${SOURCE_TEST_LOGIN_STATUS:-}" ]]; then
+    printf 'observed\n' >"$SOURCE_TEST_LOGIN_OBSERVED"
+    printf 'package login\n'
+    exit "$SOURCE_TEST_LOGIN_STATUS"
+  fi
+  if [[ "$arg" == */internal/id/sonyflake.go && -n "${SOURCE_TEST_METADATA_STATUS:-}" ]]; then
     printf 'package id\n'
     exit "${SOURCE_TEST_METADATA_STATUS:-42}"
   fi
@@ -146,6 +304,13 @@ for status in 42 0; do
   reject env PATH="$scratch/metadata-bin:$PATH" SOURCE_TEST_AWK="$real_awk" SOURCE_TEST_METADATA_STATUS="$status" \
     bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/partial-metadata-$status"
   test ! -e "$scratch/partial-metadata-$status"
+done
+for status in 42 0; do
+  reject env PATH="$scratch/metadata-bin:$PATH" SOURCE_TEST_AWK="$real_awk" SOURCE_TEST_LOGIN_STATUS="$status" \
+    SOURCE_TEST_LOGIN_OBSERVED="$scratch/login-observed-$status" \
+    bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/partial-login-$status"
+  test "$(cat "$scratch/login-observed-$status")" = observed
+  test ! -e "$scratch/partial-login-$status"
 done
 
 # A failed receipt-input read cannot be hidden by a successful JSON writer.
@@ -248,6 +413,12 @@ for mask in 0133 0077; do
     fi
     (cd "$destination/source" && find . -type f -perm 0755 | sed 's@^./@@' | sort) >"$scratch/actual-executables"
     git -C "$scratch/upstream" ls-tree -r "$pin" | awk '$1 == "100755" {print substr($0,index($0,"\t")+1)}' | sort >"$scratch/expected-executables"
+    for removed in console/src/assets/images/idp/apple-dark.svg console/src/assets/images/idp/apple.svg \
+      internal/api/ui/login/static/resources/images/idp/apple-dark.svg internal/api/ui/login/static/resources/images/idp/apple.svg; do
+      grep -Fxq "$removed" "$scratch/expected-executables"
+      grep -Fxv "$removed" "$scratch/expected-executables" >"$scratch/remaining-executables"
+      mv "$scratch/remaining-executables" "$scratch/expected-executables"
+    done
     if ! cmp "$scratch/expected-executables" "$scratch/actual-executables"; then
       echo "Preparation changed executable paths under umask $mask." >&2
       review_failures=$((review_failures + 1))

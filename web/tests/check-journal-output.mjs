@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { parse } from "parse5";
 import { assertSameJournalCover } from "./journal-cover.mjs";
+import { readJournal, journalArchives } from "../../src/data/journal.mjs";
+import { journalConfig, journalDescription } from "../../src/components/business/journal-config.js";
+import { browseJournal } from "../../src/components/business/journal-pages.js";
+import { parseFragment } from "parse5";
 import { readingPaths } from "../../src/data/journal-reading.mjs";
 
 const enabled = process.argv[2] === "enabled";
 assert.ok(enabled || process.argv[2] === "disabled");
 const candidate = new URL("../build/", import.meta.url);
-const published = new URL("../../dist/", import.meta.url);
+const posts = readJournal();
+const archives = journalArchives(posts);
 for (const locale of ["", "da/"]) {
   if (enabled) {
     const html = await readFile(new URL(`${locale}projects/index.html`, candidate), "utf8");
@@ -29,16 +34,8 @@ const text = node => { assert.ok(node); return (node.nodeName === "#text" ? node
 const find = (node, name) => all(node).find(item => hasClass(item, name));
 /** @param {string | undefined} href */
 const absolute = href => { assert.ok(href); return new URL(href, "https://devantler.tech").href; };
-const paths = ["blog/index.html", ...(await readdir(new URL("blog/", published), { withFileTypes: true }))
-  .filter(entry => entry.isDirectory() && /^[1-9]\d*$/.test(entry.name))
-  .sort((a, b) => Number(a.name) - Number(b.name)).map(entry => `blog/${entry.name}/index.html`)];
-const archivePaths = [];
-for (const kind of ["tags", "authors"]) {
-  for (const entry of await readdir(new URL(`blog/${kind}/`, published), {withFileTypes:true})) {
-    assert.ok(entry.isDirectory(), "published archives must have a complete route directory");
-    archivePaths.push(`blog/${kind}/${entry.name}/index.html`);
-  }
-}
+const paths = Array.from({length:Math.ceil(posts.length/journalConfig.postCount)},(_,index)=>index ? `blog/${index+1}/index.html` : "blog/index.html");
+const archivePaths = archives.map(archive=>`${archive.path.slice(1)}index.html`);
 assert.ok(archivePaths.length > 1, "the actual topic and author inventory must be read");
 const seen = new Set();
 const covers = new Set();
@@ -49,12 +46,14 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     await assert.rejects(readFile(new URL(path, candidate)), { code: "ENOENT" });
     continue;
   }
-  const reference = parse(await readFile(new URL(path, published), "utf8"));
+  const archive = archives.find(archive=>`${archive.path.slice(1)}index.html`===path) ?? {posts:[],label:""};
+  assert.ok(mainArchive || archive.posts.length, "authored filtered archive must not be empty");
+  const expectedPosts = mainArchive ? posts.slice(index*journalConfig.postCount,(index+1)*journalConfig.postCount) : archive.posts;
   let html = "";
   await assert.doesNotReject(async () => { html = await readFile(new URL(path, candidate), "utf8"); }, `missing Journal candidate archive: ${path}`);
   const page = parse(html);
   const cards = all(page).filter(node => hasClass(node, "sl-blog-preview"));
-  const referenceCards = all(reference).filter(node => hasClass(node, "sl-blog-preview"));
+
   /** @param {MarkupNode} card */
   const metadata = card => ({
     title: text(find(card, "sl-blog-preview-title")),
@@ -65,12 +64,12 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     authors: all(card).filter(node => hasClass(node, "sl-blog-author")).map(node => [text(node), attr(node, "href")]),
     tags: all(card).filter(node => hasClass(node, "sl-blog-tag")).map(node => [text(node), absolute(attr(node, "href"))]),
   });
-  assert.deepEqual(cards.map(metadata), referenceCards.map(metadata), `actual Astro archive parity: ${path}`);
+  assert.deepEqual(cards.map(metadata), expectedPosts.map(post=>({title:post.title,href:post.href,date:post.date,dateLabel:post.dateLabel,excerpt:text(parseFragment(post.excerpt)),authors:post.authors.map(author=>[author.name+" "+author.title,author.url]),tags:post.tags.map(tag=>[tag.label,tag.href])})), `complete authored archive metadata: ${path}`);
   assert.equal(attr(all(page).find(node => node.tagName === "html"), "lang"), "en");
   const canonical = `https://devantler.tech/${path.replace(/index\.html$/, "")}`;
   assert.equal(attr(all(page).find(node => node.tagName === "link" && attr(node, "rel") === "canonical"), "href"), canonical);
-  assert.equal(text(all(page).find(node => node.tagName === "title")), text(all(reference).find(node => node.tagName === "title")));
-  assert.equal(attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"), attr(all(reference).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"));
+  assert.equal(text(all(page).find(node => node.tagName === "title")), `${mainArchive ? journalConfig.title : archive.label} | Devantler Tech`);
+  assert.equal(attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"), journalDescription);
   const socialDescriptions = all(page).filter(node => node.tagName === "meta" && attr(node, "property") === "og:description");
   assert.equal(socialDescriptions.length, 1, `exactly one social-sharing description required: ${path}`);
   assert.equal(attr(socialDescriptions[0], "content"), attr(all(page).find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"));
@@ -84,18 +83,11 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     assert.ok(href.startsWith("/blog/tags/"), "topic choices stay inside the candidate");
     await readFile(new URL(`${href.slice(1)}index.html`, candidate));
   }
-  const publishedBrowse = find(reference, "journal-browser");
-  assert.ok(publishedBrowse);
-  const persister = all(publishedBrowse).find(node => node.tagName === "sl-sidebar-state-persist");
-  assert.ok(persister);
-  const menu = children(persister).find(node => node.tagName === "ul");
-  assert.ok(menu);
-  for (const section of all(page).filter(node => hasClass(node, "browse-group"))) {
-    const heading = text(children(section).find(node => node.tagName === "h2"));
-    /** @type {MarkupNode | undefined} */
-    const group = children(menu).flatMap(children).find(node => node.tagName === "details" && text(children(node).find(item => item.tagName === "summary")) === heading);
-    assert.ok(group, `missing actual Astro browse group: ${heading}`);
-    assert.deepEqual(all(section).filter(node => node.tagName === "a").map(node => [text(node), absolute(attr(node, "href"))]), all(group).filter(node => node.tagName === "a").map(node => [text(node), absolute(attr(node, "href"))]), `retained Astro browse choices: ${heading}`);
+  const browse = browseJournal(posts);
+  for (const section of all(page).filter(node=>hasClass(node,"browse-group"))) {
+    const heading=text(children(section).find(node=>node.tagName==="h2"));
+    const expected=heading==="Recent posts" ? browse.recent.map(post=>[post.title,post.href]) : browse.tags.map(tag=>[`${tag.label} (${tag.count})`,tag.href]);
+    assert.deepEqual(all(section).filter(node=>node.tagName==="a").map(node=>[text(node),absolute(attr(node,"href"))]),expected.map(([label,href])=>[label,absolute(href)]),"complete native browse choices");
   }
   assert.equal(all(page).filter(node => hasClass(node, "browse-group")).length, 2);
   const pagination = find(page, "journal-pagination");
@@ -107,7 +99,7 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     assert.ok(pageLinks.every(href => href && /^\/blog\/(?:(?:[2-9]|[1-9]\d+)\/)?$/.test(href)));
   } else {
     assert.equal(pagination, undefined, "topic and author archives retain every matching post without truncation");
-    assert.equal(text(all(page).find(node => node.tagName === "h1")), text(all(reference).find(node => node.tagName === "h1")));
+    assert.equal(text(all(page).find(node => node.tagName === "h1")), archive.label);
   }
   for (const [cardIndex, card] of cards.entries()) {
     assert.equal(attr(card, "role"), undefined);
@@ -123,7 +115,7 @@ for (const [index, path] of [...paths, ...archivePaths].entries()) {
     const image = all(card).find(node => node.tagName === "img");
     const src = attr(image, "src");
     assert.ok(src);
-    assertSameJournalCover(src, attr(all(referenceCards[cardIndex]).find(node => node.tagName === "img"), "src"));
+    assertSameJournalCover(src, expectedPosts[cardIndex].cover);
     assert.match(src, /^\/_app\/immutable\/assets\//);
     if (mainArchive) {
       assert.ok(!covers.has(src), "each post retains a distinct optimized cover");
@@ -166,4 +158,4 @@ if (enabled) {
   }
   assert.ok(count > 0);
 }
-console.log(`Svelte Journal: ${enabled ? `${count} actual posts across ${paths.length} main and ${archivePaths.length} topic/author Astro-matched archives` : `${paths.length + archivePaths.length} archives absent`} verified`);
+console.log(`Svelte Journal: ${enabled ? `${count} actual posts across ${paths.length} main and ${archivePaths.length} topic/author authored archives` : `${paths.length + archivePaths.length} archives absent`} verified`);

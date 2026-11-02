@@ -23,6 +23,9 @@ func modulePayload(t *testing.T, name, version string, names []string) (string, 
 			t.Fatal(err)
 		}
 		body := []byte("package example\n")
+		if member == "main.go" {
+			body = []byte("package main\nfunc main() {}\n")
+		}
 		if member == "go.mod" {
 			body = mod
 		}

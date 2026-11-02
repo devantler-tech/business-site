@@ -7,7 +7,7 @@ import {readingPaths} from "../../src/data/journal-reading.mjs";
 import {assertFeedParity,validateJournalFeed,feedAssetPaths} from "../../src/data/journal-feed.mjs";
 
 const candidate = new URL("../build/",import.meta.url);
-const published = new URL("../../dist/",import.meta.url);
+const published = new URL("../../.generated/content/",import.meta.url);
 const feedPath = "blog/rss.xml";
 const enabled = process.argv[2] === "enabled";
 assert.ok(enabled || process.argv[2] === "disabled","declare enabled or disabled feed");
