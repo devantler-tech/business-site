@@ -286,6 +286,36 @@ production ingress, customer isolation or a legal-compliance verdict. Keep
 monorepo#3936/#3939, website #19 and portal #21 open for their remaining release
 proofs. See [the staging decision](../docs/adr/0009-bounded-identity-staging.md).
 
+### Explicit production identity profile
+
+Long-lived invited access uses a separate operator selection:
+`PORTAL_IDENTITY_PROFILE=production`, the existing maintained-provider JSON in
+`PORTAL_IDENTITY_FLAG`, and no `PORTAL_IDENTITY_LEASE_UNTIL`. A typed false flag
+is valid closed configuration. Missing, malformed, wrong-type or conflicting
+production inputs fail with generic diagnostics before an HTTP listener opens.
+Leaving the profile and activation values absent retains ordinary disabled startup.
+The staging selection remains unchanged and cannot exceed ten minutes.
+
+The selected provider inherits process cancellation and SDK shutdown instead of
+borrowing a staging timer. Only the identity capability can be enabled. Current
+issuer/subject invitations and membership still authorize every private session;
+the profile grants no role and enables no request, payment or work capability.
+Before listening, the real command still verifies its restricted database login
+and configured TLS broker. Complete dependency configuration alone enables nothing.
+
+Configuration belongs to the operator's private process environment. Changing an
+external environment file does not change a running process. Disable the flag
+and restart through the reviewed deployment path to close identity access; remove
+the profile and activation values to return to ordinary disabled startup. Do not
+extend a staging lease to create production access.
+
+The required suite exercises the compiled command's ordinary, staging, enabled,
+disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitation,
+cookie-session, membership-revocation and cancellation checks. These are source
+acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
+The shipped deployment stays disabled: #305 retains runtime delivery and #302
+retains deployed acceptance and the separately reviewed activation change.
+
 ### Production public-content template
 
 Use `bash scripts/package-runtime.sh --release --production-template --svelte` to build

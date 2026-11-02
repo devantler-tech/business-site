@@ -870,7 +870,7 @@ jobs:
         run: bash scripts/portal-links-preprocess.test.sh
       - name: Verify exact fictional credential examples and adjacent leak rejection
         working-directory: .
-        run: npx --yes --package=secretlint@13.0.7 --package=@secretlint/secretlint-rule-preset-recommend@13.0.7 -- node --test scripts/portal-credential-quality.test.mjs
+        run: npx --yes --package=secretlint@13.1.0 --package=@secretlint/secretlint-rule-preset-recommend@13.1.0 -- node --test scripts/portal-credential-quality.test.mjs
       - name: Verify portal copy and API vocabulary with retained typo failures
         working-directory: .
         run: npx --yes --package=cspell@10.4.0 -- node --test scripts/portal-spelling-quality.test.mjs
@@ -1117,7 +1117,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@d8b5d0e9429cebf12907e0d4cb448433d3108e4b
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -1155,7 +1155,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@d8b5d0e9429cebf12907e0d4cb448433d3108e4b
         with:
           job-results: >-
             ${{ needs.changes.result }}

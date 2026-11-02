@@ -155,8 +155,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	}
 	api := isolated.NewAPI()
 	defer func() {
-		// Both supported providers own no external resource. Staging shutdown
-		// cancels its lease before the SDK releases evaluation bookkeeping.
+		// These providers own no external resource. Shutdown revokes the
+		// selected process gate before the SDK releases its bookkeeping.
 		_ = api.Shutdown(context.Background())
 	}()
 	if err := api.SetProviderAndWait(ctx, provider); err != nil {

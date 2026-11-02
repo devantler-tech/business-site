@@ -75,6 +75,12 @@ func (d *startupDiagnostic) label() string {
 	if string(d.data[:d.size]) == "runtime listener is unavailable\n" {
 		return "startup-listener-unavailable"
 	}
+	if string(d.data[:d.size]) == "portal activation is invalid\n" {
+		return "startup-activation-unavailable"
+	}
+	if string(d.data[:d.size]) == "portal configuration is invalid\n" {
+		return "startup-config-unavailable"
+	}
 	return "startup-unclassified"
 }
 
