@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,7 @@ func materialFixture(t *testing.T, phase string) (string, string) {
 	return input, output
 }
 
+// materialPassword generates a fictional password satisfying the native bootstrap rules.
 func materialPassword(t *testing.T) []byte {
 	t.Helper()
 	value := make([]byte, 24)
@@ -78,6 +80,7 @@ func materialPassword(t *testing.T) []byte {
 	return []byte(hex.EncodeToString(value) + "Aa1!")
 }
 
+// materialWrite preserves owner-only permissions when creating or replacing fixture inputs.
 func materialWrite(t *testing.T, directory, name string, data []byte) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(directory, name), data, 0600); err != nil {
@@ -85,6 +88,7 @@ func materialWrite(t *testing.T, directory, name string, data []byte) {
 	}
 }
 
+// materialFixtureSettings reads the fixture document for one isolated adverse mutation.
 func materialFixtureSettings(t *testing.T, directory string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(directory, "settings.json"))
@@ -94,6 +98,7 @@ func materialFixtureSettings(t *testing.T, directory string) []byte {
 	return data
 }
 
+// materialCertificate creates an independent fictional CA and server identity for TLS controls.
 func materialCertificate(t *testing.T, hostname string, expiry time.Time) ([]byte, []byte, []byte) {
 	t.Helper()
 	caPublic, caKey, err := ed25519.GenerateKey(rand.Reader)
@@ -121,6 +126,36 @@ func materialCertificate(t *testing.T, hostname string, expiry time.Time) ([]byt
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 }
 
+// materialAssertOutput checks the documented phase boundary independently of the producer.
+func materialAssertOutput(t *testing.T, output, phase string) {
+	t.Helper()
+	info, err := os.Stat(output)
+	if err != nil || info.Mode().Perm() != 0700 {
+		t.Fatal("private output reservation missing")
+	}
+	entries, err := os.ReadDir(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var members []string
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+			t.Fatal("unsafe output member")
+		}
+		members = append(members, entry.Name())
+	}
+	want, known := map[string][]string{
+		"init":  {"ca.pem", "config.json"},
+		"setup": {"ca.pem", "config.json", "master.key", "steps.json", "tls.crt", "tls.key"},
+		"serve": {"ca.pem", "config.json", "master.key", "tls.crt", "tls.key"},
+	}[phase]
+	if !known || !slices.Equal(members, want) {
+		t.Fatalf("phase %s emitted unexpected members: %v", phase, members)
+	}
+}
+
+// TestMaterializeNativePhaseSeparation pins native fields and excludes cross-phase authority.
 func TestMaterializeNativePhaseSeparation(t *testing.T) {
 	for _, phase := range []string{"init", "setup", "serve"} {
 		t.Run(phase, func(t *testing.T) {
@@ -128,20 +163,7 @@ func TestMaterializeNativePhaseSeparation(t *testing.T) {
 			if err := Materialize(phase, input, output); err != nil {
 				t.Fatal(err)
 			}
-			info, err := os.Stat(output)
-			if err != nil || info.Mode().Perm() != 0700 {
-				t.Fatal("private output reservation missing")
-			}
-			entries, err := os.ReadDir(output)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				info, err := entry.Info()
-				if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
-					t.Fatal("unsafe output member")
-				}
-			}
+			materialAssertOutput(t, output, phase)
 			var config map[string]json.RawMessage
 			raw, err := os.ReadFile(filepath.Join(output, "config.json"))
 			if err != nil || json.Unmarshal(raw, &config) != nil {
@@ -195,6 +217,7 @@ func TestMaterializeNativePhaseSeparation(t *testing.T) {
 	}
 }
 
+// TestMaterializeRefusesIncompleteOrUnsafeInputs requires refusal before output reservation.
 func TestMaterializeRefusesIncompleteOrUnsafeInputs(t *testing.T) {
 	cases := map[string]func(*testing.T, string){
 		"missing password": func(t *testing.T, p string) {
@@ -263,6 +286,7 @@ func TestMaterializeRefusesIncompleteOrUnsafeInputs(t *testing.T) {
 	}
 }
 
+// TestMaterializeRejectsAmbiguousSettings exercises duplicate, unknown and mistyped JSON fields.
 func TestMaterializeRejectsAmbiguousSettings(t *testing.T) {
 	for _, suffix := range []string{`,"databaseUser":"other"}`, `,"admin":"forbidden"}`, `,"databaseHost":true}`, `} {}`, `,"databaseAdminUser":"identity_initializer"}`, `,"phase":"setup"}`} {
 		t.Run(suffix, func(t *testing.T) {
@@ -277,6 +301,7 @@ func TestMaterializeRejectsAmbiguousSettings(t *testing.T) {
 	}
 }
 
+// TestMaterializePreservesOccupiedOutput protects content that this invocation did not create.
 func TestMaterializePreservesOccupiedOutput(t *testing.T) {
 	input, output := materialFixture(t, "serve")
 	if err := os.Mkdir(output, 0700); err != nil {
@@ -292,6 +317,7 @@ func TestMaterializePreservesOccupiedOutput(t *testing.T) {
 	}
 }
 
+// TestMaterializeRejectsInvalidNativeSettings refuses unsafe database roles and issuer settings.
 func TestMaterializeRejectsInvalidNativeSettings(t *testing.T) {
 	for name, value := range map[string]any{"databaseUser": "postgres", "databaseName": "postgres", "databaseHost": true, "schemaVersion": "unknown", "portalCallback": "http://site.example.invalid/portal/callback"} {
 		t.Run(name, func(t *testing.T) {
@@ -314,6 +340,7 @@ func TestMaterializeRejectsInvalidNativeSettings(t *testing.T) {
 	}
 }
 
+// TestMaterializeRequiresEveryPhaseMemberAndSetting removes each required input independently.
 func TestMaterializeRequiresEveryPhaseMemberAndSetting(t *testing.T) {
 	for _, phase := range []string{"init", "setup", "serve"} {
 		input, _ := materialFixture(t, phase)
@@ -359,6 +386,7 @@ func TestMaterializeRequiresEveryPhaseMemberAndSetting(t *testing.T) {
 	}
 }
 
+// TestMaterializeRefusesChangedSnapshotAndLeavesNoUsablePackage checks the final commit boundary.
 func TestMaterializeRefusesChangedSnapshotAndLeavesNoUsablePackage(t *testing.T) {
 	input, output := materialFixture(t, "serve")
 	names, fields, err := materialProfile("serve")
@@ -394,6 +422,7 @@ func TestMaterializeRefusesChangedSnapshotAndLeavesNoUsablePackage(t *testing.T)
 	}
 }
 
+// TestMaterializeCompiledCommand exercises real argument handling, phase output and safe diagnostics.
 func TestMaterializeCompiledCommand(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "customer-identity-materialize")
 	build := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-o", binary, "../../cmd/customer-identity-materialize")
@@ -409,9 +438,7 @@ func TestMaterializeCompiledCommand(t *testing.T) {
 			if data, err := exec.Command(binary, "--phase", phase, "--inputs", input, "--output", output).CombinedOutput(); err != nil || len(data) != 0 {
 				t.Fatal("compiled private phase failed or emitted data")
 			}
-			if _, err := os.Stat(filepath.Join(output, "config.json")); err != nil {
-				t.Fatal(err)
-			}
+			materialAssertOutput(t, output, phase)
 		})
 	}
 	for _, args := range [][]string{{"--phase"}, {"--phase", "serve", "--inputs", "/sensitive-input", "--output", "/sensitive-output"}, {"--phase", "serve", "--phase", "setup", "--output", "/sensitive-output"}} {
@@ -422,6 +449,7 @@ func TestMaterializeCompiledCommand(t *testing.T) {
 	}
 }
 
+// TestMaterializeBootstrapMatchesNativePasswordConsumer pins ASCII complexity and bcrypt limits.
 func TestMaterializeBootstrapMatchesNativePasswordConsumer(t *testing.T) {
 	cases := map[string]struct {
 		password string
@@ -454,11 +482,13 @@ type materialListingProbe struct {
 	limit int
 }
 
+// ReadDir records the producer's bound without replacing the filesystem listing.
 func (probe *materialListingProbe) ReadDir(limit int) ([]os.DirEntry, error) {
 	probe.limit = limit
 	return probe.file.ReadDir(limit)
 }
 
+// TestMaterializeBoundsDirectoryListingBeforeRefusal prevents unbounded input-directory reads.
 func TestMaterializeBoundsDirectoryListingBeforeRefusal(t *testing.T) {
 	directory := t.TempDir()
 	for index := range 100 {
@@ -484,6 +514,7 @@ func TestMaterializeBoundsDirectoryListingBeforeRefusal(t *testing.T) {
 	}
 }
 
+// TestMaterializeRefusesUnresolvedRawMasterKey distinguishes exact-length references from key bytes.
 func TestMaterializeRefusesUnresolvedRawMasterKey(t *testing.T) {
 	input, output := materialFixture(t, "serve")
 	reference := []byte("${" + strings.Repeat("A", 29) + "}")

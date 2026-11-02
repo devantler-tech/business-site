@@ -10,6 +10,7 @@ import (
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 )
 
+// main keeps ordinary execution inert and admits only the explicit private phase command.
 func main() {
 	if len(os.Args) == 1 {
 		return
