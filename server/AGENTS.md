@@ -287,6 +287,11 @@ the request transaction. Capture the maintained store/codec snapshot before taki
 that transaction, avoiding a second connection while one is held; the snapshot
 alone is never authority. No worker/API/MCP or production activation is added.
 
+v15 extends only the existing request-product constraint with `other` after
+unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
+Both languages show the category and case-by-case assessment boundary; the
+existing independent false-default identity/request gates remain mandatory.
+
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by
 15 November 2026. Read `CREDITS.md`. v11 follows unchanged v1–v10. Reserve each
