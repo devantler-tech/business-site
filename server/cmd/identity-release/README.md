@@ -119,8 +119,11 @@ or service execution. A later caller with changed retained build records is refu
 
 Only explicit `publish` enters a separate privileged job and repeats admission.
 Registry authentication and the existing image tag are checked before any source
-release mutation. The complete release inventory is paginated, with a bound of
-100 pages of at most 100 records; failed or malformed reads authorize no write.
+release mutation. Registry reads accept both single-image manifests and image
+indexes; an occupied index cannot be mistaken for an absent tag. Release inventory
+reads make at most 100 explicit page requests of at most 100 records each. A short
+page proves completion; a full hundredth page is refused without another request.
+Failed, malformed or incomplete reads authorize no write.
 After anonymous source readback, credentials are refreshed and the image tag is
 checked again before a push. This preflight does not make the two services atomic:
 later network, registry or signature failures can still leave a source-only release.

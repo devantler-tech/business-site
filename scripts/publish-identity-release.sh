@@ -58,7 +58,7 @@ registry_authenticate() {
   # RFC 6750 section 2.1 permits standard and URL-safe base64 characters.
   # Absolute anchors also refuse line breaks, quotes and configuration injection.
   bearer="$(jq -er '.token|select(type=="string" and test("\\A[A-Za-z0-9._~+/-]+=*\\z"))' "$work/registry-token.json")" || fail 'registry bearer token shape'
-  printf 'silent\nshow-error\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"\n' "$bearer" >"$work/registry-read.config"
+  printf 'silent\nshow-error\nheader = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"\n' "$bearer" >"$work/registry-read.config"
   chmod 600 "$work/registry-read.config"
   unset bearer
   printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin || fail 'registry authentication'
@@ -83,15 +83,25 @@ jq -e 'type=="array" and length<=1' "$work/tags.json" >/dev/null || fail 'ambigu
 if jq -e 'length==1' "$work/tags.json" >/dev/null; then
   jq -e --arg ref "refs/tags/$tag" --arg source "$source" '.[0].ref==$ref and .[0].object.type=="commit" and .[0].object.sha==$source' "$work/tags.json" >/dev/null || fail 'existing source tag differs'
 fi
-# Drafts need not have a tag ref yet. Read every API page before deciding that
-# a release is absent; a failed or malformed page cannot authorize a write.
+# Drafts need not have a tag ref yet. Read explicit, shape-checked API pages
+# until a short page proves completion. Refuse a full hundredth page without
+# fetching beyond the request budget; incomplete inventory authorizes no write.
 read_release_inventory() {
-  local output="$1"
-  gh api --hostname github.com --paginate --slurp "repos/$repo/releases?per_page=100" >"$output.pages" || fail 'release inventory retrieval'
-  jq -ces 'select(length==1)|.[0]|
-    select(type=="array" and length>0 and length<=100 and
-      all(.[];type=="array" and length<=100 and all(.[];type=="object" and (.tag_name|type)=="string")))|
-    add' "$output.pages" >"$output" || fail 'complete bounded release inventory'
+  local output="$1" page=1 count
+  : >"$output.pages"
+  while [[ "$page" -le 100 ]]; do
+    gh api --hostname github.com "repos/$repo/releases?per_page=100&page=$page" >"$output.page" || fail 'release inventory retrieval'
+    jq -ces 'select(length==1)|.[0]|
+      select(type=="array" and length<=100 and all(.[];type=="object" and (.tag_name|type)=="string"))' \
+      "$output.page" >>"$output.pages" || fail 'complete bounded release inventory'
+    count="$(jq -er 'length' "$output.page")" || fail 'release inventory page size'
+    if [[ "$count" -lt 100 ]]; then
+      jq -cs 'add' "$output.pages" >"$output" || fail 'complete bounded release inventory'
+      return
+    fi
+    page=$((page+1))
+  done
+  fail 'release inventory request bound'
 }
 read_release_inventory "$work/releases.json"
 jq --arg tag "$tag" '[.[]|select(.tag_name==$tag)]' "$work/releases.json" >"$work/matching-releases.json"

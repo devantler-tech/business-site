@@ -22,7 +22,7 @@ if [[ "$1" == api ]];then
   repos/devantler-tech/business-site/git/matching-refs/tags/identity-v4.20.0-devantler.1)
    if [[ "$KIND" == tag-conflict ]];then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]\n';
    elif [[ -f "$FIXTURE/release.json" ]] && jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null;then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]\n';else printf '[]\n';fi ;;
-  'repos/devantler-tech/business-site/releases?per_page=100')
+  repos/devantler-tech/business-site/releases\?per_page=100*)
    releases='[]'
    if [[ -f "$FIXTURE/release.json" ]];then releases="$(jq '[.]' "$FIXTURE/release.json")";fi
    case "$KIND" in
@@ -30,12 +30,24 @@ if [[ "$1" == api ]];then
     prefix="$(jq -n '[range(0;100)|{id:(1000+.),tag_name:("other-"+tostring)}]')"
     if [[ "$KIND" == paged-duplicate ]];then prefix="$(jq '.[0].tag_name="identity-v4.20.0-devantler.1"' <<<"$prefix")";fi
     pages="$(jq -n --argjson prefix "$prefix" --argjson releases "$releases" '[$prefix,$releases]')" ;;
-   malformed-inventory) pages='[[],{}]' ;;
-   oversized-inventory) pages="$(jq -n '[range(0;101)|[]]')" ;;
+   malformed-inventory) pages="$(jq -n '[[range(0;100)|{tag_name:"other"}],{}]')" ;;
+   oversized-inventory|boundary-inventory)
+    prefix="$(jq -n '[range(0;100)|{tag_name:"other"}]')"
+    pages="$(jq -n --argjson prefix "$prefix" --argjson releases "$releases" --arg kind "$KIND" '[range(0;101)|if .==99 and $kind=="boundary-inventory" then $releases else $prefix end]')" ;;
    failed-inventory) printf '[[]]\n';exit 42 ;;
    *) pages="$(jq -n --argjson releases "$releases" '[$releases]')" ;;
    esac
-   if [[ "$paginated" == true ]];then printf '%s\n' "$pages";else jq '.[0]' <<<"$pages";fi ;;
+   if [[ "$paginated" == true ]];then
+    if [[ "$KIND" == oversized-inventory ]];then
+      printf 'inventory-page %s\n' {1..101} >>"$FIXTURE/calls"
+    fi
+    printf '%s\n' "$pages"
+   else
+    page=${endpoint##*&page=}
+    [[ "$page" =~ ^[1-9][0-9]*$ ]] || exit 97
+    printf 'inventory-page %s\n' "$page" >>"$FIXTURE/calls"
+    jq --argjson page "$page" '.[$page-1]' <<<"$pages"
+   fi ;;
   repos/devantler-tech/business-site/releases/tags/identity-v4.20.0-devantler.1)
    jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null || exit 44;cat "$FIXTURE/release.json" ;;
   repos/devantler-tech/business-site/releases/789) cat "$FIXTURE/release.json" ;;
@@ -74,6 +86,17 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  reads=$((reads+1));printf '%s\n' "$reads" >"$FIXTURE/registry-reads"
  if [[ "$KIND" == registry-transport-error ]];then exit 28;fi
  if [[ "$KIND" == registry-error ]];then printf 503;exit 0;fi
+ if [[ "$KIND" == registry-oci-index || "$KIND" == registry-docker-index ]];then
+  media_type=application/vnd.oci.image.index.v1+json
+  [[ "$KIND" != registry-docker-index ]] || media_type=application/vnd.docker.distribution.manifest.list.v2+json
+  if ! grep -Fq "$media_type" "$config";then
+    printf 404;printf '{"errors":[{"code":"MANIFEST_UNKNOWN"}]}\n' >"$output";exit 0
+  fi
+  jq -n --arg media "$media_type" '{schemaVersion:2,mediaType:$media,manifests:[{digest:("sha256:"+("8"*64))}]}' >"$output"
+  sha=$(shasum -a 256 "$output"|awk '{print $1}')
+  printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
+  printf 200;exit 0
+ fi
  if [[ ! -f "$FIXTURE/pushed" && "$KIND" != registry-conflict && !( "$KIND" == registry-late-conflict && "$reads" -ge 2 ) ]];then printf 404;printf '{}\n' >"$output";exit 0;fi
  cp "$FIXTURE/manifest.json" "$output"
  if [[ "$KIND" == registry-conflict || "$KIND" == registry-late-conflict ]];then jq '.config.digest="sha256:different"' "$output" >"$FIXTURE/new";mv "$FIXTURE/new" "$output";fi
@@ -116,9 +139,9 @@ case "$1" in
 FIXTURE
 chmod +x "$scratch/bin/"{gh,curl,docker,cosign}
 successful() {
-  [[ "$1" == valid || "$1" == draft-resume || "$1" == published-retry || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-retry ]]
+  [[ "$1" == valid || "$1" == draft-resume || "$1" == published-retry || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-retry || "$1" == boundary-inventory ]]
 }
-for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict; do
+for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory; do
   fixture="$scratch/$kind"
   mkdir -p "$fixture/runner/identity-forge.fixture/restored/native/"{zitadel-handoff,zitadel-offline-replay,zitadel-base-source} "$fixture/runner/identity-forge.fixture/saved"
   work="$fixture/runner/identity-forge.fixture"
@@ -177,7 +200,7 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
     fi
     test ! -f "$fixture/runner/identity-publication.json"
     if [[ "$kind" == bad-retention || "$kind" == bad-profile || "$kind" == bad-authority ]]; then test ! -s "$fixture/calls"; fi
-    if [[ "$kind" == registry-conflict || "$kind" == registry-error || "$kind" == bad-bearer || "$kind" == registry-token-error || "$kind" == registry-login-error || "$kind" == registry-transport-error ]];then
+    if [[ "$kind" == registry-conflict || "$kind" == registry-error || "$kind" == bad-bearer || "$kind" == registry-token-error || "$kind" == registry-login-error || "$kind" == registry-transport-error || "$kind" == registry-oci-index || "$kind" == registry-docker-index ]];then
       if grep -Eq '^gh release (create|upload|edit) ' "$fixture/calls";then echo "registry preflight failure mutated source: $kind" >&2;exit 1;fi
     fi
     if [[ "$kind" == paged-duplicate || "$kind" == malformed-inventory || "$kind" == failed-inventory || "$kind" == oversized-inventory ]]; then
@@ -194,6 +217,10 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
       fi
     fi
     if [[ "$kind" != attestation-conflict ]]; then test ! -f "$fixture/pushed"; fi
+  fi
+  if [[ "$kind" == oversized-inventory ]];then
+    if grep -q '^inventory-page 101$' "$fixture/calls";then echo 'release inventory fetched beyond its request bound' >&2;exit 1;fi
+    [[ "$(grep -c '^inventory-page ' "$fixture/calls")" == 100 ]] || { echo 'release inventory did not reach its refusal boundary' >&2;exit 1; }
   fi
 done
 printf 'identity publisher: PASS — actual source-first script and conflicting tag/source/registry/provenance refusals\n'
