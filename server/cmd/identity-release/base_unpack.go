@@ -49,10 +49,8 @@ func unpackBaseCapsule(p baseProfile, input, archiveSeal, capsuleSeal, output st
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	for _, dir := range []string{"metadata", "layers", "sources", "notices", "status"} {
-		if err = root.Mkdir(dir, 0700); err != nil {
-			return err
-		}
+	if err = makeBaseCapsuleDirs(root); err != nil {
+		return err
 	}
 	files := append(baseSourceFiles(p), sourceFile{"base-source.json", int64(len(manifest)), capsuleSeal, 0444})
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })

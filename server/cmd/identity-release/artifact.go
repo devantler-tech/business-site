@@ -19,24 +19,12 @@ func restoreArtifact(input, seal, source, run string, attempt uint64, output str
 		!handoffRevision.MatchString(source) || !handoffRun.MatchString(run) || attempt == 0 || attempt > 1000000 {
 		return receipt, fmt.Errorf("external artifact digest and original caller binding required")
 	}
-	parent, err := os.OpenRoot(filepath.Dir(input))
+	sealed, err := openSealedArchive(input, seal, carrierLimit+8<<20)
 	if err != nil {
 		return receipt, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
-	original, err := readHandoffSnapshot(parent, filepath.Base(input), carrierLimit+8<<20, false, 0444)
-	if err != nil || original.file.SHA256 != seal {
-		return receipt, fmt.Errorf("original actions artifact digest differs")
-	}
-	file, err := sourceOpenRegular(parent, filepath.Base(input))
-	if err != nil {
-		return receipt, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
-	st, err := file.Stat()
-	if err != nil || !sameHandoffSnapshot(st, original.info) {
-		return receipt, fmt.Errorf("artifact changed before ZIP read")
-	}
+	defer func() { resultErr = errors.Join(resultErr, sealed.close()) }()
+	file, st := sealed.file, sealed.original.info
 	zr, err := zip.NewReader(file, st.Size())
 	if err != nil || len(zr.File) != 2 {
 		return receipt, fmt.Errorf("closed two-file Actions artifact required")
@@ -89,14 +77,7 @@ func restoreArtifact(input, seal, source, run string, attempt uint64, output str
 		!sourceDigest.MatchString(receipt.HandoffSHA256) || receipt.OriginalFiles != 17 || receipt.ForgeAdmission || receipt.SourceOfferPublished || receipt.ImagePublished || receipt.SignatureVerified || receipt.PortalActivated {
 		return receipt, fmt.Errorf("original artifact receipt differs")
 	}
-	name, err := sourceOutputPath(output)
-	if err != nil {
-		return receipt, err
-	}
-	if err = os.Mkdir(name, 0700); err != nil {
-		return receipt, err
-	}
-	root, err := os.OpenRoot(name)
+	name, root, err := reserveSourceRoot(output)
 	if err != nil {
 		return receipt, err
 	}
@@ -115,10 +96,8 @@ func restoreArtifact(input, seal, source, run string, attempt uint64, output str
 	if copyErr != nil || memberErr != nil || syncErr != nil || modeErr != nil || archiveErr != nil || n != receipt.ArchiveBytes || fmt.Sprintf("%x", hash.Sum(nil)) != receipt.ArchiveSHA256 {
 		return receipt, fmt.Errorf("incomplete or changed original carrier")
 	}
-	current, statErr := file.Stat()
-	entry, entryErr := parent.Lstat(filepath.Base(input))
-	if statErr != nil || entryErr != nil || !sameHandoffSnapshot(original.info, current) || !sameHandoffSnapshot(original.info, entry) {
-		return receipt, fmt.Errorf("artifact changed during restoration")
+	if err = sealed.unchanged(); err != nil {
+		return receipt, err
 	}
 	return unpackCarrier(filepath.Join(name, "carrier.tar"), receipt.ArchiveSHA256, receipt.HandoffSHA256, source, run, attempt, filepath.Join(name, "native"))
 }

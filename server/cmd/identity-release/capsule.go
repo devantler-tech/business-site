@@ -80,10 +80,8 @@ func captureBaseCapsule(ctx context.Context, p baseProfile, read sourceReader, o
 		return "", err
 	}
 	defer func() { resultErr = errors.Join(resultErr, root.Close()) }()
-	for _, dir := range []string{"metadata", "layers", "sources", "notices", "status"} {
-		if err = root.Mkdir(dir, 0700); err != nil {
-			return "", err
-		}
+	if err = makeBaseCapsuleDirs(root); err != nil {
+		return "", err
 	}
 	files := baseSourceFiles(p)
 	if len(files) != 41 || len(raw) != len(files) {

@@ -36,24 +36,12 @@ func unpackCarrier(input, archiveSeal, manifestSeal, source, run string, attempt
 		!sourceDigest.MatchString(manifestSeal) || !handoffRevision.MatchString(source) || !handoffRun.MatchString(run) || attempt == 0 || attempt > 1000000 {
 		return receipt, fmt.Errorf("external carrier/handoff seals and original caller identity required")
 	}
-	parent, err := os.OpenRoot(filepath.Dir(input))
+	sealed, err := openSealedArchive(input, archiveSeal, carrierLimit)
 	if err != nil {
 		return receipt, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, parent.Close()) }()
-	original, err := readHandoffSnapshot(parent, filepath.Base(input), carrierLimit, false, 0444)
-	if err != nil || original.file.SHA256 != archiveSeal {
-		return receipt, fmt.Errorf("original carrier seal differs")
-	}
-	file, err := sourceOpenRegular(parent, filepath.Base(input))
-	if err != nil {
-		return receipt, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
-	opened, err := file.Stat()
-	if err != nil || !sameHandoffSnapshot(original.info, opened) {
-		return receipt, fmt.Errorf("carrier changed before restoration")
-	}
+	defer func() { resultErr = errors.Join(resultErr, sealed.close()) }()
+	file, original := sealed.file, sealed.original
 	tr := tar.NewReader(file)
 	header, err := tr.Next()
 	if err != nil || header.Name != carrierHandoff || header.Typeflag != tar.TypeReg || header.Mode != 0444 || header.Size < 1 || header.Size > 1<<20 {
@@ -67,14 +55,7 @@ func unpackCarrier(input, archiveSeal, manifestSeal, source, run string, attempt
 	if err != nil || doc.SourceSHA != source || doc.OriginalCIRunID != run || doc.OriginalCIRunAttempt != attempt {
 		return receipt, fmt.Errorf("original handoff caller binding differs")
 	}
-	name, err := sourceOutputPath(output)
-	if err != nil {
-		return receipt, err
-	}
-	if err = os.Mkdir(name, 0700); err != nil {
-		return receipt, err
-	}
-	root, err := os.OpenRoot(name)
+	name, root, err := reserveSourceRoot(output)
 	if err != nil {
 		return receipt, err
 	}
@@ -117,10 +98,8 @@ func unpackCarrier(input, archiveSeal, manifestSeal, source, run string, attempt
 	if fmt.Sprintf("%x", canonical.Sum(nil)) != archiveSeal {
 		return receipt, fmt.Errorf("original carrier is not canonical")
 	}
-	current, err := file.Stat()
-	entry, entryErr := parent.Lstat(filepath.Base(input))
-	if err != nil || entryErr != nil || !sameHandoffSnapshot(original.info, current) || !sameHandoffSnapshot(original.info, entry) {
-		return receipt, fmt.Errorf("carrier changed during restoration")
+	if err = sealed.unchanged(); err != nil {
+		return receipt, err
 	}
 	if err = carrierJoinRoot(name, doc, body); err != nil {
 		return receipt, err

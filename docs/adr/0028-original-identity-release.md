@@ -36,7 +36,11 @@ exact Distroless signature uses its documented issuer and subject. Original
 base capsule proof fields remain false; new evidence has a separate receipt.
 
 Publication creates the fixed corresponding-source release already linked by
-the native Login/Console footers. Both original source archives and a source/run/
+the native Login/Console footers. It creates or resumes a source-bound draft,
+checks existing assets before any additions and attaches the complete source set
+before publishing. Draft staging uses a validated release database ID; the REST
+by-tag lookup is only for published releases. Actual immutable sealing and the
+source-bound tag are required. Both original source archives and a source/run/
 digest manifest must be fully retrievable anonymously before the saved image is
 pushed or signed. Existing mismatched tags/assets are refused rather than
 overwritten. Image provenance binds the same source, original run, archive and
@@ -47,9 +51,9 @@ The ordinary public-runtime publisher excludes identity tags.
 
 The carrier has a 1.25 GiB total bound and one-day retention; it is not durable
 corresponding-source hosting. Public release assets retain the offered sources.
-Before anything is published for the fixed version, an expired or incomplete
+When no release or tag has reserved the fixed version, an expired or incomplete
 carrier requires a new native run, never a reconstruction from diagnostics.
-A partial source-only release may be completed only with that same retained
+A reserved draft or published source-only release may be completed only with that same retained
 original and matching immutable contents; it grants no image or activation claim.
 If its original expires before image publication, recovery requires a reviewed
 new version and source-offer profile. A different run cannot overwrite or resume
@@ -65,5 +69,6 @@ No general legal-compliance or bit-for-bit reproducibility claim is introduced.
 
 - [GitHub workflow inputs and permissions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
 - [GitHub artifact transport](https://docs.github.com/en/actions/tutorials/store-and-share-data)
+- [GitHub immutable release staging](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)
 - [GnuPG gpgv verification limits](https://www.gnupg.org/documentation/manuals/gnupg/gpgv.html)
 - [Distroless signature identity](https://github.com/GoogleContainerTools/distroless#how-do-i-verify-distroless-images)

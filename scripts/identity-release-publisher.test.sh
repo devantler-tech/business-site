@@ -16,17 +16,27 @@ if [[ "$1" == api ]];then
   repos/devantler-tech/business-site/commits/main) printf '{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\n' ;;
   repos/devantler-tech/business-site/actions/runs/123) printf '{"head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","run_attempt":2,"path":".github/workflows/ci.yaml","event":"push","head_branch":"main","status":"completed","conclusion":"success"}\n' ;;
   repos/devantler-tech/business-site/git/matching-refs/tags/identity-v4.20.0-devantler.1)
-   if [[ "$KIND" == tag-conflict ]];then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]\n';else printf '[]\n';fi ;;
-  repos/devantler-tech/business-site/releases/tags/identity-v4.20.0-devantler.1) cat "$FIXTURE/release.json" ;;
+   if [[ "$KIND" == tag-conflict ]];then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]\n';
+   elif [[ -f "$FIXTURE/release.json" ]] && jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null;then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]\n';else printf '[]\n';fi ;;
+  'repos/devantler-tech/business-site/releases?per_page=100')
+   if [[ -f "$FIXTURE/release.json" ]];then jq '[.]' "$FIXTURE/release.json";else printf '[]\n';fi ;;
+  repos/devantler-tech/business-site/releases/tags/identity-v4.20.0-devantler.1)
+   jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null || exit 44;cat "$FIXTURE/release.json" ;;
+  repos/devantler-tech/business-site/releases/789) cat "$FIXTURE/release.json" ;;
   *) exit 98 ;;
  esac
 elif [[ "$1" == release && "$2" == create ]];then
- printf '{"id":789,"tag_name":"identity-v4.20.0-devantler.1","draft":false,"prerelease":false,"assets":[]}\n' >"$FIXTURE/release.json"
+ draft=false;for arg in "$@";do [[ "$arg" != --draft ]] || draft=true;done
+ jq -n --argjson draft "$draft" '{id:789,tag_name:"identity-v4.20.0-devantler.1",target_commitish:("a"*40),draft:$draft,prerelease:false,immutable:($draft|not),assets:[]}' >"$FIXTURE/release.json"
 elif [[ "$1" == release && "$2" == upload ]];then
+ if ! jq -e '.draft==true' "$FIXTURE/release.json" >/dev/null;then printf 'immutable release refuses asset uploads\n' >&2;exit 95;fi
  file=${!#};name=$(basename "$file");cp "$file" "$FIXTURE/$name"
  sha=$(shasum -a 256 "$file"|awk '{print $1}')
  jq --arg name "$name" --arg digest "sha256:$sha" '.assets += [{id:(100+(.assets|length)),name:$name,digest:$digest}]' "$FIXTURE/release.json" >"$FIXTURE/new"
  mv "$FIXTURE/new" "$FIXTURE/release.json"
+elif [[ "$1" == release && "$2" == edit ]];then
+ jq -e '.draft==true and (.assets|length)==3' "$FIXTURE/release.json" >/dev/null || exit 94
+ jq --argjson immutable "$([[ "$KIND" == mutable-release ]] && printf false || printf true)" '.draft=false|.immutable=$immutable' "$FIXTURE/release.json" >"$FIXTURE/new";mv "$FIXTURE/new" "$FIXTURE/release.json"
 else exit 99;fi
 FIXTURE
 cat >"$scratch/bin/curl" <<'FIXTURE'
@@ -40,6 +50,7 @@ for arg in "$@";do
 done
 printf 'curl %s\n' "$url" >>"$FIXTURE/calls"
 if [[ "$url" == https://github.com/* ]];then
+ jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null || exit 94
  name=${url##*/};cp "$FIXTURE/$name" "$output"
  if [[ "$KIND" == source-corrupt && "$name" == inputs.tar ]];then printf changed >>"$output";fi
 elif [[ "$url" == https://ghcr.io/v2/* ]];then
@@ -51,7 +62,11 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
  printf 200
 elif [[ -n "$config" ]];then
- printf '{"token":"fixture-token"}\n' >"$output"
+ if [[ "$KIND" == bad-bearer ]];then
+  printf '{"token":"safe\\nInjected: value"}\n' >"$output"
+ else
+  printf '{"token":"AbC+DeF/GhI~jK.lM_nO-pQ=="}\n' >"$output"
+ fi
 else exit 98;fi
 FIXTURE
 cat >"$scratch/bin/docker" <<'FIXTURE'
@@ -80,7 +95,7 @@ case "$1" in
  *) exit 98;;esac
 FIXTURE
 chmod +x "$scratch/bin/"{gh,curl,docker,cosign}
-for kind in valid tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority; do
+for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer; do
   fixture="$scratch/$kind"
   mkdir -p "$fixture/runner/identity-forge.fixture/restored/native/"{zitadel-handoff,zitadel-offline-replay,zitadel-base-source} "$fixture/runner/identity-forge.fixture/saved"
   work="$fixture/runner/identity-forge.fixture"
@@ -108,20 +123,35 @@ for kind in valid tag-conflict source-corrupt registry-conflict registry-error a
   esac
   jq -n '{baseManifestSha256:("8"*64)}' >"$work/base-auth.json"
   jq -n '{schemaVersion:2,config:{digest:("sha256:"+("b"*64))},layers:[{digest:("sha256:"+("7"*64))}]}' >"$fixture/manifest.json"
+  if [[ "$kind" == draft-resume || "$kind" == draft-conflict ]]; then
+    cp "$native/zitadel-offline-replay/inputs.tar" "$fixture/inputs.tar"
+    digest="$input_sha"
+    if [[ "$kind" == draft-conflict ]]; then digest="${base_sha}"; fi
+    jq -n --arg digest "sha256:$digest" '{id:789,tag_name:"identity-v4.20.0-devantler.1",target_commitish:("a"*40),draft:true,prerelease:false,immutable:false,assets:[{id:100,name:"inputs.tar",digest:$digest}]}' >"$fixture/release.json"
+  elif [[ "$kind" == published-retry ]]; then
+    cp "$scratch/valid/"{release.json,inputs.tar,base-source.tar,identity-source.json} "$fixture/"
+    touch "$fixture/pushed"
+  fi
   : >"$fixture/calls"
   if env PATH="$scratch/bin:$PATH" FIXTURE="$fixture" KIND="$kind" RUNNER_TEMP="$fixture/runner" IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=publish IDENTITY_CI_RUN_ID=123 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_ACTOR=devantler GH_TOKEN=fixture bash "$root/scripts/publish-identity-release.sh" >"$fixture/stdout" 2>"$fixture/stderr"; then
-    [[ "$kind" == valid ]] || {
+    [[ "$kind" == valid || "$kind" == draft-resume || "$kind" == published-retry ]] || {
       printf 'publisher accepted %s\n' "$kind" >&2
       exit 1
     }
     jq -e '.sourceOfferPublished==true and .imagePublished==true and .signatureVerified==true and .portalActivated==false' "$fixture/runner/identity-publication.json" >/dev/null
   else
-    if [[ "$kind" == valid ]]; then
+    if [[ "$kind" == valid || "$kind" == draft-resume || "$kind" == published-retry ]]; then
       cat "$fixture/stderr"
       exit 1
     fi
     test ! -f "$fixture/runner/identity-publication.json"
-    if [[ "$kind" == bad-* ]]; then test ! -s "$fixture/calls"; fi
+    if [[ "$kind" == bad-retention || "$kind" == bad-profile || "$kind" == bad-authority ]]; then test ! -s "$fixture/calls"; fi
+    if [[ "$kind" == draft-conflict ]]; then
+      if grep -q 'gh release upload\|gh release edit' "$fixture/calls"; then
+        printf 'conflicting draft was mutated\n' >&2
+        exit 1
+      fi
+    fi
     if [[ "$kind" != attestation-conflict ]]; then test ! -f "$fixture/pushed"; fi
   fi
 done

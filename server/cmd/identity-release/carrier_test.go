@@ -86,25 +86,7 @@ func TestOriginalCarrierRefusesWrongBindingsAndExistingDestinations(t *testing.T
 					}
 				}
 			case "truncated", "trailing":
-				body, err := os.ReadFile(archive)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if kind == "truncated" {
-					body = body[:len(body)-512]
-				} else {
-					body = append(body, make([]byte, 512)...)
-				}
-				if err := os.Chmod(archive, 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(archive, body, 0444); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(archive, 0444); err != nil {
-					t.Fatal(err)
-				}
-				args[4] = sourceSHA(body)
+				args[4] = alterArchiveTail(t, archive, kind)
 			case "link":
 				linked := archive + ".link"
 				if err := os.Symlink(archive, linked); err != nil {

@@ -118,14 +118,18 @@ original build records and inspects the original saved image without a rebuild
 or service execution. A later caller with changed retained build records is refused.
 
 Only explicit `publish` enters a separate privileged job and repeats admission.
-The fixed `identity-v4.20.0-devantler.1` release receives the two original source
-archives and `identity-source.json`. Complete anonymous retrieval and immutable
+The fixed `identity-v4.20.0-devantler.1` release stages the two original source
+archives and `identity-source.json` in a draft before publication. Every existing
+asset must already match before additions; source-bound drafts can resume only
+with the same original. Staging reads use the validated release database ID,
+because REST by-tag cannot find drafts. The published release must be actually
+immutable and its tag must retain the original source. Complete anonymous retrieval and immutable
 asset digest readback must pass before the saved image is pushed to
 `ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.1`, signed and attested.
 The exact registry digest, signer, original source/run and source-offer digest
 are independently verified. Existing mismatched tags/assets are refused; nothing
-is clobbered. Before publication, an expired carrier requires a new native build,
-never a reconstruction from diagnostics. Once the fixed source release exists,
+is clobbered. Before a release or tag reserves the version, an expired carrier
+requires a new native build, never a reconstruction from diagnostics. Once the fixed source release exists,
 only the same retained original can complete it. If that original expires before
 image publication, recovery requires a reviewed new version/source-offer profile;
 a different run cannot resume its immutable assets. There is no durable-original

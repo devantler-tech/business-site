@@ -10,14 +10,47 @@ import (
 	"testing"
 )
 
+func packedBaseTransportFixture(t *testing.T) (baseProfile, string, string, string) {
+	t.Helper()
+	p, input, seal := capturedBaseFixture(t)
+	archive := filepath.Join(t.TempDir(), "original.tar")
+	digest, err := packBaseCapsule(p, input, seal, archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p, archive, seal, digest
+}
+
+func alterArchiveTail(t *testing.T, archive, kind string) string {
+	t.Helper()
+	body, err := os.ReadFile(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	switch kind {
+	case "truncated":
+		body = body[:len(body)-512]
+	case "trailing":
+		body = append(body, make([]byte, 512)...)
+	default:
+		t.Fatalf("unexpected archive mutation: %s", kind)
+	}
+	if err := os.Chmod(archive, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archive, body, 0444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(archive, 0444); err != nil {
+		t.Fatal(err)
+	}
+	return sourceSHA(body)
+}
+
 func TestBaseTransportRefusesAlteredMemberStructureWithMatchingOuterHash(t *testing.T) {
 	for _, kind := range []string{"mode", "link", "missing", "extra", "duplicate", "order", "pax"} {
 		t.Run(kind, func(t *testing.T) {
-			p, input, seal := capturedBaseFixture(t)
-			archive := filepath.Join(t.TempDir(), "original.tar")
-			if _, err := packBaseCapsule(p, input, seal, archive); err != nil {
-				t.Fatal(err)
-			}
+			p, archive, seal, _ := packedBaseTransportFixture(t)
 			raw, err := os.ReadFile(archive)
 			if err != nil {
 				t.Fatal(err)
@@ -93,12 +126,7 @@ func TestBaseTransportRefusesAlteredMemberStructureWithMatchingOuterHash(t *test
 }
 
 func TestBaseTransportRoundTripUsesOriginalCapsuleAndCanonicalArchive(t *testing.T) {
-	p, input, seal := capturedBaseFixture(t)
-	archive := filepath.Join(t.TempDir(), "original.tar")
-	digest, err := packBaseCapsule(p, input, seal, archive)
-	if err != nil {
-		t.Fatal(err)
-	}
+	p, archive, seal, digest := packedBaseTransportFixture(t)
 	out := filepath.Join(t.TempDir(), "restored")
 	if err := unpackBaseCapsule(p, archive, digest, seal, out); err != nil {
 		t.Fatal(err)
@@ -115,12 +143,7 @@ func TestBaseTransportRoundTripUsesOriginalCapsuleAndCanonicalArchive(t *testing
 func TestBaseTransportRefusesIndependentSealsAndAlteredBytes(t *testing.T) {
 	for _, kind := range []string{"archive-seal", "capsule-seal", "truncated", "trailing", "linked", "existing", "inside"} {
 		t.Run(kind, func(t *testing.T) {
-			p, input, seal := capturedBaseFixture(t)
-			archive := filepath.Join(t.TempDir(), "original.tar")
-			digest, err := packBaseCapsule(p, input, seal, archive)
-			if err != nil {
-				t.Fatal(err)
-			}
+			p, archive, seal, digest := packedBaseTransportFixture(t)
 			out := filepath.Join(t.TempDir(), "restored")
 			switch kind {
 			case "archive-seal":
@@ -128,25 +151,7 @@ func TestBaseTransportRefusesIndependentSealsAndAlteredBytes(t *testing.T) {
 			case "capsule-seal":
 				seal = strings.Repeat("0", 64)
 			case "truncated", "trailing":
-				body, err := os.ReadFile(archive)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if kind == "truncated" {
-					body = body[:len(body)-512]
-				} else {
-					body = append(body, make([]byte, 512)...)
-				}
-				if err := os.Chmod(archive, 0600); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(archive, body, 0444); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.Chmod(archive, 0444); err != nil {
-					t.Fatal(err)
-				}
-				digest = sourceSHA(body)
+				digest = alterArchiveTail(t, archive, kind)
 			case "linked":
 				link := archive + ".link"
 				if err := os.Symlink(archive, link); err != nil {
