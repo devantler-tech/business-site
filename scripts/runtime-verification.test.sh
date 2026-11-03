@@ -15,7 +15,7 @@ readonly source=0123456789abcdef0123456789abcdef01234567
 readonly image=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 readonly manifests=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 readonly public=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@d8b5d0e9429cebf12907e0d4cb448433d3108e4b
+readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@16f1a6c96aaf2581885e17389a0e0f9f42387970
 cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp.sh" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
