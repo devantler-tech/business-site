@@ -68,6 +68,23 @@ by the invoking user with mode 0700. Every member is a bounded regular file with
 mode 0600, the same owner and one hard link. Symlinks and extra members fail.
 This is an owner-file transport, not support for Kubernetes secret projections.
 
+The verified combined application also exposes the same maintained producer as an
+exclusive one-shot command. A deployment job can use its packaged executable without
+installing Go, including in the production-template package:
+
+```text
+/app/business-site --identity-materialize --identity-phase serve --identity-inputs /absolute/private/inputs --identity-output /absolute/private/new-output
+```
+
+All four options are required exactly once. No web, public-content, disclosure,
+version or migration option may accompany them, even explicitly set to false.
+An ordinary unbound build and a cancelled invocation fail before preparation.
+The command reads no public artifact, opens no listener and performs no database,
+network or service operation. Success prints only `customer identity phase prepared`;
+errors never reflect supplied paths or credentials. The output contract below is
+unchanged. This command adds neither a projected-secret transport nor native API
+provisioning; those remain required integration work in #305 before runtime release.
+
 All phases require `settings.json`, `database-password` and `database-ca.pem`.
 The JSON contains exactly these string fields:
 

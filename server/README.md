@@ -252,6 +252,16 @@ See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
 permissions and failure handling. No migration enables a portal operation or
 establishes a production deployment.
 
+### Separate native identity preparation job
+
+The verified application executable accepts the exclusive `--identity-materialize`
+mode to prepare private native ZITADEL init/setup/serve files. See
+[CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#private-native-phase-preparation) for the
+exact four options, closed owner-only inputs and output contract. No public
+artifact or extra compiler is needed by this job. It neither runs the native
+service nor grants database, API-provisioning, deployment or portal access.
+Ordinary startup remains unchanged; mixed web/migration options fail.
+
 ### Bounded identity staging
 
 With the complete private identity configuration above, an authorized disposable
