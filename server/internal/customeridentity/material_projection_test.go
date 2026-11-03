@@ -53,6 +53,7 @@ func TestMaterialProjectionRefusals(t *testing.T) {
 			projectionMust(t, os.Remove(filepath.Join(p, "..data")))
 			projectionMust(t, os.Symlink(g, filepath.Join(p, "..data")))
 		}},
+		{"writable mount root", func(t *testing.T, p, _ string) { projectionMust(t, os.Chmod(p, 0777)) }},
 		{"writable directory", func(t *testing.T, _, g string) { projectionMust(t, os.Chmod(g, 0770)) }},
 		{"other-user-only read", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0004))

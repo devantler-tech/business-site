@@ -90,16 +90,25 @@ with a nonzero primary group. Mount a flat, phase-specific projection with exact
 the required keys, their `..data/name` aliases, one timestamped generation and
 its `..data` link. Root or the invoking user may own the entries; file group reads
 require the process primary group. Other-user access, writable groups, executable
-files, hard links and arbitrary link targets fail. Directories may retain the
-volume writer set-group-ID bit and traversal permissions but cannot be group/other writable.
+files, hard links and arbitrary link targets fail. Generation directories retain
+strict permissions. The mount root may retain the volume writer's broad directory
+bits only when the kernel reports that its pinned descriptor belongs to a read-only
+mount. Root identity, permissions and mount status are checked again during final
+snapshot validation; a writable root with those same broad bits is refused.
 
 The producer pins one generation and rechecks complete membership, identities and
 bytes around output creation. A rotation or incomplete writer transition fails;
 retry the one-shot job from a fresh invocation. No input permissions are changed
 and no intermediate credential directory is created. Outputs remain new, owner-only
 phase documents. These are observed snapshots, not a lock against later rotations.
-The transport tests use fictional native-layout projections; actual Kubernetes
-controller, service, provisioning and login acceptance remain under #305/#302.
+The transport tests use fictional native-layout projections. macOS additionally
+exercises actual read-only disk-image mounts. The existing container smoke command
+requires the separate Go integration test for both actual image profiles: all three
+phases accept the copied root-owned read-only projection and reject its writable
+counterpart. Actual copied membership, bytes, ownership and modes are checked
+before execution; missing tests, skips and partial results fail the smoke command.
+These are filesystem proofs; actual Kubernetes controller, service, provisioning
+and login acceptance remain under #305/#302.
 
 All phases require `settings.json`, `database-password` and `database-ca.pem`.
 The JSON contains exactly these string fields:

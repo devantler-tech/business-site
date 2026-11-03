@@ -44,21 +44,46 @@ func MaterializeProjection(phase, inputDirectory, outputDirectory string) error 
 
 // materialProjectionOwned permits the volume writer owner and only the process primary read group.
 func materialProjectionOwned(info os.FileInfo, directory bool) bool {
+	return materialProjectionPermissions(info, directory, false)
+}
+
+// materialProjectionPermissions preserves file restrictions even on a read-only mount.
+func materialProjectionPermissions(info os.FileInfo, directory, readOnly bool) bool {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || (stat.Uid != 0 && uint64(stat.Uid) != uint64(os.Geteuid())) {
 		return false
 	}
 	mode := info.Mode()
 	if directory {
-		return info.IsDir() && mode&(os.ModeSetuid|os.ModeSticky) == 0 && mode.Perm()&0022 == 0 && mode.Perm()&0500 == 0500 && (mode.Perm()&0070 == 0 || uint64(stat.Gid) == uint64(os.Getegid()))
+		return info.IsDir() && mode&os.ModeSetuid == 0 && (readOnly || mode&(os.ModeSticky|0022) == 0) && mode.Perm()&0500 == 0500 && (mode.Perm()&0070 == 0 || uint64(stat.Gid) == uint64(os.Getegid()))
 	}
 	return mode.IsRegular() && mode&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) == 0 && mode.Perm()&0137 == 0 && stat.Nlink == 1 && info.Size() > 0 && info.Size() <= 65536 && (mode.Perm()&0040 == 0 || uint64(stat.Gid) == uint64(os.Getegid()))
+}
+
+// materialProjectionRoot admits broad directory bits only when this descriptor's mount is read-only.
+func materialProjectionRoot(root *os.Root, info os.FileInfo) bool {
+	if materialProjectionOwned(info, true) {
+		return true
+	}
+	if !materialProjectionPermissions(info, true, true) {
+		return false
+	}
+	directory, err := root.Open(".")
+	if err != nil {
+		return false
+	}
+	var status syscall.Statfs_t
+	statErr := syscall.Fstatfs(int(directory.Fd()), &status)
+	closeErr := directory.Close()
+	// Linux ST_RDONLY and Darwin MNT_RDONLY both use this kernel ABI bit.
+	const readOnlyMount = 1
+	return statErr == nil && closeErr == nil && uint64(status.Flags)&readOnlyMount != 0
 }
 
 // materialOpenProjection pins the mount root, its generation link and complete aliases.
 func materialOpenProjection(path string, names []string) (*materialProjection, error) {
 	identity, err := os.Lstat(path)
-	if err != nil || !materialProjectionOwned(identity, true) {
+	if err != nil || !identity.IsDir() {
 		return nil, errMaterial
 	}
 	root, err := os.OpenRoot(path)
@@ -72,7 +97,7 @@ func materialOpenProjection(path string, names []string) (*materialProjection, e
 		}
 	}() // Failed reads create no source state.
 	actual, err := root.Stat(".")
-	if err != nil || !os.SameFile(identity, actual) {
+	if err != nil || !os.SameFile(identity, actual) || !materialProjectionRoot(root, actual) {
 		return nil, errMaterial
 	}
 	generation, err := root.Readlink("..data")
@@ -94,7 +119,7 @@ func materialOpenProjection(path string, names []string) (*materialProjection, e
 // unchanged refuses rotation, replacement and unexpected members without following arbitrary links.
 func (projection *materialProjection) unchanged() error {
 	identity, err := os.Lstat(projection.path)
-	if err != nil || !materialProjectionOwned(identity, true) || !os.SameFile(identity, projection.identity) {
+	if err != nil || !os.SameFile(identity, projection.identity) || !materialProjectionRoot(projection.root, identity) {
 		return errMaterial
 	}
 	link, err := projection.root.Lstat("..data")
