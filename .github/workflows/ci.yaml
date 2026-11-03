@@ -432,7 +432,7 @@ jobs:
         run: |
           command -v google-chrome
           command -v chromedriver
-          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
+          go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --lifecycle-smoke --build "$RUNNER_TEMP/zitadel-build" --repository "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/zitadel-image"
       - name: Verify actual identity browser evidence
         run: |
           source="$(sha256sum scripts/zitadel-browser.go | cut -d ' ' -f 1)"
@@ -497,6 +497,37 @@ jobs:
             .browserProof == false and .authenticationProof == false and .cleanup == "complete" and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/service-smoke.json" >/dev/null
+      - name: Verify actual identity lifecycle evidence
+        run: |
+          source="$(sha256sum scripts/zitadel-service-smoke.go | cut -d ' ' -f 1)"
+          jq -e --arg source "$source" --slurpfile image "$RUNNER_TEMP/zitadel-image/image-smoke.json" '
+            def positiveInt: if type == "number" then . == floor and . > 0 else false end;
+            .schemaVersion == 1 and .profile == "isolated-tls-durable-lifecycle" and
+            .upstreamCommit == $image[0].upstreamCommit and
+            .localImageId == $image[0].localImageId and .serviceSourceSha256 == $source and
+            .databaseImage == "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826" and
+            (.startedAt | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) and
+            (.elapsedMilliseconds | positiveInt) and .elapsedMilliseconds < 960000 and
+            (.databaseVolumeKiB | positiveInt) and .databaseVolumeKiB <= 262144 and
+            (.fictionalIdentitySha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+            .verifiedTls == true and .phaseSeparation == true and .administratorRevoked == true and
+            .durableRestart == true and .phaseBoundaryInterruption == true and
+            .authenticationProof == false and .cleanup == "complete" and
+            (.resourceSamples | length) == 6 and
+            (.resourceSamples | map(.component)) == ["zitadel","postgres","zitadel","postgres","zitadel","postgres"] and
+            (.resourceSamples | map(.observedAt)) == (.resourceSamples | map(.observedAt) | sort) and
+            all(.resourceSamples[];
+              (.observedAt | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) and
+              (.namespaceInitPid | positiveInt) and
+              .namespaceInitUid == (if .component == "zitadel" then 65532 else 999 end) and
+              (.namespaceInitRssKiB | positiveInt) and
+              (.namespaceInitPeakRssKiB | positiveInt) and .namespaceInitPeakRssKiB >= .namespaceInitRssKiB and
+              (.namespaceInitThreads | positiveInt) and
+              (.dockerMemoryUsage | type == "string" and test("\\A[0-9]+([.][0-9]+)?(B|kB|KiB|MB|MiB|GB|GiB) / [0-9]+([.][0-9]+)?(B|kB|KiB|MB|MiB|GB|GiB)\\z")) and
+              (.dockerCpuPercent | type == "string" and test("\\A[0-9]+([.][0-9]+)?%\\z")) and
+              (.dockerPids | positiveInt) and .dockerPids <= 128) and
+            (.observationScope | contains("not Dex, portal, authentication, load sizing or backup/restore"))
+          ' "$RUNNER_TEMP/zitadel-image/lifecycle-smoke.json" >/dev/null
       - name: Unpack and verify the actual pre-install source archive
         run: |
           manifest="$(jq -er '.sourceSnapshot.manifestSha256' "$RUNNER_TEMP/zitadel-build/build-receipt.json")"
@@ -754,6 +785,7 @@ jobs:
             ${{ runner.temp }}/zitadel-image/image-smoke.json
             ${{ runner.temp }}/zitadel-image/base-notices/*.txt
             ${{ runner.temp }}/zitadel-image/service-smoke.json
+            ${{ runner.temp }}/zitadel-image/lifecycle-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-smoke.json
             ${{ runner.temp }}/zitadel-image/browser-binding.json
             ${{ runner.temp }}/zitadel-image/browser-incomplete.json
