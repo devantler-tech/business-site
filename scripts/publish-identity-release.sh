@@ -58,8 +58,10 @@ done
 # the immutable source version. Keep tokens in private files and stdin only.
 # registry_authenticate obtains bounded registry credentials without logging them.
 registry_authenticate() {
-  local bearer
-  [[ "${GITHUB_ACTOR:-}" =~ ^[A-Za-z0-9_-]+$ && "${GH_TOKEN:-}" =~ ^[A-Za-z0-9_]+$ ]] || fail 'registry credential shape'
+  local bearer credential="${GH_TOKEN:-}"
+  # The workflow token is opaque. Basic encoding and password stdin preserve its
+  # bytes without interpolating the credential into a header or shell command.
+  [[ "${GITHUB_ACTOR:-}" =~ ^[A-Za-z0-9_-]+$ && -n "$credential" && "${#credential}" -le 8192 && "$credential" != *[[:cntrl:]]* ]] || fail 'registry credential shape'
   printf 'silent\nshow-error\nurl = "https://ghcr.io/token?service=ghcr.io&scope=repository:devantler-tech/business-site-identity:pull,push"\nheader = "Authorization: Basic %s"\n' "$(printf '%s:%s' "$GITHUB_ACTOR" "$GH_TOKEN" | base64 | tr -d '\n')" >"$work/registry-auth.config"
   chmod 600 "$work/registry-auth.config"
   curl --fail --config "$work/registry-auth.config" --max-time 30 --max-filesize 1048576 --output "$work/registry-token.json" || fail 'registry authentication request'

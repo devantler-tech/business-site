@@ -11,7 +11,9 @@ fail() {
 [[ "${GITHUB_REPOSITORY:-}" == "$repo" && "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main && "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || fail 'manual main source'
 [[ "${IDENTITY_CI_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && -d "${RUNNER_TEMP:-}" && -x "$RUNNER_TEMP/identity-release" && -n "${GITHUB_ENV:-}" ]] || fail 'original run and trusted reader'
 readonly caller=$GITHUB_SHA run=$IDENTITY_CI_RUN_ID
-[[ "$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" -ge 8388608 ]] || fail 'original carrier verification needs 8 GiB disposable disk headroom'
+disk_kib="$(df -Pk "$RUNNER_TEMP" | awk 'NR==2 {print $4}')" || fail 'disk capacity observation'
+[[ "$disk_kib" =~ ^[0-9]{1,15}$ ]] || fail 'bounded decimal disk capacity'
+(( 10#$disk_kib >= 8388608 )) || fail 'original carrier verification needs 8 GiB disposable disk headroom'
 work="$(mktemp -d "$RUNNER_TEMP/identity-forge.XXXXXX")"
 complete=false
 trap 'if [[ "$complete" != true ]]; then rm -rf "$work"; fi' EXIT

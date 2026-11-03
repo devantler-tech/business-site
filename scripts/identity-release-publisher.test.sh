@@ -112,6 +112,8 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
  printf 200
 elif [[ -n "$config" ]];then
+ expected_basic="$(printf '%s:%s' devantler "$GH_TOKEN" | base64 | tr -d '\n')"
+ grep -Fxq "header = \"Authorization: Basic $expected_basic\"" "$config" || exit 93
  if [[ "$KIND" == registry-token-error ]];then exit 22;fi
  if [[ "$KIND" == bad-bearer ]];then
   printf '{"token":"safe\\nInjected: value"}\n' >"$output"
@@ -125,7 +127,7 @@ cat >"$scratch/bin/docker" <<'FIXTURE'
 set -euo pipefail
 printf 'docker %s\n' "$*" >>"$FIXTURE/calls"
 case "$1" in
- login) cat >/dev/null;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
+ login) cat >"$FIXTURE/login-stdin";cmp "$FIXTURE/login-stdin" <(printf '%s' "$GH_TOKEN") || exit 93;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
   # All three anonymous source reads must finish before any image upload.
   [[ "$(grep -c 'curl https://github.com/' "$FIXTURE/calls")" == 3 ]] || exit 96
   if [[ "$2" == ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.1 && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
@@ -166,9 +168,9 @@ case "$1" in
 FIXTURE
 chmod +x "$scratch/bin/"{gh,curl,docker,cosign}
 successful() {
-  [[ "$1" == valid || "$1" == draft-resume || "$1" == source-only-resume || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-source-only-resume || "$1" == boundary-inventory || "$1" == null-local-digests || "$1" == foreign-version-race || "$1" == foreign-version-present ]]
+  [[ "$1" == valid || "$1" == credential-punctuation || "$1" == draft-resume || "$1" == source-only-resume || "$1" == paged-fresh || "$1" == paged-resume || "$1" == paged-source-only-resume || "$1" == boundary-inventory || "$1" == null-local-digests || "$1" == foreign-version-race || "$1" == foreign-version-present ]]
 }
-for kind in valid draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory source-only-resume paged-source-only-resume registry-layer-conflict pushed-layer-conflict pushed-digest-missing pushed-digest-duplicate preexisting-local-digest null-local-digests false-local-digests multi-local-digests foreign-version-race foreign-version-present; do
+for kind in valid credential-punctuation credential-empty credential-linebreak credential-control credential-oversize draft-resume published-retry draft-conflict mutable-release tag-conflict source-corrupt registry-conflict registry-error attestation-conflict bad-retention bad-profile bad-authority bad-bearer paged-fresh paged-resume paged-retry paged-duplicate malformed-inventory failed-inventory oversized-inventory registry-token-error registry-login-error registry-transport-error registry-late-conflict registry-oci-index registry-docker-index boundary-inventory source-only-resume paged-source-only-resume registry-layer-conflict pushed-layer-conflict pushed-digest-missing pushed-digest-duplicate preexisting-local-digest null-local-digests false-local-digests multi-local-digests foreign-version-race foreign-version-present; do
   fixture="$scratch/$kind"
   mkdir -p "$fixture/runner/identity-forge.fixture/restored/native/"{zitadel-handoff,zitadel-offline-replay,zitadel-base-source} "$fixture/runner/identity-forge.fixture/saved"
   work="$fixture/runner/identity-forge.fixture"
@@ -211,7 +213,15 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
   fi
   : >"$fixture/calls"
   if [[ "$kind" == foreign-version-present ]];then touch "$fixture/foreign-version";fi
-  if env PATH="$scratch/bin:$PATH" FIXTURE="$fixture" KIND="$kind" RUNNER_TEMP="$fixture/runner" IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=publish IDENTITY_CI_RUN_ID=123 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_ACTOR=devantler GH_TOKEN=fixture bash "$root/scripts/publish-identity-release.sh" >"$fixture/stdout" 2>"$fixture/stderr"; then
+  credential=fixture
+  case "$kind" in
+    credential-punctuation) credential="fictional.header.signature+slash/with=padding:and-\$symbols \"";;
+    credential-empty) credential='';;
+    credential-linebreak) credential=$'fictional\r\nInjected: value';;
+    credential-control) credential=$'fictional\177';;
+    credential-oversize) printf -v credential '%8193s' x;;
+  esac
+  if env PATH="$scratch/bin:$PATH" FIXTURE="$fixture" KIND="$kind" RUNNER_TEMP="$fixture/runner" IDENTITY_RELEASE_WORK="$work" IDENTITY_RELEASE_MODE=publish IDENTITY_CI_RUN_ID=123 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_REPOSITORY=devantler-tech/business-site GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_ACTOR=devantler GH_TOKEN="$credential" bash "$root/scripts/publish-identity-release.sh" >"$fixture/stdout" 2>"$fixture/stderr"; then
     successful "$kind" || {
       printf 'publisher accepted %s\n' "$kind" >&2
       exit 1
@@ -237,6 +247,9 @@ for kind in valid draft-resume published-retry draft-conflict mutable-release ta
       exit 1
     fi
     test ! -f "$fixture/runner/identity-publication.json"
+    if [[ "$kind" == credential-* ]];then
+      if grep -Eq '^curl |^docker (login|push) |^gh release (create|upload|edit) ' "$fixture/calls";then echo 'invalid credential reached registry or release writes' >&2;exit 1;fi
+    fi
     if [[ "$kind" == bad-retention || "$kind" == bad-profile || "$kind" == bad-authority ]]; then test ! -s "$fixture/calls"; fi
     if [[ "$kind" == registry-conflict || "$kind" == registry-error || "$kind" == bad-bearer || "$kind" == registry-token-error || "$kind" == registry-login-error || "$kind" == registry-transport-error || "$kind" == registry-oci-index || "$kind" == registry-docker-index || "$kind" == published-retry || "$kind" == paged-retry || "$kind" == registry-layer-conflict || "$kind" == preexisting-local-digest || "$kind" == false-local-digests || "$kind" == multi-local-digests ]];then
       if grep -Eq '^gh release (create|upload|edit) ' "$fixture/calls";then echo "registry preflight failure mutated source: $kind" >&2;exit 1;fi
