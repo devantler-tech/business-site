@@ -37,8 +37,8 @@ func TestMaterialProjectionContainerArchive(t *testing.T) {
 // TestMaterialProjectionContainer executes the actual packaged non-root application on Linux mounts.
 func TestMaterialProjectionContainer(t *testing.T) {
 	image := os.Getenv("PORTAL_IDENTITY_CONTAINER_IMAGE")
-	if image != "business-site:test" && image != "business-site:production-test" {
-		t.Fatal("select a locally built source-test image")
+	if !projectionContainerImageAllowed(image) {
+		t.Fatal("select a source-test image or the verified publication digest")
 	}
 	for _, phase := range []string{"init", "setup", "serve"} {
 		input, _ := materialProjectionFixture(t, phase)
@@ -100,6 +100,37 @@ func TestMaterialProjectionContainer(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+func projectionContainerImageAllowed(image string) bool {
+	if image == "business-site:test" || image == "business-site:production-test" {
+		return true
+	}
+	digest, published := strings.CutPrefix(image, "ghcr.io/devantler-tech/business-site@sha256:")
+	return published && len(digest) == 64 && strings.Trim(digest, "0123456789abcdef") == ""
+}
+
+// TestMaterialProjectionContainerImage admits the publisher's exact digest shape without accepting mutable tags.
+func TestMaterialProjectionContainerImage(t *testing.T) {
+	const digest = "ghcr.io/devantler-tech/business-site@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	for _, image := range []string{"business-site:test", "business-site:production-test", digest} {
+		if !projectionContainerImageAllowed(image) {
+			t.Errorf("refused an actual smoke caller image: %q", image)
+		}
+	}
+	for _, image := range []string{
+		"", "business-site:latest", "ghcr.io/devantler-tech/business-site:staging-123-2",
+		strings.Replace(digest, "business-site@", "business-site-other@", 1),
+		strings.Replace(digest, "devantler-tech/", "another-owner/", 1),
+		strings.Replace(digest, "ghcr.io/", "ghcr.io.example/", 1),
+		digest[:len(digest)-1], digest + "0", digest + "\n",
+		strings.Replace(digest, "abcdef", "ABCDEF", 1),
+		strings.Replace(digest, "f", "g", 1),
+	} {
+		if projectionContainerImageAllowed(image) {
+			t.Errorf("accepted an unbound or malformed image: %q", image)
 		}
 	}
 }

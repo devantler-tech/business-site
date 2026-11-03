@@ -278,6 +278,13 @@ function assertPublisher(w) {
   const verify = steps.findIndex(s => s.run?.includes('cosign verify '));
   const publishedSmoke = steps.findIndex(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE" runtime-production-dist'));
   assert.ok(exercise >= 0 && publish > exercise && verify > publish && publishedSmoke > verify);
+  const setupGo = steps.findIndex(s => s.uses?.startsWith('actions/setup-go@'));
+  assert.ok(setupGo >= 0 && setupGo < exercise, 'Publication must provision the module toolchain before its Go-backed image checks.');
+  assert.match(steps[setupGo].uses, /^actions\/setup-go@[0-9a-f]{40}$/);
+  assert.equal(steps[setupGo].with['go-version-file'], 'server/go.mod');
+  assert.equal(steps[setupGo].with['cache-dependency-path'], 'server/go.sum');
+  assert.equal(steps[setupGo].if, undefined);
+  assert.ok(steps[setupGo]['continue-on-error'] == null || steps[setupGo]['continue-on-error'] === false);
   assert.match(steps[publish].run, /docker tag business-site:production-test/);
   assert.match(steps[exercise].run, /node scripts\/container-smoke\.test\.mjs business-site:production-test runtime-production-dist/);
   for (const i of [exercise, publish, verify, publishedSmoke]) {
@@ -297,6 +304,11 @@ test('publication accepts only successful same-repository main push CI and tests
     w => { delete w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/download-artifact@')).with['run-id']; },
     w => { w.jobs['publish-container'].steps.find(s => s.run?.includes('cosign verify '))['continue-on-error'] = true; },
     w => { w.jobs['publish-container'].steps.find(s => s.run?.includes('node scripts/container-smoke.test.mjs "$PUBLISHED_IMAGE"')).if = 'false'; },
+    w => { w.jobs['publish-container'].steps = w.jobs['publish-container'].steps.filter(s => !s.uses?.startsWith('actions/setup-go@')); },
+    w => { w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/setup-go@')).with['go-version-file'] = 'other/go.mod'; },
+    w => { w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/setup-go@')).if = 'false'; },
+    w => { w.jobs['publish-container'].steps.find(s => s.uses?.startsWith('actions/setup-go@'))['continue-on-error'] = true; },
+    w => { const steps = w.jobs['publish-container'].steps; const index = steps.findIndex(s => s.uses?.startsWith('actions/setup-go@')); steps.push(steps.splice(index, 1)[0]); },
   ]) {
     const changed = structuredClone(w); mutate(changed); assert.throws(() => assertPublisher(changed));
   }
