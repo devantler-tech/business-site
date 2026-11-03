@@ -1,7 +1,6 @@
 package customeridentity
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,17 +76,7 @@ func TestMaterializeProjectionPackagedRuntime(t *testing.T) {
 			if err := Materialize(phase, ordinary, comparison); err != nil {
 				t.Fatal(err)
 			}
-			entries, err := os.ReadDir(comparison)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				want, we := os.ReadFile(filepath.Join(comparison, entry.Name()))
-				got, ge := os.ReadFile(filepath.Join(output, entry.Name()))
-				if we != nil || ge != nil || !bytes.Equal(want, got) {
-					t.Fatal("projected output differs from ordinary native producer")
-				}
-			}
+			materialCompareOutput(t, comparison, output)
 		})
 	}
 	t.Run("mixed inputs", func(t *testing.T) {

@@ -14,34 +14,34 @@ func TestMaterialProjectionRefusals(t *testing.T) {
 		name   string
 		mutate func(*testing.T, string, string)
 	}{
-		{"missing key", func(t *testing.T, p, g string) { projectionMust(t, os.Remove(filepath.Join(g, "database-password"))) }},
-		{"extra key", func(t *testing.T, p, g string) { materialWrite(t, g, "extra-secret", []byte("fictional")) }},
-		{"extra mount member", func(t *testing.T, p, g string) { materialWrite(t, p, "extra-secret", []byte("fictional")) }},
-		{"world readable", func(t *testing.T, p, g string) {
+		{"missing key", func(t *testing.T, _, g string) { projectionMust(t, os.Remove(filepath.Join(g, "database-password"))) }},
+		{"extra key", func(t *testing.T, _, g string) { materialWrite(t, g, "extra-secret", []byte("fictional")) }},
+		{"extra mount member", func(t *testing.T, p, _ string) { materialWrite(t, p, "extra-secret", []byte("fictional")) }},
+		{"world readable", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0644))
 		}},
-		{"group writable", func(t *testing.T, p, g string) {
+		{"group writable", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0660))
 		}},
-		{"executable", func(t *testing.T, p, g string) {
+		{"executable", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0700))
 		}},
-		{"empty", func(t *testing.T, p, g string) {
+		{"empty", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0600))
 			materialWrite(t, g, "database-password", nil)
 		}},
-		{"oversized", func(t *testing.T, p, g string) {
+		{"oversized", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0600))
 			materialWrite(t, g, "database-password", []byte(strings.Repeat("x", 65537)))
 		}},
 		{"hard link", func(t *testing.T, p, g string) {
 			projectionMust(t, os.Link(filepath.Join(g, "database-password"), filepath.Join(filepath.Dir(p), "outside-link")))
 		}},
-		{"file symlink", func(t *testing.T, p, g string) {
+		{"file symlink", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Remove(filepath.Join(g, "database-password")))
 			projectionMust(t, os.Symlink("settings.json", filepath.Join(g, "database-password")))
 		}},
-		{"fifo", func(t *testing.T, p, g string) {
+		{"fifo", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Remove(filepath.Join(g, "database-password")))
 			projectionMust(t, syscall.Mkfifo(filepath.Join(g, "database-password"), 0600))
 		}},
@@ -53,8 +53,8 @@ func TestMaterialProjectionRefusals(t *testing.T) {
 			projectionMust(t, os.Remove(filepath.Join(p, "..data")))
 			projectionMust(t, os.Symlink(g, filepath.Join(p, "..data")))
 		}},
-		{"writable directory", func(t *testing.T, p, g string) { projectionMust(t, os.Chmod(g, 0770)) }},
-		{"wrong read group", func(t *testing.T, p, g string) {
+		{"writable directory", func(t *testing.T, _, g string) { projectionMust(t, os.Chmod(g, 0770)) }},
+		{"other-user-only read", func(t *testing.T, _, g string) {
 			projectionMust(t, os.Chmod(filepath.Join(g, "database-password"), 0004))
 		}},
 	}
