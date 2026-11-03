@@ -75,7 +75,7 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 				t.Fatalf("refusal %d reserved a usable output", index)
 			}
 		}
-		// Real symlinked secret projections still require their own future adapter.
+		// Ordinary owner-file inputs must refuse symlinks even with a separate projection transport.
 		outside := filepath.Join(filepath.Dir(input), "actual-password")
 		if err := os.Rename(filepath.Join(input, "database-password"), outside); err != nil {
 			t.Fatal(err)
