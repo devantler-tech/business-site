@@ -33,7 +33,7 @@ func (command *identityPhaseOptions) selected(seen map[string]int) bool {
 	return seen["identity-materialize"] != 0 || seen["identity-phase"] != 0 || seen["identity-inputs"] != 0 || seen["identity-output"] != 0
 }
 
-// run rejects mixed authority before any file access, then uses the maintained native materializer.
+// run rejects mixed authority before any file access, then uses the maintained native producer.
 func (command *identityPhaseOptions) run(ctx context.Context, options *flag.FlagSet, seen map[string]int, output io.Writer) error {
 	allowed := command.enabled && command.inputs != "" && command.output != "" && validPackageIdentity() && ctx.Err() == nil
 	for _, name := range []string{"identity-materialize", "identity-phase", "identity-inputs", "identity-output"} {
