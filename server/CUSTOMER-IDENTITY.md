@@ -66,7 +66,7 @@ The three options must appear exactly in that order; accepted phases are `init`,
 `setup` and `serve`. Inputs use a physically resolved absolute directory, owned
 by the invoking user with mode 0700. Every member is a bounded regular file with
 mode 0600, the same owner and one hard link. Symlinks and extra members fail.
-This is an owner-file transport, not support for Kubernetes secret projections.
+The standalone command accepts only this owner-file transport.
 
 The verified combined application also exposes the same maintained producer as an
 exclusive one-shot command. A deployment job can use its packaged executable without
@@ -82,8 +82,24 @@ An ordinary unbound build and a cancelled invocation fail before preparation.
 The command reads no public artifact, opens no listener and performs no database,
 network or service operation. Success prints only `customer identity phase prepared`;
 errors never reflect supplied paths or credentials. The output contract below is
-unchanged. This command adds neither a projected-secret transport nor native API
-provisioning; those remain required integration work in #305 before runtime release.
+unchanged. Native API provisioning remains required integration work in #305.
+
+Replace `--identity-inputs` with `--identity-projection` to select the separate
+atomic-projection transport. Never supply both options. The process must be non-root
+with a nonzero primary group. Mount a flat, phase-specific projection with exactly
+the required keys, their `..data/name` aliases, one timestamped generation and
+its `..data` link. Root or the invoking user may own the entries; file group reads
+require the process primary group. Other-user access, writable groups, executable
+files, hard links and arbitrary link targets fail. Directories may retain the
+volume writer set-group-ID bit and traversal permissions but cannot be group/other writable.
+
+The producer pins one generation and rechecks complete membership, identities and
+bytes around output creation. A rotation or incomplete writer transition fails;
+retry the one-shot job from a fresh invocation. No input permissions are changed
+and no intermediate credential directory is created. Outputs remain new, owner-only
+phase documents. These are observed snapshots, not a lock against later rotations.
+The transport tests use fictional native-layout projections; actual Kubernetes
+controller, service, provisioning and login acceptance remain under #305/#302.
 
 All phases require `settings.json`, `database-password` and `database-ca.pem`.
 The JSON contains exactly these string fields:

@@ -46,10 +46,14 @@ organization registration, supported embedded login selection, exact HTTPS
 callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
 semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
 The combined executable's exclusive `--identity-materialize` command reuses that
-same owner-file phase producer. Require a valid package identity and all four
-identity options exactly once; refuse every web, disclosure, inspection or migration
-option before private I/O. It never starts services, accepts projected secrets,
-provisions an API client or activates access. Keep diagnostics and success output
+same owner-file phase producer. Require a valid package identity, exactly one input
+transport and all four selected identity options exactly once; refuse every web,
+disclosure, inspection or migration option before private I/O. Its separate
+`--identity-projection` input pins and rechecks one closed atomic
+projection generation, with non-root root/current-user ownership and primary-group
+read admission. Never mix it with ordinary `--identity-inputs`; ordinary owner-file
+refusals remain unchanged. It never starts services, provisions an API client or
+activates access. Keep diagnostics and success output
 free of private values, and retain compiled-command controls for all three phases.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
 Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
