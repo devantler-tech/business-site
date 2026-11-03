@@ -11,6 +11,7 @@ cat >"$scratch/bin/df" <<'FIXTURE'
 set -euo pipefail
 [[ "$#" == 2 && "$1" == -Pk && "$2" == "$RUNNER_TEMP" ]] || exit 97
 printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\nfixture 16777216 0 %s 0%% /fixture\n' "$DISK_KIB"
+exit "${DISK_EXIT:-0}"
 FIXTURE
 source_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 jq -n --arg source "$source_sha" '{id:123,run_attempt:2,repository:{full_name:"devantler-tech/business-site"},head_repository:{full_name:"devantler-tech/business-site"},head_sha:$source,head_branch:"main",path:".github/workflows/ci.yaml",event:"push",status:"completed",conclusion:"success"}' >"$scratch/run-good.json"
@@ -73,7 +74,13 @@ admit || {
 }
 test "$(wc -l <"$scratch/env" | tr -d ' ')" == 1
 test "$(wc -l <"$scratch/reader-calls" | tr -d ' ')" == 1
-for available in 0 8388607 invalid; do
+for available in 08388608 8388609; do
+  reset_fixture
+  admit "DISK_KIB=$available"
+  test "$(wc -l <"$scratch/env" | tr -d ' ')" == 1
+  test "$(wc -l <"$scratch/reader-calls" | tr -d ' ')" == 1
+done
+for available in 0 8388607 invalid 8388608+0 0x800000 8388608.0 9223372036854775808 +8388608 ''; do
   reset_fixture
   refuse "DISK_KIB=$available"
   test ! -s "$scratch/calls"
@@ -83,6 +90,11 @@ for available in 0 8388607 invalid; do
     grep -Fq 'original carrier verification needs 8 GiB disposable disk headroom' "$scratch/stderr"
   fi
 done
+reset_fixture
+refuse DISK_EXIT=1
+test ! -s "$scratch/calls"
+test ! -s "$scratch/reader-calls"
+test ! -f "$scratch/downloaded"
 for context in GITHUB_EVENT_NAME=pull_request GITHUB_REF=refs/heads/other GITHUB_REPOSITORY=other/site GITHUB_SHA=main IDENTITY_CI_RUN_ID=0; do
   reset_fixture
   refuse "$context"
@@ -120,4 +132,4 @@ refuse
 reset_fixture
 printf '{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}\n' >"$scratch/main-after.json"
 refuse
-printf 'identity forge: PASS — actual bounded API admission, disk headroom and 31 refusal controls\n'
+printf 'identity forge: PASS — actual bounded API admission, disk headroom and 38 refusal controls\n'
