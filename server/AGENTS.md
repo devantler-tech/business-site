@@ -45,6 +45,12 @@ documents with no network, user, secret-value or activation operations. Read
 organization registration, supported embedded login selection, exact HTTPS
 callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
 semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
+The combined executable's exclusive `--identity-materialize` command reuses that
+same owner-file phase producer. Require a valid package identity and all four
+identity options exactly once; refuse every web, disclosure, inspection or migration
+option before private I/O. It never starts services, accepts projected secrets,
+provisions an API client or activates access. Keep diagnostics and success output
+free of private values, and retain compiled-command controls for all three phases.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
 Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
 native navigation document,
