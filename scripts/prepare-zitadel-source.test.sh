@@ -33,10 +33,13 @@ if [[ "$#" -eq 1 ]]; then
   git clone --shared --no-checkout -- "$1" "$scratch/upstream" >"$scratch/clone.log" 2>&1
 else
   test "$#" -eq 0
-  git clone --filter=blob:none --no-checkout --depth=1 --branch v4.20.0 \
+  git clone --no-checkout --depth=1 --branch v4.20.0 \
     https://github.com/zitadel/zitadel.git "$scratch/upstream" >"$scratch/clone.log" 2>&1
 fi
-# Hydrate immutable objects through the independent archive, not another full copy.
+# Require complete fixture objects before per-file readers can trigger network fetches.
+GIT_NO_LAZY_FETCH=1 GIT_ALLOW_PROTOCOL='' git -C "$scratch/upstream" \
+  --no-replace-objects rev-list --objects --missing=error "$pin" >"$scratch/objects"
+# Preserve an independent immutable archive without creating another checkout.
 # A sparse working tree also proves that preparation never reads checkout bytes.
 git -C "$scratch/upstream" read-tree "$pin"
 bash "$root/scripts/zitadel-provider-icons.test.sh" "$scratch/upstream"
