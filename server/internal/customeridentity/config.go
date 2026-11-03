@@ -42,27 +42,7 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 		return nil, errors.New("customer broker, provider and portal require separate origins")
 	}
 	callback := inputs.DexIssuer + "/callback"
-	provider := map[string]any{
-		"ExternalDomain": idp.Host, "ExternalPort": 443, "ExternalSecure": true,
-		"TLS": map[string]any{"Enabled": true, "CertPath": "/run/customer-zitadel/tls.crt", "KeyPath": "/run/customer-zitadel/tls.key"},
-		"DefaultInstance": map[string]any{
-			"LoginPolicy": map[string]any{
-				"AllowUsernamePassword": true, "AllowRegister": false, "AllowExternalIDP": false,
-				"ForceMFA": true, "ForceMFALocalOnly": false, "HidePasswordReset": false,
-				"IgnoreUnknownUsernames": true, "AllowDomainDiscovery": false, "DisableLoginWithPhone": true,
-				"PasswordlessType": 0, "PasswordCheckLifetime": "15m", "ExternalLoginCheckLifetime": "15m",
-				"MfaInitSkipLifetime": "0s", "SecondFactorCheckLifetime": "15m", "MultiFactorCheckLifetime": "15m",
-				"DefaultRedirectURI": "https://" + portal.Host + "/portal",
-			},
-			"Restrictions":             map[string]bool{"DisallowPublicOrgRegistration": true},
-			"PasswordComplexityPolicy": map[string]int{"MinLength": 14},
-			"LockoutPolicy":            map[string]any{"MaxPasswordAttempts": 5, "MaxOTPAttempts": 5, "ShouldShowLockoutFailure": false},
-			"Features":                 map[string]any{"LoginV2": map[string]bool{"Required": false}},
-			"OIDCSettings": map[string]string{
-				"AccessTokenLifetime": "5m", "IdTokenLifetime": "5m", "RefreshTokenIdleExpiration": "15m", "RefreshTokenExpiration": "8h",
-			},
-		},
-	}
+	provider := nativeProvider(idp, portal)
 	// Native setup otherwise merges a well-known default human administrator.
 	// Source preparation cannot supply private bootstrap authority or create an instance.
 	steps := map[string]any{"FirstInstance": map[string]bool{"Skip": true}}
@@ -108,6 +88,31 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 		"logger": map[string]any{"level": "warn", "format": "json", "excludeFields": []string{"email", "username", "preferred_username", "groups"}},
 	}
 	return json.MarshalIndent(map[string]any{"zitadelConfig": provider, "zitadelSteps": steps, "zitadelApplication": application, "dexConfig": dex}, "", "  ")
+}
+
+// nativeProvider shares the exact dormant and private native provider policies.
+func nativeProvider(idp, portal *url.URL) map[string]any {
+	return map[string]any{
+		"ExternalDomain": idp.Host, "ExternalPort": 443, "ExternalSecure": true,
+		"TLS": map[string]any{"Enabled": true, "CertPath": "/run/customer-zitadel/tls.crt", "KeyPath": "/run/customer-zitadel/tls.key"},
+		"DefaultInstance": map[string]any{
+			"LoginPolicy": map[string]any{
+				"AllowUsernamePassword": true, "AllowRegister": false, "AllowExternalIDP": false,
+				"ForceMFA": true, "ForceMFALocalOnly": false, "HidePasswordReset": false,
+				"IgnoreUnknownUsernames": true, "AllowDomainDiscovery": false, "DisableLoginWithPhone": true,
+				"PasswordlessType": 0, "PasswordCheckLifetime": "15m", "ExternalLoginCheckLifetime": "15m",
+				"MfaInitSkipLifetime": "0s", "SecondFactorCheckLifetime": "15m", "MultiFactorCheckLifetime": "15m",
+				"DefaultRedirectURI": "https://" + portal.Host + "/portal",
+			},
+			"Restrictions":             map[string]bool{"DisallowPublicOrgRegistration": true},
+			"PasswordComplexityPolicy": map[string]int{"MinLength": 14},
+			"LockoutPolicy":            map[string]any{"MaxPasswordAttempts": 5, "MaxOTPAttempts": 5, "ShouldShowLockoutFailure": false},
+			"Features":                 map[string]any{"LoginV2": map[string]bool{"Required": false}},
+			"OIDCSettings": map[string]string{
+				"AccessTokenLifetime": "5m", "IdTokenLifetime": "5m", "RefreshTokenIdleExpiration": "15m", "RefreshTokenExpiration": "8h",
+			},
+		},
+	}
 }
 
 // endpoint admits only the exact HTTPS spelling expected by one identity hop.
