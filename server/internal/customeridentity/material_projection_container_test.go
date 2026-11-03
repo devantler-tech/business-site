@@ -16,6 +16,24 @@ import (
 	"time"
 )
 
+// TestMaterialProjectionContainerArchive retains a real child directory's metadata at Docker extraction.
+func TestMaterialProjectionContainerArchive(t *testing.T) {
+	for _, phase := range []string{"init", "setup", "serve"} {
+		t.Run(phase, func(t *testing.T) {
+			input, _ := materialProjectionFixture(t, phase)
+			projectionMust(t, os.Chmod(input, 0777))
+			data := projectionInputArchive(t, input)
+			header, err := tar.NewReader(bytes.NewReader(data)).Next()
+			projectionMust(t, err)
+			// Extraction deliberately ignores metadata on an existing destination's dot entry.
+			if header.Name != "input" || header.Typeflag != tar.TypeDir || header.Mode != 0777 || header.Uid != 0 || header.Gid != 65532 {
+				t.Fatal("archive lacks the independently owned projection directory")
+			}
+			projectionAssertCopied(t, input, data)
+		})
+	}
+}
+
 // TestMaterialProjectionContainer executes the actual packaged non-root application on Linux mounts.
 func TestMaterialProjectionContainer(t *testing.T) {
 	image := os.Getenv("PORTAL_IDENTITY_CONTAINER_IMAGE")
@@ -54,7 +72,7 @@ func TestMaterialProjectionContainer(t *testing.T) {
 		if _, err := projectionDocker(archive, "cp", "-", carrier+":/projection"); err != nil {
 			t.Fatal("identity fixture copy failed")
 		}
-		actual, err := projectionDocker(nil, "cp", carrier+":/projection", "-")
+		actual, err := projectionDocker(nil, "cp", carrier+":/projection/input", "-")
 		projectionMust(t, err)
 		projectionAssertCopied(t, input, actual)
 		if _, err := projectionDocker(nil, "rm", carrier); err != nil {
@@ -69,7 +87,7 @@ func TestMaterialProjectionContainer(t *testing.T) {
 				mount += ",readonly"
 			}
 			t.Run(phase+"/"+mode, func(t *testing.T) {
-				args := []string{"run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=256m", "--cpus=1", "--mount", mount, "--tmpfs", "/output:rw,noexec,nosuid,nodev,size=1m,uid=65532,gid=65532,mode=0700", image, "--identity-materialize", "--identity-phase", phase, "--identity-projection", "/projection", "--identity-output", "/output/phase"}
+				args := []string{"run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=256m", "--cpus=1", "--mount", mount, "--tmpfs", "/output:rw,noexec,nosuid,nodev,size=1m,uid=65532,gid=65532,mode=0700", image, "--identity-materialize", "--identity-phase", phase, "--identity-projection", "/projection/input", "--identity-output", "/output/phase"}
 				output, err := projectionDocker(nil, args...)
 				if readOnly {
 					if err != nil || string(output) != "customer identity phase prepared\n" {
@@ -114,6 +132,8 @@ func projectionInputArchive(t *testing.T, input string) []byte {
 		if err != nil {
 			return err
 		}
+		// A named child is created with these attributes; Docker ignores an existing dot root.
+		header.Name = filepath.Join("input", header.Name)
 		header.Uid, header.Gid = 0, 65532
 		if err := writer.WriteHeader(header); err != nil {
 			return err
@@ -156,8 +176,11 @@ func projectionAssertCopied(t *testing.T, input string, data []byte) {
 			break
 		}
 		projectionMust(t, err)
-		name := strings.TrimSuffix(strings.TrimPrefix(header.Name, "projection/"), "/")
-		if name == "projection" || name == "" {
+		if header.Name != "input" && header.Name != "input/" && !strings.HasPrefix(header.Name, "input/") {
+			t.Fatal("copied fixture member is outside its named root")
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(header.Name, "input/"), "/")
+		if name == "input" || name == "" {
 			name = "."
 		}
 		if observed[name] {
