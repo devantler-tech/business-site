@@ -118,6 +118,7 @@
     "contactintegration",
     "customeridentity",
     "ZITADEL",
+    "masterkeyFile",
     "Authelia",
     "authentik",
     "Passwordless",

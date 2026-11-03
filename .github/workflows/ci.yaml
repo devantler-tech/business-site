@@ -1117,7 +1117,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@d8b5d0e9429cebf12907e0d4cb448433d3108e4b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@da5f0839b418626a8a0b69df1f04ba931a38e371 # v19.1.0
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -1137,7 +1137,8 @@ jobs:
     name: CI - Required Checks
     runs-on: ubuntu-latest
     if: always()
-    permissions: {}
+    permissions:
+      actions: read
     needs:
       - changes
       - build-docs
@@ -1155,8 +1156,9 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@d8b5d0e9429cebf12907e0d4cb448433d3108e4b
+        uses: devantler-tech/.github/actions/aggregate-job-checks@da5f0839b418626a8a0b69df1f04ba931a38e371 # v19.1.0
         with:
+          check-workflow-startup: "true"
           job-results: >-
             ${{ needs.changes.result }}
             ${{ needs.build-docs.result }}

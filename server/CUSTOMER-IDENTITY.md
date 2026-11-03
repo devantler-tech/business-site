@@ -50,6 +50,82 @@ substitution. Never commit expanded configurations, invite links or account data
 The ZITADEL configuration has no database, master key, mail or bootstrap credential.
 It is deliberately insufficient to create a usable identity instance alone.
 
+### Private native phase preparation
+
+The separate `cmd/customer-identity-materialize` command prepares one private
+ZITADEL phase. It does not execute ZITADEL, contact a database, configure mail,
+provision a client, build a deployment package or activate the portal. With no
+arguments it reads and writes nothing. Ordinary builds do not invoke it.
+
+```sh
+GOTOOLCHAIN=local go run ./cmd/customer-identity-materialize \
+  --phase serve --inputs /absolute/private/inputs --output /absolute/private/new-output
+```
+
+The three options must appear exactly in that order; accepted phases are `init`,
+`setup` and `serve`. Inputs use a physically resolved absolute directory, owned
+by the invoking user with mode 0700. Every member is a bounded regular file with
+mode 0600, the same owner and one hard link. Symlinks and extra members fail.
+This is an owner-file transport, not support for Kubernetes secret projections.
+
+All phases require `settings.json`, `database-password` and `database-ca.pem`.
+The JSON contains exactly these string fields:
+
+- `schemaVersion`: `customer-zitadel-private-v1`.
+- `dexIssuer`, `zitadelIssuer`, `portalCallback`: the separately approved canonical
+  HTTPS destinations accepted by the dormant preparer.
+- `databaseHost`: a canonical DNS hostname without a port, scheme or path.
+- `databaseName`, `databaseUser`: separate lowercase native SQL identifiers.
+
+Initialization additionally requires `databaseAdminUser` in settings and the
+independent `database-admin-password` file. The administrator identity and password
+must differ from the application identity and password. It receives no master key,
+human bootstrap credential or service private key.
+
+Setup and ordinary service additionally require `master.key` (exactly 32 raw
+bytes, never a complete unresolved environment reference), `tls.crt`, `tls.key`
+and `service-ca.pem`. The current certificate chain
+must validate for the exact ZITADEL issuer hostname with the supplied service CA,
+and the private key must match. Database and service trust remain separate inputs.
+Passwords are opaque valid UTF-8 of 32–1024 bytes, without surrounding whitespace,
+line breaks or unresolved environment references. No input value is expanded.
+
+Setup alone also requires `bootstrap-password` and these additional string
+settings: `instanceName`, `organizationName`, `humanUsername`, `humanFirstName`,
+`humanLastName`, `humanEmail`. Its fresh human has an unverified email and must
+change the initial password. That password is limited to 32–72 bytes and requires
+the selected native ASCII lowercase, uppercase and digit classes, plus a character
+outside ASCII letters/digits. This retains the selected bcrypt input limit without
+applying it to database passwords. Ordinary service refuses every bootstrap/admin input.
+No OIDC application credential is needed before supported API provisioning exists.
+
+All input fields, certificate material and stable file snapshots are checked
+before reserving a new mode-0700 output. Native files are mode 0600, use only fixed
+consumer paths under `/run/customer-zitadel/`, and share the dormant preparer's
+complete provider policies. Mount only a successfully completed output for its
+selected phase. The native consumer arguments are:
+
+```text
+--config /run/customer-zitadel/config.json init
+--config /run/customer-zitadel/config.json setup --steps /run/customer-zitadel/steps.json --masterkeyFile /run/customer-zitadel/master.key --tlsMode enabled
+--config /run/customer-zitadel/config.json start --masterkeyFile /run/customer-zitadel/master.key --tlsMode enabled
+```
+
+Initialization emits configuration and the database CA. Setup adds explicit steps,
+master key and the service TLS pair. Ordinary service contains no bootstrap steps
+or administrator credentials. Do not mount an earlier phase's directory into a
+later phase. No environment override or extra native argument is approved by this
+offline preparation. Inputs may not contain the output directory.
+
+A refusal prints only a fixed diagnostic. An occupied output is never modified.
+If a write fails, cleanup removes only file identities created through the retained
+output descriptor; an empty failed reservation is kept rather than deleting a
+possibly replaced directory. A private reservation has one writer; no protection
+against arbitrary concurrent same-user edits is promised. Never consume a failed or partial output. Offline
+certificate/configuration checks do not prove a database handshake, persisted
+policies, native execution, mail, customer authentication or deployment. Those
+remain the separate runtime and acceptance work in #305/#302.
+
 Actual initial provisioning needs a separate private steps document with explicit
 fresh administrator inputs and `Skip=false`. Omitting `Human` does not prevent
 upstream default account creation. Verify the persisted policy/client state before
