@@ -19,7 +19,7 @@ export const load = ({ params }: { params: { locale?: string } }) => {
       offers: business.offers.map((offer, i) => ({ ...offer, ...t.offerCopy[i] })),
       otherRequest: t.otherRequest,
       vatMarker: business.vatMarker(locale),
-      priceNote: t.priceNote, hostingTitle: t.hostingTitle, hostingText: t.hostingText, fitTitle: t.fitTitle, fitText: t.fitText,
+      priceNote: t.priceNote, hostingTitle: t.hostingTitle, hostingText: t.hostingText, hostingLocation: t.hostingLocation, fitTitle: t.fitTitle, fitText: t.fitText,
       qualityEyebrow: c.qualityEyebrow, qualityTitle: c.qualityTitle, qualityIntro: c.qualityIntro,
       quality: c.quality, qualityScope: c.qualityScope,
       work: professionalWork[locale], workPreviewAlt: t.workPreviewAlt, workPreviewAction: t.workPreviewAction,

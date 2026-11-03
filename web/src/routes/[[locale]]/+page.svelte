@@ -56,7 +56,7 @@
         <p class="boundary">{t.otherRequest.boundary}</p><a class="text-link" href="#contact">{t.otherRequest.action}<span aria-hidden="true">↗</span></a>
       </article></div>
       <p class="price-note">{t.priceNote}</p>
-      <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
+      <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p><p class="hosting-location" data-hosting-location>{t.hostingLocation}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
     </section>
     <section id="work" class="work-band" aria-labelledby="work-title">
       <div class="container section">

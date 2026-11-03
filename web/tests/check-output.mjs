@@ -37,6 +37,12 @@ for (const [path, locale, title] of pages) {
     for (const [id, setup, monthly] of [["website",3750,125],["app",10000,375],["service",6250,250]]) {
       assert.match(html, new RegExp(`data-offer="${id}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     }
+    const services = html.match(/<section\b[^>]*id="services"[^>]*>([\s\S]*?)<\/section>/)?.[1] ?? "";
+    const location = services.match(/<p\b[^>]*data-hosting-location[^>]*>([\s\S]*?)<\/p>/)?.[1];
+    assert.ok(location, "the verified hosting location sits with the hosting offer");
+    assert.match(location, locale === "da" ? /i EU på servere hos Hetzner/ : /in the EU, on Hetzner servers/);
+    assert.match(location, locale === "da" ? /andre leverandører og placeringer/ : /other providers and locations/, "connected services are not claimed to stay in the EU");
+    assert.doesNotMatch(location, /Denmark|Danmark|GDPR|certif|complian|all (?:customer )?data|alle data/i, "no residency, compliance or certification claim");
     assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
     assert.ok(html.includes(`href="/${locale === "da" ? "da/" : ""}projects/"`));
     assert.ok(html.includes(`href="/${locale === "da" ? "da/" : ""}about/"`));

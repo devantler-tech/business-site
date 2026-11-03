@@ -17,9 +17,9 @@ for (const locale of ["en", "da"]) {
   let html = "";
   await assert.doesNotReject(async () => { html = await readFile(new URL(path, root), "utf8"); }, `missing enabled Projects route: ${path}`);
   const cards = [...html.matchAll(/data-public-product="([^"]+)" data-stars="(\d+)"/g)];
-  assert.equal(cards.length, 6);
+  assert.ok(cards.length >= 3 && cards.length <= 6, "a curated showcase of up to six tools, without filler");
   assert.deepEqual(cards.map(([, name, stars]) => [name, Number(stars)]), expected.map(({ repository, stars }) => [repository, stars]));
-  assert.ok(html.includes(`datetime="${publicStarSnapshot.fetchedAt}"`), "show the actual complete snapshot timestamp");
+  assert.ok(html.includes(`datetime="${publicStarSnapshot.fetchedAt}"`), "keep the actual complete snapshot timestamp machine-readable");
   assert.ok(html.includes(`rel="canonical" href="https://devantler.tech/${prefix}projects/"`));
   assert.ok(html.includes('href="/projects/" lang="en"') && html.includes('href="/da/projects/" lang="da"'));
   for (const id of ["main", "technical-title", "technical-projects", "more-public-products", "open-title", "family-title", "-self-hosted-personal-apps", "️-platform---", "research", "-data-product-", "-exploration-of-state-of-the-art-technology-architectures-and-tools-to-create-future-proof-data-spaces", "-reusable-workflows-", "-actions-", "️-world-at-ruin--", "-unifi-provider---"]) {
@@ -29,6 +29,11 @@ for (const locale of ["en", "da"]) {
   assert.ok(html.includes('PolyForm Shield'));
   assert.ok(html.includes('href="https://github.com/orgs/devantler-tech/repositories"'));
   assert.ok(html.includes('href="https://ascoachingogvaner.dk/"'));
+  const hosting = html.match(/<article\b[^>]*data-hosting-project[^>]*>([\s\S]*?)<\/article>/)?.[1];
+  assert.ok(hosting?.includes(`href="/${prefix}#services"`), "the hosting card leads to the actual hosting offer");
+  const checked = html.match(/<time datetime="([^"]+)">([^<]+)<\/time>/);
+  assert.ok(checked && checked[1] === publicStarSnapshot.fetchedAt, "the ranking keeps its exact machine-readable observation");
+  assert.ok(!/UTC|\d{2}:\d{2}/.test(checked[2]), "the visible ranking check is a quiet date, not an operational timestamp");
   assert.ok(html.includes('href="/pdfs/thesis.pdf"'));
   assert.ok(/<details\b[^>]*>[\s\S]*?<summary\b[^>]*>[\s\S]*?id="-data-product-"/.test(html), "research remains in a native disclosure");
   assert.ok(!/href="#research"|<section\b[^>]*aria-labelledby="research-title"/.test(html), "Research is not promoted in the section index or as a feature");
@@ -54,4 +59,4 @@ for (const section of ["active", "completed"]) {
   assert.ok(html.includes(`href="/projects/#${anchor}"`));
   assert.ok(html.includes(`data-fallback="#${anchor}"`) && html.includes('data-destination="/projects/"'));
 }
-console.log(`Svelte Projects output: ${enabled ? "six tools, bilingual visitor paths and legacy bookmarks" : "all new routes absent"} verified`);
+console.log(`Svelte Projects output: ${enabled ? "curated tools, bilingual visitor paths and legacy bookmarks" : "all new routes absent"} verified`);
