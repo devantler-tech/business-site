@@ -33,6 +33,11 @@ func Materialize(phase, inputDirectory, outputDirectory string) error {
 		return errMaterial
 	}
 	defer snapshot.close()
+	return materializeSnapshot(phase, outputDirectory, fields, snapshot)
+}
+
+// materializeSnapshot validates native documents before reserving private output.
+func materializeSnapshot(phase, outputDirectory string, fields []string, snapshot *materialSnapshot) error {
 	settings, err := materialSettings(snapshot.files["settings.json"], fields)
 	if err != nil {
 		return errMaterial

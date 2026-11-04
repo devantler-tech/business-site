@@ -1,6 +1,7 @@
 package customeridentity
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -17,6 +18,26 @@ import (
 	"testing"
 	"time"
 )
+
+// materialCompareOutput retains complete membership and byte checks for both input transports.
+func materialCompareOutput(t *testing.T, expected, actual string) {
+	t.Helper()
+	wantEntries, wantErr := os.ReadDir(expected)
+	gotEntries, gotErr := os.ReadDir(actual)
+	if wantErr != nil || gotErr != nil || len(wantEntries) != len(gotEntries) {
+		t.Fatal("native output membership differs from the maintained producer")
+	}
+	for index, entry := range wantEntries {
+		if entry.Name() != gotEntries[index].Name() {
+			t.Fatal("native output member differs from the maintained producer")
+		}
+		want, wantErr := os.ReadFile(filepath.Join(expected, entry.Name()))
+		got, gotErr := os.ReadFile(filepath.Join(actual, entry.Name()))
+		if wantErr != nil || gotErr != nil || !bytes.Equal(want, got) {
+			t.Fatal("native output bytes differ from the maintained producer")
+		}
+	}
+}
 
 // materialFixture creates private fictional inputs, never an actual identity.
 func materialFixture(t *testing.T, phase string) (string, string) {

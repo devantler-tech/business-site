@@ -37,6 +37,29 @@ const bounded = [
   "--cpus=1",
 ];
 
+test("actual restricted image prepares all identity phases only from the admitted projection mount", () => {
+  const result = spawnSync(
+    "go",
+    ["test", "-json", "-tags=integration", "./internal/customeridentity", "-run", "^TestMaterialProjectionContainer(Archive|Image)?$", "-count=1", "-timeout=90s"],
+    {
+      cwd: path.resolve("server"),
+      env: { ...process.env, GOTOOLCHAIN: "local", PORTAL_IDENTITY_CONTAINER_IMAGE: image },
+      encoding: "utf8",
+      timeout: 120000,
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const events = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainerImage").length, 1);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainerArchive").length, 1);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainerArchive/")).length, 3);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainer").length, 1);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainer/")).length, 6);
+  assert.equal(events.filter((event) => event.Action === "fail" || event.Action === "skip").length, 0);
+});
+
 test("actual non-root image snapshots a root-owned matching-group projection on a read-only filesystem", async () => {
   const fixture = containerGroupDisclosureFixture(image, docker);
   let id;

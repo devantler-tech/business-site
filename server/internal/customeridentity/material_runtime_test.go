@@ -30,17 +30,7 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 			if err := Materialize(phase, input, comparison); err != nil {
 				t.Fatal(err)
 			}
-			entries, err := os.ReadDir(comparison)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				want, wantErr := os.ReadFile(filepath.Join(comparison, entry.Name()))
-				got, gotErr := os.ReadFile(filepath.Join(output, entry.Name()))
-				if wantErr != nil || gotErr != nil || string(want) != string(got) {
-					t.Fatal("packaged native output differs from the maintained producer")
-				}
-			}
+			materialCompareOutput(t, comparison, output)
 		})
 	}
 	t.Run("refusals", func(t *testing.T) {
@@ -75,7 +65,7 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 				t.Fatalf("refusal %d reserved a usable output", index)
 			}
 		}
-		// Real symlinked secret projections still require their own future adapter.
+		// Ordinary owner-file inputs must refuse symlinks even with a separate projection transport.
 		outside := filepath.Join(filepath.Dir(input), "actual-password")
 		if err := os.Rename(filepath.Join(input, "database-password"), outside); err != nil {
 			t.Fatal(err)

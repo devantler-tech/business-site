@@ -1257,6 +1257,11 @@ jobs:
           path: runtime-dist/container
           run-id: ${{ github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Go for the image projection checks
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
       - name: Load and re-exercise the exact tested image before registry writes
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"

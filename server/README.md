@@ -257,8 +257,8 @@ establishes a production deployment.
 The verified application executable accepts the exclusive `--identity-materialize`
 mode to prepare private native ZITADEL init/setup/serve files. See
 [CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#private-native-phase-preparation) for the
-exact four options, closed owner-only inputs and output contract. No public
-artifact or extra compiler is needed by this job. It neither runs the native
+exact four options, separate owner-file or atomic-projection inputs and private
+output contract. No public artifact or extra compiler is needed by this job. It neither runs the native
 service nor grants database, API-provisioning, deployment or portal access.
 Ordinary startup remains unchanged; mixed web/migration options fail.
 

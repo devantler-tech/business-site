@@ -11,11 +11,13 @@ import (
 )
 
 type materialSnapshot struct {
-	root     *os.Root
-	path     string
-	identity os.FileInfo
-	files    map[string][]byte
-	metadata map[string]os.FileInfo
+	root       *os.Root
+	path       string
+	identity   os.FileInfo
+	files      map[string][]byte
+	metadata   map[string]os.FileInfo
+	owned      func(os.FileInfo, bool) bool
+	projection *materialProjection
 }
 
 // materialPath requires the caller's explicit canonical absolute private location.
@@ -75,18 +77,23 @@ func materialDirectoryMembers(directory interface {
 
 // materialRead retains independent bounded snapshots and their original file identities.
 func materialRead(path string, names []string) (*materialSnapshot, error) {
+	return materialReadOwned(path, names, materialOwned)
+}
+
+// materialReadOwned retains the same bounded snapshots for either explicit transport.
+func materialReadOwned(path string, names []string, owned func(os.FileInfo, bool) bool) (*materialSnapshot, error) {
 	if !materialPath(path) {
 		return nil, errMaterial
 	}
 	identity, err := os.Lstat(path)
-	if err != nil || !materialOwned(identity, true) {
+	if err != nil || !owned(identity, true) {
 		return nil, errMaterial
 	}
 	root, err := os.OpenRoot(path)
 	if err != nil {
 		return nil, errMaterial
 	}
-	snapshot := &materialSnapshot{root: root, path: path, identity: identity, files: map[string][]byte{}, metadata: map[string]os.FileInfo{}}
+	snapshot := &materialSnapshot{root: root, path: path, identity: identity, files: map[string][]byte{}, metadata: map[string]os.FileInfo{}, owned: owned}
 	success := false
 	defer func() {
 		if !success {
@@ -98,7 +105,7 @@ func materialRead(path string, names []string) (*materialSnapshot, error) {
 		return nil, errMaterial
 	}
 	for _, name := range names {
-		data, info, err := materialReadFile(root, name)
+		data, info, err := materialReadFileOwned(root, name, owned)
 		if err != nil {
 			return nil, errMaterial
 		}
@@ -112,9 +119,14 @@ func materialRead(path string, names []string) (*materialSnapshot, error) {
 }
 
 // materialReadFile refuses symlink/FIFO races before performing bounded descriptor reads.
-func materialReadFile(root *os.Root, name string) (contents []byte, identity os.FileInfo, result error) {
+func materialReadFile(root *os.Root, name string) ([]byte, os.FileInfo, error) {
+	return materialReadFileOwned(root, name, materialOwned)
+}
+
+// materialReadFileOwned keeps metadata admission bound to the opened descriptor.
+func materialReadFileOwned(root *os.Root, name string, owned func(os.FileInfo, bool) bool) (contents []byte, identity os.FileInfo, result error) {
 	before, err := root.Lstat(name)
-	if err != nil || !materialOwned(before, false) {
+	if err != nil || !owned(before, false) {
 		return nil, nil, errMaterial
 	}
 	file, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
@@ -127,13 +139,13 @@ func materialReadFile(root *os.Root, name string) (contents []byte, identity os.
 		}
 	}()
 	opened, err := file.Stat()
-	if err != nil || !materialOwned(opened, false) || !os.SameFile(before, opened) {
+	if err != nil || !owned(opened, false) || !os.SameFile(before, opened) {
 		return nil, nil, errMaterial
 	}
 	data, err := io.ReadAll(io.LimitReader(file, 65537))
 	after, statErr := file.Stat()
 	pathInfo, pathErr := root.Lstat(name)
-	if err != nil || statErr != nil || pathErr != nil || !materialOwned(after, false) || !os.SameFile(opened, after) || !os.SameFile(after, pathInfo) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) || int64(len(data)) != after.Size() {
+	if err != nil || statErr != nil || pathErr != nil || !owned(after, false) || !os.SameFile(opened, after) || !os.SameFile(after, pathInfo) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) || int64(len(data)) != after.Size() {
 		return nil, nil, errMaterial
 	}
 	return data, after, nil
@@ -141,8 +153,11 @@ func materialReadFile(root *os.Root, name string) (contents []byte, identity os.
 
 // unchanged rejects a replaced directory, altered member, mode or credential bytes.
 func (snapshot *materialSnapshot) unchanged() error {
+	if snapshot.projection != nil && snapshot.projection.unchanged() != nil {
+		return errMaterial
+	}
 	identity, err := os.Lstat(snapshot.path)
-	if err != nil || !materialOwned(identity, true) || !os.SameFile(identity, snapshot.identity) {
+	if err != nil || !snapshot.owned(identity, true) || !os.SameFile(identity, snapshot.identity) {
 		return errMaterial
 	}
 	names := make([]string, 0, len(snapshot.files))
@@ -153,11 +168,14 @@ func (snapshot *materialSnapshot) unchanged() error {
 		return errMaterial
 	}
 	for name, want := range snapshot.files {
-		data, info, err := materialReadFile(snapshot.root, name)
+		data, info, err := materialReadFileOwned(snapshot.root, name, snapshot.owned)
 		before := snapshot.metadata[name]
 		if err != nil || !os.SameFile(info, before) || info.Size() != before.Size() || !info.ModTime().Equal(before.ModTime()) || !bytes.Equal(data, want) {
 			return errMaterial
 		}
+	}
+	if snapshot.projection != nil {
+		return snapshot.projection.unchanged()
 	}
 	return nil
 }
@@ -241,6 +259,9 @@ func materialWriteOutputs(path string, outputs map[string][]byte, snapshot *mate
 		if e != nil || !os.SameFile(info, created[name]) || !bytes.Equal(data, outputs[name]) {
 			return errMaterial
 		}
+	}
+	if snapshot.unchanged() != nil {
+		return errMaterial
 	}
 	success = true
 	return nil

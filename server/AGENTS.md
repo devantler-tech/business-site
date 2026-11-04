@@ -46,11 +46,21 @@ organization registration, supported embedded login selection, exact HTTPS
 callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
 semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
 The combined executable's exclusive `--identity-materialize` command reuses that
-same owner-file phase producer. Require a valid package identity and all four
-identity options exactly once; refuse every web, disclosure, inspection or migration
-option before private I/O. It never starts services, accepts projected secrets,
-provisions an API client or activates access. Keep diagnostics and success output
+same owner-file phase producer. Require a valid package identity, exactly one input
+transport and all four selected identity options exactly once; refuse every web,
+disclosure, inspection or migration option before private I/O. Its separate
+`--identity-projection` input pins and rechecks one closed atomic
+projection generation, with non-root root/current-user ownership and primary-group
+read admission. Broad mount-root bits additionally require a fresh kernel
+read-only check on the retained descriptor; generation and file restrictions stay
+strict. Never mix it with ordinary `--identity-inputs`; ordinary owner-file
+refusals remain unchanged. It never starts services, provisions an API client or
+activates access. Keep diagnostics and success output
 free of private values, and retain compiled-command controls for all three phases.
+On macOS, ordinary tests use owned read-only disk images and bounded native
+commands. The existing Docker smoke command invokes the separately tagged Go
+integration case for both actual source image profiles. Require all six phase/mount
+results and their real copied-file metadata; no missing or skipped test is a pass.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
 Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
 native navigation document,
