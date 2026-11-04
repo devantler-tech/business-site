@@ -50,7 +50,7 @@ publish_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and
-    .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@16f1a6c96aaf2581885e17389a0e0f9f42387970" and
+    .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@17ee7092d5ff1748164185ff37fcff5214f9f870" and
     .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and
     .jobs.publish.secrets==null and
     .jobs.publish.with=={"app-name":"business-site","deploy-path":"./deploy","enable-caller-pin":true,"enable-signed-promotion":true,"enable-prebuilt-webapp":true,"enable-signed-recovery":false,
