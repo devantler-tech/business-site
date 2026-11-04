@@ -13,7 +13,7 @@ fresh.fetchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 fresh.observedAt = fresh.fetchedAt.slice(0, 10);
 Object.assign(fresh.repositories, {
   "provider-upjet-unifi": 900, "kyverno-policies": 800, "khoist": 700,
-  "agent-plugins": 600, ksail: 400, ".github": 300,
+  "agent-plugins": 600, ksail: 400, ".github": 950,
   "world-at-ruin": 10000,
 });
 
@@ -74,10 +74,10 @@ try {
   for (const locale of ["", "da/"]) {
     const html = await readFile(resolve(root, "web/build", locale, "projects/index.html"), "utf8");
     const names = [...html.matchAll(/data-public-product="([^"]+)"/g)].map(([, name]) => name);
-    assert.deepEqual(names, ["provider-upjet-unifi", "kyverno-policies", "khoist", "agent-plugins", "ksail", ".github"]);
+    assert.deepEqual(names, ["provider-upjet-unifi", "kyverno-policies", "khoist", "agent-plugins", "ksail"]);
     assert.ok(html.includes(`datetime="${fresh.fetchedAt}"`));
   }
-  console.log("Fresh complete build-local snapshot changes the real EN/DA six-tool output; high-star ineligible entries remain excluded.");
+  console.log("Fresh complete build-local snapshot changes the real EN/DA curated-tool output; high-star ineligible entries such as the game and repository automation remain excluded.");
 } finally {
   await rm(scratch, { recursive: true, force: true });
 }

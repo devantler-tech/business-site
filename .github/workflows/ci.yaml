@@ -151,6 +151,7 @@ jobs:
           node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs scripts/package-profile-contract.test.mjs
           node --test scripts/theme.test.mjs scripts/visitor-privacy.test.mjs scripts/journal-navigation.test.mjs
           node --test scripts/customer-scope-rollout.test.mjs scripts/vat-prices-retirement.test.mjs
+          node --test scripts/public-tools.test.mjs scripts/public-products.test.mjs
           bash scripts/journal-history.test.sh
       - name: Build
         working-directory: .

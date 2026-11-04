@@ -8,6 +8,8 @@
   let { data }: { data: ReturnType<typeof load> } = $props();
   let home = $derived(data.locale === "da" ? "/da/" : "/");
   let t = $derived(data.labels);
+  // Show the observation day quietly; the machine-readable timestamp stays exact.
+  let checkedDate = $derived(new Intl.DateTimeFormat(data.locale === "da" ? "da-DK" : "en-GB", { dateStyle: "long", timeZone: "UTC" }).format(new Date(data.checkedAt)));
 </script>
 
 <svelte:head><script src={revealScript} defer></script></svelte:head>
@@ -18,7 +20,7 @@
       <nav class="project-index" aria-label={data.projectIndex}><a href="#open-title">{data.text.tools}</a><a href="#family-title">{data.text.work}</a></nav>
       <section aria-labelledby="open-title">
         <span class="legacy-anchor" id="technical-title" aria-hidden="true"></span><span class="legacy-anchor" id="technical-projects" aria-hidden="true"></span><span class="legacy-anchor" id="more-public-products" aria-hidden="true"></span>
-        <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">01</p><h2 id="open-title">{data.text.tools}</h2><p>{data.text.toolsIntro}</p><p class="checked">{data.text.checked}: <time datetime={data.checkedAt}>{data.checkedAt.replace("T", " ").replace("Z", " UTC")}</time></p></div><enhanced:img src="../../../../../src/assets/editorial/workflows.webp?w=440" alt="" /></div>
+        <div class="catalogue-heading"><div class="section-heading"><p class="eyebrow">01</p><h2 id="open-title">{data.text.tools}</h2><p>{data.text.toolsIntro}</p><p class="checked">{data.text.checked}: <time datetime={data.checkedAt}>{checkedDate}</time></p></div><enhanced:img src="../../../../../src/assets/editorial/workflows.webp?w=440" alt="" /></div>
         {#each data.hiddenAnchors as id}<span class="legacy-anchor" {id} aria-hidden="true"></span>{/each}
         <div class="collection">
           {#each data.products as product, i}
@@ -50,7 +52,7 @@
           <a class="work-preview" href={coachingOriginal} target="_blank" rel="noopener"><enhanced:img src="../../../../../src/assets/ascoaching-homepage.jpg?w=240;480" alt={data.workPreviewAlt} sizes="(max-width: 520px) 96px, 240px" loading="lazy" /><span>{data.workPreviewAction}<span aria-hidden="true">↗</span></span></a>
           <a class="visit" href="https://ascoachingogvaner.dk/">{data.workVisitAction}<span aria-hidden="true">↗</span></a>
         </article>
-        <article data-hosting-project class="hosting"><span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span><h3>{t.platformTitle}</h3><p>{t.platformText}</p></article>
+        <article data-hosting-project class="hosting"><span class="legacy-anchor" id="️-platform---" aria-hidden="true"></span><h3>{t.platformTitle}</h3><div><p>{t.platformText}</p><a href={`${home}#services`}>{data.text.hostingAction}<span aria-hidden="true">→</span></a></div></article>
       </section>
       <aside id="engineering-checks" class="quality-bridge"><p>{t.qualityBridge}</p><a href={`${home}#quality`}>{t.qualityAction}<span aria-hidden="true">↗</span></a></aside>
       <details id="research"><summary>{data.text.earlierLinks}</summary><div class="research-detail">

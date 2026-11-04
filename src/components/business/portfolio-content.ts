@@ -5,8 +5,9 @@ export const portfolioText = {
   sourceAvailable: 'Kildekode tilgængelig — se projektets licens.',
   reuse: 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.',
   work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
-  tools: 'Værktøjer med offentlig kildekode', toolsIntro: 'Seks udvalgte, vedligeholdte værktøjer. Rækkefølgen følger antallet af GitHub-stjerner, ikke en vurdering af kvalitet.',
+  tools: 'Værktøjer med offentlig kildekode', toolsIntro: 'Udvalgte, vedligeholdte værktøjer. Rækkefølgen følger antallet af GitHub-stjerner, ikke en vurdering af kvalitet.',
   checked: 'Rangering kontrolleret', wider: 'Udforsk resten af mit offentlige arbejde', project: 'Udforsk projektet',
+  hostingAction: 'Se hosting og priser',
 },
   en: {
   pageIntro: 'Selected work — from a public website to tools that solve practical problems.',
@@ -14,8 +15,9 @@ export const portfolioText = {
   sourceAvailable: 'Source-available — see the project’s licence.',
   reuse: 'Each project has its own licence. Check its terms before reuse.',
   work: 'Selected work', intro: 'A public website you can visit and explore.',
-  tools: 'Tools with public source', toolsIntro: 'Six selected, maintained tools. Their order follows GitHub stars, not a judgement of quality.',
+  tools: 'Tools with public source', toolsIntro: 'Selected, maintained tools. Their order follows GitHub stars, not a judgement of quality.',
   checked: 'Ranking checked', wider: 'Explore the rest of my public work', project: 'Explore the project',
+  hostingAction: 'See hosting and prices',
 },
 } as const;
 
