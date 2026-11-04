@@ -41,7 +41,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 	if err := b.pool.QueryRow(t.Context(), `SELECT id FROM portal_requests WHERE client_id='client-a'`).Scan(&requestID); err != nil {
 		t.Fatal(err)
 	}
-	operator := enroll(t, b.svc, b.f, "visual-preparation", "fictional-operator", "operator")
+	operator := enroll(t, b.svc, b.f, "operator", "fictional-operator", "operator")
 	proposal := projectProposal{Key: secret(), Scope: "A fictional website iteration", Deliverables: "Accessible public pages", Currency: "DKK", OneTimeMinor: 375000, MonthlyMinor: 12500, OneTimeTerms: "One agreed iteration", MonthlyTerms: "Hosting and routine maintenance"}
 	if err := b.svc.persistProposal(t.Context(), operator, requestID, proposal); err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	inv := b.invite("operator", "fictional-operator", "operator")
+	inv := "" // Both fixed actors already have durable membership.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -211,6 +211,15 @@ func TestBrowserVisualFixture(t *testing.T) {
 					t.Error(err)
 				}
 			})
+		}
+	}) {
+		return
+	}
+	if !t.Run("PreparedOperatorSignIn", func(t *testing.T) {
+		b.finish(b.start(""))
+		status, body, _ := b.request("GET", "/portal/?lang=en", nil, "")
+		if status != http.StatusOK || !strings.Contains(body, "fictional-operator") {
+			t.Fatal("prepared operator cannot sign in to its own workspace")
 		}
 	}) {
 		return

@@ -48,6 +48,10 @@ control company identity and revised offer copy independently. Projects uses `cl
 catalogue, public website example, historical links and bookmarks. See `web/README.md`.
 Prices are introductory guides, not an automatic checkout:
 project scope, hosting capacity, external fees and support are agreed in a written proposal.
+Both homepages advertise project planning from January 2027. The separate “Other requests”
+option invites enquiries outside the three priced services through the existing contact section.
+Each request is assessed for fit before scope, timing and price are agreed; it has no fixed
+starting or monthly price and does not create or accept a private portal order.
 The app guide covers a focused first version, not a ceiling on application size. Larger builds
 use separately agreed iterations with their own scope, schedule and price. Monthly quotes are
 rounded totals based on hosting costs plus a fixed service fee to Nikolai, with amounts and
@@ -96,7 +100,9 @@ No production account or guest invitation code is used. Built-page checks verify
 website example and both rollback thumbnails, their readable larger images and localized visit action.
 
 Home puts plain-language quality and security highlights before prices and one compact public website example.
-Projects leads with six maintained public tools, followed by the compact website example and hosting.
+Projects leads with up to six curated, maintained public tools, followed by the compact website example and hosting.
+Home states that optional hosting runs in the EU on Hetzner servers, scoped to where the project runs;
+domains, email, backups and other connected services can use other providers and locations.
 Earlier project references stay in a closed native disclosure outside the section index.
 Home avoids source-code links; Projects offers controlled public project destinations
 and wider-work navigation, not raw code files or workflows. The journal and existing technical documentation retain their own detail. The copy
@@ -123,15 +129,17 @@ framing and the anonymous Wedding App demo from these business entrypoints. It d
 a paid commission, endorsement or measured client outcome. Original technical inventory and
 historical bookmarks remain available; the wider public-work link leads to the organization.
 
-Projects selects exactly six curated maintained tools from complete public GitHub metadata,
-ordered by descending stars and repository-name ties. Games, templates, legacy Actions, forks,
-archived and private repositories cannot enter this showcase. All twelve entries remain in the
+Projects selects up to six curated maintained tools from complete public GitHub metadata,
+ordered by descending stars and repository-name ties. A smaller curated set is published without
+filler; a read that leaves fewer than three eligible tools aborts publication. Games, templates,
+shared repository automation (`.github`), forks, archived and private repositories cannot enter
+this showcase. All twelve entries remain in the
 underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
 unrestricted open source. Stars indicate popularity, not a quality guarantee.
 
 The source-owned publisher refreshes the complete metadata before every build with read-only GitHub
-authority; no GitHub API call or token is sent to a visitor's browser. The page displays the actual
-UTC observation timestamp. Failed, partial or malformed reads abort publication and leave the
+authority; no GitHub API call or token is sent to a visitor's browser. The page shows the observation
+date quietly and keeps the exact UTC timestamp in its machine-readable `datetime`. Failed, partial or malformed reads abort publication and leave the
 previous live artifact with its previous timestamp; they are never presented as a fresh read.
 The source-owned publisher refreshes the ranking on main pushes, admitted manual publications and
 its daily schedule. GitHub scheduled runs can be delayed or disabled
@@ -156,8 +164,8 @@ checkout. Svelte emits the sole public application. Run `scripts/build-journal-r
 before standalone frontend builds; `npm run build` prepares it automatically. The retained
 `/_astro/` image URLs are compatibility paths without an Astro compiler or runtime.
 
-Projects presents six stars-ranked maintained tools, followed by one compact public website example
-and hosting. KSail's product introduction explains setup, deployment and operation rather
+Projects presents up to six curated, stars-ranked maintained tools, followed by one compact public
+website example and a hosting card that links to the hosting offer on Home. KSail's product introduction explains setup, deployment and operation rather
 than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
 with private details masked and the redaction disclosed in both languages. Historical English
 references and diagrams remain in the closed “Earlier project links” disclosure, without a feature
@@ -329,7 +337,7 @@ Keep this lane single-flight—maintain or measure the current post before start
 
 ## Public product catalogue
 
-Normal Projects output selects six maintained public tools as described under Featured portfolio,
+Normal Projects output selects up to six curated public tools as described under Featured portfolio,
 alongside the public website example and hosting, with historical links available separately. The old “Built in the open” shelf of
 tools, libraries, templates and source-available inspiration appears only when both
 `FEATURE_CLIENT_PORTFOLIO` and `FEATURE_FEATURED_PORTFOLIO` are explicitly false.
@@ -343,8 +351,8 @@ whose source is available for study, not unrestricted reuse or hosting.
 
 `src/data/github-stars.json` is generated with an explicit UTC observation date. Cards sort by GitHub
 stars descending, then repository name. In the legacy rollback, its leading six cards are visible
-and the remainder sits in a native disclosure. Normal output has only the six selected maintained
-tools; `more-public-products` remains a hidden historical anchor, not a remainder disclosure.
+and the remainder sits in a native disclosure. Normal output has only the curated selection of up to
+six maintained tools; `more-public-products` remains a hidden historical anchor, not a remainder disclosure.
 Builds and visitors need no GitHub connection. Refresh the snapshot when
 updating the catalogue and during the monthly site content review:
 

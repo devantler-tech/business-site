@@ -1,6 +1,20 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
+`cmd/identity-release` explicitly retains and verifies the frozen identity base's
+original source data; read its README. Preserve its embedded closed profile,
+complete OCI/layer/package/descriptor joins, original modes, private read-only
+capsule, external seal and deterministic archive readback. It never executes
+retained content, verifies OpenPGP/image signatures, publishes or activates users.
+Keep those four proof fields false; publisher admission remains separate.
+Its explicit base-transport unpacker requires both external seals and the same
+closed capsule plan, rejects altered transport and preserves source archives
+as opaque data in a new private reservation. It grants no distribution authority.
+Its explicit `prepare-handoff` operation binds the original local archives and
+raw native witness bytes to caller-supplied source/run metadata. Preserve its
+closed input roles, complete stable snapshots and exclusive manifest output.
+It neither repeats the native engines nor authenticates the supplied CI identity;
+all publication and activation claims stay false. No raw archive upload is added.
 `cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
 Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
 importing portal authority or entering the frozen identity service's graph.
@@ -31,6 +45,22 @@ documents with no network, user, secret-value or activation operations. Read
 organization registration, supported embedded login selection, exact HTTPS
 callbacks, code/S256 flows, independent secrets and strict verified-email/TLS
 semantics. Source payload tests are not actual broker/MFA/recovery acceptance.
+The combined executable's exclusive `--identity-materialize` command reuses that
+same owner-file phase producer. Require a valid package identity, exactly one input
+transport and all four selected identity options exactly once; refuse every web,
+disclosure, inspection or migration option before private I/O. Its separate
+`--identity-projection` input pins and rechecks one closed atomic
+projection generation, with non-root root/current-user ownership and primary-group
+read admission. Broad mount-root bits additionally require a fresh kernel
+read-only check on the retained descriptor; generation and file restrictions stay
+strict. Never mix it with ordinary `--identity-inputs`; ordinary owner-file
+refusals remain unchanged. It never starts services, provisions an API client or
+activates access. Keep diagnostics and success output
+free of private values, and retain compiled-command controls for all three phases.
+On macOS, ordinary tests use owned read-only disk images and bounded native
+commands. The existing Docker smoke command invokes the separately tagged Go
+integration case for both actual source image profiles. Require all six phase/mount
+results and their real copied-file metadata; no missing or skipped test is a pass.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
 Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
 native navigation document,
@@ -280,6 +310,11 @@ database expiry and current operator workspace/role after the last SDK wait, und
 the request transaction. Capture the maintained store/codec snapshot before taking
 that transaction, avoiding a second connection while one is held; the snapshot
 alone is never authority. No worker/API/MCP or production activation is added.
+
+v15 extends only the existing request-product constraint with `other` after
+unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
+Both languages show the category and case-by-case assessment boundary; the
+existing independent false-default identity/request gates remain mandatory.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

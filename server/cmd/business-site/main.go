@@ -60,6 +60,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
+	identityPhase := registerIdentityPhaseOptions(options)
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
 	}
@@ -69,6 +70,9 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 			name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
 			seen[name]++
 		}
+	}
+	if identityPhase.selected(seen) {
+		return identityPhase.run(ctx, options, seen, output)
 	}
 	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 {
 		return runtimeapp.ErrMigration
@@ -155,8 +159,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	}
 	api := isolated.NewAPI()
 	defer func() {
-		// Both supported providers own no external resource. Staging shutdown
-		// cancels its lease before the SDK releases evaluation bookkeeping.
+		// These providers own no external resource. Shutdown revokes the
+		// selected process gate before the SDK releases its bookkeeping.
 		_ = api.Shutdown(context.Background())
 	}()
 	if err := api.SetProviderAndWait(ctx, provider); err != nil {

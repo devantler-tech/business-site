@@ -74,6 +74,11 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   includes Quickstart, selected Angular and keyboard autocomplete in both themes.
   The native copy task only clears obsolete docs images; it never requires an
   empty source directory to survive archive restoration.
+  The separate source-offer profile binds both original native footers and adds
+  their unconditional versioned corresponding-source link with dated change notices.
+  Preserve existing policy links, watermark and theme controls. Its source seal and
+  preparation receipt must describe the actual complete transformed tree; the URL
+  alone is not evidence that a source release exists.
   The preparer runs the maintained local Go transform with toolchain acquisition disabled. It also
   applies the exact native-generated go-jose/v4 4.1.6, x/net 0.62.0 and CSRF
   1.7.3 dependency profile, preserving the upstream key-size limit and other
@@ -84,8 +89,14 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   output and receipt are not a build, complete license admission or image release.
 - `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
   amd64 host with its frozen upstream toolchain. Ordinary builds never invoke it.
-  CI retains build diagnostics only; successful compilation is not image admission,
+  Successful compilation is not image admission,
   distribution clearance or portal activation. Read the same source/build guide.
+  The explicit local handoff command binds the existing archives and original
+  native witness bytes to caller-supplied run metadata. Diagnostics retain that
+  bounded manifest. After all native checks and the separate frozen-base signature
+  gate, main-push CI additionally retains a closed, original-byte carrier for one
+  day; PRs cannot upload it. Diagnostic uploads still exclude raw archives. Transport grants no publication
+  or authenticated-provenance authority. Read `server/cmd/identity-release/README.md`.
   The separately compiled pinned vulnerability checker analyzes the actual Linux
   binary against the official database; preserve its failure status and retained
   text diagnostics. Both output streams enter the retained report without changing
@@ -139,8 +150,18 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   replay command may emit a whole-build success receipt, after that pipeline and
   same-build notices finish in a separate network namespace as the original
   nonroot user, with no new privileges and all capabilities dropped. Component
-  receipts remain scoped and false for whole-build proof. CI retains compact
-  evidence only; image/source-offer admission and portal activation stay separate.
+  receipts remain scoped and false for whole-build proof. Diagnostic uploads retain compact
+  evidence; original transport, image/source-offer admission and portal activation stay separate.
+- `server/cmd/identity-release/` explicitly retains the frozen identity base's
+  original OCI metadata/layers, Debian source archives, package records and
+  notices. Read its README. Preserve complete checksum/closed-membership joins,
+  original modes, external seals and actual deterministic archive readback.
+  It never runs retained data, publishes an image or activates portal access;
+  the original capsule's signature, public-source and image-admission claims remain false.
+  The separate explicit `verify-base-auth` operation verifies pinned historical
+  Debian signers and the documented Distroless signer, without asserting current
+  certificate validity. Closed carrier/ZIP readers preserve the original bytes
+  and modes and require independent artifact, source and run bindings.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
   It belongs to the existing Go 1.27.3 module and its standard validation. CI
@@ -228,46 +249,27 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   `third_party/zitadel-console-notices/README.md` for exact provenance and limits.
   The opentype.js component checks one exact decoded source-map notice; logical
   source identifiers are inert data, never paths to read or URLs to fetch.
-- `Dockerfile.zitadel` and `scripts/zitadel-{image-package,image-smoke,service-smoke}.go` assemble an
-  explicit local identity image and exercise its real version command. CI
-  checks a closed package, the copied-back image payload and inspected container
-  restrictions, then saves the exact exercised image to a bounded private archive. It removes
-  the original, confirms the complete owner-labelled image set is absent, reloads the sealed
-  archive and rechecks the same config identity and inspected configuration before final
-  owner-bound cleanup. The archive stays local and is excluded from diagnostic upload.
-  Its size, digest and successful reload enter the receipt; they are not a registry identity,
-  corresponding-source offer or distribution admission. The bounded
-  diagnostic is `cli-version-smoke`, with admission and licence closure unknown.
-  The separate explicit service profile also cold-starts the same image with an
-  ephemeral fictional PostgreSQL fixture on an internal Docker network, publishes
-  no host ports and reads actual Linux process restrictions and RSS/peak
-  measurements. Preserve its closed network, writable-path and owner-bound cleanup
-  controls. HTTP connects only to the inspected owned private endpoint; its fictional
-  authority is never resolved through DNS and redirects cannot leave that authority.
-  Read the actual process mount table too; Docker's legacy tmpfs option is not
-  guaranteed to appear among regular mount points. Keep the kernel read-only
-  root and bounded, non-executable, owner-bound tmpfs admission mandatory.
-  HTTP discovery/console availability is not browser, invitation, MFA, production
-  TLS, complete-stack acceptance or activation. No image is published.
-  The separately explicit `--browser-smoke` profile also uses the runner's Chrome
-  and matching WebDriver inside the owned service network namespace as a non-root
-  user. Its native browser sandbox remains enabled. It exercises only fictional
-  Login V1 and authenticated Console presentation, plus ten native neutral-provider
-  cases (light/dark chooser, two configured table rows, Google editor, login and
-  registration). Fixture-only native API setup preserves the login policy except
-  enabling the two unusable fictional providers; no external action is followed.
-  Login/registration links are reached by native Tab, and the picker by Enter.
-  The unchanged operator journey has 100s; the additional presentation phase has
-  120s, within a 4min worker wrapper. That same phase independently requires twenty
-  SMTP cases (chooser and nine unsaved preset editors in both themes), including
-  unchanged defaults, native Enter, loaded envelope glyphs and each screenshot.
-  Console observations wait for the frozen fixture's native background transition
-  to finish and its computed background color to match the requested theme.
-  It never saves a mail configuration or sends a message. It retains source/image-bound receipts
-  and screenshots; it grants no production login, mail, invitation or activation
-  clearance. The Go browser worker is reachable only through the explicit profile.
-  No arguments are inert; the real smoke entrypoint requires native Linux amd64
-  and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
+- `Dockerfile.zitadel` and the explicit image/service/browser helpers retain the
+  original tested candidate, complete notices, 13+3 ordered DiffIDs, restricted
+  non-root/read-only execution, fictional isolated services, actual browser proof
+  and owner-bound cleanup. Read the complete, unchanged [identity validation
+  requirements](server/cmd/identity-release/README.md#identity-validation-requirements)
+  and `docs/ZITADEL-SOURCE.md` before editing or running them. Diagnostic proof,
+  original transport, release admission and portal activation remain separate.
+- `.github/workflows/publish-identity.yaml` is a separate main-only manual release,
+  defaulting to dry-run. It verifies complete original CI/native-step/artifact
+  provenance and restores data using trusted caller code. Original source must be
+  an ancestor of current main and its retained build records must match the caller.
+  `--verify-saved` never builds or starts an image; it requires the original ID to
+  be absent, loads the sealed candidate, verifies its complete payload/base notices
+  and retains only that new exact image for publication. Explicit publish mode
+  repeats admission with separate write permissions, verifies anonymous source
+  retrieval before image push and verifies the signed digest/provenance afterward.
+  Existing source conflicts and observed upload-reference conflicts are refused.
+  Publication uses an original-CI upload reference and a verified signed digest,
+  without a shared OCI version alias or an atomic registry-tag reservation claim.
+  No deployment or portal activation
+  is performed; read ADR 0028 and the identity-release README.
 - Private portal presentation uses Go templates and native forms. Contact responses
   buffer the complete private frame and revalidate the original durable session/client
   after SDK waits. The separate mandatory `contactintegration` suite exercises the

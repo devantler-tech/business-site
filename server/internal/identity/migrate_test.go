@@ -70,6 +70,11 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // runtime grants or a production rollback. Remove new dependent tables before v13.
 func rewindWorkApprovalFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_requests DROP CONSTRAINT portal_requests_product_check;
+ ALTER TABLE portal_requests ADD CONSTRAINT portal_requests_product_check CHECK(product IN ('website','app','service'));
+ DELETE FROM portal_schema_version WHERE version=15`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-other-request schema", err)
+	}
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_work_current,portal_work_revocations,portal_work_approvals;
  ALTER TABLE portal_invoices DROP CONSTRAINT portal_invoice_work_binding;
  DELETE FROM portal_schema_version WHERE version=14`); err != nil {

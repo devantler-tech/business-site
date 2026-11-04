@@ -267,7 +267,7 @@ check() {
       (.run | contains(".nativeOfflineReplayProved == false")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Exercise the local restricted identity image" and
-      .run == "command -v google-chrome\ncommand -v chromedriver\ngo run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --browser-smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"\n" and
+      .run == "command -v google-chrome\ncommand -v chromedriver\ngo run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go --lifecycle-smoke --build \"$RUNNER_TEMP/zitadel-build\" --repository \"$GITHUB_WORKSPACE\" --output \"$RUNNER_TEMP/zitadel-image\"\n" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Scan the actual frozen identity executable") < index("Exercise the local restricted identity image") and
       index("Exercise the local restricted identity image") < index("Verify actual identity browser evidence") and
@@ -285,6 +285,8 @@ check() {
       (.run | contains("all(.mdiIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard)")) and
       (.run | contains("(.frameworkIcons | map(.kind+\"/\"+.theme)) == [\"framework-quickstart/light\",\"framework-selected/light\",\"framework-picker/light\",\"framework-quickstart/dark\",\"framework-selected/dark\",\"framework-picker/dark\"]")) and
       (.run | contains("all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard)")) and
+      (.run | contains("(.sourceOffer | map(.kind+\"/\"+.theme)) == [\"console/light\",\"console/dark\",\"login/light\",\"login/dark\"]")) and
+      (.run | contains("all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == \"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1\")")) and
       (.run | contains(".mfaProof == false")) and
       (.run | contains(".optionalMFADeferred | type == \"boolean\"")) and
       (.run | contains(".portalFederation == false")) and
@@ -295,19 +297,35 @@ check() {
       (.run | contains("/zitadel-image/service-smoke.json")) and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Verify actual identity service evidence") > index("Exercise the local restricted identity image")) and
+    any($job.steps[]; .name == "Verify actual identity lifecycle evidence" and
+      (.run | contains("sha256sum scripts/zitadel-service-smoke.go")) and
+      (.run | contains("--slurpfile image")) and
+      (.run | contains(".localImageId == $image[0].localImageId")) and
+      (.run | contains(".fictionalIdentitySha256")) and
+      (.run | contains(".verifiedTls == true")) and
+      (.run | contains(".administratorRevoked == true")) and
+      (.run | contains(".durableRestart == true")) and
+      (.run | contains(".phaseBoundaryInterruption == true")) and
+      (.run | contains("(.resourceSamples | length) == 6")) and
+      (.run | contains(".authenticationProof == false")) and
+      (.run | contains("/zitadel-image/lifecycle-smoke.json")) and
+      .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
+    ([$job.steps[].name] | index("Verify actual identity service evidence") < index("Verify actual identity lifecycle evidence") and
+      index("Verify actual identity lifecycle evidence") < index("Rebuild the native service from the retained prepared source")) and
     any($job.steps[]; .name == "Prepare the frozen identity JavaScript toolchain" and
       (.run | contains("df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de")) and
       (.run | contains("corepack prepare pnpm@10.30.3 --activate"))) and
     any($job.steps[]; .name == "Fetch the frozen public upstream input" and
       (.run | contains("8afa5dd37a8e723efb9eace8d09fd5c1cccef694"))) and
-    ([$job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))] | length == 1) and
-    all($job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"));
+    ([$job.steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))] | length == 2) and
+    ([$job.steps[] | select(.name == "Preserve build diagnostics, not unadmitted service distribution" and (.uses // "" | startswith("actions/upload-artifact@")))] | length == 1) and
+    all($job.steps[] | select(.name == "Preserve build diagnostics, not unadmitted service distribution");
       .if == "always()" and .with["if-no-files-found"] == "error" and
       (.["continue-on-error"] == null or .["continue-on-error"] == false) and
       .with.name == "zitadel-linux-build-evidence" and
       (.with.path | split("\n") | map(select(length > 0)) |
         sort == (["build-receipt.json", "packages.jsonl", "login-icons-inventory.json", "text-font-notices-inventory.json", "copied-asset-notices-inventory.json", "console-notices-inventory.json", "console-notices-supplement-inventory.json", "*.txt", "*.log", "*.sha256", "source-snapshot/source-manifest.json", "source-roundtrip.json", "selected-notice-originals/notice-originals.json", "notice-originals.json", "notice-originals-readback.json", "notice-checkout-readback.json", "verifier-tool-source.json", "selected-verifier-bootstrap/manifest.json", "verifier-bootstrap-capture.json", "prepared-build-receipt.json", "selected-go-sources/manifest.json", "go-module-source-roundtrip.json", "generator-checkpoint.json", "generator-checkpoint-roundtrip.json", "selected-generator-go-sources/manifest.json", "generator-source-readback.json", "generator-source-roundtrip.json", "go-graph-metadata/manifest.json", "go-graph-metadata-readback.json", "go-graph-metadata-roundtrip.json", "go-input-restoration.json", "go-input-readback.json", "go-input-native/manifest.json", "selected-pnpm-sources/manifest.json", "selected-pnpm-sdk-bootstrap/manifest.json", "pnpm-source-roundtrip.json", "pnpm-installation-check.json", "selected-bsr-sources/manifest.json", "bsr-source-roundtrip.json", "bsr-schema-replay.json", "selected-console-originals/manifest.json", "console-download-consumption.json", "console-originals-roundtrip.json", "console-consumption-roundtrip.json"] |
-          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png","provider-*.png","smtp-*.png","mdi-*.png","framework-*.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","sdk-reconstruction.json","sdk-bootstrap-final.json","native/pnpm-sdk-operations.json","verifier-reconstruction.json","verifier-tool-source.json","verifier-bootstrap-restored.json","notice-originals-bootstrap.json","notice-originals-bootstrap-final.json","native/notice-originals.json","native/notice-originals-readback.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) | sort))) and
+          map("$" + "{{ runner.temp }}/zitadel-build/" + .) + (["image-smoke.json","base-notices/*.txt","lifecycle-smoke.json","service-smoke.json","browser-smoke.json","browser-binding.json","browser-incomplete.json","login.png","password.png","console.png","provider-*.png","smtp-*.png","mdi-*.png","framework-*.png","source-offer-*.png"] | map("$" + "{{ runner.temp }}/zitadel-image/" + .)) + (["replay-receipt.json","sdk-reconstruction.json","sdk-bootstrap-final.json","native/pnpm-sdk-operations.json","verifier-reconstruction.json","verifier-tool-source.json","verifier-bootstrap-restored.json","notice-originals-bootstrap.json","notice-originals-bootstrap-final.json","native/notice-originals.json","native/notice-originals-readback.json","input-retention.json","input-archive.json","input-roundtrip.json","roundtrip/source-manifest.json","native-replay.log","native/build-receipt.json","native/retained-go-restoration.json","native/retained-go-service-readback.json","native/retained-bsr-restoration.json","native/retained-pnpm-restoration.json","native/console-notices-inventory.json","native/console-notices-supplement-inventory.json","native/login-icons-inventory.json","native/text-font-notices-inventory.json", "native/copied-asset-notices-inventory.json","native/build-info.txt"] | map("$" + "{{ runner.temp }}/zitadel-offline-replay/" + .)) + (["capture.json","verify.json","pack.json","base-source.json"] | map("$" + "{{ runner.temp }}/zitadel-base-source/evidence/" + .)) + ["$" + "{{ runner.temp }}/zitadel-handoff/handoff.json"] | sort))) and
     (.jobs.validation.needs | index("build-zitadel-linux") != null) and
     (.jobs.status.needs | index("build-zitadel-linux") != null) and
     any(.jobs.validation.steps[]; (.with["job-results"] // "" | contains("needs.build-zitadel-linux.result"))) and
@@ -315,6 +333,29 @@ check() {
   ' "$1" >/dev/null
 }
 check "$scratch/ci.json"
+# Run the actual mandatory lifecycle verifier against controlled receipts. These
+# controls prove receipt refusal, not execution of the two-container native trial.
+lifecycle_run="$(jq -er '[.jobs["build-zitadel-linux"].steps[]|select(.name=="Verify actual identity lifecycle evidence")|.run]|select(length==1)|.[0]' "$scratch/ci.json")"
+mkdir -p "$scratch/lifecycle/zitadel-image"
+lifecycle_source="$(shasum -a 256 "$root/scripts/zitadel-service-smoke.go" | awk '{print $1}')"
+jq -n '{upstreamCommit:("a"*40),localImageId:("sha256:"+("b"*64))}' > "$scratch/lifecycle/zitadel-image/image-smoke.json"
+jq -n --arg source "$lifecycle_source" --slurpfile image "$scratch/lifecycle/zitadel-image/image-smoke.json" '{schemaVersion:1,profile:"isolated-tls-durable-lifecycle",upstreamCommit:$image[0].upstreamCommit,localImageId:$image[0].localImageId,serviceSourceSha256:$source,databaseImage:"postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",startedAt:"2026-11-02T12:00:00Z",elapsedMilliseconds:10000,databaseVolumeKiB:100000,fictionalIdentitySha256:("c"*64),verifiedTls:true,phaseSeparation:true,administratorRevoked:true,durableRestart:true,phaseBoundaryInterruption:true,authenticationProof:false,cleanup:"complete",observationScope:"not Dex, portal, authentication, load sizing or backup/restore",resourceSamples:(["zitadel","postgres","zitadel","postgres","zitadel","postgres"]|map({component:.,observedAt:"2026-11-02T12:00:01Z",namespaceInitPid:12345,namespaceInitUid:(if .=="zitadel" then 65532 else 999 end),namespaceInitRssKiB:47104,namespaceInitPeakRssKiB:50000,namespaceInitThreads:4,dockerMemoryUsage:"98MiB / 1GiB",dockerCpuPercent:"0.15%",dockerPids:8}))}' > "$scratch/lifecycle-good.json"
+cp "$scratch/lifecycle-good.json" "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
+(cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run")
+lifecycle_controls=0
+for mutation in '.verifiedTls=false' '.administratorRevoked=false' '.durableRestart=false' '.phaseBoundaryInterruption=false' '.phaseSeparation=false' '.authenticationProof=true' '.cleanup="incomplete"' '.serviceSourceSha256=("d"*64)' '.localImageId=("sha256:"+("e"*64))' '.resourceSamples=[]' '.resourceSamples[1].namespaceInitUid=0' '.resourceSamples[0].namespaceInitRssKiB=0' '.resourceSamples[0].dockerPids=129' '.resourceSamples[0].observedAt=null' '.databaseVolumeKiB=300000' '.elapsedMilliseconds=960000' '.fictionalIdentitySha256=""' '.resourceSamples[0].dockerMemoryUsage="not-a-number"' '.resourceSamples[0].dockerMemoryUsage=98' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1GiB\n"' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1GiB\nInjected"' '.resourceSamples[0].dockerMemoryUsage="98MiB / 1invalid"' '.resourceSamples[0].dockerCpuPercent="0.15%\n"' '.resourceSamples[0].dockerCpuPercent="0.15%\nInjected"'; do
+  jq "$mutation" "$scratch/lifecycle-good.json" > "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
+  if (cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run") > "$scratch/lifecycle-refusal.log" 2>&1; then
+    printf 'Lifecycle verifier accepted broken receipt: %s\n' "$mutation" >&2
+    exit 1
+  fi
+  lifecycle_controls=$((lifecycle_controls+1))
+done
+for unit in B kB KiB MB MiB GB GiB; do
+  jq --arg unit "$unit" '.resourceSamples[].dockerMemoryUsage=("0.5"+$unit+" / 1"+$unit)' "$scratch/lifecycle-good.json" > "$scratch/lifecycle/zitadel-image/lifecycle-smoke.json"
+  (cd "$root" && RUNNER_TEMP="$scratch/lifecycle" bash -e -o pipefail -c "$lifecycle_run")
+done
+printf 'Identity lifecycle verifier rejected %s invalid receipt controls.\n' "$lifecycle_controls"
 # The workflow must join the reconstructed SDK and all six actual native calls.
 jq -er '.jobs["build-zitadel-linux"].steps[]|select(.name=="Verify native SDK reconstruction and operations")|.run|split("\u0027")[1]|select(length>0)' "$scratch/ci.json" >"$scratch/sdk-replay.jq"
 jq -n '{recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),toolSource:{toolSourceSha256:("b"*64)},pnpmSources:{manifestSha256:("d"*64)},sdkBootstrap:{schemaVersion:1,profile:"identity-pnpm-sdk-bootstrap-v1",manifestSha256:("e"*64),sourceManifestSha256:("a"*64),toolSourceSha256:("b"*64),recipeSha256:("c"*64),packages:132,sdkReconstructed:false,nativeOfflineReplayProved:false}}}' >"$scratch/sdk-build.json"
@@ -343,10 +384,10 @@ done
 # our command's refusal, not fail earlier because a source path is wrong. The
 # empty fixture is rejected before Docker on the native platform too.
 image_sources=()
-jq -r '.jobs["build-zitadel-linux"].steps[] | select(.name == "Exercise the local restricted identity image") | .run | split("\n")[] | select(startswith("go run ")) | split(" ") as $a | $a[2:($a | index("--browser-smoke"))][]' "$scratch/ci.json" > "$scratch/image-sources.txt"
+jq -r '.jobs["build-zitadel-linux"].steps[] | select(.name == "Exercise the local restricted identity image") | .run | split("\n")[] | select(startswith("go run ")) | split(" ") as $a | $a[2:($a | index("--lifecycle-smoke"))][]' "$scratch/ci.json" > "$scratch/image-sources.txt"
 while IFS= read -r file; do image_sources+=("$file"); done < "$scratch/image-sources.txt"
 mkdir "$scratch/build" "$scratch/repository"
-if (cd "$root" && GOTOOLCHAIN=local go run "${image_sources[@]}" --browser-smoke --build "$scratch/build" --repository "$scratch/repository" --output "$scratch/image") > "$scratch/entrypoint.log" 2>&1; then
+if (cd "$root" && GOTOOLCHAIN=local go run "${image_sources[@]}" --lifecycle-smoke --build "$scratch/build" --repository "$scratch/repository" --output "$scratch/image") > "$scratch/entrypoint.log" 2>&1; then
   echo "empty native service input was accepted" >&2; exit 1
 fi
 if ! grep -q '^identity-image:' "$scratch/entrypoint.log"; then
@@ -355,7 +396,7 @@ fi
 
 # Execute the mandatory consumer's predicate against independent receipt data.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Verify actual identity service evidence") | .run | split("--slurpfile image")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" > "$scratch/service.jq"
-jq -n '{schemaVersion:1,profile:"cli-version-smoke",upstreamCommit:"8afa5dd37a8e723efb9eace8d09fd5c1cccef694",localImageId:("sha256:"+("a"*64))}' > "$scratch/service-image.json"
+jq -n '{schemaVersion:1,profile:"cli-version-smoke",upstreamCommit:"8afa5dd37a8e723efb9eace8d09fd5c1cccef694",localImageId:("sha256:"+("a"*64)),baseNotices:[range(0;7)|{imagePath:"/usr/share/doc/fixture/copyright",file:{bytes:123,sha256:("d"*64)}}]}' > "$scratch/service-image.json"
 jq -n '{schemaVersion:1,profile:"isolated-service-smoke",upstreamCommit:"8afa5dd37a8e723efb9eace8d09fd5c1cccef694",localImageId:("sha256:"+("a"*64)),serviceSourceSha256:("c"*64),databaseImage:"postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826",readyMilliseconds:12000,processSamples:([range(0;3)|{pid:1234,name:"zitadel",uid:65532,gid:65532,rssKiB:47104,peakRssKiB:65536,threads:12,effectiveCapabilities:"0000000000000000",boundingCapabilities:"0000000000000000",noNewPrivileges:true,seccompMode:2,mounts:{rootReadOnly:true,tmpfsBytes:16777216,uid:65532,gid:65532,mode:"0700",noExec:true,noSuid:true,noDev:true}}]),readOnlyRoot:true,configuredTmpfsPaths:["/tmp"],network:"internal-two-container-direct",transport:"fictional-http-only",oidcDiscovery:true,embeddedConsoleHTTP:true,browserProof:false,authenticationProof:false,cleanup:"complete",imageAdmission:"unknown",licenseClosure:"unknown"}' > "$scratch/service-positive.json"
 check_service() {
   jq -e --arg source "$(printf 'c%.0s' {1..64})" --slurpfile image "$scratch/service-image.json" -f "$scratch/service.jq" "$1" > /dev/null
@@ -371,6 +412,12 @@ for mutation in '.localImageId=("sha256:"+("b"*64))' '.upstreamCommit=("b"*40)' 
   jq "$mutation" "$scratch/service-positive.json" > "$scratch/service-negative.json"
   if check_service "$scratch/service-negative.json"; then echo "invalid service evidence admitted: $mutation" >&2; exit 1; fi
 done
+cp "$scratch/service-image.json" "$scratch/service-image-original.json"
+for mutation in 'del(.baseNotices)' '.baseNotices=[]' '.baseNotices |= .[:6]' '.baseNotices[0].imagePath="/app/private"' '.baseNotices[0].file.bytes=0' '.baseNotices[0].file.sha256="invalid"'; do
+  jq "$mutation" "$scratch/service-image-original.json" > "$scratch/service-image.json"
+  if check_service "$scratch/service-positive.json"; then echo "invalid base notice evidence admitted: $mutation" >&2; exit 1; fi
+done
+cp "$scratch/service-image-original.json" "$scratch/service-image.json"
 # Exercise the outer replay's actual service-consumption predicate. A component
 # readback must remain source-bound and must not promote itself to whole replay.
 sed -n '/^jq -e --slurpfile original.*--slurpfile restored /,/retained-go-service-readback.json/p' \
@@ -604,6 +651,11 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify the bounded console notice capture" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=("$"+"{{ runner.temp }}/zitadel-build/service") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("/zitadel-handoff/handoff.json") | not)) | join("\n")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("/zitadel-handoff/handoff.json"; "/zitadel-handoff/**")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | sub("/zitadel-handoff/handoff.json"; "/zitadel-handoff/inputs.tar")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path + "\n" + "$" + "{{ runner.temp }}/zitadel-handoff/unrelated.json") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path + "\n" + "$" + "{{ runner.temp }}/zitadel-handoff/handoff.json") else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select((.uses // "" | startswith("actions/upload-artifact@")) | not))' \
   '.jobs["build-zitadel-linux"].steps += [.jobs["build-zitadel-linux"].steps[] | select(.uses // "" | startswith("actions/upload-artifact@"))]' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .if="success()" else . end)' \
@@ -625,7 +677,12 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Replay the complete retained identity build without networking"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Replay the complete retained identity build without networking" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Replay the complete retained identity build without networking" then .["continue-on-error"]=true else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .run=(.run | sub("--browser-smoke"; "--service-smoke")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .run=(.run | sub("--lifecycle-smoke"; "--service-smoke")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .run=(.run | sub("--lifecycle-smoke"; "--browser-smoke")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify actual identity lifecycle evidence"))' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual identity lifecycle evidence" then .if="false" else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify actual identity lifecycle evidence" then .["continue-on-error"]=true else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("lifecycle-smoke.json") | not)) | join("\n")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Exercise the local restricted identity image" then .["continue-on-error"]=true else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if (.uses // "" | startswith("actions/upload-artifact@")) then .with.path=(.with.path | split("\n") | map(select(contains("service-smoke.json") | not)) | join("\n")) else . end)' \
@@ -645,4 +702,5 @@ for mutation in \
   if check "$scratch/mutation.json"; then echo "CI admitted broken Linux build control: $mutation" >&2; exit 1; fi
   controls=$((controls+1))
 done
+bash "$root/scripts/identity-base-source-ci.test.sh"
 printf 'ZITADEL build CI contract passed, including %s broken-wiring controls.\n' "$controls"

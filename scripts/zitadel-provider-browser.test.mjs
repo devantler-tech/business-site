@@ -4,6 +4,29 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source=readFileSync(new URL('./zitadel-browser.go',import.meta.url),'utf8');
 const script=name=>{const match=source.match(new RegExp('const '+name+' = `([\\s\\S]*?)`'));assert.ok(match,name);return new Function(match[1]);};
+// The exact native observation must prove a visible, focused, unconditional
+// source offer. These synthetic controls are not actual browser rendering.
+const sourceOfferObservation=script('browserSourceOfferObservation');
+const offerURL='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1';
+for(const kind of ['console','login'])for(const fault of ['none','missing','duplicate','wrong-url','query','hidden','covered','offscreen','invisible','unfocused','negative-tabindex','wrong-name','missing-rel','wrong-target','opposite-theme',...(kind==='console'?['transitioning-theme','missing-theme-root','wrong-background']:[])]){
+ const a={tagName:'A',href:offerURL+(fault==='query'?'?latest=1':''),innerText:fault==='wrong-name'?'Help':'Source code',tabIndex:fault==='negative-tabindex'?-1:0,
+  rel:fault==='missing-rel'?'noopener':'noopener noreferrer',target:fault==='wrong-target'?'_self':'_blank',
+  getAttribute:name=>name==='href'?(fault==='wrong-url'?'https://outside.invalid/source':a.href):null,
+  getClientRects:()=>fault==='hidden'?[]:[{}],closest:()=>fault==='hidden'?{}:null,
+  getBoundingClientRect:()=>({x:20,y:20,left:20,right:120,top:20,bottom:fault==='offscreen'?900:40,width:100,height:20})};
+ const back={getAnimations:()=>fault==='transitioning-theme'?[{pending:false,playState:'running'}]:[]};
+ globalThis.location=new URL('http://fixture.localhost:8080/ui/login/login');
+ globalThis.innerWidth=390;globalThis.innerHeight=844;
+ globalThis.getComputedStyle=e=>e===back?{backgroundColor:fault==='wrong-background'?'rgb(17, 24, 39)':'rgb(250, 250, 250)'}:{visibility:fault==='invisible'?'hidden':'visible',display:'inline',opacity:'1'};
+ globalThis.document={activeElement:fault==='unfocused'?{}:a,querySelectorAll:()=>fault==='missing'?[]:fault==='duplicate'?[a,a]:[a],elementFromPoint:()=>({closest:()=>fault==='covered'?{}:a}),
+  documentElement:{classList:{contains:name=>name==='lgn-light-theme'&&fault!=='opposite-theme'}},
+  querySelector:selector=>selector==='cnsl-root.light-theme'?(fault==='opposite-theme'||fault==='missing-theme-root'?null:{}):selector==='cnsl-root .main-container'?back:null};
+ const p=sourceOfferObservation(kind,'light');
+ assert.equal(typeof p.themeReady,'boolean','source-offer theme observation is missing');
+ assert.equal(p.visible&&p.keyboard&&p.themeReady,fault==='none','source offer admitted '+kind+'/'+fault);
+ if(fault==='none')assert.equal(p.href,offerURL);
+}
+console.log('PASS: exact source-offer observation in both interfaces and 31 adverse visibility, focus and settled-theme controls');
 const observe=script('browserProviderObservation');
 globalThis.location=new URL('http://fixture.localhost:8080/ui/login/login');
 globalThis.document={querySelectorAll:()=>[],querySelector:()=>null,documentElement:{classList:{contains:()=>true}},readyState:'complete',fonts:{status:'loaded'}};

@@ -1167,6 +1167,18 @@ same config ID and complete selected configuration, recheck the archive bytes,
 and remove the reloaded owned image. Load output text is never identity proof.
 Any failed export, absence check, reload, readback or cleanup prevents success.
 
+The image inspection also requires `RootFS.type` to be `layers`, the thirteen
+ordered DiffIDs from pinned amd64 config
+`55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110`,
+and exactly three application layers for WORKDIR and the two COPY instructions.
+Missing, shortened, substituted or extra
+layers refuse before execution. Reload inspection compares this complete
+filesystem identity too. The receipt retains it as `baseRootFS`; those
+uncompressed DiffIDs are distinct from compressed registry layer digests.
+This check binds the candidate to the frozen base filesystem. It does not
+itself verify an upstream signature, retain base-package source, or complete
+the base's separate distribution assessment.
+
 The receipt's `candidateArchive` and `candidateReloaded` fields bind this local
 handoff to the exercised image. The archive is opaque to this helper: Docker
 performs save/load; no second archive parser is introduced. Its tar digest,
@@ -1191,6 +1203,28 @@ by this test. No customer credentials or configuration are supplied.
 false. Remaining terms and corresponding source remain #326/#308; complete
 restricted services and actual invitation/login acceptance remain #305/#302.
 The portal and identity publication remain off.
+
+## Native versioned source offer
+
+The explicit preparer's `native-source-offer-v1` profile adds an unconditional
+`Source code` anchor to both frozen native footers. The destination is
+`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1`.
+Both templates retain a 2026-11-01 modification notice. Existing privacy/terms
+links, branding conditions and theme controls remain; none controls the source
+anchor's availability. The complete prepared profile is
+`6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181`:
+9,528 files and 261,325,366 bytes before installation. Its two additional changed
+paths and fixed destination enter the preparation record and dated source records.
+
+The native browser worker requires four additional observations: Login and
+Console, each in light and dark themes. It reaches the real anchor with Tab,
+checks its exact destination and visible unobstructed bounds, captures a separate
+PNG, and rechecks the same page and focused anchor afterward. The host verifies
+the closed four-case set and every PNG digest; the earlier 47 screenshots remain
+separate. The fixture follows no external source link and proves no public
+availability. This profile neither publishes source nor admits distribution.
+The corresponding immutable release and anonymous retrieval must be verified
+before image distribution or a network-facing deployment uses this offer.
 
 ## Isolated service process test
 
@@ -1313,3 +1347,53 @@ requires their glyphs and links to fit inside it; it injects no DOM or styles.
 These checks cover two actual table variants and one actual editor; the other variants
 remain bound by their exact transformed source hashes. This remains presentation
 evidence, not completed federation, invitations, MFA or portal activation.
+
+The same owned container supplies six original Debian copyright bodies and the
+complete GPL-2 text they reference through seven explicit Docker copies. The
+closed, bounded readback checks original byte lengths, hashes and modes before
+export and again after reload; the receipt records their actual image paths.
+These originals are retained separately under `base-notices/`, alongside the
+RootFS prefix evidence. They were already shipped by the base, rather than
+new notices added to the application package. This is notice preservation and
+filesystem evidence, not complete base corresponding-source admission.
+
+The frozen ca-certificates copyright is a regular file with original mode 0555,
+while the other six copied terms files are 0644. Preserve and verify each
+member's actual mode rather than normalizing or assuming one mode for all
+notices. The native source inspection and the original tar headers bind this
+distinction; the executable bit is not permission to execute a copyright file.
+
+The native source-offer screenshots require their own settled-theme observation
+before and after capture. Console's two theme buttons both toggle, including the
+selected button. The source-offer journey therefore uses nonactivating WebDriver
+keyboard input to establish that control as its origin, then genuine reverse Tab
+to reach the source link. It neither clicks the theme control nor borrows an
+earlier view's theme result. Existing provider/editor observations retain their
+independent theme and transition checks.
+
+## Original base sources
+
+The otherwise inert [`identity-release` command](../server/cmd/identity-release/README.md)
+retains the frozen base's original OCI index/amd64 manifest/config, thirteen
+compressed layers, five Debian source descriptors, seven source archives/signature
+files, six installed-package records and seven complete notice bodies. Its closed
+41-file source set plus manifest preserves each original image mode separately
+from the read-only transport mode. Every original length and digest is pinned.
+The native CI caller captures, verifies and deterministically packs this set with
+the server's original Go compiler before selecting the frozen service compiler.
+It retains only four compact evidence files in ordinary build diagnostics, not
+the raw source archive or a newly distributed image.
+
+Complete metadata/layer/package/version/checksum joins and independent capsule
+readback are required. Missing, extra, linked, substituted or writable files fail;
+the archive is read back after closing and the whole source capsule is checked
+again. Acquisition has no authenticated input or arbitrary URL/profile option.
+An ordinary invocation neither fetches nor writes anything. Original source
+archives remain opaque data throughout these operations.
+
+OpenPGP armor is retained without a signature-verification claim. This command
+also does not verify the base image signature or public source availability.
+`baseImageSignatureVerified`, `openpgpVerified`, `sourceReleaseVerified` and
+`imageAdmission` remain false. Durable corresponding source, a separately
+authorized signed publisher, complete image/source pairing and the real deployed
+customer journey remain open in #308, #305 and #302.

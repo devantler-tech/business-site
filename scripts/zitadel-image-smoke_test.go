@@ -12,6 +12,71 @@ import (
 )
 
 // Process doubles test orchestration failures, never real container acceptance.
+func imageBaseFixtureLayers(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/zitadel-source/base/config.json.raw")
+	if err != nil || imageHash(raw) != "55a757dc8ab862a4eb634c434261dcd26f17c186b54f7bce845404a335456110" {
+		t.Fatal("independent frozen base config differs")
+	}
+	var config struct {
+		RootFS struct {
+			DiffIDs []string `json:"diff_ids"`
+		} `json:"rootfs"`
+	}
+	if err := json.Unmarshal(raw, &config); err != nil || len(config.RootFS.DiffIDs) != 13 {
+		t.Fatal("independent base RootFS observation incomplete")
+	}
+	return append(config.RootFS.DiffIDs, "sha256:"+strings.Repeat("c", 64), "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("e", 64))
+}
+
+func TestImageSmokeRejectsAnUnboundBaseFilesystem(t *testing.T) {
+	for _, kind := range []string{"missing", "short", "substituted", "extra", "wrong-type", "old-single", "only-two", "bad-first-app", "bad-middle-app", "bad-last-app"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			base := imageSmokeDouble(t, build, "")
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				raw, err := base(d, name, args...)
+				if err == nil && name == "docker" && args[0] == "image" && args[1] == "inspect" {
+					var all []map[string]any
+					if err := json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					layers, fsType := imageBaseFixtureLayers(t), "layers"
+					switch kind {
+					case "missing":
+						layers = nil
+					case "short":
+						layers = layers[:12]
+					case "substituted":
+						layers[0] = "sha256:" + strings.Repeat("d", 64)
+					case "extra":
+						layers = append(layers, "sha256:"+strings.Repeat("e", 64))
+					case "wrong-type":
+						fsType = "other"
+					case "old-single":
+						layers = layers[:14]
+					case "only-two":
+						layers = layers[:15]
+					case "bad-first-app":
+						layers[13] = "invalid"
+					case "bad-middle-app":
+						layers[14] = "invalid"
+					case "bad-last-app":
+						layers[15] = "invalid"
+					}
+					all[0]["RootFS"] = map[string]any{"Type": fsType, "Layers": layers}
+					return imageTestJSON(t, all), nil
+				}
+				return raw, err
+			}
+			if err := imageSmoke(build, repo, filepath.Join(t.TempDir(), "smoke"), run); err == nil {
+				t.Fatal("image with unbound base filesystem was accepted")
+			}
+		})
+	}
+}
+
 func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 	t.Helper()
 	started := false
@@ -73,7 +138,7 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			if kind == "architecture" {
 				arch = "arm64"
 			}
-			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app", "Labels": map[string]string{"org.devantler-tech.identity-smoke-owner": owner}}}}), nil
+			return imageTestJSON(t, []any{map[string]any{"Id": "sha256:" + strings.Repeat("b", 64), "Os": "linux", "Architecture": arch, "RootFS": map[string]any{"Type": "layers", "Layers": imageBaseFixtureLayers(t)}, "Config": map[string]any{"User": user, "Entrypoint": []string{"/app/zitadel"}, "Cmd": []string{"--version"}, "WorkingDir": "/app", "Labels": map[string]string{"org.devantler-tech.identity-smoke-owner": owner}}}}), nil
 		case args[0] == "create":
 			for _, flag := range []string{"--read-only", "--network=none", "--user=65532:65532", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pull=never", "--platform=linux/amd64", "--pids-limit=32", "--memory=256m", "--cpus=1"} {
 				if !strings.Contains(command, flag) {
@@ -122,6 +187,38 @@ func imageSmokeDouble(t *testing.T, build string, kind string) imageCommand {
 			}
 			return []byte("zitadel version 4.20.0\n"), nil
 		case args[0] == "cp":
+			if strings.Contains(args[1], ":/usr/share/") {
+				imagePath := strings.SplitN(args[1], ":", 2)[1]
+				var original string
+				switch imagePath {
+				case "/usr/share/doc/base-files/copyright":
+					original = "base-files-copyright.raw"
+				case "/usr/share/doc/netbase/copyright":
+					original = "netbase-copyright.raw"
+				case "/usr/share/doc/tzdata/copyright":
+					original = "tzdata-copyright.raw"
+				case "/usr/share/doc/tzdata-legacy/copyright":
+					original = "tzdata-legacy-copyright.raw"
+				case "/usr/share/doc/media-types/copyright":
+					original = "media-types-copyright.raw"
+				case "/usr/share/doc/ca-certificates/copyright":
+					original = "ca-certificates-copyright.raw"
+				case "/usr/share/common-licenses/GPL-2":
+					original = "GPL-2.raw"
+				default:
+					t.Fatalf("unexpected base notice path: %s", imagePath)
+				}
+				b, err := os.ReadFile(filepath.Join("testdata/zitadel-source/base", original))
+				if err != nil {
+					return nil, err
+				}
+				mode := os.FileMode(0644)
+				if original == "ca-certificates-copyright.raw" {
+					mode = 0555
+				}
+				return nil, os.WriteFile(args[2], b, mode)
+			}
+
 			context := filepath.Join(filepath.Dir(args[2]), "context")
 			err := filepath.WalkDir(context, func(p string, d os.DirEntry, e error) error {
 				if e != nil {
@@ -408,6 +505,12 @@ func TestRestrictedImageSmokeCompletesOnlyAfterObservedSuccess(t *testing.T) {
 	if !bytes.Contains(b, []byte("cli-version-smoke")) || !bytes.Contains(b, []byte("unknown")) {
 		t.Fatal("missing honest scope")
 	}
+	var receipt struct {
+		BaseRootFS imageRootFS `json:"baseRootFS"`
+	}
+	if err := json.Unmarshal(b, &receipt); err != nil || receipt.BaseRootFS.Type != "layers" || strings.Join(receipt.BaseRootFS.Layers, "\n") != strings.Join(imageBaseFixtureLayers(t), "\n") {
+		t.Fatal("actual inspected base filesystem is absent from the receipt")
+	}
 }
 
 func TestServiceProbeFailureCannotEmitSuccessfulImageReceipt(t *testing.T) {
@@ -472,5 +575,249 @@ func TestImageCleanupNeverDeletesAnUnownedObject(t *testing.T) {
 	}
 	if deleted {
 		t.Fatal("cleanup attempted to delete an unowned object")
+	}
+}
+
+// These controls exercise the actual Docker-copy boundary, not a notice summary.
+func TestImageSmokeRejectsMissingOrSubstitutedBaseCopyrights(t *testing.T) {
+	for _, pkg := range []string{"base-files", "netbase", "tzdata", "tzdata-legacy", "media-types", "ca-certificates", "GPL-2"} {
+		for _, kind := range []string{"missing", "substituted", "wrong-mode"} {
+			t.Run(pkg+"/"+kind, func(t *testing.T) {
+				build, repo, _ := imageTestFixture(t)
+				imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+				base := imageSmokeDouble(t, build, "")
+				imagePath := "/usr/share/doc/" + pkg + "/copyright"
+				if pkg == "GPL-2" {
+					imagePath = "/usr/share/common-licenses/GPL-2"
+				}
+				run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+					if name == "docker" && len(args) == 3 && args[0] == "cp" && strings.HasSuffix(args[1], ":"+imagePath) {
+						if kind == "missing" {
+							return nil, fmt.Errorf("original copyright missing")
+						}
+						if kind == "substituted" {
+							return nil, os.WriteFile(args[2], []byte("substituted original copyright\n"), 0644)
+						}
+						raw, err := base(d, name, args...)
+						if err == nil {
+							err = os.Chmod(args[2], 0600)
+						}
+						return raw, err
+					}
+					return base(d, name, args...)
+				}
+				out := filepath.Join(t.TempDir(), "smoke")
+				if err := imageSmoke(build, repo, out, run); err == nil {
+					t.Fatal("missing or substituted base copyright accepted")
+				}
+				if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+					t.Fatal("invalid base produced success receipt")
+				}
+			})
+		}
+	}
+}
+
+func TestImageSmokeRetainsOriginalBaseNoticeCopies(t *testing.T) {
+	build, repo, _ := imageTestFixture(t)
+	imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+	out := filepath.Join(t.TempDir(), "smoke")
+	if err := imageSmoke(build, repo, out, imageSmokeDouble(t, build, "")); err != nil {
+		t.Fatal(err)
+	}
+	var receipt struct {
+		BaseNotices []imageBaseNotice `json:"baseNotices"`
+	}
+	raw, err := os.ReadFile(filepath.Join(out, "image-smoke.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	originals := []string{"base-files", "netbase", "tzdata", "tzdata-legacy", "media-types", "ca-certificates", "GPL-2"}
+	if len(receipt.BaseNotices) != len(originals) {
+		t.Fatal("incomplete original copyright receipt")
+	}
+	for i, name := range originals {
+		fixture := name + "-copyright.raw"
+		wantPath := "/usr/share/doc/" + name + "/copyright"
+		if name == "GPL-2" {
+			fixture = "GPL-2.raw"
+			wantPath = "/usr/share/common-licenses/GPL-2"
+		}
+		want, err := os.ReadFile(filepath.Join("testdata/zitadel-source/base", fixture))
+		if err != nil {
+			t.Fatal(err)
+		}
+		notice := receipt.BaseNotices[i]
+		got, err := os.ReadFile(filepath.Join(out, notice.File.Path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if notice.ImagePath != wantPath || !bytes.Equal(got, want) || notice.File.SHA256 != imageHash(want) || notice.File.Bytes != len(want) || notice.File.Mode != func() uint32 {
+			if name == "ca-certificates" {
+				return 0555
+			}
+			return 0644
+		}() {
+			t.Fatal("original base copyright bytes/receipt differ")
+		}
+	}
+}
+func TestImageSmokeRejectsLateBaseNoticeReplacement(t *testing.T) {
+	for _, when := range []string{"probe", "reload"} {
+		t.Run(when, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			out := filepath.Join(t.TempDir(), "smoke")
+			base := imageSmokeDouble(t, build, "")
+			replace := func() {
+				if err := os.WriteFile(filepath.Join(out, "base-notices/GPL-2.txt"), []byte("replaced late\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				b, err := base(d, name, args...)
+				if when == "reload" && name == "docker" && args[0] == "image" && args[1] == "load" {
+					replace()
+				}
+				return b, err
+			}
+			probe := func(string, string) error {
+				if when == "probe" {
+					replace()
+				}
+				return nil
+			}
+			if err := imageSmoke(build, repo, out, run, probe); err == nil {
+				t.Fatal("late base copyright substitution admitted")
+			}
+			if _, err := os.Stat(filepath.Join(out, "image-smoke.json")); !os.IsNotExist(err) {
+				t.Fatal("late substitution emitted success")
+			}
+		})
+	}
+}
+
+func TestSavedImageVerifierNeverRebuildsOrRunsTheCandidate(t *testing.T) {
+	for _, kind := range []string{"valid", "foreign", "presence-error", "load-error", "payload", "extra", "config", "archive"} {
+		t.Run(kind, func(t *testing.T) {
+			build, repo, _ := imageTestFixture(t)
+			imageTestWrite(t, repo, "Dockerfile.zitadel", []byte("fixture Dockerfile\n"))
+			original := filepath.Join(t.TempDir(), "original")
+			base := imageSmokeDouble(t, build, "")
+			if err := imageSmoke(build, repo, original, base); err != nil {
+				t.Fatal(err)
+			}
+			native := t.TempDir()
+			imageTestWrite(t, native, "zitadel-build/build-receipt.json", mustImageTestRead(t, build, "build-receipt.json"))
+			if err := os.Rename(original, filepath.Join(native, "zitadel-image")); err != nil {
+				t.Fatal(err)
+			}
+			out := filepath.Join(t.TempDir(), "verified")
+			loads, removals := 0, 0
+			savedOwner := ""
+			run := func(d time.Duration, name string, args ...string) ([]byte, error) {
+				if name != "docker" || args[0] == "build" || args[0] == "start" || args[0] == "run" || args[0] == "image" && args[1] == "save" {
+					t.Fatalf("saved verifier executed forbidden operation: %s %v", name, args)
+				}
+				if args[0] == "image" && args[1] == "ls" {
+					if kind == "presence-error" {
+						return []byte(""), fmt.Errorf("unavailable")
+					}
+					if kind == "foreign" {
+						return []byte("sha256:" + strings.Repeat("b", 64) + "\n"), nil
+					}
+					return nil, nil
+				}
+				if args[0] == "image" && args[1] == "load" {
+					loads++
+					if kind == "load-error" {
+						return []byte("Loaded image"), fmt.Errorf("failed load")
+					}
+				}
+				if args[0] == "image" && args[1] == "rm" {
+					removals++
+				}
+				if args[0] == "create" {
+					for i, arg := range args {
+						if arg == "--label" {
+							savedOwner = strings.TrimPrefix(args[i+1], "org.devantler-tech.identity-smoke-owner=")
+						}
+					}
+					if err := os.CopyFS(filepath.Join(out, "context"), os.DirFS(filepath.Join(native, "zitadel-image/context"))); err != nil {
+						t.Fatal(err)
+					}
+					if err := filepath.WalkDir(filepath.Join(native, "zitadel-image/context"), func(p string, d os.DirEntry, e error) error {
+						if e != nil {
+							return e
+						}
+						if d.IsDir() {
+							return nil
+						}
+						rel, e := filepath.Rel(filepath.Join(native, "zitadel-image/context"), p)
+						if e != nil {
+							return e
+						}
+						st, e := os.Stat(p)
+						if e != nil {
+							return e
+						}
+						return os.Chmod(filepath.Join(out, "context", rel), st.Mode().Perm())
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				raw, err := base(d, name, args...)
+				if err == nil && args[0] == "inspect" {
+					var all []map[string]any
+					if err = json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					all[0]["Config"].(map[string]any)["Labels"] = map[string]string{"org.devantler-tech.identity-smoke-owner": savedOwner}
+					all[0]["State"].(map[string]any)["Status"] = "created"
+					raw = imageTestJSON(t, all)
+				}
+				if err == nil && args[0] == "image" && args[1] == "inspect" && kind == "config" {
+					var all []map[string]any
+					if err = json.Unmarshal(raw, &all); err != nil {
+						t.Fatal(err)
+					}
+					all[0]["Architecture"] = "arm64"
+					return imageTestJSON(t, all), nil
+				}
+				if err == nil && args[0] == "cp" && strings.HasSuffix(args[1], ":/app/.") {
+					if kind == "payload" {
+						imageTestWrite(t, args[2], "zitadel", []byte("changed"))
+					}
+					if kind == "extra" {
+						imageTestWrite(t, args[2], "extra", []byte("extra"))
+					}
+				}
+				return raw, err
+			}
+			if kind == "archive" {
+				imageTestWrite(t, filepath.Join(native, "zitadel-image"), "candidate-image.tar", []byte("changed"))
+			}
+			err := imageVerifySaved(native, repo, out, run)
+			if kind == "valid" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if loads != 1 || removals != 0 {
+					t.Fatal("successful original must be retained for explicit publication")
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("unverified saved candidate accepted")
+			}
+			if kind == "foreign" || kind == "presence-error" || kind == "archive" {
+				if loads != 0 || removals != 0 {
+					t.Fatal("foreign image mutated")
+				}
+			}
+		})
 	}
 }

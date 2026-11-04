@@ -102,7 +102,7 @@ for (const omission of ['symlink', 'excluded']) {
 }
 
 test('valid Danish copy and project API names pass the real checker', () => {
-  const result = check('Send forespørgsel. Dine projektforespørgsler. pgxpool openfeature PKCE. contacttrial contacttrialintegration contactintegration autofocus. pipefail coverprofile.');
+  const result = check('Send forespørgsel. Dine projektforespørgsler. Andre opgaver vurderer tidsplan. pgxpool openfeature PKCE. contacttrial contacttrialintegration contactintegration autofocus. pipefail coverprofile.');
   assert.equal(result.status, 0, result.output);
 });
 

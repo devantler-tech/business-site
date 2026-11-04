@@ -34,8 +34,9 @@ export function rankPublicProducts(catalogue: Product[], stars: StarSnapshot) {
     .sort((a, b) => b.stars - a.stars || (a.repository < b.repository ? -1 : a.repository > b.repository ? 1 : 0));
 }
 
-// The editorial inventory stays complete. Only maintained tools earn a business
-// showcase; live visibility/status and popularity come from a complete forge read.
+// The editorial inventory stays complete. Only curated, maintained tools earn a
+// business showcase of up to six; live visibility/status and popularity come from
+// a complete forge read. A curated set smaller than six is published without filler.
 export function selectPublicTools(catalogue: Product[], stars: StarSnapshot) {
   if (
     !stars.fetchedAt ||
@@ -57,7 +58,7 @@ export function selectPublicTools(catalogue: Product[], stars: StarSnapshot) {
     const entry = stars.metadata![repository];
     return showcaseTool === true && !entry.private && !entry.archived && !entry.fork;
   });
-  if (tools.length < 6) throw new Error("Fewer than six eligible tools; keep the previous publication");
+  if (tools.length < 3) throw new Error("Fewer than three eligible tools; keep the previous publication");
   return tools.slice(0, 6);
 }
 

@@ -37,7 +37,7 @@ release_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || (inputs.mode == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027)) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
-    .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b" and
+    .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@16f1a6c96aaf2581885e17389a0e0f9f42387970" and
     .jobs.release.permissions=={"contents":"read"} and
     .jobs.release.secrets=={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"} and
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
@@ -47,10 +47,10 @@ release_valid() {
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
-    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease }}" and
+    .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and
-    .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@467f07582436a26b62cf4aa756423512f85ba0c0" and
+    .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@16f1a6c96aaf2581885e17389a0e0f9f42387970" and
     .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and
     .jobs.publish.secrets==null and
     .jobs.publish.with=={"app-name":"business-site","deploy-path":"./deploy","enable-caller-pin":true,"enable-signed-promotion":true,"enable-prebuilt-webapp":true,"enable-signed-recovery":false,

@@ -137,7 +137,8 @@ activated.
 Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage index),
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
-v13 (durable membership incarnations), and v14 (expiring work-approval evidence)
+v13 (durable membership incarnations), v14 (expiring work-approval evidence),
+and v15 (the case-by-case other-request category)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.
@@ -251,6 +252,16 @@ See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
 permissions and failure handling. No migration enables a portal operation or
 establishes a production deployment.
 
+### Separate native identity preparation job
+
+The verified application executable accepts the exclusive `--identity-materialize`
+mode to prepare private native ZITADEL init/setup/serve files. See
+[CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#private-native-phase-preparation) for the
+exact four options, separate owner-file or atomic-projection inputs and private
+output contract. No public artifact or extra compiler is needed by this job. It neither runs the native
+service nor grants database, API-provisioning, deployment or portal access.
+Ordinary startup remains unchanged; mixed web/migration options fail.
+
 ### Bounded identity staging
 
 With the complete private identity configuration above, an authorized disposable
@@ -284,6 +295,36 @@ These are synthetic staging proofs, not live Dex/Google/Microsoft registration,
 production ingress, customer isolation or a legal-compliance verdict. Keep
 monorepo#3936/#3939, website #19 and portal #21 open for their remaining release
 proofs. See [the staging decision](../docs/adr/0009-bounded-identity-staging.md).
+
+### Explicit production identity profile
+
+Long-lived invited access uses a separate operator selection:
+`PORTAL_IDENTITY_PROFILE=production`, the existing maintained-provider JSON in
+`PORTAL_IDENTITY_FLAG`, and no `PORTAL_IDENTITY_LEASE_UNTIL`. A typed false flag
+is valid closed configuration. Missing, malformed, wrong-type or conflicting
+production inputs fail with generic diagnostics before an HTTP listener opens.
+Leaving the profile and activation values absent retains ordinary disabled startup.
+The staging selection remains unchanged and cannot exceed ten minutes.
+
+The selected provider inherits process cancellation and SDK shutdown instead of
+borrowing a staging timer. Only the identity capability can be enabled. Current
+issuer/subject invitations and membership still authorize every private session;
+the profile grants no role and enables no request, payment or work capability.
+Before listening, the real command still verifies its restricted database login
+and configured TLS broker. Complete dependency configuration alone enables nothing.
+
+Configuration belongs to the operator's private process environment. Changing an
+external environment file does not change a running process. Disable the flag
+and restart through the reviewed deployment path to close identity access; remove
+the profile and activation values to return to ordinary disabled startup. Do not
+extend a staging lease to create production access.
+
+The required suite exercises the compiled command's ordinary, staging, enabled,
+disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitation,
+cookie-session, membership-revocation and cancellation checks. These are source
+acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
+The shipped deployment stays disabled: #305 retains runtime delivery and #302
+retains deployed acceptance and the separately reviewed activation change.
 
 ### Production public-content template
 

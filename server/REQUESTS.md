@@ -1,9 +1,15 @@
 # Private project requests
 
-An invited client can send a free website, web-app or service brief, revisit its
+An invited client can send a free website, web-app, service or other brief, revisit its
 receipt and see up to 50 recent requests. Older receipt links remain usable.
 This is source functionality behind **two closed release gates**, not live
 customer intake. The public website and static Pages output contain no briefs.
+
+“Other requests” / “Andre opgaver” covers work outside the three standard
+categories. Devantler Tech first assesses whether it can help; any work, price
+and timeline require a separate agreement. The category appears in the native
+client form, saved receipt and operator list/detail. It creates no automatic
+quote, payment, work approval, queue claim or agent execution.
 
 `portal-identity` and `portal-requests` are OpenFeature booleans, evaluated with
 false defaults on every request operation. Missing flags, wrong types and errors
@@ -16,7 +22,8 @@ by 12 November 2026 under [#57](https://github.com/devantler-tech/business-site/
 
 The workspace links to `/portal/requests` only for a client while the request gate
 is on. `/portal/requests/new` renders an EN/DA native form with a fresh opaque
-submission key. POST `/portal/requests` accepts one product, a title of up to 120
+submission key. POST `/portal/requests` accepts exactly one of `website`, `app`,
+`service` or `other`, a title of up to 120
 Unicode code points and a brief of up to 1,200, before trimming outer whitespace.
 Native textarea line endings are canonicalized to LF before counting and retry
 comparison, so form-encoded CRLF does not consume an extra character.

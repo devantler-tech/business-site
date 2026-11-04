@@ -48,9 +48,15 @@
         <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
-      </article>{/each}</div>
+      </article>{/each}
+      <article class="offer" data-offer="other">
+        <h3>{t.otherRequest.title}</h3><p class="offer-description">{t.otherRequest.description}</p>
+        <p class="assessment">{t.otherRequest.assessment}</p>
+        <ul>{#each t.otherRequest.includes as item}<li>{item}</li>{/each}</ul>
+        <p class="boundary">{t.otherRequest.boundary}</p><a class="text-link" href="#contact">{t.otherRequest.action}<span aria-hidden="true">↗</span></a>
+      </article></div>
       <p class="price-note">{t.priceNote}</p>
-      <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
+      <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p><p class="hosting-location" data-hosting-location>{t.hostingLocation}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
     </section>
     <section id="work" class="work-band" aria-labelledby="work-title">
       <div class="container section">
@@ -114,9 +120,10 @@
   .quality-columns h3 { font-size: 1.2rem; }
   .quality-columns p { margin-top: .8rem; font-size: .95rem; }
   .quality-scope { max-width: 860px; font-size: .8rem; margin-top: 2rem; }
-  .offers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+  .offers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
   .offer { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; padding: 1.65rem; background: var(--card); }
   .offer-description { font-size: .9rem; margin-top: .8rem; min-height: 4.5em; }
+  .assessment { margin-top: 1.5rem; padding-bottom: 1.3rem; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 1.2rem; font-weight: 600; }
   .price { display: flex; flex-direction: column; margin-top: 1.5rem; }
   .price > span { font-size: .8rem; color: var(--muted); }
   .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
