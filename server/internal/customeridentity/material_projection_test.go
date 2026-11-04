@@ -91,7 +91,11 @@ func TestMaterialProjectionSnapshotRefusesChanges(t *testing.T) {
 			projectionMust(t, err)
 			projection, err := materialOpenProjection(input, names)
 			projectionMust(t, err)
-			defer func() { _ = projection.root.Close() }()
+			defer func() {
+				if err := projection.root.Close(); err != nil {
+					t.Errorf("close projection root: %v", err)
+				}
+			}()
 			generation := filepath.Join(input, projection.generation)
 			snapshot, err := materialReadOwned(generation, names, materialProjectionOwned)
 			projectionMust(t, err)
