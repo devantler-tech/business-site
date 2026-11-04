@@ -1150,7 +1150,7 @@ jobs:
       - test-combined-runtime
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@16f1a6c96aaf2581885e17389a0e0f9f42387970 # v20.1.1
+        uses: devantler-tech/.github/actions/aggregate-job-checks@17ee7092d5ff1748164185ff37fcff5214f9f870 # v20.1.5
         with:
           job-results: >-
             ${{ needs.changes.result }}
@@ -1189,7 +1189,7 @@ jobs:
       - publish-container
     steps:
       - name: Check job results
-        uses: devantler-tech/.github/actions/aggregate-job-checks@16f1a6c96aaf2581885e17389a0e0f9f42387970 # v20.1.1
+        uses: devantler-tech/.github/actions/aggregate-job-checks@17ee7092d5ff1748164185ff37fcff5214f9f870 # v20.1.5
         with:
           check-workflow-startup: "true"
           job-results: >-
