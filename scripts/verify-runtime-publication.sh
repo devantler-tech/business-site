@@ -5,7 +5,7 @@ export LC_ALL=C
 readonly repo=devantler-tech/business-site
 readonly image=ghcr.io/devantler-tech/business-site
 readonly artifact=$image/manifests
-readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@66b52462d8f6c74b95196cc3642091d05b253983
+readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@1a0eb6f18b88a7816b91cbf692b8ad8ea9a08123
 # Stop before emitting a receipt; errors describe the rejected boundary, not private input.
 fail() {
   printf 'runtime publication: refused %s\n' "$1" >&2
