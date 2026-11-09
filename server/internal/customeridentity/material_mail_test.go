@@ -47,7 +47,7 @@ func TestMaterializeSetupMail(t *testing.T) {
 	var config struct {
 		DefaultInstance struct {
 			SMTPConfiguration struct {
-				Tls  bool
+				TLS  bool `json:"Tls"`
 				From string
 				SMTP struct {
 					Host      string
@@ -61,7 +61,7 @@ func TestMaterializeSetupMail(t *testing.T) {
 		t.Fatal("native setup configuration missing or malformed")
 	}
 	mail := config.DefaultInstance.SMTPConfiguration
-	if !mail.Tls || mail.From != "invitations@example.invalid" ||
+	if !mail.TLS || mail.From != "invitations@example.invalid" ||
 		mail.SMTP.Host != "submission.example.invalid:465" ||
 		mail.SMTP.PlainAuth.User != "fictional-sender" ||
 		mail.SMTP.PlainAuth.Password != string(password) {
