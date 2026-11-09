@@ -20,8 +20,8 @@ type iconFixture struct {
 }
 
 var sourceOfferTestInputs = []struct{ fixture, path, original, expected string }{
-	{"console.html.raw", "console/src/app/modules/footer/footer.component.html", "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", "018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f"},
-	{"login.html.raw", "internal/api/ui/login/static/templates/footer.html", "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", "df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e"},
+	{"console.html.raw", "console/src/app/modules/footer/footer.component.html", "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", "ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0"},
+	{"login.html.raw", "internal/api/ui/login/static/templates/footer.html", "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", "fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508"},
 }
 
 func sourceOfferFixture(t *testing.T) string {
@@ -54,7 +54,7 @@ func TestExplicitSourceOfferPreservesNativeFooterContent(t *testing.T) {
 	if code := run([]string{"--source-offer", "--prepare", "--source", root}, &out, &diagnostic); code != 0 {
 		t.Fatalf("explicit source-offer preparation unavailable: %s", diagnostic.String())
 	}
-	const wantURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+	const wantURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2"
 	for _, input := range sourceOfferTestInputs {
 		b, err := os.ReadFile(filepath.Join(root, input.path))
 		if err != nil {
@@ -66,7 +66,7 @@ func TestExplicitSourceOfferPreservesNativeFooterContent(t *testing.T) {
 		if strings.Count(string(b), wantURL) != 1 {
 			t.Fatal("missing or repeated exact source offer")
 		}
-		if !strings.Contains(string(b), "Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer.") {
+		if !strings.Contains(string(b), "Modified by Devantler Tech on 2026-11-09: add the versioned corresponding-source offer.") {
 			t.Fatalf("modified native footer lacks its dated change notice: %s", input.path)
 		}
 	}

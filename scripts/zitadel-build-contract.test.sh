@@ -286,7 +286,7 @@ check() {
       (.run | contains("(.frameworkIcons | map(.kind+\"/\"+.theme)) == [\"framework-quickstart/light\",\"framework-selected/light\",\"framework-picker/light\",\"framework-quickstart/dark\",\"framework-selected/dark\",\"framework-picker/dark\"]")) and
       (.run | contains("all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard)")) and
       (.run | contains("(.sourceOffer | map(.kind+\"/\"+.theme)) == [\"console/light\",\"console/dark\",\"login/light\",\"login/dark\"]")) and
-      (.run | contains("all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == \"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1\")")) and
+      (.run | contains("all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == \"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2\")")) and
       (.run | contains(".mfaProof == false")) and
       (.run | contains(".optionalMFADeferred | type == \"boolean\"")) and
       (.run | contains(".portalFederation == false")) and

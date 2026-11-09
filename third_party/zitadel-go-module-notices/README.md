@@ -1,15 +1,17 @@
 # Selected Go dependency notices
 
-The frozen catalogue binds 231 actual dependency identities to their complete
+The frozen catalogue binds 230 actual dependency identities to their complete
 root and eleven nested notice components. Its twelve selected source entries
 also retain seventeen literal attribution/origin spans. The Linux collector
 checks whole-file hashes, actual package/GoFiles membership, complete terms
 references and all external input bytes before retaining any output. Ordinary
 website builds and no-argument invocations remain inactive.
 
-The pinned dependency profile selects go-jose/v4 4.1.6 and golang.org/x/net 0.62.0.
-Their original/effective versions and checksums agree with the complete prepared
-module-file hashes. The retained go-jose root and nested license texts are
+The pinned profile selects go-jose/v4 4.1.6, x/net 0.62.0, gorilla/csrf 1.7.3,
+crewjam/saml 0.5.2, beevik/etree 1.8.1 and russellhaering/goxmldsig 1.6.1.
+Their identities and checksums agree with the complete prepared module files.
+The three SAML-related upgrades retain the same root licence bytes. JWT v4
+leaves the compiled selection because SAML uses the existing JWT v5 module. The retained go-jose root and nested license texts are
 byte-equal to 4.1.4; the complete x/net LICENSE and PATENTS are byte-equal to 0.61.0.
 This policy update still requires actual native compiler/binary validation and
 does not turn the catalogue into a vulnerability or distribution verdict.

@@ -29,11 +29,11 @@ const sourceArchiveLimit = sourceTreeLimit + sourceManifestLimit + int64(sourceM
 
 // This complete tree identity is independently collected from the frozen
 // preparer after the native API serialization change, before installation.
-const sourcePreparedProfile = "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181"
+const sourcePreparedProfile = "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3"
 
 // sourceModifiedOn dates the frozen modification set, not its later capture.
 // Update it with that set; identical inputs must retain the same source seal.
-const sourceModifiedOn = "2026-11-01"
+const sourceModifiedOn = "2026-11-09"
 
 type sourceCapturePolicy struct{ Prepared, OriginalAPI, SerialAPI, Preparation string }
 type sourceCaptureSummary struct {
@@ -529,7 +529,8 @@ func sourceCaptureBuildWithNotices(build, repository, output, notices string, po
 		"Replace SMTP image decoration with the existing neutral envelope glyph in five consumers; remove nine original SMTP image paths while preserving all nine connection defaults.",
 		"Retain 25 standard MDI graphics unchanged; replace OpenID/JWT decoration with existing arrow/key glyphs in five consumers; remove the two OpenID/JWT MDI SVGs and their registrations.",
 		"Replace framework image decoration with the existing code glyph and visible names in seven consumers; remove all forty-four technology images and thirty-nine image properties while preserving all thirty-five framework entries and twenty-four selectable IDs. Retire the obsolete image-copy operation while still clearing old outputs.",
-		"Add the unconditional versioned corresponding-source offer to native Login and Console footers, preserving existing policy links and watermark behavior and dating both changed templates 2026-11-01.",
+		"Add the unconditional versioned corresponding-source offer to native Login and Console footers, preserving existing policy links and watermark behavior and dating both changed templates 2026-11-09.",
+		"Update crewjam/saml to 0.5.2, beevik/etree to 1.8.1 and russellhaering/goxmldsig to 1.6.1 with their native generated checksums.",
 	}}
 	raw, err := json.MarshalIndent(modifications, "", "  ")
 	if err != nil {
@@ -671,7 +672,7 @@ func sourceNoticeMembers() []sourceMember {
 		{Path: "third_party/zitadel-copied-assets/catalogue.json", Bytes: 962009, SHA256: "b457cbb2df1ecc95fd91a015d2d2def35298ef0cb445768104d128be9c062186", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/original-line-awesome.css", Bytes: 110644, SHA256: "194db85f3ea5dd6c3864270bd81cacb137b4e1f1c1473f64d9a65545d8f4c66e", Mode: 0644},
 		{Path: "third_party/zitadel-copied-assets/original-line-awesome.min.css", Bytes: 89729, SHA256: "ce61a18cf084f15003798340044643f329ac5f90045acb2d9e778368bd799854", Mode: 0644},
-		{Path: "third_party/zitadel-go-module-notices/catalogue.json", Bytes: 207607, SHA256: "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd", Mode: 0644},
+		{Path: "third_party/zitadel-go-module-notices/catalogue.json", Bytes: 206822, SHA256: "32bb716522ebfe0676ce5d26ef735c826874e17852a912b7416b4c6c53712c77", Mode: 0644},
 		{Path: "third_party/zitadel-go-module-notices/incorporated/external/armon-go-radix-LICENSE.txt", Bytes: 1079, SHA256: "831892cd31b9eef0311bb1de9014527ef5d3592eed7add1f9f829510d2065e62", Mode: 0644},
 		{Path: "third_party/zitadel-go-module-notices/incorporated/external/jub0bs-cors-LICENSE.txt", Bytes: 1063, SHA256: "35266411be2f2a792cfac1ed4211d20610e33bc1921ae4a68ff01c12b95764e8", Mode: 0644},
 		{Path: "third_party/zitadel-go-module-notices/incorporated/external/zlib-crc32.c.header.txt", Bytes: 574, SHA256: "e5c4e9c78aa77e8868f4ea0735e5519226109943b45e7092db956ec9821f8c0a", Mode: 0644},
@@ -1120,7 +1121,7 @@ func sourceBundleRun(args []string, out, diagnostic io.Writer) int {
 			Prepared:    sourcePreparedProfile,
 			OriginalAPI: "bf332001875b5075845459450c72d98523c1db0923df40a04525740892c0e0e6",
 			SerialAPI:   "6f1f58f338a3e3fd6c65bcc42c5b2bc56b71a7affc758e14e096c122f28a5455",
-			Preparation: "905cc6f39bd269a2b3de5fc7a6f7ad299aa693283c708478436292f69f3b01bb",
+			Preparation: "9b1930d0524db02d52ef76fe76ddc55aea034505551c1351e316404985e8e158",
 		})
 	case len(args) == 3 && args[0] == "--seal-prepared":
 		var seal string

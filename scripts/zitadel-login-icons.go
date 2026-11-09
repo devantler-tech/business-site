@@ -1191,11 +1191,11 @@ var neutralFrameworkInputs = []neutralProviderInput{
 	{path: "apps/docs/public/img/tech/vue.svg", sha256: "05c69aeeda1250c36e4845230976e6664a08ed67cdf14c9cbdb97223dc6d082d", mode: 0644, kind: "retire"},
 }
 
-const identitySourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+const identitySourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2"
 
 var sourceOfferInputs = []neutralProviderInput{
-	{path: "console/src/app/modules/footer/footer.component.html", sha256: "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", mode: 0644, kind: "source-offer-console", expected: "018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f"},
-	{path: "internal/api/ui/login/static/templates/footer.html", sha256: "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", mode: 0644, kind: "source-offer-login", expected: "df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e"},
+	{path: "console/src/app/modules/footer/footer.component.html", sha256: "6fbfdb18cd43ed108b94d7f646cc383ca590628f239366a73f46a7a4211ad525", mode: 0644, kind: "source-offer-console", expected: "ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0"},
+	{path: "internal/api/ui/login/static/templates/footer.html", sha256: "d40ea344ca387a5311166523840ccfae7c7130ceca1f0379fe68d4bfc66f5074", mode: 0644, kind: "source-offer-login", expected: "fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508"},
 }
 
 func init() {
@@ -1322,14 +1322,14 @@ func prepareNeutralIconProfile(args []string, out, diagnostic io.Writer, profile
 				return fail(fmt.Errorf("native Console footer slot differs"))
 			}
 			text = strings.Replace(text, old, "    <div class=\"footer-links\">\n      <a target=\"_blank\" rel=\"noopener noreferrer\" href=\""+identitySourceOfferURL+"\" external>Source code</a>\n    </div>\n\n"+old, 1)
-			text = "<!-- Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. -->\n" + text
+			text = "<!-- Modified by Devantler Tech on 2026-11-09: add the versioned corresponding-source offer. -->\n" + text
 			consoleSlots++
 		case "source-offer-login":
 			if strings.Count(text, "</footer>") != 1 {
 				return fail(fmt.Errorf("native Login footer slot differs"))
 			}
 			text = strings.Replace(text, "</footer>", "  <a href=\""+identitySourceOfferURL+"\" rel=\"noopener noreferrer\" target=\"_blank\">Source code</a>\n</footer>", 1)
-			text = "{{/* Modified by Devantler Tech on 2026-11-01: add the versioned corresponding-source offer. */}}\n" + text
+			text = "{{/* Modified by Devantler Tech on 2026-11-09: add the versioned corresponding-source offer. */}}\n" + text
 			loginSlots++
 		case "framework-copy", "framework-data", "framework-mapping", "framework-quickstart", "framework-picker", "framework-change":
 			var slots int

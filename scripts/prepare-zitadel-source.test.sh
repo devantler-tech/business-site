@@ -58,25 +58,36 @@ printf 'FICTIONAL-PRIVATE-INPUT\n' >"$scratch/upstream/local-only.txt"
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-before"
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-before"
 bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
+# Verify the patch selected by the real offline preparer, before testing its receipts.
+saml_version="$(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 \
+  GOPROXY=off go list -mod=readonly -m -f '{{.Version}}' github.com/crewjam/saml)"
+if [[ "$saml_version" != v0.5.2 ]]; then
+  printf 'Expected prepared crewjam/saml v0.5.2, got %s\n' "$saml_version" >&2
+  exit 1
+fi
 # Both native presentations must offer this immutable identity release even when
 # customer privacy links or the upstream watermark are disabled.
 test "$(shasum -a 256 "$scratch/prepared source/source/console/src/app/modules/footer/footer.component.html" | awk '{print $1}')" = \
-  018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f
+  ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0
 test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/static/templates/footer.html" | awk '{print $1}')" = \
-  df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e
+  fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after"
 cmp "$scratch/input-before" "$scratch/input-after"
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
 cmp "$scratch/modules-before" "$scratch/modules-after"
-# Independently collected with native Go 1.26.10 for the three selected patches,
+# Independently collected with native Go 1.26.10 for the six selected versions,
 # without a toolchain change or unrelated selected dependency changes.
 test "$(shasum -a 256 "$scratch/prepared source/source/go.mod" | awk '{print $1}')" = \
-  d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50
+  07ed7fd00389cf4950652e5950d4ec73ce64adc7aea13c89dde95076798b2518
 test "$(shasum -a 256 "$scratch/prepared source/source/go.sum" | awk '{print $1}')" = \
-  19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba
+  1ccb3b6ace2ac71e266ee5c9d28e23c04dfb3ba3084b9bdca7a487f35b9af6d0
 test -f "$scratch/upstream/local-only.txt"
 test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
+
+# The existing native provider suite exercises signed SAML assertions and mappings.
+(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
+  go test -mod=readonly -count=1 ./internal/idp/providers/saml github.com/crewjam/saml)
 
 # Exercise the real prepared machine-ID function through its native package.
 # These tests add no production source or dependencies to the prepared output.
@@ -158,8 +169,8 @@ ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc  console/src/ap
 7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7  console/src/app/components/framework-autocomplete/framework-autocomplete.component.html
 0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712  console/src/app/components/framework-change/framework-change.component.html
 405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba  console/package.json
-018cc4310ac0fd779eaaf38e30e4370719c8409cc5c7bef0a8e1ba1ac053342f  console/src/app/modules/footer/footer.component.html
-df0ba54c82cfa06a5c9b4d99ea11aa3c3b1c07ad65573d13c0b813b91e85b43e  internal/api/ui/login/static/templates/footer.html
+ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0  console/src/app/modules/footer/footer.component.html
+fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508  internal/api/ui/login/static/templates/footer.html
 PROVIDERS
 (cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
 while read -r _hash path; do
@@ -213,10 +224,10 @@ jq -e --arg pin "$pin" '
   (.removedFiles | length) == 75 and .providerProfile == "native-neutral-provider-icons-v1" and
   .frameworkProfile == "native-neutral-framework-icons-v1" and
   .sourceOfferProfile == "native-source-offer-v1" and
-  .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1" and
+  .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2" and
   .smtpProfile == "native-neutral-smtp-icons-v1" and .mdiProfile == "native-neutral-mdi-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
-  .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1" and
+  .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1" and
   .changedFiles == ["console/src/styles.scss","internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss","internal/id/sonyflake.go","internal/api/ui/login/login.go","go.mod","go.sum","console/src/app/modules/idp-table/idp-table.component.html","console/src/app/modules/policies/idp-settings/idp-settings.component.html","console/src/app/modules/providers/provider-apple/provider-apple.component.html","console/src/app/modules/providers/provider-azure-ad/provider-azure-ad.component.html","console/src/app/modules/providers/provider-github-es/provider-github-es.component.html","console/src/app/modules/providers/provider-github/provider-github.component.html","console/src/app/modules/providers/provider-gitlab-self-hosted/provider-gitlab-self-hosted.component.html","console/src/app/modules/providers/provider-gitlab/provider-gitlab.component.html","console/src/app/modules/providers/provider-google/provider-google.component.html","console/src/app/modules/providers/provider-oauth/provider-oauth.component.html","console/src/app/modules/providers/provider-saml-sp/provider-saml-sp.component.html","internal/api/ui/login/static/templates/login.html","internal/api/ui/login/static/templates/register_option.html","console/src/app/modules/idp-table/idp-table.component.scss","console/src/app/modules/policies/idp-settings/idp-settings.component.scss","console/src/app/modules/providers/providers.scss","internal/api/ui/login/static/resources/themes/scss/styles/identity_provider/identity_provider_base.scss","internal/api/ui/login/static/resources/themes/scss/styles/vars.scss","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.html","console/src/app/modules/policies/notification-smtp-provider/notification-smtp-provider.component.scss","console/src/app/modules/smtp-provider/known-smtp-providers-settings.ts","console/src/app/modules/smtp-provider/smtp-provider.component.html","console/src/app/modules/smtp-provider/smtp-provider.scss","console/src/app/app.component.ts","console/src/app/modules/providers/provider-oidc/provider-oidc.component.html","console/src/app/modules/providers/provider-jwt/provider-jwt.component.html","console/package.json","apps/docs/frameworks.json","console/src/app/components/quickstart/quickstart.component.ts","console/src/app/components/framework-change/framework-change.component.ts","console/src/app/pages/app-create/app-create.component.ts","console/src/app/components/quickstart/quickstart.component.html","console/src/app/components/framework-autocomplete/framework-autocomplete.component.html","console/src/app/components/framework-change/framework-change.component.html","console/src/app/modules/footer/footer.component.html","internal/api/ui/login/static/templates/footer.html"]
 ' "$scratch/prepared source/source-preparation.json" >/dev/null
 
@@ -232,7 +243,7 @@ cp -R "$scratch/prepared source" "$scratch/native-capture/prepared"
   cp "$scratch/native-capture/api-project.serial.json" apps/api/project.json
 )
 go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/native-snapshot" >"$scratch/native-capture.json"
-jq -e '.preparedProfileSha256=="6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files==9528 and .bytes==261325366 and .records==58' "$scratch/native-capture.json" >/dev/null
+jq -e '.preparedProfileSha256=="06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .files==9528 and .bytes==261325885 and .records==58' "$scratch/native-capture.json" >/dev/null
 native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
 # The actual sealed file layout contains no empty technology directory. Its
 # native pre-build command must succeed without restoring retired image inputs.

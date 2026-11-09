@@ -135,7 +135,7 @@ technology images in the original source or either generated copy, and examines
 every compiler package before selecting the unchanged catalogue. Escaped bundle
 references also refuse. The 1,883/3,766/1,883 retained inventory stays unchanged;
 the combined profiles now bind 34 distinct consumers. Complete source preparation
-contains 9,528 files and 261,324,795 bytes after native API serialization, while
+contains 9,528 files and 261,325,314 bytes after native API serialization, while
 the 58-record, 40-tool and 45-notice boundaries remain intact.
 
 Six additional native browser cases observe Quickstart, the Angular selection
@@ -187,15 +187,18 @@ Reintroducing JSONPath support requires a separately admitted implementation and
 compatibility validation, not removal of these exclusion checks. This restriction
 does not change the portal → customer Dex → ZITADEL login architecture.
 
-The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1` dependency profile applies the exact native Go
+The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1` dependency profile applies the exact native Go
 1.26.10 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
-`gorilla/csrf` 1.7.3: three module lines and six added checksums. Complete original and resulting hashes are checked
-offline. The preparer runs only the maintained standard-library Go decoration
+`gorilla/csrf` 1.7.3. The SAML security update selects `crewjam/saml` 0.5.2,
+`beevik/etree` 1.8.1 and `russellhaering/goxmldsig` 1.6.1. Together the patches
+change six module lines and add twelve checksums. The offline recipe verifies the
+complete original and resulting module files. The preparer runs only the maintained standard-library Go decoration
 transform with `GOTOOLCHAIN=local`; it never downloads a compiler or executes
 upstream Go source. Other dependency selections,
 the compiler and the upstream 4096-bit RSA key limit are preserved. Original unused
 checksum entries remain as produced by the native updates. The selected modules,
-compiler metadata and notice catalogue must agree on all three patched versions. Dirty input
+compiler metadata and notice catalogue must agree on all six patched versions. SAML now uses the already-selected JWT v5, so
+JWT v4 stays out of the selected graph and retained notices. Dirty input
 checkout metadata is ignored and preserved, just like other working-copy files.
 The login interceptor explicitly marks requests as plaintext only when the existing
 external TLS setting is disabled. The patched library's HTTPS Origin/Referer and
@@ -618,10 +621,10 @@ remain `unknown`, reproducibility is not established and the portal stays off.
 
 Both native Linux capture phases require `--modules
 third_party/zitadel-go-module-notices`. The compiled catalogue digest binds all
-231 selected dependency identities and the frozen upstream go.mod/go.sum. The
+230 selected dependency identities and the frozen prepared go.mod/go.sum. The
 catalogue was curated from checksum-matched complete module archives, not from
 licence labels, current upstream files or everything listed in go.sum. It records
-262 root text components, including the complete MinIO CREDITS file and qualified
+261 root text components, including the complete MinIO CREDITS file and qualified
 or mixed-case licence names. The lib/pq notice.go and notice_test.go source files
 are not misclassified as legal text.
 
@@ -805,11 +808,11 @@ The same explicit flag also retains the selected service's complete Go ZIP and
 go.mod inputs after compilation and final module verification. The otherwise
 inert command in `server/cmd/zitadel-module-sources/` checks the frozen catalogue and locks,
 every original/effective replacement, and equality between the root command's
-dependency list and the complete compiler stream. It copies only the 231 selected
+dependency list and the complete compiler stream. It copies only the 230 selected
 effective module pairs from this build's private cache. Go's maintained module
 library recomputes full archive/go.mod content sums; `.ziphash` is not trusted.
 
-The retained directory contains 462 source payloads and four literal metadata
+The retained directory contains 460 source payloads and four literal metadata
 records plus an externally sealed manifest. Readback verifies complete bytes,
 membership, sizes and canonical file modes, rejecting linked inputs and partial
 I/O. CI copies the actual retained package into a fresh directory and verifies
@@ -1208,12 +1211,12 @@ The portal and identity publication remain off.
 
 The explicit preparer's `native-source-offer-v1` profile adds an unconditional
 `Source code` anchor to both frozen native footers. The destination is
-`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1`.
-Both templates retain a 2026-11-01 modification notice. Existing privacy/terms
+`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2`.
+Both templates retain a 2026-11-09 modification notice. Existing privacy/terms
 links, branding conditions and theme controls remain; none controls the source
 anchor's availability. The complete prepared profile is
-`6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181`:
-9,528 files and 261,325,366 bytes before installation. Its two additional changed
+`06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3`:
+9,528 files and 261,325,885 bytes before installation. Its two additional changed
 paths and fixed destination enter the preparation record and dated source records.
 
 The native browser worker requires four additional observations: Login and

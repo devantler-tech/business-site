@@ -171,8 +171,8 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   Its separate verifier-bootstrap modes retain only original x/mod ZIP/mod/info
   and successful native package membership, tied to the approved tool-source seal.
   Closed-profile verification and restoration never assert tool reconstruction.
-  Explicit capture retains the frozen service's 231 original/effective selections
-  and 466 source/metadata files from that build's private cache. The root command's
+  Explicit capture retains the frozen service's 230 original/effective selections
+  and 464 source/metadata files from that build's private cache. The root command's
   complete dependency set must equal the compiler stream. External-seal readback
   rejects changed, missing, extra, linked and wrong-mode inputs; CI verifies an
   actual fresh copy. Only compact manifests/diagnostics are uploaded. This is

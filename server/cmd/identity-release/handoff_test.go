@@ -63,8 +63,8 @@ func handoffFixture(t *testing.T) (string, []string) {
 	build := map[string]any{"schemaVersion": 1, "profile": "api-login-v1-console", "platform": "linux/amd64",
 		"upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694", "version": "4.20.0",
 		"recipeSha256": digest, "binarySha256": binary, "reproducible": false,
-		"sourceSnapshot": map[string]any{"manifestSha256": digest, "preparedProfileSha256": "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181",
-			"files": 9528, "bytes": 261325366, "records": 58}}
+		"sourceSnapshot": map[string]any{"manifestSha256": digest, "preparedProfileSha256": "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3",
+			"files": 9528, "bytes": 261325885, "records": 58}}
 	buildSHA := put("zitadel-build/build-receipt.json", build)
 	put("zitadel-offline-replay/native/build-receipt.json", map[string]any{"schemaVersion": 1,
 		"profile": "api-login-v1-console", "platform": "linux/amd64", "binarySha256": replayBinary,

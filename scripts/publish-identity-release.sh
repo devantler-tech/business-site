@@ -3,7 +3,7 @@
 set -euo pipefail
 export LC_ALL=C
 umask 077
-readonly repo=devantler-tech/business-site tag=identity-v4.20.0-devantler.1
+readonly repo=devantler-tech/business-site tag=identity-v4.20.0-devantler.2
 readonly image_name=ghcr.io/devantler-tech/business-site-identity
 # fail preserves partial-state failure instead of issuing a publication receipt.
 fail() {

@@ -211,8 +211,8 @@ func joinHandoff(doc *handoffDocument, o map[string]handoffObject, files map[str
 	if build.number("schemaVersion") != 1 || build.text("profile") != "api-login-v1-console" ||
 		build.text("platform") != "linux/amd64" || build.text("version") != "4.20.0" ||
 		build.text("upstreamCommit") != "8afa5dd37a8e723efb9eace8d09fd5c1cccef694" || !build.is("reproducible", false) ||
-		source.text("preparedProfileSha256") != "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" ||
-		source.number("files") != 9528 || source.number("bytes") != 261325366 || source.number("records") != 58 {
+		source.text("preparedProfileSha256") != "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" ||
+		source.number("files") != 9528 || source.number("bytes") != 261325885 || source.number("records") != 58 {
 		return fmt.Errorf("frozen connected source profile required")
 	}
 	doc.RecipeSHA256, doc.SourceManifestSHA256 = build.text("recipeSha256"), source.text("manifestSha256")
