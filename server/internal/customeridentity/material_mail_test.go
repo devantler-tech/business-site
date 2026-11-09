@@ -121,10 +121,10 @@ func TestMaterializeSetupMailRefusals(t *testing.T) {
 			materialMailSettings(t, input, map[string]string{"smtpFrom": "invitations@[192.0.2.1]"})
 		},
 		"non-ASCII sender": func(t *testing.T, input string) {
-			materialMailSettings(t, input, map[string]string{"smtpFrom": "invitat\u00e9@example.invalid"})
+			materialMailSettings(t, input, map[string]string{"smtpFrom": "invitations\u00e9@example.invalid"})
 		},
 		"non-ASCII credential user": func(t *testing.T, input string) {
-			materialMailSettings(t, input, map[string]string{"smtpUser": "us\u00e9r"})
+			materialMailSettings(t, input, map[string]string{"smtpUser": "user\u00e9"})
 		},
 		"credential user control character": func(t *testing.T, input string) {
 			materialMailSettings(t, input, map[string]string{"smtpUser": "fictional\tuser"})
