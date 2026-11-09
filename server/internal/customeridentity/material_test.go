@@ -59,7 +59,7 @@ func materialFixture(t *testing.T, phase string) (string, string) {
 	if phase == "init" {
 		settings["databaseAdminUser"] = "identity_initializer"
 	}
-	if phase == "setup" {
+	if phase == "setup" || phase == "setup-mail" {
 		for key, value := range map[string]string{"instanceName": "Fictional identity", "organizationName": "Fictional operator", "humanUsername": "fictional_operator", "humanFirstName": "Fictional", "humanLastName": "Operator", "humanEmail": "operator@example.invalid"} {
 			settings[key] = value
 		}
@@ -85,8 +85,11 @@ func materialFixture(t *testing.T, phase string) (string, string) {
 		materialWrite(t, input, "tls.key", key)
 		materialWrite(t, input, "service-ca.pem", ca)
 	}
-	if phase == "setup" {
+	if phase == "setup" || phase == "setup-mail" {
 		materialWrite(t, input, "bootstrap-password", materialPassword(t))
+	}
+	if phase == "setup-mail" {
+		materialMailInputs(t, input)
 	}
 	return input, output
 }
@@ -167,9 +170,10 @@ func materialAssertOutput(t *testing.T, output, phase string) {
 		members = append(members, entry.Name())
 	}
 	want, known := map[string][]string{
-		"init":  {"ca.pem", "config.json"},
-		"setup": {"ca.pem", "config.json", "master.key", "steps.json", "tls.crt", "tls.key"},
-		"serve": {"ca.pem", "config.json", "master.key", "tls.crt", "tls.key"},
+		"init":       {"ca.pem", "config.json"},
+		"setup-mail": {"ca.pem", "config.json", "master.key", "steps.json", "tls.crt", "tls.key"},
+		"setup":      {"ca.pem", "config.json", "master.key", "steps.json", "tls.crt", "tls.key"},
+		"serve":      {"ca.pem", "config.json", "master.key", "tls.crt", "tls.key"},
 	}[phase]
 	if !known || !slices.Equal(members, want) {
 		t.Fatalf("phase %s emitted unexpected members: %v", phase, members)
@@ -178,7 +182,7 @@ func materialAssertOutput(t *testing.T, output, phase string) {
 
 // TestMaterializeNativePhaseSeparation pins native fields and excludes cross-phase authority.
 func TestMaterializeNativePhaseSeparation(t *testing.T) {
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialFixture(t, phase)
 			if err := Materialize(phase, input, output); err != nil {
@@ -189,6 +193,13 @@ func TestMaterializeNativePhaseSeparation(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join(output, "config.json"))
 			if err != nil || json.Unmarshal(raw, &config) != nil {
 				t.Fatal("native config missing")
+			}
+			var defaults map[string]json.RawMessage
+			if json.Unmarshal(config["DefaultInstance"], &defaults) != nil {
+				t.Fatal("native defaults missing")
+			}
+			if _, hasMail := defaults["SMTPConfiguration"]; hasMail != (phase == "setup-mail") {
+				t.Fatal("mail settings crossed the selected setup profile")
 			}
 			var database struct {
 				Postgres struct {
@@ -208,7 +219,7 @@ func TestMaterializeNativePhaseSeparation(t *testing.T) {
 			if (database.Postgres.Admin.Username != "") != (phase == "init") {
 				t.Fatal("administrator authority crossed phase")
 			}
-			if phase == "setup" {
+			if phase == "setup" || phase == "setup-mail" {
 				steps, err := os.ReadFile(filepath.Join(output, "steps.json"))
 				if err != nil {
 					t.Fatal(err)
@@ -363,7 +374,7 @@ func TestMaterializeRejectsInvalidNativeSettings(t *testing.T) {
 
 // TestMaterializeRequiresEveryPhaseMemberAndSetting removes each required input independently.
 func TestMaterializeRequiresEveryPhaseMemberAndSetting(t *testing.T) {
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		input, _ := materialFixture(t, phase)
 		entries, err := os.ReadDir(input)
 		if err != nil {
@@ -453,7 +464,7 @@ func TestMaterializeCompiledCommand(t *testing.T) {
 	if data, err := exec.Command(binary).CombinedOutput(); err != nil || len(data) != 0 {
 		t.Fatal("ordinary command is not inert")
 	}
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialFixture(t, phase)
 			if data, err := exec.Command(binary, "--phase", phase, "--inputs", input, "--output", output).CombinedOutput(); err != nil || len(data) != 0 {

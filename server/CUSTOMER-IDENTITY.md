@@ -53,17 +53,16 @@ It is deliberately insufficient to create a usable identity instance alone.
 ### Private native phase preparation
 
 The separate `cmd/customer-identity-materialize` command prepares one private
-ZITADEL phase. It does not execute ZITADEL, contact a database, configure mail,
-provision a client, build a deployment package or activate the portal. With no
-arguments it reads and writes nothing. Ordinary builds do not invoke it.
+ZITADEL phase. It writes private native inputs for a separate deployment job.
+With no arguments it reads and writes nothing. Ordinary builds do not invoke it.
 
 ```sh
 GOTOOLCHAIN=local go run ./cmd/customer-identity-materialize \
   --phase serve --inputs /absolute/private/inputs --output /absolute/private/new-output
 ```
 
-The three options must appear exactly in that order; accepted phases are `init`,
-`setup` and `serve`. Inputs use a physically resolved absolute directory, owned
+The three options must appear exactly in that order. The accepted selections are
+`init`, `setup`, `setup-mail` and `serve`. Inputs use a physically resolved absolute directory, owned
 by the invoking user with mode 0700. Every member is a bounded regular file with
 mode 0600, the same owner and one hard link. Symlinks and extra members fail.
 The standalone command accepts only this owner-file transport.
@@ -132,7 +131,7 @@ and the private key must match. Database and service trust remain separate input
 Passwords are opaque valid UTF-8 of 32–1024 bytes, without surrounding whitespace,
 line breaks or unresolved environment references. No input value is expanded.
 
-Setup alone also requires `bootstrap-password` and these additional string
+Both setup profiles also require `bootstrap-password` and these additional string
 settings: `instanceName`, `organizationName`, `humanUsername`, `humanFirstName`,
 `humanLastName`, `humanEmail`. Its fresh human has an unverified email and must
 change the initial password. That password is limited to 32–72 bytes and requires
@@ -140,6 +139,22 @@ the selected native ASCII lowercase, uppercase and digit classes, plus a charact
 outside ASCII letters/digits. This retains the selected bcrypt input limit without
 applying it to database passwords. Ordinary service refuses every bootstrap/admin input.
 No OIDC application credential is needed before supported API provisioning exists.
+
+Select `setup-mail` for first-instance setup with the approved dedicated mail
+sender. It requires all ordinary setup inputs plus `smtp-password` and four
+private string settings:
+
+- `smtpHost`: the submission service's canonical DNS hostname, without a port.
+- `smtpPort`: `465` or `587`.
+- `smtpFrom`: the approved sender's bare email address.
+- `smtpUser`: the dedicated submission credential's username.
+
+Use a separate password under the same opaque password requirements. The
+producer writes these settings only to the private setup configuration. ZITADEL
+uses its system trust store to verify the SMTP hostname before authenticating.
+Use the same native `setup` invocation for either setup profile. The remaining
+delivery work verifies that the provider persists across restart and that the
+approved sender delivers invitations and recovery messages. See #374 and #302.
 
 All input fields, certificate material and stable file snapshots are checked
 before reserving a new mode-0700 output. Native files are mode 0600, use only fixed
