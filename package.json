@@ -37,7 +37,7 @@
     "cspell": "10.4.0",
     "htmlhint": "1.9.2",
     "js-yaml": "^5.5.0",
-    "parse5": "8.0.1",
+    "parse5": "8.1.0",
     "secretlint": "13.1.0"
   },
   "overrides": {
