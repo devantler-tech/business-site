@@ -18,7 +18,7 @@ import (
 
 // TestMaterialProjectionContainerArchive retains a real child directory's metadata at Docker extraction.
 func TestMaterialProjectionContainerArchive(t *testing.T) {
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		t.Run(phase, func(t *testing.T) {
 			input, _ := materialProjectionFixture(t, phase)
 			projectionMust(t, os.Chmod(input, 0777))
@@ -40,7 +40,7 @@ func TestMaterialProjectionContainer(t *testing.T) {
 	if !projectionContainerImageAllowed(image) {
 		t.Fatal("select a source-test image or the verified publication digest")
 	}
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		input, _ := materialProjectionFixture(t, phase)
 		projectionMust(t, os.Chmod(input, 0777))
 		archive := projectionInputArchive(t, input)
