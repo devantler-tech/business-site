@@ -60,7 +60,7 @@ shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/m
 bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
 # Verify the patch selected by the real offline preparer, before testing its receipts.
 saml_version="$(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 \
-  GOPROXY=off go list -mod=readonly -m -f '{{.Version}}' github.com/crewjam/saml)"
+  GOPROXY=off go mod edit -json | jq -er '.Require[] | select(.Path == "github.com/crewjam/saml") | .Version')"
 if [[ "$saml_version" != v0.5.2 ]]; then
   printf 'Expected prepared crewjam/saml v0.5.2, got %s\n' "$saml_version" >&2
   exit 1
