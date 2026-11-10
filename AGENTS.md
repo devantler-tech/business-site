@@ -98,9 +98,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   day; PRs cannot upload it. Diagnostic uploads still exclude raw archives. Transport grants no publication
   or authenticated-provenance authority. Read `server/cmd/identity-release/README.md`.
   The separately compiled pinned vulnerability checker analyzes the actual Linux
-  binary against the official database; preserve its failure status and retained
-  text diagnostics. Both output streams enter the retained report without changing
-  the checker exit status. Its verdict is not full admission or deployed acceptance.
+  binary against the official database through `scripts/scan-zitadel-binary.sh`;
+  preserve its failure status and retained text diagnostics. Both output streams
+  enter the retained report and the job log. Reachable findings fail unless every
+  advisory is in that script's named, dated exception list; expired entries fail.
+  Never add a wildcard or module-wide exception, or extend one without fresh evidence.
+  Its verdict is not full admission or deployed acceptance.
 - `scripts/zitadel-source-bundle.go` is an explicit, otherwise inert source-input
   snapshot/archive verifier. Its prepared-source operation admits only the complete
   frozen tree after API serialization, preserving empty files and executable modes.

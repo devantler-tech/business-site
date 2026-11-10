@@ -427,7 +427,7 @@ jobs:
       - name: Build the complete native Linux service and embedded console
         run: bash scripts/build-zitadel-linux.sh --build --capture-source --module-source-verifier "$RUNNER_TEMP/zitadel-module-sources" --bsr-source-verifier "$RUNNER_TEMP/zitadel-bsr-sources" --verifier-bootstrap-cache "$IDENTITY_VERIFIER_CACHE" --verifier-composition "$RUNNER_TEMP/verifier-composition.json" --verifier-compiler-sha256 "$IDENTITY_VERIFIER_GO_SHA256" --source "$RUNNER_TEMP/zitadel-upstream" --output "$RUNNER_TEMP/zitadel-build"
       - name: Scan the actual frozen identity executable
-        run: '"$RUNNER_TEMP/identity-analysis/govulncheck" -mode=binary -db=https://vuln.go.dev "$RUNNER_TEMP/zitadel-build/service/zitadel" > "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" 2>&1'
+        run: bash scripts/scan-zitadel-binary.sh --scanner "$RUNNER_TEMP/identity-analysis/govulncheck" --binary "$RUNNER_TEMP/zitadel-build/service/zitadel" --report "$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt" --findings "$RUNNER_TEMP/identity-analysis/vulnerability-findings.json"
       # Catch native UI failures before the independent rebuild/replay work.
       - name: Exercise the local restricted identity image
         run: |
