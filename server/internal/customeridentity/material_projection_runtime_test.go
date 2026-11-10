@@ -49,14 +49,18 @@ func TestMaterializeProjectionPackagedRuntime(t *testing.T) {
 	if data, err := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", identity, "-o", binary, "../../cmd/business-site").CombinedOutput(); err != nil {
 		t.Fatalf("runtime build failed: %v %s", err, data)
 	}
-	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve", dexServePhase} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialProjectionFixture(t, phase)
 			args := []string{"--identity-materialize", "--identity-phase", phase, "--identity-projection", input, "--identity-output", output}
 			if data, err := exec.Command(binary, args...).CombinedOutput(); err != nil || string(data) != "customer identity phase prepared\n" {
 				t.Fatal("packaged runtime refused coherent projected phase")
 			}
-			materialAssertOutput(t, output, phase)
+			if phase == dexServePhase {
+				dexAssertOutput(t, input, output)
+			} else {
+				materialAssertOutput(t, output, phase)
+			}
 			names, _, err := materialProfile(phase)
 			if err != nil {
 				t.Fatal(err)

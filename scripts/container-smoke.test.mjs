@@ -54,9 +54,9 @@ test("actual restricted image prepares all identity phases only from the admitte
   const events = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainerImage").length, 1);
   assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainerArchive").length, 1);
-  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainerArchive/")).length, 4);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainerArchive/")).length, 5);
   assert.equal(events.filter((event) => event.Action === "pass" && event.Test === "TestMaterialProjectionContainer").length, 1);
-  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainer/")).length, 8);
+  assert.equal(events.filter((event) => event.Action === "pass" && event.Test?.startsWith("TestMaterialProjectionContainer/")).length, 10);
   assert.equal(events.filter((event) => event.Action === "fail" || event.Action === "skip").length, 0);
 });
 

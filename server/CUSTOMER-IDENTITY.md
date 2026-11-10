@@ -62,7 +62,7 @@ GOTOOLCHAIN=local go run ./cmd/customer-identity-materialize \
 ```
 
 The three options must appear exactly in that order. The accepted selections are
-`init`, `setup`, `setup-mail` and `serve`. Inputs use a physically resolved absolute directory, owned
+`init`, `setup`, `setup-mail`, `serve` and `dex-serve`. Inputs use a physically resolved absolute directory, owned
 by the invoking user with mode 0700. Every member is a bounded regular file with
 mode 0600, the same owner and one hard link. Symlinks and extra members fail.
 The standalone command accepts only this owner-file transport.
@@ -101,15 +101,15 @@ retry the one-shot job from a fresh invocation. No input permissions are changed
 and no intermediate credential directory is created. Outputs remain new, owner-only
 phase documents. These are observed snapshots, not a lock against later rotations.
 The transport tests use fictional native-layout projections. macOS additionally
-exercises actual read-only disk-image mounts. The existing container smoke command
-requires the separate Go integration test for both actual image profiles: all three
+exercises actual read-only disk-image mounts. The container smoke command
+requires the Go integration test for both application image profiles. All five
 phases accept the copied root-owned read-only projection and reject its writable
 counterpart. Actual copied membership, bytes, ownership and modes are checked
 before execution; missing tests, skips and partial results fail the smoke command.
 These are filesystem proofs; actual Kubernetes controller, service, provisioning
 and login acceptance remain under #305/#302.
 
-All phases require `settings.json`, `database-password` and `database-ca.pem`.
+All ZITADEL phases require `settings.json`, `database-password` and `database-ca.pem`.
 The JSON contains exactly these string fields:
 
 - `schemaVersion`: `customer-zitadel-private-v1`.
@@ -192,10 +192,39 @@ initialize a new instance, not reconciliation of an existing one. Use supported
 administration APIs for existing policies and persisted credential rotation.
 
 ZITADEL needs its own PostgreSQL role/store, private master key, verified database
-TLS, certificate/key and working mail. Dex needs independent durable PostgreSQL
-credentials and a CA at `/run/customer-dex/database-ca.pem`, plus its own TLS
-certificate/key. Missing inputs must fail before runtime startup; never fall back
-to development storage or unverified TLS. That deployment preflight remains #305.
+TLS, certificate/key and working mail.
+
+### Private Dex serving preparation
+
+Use the same packaged command with `--identity-phase dex-serve` to prepare
+the customer broker after the operator has commissioned the retained ZITADEL
+application. Its `settings.json` uses the same endpoint and database fields
+as ZITADEL serving, with `schemaVersion` set to `customer-dex-private-v1`,
+`databaseName` set to `customer_dex`, and the additional `zitadelClientID` field
+from the commissioned application. Use a dedicated PostgreSQL role and store.
+The other required inputs are:
+
+- `database-password` and `database-ca.pem` for verified PostgreSQL TLS.
+- `tls.crt`, `tls.key` and `service-ca.pem` for the exact Dex issuer hostname.
+- `zitadel-ca.pem` to add the upstream CA to Dex's HTTPS trust.
+- `zitadel-client-secret` and `portal-client-secret` for the two independent
+  confidential clients. Both use the same opaque password format as the database
+  password. All three values must be distinct.
+
+The new owner-only output contains only `config.json`, `database-ca.pem`,
+`zitadel-ca.pem`, `tls.crt` and `tls.key`. The setup and database administrator
+inputs remain separate. Run the command as the pinned Dex image's numeric
+UID/GID 65534 so it can produce files for that same identity, then mount the
+output read-only at `/run/customer-dex` in Dex. Start Dex with
+`serve /run/customer-dex/config.json` and set
+`DEX_EXPAND_ENV=false`, `DEX_CONFIG_DISALLOW_UNKNOWN_FIELDS=true` and
+`DEX_CONTINUE_ON_CONNECTOR_FAILURE=false`. This preserves literal credentials,
+rejects unknown configuration fields and refuses a failed upstream connector.
+Only the independent portal client secret belongs in the portal's own
+secret-file projection.
+
+Native Dex startup, wrong-CA and wrong-name refusal, durable restart, and the
+real ZITADEL code exchange remain release acceptance under #491 and #305.
 
 ## Invited users and authorization
 

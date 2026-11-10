@@ -22,7 +22,7 @@ type identityPhaseOptions struct {
 func registerIdentityPhaseOptions(options *flag.FlagSet) *identityPhaseOptions {
 	command := &identityPhaseOptions{}
 	options.BoolVar(&command.enabled, "identity-materialize", false, "prepare one private native identity phase without starting services")
-	options.StringVar(&command.phase, "identity-phase", "", "explicit init, setup, setup-mail or serve preparation")
+	options.StringVar(&command.phase, "identity-phase", "", "explicit init, setup, setup-mail, serve or dex-serve preparation")
 	options.StringVar(&command.inputs, "identity-inputs", "", "private owner-only phase input directory")
 	options.StringVar(&command.projection, "identity-projection", "", "confined atomic secret projection for one phase")
 	options.StringVar(&command.output, "identity-output", "", "new private phase output directory")

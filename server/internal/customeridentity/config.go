@@ -57,13 +57,46 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 			"loginVersion": map[string]any{"loginV1": map[string]any{}},
 		},
 	}
-	dex := map[string]any{
+	dex := nativeDexConfig(inputs, dexCredentials{
+		databaseHost: "${CUSTOMER_DEX_DB_HOST}", databaseUser: "${CUSTOMER_DEX_DB_USER}", databasePassword: "${CUSTOMER_DEX_DB_PASSWORD}",
+		zitadelClientID: "${CUSTOMER_ZITADEL_CLIENT_ID}", zitadelSecret: "${CUSTOMER_ZITADEL_CLIENT_SECRET}",
+	})
+	return json.MarshalIndent(map[string]any{"zitadelConfig": provider, "zitadelSteps": steps, "zitadelApplication": application, "dexConfig": dex}, "", "  ")
+}
+
+type dexCredentials struct {
+	databaseHost, databaseUser, databasePassword string
+	zitadelClientID, zitadelSecret, portalSecret string
+	zitadelCA                                    string
+}
+
+// nativeDexConfig keeps the same identity and transport policy in preparation and serving.
+func nativeDexConfig(inputs Endpoints, credentials dexCredentials) map[string]any {
+	provider := map[string]any{
+		"issuer": inputs.ZitadelIssuer, "clientID": credentials.zitadelClientID,
+		"clientSecret": credentials.zitadelSecret, "redirectURI": inputs.DexIssuer + "/callback",
+		"scopes": []string{"profile", "email"}, "pkceChallenge": "S256", "getUserInfo": true,
+		// Dex requires a boolean claim, not true. ZITADEL Login V1 enforces
+		// address verification; purpose-bound portal contact proof checks true.
+		"insecureSkipEmailVerified": false, "insecureEnableGroups": false, "insecureSkipVerify": false,
+	}
+	portalClient := map[string]any{
+		"id": "business-portal", "name": "Devantler Tech portal", "public": false,
+		"redirectURIs": []string{inputs.PortalCallback},
+	}
+	if credentials.zitadelCA != "" {
+		provider["rootCAs"] = []string{credentials.zitadelCA}
+		portalClient["secret"] = credentials.portalSecret
+	} else {
+		portalClient["secretEnv"] = "CUSTOMER_PORTAL_CLIENT_SECRET"
+	}
+	return map[string]any{
 		"issuer": inputs.DexIssuer, "enablePasswordDB": false,
 		"expiry": map[string]string{"idTokens": "5m", "authRequests": "5m", "signingKeys": "6h"},
 		"web":    map[string]string{"https": "0.0.0.0:5556", "tlsCert": "/run/customer-dex/tls.crt", "tlsKey": "/run/customer-dex/tls.key"},
 		"storage": map[string]any{"type": "postgres", "config": map[string]any{
-			"host": "${CUSTOMER_DEX_DB_HOST}", "port": 5432, "database": "customer_dex",
-			"user": "${CUSTOMER_DEX_DB_USER}", "password": "${CUSTOMER_DEX_DB_PASSWORD}",
+			"host": credentials.databaseHost, "port": 5432, "database": "customer_dex",
+			"user": credentials.databaseUser, "password": credentials.databasePassword,
 			"ssl": map[string]string{"mode": "verify-full", "caFile": "/run/customer-dex/database-ca.pem"},
 		}},
 		"oauth2": map[string]any{
@@ -72,22 +105,11 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 		},
 		"connectors": []any{map[string]any{
 			"type": "oidc", "id": "customer-zitadel", "name": "Devantler Tech account",
-			"config": map[string]any{
-				"issuer": inputs.ZitadelIssuer, "clientID": "${CUSTOMER_ZITADEL_CLIENT_ID}",
-				"clientSecret": "${CUSTOMER_ZITADEL_CLIENT_SECRET}", "redirectURI": callback,
-				"scopes": []string{"profile", "email"}, "pkceChallenge": "S256", "getUserInfo": true,
-				// Dex requires a boolean claim, not true. ZITADEL Login V1 enforces
-				// address verification; purpose-bound portal contact proof checks true.
-				"insecureSkipEmailVerified": false, "insecureEnableGroups": false, "insecureSkipVerify": false,
-			},
+			"config": provider,
 		}},
-		"staticClients": []any{map[string]any{
-			"id": "business-portal", "name": "Devantler Tech portal", "public": false,
-			"secretEnv": "CUSTOMER_PORTAL_CLIENT_SECRET", "redirectURIs": []string{inputs.PortalCallback},
-		}},
-		"logger": map[string]any{"level": "warn", "format": "json", "excludeFields": []string{"email", "username", "preferred_username", "groups"}},
+		"staticClients": []any{portalClient},
+		"logger":        map[string]any{"level": "warn", "format": "json", "excludeFields": []string{"email", "username", "preferred_username", "groups"}},
 	}
-	return json.MarshalIndent(map[string]any{"zitadelConfig": provider, "zitadelSteps": steps, "zitadelApplication": application, "dexConfig": dex}, "", "  ")
 }
 
 // nativeProvider shares the exact dormant and private native provider policies.
