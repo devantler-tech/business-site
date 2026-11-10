@@ -206,9 +206,16 @@ Native CI builds pinned `govulncheck` 1.8.0 with the separate verifier compiler,
 then analyzes the actual frozen Linux executable in binary mode against
 `https://vuln.go.dev`. Findings and analysis errors fail the job before later
 image/replay proof; the ordinary text diagnostic is retained in the existing
-compact evidence. Do not use JSON mode as a success gate or suppress a finding.
-Standard output and standard error share that retained report, including early
-scanner errors; redirection preserves the checker's original exit status.
+compact evidence and printed into the job log. Standard output and standard error
+share that retained report, including early scanner errors, and analysis errors
+keep the checker's original exit status. Only when the text scan reports reachable
+findings does `scripts/scan-zitadel-binary.sh` read a second JSON scan to name them.
+The job passes only if every reachable advisory appears in that script's exception
+list and its expiry date has not passed. Each entry names one advisory ID, an expiry
+and a reason; a clean text scan never depends on the JSON scan. The current single
+entry is GO-2026-6909 (`crewjam/saml`) until 2026-12-09: v0.6.0 fixes both defects,
+but the database still records no fixed version, and this build configures no SAML
+identity provider (business-site#516). Never add a wildcard or module-wide entry.
 The actual packaged executable preserves function symbols and omits only DWARF
 debug data. A complete native symbol read must identify its main entrypoint before
 the checker runs; empty, failed or partial symbol reads cannot produce a build receipt.
