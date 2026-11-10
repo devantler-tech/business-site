@@ -59,7 +59,10 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     SPELL_CSPELL_CONFIG_FILE: '.cspell.json',
     SPELL_CSPELL_RULES_PATH: '/github/workspace',
     REPOSITORY_SECRETLINT_RULES_PATH: '/github/workspace',
-    SPELL_LYCHEE_ARGUMENTS: ['--preprocess', '/github/workspace/scripts/portal-links-preprocess.sh'],
+    SPELL_LYCHEE_ARGUMENTS: [
+      '--preprocess', '/github/workspace/scripts/portal-links-preprocess.sh',
+      '--host-concurrency', '2', '--host-request-interval', '500ms',
+    ],
   });
   assert.deepEqual(rules, {
     'tagname-lowercase': true,

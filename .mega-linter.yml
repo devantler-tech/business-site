@@ -15,4 +15,11 @@ SPELL_CSPELL_RULES_PATH: /github/workspace
 REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
 # Private forms have mixed methods and authentication. The adapter retains every
 # target in explicit method-aware coverage; ordinary documents stay byte-identical.
-SPELL_LYCHEE_ARGUMENTS: ["--preprocess", "/github/workspace/scripts/portal-links-preprocess.sh"]
+# Pace repeated requests to the same host. All failed responses still fail the scan.
+SPELL_LYCHEE_ARGUMENTS:
+  - "--preprocess"
+  - "/github/workspace/scripts/portal-links-preprocess.sh"
+  - "--host-concurrency"
+  - "2"
+  - "--host-request-interval"
+  - "500ms"
