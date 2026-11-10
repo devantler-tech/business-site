@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
@@ -243,16 +244,40 @@ func nativeDexClient(t *testing.T, id, hostname, port string, ca []byte) *http.C
 	}}
 }
 
-func nativeDexGet(client *http.Client, url string, value any) error {
+func nativeDexGet(client *http.Client, url string, value any) (err error) {
 	response, err := client.Get(url)
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err = errors.Join(err, response.Body.Close())
+	}()
 	if response.StatusCode != http.StatusOK {
 		return errors.New("fixture response was not successful")
 	}
 	return json.NewDecoder(io.LimitReader(response.Body, 16384)).Decode(value)
+}
+
+type nativeDexCloseFailure struct {
+	io.Reader
+	err error
+}
+
+func (failure nativeDexCloseFailure) Close() error {
+	return failure.err
+}
+
+func (failure nativeDexCloseFailure) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Body: failure}, nil
+}
+
+func TestNativeDexGetReportsCloseFailure(t *testing.T) {
+	closeErr := errors.New("fixture response close failed")
+	client := &http.Client{Transport: nativeDexCloseFailure{strings.NewReader(`{"ready":true}`), closeErr}}
+	var response map[string]bool
+	if err := nativeDexGet(client, nativeDexIssuer, &response); !errors.Is(err, closeErr) || !response["ready"] {
+		t.Fatalf("expected decoded response and its close failure, got %v", err)
+	}
 }
 
 func nativeDexKeys(t *testing.T, client *http.Client) []string {
@@ -375,11 +400,17 @@ func TestNativeDexTLSAndRestart(t *testing.T) {
 	if nativeDexSQL(t, db, encryptedSessions) != "t" {
 		t.Fatal("the native broker did not open verified TLS database sessions")
 	}
-	wrongName := nativeDexClient(t, dex, "wrong.example.invalid", "5556", ca)
+	const wrongServingName = "wrong.example.invalid"
+	wrongName := nativeDexClient(t, dex, wrongServingName, "5556", ca)
 	var rejected map[string]any
-	var hostnameError *tls.CertificateVerificationError
-	if err := nativeDexGet(wrongName, nativeDexIssuer+"/.well-known/openid-configuration", &rejected); err == nil || !errors.As(err, &hostnameError) {
+	var hostnameError x509.HostnameError
+	if err := nativeDexGet(wrongName, nativeDexIssuer+"/.well-known/openid-configuration", &rejected); !errors.As(err, &hostnameError) || hostnameError.Host != wrongServingName {
 		t.Fatal("the native broker serving certificate did not refuse a wrong name")
+	}
+	wrongServingCA := nativeDexClient(t, dex, "login.example.invalid", "5556", wrongCA)
+	var authorityError x509.UnknownAuthorityError
+	if err := nativeDexGet(wrongServingCA, nativeDexIssuer+"/.well-known/openid-configuration", &rejected); !errors.As(err, &authorityError) {
+		t.Fatal("the native broker serving certificate did not refuse an untrusted CA")
 	}
 	nativeDexRun(t, "stop", "--time", "5", dex)
 	nativeDexRun(t, "stop", "--time", "5", db)

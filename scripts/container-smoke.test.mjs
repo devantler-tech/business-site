@@ -64,7 +64,7 @@ if (image === "business-site:production-test") {
   test("signed Dex refuses invalid TLS and retains its database-backed signing keys", () => {
     const result = spawnSync(
       "go",
-      ["test", "-json", "-tags=integration", "./internal/customeridentity", "-run", "^TestNativeDexTLSAndRestart$", "-count=1", "-timeout=210s"],
+      ["test", "-json", "-tags=integration", "./internal/customeridentity", "-run", "^TestNativeDex(GetReportsCloseFailure|TLSAndRestart)$", "-count=1", "-timeout=210s"],
       {
         cwd: path.resolve("server"),
         env: { ...process.env, CGO_ENABLED: "0", GOTOOLCHAIN: "local", PORTAL_NATIVE_DEX_FIXTURE: "true" },
@@ -78,6 +78,7 @@ if (image === "business-site:production-test") {
     const events = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
     const passed = events.filter((event) => event.Action === "pass" && event.Test).map((event) => event.Test).sort();
     assert.deepEqual(passed, [
+      "TestNativeDexGetReportsCloseFailure",
       "TestNativeDexTLSAndRestart",
       "TestNativeDexTLSAndRestart/wrong-database-ca",
       "TestNativeDexTLSAndRestart/wrong-database-name",
