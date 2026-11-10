@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+// handoffFixture writes matching fictional native receipts and archive placeholders
+// for testing the handoff contract.
 func handoffFixture(t *testing.T) (string, []string) {
 	t.Helper()
 	root := t.TempDir()

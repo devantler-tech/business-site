@@ -694,6 +694,8 @@ func TestBrowserFrameworkReceiptRequiresAllSixBoundScreenshots(t *testing.T) {
 	}
 }
 
+// TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes checks that all four
+// browser observations retain the exact source link and matching screenshot bytes.
 func TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes(t *testing.T) {
 	output := t.TempDir()
 	var encoded bytes.Buffer

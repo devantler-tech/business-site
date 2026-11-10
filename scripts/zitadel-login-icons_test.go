@@ -48,6 +48,8 @@ func sourceOfferFixture(t *testing.T) string {
 	return root
 }
 
+// TestExplicitSourceOfferPreservesNativeFooterContent checks the two footer
+// transformations against their expected hashes and verifies the preparation receipt.
 func TestExplicitSourceOfferPreservesNativeFooterContent(t *testing.T) {
 	root := sourceOfferFixture(t)
 	var out, diagnostic bytes.Buffer

@@ -203,6 +203,8 @@ func observeHandoff(input string) (doc handoffDocument, resultErr error) {
 	return doc, nil
 }
 
+// joinHandoff checks the connected build profile and binds its seals to the
+// offline replay, base source and saved image evidence.
 func joinHandoff(doc *handoffDocument, o map[string]handoffObject, files map[string]handoffSnapshot) error {
 	build := o["zitadel-build/build-receipt.json"]
 	replay := o["zitadel-offline-replay/replay-receipt.json"]
