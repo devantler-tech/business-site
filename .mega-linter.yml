@@ -15,4 +15,21 @@ SPELL_CSPELL_RULES_PATH: /github/workspace
 REPOSITORY_SECRETLINT_RULES_PATH: /github/workspace
 # Private forms have mixed methods and authentication. The adapter retains every
 # target in explicit method-aware coverage; ordinary documents stay byte-identical.
-SPELL_LYCHEE_ARGUMENTS: ["--preprocess", "/github/workspace/scripts/portal-links-preprocess.sh"]
+# Pace repeated requests to the same host. All failed responses still fail the scan.
+SPELL_LYCHEE_ARGUMENTS:
+  - "--preprocess"
+  - "/github/workspace/scripts/portal-links-preprocess.sh"
+  - "--host-concurrency"
+  - "2"
+  - "--host-request-interval"
+  - "500ms"
+  # Check the same public file and ref through the content endpoint when the
+  # rendered blob page is unreliable. Leave fragments and moving branches alone.
+  - "--remap"
+  - >-
+    ^https://github\.com/devantler-tech/business-site/blob/([a-f0-9]{40})/(server/[A-Za-z0-9._/-]+\.md)$
+    https://raw.githubusercontent.com/devantler-tech/business-site/$1/$2
+  - "--remap"
+  - >-
+    ^https://github\.com/bufbuild/buf/blob/v1\.72\.0/private/bufpkg/bufmodule/digest\.go$
+    https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go

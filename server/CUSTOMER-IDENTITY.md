@@ -223,8 +223,17 @@ rejects unknown configuration fields and refuses a failed upstream connector.
 Only the independent portal client secret belongs in the portal's own
 secret-file projection.
 
-Native Dex startup, wrong-CA and wrong-name refusal, durable restart, and the
-real ZITADEL code exchange remain release acceptance under #491 and #305.
+The production-profile Docker smoke runs the pinned signed Dex image with these
+actual files in a disposable internal network. Its PostgreSQL listener requires
+TLS 1.3 for network clients, and the broker uses a dedicated non-administrator
+role. The test requires native refusal of a wrong database CA, a wrong database
+hostname and an untrusted upstream discovery CA. It verifies discovery over
+HTTPS, observes encrypted database sessions, and checks that the same public
+signing keys survive a broker and database restart. The upstream discovery
+fixture creates no users or authorization codes.
+
+The real ZITADEL code exchange, gateway and closed deployment remain release
+acceptance under #305.
 
 ## Invited users and authorization
 
