@@ -62,6 +62,12 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
     SPELL_LYCHEE_ARGUMENTS: [
       '--preprocess', '/github/workspace/scripts/portal-links-preprocess.sh',
       '--host-concurrency', '2', '--host-request-interval', '500ms',
+      '--remap',
+      '^https://github\\.com/devantler-tech/business-site/blob/([a-f0-9]{40})/(server/[A-Za-z0-9._/-]+\\.md)$ ' +
+        'https://raw.githubusercontent.com/devantler-tech/business-site/$1/$2',
+      '--remap',
+      '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
+        'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
     ],
   });
   assert.deepEqual(rules, {
