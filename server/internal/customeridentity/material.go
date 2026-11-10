@@ -24,7 +24,7 @@ var errMaterial = errors.New("customer identity private material refused")
 var materialIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_]{2,62}$`)
 var materialReference = regexp.MustCompile(`^\$\{[A-Za-z_][A-Za-z0-9_]*\}$`)
 
-// Materialize prepares one private native ZITADEL phase without executing it.
+// Materialize prepares one private native ZITADEL or Dex phase without executing it.
 // Inputs are closed owner-only files. Outputs are not deployment or login proof.
 func Materialize(phase, inputDirectory, outputDirectory string) error {
 	names, fields, err := materialProfile(phase)
@@ -42,7 +42,7 @@ func Materialize(phase, inputDirectory, outputDirectory string) error {
 // materializeSnapshot validates native documents before reserving private output.
 func materializeSnapshot(phase, outputDirectory string, fields []string, snapshot *materialSnapshot) error {
 	settings, err := materialSettings(snapshot.files["settings.json"], fields)
-	if err != nil {
+	if err != nil || settings["schemaVersion"] != materialSchema(phase) {
 		return errMaterial
 	}
 	outputs, err := materialDocuments(phase, settings, snapshot.files)
@@ -73,6 +73,9 @@ func materialProfile(phase string) ([]string, []string, error) {
 			names = append(names, "smtp-password")
 			fields = append(fields, "smtpHost", "smtpPort", "smtpFrom", "smtpUser")
 		}
+	case dexServePhase:
+		names = append(names, "tls.crt", "tls.key", "service-ca.pem", "zitadel-ca.pem", "zitadel-client-secret", "portal-client-secret")
+		fields = append(fields, "zitadelClientID")
 	case "serve":
 		names = append(names, "master.key", "tls.crt", "tls.key", "service-ca.pem")
 	default:
@@ -114,10 +117,18 @@ func materialSettings(data []byte, fields []string) (map[string]string, error) {
 	if token, err := decoder.Token(); err != nil || token != json.Delim('}') || len(settings) != len(fields) {
 		return nil, errMaterial
 	}
-	if _, err := decoder.Token(); err != io.EOF || settings["schemaVersion"] != "customer-zitadel-private-v1" {
+	if _, err := decoder.Token(); err != io.EOF {
 		return nil, errMaterial
 	}
 	return settings, nil
+}
+
+// materialSchema distinguishes the two closed sets of private inputs.
+func materialSchema(phase string) string {
+	if phase == dexServePhase {
+		return "customer-dex-private-v1"
+	}
+	return "customer-zitadel-private-v1"
 }
 
 // materialDocuments composes only fixed native fields with JSON-safe values.
@@ -132,6 +143,9 @@ func materialDocuments(phase string, settings map[string]string, files map[strin
 	}
 	if _, err := materialRoots(files["database-ca.pem"]); err != nil {
 		return nil, errMaterial
+	}
+	if phase == dexServePhase {
+		return materialDexDocuments(endpoints, settings, files)
 	}
 	idp, err := endpoint(endpoints.ZitadelIssuer, "")
 	if err != nil {

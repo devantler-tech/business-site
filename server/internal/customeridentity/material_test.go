@@ -42,6 +42,9 @@ func materialCompareOutput(t *testing.T, expected, actual string) {
 // materialFixture creates private fictional inputs, never an actual identity.
 func materialFixture(t *testing.T, phase string) (string, string) {
 	t.Helper()
+	if phase == dexServePhase {
+		return dexFixture(t)
+	}
 	parent, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

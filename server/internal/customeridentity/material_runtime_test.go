@@ -16,7 +16,7 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 	if data, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("runtime fixture build failed: %v %s", err, data)
 	}
-	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve", dexServePhase} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialFixture(t, phase)
 			args := []string{"--identity-materialize", "--identity-phase", phase, "--identity-inputs", input, "--identity-output", output}
@@ -24,7 +24,11 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 			if err != nil || string(data) != "customer identity phase prepared\n" {
 				t.Fatal("packaged runtime cannot prepare the native phase without starting public services")
 			}
-			materialAssertOutput(t, output, phase)
+			if phase == dexServePhase {
+				dexAssertOutput(t, input, output)
+			} else {
+				materialAssertOutput(t, output, phase)
+			}
 			// The command delegates to the same maintained native producer exactly.
 			comparison := filepath.Join(filepath.Dir(output), "comparison")
 			if err := Materialize(phase, input, comparison); err != nil {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,18 +19,19 @@ import (
 
 // TestMaterialProjectionContainerArchive retains a real child directory's metadata at Docker extraction.
 func TestMaterialProjectionContainerArchive(t *testing.T) {
-	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve", dexServePhase} {
 		t.Run(phase, func(t *testing.T) {
 			input, _ := materialProjectionFixture(t, phase)
 			projectionMust(t, os.Chmod(input, 0777))
-			data := projectionInputArchive(t, input)
+			group := projectionContainerID(phase)
+			data := projectionInputArchive(t, input, group)
 			header, err := tar.NewReader(bytes.NewReader(data)).Next()
 			projectionMust(t, err)
 			// Extraction deliberately ignores metadata on an existing destination's dot entry.
-			if header.Name != "input" || header.Typeflag != tar.TypeDir || header.Mode != 0777 || header.Uid != 0 || header.Gid != 65532 {
+			if header.Name != "input" || header.Typeflag != tar.TypeDir || header.Mode != 0777 || header.Uid != 0 || header.Gid != group {
 				t.Fatal("archive lacks the independently owned projection directory")
 			}
-			projectionAssertCopied(t, input, data)
+			projectionAssertCopied(t, input, data, group)
 		})
 	}
 }
@@ -40,10 +42,12 @@ func TestMaterialProjectionContainer(t *testing.T) {
 	if !projectionContainerImageAllowed(image) {
 		t.Fatal("select a source-test image or the verified publication digest")
 	}
-	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve", dexServePhase} {
 		input, _ := materialProjectionFixture(t, phase)
 		projectionMust(t, os.Chmod(input, 0777))
-		archive := projectionInputArchive(t, input)
+		owner := projectionContainerID(phase)
+		uid := strconv.Itoa(owner)
+		archive := projectionInputArchive(t, input, owner)
 		volumeBytes, err := projectionDocker(nil, "volume", "create")
 		projectionMust(t, err)
 		volume := strings.TrimSpace(string(volumeBytes))
@@ -74,7 +78,7 @@ func TestMaterialProjectionContainer(t *testing.T) {
 		}
 		actual, err := projectionDocker(nil, "cp", carrier+":/projection/input", "-")
 		projectionMust(t, err)
-		projectionAssertCopied(t, input, actual)
+		projectionAssertCopied(t, input, actual, owner)
 		if _, err := projectionDocker(nil, "rm", carrier); err != nil {
 			t.Fatal("owned identity carrier cleanup failed")
 		}
@@ -87,7 +91,7 @@ func TestMaterialProjectionContainer(t *testing.T) {
 				mount += ",readonly"
 			}
 			t.Run(phase+"/"+mode, func(t *testing.T) {
-				args := []string{"run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=256m", "--cpus=1", "--mount", mount, "--tmpfs", "/output:rw,noexec,nosuid,nodev,size=1m,uid=65532,gid=65532,mode=0700", image, "--identity-materialize", "--identity-phase", phase, "--identity-projection", "/projection/input", "--identity-output", "/output/phase"}
+				args := []string{"run", "--rm", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=128", "--memory=256m", "--cpus=1", "--user", uid + ":" + uid, "--mount", mount, "--tmpfs", "/output:rw,noexec,nosuid,nodev,size=1m,uid=" + uid + ",gid=" + uid + ",mode=0700", image, "--identity-materialize", "--identity-phase", phase, "--identity-projection", "/projection/input", "--identity-output", "/output/phase"}
 				output, err := projectionDocker(nil, args...)
 				if readOnly {
 					if err != nil || string(output) != "customer identity phase prepared\n" {
@@ -102,6 +106,14 @@ func TestMaterialProjectionContainer(t *testing.T) {
 			})
 		}
 	}
+}
+
+// projectionContainerID matches each native service's numeric file owner.
+func projectionContainerID(phase string) int {
+	if phase == dexServePhase {
+		return 65534
+	}
+	return 65532
 }
 
 func projectionContainerImageAllowed(image string) bool {
@@ -136,7 +148,7 @@ func TestMaterialProjectionContainerImage(t *testing.T) {
 }
 
 // projectionInputArchive preserves the closed fictional fixture with explicit Linux ownership.
-func projectionInputArchive(t *testing.T, input string) []byte {
+func projectionInputArchive(t *testing.T, input string, group int) []byte {
 	t.Helper()
 	var data bytes.Buffer
 	writer := tar.NewWriter(&data)
@@ -165,7 +177,7 @@ func projectionInputArchive(t *testing.T, input string) []byte {
 		}
 		// A named child is created with these attributes; Docker ignores an existing dot root.
 		header.Name = filepath.Join("input", header.Name)
-		header.Uid, header.Gid = 0, 65532
+		header.Uid, header.Gid = 0, group
 		if err := writer.WriteHeader(header); err != nil {
 			return err
 		}
@@ -185,7 +197,7 @@ func projectionInputArchive(t *testing.T, input string) []byte {
 }
 
 // projectionAssertCopied reads actual daemon archive bytes and metadata before executing the image.
-func projectionAssertCopied(t *testing.T, input string, data []byte) {
+func projectionAssertCopied(t *testing.T, input string, data []byte, group int) {
 	t.Helper()
 	expectedMembers := map[string]os.FileInfo{}
 	projectionMust(t, filepath.WalkDir(input, func(filename string, entry os.DirEntry, err error) error {
@@ -222,7 +234,7 @@ func projectionAssertCopied(t *testing.T, input string, data []byte) {
 			t.Fatal("unexpected copied fixture member")
 		}
 		observed[name] = true
-		if header.Uid != 0 || header.Gid != 65532 || header.FileInfo().Mode()&os.ModeType != info.Mode()&os.ModeType || os.FileMode(header.Mode).Perm() != info.Mode().Perm() {
+		if header.Uid != 0 || header.Gid != group || header.FileInfo().Mode()&os.ModeType != info.Mode()&os.ModeType || os.FileMode(header.Mode).Perm() != info.Mode().Perm() {
 			t.Fatal("actual copied fixture lost its ownership or mode")
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
