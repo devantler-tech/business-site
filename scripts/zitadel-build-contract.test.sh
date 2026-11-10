@@ -6,12 +6,22 @@ scratch="$(mktemp -d)"
 trap 'rm -rf -- "$scratch"' EXIT
 yq -o=json '.' "$root/.github/workflows/ci.yaml" >"$scratch/ci.json"
 # Exercise the actual workflow command with a scanner that produces plausible
-# stdout before its stderr diagnostic and failure. Both streams must survive.
+# stdout before its stderr diagnostic and failure. Both streams must survive in
+# the retained report and the job log, and only the named, unexpired exception
+# may turn reachable findings into success.
 scanner_run="$(jq -er '[.jobs["build-zitadel-linux"].steps[] | select(.name == "Scan the actual frozen identity executable") | .run] | select(length == 1) | .[0]' "$scratch/ci.json")"
-mkdir -p "$scratch/scanner/identity-analysis" "$scratch/scanner/zitadel-build/service"
+mkdir -p "$scratch/scanner/identity-analysis" "$scratch/scanner/zitadel-build/service" "$scratch/scanner/bin"
 cat >"$scratch/scanner/identity-analysis/govulncheck" <<'SCANNER'
 #!/usr/bin/env bash
 set -eu
+if [ "$#" -eq 4 ]; then
+  test "$1" = -mode=binary
+  test "$2" = -db=https://vuln.go.dev
+  test "$3" = -format=json
+  test "$4" = "$RUNNER_TEMP/zitadel-build/service/zitadel"
+  cat "$SCANNER_FIXTURE_JSON"
+  exit "${SCANNER_FIXTURE_JSON_STATUS:-0}"
+fi
 test "$#" -eq 3
 test "$1" = -mode=binary
 test "$2" = -db=https://vuln.go.dev
@@ -21,19 +31,62 @@ printf 'fixture scanner diagnostic\n' >&2
 exit "$SCANNER_FIXTURE_STATUS"
 SCANNER
 chmod +x "$scratch/scanner/identity-analysis/govulncheck"
+cat >"$scratch/scanner/bin/date" <<'CLOCK'
+#!/usr/bin/env bash
+test "$*" = '-u +%F'
+printf '%s\n' "$SCANNER_FIXTURE_TODAY"
+CLOCK
+chmod +x "$scratch/scanner/bin/date"
 printf 'plausible scan report\nfixture scanner diagnostic\n' >"$scratch/scanner-expected.txt"
-for scanner_status in 42 3 0; do
+config='{"config":{"protocol_version":"v1.0.0","scanner_name":"govulncheck","scan_level":"symbol","scan_mode":"binary"}}'
+called() { printf '{"finding":{"osv":"%s","trace":[{"module":"m","version":"v1","package":"m","function":"F"}]}}\n' "$1"; }
+module_only() { printf '{"finding":{"osv":"%s","trace":[{"module":"m","version":"v1"}]}}\n' "$1"; }
+{ echo "$config"; module_only GO-2026-6909; called GO-2026-6909; } >"$scratch/excepted.json"
+{ echo "$config"; called GO-2026-6909; called GO-2026-4753; } >"$scratch/unrelated.json"
+{ echo "$config"; module_only GO-2026-6909; called GO-2026-4753; } >"$scratch/unrelated-only.json"
+{ echo "$config"; module_only GO-2026-6909; } >"$scratch/uncalled.json"
+called GO-2026-6909 >"$scratch/no-config.json"
+printf 'not json\n' >"$scratch/broken.json"
+# status today json json-status expected
+while read -r scanner_status today fixture json_status expected; do
   observed_status=0
-  RUNNER_TEMP="$scratch/scanner" SCANNER_FIXTURE_STATUS="$scanner_status" \
-    bash -e -o pipefail -c "$scanner_run" >"$scratch/scanner-step.stdout" 2>"$scratch/scanner-step.stderr" || observed_status=$?
-  test "$observed_status" -eq "$scanner_status"
+  rm -f "$scratch/scanner/zitadel-build/vulnerability-analysis.txt" "$scratch/scanner/identity-analysis/vulnerability-findings.json"
+  PATH="$scratch/scanner/bin:$PATH" RUNNER_TEMP="$scratch/scanner" SCANNER_FIXTURE_STATUS="$scanner_status" \
+    SCANNER_FIXTURE_TODAY="$today" SCANNER_FIXTURE_JSON="$scratch/$fixture" SCANNER_FIXTURE_JSON_STATUS="$json_status" \
+    bash -e -o pipefail -c "cd \"\$1\" && $scanner_run" scan "$root" >"$scratch/scanner-step.stdout" 2>"$scratch/scanner-step.stderr" || observed_status=$?
+  if [[ "$observed_status" -ne "$expected" ]]; then
+    echo "scanner case $scanner_status/$today/$fixture/$json_status exited $observed_status, expected $expected" >&2
+    exit 1
+  fi
   if ! cmp -s "$scratch/scanner-expected.txt" "$scratch/scanner/zitadel-build/vulnerability-analysis.txt"; then
     echo 'scanner diagnostic missing from retained analysis' >&2
     exit 1
   fi
-  test ! -s "$scratch/scanner-step.stdout"
-  test ! -s "$scratch/scanner-step.stderr"
-done
+  grep -qx 'fixture scanner diagnostic' "$scratch/scanner-step.stdout" || { echo 'scanner report missing from job log' >&2; exit 1; }
+  case "$fixture/$expected" in
+    excepted.json/0) grep -q '^::warning::GO-2026-6909 is excepted until 2026-12-09: ' "$scratch/scanner-step.stdout" ;;
+    unrelated.json/3 | unrelated-only.json/3) grep -qx '::error::GO-2026-4753 is reachable in the identity executable and has no exception' "$scratch/scanner-step.stdout" ;;
+    excepted.json/3) grep -q '^::error::GO-2026-6909 exception expired on 2026-12-09' "$scratch/scanner-step.stdout" ;;
+  esac
+done <<'CASES'
+42 2026-11-09 excepted.json 0 42
+0 2026-11-09 unrelated.json 0 0
+3 2026-11-09 excepted.json 0 0
+3 2026-12-09 excepted.json 0 0
+3 2026-12-10 excepted.json 0 3
+3 2026-11-09 unrelated.json 0 3
+3 2026-11-09 unrelated-only.json 0 3
+3 2026-11-09 uncalled.json 0 1
+3 2026-11-09 no-config.json 0 1
+3 2026-11-09 broken.json 0 1
+3 2026-11-09 excepted.json 2 2
+CASES
+# The exception list names exactly one advisory with a dated expiry.
+if [[ "$(grep -cE "^  'GO-[0-9]{4}-[0-9]+\|" "$root/scripts/scan-zitadel-binary.sh")" -ne 1 ]] ||
+  ! grep -qE "^  'GO-2026-6909\|2026-12-09\|" "$root/scripts/scan-zitadel-binary.sh"; then
+  echo 'identity vulnerability exceptions must name only GO-2026-6909 with its expiry' >&2
+  exit 1
+fi
 # Exercise the actual native composition producer, including plausible complete
 # stdout followed by a failure. The failed producer must prevent normalization.
 composition_run="$(jq -er '[.jobs["build-zitadel-linux"].steps[]|select(.name=="Observe actual verifier package compositions")|.run]|select(length==1)|.[0]' "$scratch/ci.json")"
@@ -102,7 +155,7 @@ check() {
       .run == "GOBIN=\"$RUNNER_TEMP/identity-analysis\" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($job.steps[]; .name == "Scan the actual frozen identity executable" and
-      .run == "\"$RUNNER_TEMP/identity-analysis/govulncheck\" -mode=binary -db=https://vuln.go.dev \"$RUNNER_TEMP/zitadel-build/service/zitadel\" > \"$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt\" 2>&1" and
+      .run == "bash scripts/scan-zitadel-binary.sh --scanner \"$RUNNER_TEMP/identity-analysis/govulncheck\" --binary \"$RUNNER_TEMP/zitadel-build/service/zitadel\" --report \"$RUNNER_TEMP/zitadel-build/vulnerability-analysis.txt\" --findings \"$RUNNER_TEMP/identity-analysis/vulnerability-findings.json\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[].name] | index("Setup the source verifier compiler") < index("Build the pinned identity vulnerability checker") and
       index("Build the pinned identity vulnerability checker") < index("Setup the frozen identity Go compiler") and
@@ -534,7 +587,8 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Scan the actual frozen identity executable"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .["continue-on-error"]=true else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run |= sub(" 2>&1$"; "") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run |= sub("zitadel-build/vulnerability-analysis.txt"; "identity-analysis/vulnerability-analysis.txt") else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run |= sub("scripts/scan-zitadel-binary.sh"; "scripts/other-scan.sh") else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run += " -json" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Scan the actual frozen identity executable" then .run=(.run | sub("service/zitadel"; "service/other")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Verify the exact identity build-tool license scope"))' \
