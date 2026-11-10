@@ -1,7 +1,7 @@
 # Selected identity Go source inputs
 
 This command in the existing Go 1.27.3 server module is inactive without arguments. It uses the frozen
-231-module service catalogue and `golang.org/x/mod` v0.42.0, pinned through
+230-module service catalogue and `golang.org/x/mod` v0.42.0, pinned through
 the server's `go.mod` and `go.sum`. This build-tool dependency is not an identity service
 dependency. Ordinary website builds never run it.
 

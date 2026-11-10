@@ -460,7 +460,7 @@ jobs:
             (.frameworkIcons | map(.kind+"/"+.theme)) == ["framework-quickstart/light","framework-selected/light","framework-picker/light","framework-quickstart/dark","framework-selected/dark","framework-picker/dark"] and
             all(.frameworkIcons[]; .glyphs and .labels and .targets and .themeReady and .resources and .keyboard) and
             (.sourceOffer | map(.kind+"/"+.theme)) == ["console/light","console/dark","login/light","login/dark"] and
-            all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1") and
+            all(.sourceOffer[]; .visible and .keyboard and .themeReady and .href == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2") and
             all(.pages[]; .loaded == true and .sameOriginResources == true and .unadmittedFontAbsent == true and .secureContext == true and .webCrypto == true and .presentationReady == true) and
             .imageAdmission == "unknown" and .licenseClosure == "unknown"
           ' "$RUNNER_TEMP/zitadel-image/browser-smoke.json" >/dev/null

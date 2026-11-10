@@ -78,7 +78,7 @@ jq -e '.profile == "native-neutral-framework-icons-v1" and .changedFiles == 8 an
 # corresponding source. Publication must precede distribution of this image.
 GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
   --source-offer --prepare --source "$stage/source" >"$stage/source-offer.json"
-jq -e '.profile == "native-source-offer-v1" and .changedFiles == 2 and .removedFiles == 0 and .consoleSlots == 1 and .loginSlots == 1 and (.changedPaths|length)==2 and .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"' "$stage/source-offer.json" >/dev/null
+jq -e '.profile == "native-source-offer-v1" and .changedFiles == 2 and .removedFiles == 0 and .consoleSlots == 1 and .loginSlots == 1 and (.changedPaths|length)==2 and .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2"' "$stage/source-offer.json" >/dev/null
 console=console/src/styles.scss
 login=internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$stage/console"
@@ -140,8 +140,19 @@ awk '
   $0 == "\tgithub.com/gorilla/csrf v1.7.2" {
     print "\tgithub.com/gorilla/csrf v1.7.3"; csrf++; next
   }
+  $0 == "\tgithub.com/beevik/etree v1.6.0" {
+    print "\tgithub.com/beevik/etree v1.8.1"; etree++; next
+  }
+  $0 == "\tgithub.com/crewjam/saml v0.5.1" {
+    print "\tgithub.com/crewjam/saml v0.5.2"; saml++; next
+  }
+  $0 == "\tgithub.com/russellhaering/goxmldsig v1.6.0" {
+    print "\tgithub.com/russellhaering/goxmldsig v1.6.1"; xmlsig++; next
+  }
   { print }
-  END { if (jose != 1 || net != 1 || csrf != 1) exit 1 }
+  END {
+    if (jose != 1 || net != 1 || csrf != 1 || etree != 1 || saml != 1 || xmlsig != 1) exit 1
+  }
 ' "$stage/source/go.mod" >"$stage/go.mod" || fail 'module patch differs'
 awk '
   $0 == "github.com/gorilla/csrf v1.7.2 h1:oTUjx0vyf2T+wkrx09Trsev1TE+/EbDAeHtSTbtC2eI=" { originalCSRF++ }
@@ -165,11 +176,36 @@ awk '
     print "golang.org/x/net v0.62.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI="
     changedNet++; next
   }
+  $0 == "github.com/beevik/etree v1.6.0 h1:u8Kwy8pp9D9XeITj2Z0XtA5qqZEmtJtuXZRQi+j03eE=" { original_etree++ }
+  $0 == "github.com/beevik/etree v1.6.0/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=" {
+    print
+    print "github.com/beevik/etree v1.8.1 h1:MchsAnqPGCGsfQezhwcouHPlAHlcAOqWpyCVZoyWfjU="
+    print "github.com/beevik/etree v1.8.1/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc="
+    added_etree++; next
+  }
+  $0 == "github.com/crewjam/saml v0.5.1 h1:g+mfp0CrLuLRZCK793PgJcZeg5dS/0CDwoeAX2zcwNI=" { original_saml++ }
+  $0 == "github.com/crewjam/saml v0.5.1/go.mod h1:r0fDkmFe5URDgPrmtH0IYokva6fac3AUdstiPhyEolQ=" {
+    print
+    print "github.com/crewjam/saml v0.5.2 h1:C6Md0Q8bI5AtkYeSbnvmJAm77GnoO4HlTuOO9w9V4Sw="
+    print "github.com/crewjam/saml v0.5.2/go.mod h1:l8lz5HQx4DBy+G4Z1eeO5+UTgOTvIl3zUnfPsZl04Tc="
+    added_saml++; next
+  }
+  $0 == "github.com/russellhaering/goxmldsig v1.6.0 h1:8fdWXEPh2k/NZNQBPFNoVfS3JmzS4ZprY/sAOpKQLks=" { original_xmlsig++ }
+  $0 == "github.com/russellhaering/goxmldsig v1.6.0/go.mod h1:TrnaquDcYxWXfJrOjeMBTX4mLBeYAqaHEyUeWPxZlBM=" {
+    print
+    print "github.com/russellhaering/goxmldsig v1.6.1 h1:SB7R5ttvrGIDB2juJAK/i7DQ2Ivr7agG+ohfNJjwyYU="
+    print "github.com/russellhaering/goxmldsig v1.6.1/go.mod h1:haZkRcLs9W/Xp989fIjP3BrTdbFQveRF0QNZSYoH09w="
+    added_xmlsig++; next
+  }
   { print }
-  END { if (original != 1 || changed != 1 || originalNet != 1 || changedNet != 1 || originalCSRF != 1 || changedCSRF != 1) exit 1 }
+  END {
+    if (original != 1 || changed != 1 || originalNet != 1 || changedNet != 1 ||
+        originalCSRF != 1 || changedCSRF != 1 || original_etree != 1 || added_etree != 1 ||
+        original_saml != 1 || added_saml != 1 || original_xmlsig != 1 || added_xmlsig != 1) exit 1
+  }
 ' "$stage/source/go.sum" >"$stage/go.sum" || fail 'checksum patch differs'
-[[ "$(shasum -a 256 "$stage/go.mod" | awk '{print $1}')" = d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50 ]] || fail 'patched module differs'
-[[ "$(shasum -a 256 "$stage/go.sum" | awk '{print $1}')" = 19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba ]] || fail 'patched checksums differ'
+[[ "$(shasum -a 256 "$stage/go.mod" | awk '{print $1}')" = 07ed7fd00389cf4950652e5950d4ec73ce64adc7aea13c89dde95076798b2518 ]] || fail 'patched module differs'
+[[ "$(shasum -a 256 "$stage/go.sum" | awk '{print $1}')" = 1ccb3b6ace2ac71e266ee5c9d28e23c04dfb3ba3084b9bdca7a487f35b9af6d0 ]] || fail 'patched checksums differ'
 mv "$stage/go.mod" "$stage/source/go.mod"
 mv "$stage/go.sum" "$stage/source/go.sum"
 rm -- "$stage/source/console/src/assets/ailerons.otf" \
@@ -194,7 +230,7 @@ input_hash="$(shasum -a 256 "$root/scripts/zitadel-source-inputs.sha256" | awk '
 jq -n --arg pin "$pin" --arg recipe "$recipe_hash" --arg inputs "$input_hash" --slurpfile frameworks "$stage/framework-icons.json" --slurpfile offer "$stage/source-offer.json" \
   '{schemaVersion:1,upstreamCommit:$pin,recipeSha256:$recipe,inputManifestSha256:$inputs,
     imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:"machine-id-no-jsonpath-v1",
-    dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1",
+    dependencyProfile:"go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1",
     removedFiles:["console/src/assets/ailerons.otf","console/src/styles/ailerons.scss",
       "internal/api/ui/login/static/resources/fonts/ailerons/ailerons.otf",
       "internal/api/ui/login/static/resources/themes/scss/styles/typography/faces/ailerons_font_faces.scss","console/src/assets/images/idp/apple-dark.svg","console/src/assets/images/idp/apple.svg","console/src/assets/images/idp/github-dark.svg","console/src/assets/images/idp/github.svg","console/src/assets/images/idp/gitlab.svg","console/src/assets/images/idp/google.png","console/src/assets/images/idp/ms.svg","console/src/assets/images/idp/oauth.svg","console/src/assets/images/idp/saml-icon.svg","internal/api/ui/login/static/resources/images/idp/apple-dark.svg","internal/api/ui/login/static/resources/images/idp/apple.svg","internal/api/ui/login/static/resources/images/idp/github-white.png","internal/api/ui/login/static/resources/images/idp/github.png","internal/api/ui/login/static/resources/images/idp/gitlab.png","internal/api/ui/login/static/resources/images/idp/google.png","internal/api/ui/login/static/resources/images/idp/ms.svg","console/src/assets/images/smtp/aws-ses.svg","console/src/assets/images/smtp/brevo.svg","console/src/assets/images/smtp/google.png","console/src/assets/images/smtp/mailchimp.svg","console/src/assets/images/smtp/mailgun.svg","console/src/assets/images/smtp/mailjet.svg","console/src/assets/images/smtp/outlook.svg","console/src/assets/images/smtp/postmark.png","console/src/assets/images/smtp/sendgrid.png","console/src/assets/mdi/openid.svg","console/src/assets/mdi/jwt.svg"],

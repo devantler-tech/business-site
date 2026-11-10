@@ -9,7 +9,7 @@ import (
 )
 
 // The reviewed catalogue, not a CLI input, chooses the admitted service graph.
-const frozenCatalogue = "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd"
+const frozenCatalogue = "32bb716522ebfe0676ce5d26ef735c826874e17852a912b7416b4c6c53712c77"
 
 // run is inert without arguments and admits exactly one explicit operation.
 func run(args []string, stdout io.Writer) error {
@@ -61,8 +61,8 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if result.Modules != 231 {
-		return fmt.Errorf("frozen service selection must contain 231 modules")
+	if result.Modules != 230 {
+		return fmt.Errorf("frozen service selection must contain 230 modules")
 	}
 	return json.NewEncoder(stdout).Encode(result)
 }

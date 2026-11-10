@@ -976,13 +976,13 @@ func browserProviderReceipt(output string, cases []browserProviderCase) error {
 	return nil
 }
 
-const browserSourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1"
+const browserSourceOfferURL = "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2"
 
 // Observe the native anchor after genuine Tab input. The script neither changes
 // focus nor follows the external source link in the isolated fictional fixture.
 const browserSourceOfferObservation = `
 const [kind,theme]=arguments;
-const expected='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1';
+const expected='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2';
 const links=[...document.querySelectorAll('cnsl-footer a, footer a')].filter(a=>a.getAttribute('href')===expected);
 const a=links.length===1?links[0]:null,r=a?.getBoundingClientRect(),style=a?getComputedStyle(a):null;
 const visible=!!a&&a.tagName==='A'&&a.href===expected&&a.innerText.trim()==='Source code'&&a.target==='_blank'&&['noopener','noreferrer'].every(v=>a.rel.split(/\s+/).includes(v))&&a.tabIndex===0&&!a.closest('[hidden],[inert],[aria-hidden="true"]')&&a.getClientRects().length>0&&style.display!=='none'&&style.visibility==='visible'&&Number(style.opacity)>0&&r.width>0&&r.height>0&&r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')===a;

@@ -19,16 +19,16 @@ if [[ "$1" == api ]];then
  case "$endpoint" in
   repos/devantler-tech/business-site/commits/main) printf '{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}\n' ;;
   repos/devantler-tech/business-site/actions/runs/123) printf '{"head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","run_attempt":2,"path":".github/workflows/ci.yaml","event":"push","head_branch":"main","status":"completed","conclusion":"success"}\n' ;;
-  repos/devantler-tech/business-site/git/matching-refs/tags/identity-v4.20.0-devantler.1)
-   if [[ "$KIND" == tag-conflict ]];then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]\n';
-   elif [[ -f "$FIXTURE/release.json" ]] && jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null;then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.1","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]\n';else printf '[]\n';fi ;;
+  repos/devantler-tech/business-site/git/matching-refs/tags/identity-v4.20.0-devantler.2)
+   if [[ "$KIND" == tag-conflict ]];then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.2","object":{"type":"commit","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]\n';
+   elif [[ -f "$FIXTURE/release.json" ]] && jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null;then printf '[{"ref":"refs/tags/identity-v4.20.0-devantler.2","object":{"type":"commit","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]\n';else printf '[]\n';fi ;;
   repos/devantler-tech/business-site/releases\?per_page=100*)
    releases='[]'
    if [[ -f "$FIXTURE/release.json" ]];then releases="$(jq '[.]' "$FIXTURE/release.json")";fi
    case "$KIND" in
    paged-*)
     prefix="$(jq -n '[range(0;100)|{id:(1000+.),tag_name:("other-"+tostring)}]')"
-    if [[ "$KIND" == paged-duplicate ]];then prefix="$(jq '.[0].tag_name="identity-v4.20.0-devantler.1"' <<<"$prefix")";fi
+    if [[ "$KIND" == paged-duplicate ]];then prefix="$(jq '.[0].tag_name="identity-v4.20.0-devantler.2"' <<<"$prefix")";fi
     pages="$(jq -n --argjson prefix "$prefix" --argjson releases "$releases" '[$prefix,$releases]')" ;;
    malformed-inventory) pages="$(jq -n '[[range(0;100)|{tag_name:"other"}],{}]')" ;;
    oversized-inventory|boundary-inventory)
@@ -48,14 +48,14 @@ if [[ "$1" == api ]];then
     printf 'inventory-page %s\n' "$page" >>"$FIXTURE/calls"
     jq --argjson page "$page" '.[$page-1]' <<<"$pages"
    fi ;;
-  repos/devantler-tech/business-site/releases/tags/identity-v4.20.0-devantler.1)
+  repos/devantler-tech/business-site/releases/tags/identity-v4.20.0-devantler.2)
    jq -e '.draft==false' "$FIXTURE/release.json" >/dev/null || exit 44;cat "$FIXTURE/release.json" ;;
   repos/devantler-tech/business-site/releases/789) cat "$FIXTURE/release.json" ;;
   *) exit 98 ;;
  esac
 elif [[ "$1" == release && "$2" == create ]];then
  draft=false;for arg in "$@";do [[ "$arg" != --draft ]] || draft=true;done
- jq -n --argjson draft "$draft" '{id:789,tag_name:"identity-v4.20.0-devantler.1",target_commitish:("a"*40),draft:$draft,prerelease:false,immutable:($draft|not),assets:[]}' >"$FIXTURE/release.json"
+ jq -n --argjson draft "$draft" '{id:789,tag_name:"identity-v4.20.0-devantler.2",target_commitish:("a"*40),draft:$draft,prerelease:false,immutable:($draft|not),assets:[]}' >"$FIXTURE/release.json"
 elif [[ "$1" == release && "$2" == upload ]];then
  if ! jq -e '.draft==true' "$FIXTURE/release.json" >/dev/null;then printf 'immutable release refuses asset uploads\n' >&2;exit 95;fi
  file=${!#};name=$(basename "$file");cp "$file" "$FIXTURE/$name"
@@ -85,7 +85,7 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  reads=0;[[ ! -f "$FIXTURE/registry-reads" ]] || read -r reads <"$FIXTURE/registry-reads"
  reads=$((reads+1));printf '%s\n' "$reads" >"$FIXTURE/registry-reads"
  if [[ "$KIND" == foreign-version-race && "$reads" == 2 ]];then touch "$FIXTURE/foreign-version";fi
- if [[ "$KIND" == foreign-version-present && "$url" == */manifests/4.20.0-devantler.1 ]];then
+ if [[ "$KIND" == foreign-version-present && "$url" == */manifests/4.20.0-devantler.[12] ]];then
   jq '.config.digest=("sha256:"+("6"*64))' "$FIXTURE/manifest.json" >"$output"
   sha=$(shasum -a 256 "$output"|awk '{print $1}')
   printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
@@ -130,7 +130,7 @@ case "$1" in
  login) cat >"$FIXTURE/login-stdin";cmp "$FIXTURE/login-stdin" <(printf '%s' "$GH_TOKEN") || exit 93;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
   # All three anonymous source reads must finish before any image upload.
   [[ "$(grep -c 'curl https://github.com/' "$FIXTURE/calls")" == 3 ]] || exit 96
-  if [[ "$2" == ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.1 && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
+  if [[ "$2" == ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.[12] && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
   touch "$FIXTURE/pushed";;image)
   if [[ "$2" == inspect ]];then
     [[ "$#" == 5 && "$3" == --format && "$4" == '{{json .RepoDigests}}' && "$5" == "sha256:$(printf '%064d' 0 | tr 0 b)" ]] || exit 97
@@ -206,7 +206,7 @@ for kind in valid credential-punctuation credential-empty credential-linebreak c
     cp "$native/zitadel-offline-replay/inputs.tar" "$fixture/inputs.tar"
     digest="$input_sha"
     if [[ "$kind" == draft-conflict ]]; then digest="${base_sha}"; fi
-    jq -n --arg digest "sha256:$digest" '{id:789,tag_name:"identity-v4.20.0-devantler.1",target_commitish:("a"*40),draft:true,prerelease:false,immutable:false,assets:[{id:100,name:"inputs.tar",digest:$digest}]}' >"$fixture/release.json"
+    jq -n --arg digest "sha256:$digest" '{id:789,tag_name:"identity-v4.20.0-devantler.2",target_commitish:("a"*40),draft:true,prerelease:false,immutable:false,assets:[{id:100,name:"inputs.tar",digest:$digest}]}' >"$fixture/release.json"
   elif [[ "$kind" == published-retry || "$kind" == paged-retry || "$kind" == registry-layer-conflict || "$kind" == source-only-resume || "$kind" == paged-source-only-resume ]]; then
     cp "$scratch/valid/"{release.json,inputs.tar,base-source.tar,identity-source.json} "$fixture/"
     if [[ "$kind" != source-only-resume && "$kind" != paged-source-only-resume ]];then touch "$fixture/pushed";fi
@@ -231,7 +231,7 @@ for kind in valid credential-punctuation credential-empty credential-linebreak c
       if [[ -f "$fixture/foreign-version-overwritten" ]];then echo 'publisher overwrote a shared version alias' >&2;exit 1;fi
       expected_ref="ghcr.io/devantler-tech/business-site-identity:original-123-2-$(printf '%064d' 0 | tr 0 b)"
       grep -Fxq "docker push $expected_ref" "$fixture/calls" || { echo 'publisher did not use the original-CI upload reference' >&2;exit 1; }
-      if grep -Eq '^docker (push|tag|image rm) .*business-site-identity:4\.20\.0-devantler\.1' "$fixture/calls";then echo 'publisher wrote the shared version alias' >&2;exit 1;fi
+      if grep -Eq '^docker (push|tag|image rm) .*business-site-identity:4\.20\.0-devantler\.[12]($|[[:space:]])' "$fixture/calls";then echo 'publisher wrote the shared version alias' >&2;exit 1;fi
     fi
     first_write="$(awk '/^gh release (create|upload|edit) / {print NR;exit}' "$fixture/calls")"
     if [[ -n "$first_write" ]];then

@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "upstreamCommit": "8afa5dd37a8e723efb9eace8d09fd5c1cccef694",
   "metadataProfile": "machine-id-no-jsonpath-v1",
-  "goModSha256": "d93f15da9568e8845430997cf6a1f5831decb2c3a526d71ffa8a0d869fe65b50",
-  "goSumSha256": "19e4a6df1f26dd45007ee996eb654923e561dd9aa818315abed3a40577d2f8ba",
+  "goModSha256": "07ed7fd00389cf4950652e5950d4ec73ce64adc7aea13c89dde95076798b2518",
+  "goSumSha256": "1ccb3b6ace2ac71e266ee5c9d28e23c04dfb3ba3084b9bdca7a487f35b9af6d0",
   "modules": [
     {
       "original": {
@@ -641,16 +641,16 @@
     {
       "original": {
         "Path": "github.com/beevik/etree",
-        "Version": "v1.6.0",
-        "Sum": "h1:u8Kwy8pp9D9XeITj2Z0XtA5qqZEmtJtuXZRQi+j03eE=",
+        "Version": "v1.8.1",
+        "Sum": "h1:MchsAnqPGCGsfQezhwcouHPlAHlcAOqWpyCVZoyWfjU=",
         "GoModSum": "h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/beevik/etree",
-        "Version": "v1.6.0",
-        "Sum": "h1:u8Kwy8pp9D9XeITj2Z0XtA5qqZEmtJtuXZRQi+j03eE=",
+        "Version": "v1.8.1",
+        "Sum": "h1:MchsAnqPGCGsfQezhwcouHPlAHlcAOqWpyCVZoyWfjU=",
         "GoModSum": "h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=",
         "Main": false,
         "Replace": null
@@ -916,17 +916,17 @@
     {
       "original": {
         "Path": "github.com/crewjam/saml",
-        "Version": "v0.5.1",
-        "Sum": "h1:g+mfp0CrLuLRZCK793PgJcZeg5dS/0CDwoeAX2zcwNI=",
-        "GoModSum": "h1:r0fDkmFe5URDgPrmtH0IYokva6fac3AUdstiPhyEolQ=",
+        "Version": "v0.5.2",
+        "Sum": "h1:C6Md0Q8bI5AtkYeSbnvmJAm77GnoO4HlTuOO9w9V4Sw=",
+        "GoModSum": "h1:l8lz5HQx4DBy+G4Z1eeO5+UTgOTvIl3zUnfPsZl04Tc=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/crewjam/saml",
-        "Version": "v0.5.1",
-        "Sum": "h1:g+mfp0CrLuLRZCK793PgJcZeg5dS/0CDwoeAX2zcwNI=",
-        "GoModSum": "h1:r0fDkmFe5URDgPrmtH0IYokva6fac3AUdstiPhyEolQ=",
+        "Version": "v0.5.2",
+        "Sum": "h1:C6Md0Q8bI5AtkYeSbnvmJAm77GnoO4HlTuOO9w9V4Sw=",
+        "GoModSum": "h1:l8lz5HQx4DBy+G4Z1eeO5+UTgOTvIl3zUnfPsZl04Tc=",
         "Main": false,
         "Replace": null
       },
@@ -1921,31 +1921,6 @@
           "file": "LICENSE",
           "bytes": 1066,
           "sha256": "a42aa25a9e39dc3a1d5d8ca538e5eeea5bfef0d7394bc56d7d8cc819a0f34e5f"
-        }
-      ]
-    },
-    {
-      "original": {
-        "Path": "github.com/golang-jwt/jwt/v4",
-        "Version": "v4.5.2",
-        "Sum": "h1:YtQM7lnr8iZ+j5q71MGKkNw9Mn7AjHM68uc9g5fXeUI=",
-        "GoModSum": "h1:m21LjoU+eqJr34lmDMbreY2eSTRJ1cv77w39/MY0Ch0=",
-        "Main": false,
-        "Replace": null
-      },
-      "effective": {
-        "Path": "github.com/golang-jwt/jwt/v4",
-        "Version": "v4.5.2",
-        "Sum": "h1:YtQM7lnr8iZ+j5q71MGKkNw9Mn7AjHM68uc9g5fXeUI=",
-        "GoModSum": "h1:m21LjoU+eqJr34lmDMbreY2eSTRJ1cv77w39/MY0Ch0=",
-        "Main": false,
-        "Replace": null
-      },
-      "components": [
-        {
-          "file": "LICENSE",
-          "bytes": 1100,
-          "sha256": "fe26ca41577b9b2b4448050a24b25e5753af66b5d5945d5d36094e7790bfcb2f"
         }
       ]
     },
@@ -3910,17 +3885,17 @@
     {
       "original": {
         "Path": "github.com/russellhaering/goxmldsig",
-        "Version": "v1.6.0",
-        "Sum": "h1:8fdWXEPh2k/NZNQBPFNoVfS3JmzS4ZprY/sAOpKQLks=",
-        "GoModSum": "h1:TrnaquDcYxWXfJrOjeMBTX4mLBeYAqaHEyUeWPxZlBM=",
+        "Version": "v1.6.1",
+        "Sum": "h1:SB7R5ttvrGIDB2juJAK/i7DQ2Ivr7agG+ohfNJjwyYU=",
+        "GoModSum": "h1:haZkRcLs9W/Xp989fIjP3BrTdbFQveRF0QNZSYoH09w=",
         "Main": false,
         "Replace": null
       },
       "effective": {
         "Path": "github.com/russellhaering/goxmldsig",
-        "Version": "v1.6.0",
-        "Sum": "h1:8fdWXEPh2k/NZNQBPFNoVfS3JmzS4ZprY/sAOpKQLks=",
-        "GoModSum": "h1:TrnaquDcYxWXfJrOjeMBTX4mLBeYAqaHEyUeWPxZlBM=",
+        "Version": "v1.6.1",
+        "Sum": "h1:SB7R5ttvrGIDB2juJAK/i7DQ2Ivr7agG+ohfNJjwyYU=",
+        "GoModSum": "h1:haZkRcLs9W/Xp989fIjP3BrTdbFQveRF0QNZSYoH09w=",
         "Main": false,
         "Replace": null
       },

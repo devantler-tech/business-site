@@ -116,7 +116,7 @@ notice_args=()
 # These summaries describe complete original-byte readback, never legal closure.
 check_notice_summary() {
   jq -e --arg source "$notice_seal" --arg recipe "$(shasum -a 256 "$root/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .recipeSha256==$recipe and .files==45 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
+    '.schemaVersion==1 and .profile=="identity-notice-originals-v1" and .sourceManifestSha256==$source and .preparedProfileSha256=="06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .recipeSha256==$recipe and .files==45 and .bytes>0 and .originalInputsReadbackPassed==true and (.manifestSha256|test("^[0-9a-f]{64}$"))' "$1" >/dev/null || fail 'complete notice-original readback required'
 }
 check_notice_readback() {
   [[ -n "$notice_snapshot" ]] || return 0
@@ -217,7 +217,7 @@ fi
 if [[ -z "$prepared_source" ]]; then
   bash "$root/scripts/prepare-zitadel-source.sh" --prepare --source "$source_repo" --output "$output/prepared"
 fi
-jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1"' "$output/prepared/source-preparation.json" >/dev/null
+jq -e --arg pin "$pin" '.schemaVersion == 1 and .upstreamCommit == $pin and .imageAdmission == "unknown" and .licenseClosure == "unknown" and .metadataProfile == "machine-id-no-jsonpath-v1" and .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1"' "$output/prepared/source-preparation.json" >/dev/null
 cd "$output/prepared/source"
 inputs=(go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/package.json proto/buf.lock)
 if [[ -z "$prepared_source" ]]; then
@@ -241,7 +241,7 @@ if [[ -z "$retained_inputs" ]]; then mkdir "$GOMODCACHE" "$GOPATH" "$npm_config_
 : >"$npm_config_userconfig"
 : >"$npm_config_globalconfig"
 if [[ -n "$prepared_source" ]]; then
-  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files == 9528 and .records == 58 and .bytes == 261325366' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
+  jq -e --arg seal "$prepared_sha" '.manifestSha256 == $seal and .preparedProfileSha256 == "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .files == 9528 and .records == 58 and .bytes == 261325885' <<<"$prepared_input_json" >/dev/null || fail 'restored source does not match the frozen complete profile'
   # Reuse capture's exact source/recipe/transformation admission before install.
   # Equality also binds the retained modification record and original API bytes;
   # neither preparation nor the API serialization transform is rerun here.
@@ -300,7 +300,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # Capture before any install/generation can alter maintained source or add
   # caches. The helper admits the complete fixed profile, not just seven locks.
   go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$output" "$root" "$output/source-snapshot" >"$output/source-capture.pending"
-  jq -e '.preparedProfileSha256 == "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .files == 9528 and .bytes == 261325366 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
+  jq -e '.preparedProfileSha256 == "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .files == 9528 and .bytes == 261325885 and .records == 58 and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/source-capture.pending" >/dev/null || fail 'incomplete prepared-source capture'
   source_manifest="$(jq -er .manifestSha256 "$output/source-capture.pending")"
   notice_snapshot="$output/source-snapshot" notice_seal="$source_manifest" notice_root="$output/selected-notice-originals"
   go run "$root/scripts/zitadel-source-bundle.go" --capture-notice-originals "$root" "$notice_snapshot" "$notice_seal" "$notice_root" >"$output/notice-originals.json" || fail 'complete notice-original capture failed'
@@ -605,7 +605,7 @@ if [[ "$capture_source" -eq 1 ]]; then
   # final module verification. The command's checksum-bound dependency is
   # tooling, not an extra service module or a complete offline-replay closure.
   "$module_verifier" --capture --build "$output" --catalogue "$notice_root/third_party/zitadel-go-module-notices/catalogue.json" --output "$output/selected-go-sources" >"$output/go-module-source-capture.pending"
-  jq -e '.schemaVersion == 1 and .modules == 231 and .files == 466 and .selectedServiceGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/go-module-source-capture.pending" >/dev/null || fail 'incomplete selected Go source capture'
+  jq -e '.schemaVersion == 1 and .modules == 230 and .files == 464 and .selectedServiceGoSourcesCaptured == true and .dependencyInputsCaptured == false and .nativeOfflineReplayProved == false and (.manifestSha256 | test("^[0-9a-f]{64}$"))' "$output/go-module-source-capture.pending" >/dev/null || fail 'incomplete selected Go source capture'
   go_modules_manifest="$(jq -er .manifestSha256 "$output/go-module-source-capture.pending")"
   "$module_verifier" --verify "$output/selected-go-sources" --sha256 "$go_modules_manifest" >"$output/go-module-source-readback.pending"
   cmp "$output/go-module-source-capture.pending" "$output/go-module-source-readback.pending" || fail 'selected Go source readback differs'

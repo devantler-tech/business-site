@@ -694,6 +694,8 @@ func TestBrowserFrameworkReceiptRequiresAllSixBoundScreenshots(t *testing.T) {
 	}
 }
 
+// TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes checks that all four
+// browser observations retain the exact source link and matching screenshot bytes.
 func TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes(t *testing.T) {
 	output := t.TempDir()
 	var encoded bytes.Buffer
@@ -709,7 +711,7 @@ func TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes(t *testing.T) {
 				t.Fatal(err)
 			}
 			cases = append(cases, browserSourceOfferCase{kind, theme,
-				"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.1",
+				"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2",
 				true, true, true, browserScreen{name, len(raw), imageHash(raw)}})
 		}
 	}

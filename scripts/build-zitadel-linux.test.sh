@@ -43,7 +43,7 @@ for f in go.mod go.sum package.json pnpm-lock.yaml pnpm-workspace.yaml console/p
 done
 printf '{"targets":{"generate-install":{"options":{"commands":["native generator"]}}}}\n' >"$out/source/apps/api/project.json"
 jq -n --arg pin "${TEST_PIN:-8afa5dd37a8e723efb9eace8d09fd5c1cccef694}" --arg profile "${TEST_METADATA_PROFILE:-machine-id-no-jsonpath-v1}" \
-  --arg dependency "${TEST_DEPENDENCY_PROFILE:-go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-v1}" \
+  --arg dependency "${TEST_DEPENDENCY_PROFILE:-go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1}" \
   '{schemaVersion:1,upstreamCommit:$pin,imageAdmission:"unknown",licenseClosure:"unknown",metadataProfile:$profile,dependencyProfile:$dependency} |
     if $dependency == "missing" then del(.dependencyProfile) else . end' >"$out/source-preparation.json"
 STUB
@@ -280,7 +280,7 @@ case "$1 $2" in
               rm -f "$7/third_party/$family/README.md"
             done
             (cd "$7" && find third_party -type f | sort | while IFS= read -r name; do shasum -a 256 "$name"; done) >"$7/.fixture-notice-digests"
-            jq -n --arg recipe "$(shasum -a 256 "${2%/scripts/zitadel-source-bundle.go}/scripts/build-zitadel-linux.sh" | awk '{print $1}')" '{schemaVersion:1,profile:"identity-notice-originals-v1",sourceManifestSha256:("a"*64),preparedProfileSha256:"6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181",recipeSha256:$recipe,manifestSha256:("c"*64),files:45,bytes:123,originalInputsReadbackPassed:true}' >"$7/.fixture-notice-summary.json"
+            jq -n --arg recipe "$(shasum -a 256 "${2%/scripts/zitadel-source-bundle.go}/scripts/build-zitadel-linux.sh" | awk '{print $1}')" '{schemaVersion:1,profile:"identity-notice-originals-v1",sourceManifestSha256:("a"*64),preparedProfileSha256:"06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3",recipeSha256:$recipe,manifestSha256:("c"*64),files:45,bytes:123,originalInputsReadbackPassed:true}' >"$7/.fixture-notice-summary.json"
           else
             cp -R "$4/third_party" "$7/"
             cp "$4/".fixture-notice-* "$7/"
@@ -313,8 +313,8 @@ case "$1 $2" in
           cp -R "$TEST_PREPARED_BUILD/prepared/source" "$6/prepared/source"
           cp "$TEST_PREPARED_BUILD/prepared/source-preparation.json" "$6/prepared/source-preparation.json"
           for record in api-project.original.json api-project.serial.json inputs.sha256; do cp "$TEST_PREPARED_BUILD/$record" "$6/$record"; done
-          jq -n --arg profile "${TEST_REPLAY_PROFILE:-6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181}" \
-            --argjson bytes "${TEST_REPLAY_BYTES:-261325366}" --argjson records "${TEST_REPLAY_RECORDS:-58}" \
+          jq -n --arg profile "${TEST_REPLAY_PROFILE:-06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3}" \
+            --argjson bytes "${TEST_REPLAY_BYTES:-261325885}" --argjson records "${TEST_REPLAY_RECORDS:-58}" \
             '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9528,records:$records,bytes:$bytes,recipeSha256:("b"*64)}';;
         --capture-build)
           [[ ( "$#" -eq 6 || "$#" -eq 7 ) && ! -s "$TEST_CALLS" && ! -e "$4/service" ]]
@@ -337,8 +337,8 @@ case "$1 $2" in
           cp "$5/tools/zitadel-pnpm-source/"{index.mjs,package.json,package-lock.json} "$6/records/recipes/zitadel-pnpm-source/"
           cp "$4/prepared/source/console/scripts/install-proto-plugins.sh" "$6/source/console/scripts/install-proto-plugins.sh"
           jq -n --arg recipe "$(shasum -a 256 "$5/scripts/build-zitadel-linux.sh" | awk '{print $1}')" \
-            --arg profile "${TEST_CAPTURE_PROFILE:-6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181}" \
-            --argjson bytes "${TEST_CAPTURE_BYTES:-261325366}" --argjson records "${TEST_CAPTURE_RECORDS:-58}" \
+            --arg profile "${TEST_CAPTURE_PROFILE:-06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3}" \
+            --argjson bytes "${TEST_CAPTURE_BYTES:-261325885}" --argjson records "${TEST_CAPTURE_RECORDS:-58}" \
             '{manifestSha256:("a"*64),preparedProfileSha256:$profile,files:9528,records:$records,bytes:$bytes,recipeSha256:$recipe}';;
         --pack)
           [[ "$#" -eq 6 && "$5" = "$(printf '%064d' 0 | tr 0 a)" ]]
@@ -687,10 +687,10 @@ if [[ "$1" = --capture ]]; then
   mkdir "$7"
 else
   [[ "$#" -eq 4 && "$1" = --verify && -d "$2" && "$3" = --sha256 && "$4" = "$(printf '%064d' 0 | tr 0 b)" ]]
-  if [[ "${TEST_FAIL:-}" = module-source-readback ]]; then echo '{"modules":231}'; exit 42; fi
+  if [[ "${TEST_FAIL:-}" = module-source-readback ]]; then echo '{"modules":230}'; exit 42; fi
 fi
 if [[ "${TEST_FAIL:-}" = module-source-incomplete ]]; then echo '{"modules":230}'; exit; fi
-jq -n '{schemaVersion:1,manifestSha256:("b"*64),modules:231,files:466,bytes:123,selectedServiceGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
+jq -n '{schemaVersion:1,manifestSha256:("b"*64),modules:230,files:464,bytes:123,selectedServiceGoSourcesCaptured:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}'
 STUB
 chmod 755 "$TEST_MODULE_VERIFIER"
 bash "$build"
@@ -813,8 +813,8 @@ for fault in unsealed-source both-source-modes capture-with-prepared substituted
     console-seal-only) args+=(--console-sha256 "$prepared_sha");;
     console-duplicate-seal) args+=(--console-inputs "$scratch/unavailable-capsule" --console-sha256 "$prepared_sha" --console-sha256 "$prepared_sha");;
   esac
-  profile=6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181
-  bytes=261325366
+  profile=06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3
+  bytes=261325885
   records=58
   [[ "$fault" != incomplete-authored-records ]] || records=28
   [[ "$fault" != extra-authored-records ]] || records=59
@@ -884,13 +884,13 @@ if bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE
 : >"$TEST_CALLS"
 bash "$build" --build --capture-source --module-source-verifier "$TEST_MODULE_VERIFIER" --bsr-source-verifier "$TEST_BSR_VERIFIER" "${capture_inputs[@]}" --source "$scratch/upstream" --output "$scratch/captured"
 jq -e '.sourceSnapshot.noticeOriginals.files==45 and .sourceSnapshot.noticeOriginals.originalInputsReadbackPassed==true and .sourceSnapshot.noticeOriginals.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.noticeOriginals.preparedProfileSha256==.sourceSnapshot.preparedProfileSha256 and .sourceSnapshot.noticeOriginals.recipeSha256==.recipeSha256' "$scratch/captured/build-receipt.json" >/dev/null
-jq -e '.sourceSnapshot.preparedProfileSha256 == "6f1a041fb83c337d5fd0619e33c305497e64be3bdf87c0f8e57c23deffd38181" and .sourceSnapshot.files == 9528 and .sourceSnapshot.bytes == 261325366 and .sourceSnapshot.records == 58 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.preparedProfileSha256 == "06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .sourceSnapshot.files == 9528 and .sourceSnapshot.bytes == 261325885 and .sourceSnapshot.records == 58 and .sourceSnapshot.dependencyInputsCaptured == false and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.toolSource.toolSourceSha256 == ("9"*64) and .sourceSnapshot.toolSource.members == 40 and .sourceSnapshot.toolSource.goVerifiersRebuilt == false and .sourceSnapshot.verifierBootstrap.files == 4 and .sourceSnapshot.verifierBootstrap.verifierBootstrapCaptured == true and .sourceSnapshot.verifierBootstrap.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.verifierBootstrap.toolSourceSha256 == .sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.verifierCompiler == {go:"1.27.3",sha256:("8"*64)}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.sdkBootstrap.profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceSnapshot.sdkBootstrap.packages==132 and .sourceSnapshot.sdkBootstrap.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.sdkBootstrap.toolSourceSha256==.sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.sdkBootstrap.recipeSha256==.recipeSha256 and .sourceSnapshot.sdkBootstrap.sdkReconstructed==false and .sourceSnapshot.sdkBootstrap.nativeOfflineReplayProved==false' "$scratch/captured/build-receipt.json" >/dev/null
-jq -e '.sourceSnapshot.goModules.modules == 231 and .sourceSnapshot.goModules.files == 466 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.goModules.modules == 230 and .sourceSnapshot.goModules.files == 464 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.consoleDownloads.originalConsoleDownloadsConsumed == true and .consoleDownloads.requests == 3 and .consoleDownloads.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .consoleDownloads.dependencyInputsCaptured == false and .consoleDownloads.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null || { echo 'native console consumption was not bound to the captured source' >&2; exit 1; }

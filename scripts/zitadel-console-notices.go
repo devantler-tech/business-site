@@ -33,7 +33,7 @@ const noticeSnapshotLimit = 4 << 20
 const sourceLicensePath = "prepared/source/LICENSE"
 const sourceLicenseRaw = "zitadel-root-license.txt"
 const sourceLicenseHash = "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
-const moduleCatalogueHash = "bb27ca58e6797c4122d70b2db9f9aea7002791b30de5d6323bf35356335b80dd"
+const moduleCatalogueHash = "32bb716522ebfe0676ce5d26ef735c826874e17852a912b7416b4c6c53712c77"
 const moduleNoticeRaw = "go-module-notices.txt"
 
 type noticeReader func(string, string, int64) ([]byte, error)
