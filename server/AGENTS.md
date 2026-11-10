@@ -56,11 +56,14 @@ read-only check on the retained descriptor; generation and file restrictions sta
 strict. Never mix it with ordinary `--identity-inputs`; ordinary owner-file
 refusals remain unchanged. It never starts services, provisions an API client or
 activates access. Keep diagnostics and success output
-free of private values, and retain compiled-command controls for all four phases.
+free of private values, and retain compiled-command controls for all five phases.
 On macOS, ordinary tests use owned read-only disk images and bounded native
 commands. The existing Docker smoke command invokes the separately tagged Go
-integration case for both actual source image profiles. Require all eight phase/mount
+integration case for both actual source image profiles. Require all ten phase/mount
 results and their real copied-file metadata; no missing or skipped test is a pass.
+The production-profile smoke command also exercises the pinned customer Dex image
+against disposable PostgreSQL and an HTTPS discovery fixture. Require actual TLS
+refusal and retained signing keys after restart. This runs no customer login.
 Keep the portal's maintained generic OIDC boundary and current membership checks.
 Sign-in and contact-confirmation POSTs complete in the same escaped, no-store
 native navigation document,

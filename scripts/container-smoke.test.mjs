@@ -60,6 +60,33 @@ test("actual restricted image prepares all identity phases only from the admitte
   assert.equal(events.filter((event) => event.Action === "fail" || event.Action === "skip").length, 0);
 });
 
+if (image === "business-site:production-test") {
+  test("signed Dex refuses invalid TLS and retains its database-backed signing keys", () => {
+    const result = spawnSync(
+      "go",
+      ["test", "-json", "-tags=integration", "./internal/customeridentity", "-run", "^TestNativeDexTLSAndRestart$", "-count=1", "-timeout=210s"],
+      {
+        cwd: path.resolve("server"),
+        env: { ...process.env, CGO_ENABLED: "0", GOTOOLCHAIN: "local", PORTAL_NATIVE_DEX_FIXTURE: "true" },
+        encoding: "utf8",
+        timeout: 225000,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const events = result.stdout.trim().split("\n").map((line) => JSON.parse(line));
+    const passed = events.filter((event) => event.Action === "pass" && event.Test).map((event) => event.Test).sort();
+    assert.deepEqual(passed, [
+      "TestNativeDexTLSAndRestart",
+      "TestNativeDexTLSAndRestart/wrong-database-ca",
+      "TestNativeDexTLSAndRestart/wrong-database-name",
+      "TestNativeDexTLSAndRestart/wrong-provider-ca",
+    ]);
+    assert.equal(events.filter((event) => event.Action === "fail" || event.Action === "skip").length, 0);
+  });
+}
+
 test("actual non-root image snapshots a root-owned matching-group projection on a read-only filesystem", async () => {
   const fixture = containerGroupDisclosureFixture(image, docker);
   let id;
