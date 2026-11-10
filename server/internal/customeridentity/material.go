@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"net"
 	"net/mail"
 	"net/url"
 	"regexp"
@@ -15,6 +16,8 @@ import (
 	"time"
 	"unicode/utf8"
 )
+
+const setupMailPhase = "setup-mail"
 
 var errMaterial = errors.New("customer identity private material refused")
 
@@ -63,9 +66,13 @@ func materialProfile(phase string) ([]string, []string, error) {
 	case "init":
 		names = append(names, "database-admin-password")
 		fields = append(fields, "databaseAdminUser")
-	case "setup":
+	case "setup", setupMailPhase:
 		names = append(names, "master.key", "tls.crt", "tls.key", "service-ca.pem", "bootstrap-password")
 		fields = append(fields, "instanceName", "organizationName", "humanUsername", "humanFirstName", "humanLastName", "humanEmail")
+		if phase == setupMailPhase {
+			names = append(names, "smtp-password")
+			fields = append(fields, "smtpHost", "smtpPort", "smtpFrom", "smtpUser")
+		}
 	case "serve":
 		names = append(names, "master.key", "tls.crt", "tls.key", "service-ca.pem")
 	default:
@@ -155,7 +162,7 @@ func materialDocuments(phase string, settings map[string]string, files map[strin
 			outputs[name] = bytes.Clone(files[name])
 		}
 	}
-	if phase == "setup" {
+	if phase == "setup" || phase == setupMailPhase {
 		address, e := mail.ParseAddress(settings["humanEmail"])
 		if e != nil || address.Address != settings["humanEmail"] || !materialIdentifier.MatchString(settings["humanUsername"]) || !materialBootstrapPassword(files["bootstrap-password"]) || bytes.Equal(files["bootstrap-password"], files["database-password"]) {
 			return nil, errMaterial
@@ -166,11 +173,49 @@ func materialDocuments(phase string, settings map[string]string, files map[strin
 			return nil, errMaterial
 		}
 	}
+	if phase == setupMailPhase {
+		mailConfig, err := materialSetupMail(settings, files)
+		if err != nil {
+			return nil, errMaterial
+		}
+		provider["DefaultInstance"].(map[string]any)["SMTPConfiguration"] = mailConfig
+	}
 	outputs["config.json"], err = json.MarshalIndent(provider, "", "  ")
 	if err != nil {
 		return nil, errMaterial
 	}
 	return outputs, nil
+}
+
+// materialSetupMail emits the pinned native SMTP settings for fresh instance setup.
+func materialSetupMail(settings map[string]string, files map[string][]byte) (map[string]any, error) {
+	host := settings["smtpHost"]
+	port := settings["smtpPort"]
+	if _, err := endpoint("https://"+host, ""); err != nil || (port != "465" && port != "587") {
+		return nil, errMaterial
+	}
+	from, user := settings["smtpFrom"], settings["smtpUser"]
+	address, err := mail.ParseAddress(from)
+	_, domain, hasDomain := strings.Cut(from, "@")
+	if err != nil || address.Address != from || !hasDomain || !dnsName.MatchString(domain) ||
+		strings.IndexFunc(from+user, func(r rune) bool { return r <= ' ' || r >= 127 }) >= 0 {
+		return nil, errMaterial
+	}
+	password := files["smtp-password"]
+	if !materialPasswordValid(password) || bytes.Equal(password, files["database-password"]) ||
+		bytes.Equal(password, files["bootstrap-password"]) || bytes.Equal(password, files["master.key"]) {
+		return nil, errMaterial
+	}
+	return map[string]any{
+		"Description": "Customer identity email",
+		"From":        from,
+		"FromName":    "Devantler Tech",
+		"Tls":         true,
+		"SMTP": map[string]any{
+			"Host":      net.JoinHostPort(host, port),
+			"PlainAuth": map[string]string{"User": user, "Password": string(password)},
+		},
+	}, nil
 }
 
 // materialApplicationDatabase refuses the built-in shared stores and privileged role namespace.

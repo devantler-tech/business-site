@@ -49,7 +49,7 @@ func TestMaterializeProjectionPackagedRuntime(t *testing.T) {
 	if data, err := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", identity, "-o", binary, "../../cmd/business-site").CombinedOutput(); err != nil {
 		t.Fatalf("runtime build failed: %v %s", err, data)
 	}
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialProjectionFixture(t, phase)
 			args := []string{"--identity-materialize", "--identity-phase", phase, "--identity-projection", input, "--identity-output", output}

@@ -16,7 +16,7 @@ func TestMaterializePackagedRuntime(t *testing.T) {
 	if data, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("runtime fixture build failed: %v %s", err, data)
 	}
-	for _, phase := range []string{"init", "setup", "serve"} {
+	for _, phase := range []string{"init", "setup", "setup-mail", "serve"} {
 		t.Run(phase, func(t *testing.T) {
 			input, output := materialFixture(t, phase)
 			args := []string{"--identity-materialize", "--identity-phase", phase, "--identity-inputs", input, "--identity-output", output}
