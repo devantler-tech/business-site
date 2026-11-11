@@ -262,7 +262,6 @@ for kind in valid credential-punctuation credential-empty credential-linebreak c
       if [[ -f "$fixture/foreign-version-overwritten" ]];then echo 'publisher overwrote a shared version alias' >&2;exit 1;fi
       expected_ref="ghcr.io/devantler-tech/business-site-identity:original-123-2-$(printf '%064d' 0 | tr 0 b)"
       grep -Fxq "docker push $expected_ref" "$fixture/calls" || { echo 'publisher did not use the original-CI upload reference' >&2;exit 1; }
-      assert_no_shared_version_writes "$fixture/calls"
     fi
     first_write="$(awk '/^gh release (create|upload|edit) / {print NR;exit}' "$fixture/calls")"
     if [[ -n "$first_write" ]];then
@@ -308,6 +307,8 @@ for kind in valid credential-punctuation credential-empty credential-linebreak c
     *) test ! -f "$fixture/pushed" ;;
     esac
   fi
+  # The publisher has returned and its EXIT cleanup has finished in either case.
+  assert_no_shared_version_writes "$fixture/calls"
   if [[ "$kind" == oversized-inventory ]];then
     if grep -q '^inventory-page 101$' "$fixture/calls";then echo 'release inventory fetched beyond its request bound' >&2;exit 1;fi
     [[ "$(grep -c '^inventory-page ' "$fixture/calls")" == 100 ]] || { echo 'release inventory did not reach its refusal boundary' >&2;exit 1; }
