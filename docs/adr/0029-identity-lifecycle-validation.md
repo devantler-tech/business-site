@@ -7,7 +7,7 @@ acceptance helper. It retains the CLI, HTTP and browser baselines, then exercise
 TLS and durable startup against that same original image. It does not rebuild or
 substitute the candidate. Ordinary invocation stays inert.
 
-Run it only with the pinned Linux amd64 Go 1.26.10 toolchain and Docker, through
+Run it only with the pinned Linux amd64 Go 1.26.11 toolchain and Docker, through
 required CI. The existing image helper requires explicit build, repository and
 output paths. The lifecycle receipt is `lifecycle-smoke.json`; its source hash and
 local image ID are joined to the original image receipt by a mandatory CI step.

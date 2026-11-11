@@ -59,7 +59,7 @@ shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-befor
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-before"
 bash "$prepare" --prepare --source "$scratch/upstream" --output "$scratch/prepared source"
 # Verify the patch selected by the real offline preparer, before testing its receipts.
-saml_version="$(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 \
+saml_version="$(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.11 \
   GOPROXY=off go mod edit -json | jq -er '.Require[] | select(.Path == "github.com/crewjam/saml") | .Version')"
 if [[ "$saml_version" != v0.5.2 ]]; then
   printf 'Expected prepared crewjam/saml v0.5.2, got %s\n' "$saml_version" >&2
@@ -75,8 +75,8 @@ shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after
 cmp "$scratch/input-before" "$scratch/input-after"
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
 cmp "$scratch/modules-before" "$scratch/modules-after"
-# Independently collected with native Go 1.26.10 for the six selected versions,
-# without a toolchain change or unrelated selected dependency changes.
+# Independently collected with native Go 1.26.10 for the six selected versions.
+# Go 1.26.11 must preserve these exact module files and dependency selections.
 test "$(shasum -a 256 "$scratch/prepared source/source/go.mod" | awk '{print $1}')" = \
   07ed7fd00389cf4950652e5950d4ec73ce64adc7aea13c89dde95076798b2518
 test "$(shasum -a 256 "$scratch/prepared source/source/go.sum" | awk '{print $1}')" = \
@@ -86,14 +86,14 @@ test ! -e "$scratch/prepared source/source/local-only.txt"
 test ! -d "$scratch/prepared source/source/.git"
 
 # The existing native provider suite exercises signed SAML assertions and mappings.
-(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
+(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.11 GOMAXPROCS=2 GOFLAGS=-p=2 \
   go test -mod=readonly -count=1 ./internal/idp/providers/saml github.com/crewjam/saml)
 
 # Exercise the real prepared machine-ID function through its native package.
 # These tests add no production source or dependencies to the prepared output.
 cp "$root/scripts/testdata/zitadel-metadata-profile/metadata_profile_test.go" \
   "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
-(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.10 GOMAXPROCS=2 GOFLAGS=-p=2 \
+(cd "$scratch/prepared source/source" && GOTOOLCHAIN=go1.26.11 GOMAXPROCS=2 GOFLAGS=-p=2 \
   go test -mod=readonly -count=1 ./internal/id -run '^TestCustomerMetadataProfile')
 rm -- "$scratch/prepared source/source/internal/id/customer_metadata_profile_test.go"
 
@@ -107,7 +107,7 @@ cp "$root/scripts/testdata/zitadel-metadata-profile/login_csrf_test.go" "$scratc
     "$scratch/prepared source/source/internal/api/ui/login/login.go"
 } >"$scratch/csrf-probe/interceptor.go"
 printf 'module example.invalid/csrfprobe\n\ngo 1.26.0\n\nrequire github.com/gorilla/csrf v1.7.3\n' >"$scratch/csrf-probe/go.mod"
-(cd "$scratch/csrf-probe" && GOTOOLCHAIN=go1.26.10 go mod tidy && GOTOOLCHAIN=go1.26.10 go test -race -count=1 .)
+(cd "$scratch/csrf-probe" && GOTOOLCHAIN=go1.26.11 go mod tidy && GOTOOLCHAIN=go1.26.11 go test -race -count=1 .)
 
 for path in \
   console/src/assets/ailerons.otf \

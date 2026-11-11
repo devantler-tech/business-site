@@ -35,7 +35,7 @@ func verifierBootstrapFixture(t *testing.T) (verifierBootstrapInputs, identity) 
 			writeFixture(t, filepath.Join(inputs.ToolSource, "server/cmd", filepath.Base(command.ImportPath), file), []byte("package main\n"))
 		}
 	}
-	writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module github.com/devantler-tech/business-site/server\n\ngo 1.27.3\n\nrequire golang.org/x/mod v0.42.0\n"))
+	writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module github.com/devantler-tech/business-site/server\n\ngo 1.27.4\n\nrequire golang.org/x/mod v0.42.0\n"))
 	writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.sum"), []byte(dep.Path+" "+dep.Version+" "+sum+"\n"+dep.Path+" "+dep.Version+"/go.mod "+modSum+"\n"))
 	prefix := "cache/download/golang.org/x/mod/@v/v0.42.0"
 	body, err := os.ReadFile(zip)
@@ -115,7 +115,7 @@ func TestVerifierBootstrapRefusesIncompleteCapture(t *testing.T) {
 				dep.Sum = sum
 				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.sum"), []byte(dep.Path+" "+dep.Version+" "+sum+"\n"+dep.Path+" "+dep.Version+"/go.mod "+dep.GoModSum+"\n"))
 			case "wrong-module":
-				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module other.example/server\n\ngo 1.27.3\nrequire golang.org/x/mod v0.42.0\n"))
+				writeFixture(t, filepath.Join(inputs.ToolSource, "server/go.mod"), []byte("module other.example/server\n\ngo 1.27.4\nrequire golang.org/x/mod v0.42.0\n"))
 			case "replacement":
 				f, err := os.OpenFile(filepath.Join(inputs.ToolSource, "server/go.mod"), os.O_APPEND|os.O_WRONLY, 0)
 				if err != nil {

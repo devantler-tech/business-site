@@ -198,7 +198,7 @@ func verifierBootstrapMetadata(inputs verifierBootstrapInputs, dep identity) (mo
 		return "", "", err
 	}
 	m, err := modfile.Parse("go.mod", mod, nil)
-	if err != nil || m.Module == nil || m.Module.Mod.Path != "github.com/devantler-tech/business-site/server" || m.Go == nil || m.Go.Version != "1.27.3" || len(m.Replace) != 0 || len(m.Exclude) != 0 {
+	if err != nil || m.Module == nil || m.Module.Mod.Path != "github.com/devantler-tech/business-site/server" || m.Go == nil || m.Go.Version != "1.27.4" || len(m.Replace) != 0 || len(m.Exclude) != 0 {
 		return "", "", fmt.Errorf("verifier module or compiler declaration differs")
 	}
 	found := 0

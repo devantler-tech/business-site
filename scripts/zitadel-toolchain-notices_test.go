@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Literal observations from the selected Linux Go 1.26.10 build, not a list
+// Literal observations from the original Linux Go 1.26.10 build, not a list
 // obtained from the collector being tested.
 var vendorFixturePackages = []string{
 	"vendor/golang.org/x/crypto/chacha20",
@@ -278,7 +278,7 @@ func newToolchainRoot(t *testing.T) string {
 			writeNotice(t, root, "src/vendor/golang.org/x/"+module+"/"+name, data)
 		}
 	}
-	writeNotice(t, root, "VERSION", []byte("go1.26.10\ntime 2026-10-01T00:00:00Z\n"))
+	writeNotice(t, root, "VERSION", []byte("go1.26.11\ntime 2026-10-01T00:00:00Z\n"))
 	return root
 }
 
@@ -323,7 +323,7 @@ func TestToolchainNoticeCLIProducesBoundVerbatimOutput(t *testing.T) {
 		}
 	}
 	proof := decoded.Toolchain
-	if proof.Version != "1.26.10" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 11 || len(decoded.Inputs) != 9 {
+	if proof.Version != "1.26.11" || proof.RawDiagnostic != "go-toolchain-notices.txt" || proof.Bytes != len(text) || proof.SHA256 != noticeHash(text) || len(proof.Sections) != 11 || len(decoded.Inputs) != 9 {
 		t.Fatal("incomplete toolchain/build binding")
 	}
 	for i, name := range []string{"LICENSE", "PATENTS", "VERSION"} {
@@ -358,11 +358,11 @@ func TestToolchainCaptureRefusesPostSnapshotChanges(t *testing.T) {
 			args[0] = "--inventory"
 			switch change {
 			case "VERSION":
-				writeNotice(t, root, "VERSION", []byte("go1.26.10\ntime 2026-10-02T00:00:00Z\n"))
+				writeNotice(t, root, "VERSION", []byte("go1.26.11\ntime 2026-10-02T00:00:00Z\n"))
 			case "omitted-option":
 				args = args[:6]
 			case "wrong-compiler-receipt":
-				changeNoticeJSON(t, f, "build-receipt.pending", func(v map[string]any) { v["tools"].(map[string]any)["go"] = "1.26.11" })
+				changeNoticeJSON(t, f, "build-receipt.pending", func(v map[string]any) { v["tools"].(map[string]any)["go"] = "1.26.10" })
 			case "existing-output":
 				if err := os.Mkdir(filepath.Join(f.build, "go-toolchain-notices.txt"), 0700); err != nil {
 					t.Fatal(err)
@@ -475,13 +475,13 @@ func TestToolchainRefusesInvalidDistributionInputs(t *testing.T) {
 			case "substituted-patents":
 				writeNotice(t, root, "PATENTS", []byte("different terms\n"))
 			case "wrong-version":
-				writeNotice(t, root, "VERSION", []byte("go1.26.11\n"))
+				writeNotice(t, root, "VERSION", []byte("go1.26.10\n"))
 			case "version-append":
-				writeNotice(t, root, "VERSION", []byte("go1.26.10\nnot distribution metadata\n"))
+				writeNotice(t, root, "VERSION", []byte("go1.26.11\nnot distribution metadata\n"))
 			case "invalid-time":
-				writeNotice(t, root, "VERSION", []byte("go1.26.10\ntime not-a-time\n"))
+				writeNotice(t, root, "VERSION", []byte("go1.26.11\ntime not-a-time\n"))
 			case "oversized-version":
-				writeNotice(t, root, "VERSION", []byte("go1.26.10\n"+strings.Repeat("x", 20<<10)))
+				writeNotice(t, root, "VERSION", []byte("go1.26.11\n"+strings.Repeat("x", 20<<10)))
 			case "linked-file":
 				p := filepath.Join(root, "LICENSE")
 				if err := os.Rename(p, p+".real"); err != nil {

@@ -84,7 +84,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   1.7.3 dependency profile, preserving the upstream key-size limit and other
   selections. The login interceptor marks only explicitly configured plaintext
   mode for the patched CSRF library; production TLS checks stay enabled.
-  Configured metadata selectors fail explicitly; the native preparation test uses Go 1.26.10.
+  Configured metadata selectors fail explicitly; the native preparation test uses Go 1.26.11.
   Read `docs/ZITADEL-SOURCE.md`; the offline
   output and receipt are not a build, complete license admission or image release.
 - `scripts/build-zitadel-linux.sh` explicitly builds that source on a clean Linux
@@ -137,7 +137,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   input components and their original build receipt using the archive engine's
   distinct retained-input profile. That profile preserves private capsule modes
   and cannot impersonate prepared source. Inside the same network boundary,
-  reconstruct both source verifiers with the caller-selected original Go 1.27.3
+  reconstruct both source verifiers with the caller-selected original Go 1.27.4
   compiler, the approved source layout and checksum-pinned x/mod originals.
   Preserve original compiler, native package composition and exact binary hash
   joins. Only rebuilt executables enter the service pipeline; original programs
@@ -167,7 +167,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and modes and require independent artifact, source and run bindings.
 - `server/cmd/zitadel-module-sources/` is an otherwise inert build command using
   checksum-pinned `golang.org/x/mod` for complete module ZIP/content validation.
-  It belongs to the existing Go 1.27.3 module and its standard validation. CI
+  It belongs to the existing Go 1.27.4 module and its standard validation. CI
   builds it before selecting the unchanged frozen identity compiler. The Linux
   builder requires its explicit executable path when source capture is enabled
   and binds its compiler, command identity and byte digest to the receipt.

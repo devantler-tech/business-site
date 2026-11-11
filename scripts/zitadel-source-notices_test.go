@@ -1237,7 +1237,7 @@ func TestModuleRootBinaryJoinRequiresExactCheckedBuildInformation(t *testing.T) 
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			wanted := []*debug.Module{{Path: "example.com/dep", Version: "v1.2.3", Sum: "h1:original"}, {Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/replaced", Version: "v1.1.0", Sum: "h1:replaced"}}}
-			info := &debug.BuildInfo{GoVersion: "go1.26.10", Path: "github.com/zitadel/zitadel", Main: debug.Module{Path: "github.com/zitadel/zitadel", Version: "(devel)"}, Deps: []*debug.Module{{Path: "example.com/dep", Version: "v1.2.3", Sum: "h1:original"}, {Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/replaced", Version: "v1.1.0", Sum: "h1:replaced"}}}, Settings: []debug.BuildSetting{{Key: "GOOS", Value: "linux"}, {Key: "GOARCH", Value: "amd64"}, {Key: "CGO_ENABLED", Value: "0"}}}
+			info := &debug.BuildInfo{GoVersion: "go1.26.11", Path: "github.com/zitadel/zitadel", Main: debug.Module{Path: "github.com/zitadel/zitadel", Version: "(devel)"}, Deps: []*debug.Module{{Path: "example.com/dep", Version: "v1.2.3", Sum: "h1:original"}, {Path: "example.com/old", Version: "v1.0.0", Replace: &debug.Module{Path: "example.com/replaced", Version: "v1.1.0", Sum: "h1:replaced"}}}, Settings: []debug.BuildSetting{{Key: "GOOS", Value: "linux"}, {Key: "GOARCH", Value: "amd64"}, {Key: "CGO_ENABLED", Value: "0"}}}
 			switch test.name {
 			case "missing":
 				info.Deps = info.Deps[:1]
