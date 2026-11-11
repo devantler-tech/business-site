@@ -1141,14 +1141,15 @@ type lifecycleContainerSpec struct {
 // lifecycleInspect refuses an unexpected writable mount, credential environment,
 // namespace, image, execution mode or owner before any native phase is started.
 func lifecycleInspect(raw []byte, id, owner, network, state string, spec lifecycleContainerSpec) (imageContainer, error) {
+	var c imageContainer
 	bad := func() (imageContainer, error) {
-		return imageContainer{}, fmt.Errorf("owned restricted lifecycle container required")
+		return imageContainer{}, fmt.Errorf("owned restricted lifecycle container required (exited=%t running=%t dead=%t oom=%t exit=%d)", c.State.Status == "exited", c.State.Running, c.State.Dead, c.State.OOMKilled, c.State.ExitCode)
 	}
 	var all []imageContainer
 	if imageDecode(raw, &all) != nil || len(all) != 1 {
 		return bad()
 	}
-	c := all[0]
+	c = all[0]
 	h := c.HostConfig
 	if c.ID != id || c.Image != spec.imageID || c.Config.Image != spec.image || c.Config.User != spec.user || c.Config.WorkingDir != spec.workdir || !reflect.DeepEqual(c.Config.Entrypoint, spec.entrypoint) || !reflect.DeepEqual(c.Config.Cmd, spec.command) || c.Config.Labels["org.devantler-tech.identity-smoke-owner"] != owner || !h.ReadonlyRootfs || h.Privileged || h.PublishAllPorts || !reflect.DeepEqual(h.CapDrop, []string{"ALL"}) || len(h.CapAdd) != 0 || !reflect.DeepEqual(h.SecurityOpt, []string{"no-new-privileges"}) || h.NetworkMode != network || h.PidMode != "" || h.IpcMode != "private" || h.PidsLimit != 128 || h.Memory != spec.memory || h.NanoCpus != 2000000000 || len(h.Binds) != 0 || len(h.Devices) != 0 || len(h.PortBindings) != 0 || !reflect.DeepEqual(h.Tmpfs, spec.tmpfs) || c.State.Status != state || c.State.Dead || c.State.OOMKilled || len(c.NetworkSettings.Networks) > 1 {
 		return bad()
@@ -1715,13 +1716,17 @@ func imageLifecycle(image, owner, repo, output string, run imageCommand) (result
 	}
 	for trial := 0; trial < 2; trial++ {
 		if trial == 1 {
-			for _, id := range []string{s.service, s.database} {
+			for _, container := range []struct{ component, id string }{{"service", s.service}, {"database", s.database}} {
+				component, id := container.component, container.id
 				if _, err = run(time.Minute, "docker", "stop", "--time=20", id); err != nil {
 					return fmt.Errorf("durable lifecycle shutdown failed")
 				}
 				actual, e := s.inspect(id, "exited")
-				if e != nil || actual.State.ExitCode != 0 {
-					return fmt.Errorf("durable lifecycle shutdown unclean")
+				if e != nil {
+					return fmt.Errorf("durable lifecycle %s shutdown inspection refused: %w", component, e)
+				}
+				if actual.State.ExitCode != 0 {
+					return fmt.Errorf("durable lifecycle %s shutdown unclean (exit=%d)", component, actual.State.ExitCode)
 				}
 				if err = s.remove(id); err != nil {
 					return err
