@@ -22,11 +22,11 @@ done
 for executable in "$module_verifier" "$bsr_verifier" "$verifier_go"; do
   [[ "$executable" = /* && -f "$executable" && -x "$executable" && ! -L "$executable" ]] || fail 'original verifier and compiler inputs must be regular executables'
 done
-[[ "$(GOTOOLCHAIN=local GOENV=off GOWORK=off "$verifier_go" env GOVERSION)" = go1.27.3 ]] || fail 'original Go 1.27.3 verifier compiler required'
+[[ "$(GOTOOLCHAIN=local GOENV=off GOWORK=off "$verifier_go" env GOVERSION)" = go1.27.4 ]] || fail 'original Go 1.27.4 verifier compiler required'
 verifier_go_sha="$(shasum -a 256 "$verifier_go" | awk '{print $1}')"
 [[ "$(uname -s)" = Linux && "$(uname -m)" = x86_64 && "$(id -u)" != 0 ]] || fail 'native nonroot Linux amd64 required'
 for tool in go node jq curl sudo unshare setpriv timeout readlink shasum; do command -v "$tool" >/dev/null || fail 'required native replay tool missing'; done
-[[ "$(GOTOOLCHAIN=local go env GOVERSION)" = go1.26.10 ]] || fail 'frozen compiler required'
+[[ "$(GOTOOLCHAIN=local go env GOVERSION)" = go1.26.11 ]] || fail 'frozen compiler required'
 [[ "$build" = /* && -d "$build" && ! -L "$build" && "$build" = "$(cd "$build" && pwd -P)" ]] || fail 'physical build input required'
 [[ "$output" = /* && ! -e "$output" && ! -L "$output" ]] || fail 'new absolute output required'
 parent="$(cd "$(dirname "$output")" && pwd -P)" name="$(basename "$output")"
@@ -47,7 +47,7 @@ go run "$root/scripts/zitadel-source-bundle.go" --unpack "$output/inputs.tar" "$
 cmp "$output/retained-inputs/source-manifest.json" "$output/roundtrip/source-manifest.json" || fail 'complete input membership changed'
 original="$output/roundtrip/source/build-receipt.json"
 jq -e --arg module "$(shasum -a 256 "$module_verifier" | awk '{print $1}')" --arg bsr "$(shasum -a 256 "$bsr_verifier" | awk '{print $1}')" --arg compiler "$verifier_go_sha" \
-  '.sourceSnapshot.goModuleVerifier.sha256==$module and .sourceSnapshot.bsrVerifier.sha256==$bsr and .sourceSnapshot.verifierCompiler.go=="1.27.3" and .sourceSnapshot.verifierCompiler.sha256==$compiler' "$original" >/dev/null || fail 'original verifier or compiler identities differ'
+  '.sourceSnapshot.goModuleVerifier.sha256==$module and .sourceSnapshot.bsrVerifier.sha256==$bsr and .sourceSnapshot.verifierCompiler.go=="1.27.4" and .sourceSnapshot.verifierCompiler.sha256==$compiler' "$original" >/dev/null || fail 'original verifier or compiler identities differ'
 caller_uid="$(id -u)" caller_gid="$(id -g)" parent_net="$(readlink /proc/self/ns/net)"
 mkdir -m 700 "$output/driver-cache" "$output/driver-modules" "$output/driver-path"
 curl --fail --silent --show-error --connect-timeout 5 --max-time 10 --output /dev/null https://proxy.golang.org || fail 'reachable network control failed'
@@ -72,7 +72,7 @@ snapshot="$output/roundtrip/source/source-snapshot"
 source_sha="$(jq -er .sourceSnapshot.manifestSha256 "$original")"
 bootstrap="$output/roundtrip/source/selected-verifier-bootstrap"
 bootstrap_sha="$(jq -er .sourceSnapshot.verifierBootstrap.manifestSha256 "$original")"
-[[ "$(shasum -a 256 "$verifier_go" | awk '{print $1}')" = "$compiler_sha" && "$(GOTOOLCHAIN=local "$verifier_go" env GOVERSION)" = go1.27.3 ]]
+[[ "$(shasum -a 256 "$verifier_go" | awk '{print $1}')" = "$compiler_sha" && "$(GOTOOLCHAIN=local "$verifier_go" env GOVERSION)" = go1.27.4 ]]
 # Match retained code to the reviewed caller before compiling or running it.
 notice_root="$output/notice-originals-bootstrap"
 go run "$root/scripts/zitadel-source-bundle.go" --restore-notice-originals "$output/roundtrip/source/selected-notice-originals" "$snapshot" "$source_sha" "$notice_root" >"$output/notice-originals-bootstrap.json"
@@ -163,7 +163,7 @@ node "$output/native-pnpm-sdk/index.mjs" bootstrap-verify --capsule "$sdk_bootst
 jq -e --slurpfile original "$original" '.==$original[0].sourceSnapshot.sdkBootstrap' "$output/sdk-bootstrap-final.json" >/dev/null
 [[ "$(shasum -a 256 "$output/verifier-bin/zitadel-module-sources" | awk '{print $1}')" = "$module_sha" && "$(shasum -a 256 "$output/verifier-bin/zitadel-bsr-sources" | awk '{print $1}')" = "$bsr_sha" && "$(shasum -a 256 "$verifier_go" | awk '{print $1}')" = "$compiler_sha" ]]
 jq -n --arg source "$source_sha" --arg bootstrap "$bootstrap_sha" --arg compiler "$compiler_sha" --arg module "$module_sha" --arg bsr "$bsr_sha" \
-  '{schemaVersion:1,profile:"identity-source-verifier-reconstruction-v1",sourceManifestSha256:$source,bootstrapManifestSha256:$bootstrap,compilerSha256:$compiler,go:"1.27.3",moduleSha256:$module,bsrSha256:$bsr,goVerifiersRebuilt:true,originalBinaryIdentitiesMatched:true,compositionsMatched:true,emptyCacheRefused:true}' >"$output/verifier-reconstruction.json"
+  '{schemaVersion:1,profile:"identity-source-verifier-reconstruction-v1",sourceManifestSha256:$source,bootstrapManifestSha256:$bootstrap,compilerSha256:$compiler,go:"1.27.4",moduleSha256:$module,bsrSha256:$bsr,goVerifiersRebuilt:true,originalBinaryIdentitiesMatched:true,compositionsMatched:true,emptyCacheRefused:true}' >"$output/verifier-reconstruction.json"
 REPLAY_CHILD
 then
   tail -80 "$output/native-replay.log" >&2
@@ -171,7 +171,7 @@ then
 fi
 [[ "$(cat "$output/network-boundary.txt")" = verified ]] || fail 'kernel boundary was not verified'
 native="$output/native/build-receipt.json"
-jq -e --slurpfile original "$original" '.schemaVersion==1 and .profile=="identity-source-verifier-reconstruction-v1" and .go=="1.27.3" and .compilerSha256==$original[0].sourceSnapshot.verifierCompiler.sha256 and .sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and .bootstrapManifestSha256==$original[0].sourceSnapshot.verifierBootstrap.manifestSha256 and .moduleSha256==$original[0].sourceSnapshot.goModuleVerifier.sha256 and .bsrSha256==$original[0].sourceSnapshot.bsrVerifier.sha256 and .goVerifiersRebuilt==true and .originalBinaryIdentitiesMatched==true and .compositionsMatched==true and .emptyCacheRefused==true' "$output/verifier-reconstruction.json" >/dev/null || fail 'native verifier reconstruction join differs'
+jq -e --slurpfile original "$original" '.schemaVersion==1 and .profile=="identity-source-verifier-reconstruction-v1" and .go=="1.27.4" and .compilerSha256==$original[0].sourceSnapshot.verifierCompiler.sha256 and .sourceManifestSha256==$original[0].sourceSnapshot.manifestSha256 and .bootstrapManifestSha256==$original[0].sourceSnapshot.verifierBootstrap.manifestSha256 and .moduleSha256==$original[0].sourceSnapshot.goModuleVerifier.sha256 and .bsrSha256==$original[0].sourceSnapshot.bsrVerifier.sha256 and .goVerifiersRebuilt==true and .originalBinaryIdentitiesMatched==true and .compositionsMatched==true and .emptyCacheRefused==true' "$output/verifier-reconstruction.json" >/dev/null || fail 'native verifier reconstruction join differs'
 jq -e --slurpfile original "$original" '.sdkReconstructed==true and .installationMatched==true and .compositionMatched==true and .emptyCacheRefused==true and .partialCacheRefused==true and .nativeOfflineReplayProved==false and (del(.installationMatched,.compositionMatched,.emptyCacheRefused,.partialCacheRefused)+{sdkReconstructed:false})==$original[0].sourceSnapshot.sdkBootstrap' "$output/sdk-reconstruction.json" >/dev/null || fail 'native SDK reconstruction join differs'
 [[ "$(shasum -a 256 "$verifier_go" | awk '{print $1}')" = "$verifier_go_sha" ]] || fail 'original verifier compiler changed'
 jq -e --slurpfile original "$original" '

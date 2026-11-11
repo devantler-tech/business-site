@@ -154,7 +154,7 @@ func selectGeneratorModules(observations []generatorObservation) ([]identity, er
 	selected := map[string]identity{}
 	for i, observation := range observations {
 		tool, b := generatorTools[i], observation.Build
-		if !generatorDigest(observation.BinarySHA256) || observation.Bytes <= 0 || observation.Bytes > payloadLimit || observation.Name != tool.Name || b.GoVersion != "go1.26.10" || b.Path != tool.Command || b.Main.Path != tool.Module || b.Main.Version != tool.Version || b.Main.Replace != nil {
+		if !generatorDigest(observation.BinarySHA256) || observation.Bytes <= 0 || observation.Bytes > payloadLimit || observation.Name != tool.Name || b.GoVersion != "go1.26.11" || b.Path != tool.Command || b.Main.Path != tool.Module || b.Main.Version != tool.Version || b.Main.Replace != nil {
 			return nil, fmt.Errorf("native generator identity differs")
 		}
 		settings := map[string]string{}

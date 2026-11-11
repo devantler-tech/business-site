@@ -1,6 +1,6 @@
 # Frozen identity base sources
 
-This explicit Go 1.27.3 command retains the original Debian sources and notices
+This explicit Go 1.27.4 command retains the original Debian sources and notices
 for the frozen Linux/amd64 identity base. No arguments show help and perform no
 work. It supports Linux and Darwin metadata; it neither runs retained programs
 nor publishes an image, changes a cluster, creates users or activates the portal.
@@ -218,4 +218,4 @@ and the deployed invitation/login/MFA/recovery/revocation/isolation journey.
   in Login and Console in both themes. They never follow the external URL inside
   the fictional fixture; public retrieval is a separate publication requirement.
   No arguments are inert; the real smoke entrypoint requires native Linux amd64
-  and Go 1.26.10. Read `docs/ZITADEL-SOURCE.md` before using it.
+  and Go 1.26.11. Read `docs/ZITADEL-SOURCE.md` before using it.

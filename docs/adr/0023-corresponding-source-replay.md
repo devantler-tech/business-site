@@ -36,8 +36,8 @@ capture and native offline replay remain false.
 
 The verifier is an explicit command in the existing server Go module, covered by
 its standard validation and module/version/checksum acquisition boundary. CI
-builds it using the repository's Go 1.27.3 compiler before selecting the unchanged
-frozen Go 1.26.10 service compiler. The builder takes its explicit executable path,
+builds it using the repository's Go 1.27.4 compiler before selecting the unchanged
+frozen Go 1.26.11 service compiler. The builder takes its explicit executable path,
 checks its command/compiler metadata and binds its unchanged digest to the receipt.
 It does not enter the service's
 230-module graph. No module ZIP, complete retained package or executable is added
@@ -102,9 +102,9 @@ generation. Preserve API Buf 1.67.0 before console Buf 1.72.0. Record and copy t
 actual native executables, check their versions and unchanged byte hashes, and
 acquire only the three immutable references in the frozen v1 lock. Retain literal
 registry replies and separate complete source/documentation exports. The existing
-Go 1.27.3 verifier joins these observations to both native cache representations,
+Go 1.27.4 verifier joins these observations to both native cache representations,
 the prepared-source seal and this complete build recipe. It remains separate from
-the frozen Go 1.26.10 service graph.
+the frozen Go 1.26.11 service graph.
 
 After capture/readback, unpack the already sealed prepared source into a new
 workspace. Each actual compiler gets independent verified baseline/offline caches

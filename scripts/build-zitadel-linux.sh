@@ -72,7 +72,7 @@ while IFS= read -r config_key; do
   case "$config_key" in [Nn][Pp][Mm]_[Cc][Oo][Nn][Ff][Ii][Gg]_*) unset "$config_key";; esac
 done < <(compgen -e)
 export npm_config_manage_package_manager_versions=false
-[[ "$(go env GOVERSION)" = go1.26.10 ]] || fail 'Go 1.26.10 is required'
+[[ "$(go env GOVERSION)" = go1.26.11 ]] || fail 'Go 1.26.11 is required'
 go_root="$(go env GOROOT)"
 [[ "$go_root" = /* && -d "$go_root" && ! -L "$go_root" ]] || fail 'selected Go distribution is unavailable'
 [[ "$(node --version)" = v22.23.3 ]] || fail 'Node 22.23.3 is required'
@@ -184,7 +184,7 @@ verifier_digest() {
   local name="$1" executable="$2" command="$3"
   go version -m "$executable" >"$output/$name-source-verifier.txt" || fail 'verifier metadata read failed'
   awk -v expected="github.com/devantler-tech/business-site/server/cmd/$command" '
-    NR == 1 && $NF == "go1.27.3" {compiler=1}
+    NR == 1 && $NF == "go1.27.4" {compiler=1}
     $1 == "path" && $2 == expected {command=1}
     END {exit !(compiler && command)}' "$output/$name-source-verifier.txt" || fail 'verifier command or compiler differs'
   shasum -a 256 "$executable" | awk '{print $1}'
@@ -558,7 +558,7 @@ if grep -q INTERP "$output/elf-program.txt"; then fail 'unexpected dynamic inter
 go version -m "$binary" >"$output/build-info.txt"
 awk '($1 == "dep" || $1 == "=>" || $1 == "mod") && $2 == "github.com/jarcoal/jpath" {bad=1} END {exit bad}' \
   "$output/build-info.txt" || fail 'unadmitted metadata selector remains in binary metadata'
-for expected in go1.26.10 GOOS=linux GOARCH=amd64 CGO_ENABLED=0; do
+for expected in go1.26.11 GOOS=linux GOARCH=amd64 CGO_ENABLED=0; do
   grep -qF "$expected" "$output/build-info.txt" || fail "service build info missing: $expected"
 done
 [[ "$("$binary" --version)" = "zitadel version $version" ]] || fail 'service version execution failed'
@@ -682,9 +682,9 @@ if [[ "$capture_source" -eq 1 ]]; then
   jq -e --arg archive "$archive_hash" --arg manifest "$source_manifest" '.archiveSha256 == $archive and .manifestSha256 == $manifest' "$output/source-archive.pending" >/dev/null || fail 'prepared-source archive changed during build'
   jq -e --arg recipe "$recipe_hash" '.recipeSha256 == $recipe' "$output/source-capture.pending" >/dev/null || fail 'captured source recipe changed during build'
   check_text_notice_records "$output/source-snapshot/records"
-  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.3",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.3",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
+  source_snapshot_json="$(jq -n --arg verifier "$module_verifier_hash" --arg bsrVerifier "$bsr_verifier_hash" --slurpfile capture "$output/source-capture.pending" --slurpfile archive "$output/source-archive.pending" --slurpfile modules "$output/go-module-source-readback.pending" --slurpfile bsr "$output/bsr-source-readback.pending" --slurpfile pnpm "$output/pnpm-source-readback.pending" --slurpfile generators "$output/generator-checkpoint-receipt.json" --slurpfile generatorSources "$output/generator-source-readback.json" --slurpfile graphMetadata "$output/go-graph-metadata-readback.json" --slurpfile replay "$output/bsr-schema-replay.json" '$capture[0] + $archive[0] + {goModules:$modules[0],goModuleVerifier:{go:"1.27.4",sha256:$verifier},generatorBuildMetadata:$generators[0],generatorGoSources:$generatorSources[0],goGraphMetadata:$graphMetadata[0],bsrSources:$bsr[0],bsrVerifier:{go:"1.27.4",sha256:$bsrVerifier},pnpmSources:$pnpm[0],bsrSchemaReplay:$replay[0],dependencyInputsCaptured:false,nativeOfflineReplayProved:false}')"
   check_sdk_bootstrap_readback
-  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],sdkBootstrap:$sdk[0],verifierCompiler:{go:"1.27.3",sha256:$compiler}}')"
+  source_snapshot_json="$(jq -n --argjson snapshot "$source_snapshot_json" --arg compiler "$verifier_compiler_sha" --slurpfile tools "$output/verifier-tool-source.json" --slurpfile bootstrap "$output/verifier-bootstrap-capture.json" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" '$snapshot + {toolSource:$tools[0],verifierBootstrap:$bootstrap[0],sdkBootstrap:$sdk[0],verifierCompiler:{go:"1.27.4",sha256:$compiler}}')"
   source_snapshot_json="$(jq --argjson originals "$notice_summary" '. + {noticeOriginals:$originals}' <<<"$source_snapshot_json")"
 fi
 if [[ -n "$retained_inputs" ]]; then
@@ -718,13 +718,13 @@ fi
 jq -n --arg pin "$pin" --arg version "$version" --arg date "$source_date" --arg binary "$binary_hash" --arg recipe "$recipe_hash" \
   --argjson snapshot "$source_snapshot_json" --argjson sourceInput "$prepared_input_json" --argjson consoleDownloads "$console_downloads_json" \
   --argjson elapsed "$(($(date -u +%s) - started))" --slurpfile preparation "$output/prepared/source-preparation.json" \
-    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
+    '{schemaVersion:1,upstreamCommit:$pin,version:$version,sourceDate:$date,platform:"linux/amd64",profile:"api-login-v1-console",recipeSha256:$recipe,binarySha256:$binary,elapsedSeconds:$elapsed,preparation:$preparation[0],tools:{go:"1.26.11",node:"22.23.3",pnpm:"10.30.3"},imageAdmission:"unknown",licenseClosure:"unknown",reproducible:false} + (if $snapshot == null then {} else {sourceSnapshot:$snapshot} end) + (if $sourceInput == null then {} else {sourceInput:$sourceInput} end) + (if $consoleDownloads == null then {} else {consoleDownloads:$consoleDownloads} end)' >"$output/build-receipt.pending"
 if [[ -n "$retained_inputs" ]]; then
   jq --argjson originals "$notice_summary" --slurpfile sdk "$output/sdk-bootstrap-readback.pending" --slurpfile operations "$output/pnpm-sdk-operations.json" '. + {retainedInputsRestored:true,noticeOriginals:$originals,sdkBootstrap:$sdk[0],sdkNativeOperations:$operations[0]}' "$output/build-receipt.pending" >"$output/retained-build-receipt.pending"
   mv "$output/retained-build-receipt.pending" "$output/build-receipt.pending"
 fi
 # Both inventories bind these final bytes. After capture, only rename the receipt.
-[[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.10 ]] || fail 'selected Go compiler changed'
+[[ "$(go env GOROOT)" = "$go_root" && "$(go env GOVERSION)" = go1.26.11 ]] || fail 'selected Go compiler changed'
 go run "$root/scripts/zitadel-console-notices.go" --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --supplement "$notice_root/third_party/zitadel-console-notices" --toolchain "$go_root" --source-license --modules "$notice_root/third_party/zitadel-go-module-notices" ${retained_inputs:+"--retained-go-cache"} >"$output/console-notices-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --inventory --build "$output" --notices "$notice_root/third_party/zitadel-login-icons" >"$output/login-icons-inventory.pending"
 go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" --text-fonts --inventory --build "$output" --recipe "$root/scripts/build-zitadel-linux.sh" --notices "$notice_root/third_party/zitadel-text-fonts" >"$output/text-font-notices-inventory.pending"

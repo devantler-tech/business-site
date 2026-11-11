@@ -297,7 +297,7 @@ jobs:
       - name: Setup the prepared-source test compiler
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - name: Exercise frozen upstream source preparation and refusal controls
         run: bash scripts/prepare-zitadel-source.test.sh
@@ -338,7 +338,7 @@ jobs:
         run: GOBIN="$RUNNER_TEMP/identity-analysis" go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Prepare original verifier compiler and private caches
         run: |
-          test "$(go env GOVERSION)" = go1.27.3
+          test "$(go env GOVERSION)" = go1.27.4
           mkdir -m 700 "$RUNNER_TEMP/verifier-modules" "$RUNNER_TEMP/verifier-build-cache" "$RUNNER_TEMP/verifier-go-path"
           compiler="$(realpath "$(command -v go)")"
           compiler_sha="$(shasum -a 256 "$compiler" | awk '{print $1}')"
@@ -385,7 +385,7 @@ jobs:
         # Preserve the original compiler path above; the service remains frozen.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.10"
+          go-version: "1.26.11"
           cache: false
       - name: Verify the bounded login icon inventory
         working-directory: scripts

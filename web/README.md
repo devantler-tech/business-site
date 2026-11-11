@@ -81,7 +81,7 @@ switch and protected deployment environment. Manual dispatch defaults to an arti
 It has one public frontend. Frozen artifacts and immutable Git revisions remain recovery evidence.
 A merge/build is not live proof: verify the successful deployment, public source receipt and journeys.
 
-With Go 1.27.3, `bash scripts/package-runtime.sh --release` creates `runtime-dist/`;
+With Go 1.27.4, `bash scripts/package-runtime.sh --release` creates `runtime-dist/`;
 `--production-template` creates `runtime-production-dist/`. Both use Svelte and ignore ambient
 presentation inputs. The optional historical `--svelte` argument is a compatibility alias.
 CI tests each package, extracted archive and restricted container. Packaging does not deploy.

@@ -868,7 +868,7 @@ type noticeToolchain struct {
 // noticeToolchainSnapshot retains checked distribution terms, not compiler code
 // or a claim of complete selected-module/incorporated-source coverage.
 func noticeToolchainSnapshot(root string, read noticeReader) (*noticeToolchain, error) {
-	result := &noticeToolchain{Evidence: noticeToolchainEvidence{Version: "1.26.10", RawDiagnostic: "go-toolchain-notices.txt"}}
+	result := &noticeToolchain{Evidence: noticeToolchainEvidence{Version: "1.26.11", RawDiagnostic: "go-toolchain-notices.txt"}}
 	for _, input := range []struct{ name, hash string }{
 		{"LICENSE", "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"},
 		{"PATENTS", "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"},
@@ -883,7 +883,7 @@ func noticeToolchainSnapshot(root string, read noticeReader) (*noticeToolchain, 
 		}
 		if input.name == "VERSION" {
 			lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-			if len(lines) > 2 || lines[0] != "go1.26.10" {
+			if len(lines) > 2 || lines[0] != "go1.26.11" {
 				return nil, fmt.Errorf("toolchain distribution version differs")
 			}
 			if len(lines) == 2 {
@@ -1015,7 +1015,7 @@ func noticeRunWithCatalogue(args []string, out, diagnostic io.Writer, catalogueH
 
 // noticeJoinBuildInfo is the selected-module binary boundary, not a legal verdict.
 func noticeJoinBuildInfo(info *debug.BuildInfo, expected []*debug.Module) error {
-	if info == nil || info.GoVersion != "go1.26.10" || info.Path != "github.com/zitadel/zitadel" || info.Main.Path != "github.com/zitadel/zitadel" || info.Main.Version != "(devel)" || info.Main.Sum != "" || info.Main.Replace != nil || len(expected) == 0 || len(info.Deps) != len(expected) {
+	if info == nil || info.GoVersion != "go1.26.11" || info.Path != "github.com/zitadel/zitadel" || info.Main.Path != "github.com/zitadel/zitadel" || info.Main.Version != "(devel)" || info.Main.Sum != "" || info.Main.Replace != nil || len(expected) == 0 || len(info.Deps) != len(expected) {
 		return fmt.Errorf("module binary identity differs")
 	}
 	settings := map[string]string{}
@@ -1597,7 +1597,7 @@ func noticeCapture(build, recipe string, read noticeReader, options ...noticeSup
 	if err != nil {
 		return result, nil, err
 	}
-	if noticeDigest(prep) != before.PreparationSHA256 || !reflect.DeepEqual(obj["preparation"], prepObject) || !reflect.DeepEqual(obj["tools"], map[string]any{"go": "1.26.10", "node": "22.23.3", "pnpm": "10.30.3"}) {
+	if noticeDigest(prep) != before.PreparationSHA256 || !reflect.DeepEqual(obj["preparation"], prepObject) || !reflect.DeepEqual(obj["tools"], map[string]any{"go": "1.26.11", "node": "22.23.3", "pnpm": "10.30.3"}) {
 		return result, nil, fmt.Errorf("build receipt preparation or toolchain differs")
 	}
 	if obj["recipeSha256"] != before.RecipeSHA256 {

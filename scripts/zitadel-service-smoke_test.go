@@ -482,8 +482,8 @@ func TestServiceTransportKeepsAuthorityWithoutDNS(t *testing.T) {
 func TestExplicitIdentityServiceProfile(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	status := imageRun([]string{"--service-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic)
-	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.10"
-	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required")) {
+	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.11"
+	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.11 required")) {
 		t.Fatalf("service request did not reach native admission: status=%d diagnostic=%q", status, diagnostic.String())
 	}
 }
@@ -493,8 +493,8 @@ func TestExplicitIdentityServiceProfile(t *testing.T) {
 func TestExplicitIdentityBrowserProfile(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	status := imageRun([]string{"--browser-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic)
-	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.10"
-	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required")) {
+	native := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && runtime.Version() == "go1.26.11"
+	if status == 0 || strings.Contains(diagnostic.String(), "unexpected argument") || (!native && !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.11 required")) {
 		t.Fatalf("browser request did not reach native admission: status=%d diagnostic=%q", status, diagnostic.String())
 	}
 }
@@ -856,9 +856,9 @@ func TestLifecycleModeRemainsExplicitAndPlatformBound(t *testing.T) {
 			t.Fatal("implicit or incomplete lifecycle invocation accepted")
 		}
 	}
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.11" {
 		diagnostic.Reset()
-		if imageRun([]string{"--lifecycle-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic) == 0 || !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.10 required") {
+		if imageRun([]string{"--lifecycle-smoke", "--build", t.TempDir(), "--repository", t.TempDir(), "--output", t.TempDir()}, &out, &diagnostic) == 0 || !strings.Contains(diagnostic.String(), "native Linux amd64 Go 1.26.11 required") {
 			t.Fatal("lifecycle mode does not use the actual native-platform guard")
 		}
 	}

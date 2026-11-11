@@ -129,7 +129,7 @@ check() {
     .jobs["test-zitadel-source"] as $source |
     $source.if == null and $source["continue-on-error"] == null and
     any($source.steps[]; (.uses // "" | startswith("actions/setup-go@")) and
-      .with["go-version"] == "1.26.10" and .with.cache == false and
+      .with["go-version"] == "1.26.11" and .with.cache == false and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     any($source.steps[]; .run == "bash scripts/prepare-zitadel-source.test.sh" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
@@ -170,7 +170,7 @@ check() {
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
     ([$job.steps[]|select(.name=="Prepare original verifier compiler and private caches")]|length)==1 and
     any($job.steps[]; .name=="Prepare original verifier compiler and private caches" and .if==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
-      (.run|contains("test \"$(go env GOVERSION)\" = go1.27.3")) and
+      (.run|contains("test \"$(go env GOVERSION)\" = go1.27.4")) and
       (.run|contains("compiler=\"$(realpath \"$(command -v go)\")\"")) and
       (.run|contains("IDENTITY_VERIFIER_GO_SHA256=$compiler_sha")) and
       (.run|contains("GOMODCACHE=$RUNNER_TEMP/verifier-modules")) and (.run|contains("GOFLAGS="))) and
@@ -189,7 +189,7 @@ check() {
     any($job.steps[]; .name == "Replay the complete retained identity build without networking" and
       .run == "bash scripts/replay-zitadel-inputs.sh --build \"$RUNNER_TEMP/zitadel-build\" --module-source-verifier \"$RUNNER_TEMP/zitadel-module-sources\" --bsr-source-verifier \"$RUNNER_TEMP/zitadel-bsr-sources\" --verifier-go \"$IDENTITY_VERIFIER_GO\" --output \"$RUNNER_TEMP/zitadel-offline-replay\"" and
       .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false)) and
-    any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.10" and .with.cache == false) and
+    any($job.steps[]; (.uses // "" | startswith("actions/setup-go@")) and .with["go-version"] == "1.26.11" and .with.cache == false) and
     any($job.steps[]; .name == "Verify the bounded login icon inventory" and
       .["working-directory"] == "scripts" and
       .run == "go test -race zitadel-login-icons.go zitadel-text-fonts.go zitadel-copied-assets.go zitadel-login-icons_test.go zitadel-text-fonts_test.go zitadel-copied-assets_test.go" and
@@ -499,7 +499,7 @@ done
 # textual mentions of a joined seal or the deliberately false offline claim.
 jq -er '.jobs["build-zitadel-linux"].steps[] | select(.name == "Rebuild the native service from the retained prepared source") | .run |
   split("jq -e --slurpfile original")[1] | split("\u0027")[1] | select(length > 0)' "$scratch/ci.json" >"$scratch/prepared.jq"
-jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.10",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)},consoleDownloads:{sourceManifestSha256:("a"*64),manifestSha256:("d"*64),requestsSha256:("e"*64),helperSourceSha256:("f"*64),installerSha256:("1"*64),adapterSha256:("2"*64),launcherSha256:("3"*64),requests:3,originalConsoleDownloadsConsumed:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}}' >"$scratch/original-build.json"
+jq -n '{upstreamCommit:("d"*40),tools:{go:"1.26.11",node:"22.23.3",pnpm:"10.30.3"},platform:"linux/amd64",profile:"api-login-v1-console",preparation:{schemaVersion:1},recipeSha256:("c"*64),sourceSnapshot:{manifestSha256:("a"*64),preparedProfileSha256:("b"*64)},consoleDownloads:{sourceManifestSha256:("a"*64),manifestSha256:("d"*64),requestsSha256:("e"*64),helperSourceSha256:("f"*64),installerSha256:("1"*64),adapterSha256:("2"*64),launcherSha256:("3"*64),requests:3,originalConsoleDownloadsConsumed:true,dependencyInputsCaptured:false,nativeOfflineReplayProved:false}}' >"$scratch/original-build.json"
 jq '.sourceInput = (.sourceSnapshot + {recipeSha256:.recipeSha256,nativeOfflineReplayProved:false}) | del(.sourceSnapshot) | .imageAdmission="unknown" | .licenseClosure="unknown"' "$scratch/original-build.json" >"$scratch/prepared-build.json"
 jq -e --slurpfile original "$scratch/original-build.json" -f "$scratch/prepared.jq" "$scratch/prepared-build.json" >/dev/null
 for mutation in \
@@ -635,7 +635,7 @@ for mutation in \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Prepare original verifier compiler and private caches"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .["continue-on-error"]=true else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .run=(.run|sub("go1.27.3";"go1.26.10")) else . end)' \
+  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare original verifier compiler and private caches" then .run=(.run|sub("go1.27.4";"go1.26.11")) else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Observe actual verifier package compositions"))' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Observe actual verifier package compositions" then .if="false" else . end)' \
   '.jobs["build-zitadel-linux"].steps |= map(if .name == "Observe actual verifier package compositions" then .["continue-on-error"]=true else . end)' \

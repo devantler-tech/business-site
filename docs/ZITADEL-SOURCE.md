@@ -188,7 +188,7 @@ compatibility validation, not removal of these exclusion checks. This restrictio
 does not change the portal → customer Dex → ZITADEL login architecture.
 
 The `go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1` dependency profile applies the exact native Go
-1.26.10 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
+1.26.11 metadata for `go-jose/v4` 4.1.6, `golang.org/x/net` 0.62.0 and
 `gorilla/csrf` 1.7.3. The SAML security update selects `crewjam/saml` 0.5.2,
 `beevik/etree` 1.8.1 and `russellhaering/goxmldsig` 1.6.1. Together the patches
 change six module lines and add twelve checksums. The offline recipe verifies the
@@ -240,7 +240,7 @@ distribution. This preparer alone provides none of those results.
 bash scripts/prepare-zitadel-source.test.sh
 ```
 
-The test requires Go 1.26.10 and uses the real frozen public source. It exercises
+The test requires Go 1.26.11 and uses the real frozen public source. It exercises
 the actual prepared machine-ID package for exact raw-response preservation,
 explicit selector refusal and propagation through its HTTP metadata caller. It also
 exercises default-off behavior,
@@ -258,7 +258,7 @@ aggregates. The test owns and removes its disposable checkout and outputs.
 
 ## Build the complete Linux service
 
-The explicit build profile requires a clean Linux amd64 host, Go 1.26.10,
+The explicit build profile requires a clean Linux amd64 host, Go 1.26.11,
 Node 22.23.3, pnpm 10.30.3, GNU time and binutils. It prepares a fresh source
 archive itself; it never resumes generated output from an earlier experiment.
 
@@ -554,12 +554,12 @@ restricted runtime and authenticated image publication remain #308/#305 work.
 
 ## Selected compiler-distribution terms
 
-The explicit Linux recipe obtains `GOROOT` from its selected Go 1.26.10 compiler
+The explicit Linux recipe obtains `GOROOT` from its selected Go 1.26.11 compiler
 and passes it as `--toolchain` to the same before/after compilation capture.
 It rechecks the compiler version and distribution path before final capture.
 The reader requires complete, regular, nonlinked LICENSE, PATENTS and VERSION
 files from that directory. The full LICENSE/PATENTS digests are pinned; VERSION
-must name Go 1.26.10 and contain only the optional distribution timestamp.
+must name Go 1.26.11 and contain only the optional distribution timestamp.
 
 The same explicit input also checks the eight LICENSE/PATENTS files beneath
 `GOROOT/src/vendor/golang.org/x/{net,crypto,text,sys}`. A complete observation of
@@ -827,8 +827,8 @@ it again. Its manifest and compact round-trip result are diagnostics; source ZIP
 and go.mod payloads are excluded. The completed binary/recipe receipt binds the
 narrow `sourceSnapshot.goModules` result. The verifier's checksum-pinned module
 library is a build-tool acquisition in the existing server Go module, not an
-identity service dependency. CI tests/builds that command with Go 1.27.3 before
-selecting the unchanged upstream Go 1.26.10 compiler. Source capture requires
+identity service dependency. CI tests/builds that command with Go 1.27.4 before
+selecting the unchanged upstream Go 1.26.11 compiler. Source capture requires
 `--module-source-verifier /absolute/built-command`; the builder checks its command
 identity/compiler and records its unchanged executable digest in
 `sourceSnapshot.goModuleVerifier`. The native build never downloads or switches
@@ -853,7 +853,7 @@ module inputs and cold native replay still remain under #343.
 
 The explicit capture now also retains the checkpoint's selected generator Go
 sources. The pinned `x/mod/sumdb.Client` authenticates ZIP and separate go.mod
-checksums against Go 1.26.10's fixed official verifier key using only this build's
+checksums against Go 1.26.11's fixed official verifier key using only this build's
 owned signed lookup, tile and latest-tree records. Remote reads are denied;
 latest-tree updates remain in memory. The authenticated ZIP line must match the
 original native build metadata. Complete original ZIP and go.mod bytes are then
@@ -878,7 +878,7 @@ metadata capsules before reserving a fresh output. It joins identities, refuses
 literal conflicts and reconstructs only documented native download/checksum paths.
 It never copies an extracted module tree, `.ziphash` or compiled cache. The fixed
 catalogue, service locks and official checksum key cannot be replaced by CLI data.
-CI reads these inputs with the frozen Go 1.26.10 client in a network namespace as
+CI reads these inputs with the frozen Go 1.26.11 client in a network namespace as
 the original non-root user, with fresh caches and remote module acquisition off.
 It compares all selected service/generator checksums, checks unchanged source locks
 and requires a missing signed proof to fail in a separately reconstructed cache.
@@ -886,7 +886,7 @@ This is native input readback, not generation or compilation from those inputs.
 The two whole-build proof flags remain false; issue #343 retains full cold replay.
 
 The same explicit capture also requires
-`--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.3.
+`--bsr-source-verifier /absolute/built-command`, built separately with Go 1.27.4.
 Before native API generation, the builder creates a private Buf cache. It retains
 the actual API 1.67.0 and console 1.72.0 native commands, checks their original and
 copied byte hashes throughout, and binds those identities to the sealed schema
@@ -1006,7 +1006,7 @@ bash scripts/replay-zitadel-inputs.sh \
   --build /physical/owned/original-build \
   --module-source-verifier /physical/owned/zitadel-module-sources \
   --bsr-source-verifier /physical/owned/zitadel-bsr-sources \
-  --verifier-go /physical/original-go1.27.3/bin/go \
+  --verifier-go /physical/original-go1.27.4/bin/go \
   --output /physical/owned/new-offline-replay
 ```
 
@@ -1027,7 +1027,7 @@ new network namespace and verifies different namespace identity, the original
 nonroot UID/GID, no new privileges and zero effective/bounding capabilities.
 It also observes the network control fail there. The complete existing native
 pipeline first restores the exact approved tool-source layout and checksum-pinned
-x/mod ZIP/mod/info into fresh private caches. The supplied original Go 1.27.3
+x/mod ZIP/mod/info into fresh private caches. The supplied original Go 1.27.4
 compiler rebuilds the two fixed commands with identical flags. Their successful
 native package compositions and executable bytes must equal the original build.
 A separate empty-cache control must refuse acquisition. The reconstructed module
@@ -1064,8 +1064,8 @@ Module/package paths, checksums, complete terms and origin inputs remain checked
 The retained marker enters the final build receipt before either notice inventory
 binds its bytes; completion only renames that unchanged receipt.
 
-Go 1.26.10, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities
-and the caller-selected original Go 1.27.3 distribution remain explicit build-tool
+Go 1.26.11, Node 22.23.3, pnpm 10.30.3, the host's normal shell/system utilities
+and the caller-selected original Go 1.27.4 distribution remain explicit build-tool
 boundaries. This does not claim a hermetic OS/toolchain distribution.
 The separate `selected-pnpm-sdk-bootstrap` component retains the unchanged SDK
 lock's 132 original archives, source/recipe/tool bindings, complete installed-file
@@ -1124,7 +1124,7 @@ offering, deployed resource measurements and portal activation remain separate.
 
 The explicit image test packages the actual successful Linux build and observes
 its version command inside a restricted container. Run it on native Linux amd64
-with Go 1.26.10 and a Docker engine that reports its built-in seccomp profile:
+with Go 1.26.11 and a Docker engine that reports its built-in seccomp profile:
 
 ```sh
 go run scripts/zitadel-image-package.go scripts/zitadel-image-smoke.go scripts/zitadel-service-smoke.go scripts/zitadel-browser.go \

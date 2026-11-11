@@ -58,7 +58,7 @@ func newNoticeFixture(t *testing.T) noticeFixture {
 	writeNotice(t, f.build, "generated.sha256", []byte(noticeHash(f.raw)+"  "+noticeConsole+"\n"+noticeHash(f.raw)+"  "+noticeEmbedded+"\n"))
 	binary := []byte("actual selected fixture binary\n")
 	writeNotice(t, f.build, "service/zitadel", binary)
-	receipt := map[string]any{"schemaVersion": 1, "upstreamCommit": noticePin, "version": "4.20.0", "sourceDate": "2026-10-22T07:05:44Z", "platform": "linux/amd64", "profile": "api-login-v1-console", "preparation": prep, "recipeSha256": noticeHash([]byte("fixture recipe\n")), "binarySha256": noticeHash(binary), "imageAdmission": "unknown", "licenseClosure": "unknown", "reproducible": false, "tools": map[string]string{"go": "1.26.10", "node": "22.23.3", "pnpm": "10.30.3"}}
+	receipt := map[string]any{"schemaVersion": 1, "upstreamCommit": noticePin, "version": "4.20.0", "sourceDate": "2026-10-22T07:05:44Z", "platform": "linux/amd64", "profile": "api-login-v1-console", "preparation": prep, "recipeSha256": noticeHash([]byte("fixture recipe\n")), "binarySha256": noticeHash(binary), "imageAdmission": "unknown", "licenseClosure": "unknown", "reproducible": false, "tools": map[string]string{"go": "1.26.11", "node": "22.23.3", "pnpm": "10.30.3"}}
 	writeNotice(t, f.build, "build-receipt.pending", noticeJSON(t, receipt))
 	snapshot, err := noticeSnapshot(f.build, f.recipe, noticeRead)
 	if err != nil {

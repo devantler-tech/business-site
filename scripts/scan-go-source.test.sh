@@ -19,13 +19,13 @@ if [ "$#" -eq 2 ] && [ "$1" = env ] && [ "$2" = GOVERSION ]; then
   if [ "$SCAN_CASE" = compiler-failure ]; then exit 19; fi
   case "$SCAN_CASE" in
     compiler-empty) printf '\n' ;;
-    compiler-invalid) printf 'go1.27.3 invalid\n' ;;
-    *) printf 'go1.27.3\n' ;;
+    compiler-invalid) printf 'go1.27.4 invalid\n' ;;
+    *) printf 'go1.27.4\n' ;;
   esac
   exit 0
 fi
 [ "$PWD" = "$SCAN_MODULE" ] || exit 31
-[ "${GOTOOLCHAIN:-}" = go1.27.3 ] || exit 32
+[ "${GOTOOLCHAIN:-}" = go1.27.4 ] || exit 32
 [ "$#" -eq 2 ] && [ "$1" = install ] && [ "$2" = github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.8 ] || exit 33
 if [ "$SCAN_CASE" = compiler-build-failure ]; then exit 17; fi
 cat > "$GOBIN/osv-scanner" <<'SCANNER'

@@ -18,7 +18,7 @@ import (
 	"golang.org/x/mod/sumdb"
 )
 
-// This is Go 1.26.10's official verifier, not a key supplied by a capsule.
+// This is Go 1.26.11's official verifier, not a key supplied by a capsule.
 const officialGeneratorSumDBKey = "sum.golang.org+033de0ae+Ac4zctda0e5eza+HJyk9SxEdh+s3Ux18htTTAD8OuAn8"
 
 func runGeneratorSources(operation string, args []string, stdout io.Writer) error {

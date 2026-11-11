@@ -140,7 +140,7 @@ func generatorFixture() []generatorObservation {
 		}
 		observations = append(observations, generatorObservation{
 			Name: tool.Name, BinarySHA256: strings.Repeat("a", 64), Bytes: 100,
-			Build: debug.BuildInfo{GoVersion: "go1.26.10", Path: tool.Command, Main: main,
+			Build: debug.BuildInfo{GoVersion: "go1.26.11", Path: tool.Command, Main: main,
 				Deps:     []*debug.Module{{Path: "example.com/dependency", Version: "v1.2.3", Sum: "h1:" + strings.Repeat("B", 43) + "="}},
 				Settings: []debug.BuildSetting{{Key: "GOOS", Value: "linux"}, {Key: "GOARCH", Value: "amd64"}, {Key: "CGO_ENABLED", Value: "0"}}},
 		})
@@ -184,7 +184,7 @@ func TestGeneratorSelectionRejectsIncompleteOrChangedObservations(t *testing.T) 
 			case "wrong-version":
 				observations[0].Build.Main.Version = "v9.0.0"
 			case "wrong-go":
-				observations[0].Build.GoVersion = "go1.27.3"
+				observations[0].Build.GoVersion = "go1.27.4"
 			case "wrong-os":
 				observations[0].Build.Settings[0].Value = "darwin"
 			case "wrong-arch":
