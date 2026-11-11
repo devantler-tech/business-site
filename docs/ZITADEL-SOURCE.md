@@ -1218,11 +1218,11 @@ The portal and identity publication remain off.
 
 The explicit preparer's `native-source-offer-v1` profile adds an unconditional
 `Source code` anchor to both frozen native footers. The destination is
-`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2`.
-Both templates retain a 2026-11-09 modification notice. Existing privacy/terms
+`https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.3`.
+Both templates retain a 2026-11-11 modification notice. Existing privacy/terms
 links, branding conditions and theme controls remain; none controls the source
 anchor's availability. The complete prepared profile is
-`06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3`:
+`623cb4cd5a56781d132ce5cdd83dc2489411282d56efe2d3bcb1ba0b68331f76`:
 9,528 files and 261,325,885 bytes before installation. Its two additional changed
 paths and fixed destination enter the preparation record and dated source records.
 

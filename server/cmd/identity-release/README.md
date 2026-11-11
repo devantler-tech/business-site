@@ -147,7 +147,7 @@ observed as absent. A rerun that observes an occupied upload reference is refuse
 A partial image publication
 therefore needs a separately reviewed recovery or new version; it is not silently
 adopted or treated as a completed release.
-The fixed `identity-v4.20.0-devantler.2` release stages the two original source
+The fixed `identity-v4.20.0-devantler.3` release stages the two original source
 archives and `identity-source.json` in a draft before publication. Every existing
 asset must already match before additions; source-bound drafts can resume only
 with the same original. Staging reads use the validated release database ID,

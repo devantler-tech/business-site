@@ -7,7 +7,7 @@ const script=name=>{const match=source.match(new RegExp('const '+name+' = `([\\s
 // The exact native observation must prove a visible, focused, unconditional
 // source offer. These synthetic controls are not actual browser rendering.
 const sourceOfferObservation=script('browserSourceOfferObservation');
-const offerURL='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2';
+const offerURL='https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.3';
 for(const kind of ['console','login'])for(const fault of ['none','missing','duplicate','wrong-url','query','hidden','covered','offscreen','invisible','unfocused','negative-tabindex','wrong-name','missing-rel','wrong-target','opposite-theme',...(kind==='console'?['transitioning-theme','missing-theme-root','wrong-background']:[])]){
  const a={tagName:'A',href:offerURL+(fault==='query'?'?latest=1':''),innerText:fault==='wrong-name'?'Help':'Source code',tabIndex:fault==='negative-tabindex'?-1:0,
   rel:fault==='missing-rel'?'noopener':'noopener noreferrer',target:fault==='wrong-target'?'_self':'_blank',

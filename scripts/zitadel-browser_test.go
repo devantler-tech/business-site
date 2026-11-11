@@ -711,7 +711,7 @@ func TestBrowserSourceOfferRequiresBothNativeInterfacesAndThemes(t *testing.T) {
 				t.Fatal(err)
 			}
 			cases = append(cases, browserSourceOfferCase{kind, theme,
-				"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2",
+				"https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.3",
 				true, true, true, browserScreen{name, len(raw), imageHash(raw)}})
 		}
 	}
