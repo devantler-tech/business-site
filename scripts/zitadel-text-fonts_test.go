@@ -77,7 +77,7 @@ func textFixture(t *testing.T) (string, string, string, textPolicy) {
 	json.Unmarshal(mustTextRead(t, build, "prepared/source-preparation.json"), &prepObject)
 	receiptObject["preparation"] = prepObject
 	receiptObject["sourceDate"] = "2026-10-22T07:05:44Z"
-	receiptObject["tools"] = map[string]any{"go": "1.26.10", "node": "22.23.3", "pnpm": "10.30.3"}
+	receiptObject["tools"] = map[string]any{"go": "1.26.11", "node": "22.23.3", "pnpm": "10.30.3"}
 	receiptBytes, _ := json.Marshal(receiptObject)
 	put(build, "build-receipt.pending", receiptBytes)
 	return build, notices, recipe, policy

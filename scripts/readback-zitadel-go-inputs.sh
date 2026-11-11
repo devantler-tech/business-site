@@ -15,14 +15,14 @@ done
 [[ "$build" = /* && "$verifier" = /* ]] || fail 'complete absolute arguments required'
 [ "$(uname -s)/$(uname -m)" = Linux/x86_64 ] || fail 'native Linux amd64 required'
 for tool in go jq shasum sudo unshare setpriv timeout; do command -v "$tool" >/dev/null || fail 'native reader tool unavailable'; done
-[ "$(go version)" = 'go version go1.26.10 linux/amd64' ] || fail 'frozen native Go compiler required'
+[ "$(go version)" = 'go version go1.26.11 linux/amd64' ] || fail 'frozen native Go compiler required'
 [ -x "$verifier" ] && [ -f "$build/build-receipt.json" ] || fail 'owned build or verifier missing'
 sha() { shasum -a 256 "$1" | cut -d ' ' -f 1; }
 jq -es '
  length==1 and .[0].upstreamCommit=="8afa5dd37a8e723efb9eace8d09fd5c1cccef694" and
- .[0].profile=="api-login-v1-console" and .[0].tools.go=="1.26.10" and
+ .[0].profile=="api-login-v1-console" and .[0].tools.go=="1.26.11" and
  .[0].sourceSnapshot.dependencyInputsCaptured==false and .[0].sourceSnapshot.nativeOfflineReplayProved==false and
- .[0].sourceSnapshot.goModuleVerifier.go=="1.27.3" and
+ .[0].sourceSnapshot.goModuleVerifier.go=="1.27.4" and
  all(.[0].sourceSnapshot|[.manifestSha256,.goModules.manifestSha256,.generatorGoSources.manifestSha256,
   .goGraphMetadata.manifestSha256,.goModuleVerifier.sha256][];type=="string" and test("^[0-9a-f]{64}$"))
 ' "$build/build-receipt.json" >/dev/null || fail 'native source receipt differs'
@@ -127,7 +127,7 @@ fi
 [ "$(sha "$verifier")" = "$verifier_seal" ] || fail 'verifier changed during readback'
 jq -n --arg source "$source_seal" --arg seal "$manifest_seal" \
  --slurpfile service "$work/service-expected.json" --slurpfile generators "$work/generator-expected.json" '
- {schemaVersion:1,sourceManifestSha256:$source,restorationManifestSha256:$seal,go:"1.26.10",
+ {schemaVersion:1,sourceManifestSha256:$source,restorationManifestSha256:$seal,go:"1.26.11",
   serviceModules:($service[0]|length),generatorModules:($generators[0]|length),
   selectedIdentities:([$service[0][], $generators[0][]]|unique_by([.Path,.Version])|length),
   nativeCacheReadbackPassed:true,networkDenied:true,independentProofControlPassed:true,missingProofRefused:true,sourceChecksumsUnchanged:true,

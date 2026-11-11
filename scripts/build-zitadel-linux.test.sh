@@ -9,7 +9,7 @@ trap 'rm -rf -- "$scratch"' EXIT
 mkdir -p "$scratch/recipe/scripts" "$scratch/bin" "$scratch/upstream"
 mkdir "$scratch/go-distribution"
 cp "$root/scripts/testdata/go1.26.10/LICENSE" "$root/scripts/testdata/go1.26.10/PATENTS" "$scratch/go-distribution/"
-printf 'go1.26.10\n' >"$scratch/go-distribution/VERSION"
+printf 'go1.26.11\n' >"$scratch/go-distribution/VERSION"
 cp "$root/scripts/build-zitadel-linux.sh" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-login-icons.go" "$scratch/recipe/scripts/"
 cp "$root/scripts/zitadel-text-fonts.go" "$scratch/recipe/scripts/"
@@ -218,7 +218,7 @@ cat >"$scratch/bin/go" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 case "$1 $2" in
-  'env GOVERSION') echo "${TEST_GO:-go1.26.10}";;
+  'env GOVERSION') echo "${TEST_GO:-go1.26.11}";;
   'env GOROOT') echo "$TEST_GOROOT";;
   'tool nm')
     [[ "$#" -eq 3 && "$3" == */service/zitadel ]]
@@ -228,20 +228,20 @@ case "$1 $2" in
     [[ "${TEST_FAIL:-}" != partial-symbols ]] || exit 42;;
   'version -m')
     if [[ "$3" == *.artifacts/bin/linux/amd64/protoc-gen-openapiv2 ]]; then
-      printf 'fixture: go1.26.10\n\tmod\tgithub.com/grpc-ecosystem/grpc-gateway/v2\t%s\n' "${TEST_API_OPENAPI_VERSION:-v2.28.0}"
+      printf 'fixture: go1.26.11\n\tmod\tgithub.com/grpc-ecosystem/grpc-gateway/v2\t%s\n' "${TEST_API_OPENAPI_VERSION:-v2.28.0}"
       exit
     fi
     if [[ "$3" = "$TEST_BSR_VERIFIER" ]]; then
-      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_BSR_VERIFIER_GO:-go1.27.3}" "${TEST_BSR_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-bsr-sources}"
+      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_BSR_VERIFIER_GO:-go1.27.4}" "${TEST_BSR_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-bsr-sources}"
       if [[ "${TEST_FAIL:-}" = bsr-verifier-metadata ]]; then exit 42; fi
       exit
     fi
     if [[ "$3" = "$TEST_MODULE_VERIFIER" ]]; then
       if [[ "${TEST_FAIL:-}" = verifier-metadata ]]; then exit 42; fi
-      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_VERIFIER_GO:-go1.27.3}" "${TEST_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources}"
+      printf 'fixture: %s\n\tpath\t%s\n' "${TEST_VERIFIER_GO:-go1.27.4}" "${TEST_VERIFIER_PATH:-github.com/devantler-tech/business-site/server/cmd/zitadel-module-sources}"
       exit
     fi
-    printf 'fixture: go1.26.10\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n'
+    printf 'fixture: go1.26.11\n\tbuild\tGOOS=linux\n\tbuild\tGOARCH=amd64\n\tbuild\tCGO_ENABLED=0\n'
     if [[ "${TEST_UNADMITTED:-}" = binary ]]; then printf '\tdep\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_UNADMITTED:-}" = binary-replacement ]]; then printf '\t=>\tgithub.com/jarcoal/jpath\tv0.0.0-20140328210829-f76b8b2dbf52\th1:fixture\n'; fi
     if [[ "${TEST_FAIL:-}" = binary-metadata ]]; then exit 42; fi;;
@@ -852,7 +852,7 @@ capture_reject linked-verifier "$scratch/linked-verifier"
 capture_reject missing-verifier "$scratch/absent-verifier"
 capture_reject nonexecutable-verifier "$scratch/nonexecutable-verifier"
 capture_reject relative-verifier ./module-source-verifier
-capture_reject wrong-verifier-compiler "$TEST_MODULE_VERIFIER" TEST_VERIFIER_GO=go1.26.10
+capture_reject wrong-verifier-compiler "$TEST_MODULE_VERIFIER" TEST_VERIFIER_GO=go1.26.11
 capture_reject wrong-verifier-command "$TEST_MODULE_VERIFIER" TEST_VERIFIER_PATH=example.invalid/command
 capture_reject partial-verifier-metadata "$TEST_MODULE_VERIFIER" TEST_FAIL=verifier-metadata
 # These carry a valid module verifier so each schema-tool admission is exercised.
@@ -871,7 +871,7 @@ bsr_reject linked-bsr-verifier "$scratch/linked-bsr-verifier"
 bsr_reject missing-bsr-verifier "$scratch/absent-bsr-verifier"
 bsr_reject nonexecutable-bsr-verifier "$scratch/nonexecutable-bsr-verifier"
 bsr_reject relative-bsr-verifier ./bsr-source-verifier
-bsr_reject wrong-bsr-verifier-compiler "$TEST_BSR_VERIFIER" TEST_BSR_VERIFIER_GO=go1.26.10
+bsr_reject wrong-bsr-verifier-compiler "$TEST_BSR_VERIFIER" TEST_BSR_VERIFIER_GO=go1.26.11
 bsr_reject wrong-bsr-verifier-command "$TEST_BSR_VERIFIER" TEST_BSR_VERIFIER_PATH=example.invalid/command
 bsr_reject partial-bsr-verifier-metadata "$TEST_BSR_VERIFIER" TEST_FAIL=bsr-verifier-metadata
 bsr_reject wrong-api-schema-version "$TEST_BSR_VERIFIER" TEST_API_BUF_VERSION=1.72.0
@@ -888,10 +888,10 @@ jq -e '.sourceSnapshot.preparedProfileSha256 == "06862d888dc1cc209f48f22c38cca74
 jq -e '.sourceSnapshot.pnpmSources.selectedPNPMSourcesCaptured == true and .sourceSnapshot.pnpmSources.packages > 0 and .sourceSnapshot.pnpmSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.pnpmSources.dependencyInputsCaptured == false and .sourceSnapshot.pnpmSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorBuildMetadata.tools == 14 and .sourceSnapshot.generatorBuildMetadata.modules > 0 and .sourceSnapshot.generatorBuildMetadata.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorBuildMetadata.generatorBuildMetadataValidated == true and .sourceSnapshot.generatorBuildMetadata.dependencyInputsCaptured == false and .sourceSnapshot.generatorBuildMetadata.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.generatorGoSources.selectedGeneratorGoSourcesCaptured == true and .sourceSnapshot.generatorGoSources.modules == .sourceSnapshot.generatorBuildMetadata.modules and .sourceSnapshot.generatorGoSources.checkpointSha256 == .sourceSnapshot.generatorBuildMetadata.checkpointSha256 and .sourceSnapshot.generatorGoSources.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.generatorGoSources.dependencyInputsCaptured == false and .sourceSnapshot.generatorGoSources.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
-jq -e '.sourceSnapshot.toolSource.toolSourceSha256 == ("9"*64) and .sourceSnapshot.toolSource.members == 40 and .sourceSnapshot.toolSource.goVerifiersRebuilt == false and .sourceSnapshot.verifierBootstrap.files == 4 and .sourceSnapshot.verifierBootstrap.verifierBootstrapCaptured == true and .sourceSnapshot.verifierBootstrap.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.verifierBootstrap.toolSourceSha256 == .sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.verifierCompiler == {go:"1.27.3",sha256:("8"*64)}' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e '.sourceSnapshot.toolSource.toolSourceSha256 == ("9"*64) and .sourceSnapshot.toolSource.members == 40 and .sourceSnapshot.toolSource.goVerifiersRebuilt == false and .sourceSnapshot.verifierBootstrap.files == 4 and .sourceSnapshot.verifierBootstrap.verifierBootstrapCaptured == true and .sourceSnapshot.verifierBootstrap.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .sourceSnapshot.verifierBootstrap.toolSourceSha256 == .sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.verifierCompiler == {go:"1.27.4",sha256:("8"*64)}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.sdkBootstrap.profile=="identity-pnpm-sdk-bootstrap-v1" and .sourceSnapshot.sdkBootstrap.packages==132 and .sourceSnapshot.sdkBootstrap.sourceManifestSha256==.sourceSnapshot.manifestSha256 and .sourceSnapshot.sdkBootstrap.toolSourceSha256==.sourceSnapshot.toolSource.toolSourceSha256 and .sourceSnapshot.sdkBootstrap.recipeSha256==.recipeSha256 and .sourceSnapshot.sdkBootstrap.sdkReconstructed==false and .sourceSnapshot.sdkBootstrap.nativeOfflineReplayProved==false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.goModules.modules == 230 and .sourceSnapshot.goModules.files == 464 and .sourceSnapshot.goModules.selectedServiceGoSourcesCaptured == true and .sourceSnapshot.goModules.dependencyInputsCaptured == false and .sourceSnapshot.goModules.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
-jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.3",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
+jq -e --arg digest "$(shasum -a 256 "$TEST_MODULE_VERIFIER" | awk '{print $1}')" '.sourceSnapshot.goModuleVerifier == {go:"1.27.4",sha256:$digest}' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.sourceSnapshot.bsrSources.modules == 3 and .sourceSnapshot.bsrSources.files == 170 and .sourceSnapshot.bsrSources.selectedBSRSourcesCaptured == true and .sourceSnapshot.bsrSchemaReplay.schemaOfflineReplayProved == true and .sourceSnapshot.bsrSchemaReplay.noNewPrivilegesReplay == true and .sourceSnapshot.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null
 jq -e '.consoleDownloads.originalConsoleDownloadsConsumed == true and .consoleDownloads.requests == 3 and .consoleDownloads.sourceManifestSha256 == .sourceSnapshot.manifestSha256 and .consoleDownloads.dependencyInputsCaptured == false and .consoleDownloads.nativeOfflineReplayProved == false' "$scratch/captured/build-receipt.json" >/dev/null || { echo 'native console consumption was not bound to the captured source' >&2; exit 1; }
 : >"$TEST_CALLS"

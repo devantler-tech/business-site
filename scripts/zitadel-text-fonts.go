@@ -460,7 +460,7 @@ func textCapture(build, notices, recipe string, read textReader, policy textPoli
 			return result, nil, fmt.Errorf("wrong build receipt identity: %s", key)
 		}
 	}
-	if !reflect.DeepEqual(decoded["preparation"], state.Preparation) || !reflect.DeepEqual(decoded["tools"], map[string]any{"go": "1.26.10", "node": "22.23.3", "pnpm": "10.30.3"}) {
+	if !reflect.DeepEqual(decoded["preparation"], state.Preparation) || !reflect.DeepEqual(decoded["tools"], map[string]any{"go": "1.26.11", "node": "22.23.3", "pnpm": "10.30.3"}) {
 		return result, nil, fmt.Errorf("receipt preparation or compiler toolchain differs")
 	}
 	var recipeHash, binaryHash string

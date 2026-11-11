@@ -1,6 +1,6 @@
 # Selected identity Go source inputs
 
-This command in the existing Go 1.27.3 server module is inactive without arguments. It uses the frozen
+This command in the existing Go 1.27.4 server module is inactive without arguments. It uses the frozen
 230-module service catalogue and `golang.org/x/mod` v0.42.0, pinned through
 the server's `go.mod` and `go.sum`. This build-tool dependency is not an identity service
 dependency. Ordinary website builds never run it.
@@ -52,7 +52,7 @@ Only the outer Linux replay can prove reconstruction and actual service use.
 The explicit Linux builder takes `--module-source-verifier /absolute/zitadel-module-sources`
 alongside `--capture-source`. It requires the reviewed command identity, exact
 tool compiler and an unchanged executable digest. CI builds that command before
-switching to the identity service's unchanged Go 1.26.10 compiler; the native
+switching to the identity service's unchanged Go 1.26.11 compiler; the native
 build never switches or auto-downloads a toolchain. The builder invokes capture
 and verification after compilation
 and its final module verification. The complete compiler stream, root command
@@ -84,7 +84,7 @@ compact manifest/round-trip diagnostics, not the retained sources.
 The separate `observe-generators --build /absolute/build --source-sha256 SOURCE_SEAL`
 operation reads all fourteen actual API generator executables after generation and
 before the console installs its different OpenAPI binary. It validates the frozen
-Go locks and API install recipe, exact tool commands/main versions, Go 1.26.10,
+Go locks and API install recipe, exact tool commands/main versions, Go 1.26.11,
 Linux amd64 and disabled CGO. It hashes each confined executable before and after
 reading native Go build information. The checkpoint retains every original
 main/dependency/replacement/settings record, including gci and the nested gRPC
@@ -100,7 +100,7 @@ inputs. `dependencyInputsCaptured` and `nativeOfflineReplayProved` stay false.
 
 The explicit generator-source operations retain the checkpoint's selected Go
 module ZIP, go.mod and literal info bytes, plus the required checksum proofs.
-The maintained checksum client uses Go 1.26.10's fixed official `sum.golang.org`
+The maintained checksum client uses Go 1.26.11's fixed official `sum.golang.org`
 verifier key; the CLI and retained data cannot select another key. It reads only
 this build's owned lookup, tile and signed latest-tree records, with remote reads
 denied and latest-tree updates confined to memory. Each ZIP checksum must also
@@ -146,7 +146,7 @@ its own derived cache markers. This project-checksum read does not establish
 standalone signed-log availability for service-only modules; generator reads
 outside the project retain their separate signed-log proof.
 
-CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.10 inside a network
+CI runs `scripts/readback-zitadel-go-inputs.sh` with Go 1.26.11 inside a network
 namespace, dropping root privileges before native module reads. It compares every
 service/generator checksum, preserves the source locks and requires a fresh
 missing-proof read to fail. Only compact manifests and reader results are uploaded.

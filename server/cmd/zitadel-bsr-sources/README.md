@@ -1,6 +1,6 @@
 # Selected schema source packages
 
-This explicit Go 1.27.3 build tool retains and checks the frozen identity
+This explicit Go 1.27.4 build tool retains and checks the frozen identity
 profile's three BSR modules. No arguments perform no work. It never acquires
 dependencies, executes retained content, starts identity services or activates
 the portal. The explicit Linux builder supplies same-build observations and runs

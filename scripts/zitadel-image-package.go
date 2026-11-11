@@ -380,7 +380,7 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 		return 0
 	}
 	if args[0] == "--browser-worker" {
-		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
+		if len(args) != 4 || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.11" {
 			return fail(fmt.Errorf("explicit native browser worker required"))
 		}
 		if err := browserWorker(args[1], args[2], args[3]); err != nil {
@@ -408,8 +408,8 @@ func imageRun(args []string, _ io.Writer, diagnostic io.Writer) int {
 		}
 	}
 	if (values["--smoke"] != "" || values["--service-smoke"] != "" || values["--browser-smoke"] != "" || values["--lifecycle-smoke"] != "") && len(values) == 4 && values["--build"] != "" && values["--repository"] != "" && values["--output"] != "" {
-		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.10" {
-			return fail(fmt.Errorf("native Linux amd64 Go 1.26.10 required"))
+		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || runtime.Version() != "go1.26.11" {
+			return fail(fmt.Errorf("native Linux amd64 Go 1.26.11 required"))
 		}
 		var probes []func(string, string) error
 		if values["--service-smoke"] != "" || values["--browser-smoke"] != "" || values["--lifecycle-smoke"] != "" {
