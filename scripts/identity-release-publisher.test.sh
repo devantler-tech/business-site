@@ -5,6 +5,37 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
+
+assert_no_shared_version_writes() {
+  local status=0
+  grep -Eq -- '^docker (push|tag|image rm) .*business-site-identity:[0-9]+\.[0-9]+\.[0-9]+-devantler\.[0-9]+($|[[:space:]])' "$1" || status=$?
+  case "$status" in
+    0) echo 'publisher wrote the shared version alias' >&2;;
+    1) return 0;;
+    *) echo 'publisher call log could not be examined' >&2;;
+  esac
+  return 1
+}
+
+# Exercise the call-log guard independently of the publisher's correct behavior.
+# A new release version must not make a forbidden shared-alias write invisible.
+for version in 4.20.0-devantler.1 4.20.0-devantler.2 4.20.0-devantler.3 4.20.0-devantler.4 4.20.0-devantler.99 4.21.0-devantler.1; do
+  for operation in push 'tag sha256:fixture' 'image rm'; do
+    printf 'docker %s ghcr.io/devantler-tech/business-site-identity:%s\n' "$operation" "$version" >"$scratch/alias-calls"
+    if assert_no_shared_version_writes "$scratch/alias-calls" >/dev/null 2>&1; then
+      printf 'shared-alias guard accepted %s %s\n' "$operation" "$version" >&2
+      exit 1
+    fi
+  done
+done
+printf 'docker push ghcr.io/devantler-tech/business-site-identity:original-123-2-%064d\n' 0 >"$scratch/alias-calls"
+assert_no_shared_version_writes "$scratch/alias-calls"
+for unreadable in "$scratch/missing-calls" "$scratch"; do
+  if assert_no_shared_version_writes "$unreadable" >/dev/null 2>&1; then
+    echo 'shared-alias guard accepted an unreadable call log' >&2
+    exit 1
+  fi
+done
 mkdir "$scratch/bin"
 cat >"$scratch/bin/gh" <<'FIXTURE'
 #!/usr/bin/env bash
@@ -85,7 +116,7 @@ elif [[ "$url" == https://ghcr.io/v2/* ]];then
  reads=0;[[ ! -f "$FIXTURE/registry-reads" ]] || read -r reads <"$FIXTURE/registry-reads"
  reads=$((reads+1));printf '%s\n' "$reads" >"$FIXTURE/registry-reads"
  if [[ "$KIND" == foreign-version-race && "$reads" == 2 ]];then touch "$FIXTURE/foreign-version";fi
- if [[ "$KIND" == foreign-version-present && "$url" == */manifests/4.20.0-devantler.[12] ]];then
+ if [[ "$KIND" == foreign-version-present && "$url" =~ /manifests/[0-9]+\.[0-9]+\.[0-9]+-devantler\.[0-9]+$ ]];then
   jq '.config.digest=("sha256:"+("6"*64))' "$FIXTURE/manifest.json" >"$output"
   sha=$(shasum -a 256 "$output"|awk '{print $1}')
   printf 'HTTP/2 200\r\nDocker-Content-Digest: sha256:%s\r\n' "$sha" >"$headers"
@@ -130,7 +161,7 @@ case "$1" in
  login) cat >"$FIXTURE/login-stdin";cmp "$FIXTURE/login-stdin" <(printf '%s' "$GH_TOKEN") || exit 93;[[ "$KIND" != registry-login-error ]] || exit 1;;tag) :;;push)
   # All three anonymous source reads must finish before any image upload.
   [[ "$(grep -c 'curl https://github.com/' "$FIXTURE/calls")" == 3 ]] || exit 96
-  if [[ "$2" == ghcr.io/devantler-tech/business-site-identity:4.20.0-devantler.[12] && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
+  if [[ "$2" =~ ^ghcr\.io/devantler-tech/business-site-identity:[0-9]+\.[0-9]+\.[0-9]+-devantler\.[0-9]+$ && -f "$FIXTURE/foreign-version" ]];then touch "$FIXTURE/foreign-version-overwritten";fi
   touch "$FIXTURE/pushed";;image)
   if [[ "$2" == inspect ]];then
     [[ "$#" == 5 && "$3" == --format && "$4" == '{{json .RepoDigests}}' && "$5" == "sha256:$(printf '%064d' 0 | tr 0 b)" ]] || exit 97
@@ -231,7 +262,7 @@ for kind in valid credential-punctuation credential-empty credential-linebreak c
       if [[ -f "$fixture/foreign-version-overwritten" ]];then echo 'publisher overwrote a shared version alias' >&2;exit 1;fi
       expected_ref="ghcr.io/devantler-tech/business-site-identity:original-123-2-$(printf '%064d' 0 | tr 0 b)"
       grep -Fxq "docker push $expected_ref" "$fixture/calls" || { echo 'publisher did not use the original-CI upload reference' >&2;exit 1; }
-      if grep -Eq '^docker (push|tag|image rm) .*business-site-identity:4\.20\.0-devantler\.[12]($|[[:space:]])' "$fixture/calls";then echo 'publisher wrote the shared version alias' >&2;exit 1;fi
+      assert_no_shared_version_writes "$fixture/calls"
     fi
     first_write="$(awk '/^gh release (create|upload|edit) / {print NR;exit}' "$fixture/calls")"
     if [[ -n "$first_write" ]];then
