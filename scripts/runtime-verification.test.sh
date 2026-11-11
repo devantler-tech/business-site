@@ -9,13 +9,19 @@ fail() {
   printf 'runtime verification: FAIL — %s\n' "$*" >&2
   exit 1
 }
-mkdir -p "$scratch/bin" "$scratch/runner" "$scratch/source/deploy" "$scratch/source/.runtime-publisher/.github/scripts"
+mkdir -p "$scratch/bin" "$scratch/runner" "$scratch/source/deploy" "$scratch/source/.github/workflows" "$scratch/source/.runtime-publisher/.github/scripts"
 cp "$root"/deploy/*.yaml "$scratch/source/deploy/"
+readonly caller=.github/workflows/publish-runtime.yaml
+cp "$root/$caller" "$scratch/source/$caller"
 readonly source=0123456789abcdef0123456789abcdef01234567
 readonly image=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 readonly manifests=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 readonly public=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@0042076bbe7b0ae75a5bc5584333deecff9c5af5
+# The publisher caller is the single written copy of the accepted publisher commit; a
+# dependency bump changes it there and these controls follow without a hand-made copy.
+workflow="$(yq -r '.jobs.publish.uses' "$root/$caller")" || fail 'publisher caller cannot be read'
+[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'publisher caller is not pinned to one full commit'
+readonly workflow
 cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp.sh" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -163,4 +169,31 @@ for target in image-signature image-tag manifests-signature manifests-tag; do
     [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'invalid signature left a receipt'
   done
 done
-printf 'runtime verification: PASS — origin failure, source immutability, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'
+cp "$scratch/source/$caller" "$scratch/caller.yaml"
+publisher=${workflow%@*}
+other=1123456789abcdef0123456789abcdef01234567
+# A moving or foreign publisher reference is refused before any registry read; the frozen
+# caller naming a different commit than the one that signed is refused by the signature.
+for reference in "$publisher@main" "$publisher@v20.1.19" "$publisher@${workflow:${#publisher}+1:39}" \
+  "foreign/.github/.github/workflows/publish-app.yaml@${workflow#*@}" \
+  "devantler-tech/.github/.github/workflows/create-release.yaml@${workflow#*@}" "$publisher@$other"; do
+  reset_fixture
+  REFERENCE="$reference" yq '.jobs.publish.uses=strenv(REFERENCE)' "$scratch/caller.yaml" >"$scratch/source/$caller"
+  if verify; then fail "an unaccepted publisher reference was accepted: $reference"; fi
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'unaccepted publisher reference left a receipt'
+  if [[ "$reference" == "$publisher@$other" ]]; then
+    grep -q 'refused signature or publication claims' "$scratch/stderr" || fail 'a different publisher commit was not refused by its signature'
+  else
+    grep -q 'refused accepted publisher reference' "$scratch/stderr" || fail 'a moving or foreign publisher reference was not refused first'
+    [[ ! -s "$scratch/calls" ]] || fail 'a moving or foreign publisher reference reached the registry'
+  fi
+done
+reset_fixture
+rm "$scratch/source/$caller"
+if verify; then fail 'a missing publisher caller was accepted'; fi
+grep -q 'refused accepted publisher caller read' "$scratch/stderr" || fail 'a missing publisher caller was not refused as unreadable'
+[[ ! -e "$scratch/runner/runtime-publication.json" && ! -s "$scratch/calls" ]] || fail 'a missing publisher caller reached the registry or left a receipt'
+cp "$scratch/caller.yaml" "$scratch/source/$caller"
+reset_fixture
+verify || fail 'the restored publisher caller must verify again'
+printf 'runtime verification: PASS — origin failure, source immutability, accepted publisher read from its caller, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'

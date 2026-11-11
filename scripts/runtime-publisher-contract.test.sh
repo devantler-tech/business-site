@@ -37,7 +37,7 @@ release_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027workflow_dispatch\u0027 && github.ref == \u0027refs/heads/main\u0027 && (inputs.mode == \u0027dry-run\u0027 || (inputs.mode == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027)) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="\u0024{{ inputs.mode }}") and
     .jobs.release.needs=="admit" and .jobs.release.if==null and
-    .jobs.release.uses=="devantler-tech/.github/.github/workflows/create-release.yaml@0042076bbe7b0ae75a5bc5584333deecff9c5af5" and
+    (.jobs.release.uses|test("^devantler-tech/\\.github/\\.github/workflows/create-release\\.yaml@[0-9a-f]{40}$")) and
     .jobs.release.permissions=={"contents":"read"} and
     .jobs.release.secrets=={"APP_PRIVATE_KEY":"\u0024{{ secrets.APP_PRIVATE_KEY }}"} and
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
@@ -50,7 +50,7 @@ publish_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and
-    .jobs.publish.uses=="devantler-tech/.github/.github/workflows/publish-app.yaml@0042076bbe7b0ae75a5bc5584333deecff9c5af5" and
+    (.jobs.publish.uses|test("^devantler-tech/\\.github/\\.github/workflows/publish-app\\.yaml@[0-9a-f]{40}$")) and
     .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and
     .jobs.publish.secrets==null and
     .jobs.publish.with=={"app-name":"business-site","deploy-path":"./deploy","enable-caller-pin":true,"enable-signed-promotion":true,"enable-prebuilt-webapp":true,"enable-signed-recovery":false,
@@ -75,14 +75,19 @@ for data in "$release" "$publish"; do
 done
 release_valid <<<"$release" || fail 'unsafe release trigger, default or credential boundary'
 for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.default="release"' '.on.push={branches:["main"]}' \
-  '.jobs.release.with["dry-run"]=false' '.jobs.release.secrets="inherit"' '.jobs.release.needs=null'; do
+  '.jobs.release.with["dry-run"]=false' '.jobs.release.secrets="inherit"' '.jobs.release.needs=null' \
+  '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.release.uses|=sub("@[0-9a-f]{40}$";"@v20.1.19")' \
+  '.jobs.release.uses|=sub("[0-9a-f]$";"")' '.jobs.release.uses|=sub("^devantler-tech/";"foreign/")' \
+  '.jobs.release.uses|=sub("create-release";"publish-app")'; do
   if release_valid <<<"$(jq "$mutation" <<<"$release")"; then fail 'unsafe release boundary accepted'; fi
 done
 publish_valid <<<"$publish" || fail 'unsafe publisher or missing independent readback'
 for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.with["enable-signed-recovery"]=true' \
   '.jobs.publish.with["enable-prebuilt-webapp"]=false' '.jobs.publish.with["prebuilt-ci-run-id"]="1"' \
   '.jobs.publish.uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
-  '.jobs.verify.steps[-2]["continue-on-error"]=true'; do
+  '.jobs.verify.steps[-2]["continue-on-error"]=true' \
+  '.jobs.publish.uses|=sub("@[0-9a-f]{40}$";"@v20.1.19")' '.jobs.publish.uses|=sub("[0-9a-f]$";"")' \
+  '.jobs.publish.uses|=sub("^devantler-tech/";"foreign/")' '.jobs.publish.uses|=sub("publish-app";"create-release")'; do
   if publish_valid <<<"$(jq "$mutation" <<<"$publish")"; then fail 'unsafe publisher boundary accepted'; fi
 done
 jq -e '.branches==["main"] and (.plugins|length)==3 and .plugins[0][0]=="@semantic-release/commit-analyzer" and

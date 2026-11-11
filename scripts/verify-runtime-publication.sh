@@ -5,12 +5,16 @@ export LC_ALL=C
 readonly repo=devantler-tech/business-site
 readonly image=ghcr.io/devantler-tech/business-site
 readonly artifact=$image/manifests
-readonly workflow=devantler-tech/.github/.github/workflows/publish-app.yaml@0042076bbe7b0ae75a5bc5584333deecff9c5af5
 # Stop before emitting a receipt; errors describe the rejected boundary, not private input.
 fail() {
   printf 'runtime publication: refused %s\n' "$1" >&2
   exit 1
 }
+# The frozen source's own publisher caller is the only record of the accepted shared publisher;
+# accept exactly one full commit of the organisation's publish-app workflow, never a branch or tag.
+workflow="$(yq -r '.jobs.publish.uses' .github/workflows/publish-runtime.yaml 2>/dev/null)" || fail 'accepted publisher caller read'
+[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'accepted publisher reference'
+readonly workflow
 [[ "${GITHUB_REPOSITORY:-}" == "$repo" && "${SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ && "${GITHUB_SHA:-}" == "$SOURCE_SHA" ]] || fail 'source context'
 [[ "${VERSION:-}" =~ ^(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ && "${GITHUB_REF:-}" == "refs/tags/v$VERSION" ]] || fail 'version context'
 [[ "${IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ && "${PUBLIC_DIGEST:-}" =~ ^[0-9a-f]{64}$ ]] || fail 'original digests'
