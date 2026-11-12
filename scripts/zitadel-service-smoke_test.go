@@ -764,6 +764,47 @@ func TestLifecycleIdentitySnapshotRejectsMissingOrChangedBootstrap(t *testing.T)
 	}
 }
 
+func TestLifecycleInspectionDoesNotInventContainerState(t *testing.T) {
+	for name, raw := range map[string]string{
+		"malformed JSON":       `[{"State":{"ExitCode":137}}`,
+		"wrong document shape": `{"State":{"ExitCode":137}}`,
+		"no containers":        `[]`,
+		"null document":        `null`,
+		"null container":       `[null]`,
+		"multiple containers":  `[{"State":{"ExitCode":137}},{"State":{"ExitCode":0}}]`,
+		"invalid state field":  `[{"State":{"ExitCode":"fictional-private-value"}}]`,
+		"trailing document":    `[{"State":{"ExitCode":137}}] {}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := lifecycleInspect([]byte(raw), "id", "owner", "network", "exited", lifecycleContainerSpec{})
+			if err == nil {
+				t.Fatal("unreadable or ambiguous inspection accepted")
+			}
+			for _, unobserved := range []string{"exited=", "running=", "dead=", "oom=", "exit=", "fictional-private-value"} {
+				if strings.Contains(err.Error(), unobserved) {
+					t.Fatalf("inspection failure reported unobserved state or private input: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLifecycleInspectionRetainsObservedStateDiagnostics(t *testing.T) {
+	raw := `[{"State":{"Status":"exited","OOMKilled":true,"ExitCode":137},"Config":{"Env":["ZITADEL_PASSWORD=fictional-private-value"]}}]`
+	_, err := lifecycleInspect([]byte(raw), "id", "owner", "network", "exited", lifecycleContainerSpec{})
+	if err == nil {
+		t.Fatal("unrestricted container accepted")
+	}
+	for _, observed := range []string{"exited=true", "running=false", "dead=false", "oom=true", "exit=137"} {
+		if !strings.Contains(err.Error(), observed) {
+			t.Fatalf("decoded container failure lost observed state: %v", err)
+		}
+	}
+	if strings.Contains(err.Error(), "fictional-private-value") {
+		t.Fatalf("decoded container diagnostic exposed private input: %v", err)
+	}
+}
+
 func TestLifecycleInspectionRejectsAuthorityAndMountChanges(t *testing.T) {
 	owner, network, id, image := strings.Repeat("a", 32), strings.Repeat("b", 64), strings.Repeat("c", 64), "sha256:"+strings.Repeat("d", 64)
 	spec := lifecycleContainerSpec{image: image, imageID: image, user: "65532:65532", workdir: "/app", entrypoint: []string{"/app/zitadel"}, command: []string{"--config", "/fixture/serve.json", "start"}, tmpfs: map[string]string{"/tmp": serviceTmpfs}, memory: 1073741824, inputs: map[string]string{"/fixture/serve.json": "/private/serve.json"}}
