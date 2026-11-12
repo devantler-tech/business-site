@@ -78,7 +78,7 @@ jq -e '.profile == "native-neutral-framework-icons-v1" and .changedFiles == 8 an
 # corresponding source. Publication must precede distribution of this image.
 GOTOOLCHAIN=local go run "$root/scripts/zitadel-login-icons.go" "$root/scripts/zitadel-text-fonts.go" "$root/scripts/zitadel-copied-assets.go" \
   --source-offer --prepare --source "$stage/source" >"$stage/source-offer.json"
-jq -e '.profile == "native-source-offer-v1" and .changedFiles == 2 and .removedFiles == 0 and .consoleSlots == 1 and .loginSlots == 1 and (.changedPaths|length)==2 and .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2"' "$stage/source-offer.json" >/dev/null
+jq -e '.profile == "native-source-offer-v1" and .changedFiles == 2 and .removedFiles == 0 and .consoleSlots == 1 and .loginSlots == 1 and (.changedPaths|length)==2 and .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.3"' "$stage/source-offer.json" >/dev/null
 console=console/src/styles.scss
 login=internal/api/ui/login/static/resources/themes/scss/styles/typography/typography.scss
 sed "/^@import '\.\/styles\/ailerons\.scss';$/d" "$stage/source/$console" >"$stage/console"

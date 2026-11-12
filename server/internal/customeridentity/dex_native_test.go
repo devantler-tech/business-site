@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	nativeDexImage      = "ghcr.io/devantler-tech/platform-dex@sha256:cffb54b332b8d957ca4c8611814ee1685837370ce5fa7069dacdbc39c0c2afc7"
+	nativeDexImage      = "ghcr.io/devantler-tech/platform-dex@sha256:0bf7109e4830f683e6aa1893937c743098e68368f9f093222fb38a977dff6e7c"
 	nativeDexDBImage    = "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826"
 	nativeDexIssuer     = "https://login.example.invalid"
 	nativeDexProvider   = "https://accounts.example.invalid"

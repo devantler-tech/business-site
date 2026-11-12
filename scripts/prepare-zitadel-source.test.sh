@@ -68,9 +68,9 @@ fi
 # Both native presentations must offer this immutable identity release even when
 # customer privacy links or the upstream watermark are disabled.
 test "$(shasum -a 256 "$scratch/prepared source/source/console/src/app/modules/footer/footer.component.html" | awk '{print $1}')" = \
-  ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0
+  db510b5a4bf053ef9e3ccf473c646220e4d1fdf0789c02c1c91beaf91f753054
 test "$(shasum -a 256 "$scratch/prepared source/source/internal/api/ui/login/static/templates/footer.html" | awk '{print $1}')" = \
-  fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508
+  a54d363ce4bdd841d26db32c2b1d6107b3efb4f7f3ba60527cba7aae16861136
 shasum -a 256 "$scratch/upstream/console/src/styles.scss" >"$scratch/input-after"
 cmp "$scratch/input-before" "$scratch/input-after"
 shasum -a 256 "$scratch/upstream/go.mod" "$scratch/upstream/go.sum" >"$scratch/modules-after"
@@ -169,8 +169,8 @@ ab747e1c94c1eee5d85841b17cad89be28e25c1294eea3fc99fb7882d3bd62fc  console/src/ap
 7c89adff82dfaf56c4c19009b6ff5c4727a311f770349444fda4e28b89b1ead7  console/src/app/components/framework-autocomplete/framework-autocomplete.component.html
 0d15ceee223c97491005a7492e2015091e03b3c05774e2b811af6d2d1144f712  console/src/app/components/framework-change/framework-change.component.html
 405d55363da00709e47281d975aff93af71cbc15429b62276fecdbd3822cfeba  console/package.json
-ae12cddc79257c456a2e6d0bd27185931f0f5d08b77590e290b52ab7a95b1dc0  console/src/app/modules/footer/footer.component.html
-fc90c05f2d2f44b820da3e32fd460f6ecb2963f6791099ba57bcad0df8a87508  internal/api/ui/login/static/templates/footer.html
+db510b5a4bf053ef9e3ccf473c646220e4d1fdf0789c02c1c91beaf91f753054  console/src/app/modules/footer/footer.component.html
+a54d363ce4bdd841d26db32c2b1d6107b3efb4f7f3ba60527cba7aae16861136  internal/api/ui/login/static/templates/footer.html
 PROVIDERS
 (cd "$scratch/prepared source/source" && shasum -a 256 -c "$scratch/neutral-consumers.sha256") >/dev/null
 while read -r _hash path; do
@@ -224,7 +224,7 @@ jq -e --arg pin "$pin" '
   (.removedFiles | length) == 75 and .providerProfile == "native-neutral-provider-icons-v1" and
   .frameworkProfile == "native-neutral-framework-icons-v1" and
   .sourceOfferProfile == "native-source-offer-v1" and
-  .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.2" and
+  .sourceOfferURL == "https://github.com/devantler-tech/business-site/releases/tag/identity-v4.20.0-devantler.3" and
   .smtpProfile == "native-neutral-smtp-icons-v1" and .mdiProfile == "native-neutral-mdi-icons-v1" and
   .metadataProfile == "machine-id-no-jsonpath-v1" and
   .dependencyProfile == "go-jose-4.1.6-x-net-0.62.0-csrf-1.7.3-saml-0.5.2-v1" and
@@ -243,7 +243,7 @@ cp -R "$scratch/prepared source" "$scratch/native-capture/prepared"
   cp "$scratch/native-capture/api-project.serial.json" apps/api/project.json
 )
 go run "$root/scripts/zitadel-source-bundle.go" --capture-build "$scratch/native-capture" "$root" "$scratch/native-snapshot" >"$scratch/native-capture.json"
-jq -e '.preparedProfileSha256=="06862d888dc1cc209f48f22c38cca746846bbd232eb6be6560797cfcc0d4f0f3" and .files==9528 and .bytes==261325885 and .records==58' "$scratch/native-capture.json" >/dev/null
+jq -e '.preparedProfileSha256=="623cb4cd5a56781d132ce5cdd83dc2489411282d56efe2d3bcb1ba0b68331f76" and .files==9528 and .bytes==261325885 and .records==58' "$scratch/native-capture.json" >/dev/null
 native_seal="$(jq -r '.manifestSha256' "$scratch/native-capture.json")"
 # The actual sealed file layout contains no empty technology directory. Its
 # native pre-build command must succeed without restoring retired image inputs.
