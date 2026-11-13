@@ -16,6 +16,7 @@ dist/
 .playwright-mcp/
 /megalinter-reports/
 /web/.svelte-kit/
+/web/.svelte-check/
 /web/build/
 /web/.env
 /web/.env.local
