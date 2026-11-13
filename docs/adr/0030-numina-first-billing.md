@@ -49,16 +49,26 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
    sales even when that revenue was already invoiced in Numina.
    - **Invoice (default; bank transfer or EAN).** On acceptance the portal
      creates or updates the customer's Numina contact. It then creates, books and
-     sends the invoice through the API, keyed for idempotency on the accepted
-     proposal version. The order is funded when Numina reports the invoice
-     settled (`payment_state` closed or paid, nothing outstanding). Numina has no
-     webhooks, so the portal reads that state by polling. This is #549.
+     sends the invoice through the API. Each invoice has a durable identity: the
+     order and its billing period, with the acceptance invoice as the first
+     period. The portal records that identity before the call, uses it as the
+     idempotency key and writes it into the invoice `memo`. Numina's spec states
+     no retention window for keys, so before retrying a creation whose result is
+     unknown, the portal lists the contact's invoices for that period and creates
+     one only when none carries the identity. The order is funded when Numina
+     reports the invoice settled: `payment_state` is `paid` and nothing is
+     outstanding. Any other state, including `covered_by_unmatched_payments`,
+     waits until the payment is matched in Numina. Numina has no webhooks, so the
+     portal reads that state by polling. This is #549.
    - **Card or MobilePay.** Stripe Checkout takes one-off payments; a Stripe
      subscription takes monthly card payments. MobilePay is single-use only, so
      it is never offered for a subscription. Stripe sends the receipt, and
      Numina's Stripe integration books the sale, fee and payout. The order is
-     funded by a signature-verified Stripe event for its exact Checkout Session
-     or subscription invoice; a browser return is never proof.
+     funded only by a signature-verified success event for its exact object: for
+     Checkout, `checkout.session.completed` with `payment_status` `paid`, or
+     `checkout.session.async_payment_succeeded`; for a subscription, `invoice.paid`
+     for the invoice of that billing period. Failure and expiry events are signed
+     too and never fund an order, and a browser return is never proof.
 2. **Monthly hosting and retainers are billed in advance.** Each month is
    billed on the 1st for that month, due in 14 days. On the invoice path the
    portal creates that invoice itself, because Numina subscriptions have no API.
@@ -79,7 +89,11 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
    payments.
 6. **Work approval keeps its rule and changes its evidence.** Paid work still
    needs an accepted version and settled funding, but the funding now comes from
-   the order's one collection path (decision 1), not from the retired ledger.
+   the order's one collection path (decision 1), not from the retired ledger. The
+   approval still binds the accepted version and its exact net, VAT and payable
+   amounts to one funding record: the Numina invoice for that order and period,
+   or the Stripe Checkout Session or subscription invoice. The default-off
+   work-approval gate stays off until it reads that evidence, under #268.
 7. **Stripe Invoicing is not used.** Numina issues invoices and Stripe only
    collects cards. This replaces the Stripe Invoicing preference in #21.
 

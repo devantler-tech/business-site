@@ -1,9 +1,10 @@
 # Private draft proposals
 
-> [ADR 0030](../docs/adr/0030-numina-first-billing.md) replaces hand-written versions with
-> proposals generated from the request and the published prices. Custom work is drafted by the
-> Agentic Engineer and approved by the maintainer. Client acceptance below is unchanged, and
-> Numina becomes the backend for quotes once its API can create them.
+> [ADR 0030](../docs/adr/0030-numina-first-billing.md) plans to replace hand-written versions
+> with proposals generated from the request and the published prices. Custom work is drafted by
+> the Agentic Engineer and approved by the maintainer. Until generation ships, versions are
+> still written in the form below. Client acceptance is unchanged, and Numina becomes the
+> backend for quotes once its API can create them.
 
 An authorized operator can prepare immutable scope and price versions for an
 existing project request. The private request-detail page shows complete history
