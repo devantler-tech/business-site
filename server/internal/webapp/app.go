@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -117,36 +118,119 @@ func miss(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// unsafePath rejects encoded, ambiguous or uncleaned paths before any routing.
+// EscapedPath also catches encodings Go leaves out of RawPath, such as %3F,
+// which would otherwise decode into a redirect target's query or fragment.
+func unsafePath(r *http.Request) bool {
+	p := r.URL.Path
+	return r.URL.RawPath != "" || strings.Contains(r.URL.EscapedPath(), "%") || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/"
+}
+
+// servePrivate delegates the portal unchanged and reports whether it took the request.
+func servePrivate(w http.ResponseWriter, r *http.Request, portal http.Handler) bool {
+	p := r.URL.Path
+	if p != "/portal" && !strings.HasPrefix(p, "/portal/") {
+		return false
+	}
+	if portal == nil {
+		miss(w, r)
+	} else {
+		portal.ServeHTTP(w, r)
+	}
+	return true
+}
+
+// readOnly answers health and method refusals and reports whether it did.
+func readOnly(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return true
+	}
+	if r.URL.Path == "/healthz" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodHead {
+			_, _ = io.WriteString(w, "ok\n")
+		}
+		return true
+	}
+	return false
+}
+
+// Hosts names the public site's host and the portal's own host.
+type Hosts struct{ Public, Portal string }
+
+// requestHost is the request's lowercase host name without port or trailing dot.
+func requestHost(r *http.Request) string {
+	host := r.Host
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		host = name
+	}
+	return strings.TrimSuffix(strings.ToLower(host), ".")
+}
+
+// redirect sends a GET or HEAD to a fixed origin, keeping only the checked path and query.
+func redirect(w http.ResponseWriter, r *http.Request, target string) {
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Location", target)
+	w.WriteHeader(http.StatusFound)
+}
+
+// HostHandler serves one runtime under two hosts without showing a page twice.
+// On the portal host, / opens the portal and public pages redirect to the public
+// host. On every other host (the public host, its www name, a staging name or a
+// health probe's address), /portal… redirects to the portal host and public
+// pages are served; www additionally redirects to the public host.
+func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
+	public := a.Handler(nil)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if unsafePath(r) {
+			miss(w, r)
+			return
+		}
+		p := r.URL.Path
+		private := p == "/portal" || strings.HasPrefix(p, "/portal/")
+		switch requestHost(r) {
+		case hosts.Portal:
+			if servePrivate(w, r, portal) || readOnly(w, r) {
+				return
+			}
+			if p == "/" {
+				redirect(w, r, "/portal/")
+			} else {
+				redirect(w, r, "https://"+hosts.Public+p)
+			}
+		case "www." + hosts.Public:
+			if !readOnly(w, r) {
+				redirect(w, r, "https://"+hosts.Public+p)
+			}
+		default:
+			if !private {
+				public.ServeHTTP(w, r)
+			} else if !readOnly(w, r) {
+				redirect(w, r, "https://"+hosts.Portal+p)
+			}
+		}
+	})
+}
+
 // Handler delegates canonical /portal requests unchanged before public lookup.
 // It has no directory listings, SPA fallback or path-cleaning redirects.
 func (a *Artifact) Handler(portal http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		p := r.URL.Path
-		if r.URL.RawPath != "" || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/" {
+		if unsafePath(r) {
 			miss(w, r)
 			return
 		}
-		if p == "/portal" || strings.HasPrefix(p, "/portal/") {
-			if portal == nil {
-				miss(w, r)
-			} else {
-				portal.ServeHTTP(w, r)
-			}
-			return
-		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.Header().Set("Allow", "GET, HEAD")
-			w.Header().Set("Cache-Control", "no-store")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		if p == "/healthz" {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			if r.Method != http.MethodHead {
-				_, _ = io.WriteString(w, "ok\n")
-			}
+		if servePrivate(w, r, portal) || readOnly(w, r) {
 			return
 		}
 		name := strings.TrimPrefix(p, "/")

@@ -24,6 +24,10 @@ spec:
     - 0.0.0.0:8080
     - --company-disclosure-projection
     - /run/webapp-inputs/disclosure
+    - --public-host
+    - devantler.tech
+    - --portal-host
+    - portal.devantler.tech
   secretProjections:
     - secretName: business-site-disclosure
       items:

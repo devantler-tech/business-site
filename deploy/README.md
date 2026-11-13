@@ -49,13 +49,17 @@ reviewed restart. Controller synchronization and real projection/rotation behavi
 remain separate live acceptance. No disclosure value belongs in this repository,
 image or publication receipt. Tests use fictional values in disposable volumes.
 
-The package proposes exactly `business-site.platform.devantler.tech` for public
-staging. Its validator rejects the former example name, the production address,
-wildcards, lookalikes and other tenants' names. This source decision is not
-Platform approval: the current route policy still denies this unregistered
-tenant. Before registration, separately review that exact hostname's allowlist,
-selected input materialization and network/controller behavior. Do not apply this
-directory to an ambient cluster. No DNS change or production cutover is included.
+The WebApp uses exactly `business-site.platform.devantler.tech`, where the public pages are
+checked before a DNS switch. Two routes add the public names on their own gateway listeners:
+`http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
+`http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
+`--portal-host` arguments route by host, so nothing is served twice: `portal.devantler.tech`
+opens the portal at `/` and redirects public pages to devantler.tech, `www` redirects to the
+apex, and every other host serves the public pages and redirects `/portal…` to
+portal.devantler.tech ([ADR 0020](../docs/adr/0020-public-staging-hostname.md), amended
+2026-11-13). The validator admits exactly these names and routes and refuses wildcards,
+lookalikes and other tenants' names. Platform admits the hostnames, listeners and certificates
+separately (devantler-tech/platform#6177). Do not apply this directory to an ambient cluster.
 
 Issue #102 retains actual platform consumption proof and each adopted signed pair.
 The input declarations tracked by #300 require their own newly verified signed

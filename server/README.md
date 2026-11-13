@@ -366,6 +366,22 @@ separate `EffectivePublicDigest`, never the address or filename. This is a
 deployment configuration check, not provider/portal activation or compliance
 certification. Restart deliberately to rotate the projected disclosure.
 
+### Two hosts
+
+`--public-host` and `--portal-host` let one runtime serve the public site and the portal on
+their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
+
+| Host                 | `/portal…`                          | Public pages                |
+|----------------------|-------------------------------------|-----------------------------|
+| portal host          | served; `/` redirects to `/portal/` | redirect to the public host |
+| `www.` + public host | redirect to the public host         | redirect to the public host |
+| any other host       | redirect to the portal host         | served                      |
+
+Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
+never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
+and are checked before a listener opens. Routing changes nothing else: the portal stays behind
+its own default-off gates.
+
 The same runtime/container smoke scripts support both profiles. Their production
 controls use fictional private input outside the build context; image controls
 exercise both an owner-only volume and a root-owned, matching-group atomic

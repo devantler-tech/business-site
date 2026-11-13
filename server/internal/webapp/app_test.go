@@ -20,12 +20,19 @@ func publicFixture() fstest.MapFS {
 	}
 }
 
-// TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
-func TestPublicRoutesAndClosedPortal(t *testing.T) {
+// loadPublicFixture loads the synthetic public artifact or stops the test.
+func loadPublicFixture(t *testing.T) *Artifact {
+	t.Helper()
 	a, err := Load(publicFixture())
 	if err != nil {
 		t.Fatal(err)
 	}
+	return a
+}
+
+// TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
+func TestPublicRoutesAndClosedPortal(t *testing.T) {
+	a := loadPublicFixture(t)
 	h := a.Handler(nil)
 	for _, tc := range []struct {
 		method, path string
@@ -137,10 +144,7 @@ func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 
 // TestPrivateRoutingNeverFallsBackOrRedirects preserves handler authority and rejects ambiguity.
 func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
-	a, err := Load(publicFixture())
-	if err != nil {
-		t.Fatal(err)
-	}
+	a := loadPublicFixture(t)
 	calls := 0
 	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
@@ -166,6 +170,82 @@ func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
 		}
 	}
 	if calls != 3 {
+		t.Fatal("ambiguous path reached private handler")
+	}
+}
+
+// TestHostHandlerShowsEachPageOnOneHost serves the public site and the portal
+// from one runtime, redirecting each host's foreign paths to the other host.
+func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
+	a := loadPublicFixture(t)
+	calls := 0
+	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := a.HostHandler(portal, Hosts{Public: "devantler.tech", Portal: "portal.devantler.tech"})
+	for _, tc := range []struct {
+		method, host, path string
+		status             int
+		location, contains string
+	}{
+		// The portal host opens the portal and sends public pages away.
+		{"GET", "portal.devantler.tech", "/", 302, "/portal/", ""},
+		{"GET", "Portal.Devantler.Tech:443", "/?lang=da", 302, "/portal/?lang=da", ""},
+		{"HEAD", "portal.devantler.tech", "/", 302, "/portal/", ""},
+		{"GET", "portal.devantler.tech", "/da/", 302, "https://devantler.tech/da/", ""},
+		{"GET", "portal.devantler.tech", "/assets/site.css?v=1", 302, "https://devantler.tech/assets/site.css?v=1", ""},
+		{"GET", "portal.devantler.tech", "/portal/", 418, "", ""},
+		{"POST", "portal.devantler.tech", "/portal/sign-in", 418, "", ""},
+		{"POST", "portal.devantler.tech", "/", 405, "", ""},
+		{"GET", "portal.devantler.tech", "/healthz", 200, "", "ok"},
+		// The public host serves pages and sends portal paths to the portal host.
+		{"GET", "devantler.tech", "/", 200, "", "English"},
+		{"GET", "devantler.tech.", "/da/", 200, "", "Dansk"},
+		{"GET", "devantler.tech", "/portal", 302, "https://portal.devantler.tech/portal", ""},
+		{"GET", "devantler.tech", "/portal/sign-in?lang=da", 302, "https://portal.devantler.tech/portal/sign-in?lang=da", ""},
+		{"POST", "devantler.tech", "/portal/sign-in", 405, "", ""},
+		{"GET", "devantler.tech", "/missing", 404, "", ""},
+		// www has one canonical name.
+		{"GET", "www.devantler.tech", "/projects", 302, "https://devantler.tech/projects", ""},
+		{"GET", "www.devantler.tech", "/portal/", 302, "https://devantler.tech/portal/", ""},
+		// A staging name or a probe's address behaves like the public host.
+		{"GET", "business-site.platform.devantler.tech", "/", 200, "", "English"},
+		{"GET", "10.0.0.7:8080", "/healthz", 200, "", "ok"},
+		{"GET", "10.0.0.7:8080", "/portal/", 302, "https://portal.devantler.tech/portal/", ""},
+	} {
+		t.Run(tc.method+" "+tc.host+tc.path, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.path, nil)
+			r.Host = tc.host
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != tc.status || w.Header().Get("Location") != tc.location || !strings.Contains(w.Body.String(), tc.contains) {
+				t.Fatalf("status=%d location=%q body=%q; want %d %q containing %q", w.Code, w.Header().Get("Location"), w.Body, tc.status, tc.location, tc.contains)
+			}
+			if tc.status == 302 && w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("host redirect is cacheable")
+			}
+			if tc.method == "HEAD" && w.Body.Len() != 0 {
+				t.Fatal("HEAD has body")
+			}
+		})
+	}
+	if calls != 2 {
+		t.Fatalf("portal handler calls = %d, want 2", calls)
+	}
+	// Unsafe spellings never become redirects to another origin, on any host.
+	for _, host := range []string{"portal.devantler.tech", "devantler.tech", "www.devantler.tech"} {
+		for _, path := range []string{"//evil.example/", "/%2f%2f127.0.0.1/", "/%3Fx=1", "/%23x", "/%20", "/caf%C3%A9", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
+			r := httptest.NewRequest("GET", path, nil)
+			r.Host = host
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 404 || w.Header().Get("Location") != "" {
+				t.Fatalf("unsafe %s%s: %d location=%q", host, path, w.Code, w.Header().Get("Location"))
+			}
+		}
+	}
+	if calls != 2 {
 		t.Fatal("ambiguous path reached private handler")
 	}
 }

@@ -49,3 +49,40 @@ wildcards, suffix lookalikes, nonliteral spellings and other tenants' names with
 no rejected-input disclosure. Existing restricted-image and disabled-portal
 checks remain mandatory. These checks prove source/package behavior, not actual
 Platform admission or live staging.
+
+## Amendment — public site and portal hosts, 13 November 2026
+
+The maintainer chose `portal.devantler.tech` for the portal (#554). He also made
+moving `devantler.tech` off GitHub Pages a priority, because the site is
+commercial. One release of this package now serves both hosts.
+
+The WebApp keeps `business-site.platform.devantler.tech`. The platform's WebApp
+route attaches only to the shared `*.platform.devantler.tech` listener, and this
+name is where the public pages are checked before the DNS switch. Two
+package-owned routes add the public names, each on its own gateway listener:
+
+- `business-site-public`: `devantler.tech` and `www.devantler.tech`;
+- `business-site-portal`: `portal.devantler.tech`.
+
+The runtime routes by host, set by `--public-host devantler.tech` and
+`--portal-host portal.devantler.tech`:
+
+| Host | `/portal…` | Public pages |
+|---|---|---|
+| `portal.devantler.tech` | served (`/` opens `/portal/`) | redirect to devantler.tech |
+| `www.devantler.tech` | redirect to devantler.tech | redirect to devantler.tech |
+| any other host | redirect to portal.devantler.tech | served |
+
+"Any other host" includes `devantler.tech`, the staging name and a health
+probe's address. So nothing appears under two hosts.
+
+Redirects are temporary (302) and not cacheable. Unsafe paths still miss rather
+than redirect. Both host arguments are required together, must be distinct DNS
+names, and are checked before a listener opens.
+
+The validator admits exactly these two routes, with their hostnames, listeners
+and backend. It still admits only the staging name as the WebApp host. Platform
+listeners, certificates, the route allow-list and the Tenant re-pin are
+devantler-tech/platform#6177. The DNS switch and the retirement of the Pages
+publication follow under devantler-tech/monorepo#3939. The portal stays
+default-off.

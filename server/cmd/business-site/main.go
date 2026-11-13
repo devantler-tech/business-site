@@ -60,6 +60,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
+	publicHost := options.String("public-host", "", "public site host; with --portal-host, each host redirects the other's pages")
+	portalHost := options.String("portal-host", "", "portal host; / opens the portal there")
 	identityPhase := registerIdentityPhaseOptions(options)
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
@@ -106,6 +108,9 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		}
 		_, err := fmt.Fprintln(output, "portal schema migration completed")
 		return err
+	}
+	if !validHosts(*publicHost, *portalHost, seen) {
+		return errors.New("host arguments are invalid")
 	}
 	projected := seen["company-disclosure-projection"] != 0
 	if projected && (seen["company-disclosure-projection"] != 1 || seen["company-disclosure-file"] != 0 || *projection == "" || *check || *version || publicProfile != "production-template") {
@@ -179,9 +184,25 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		// Serve owns and closes the listener; this fallback may find it closed.
 		_ = listener.Close()
 	}()
-	return runtimeapp.ServeReady(ctx, listener, artifact.Handler(portal), func() {
+	handler := artifact.Handler(portal)
+	if *publicHost != "" || *portalHost != "" {
+		handler = artifact.HostHandler(portal, webapp.Hosts{Public: *publicHost, Portal: *portalHost})
+	}
+	return runtimeapp.ServeReady(ctx, listener, handler, func() {
 		_, _ = fmt.Fprintf(output, "runtime ready; listen=%s; private routes remain independently gated\n", listener.Addr())
 	})
+}
+
+// validHosts accepts neither host or two distinct lowercase DNS names, each given once.
+func validHosts(public, portal string, seen map[string]int) bool {
+	if seen["public-host"] > 1 || seen["portal-host"] > 1 {
+		return false
+	}
+	if public == "" && portal == "" {
+		return true
+	}
+	name := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
+	return name.MatchString(public) && name.MatchString(portal) && public != portal && portal != "www."+public
 }
 
 // validPackageIdentity applies the same source/profile receipt gate to both

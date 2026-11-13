@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -51,21 +52,9 @@ func configuredPublicArtifact(t *testing.T) string {
 func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	// Private migration configuration cannot turn ordinary web startup into DDL.
 	t.Setenv("PORTAL_MIGRATION_DATABASE_FILE", "/missing/private-migration-file")
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
-		t.Setenv(name, "")
-	}
+	clearPortalEnvironment(t)
 	dir := configuredPublicArtifact(t)
-	ctx, cancel := context.WithCancel(context.Background())
 	var listen string
-	listenTCP := func(network, address string) (net.Listener, error) {
-		listener, err := net.Listen(network, address)
-		if err == nil {
-			// The readiness channel synchronizes this address with the HTTP client.
-			// The runtime retains this exact listener until serving shuts down.
-			listen = listener.Addr().String()
-		}
-		return listener, err
-	}
 	ready := make(chan struct{})
 	var once sync.Once
 	outputReleased := make(chan struct{})
@@ -80,17 +69,10 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		<-outputReleased
 		return len(data), nil
 	})
-	done := make(chan error, 1)
-	stopped := make(chan struct{})
+	cancel, done, join := startRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, recordedListener(&listen))
 	defer func() {
 		releaseOutput()
-		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
-			t.Error("runtime fixture cleanup did not join its worker")
-		}
-	}()
-	go func() {
-		defer close(stopped)
-		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, listenTCP)
+		join()
 	}()
 	select {
 	case <-ready:
@@ -141,6 +123,45 @@ func cancelAndJoinRuntime(cancel context.CancelFunc, stopped <-chan struct{}, ti
 		return nil
 	case <-time.After(timeout):
 		return context.DeadlineExceeded
+	}
+}
+
+// clearPortalEnvironment keeps a runtime under test public-only.
+func clearPortalEnvironment(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
+		t.Setenv(name, "")
+	}
+}
+
+// recordedListener opens a real listener and records its address in listen.
+// The readiness channel synchronizes this address with the HTTP client, and
+// the runtime retains this exact listener until serving shuts down.
+func recordedListener(listen *string) func(string, string) (net.Listener, error) {
+	return func(network, address string) (net.Listener, error) {
+		listener, err := net.Listen(network, address)
+		if err == nil {
+			*listen = listener.Addr().String()
+		}
+		return listener, err
+	}
+}
+
+// startRuntime runs the runtime in a worker. join cancels it and reports a
+// worker that does not stop within five seconds.
+func startRuntime(t *testing.T, args []string, output io.Writer, listenTCP func(string, string) (net.Listener, error)) (context.CancelFunc, <-chan error, func()) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		done <- runWithListen(ctx, args, output, listenTCP)
+	}()
+	return cancel, done, func() {
+		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
+			t.Error("runtime fixture cleanup did not join its worker")
+		}
 	}
 }
 
@@ -202,5 +223,84 @@ func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
 	}
 	if err := run(context.Background(), []string{"--public", dir}, io.Discard); err == nil || err.Error() != "public artifact does not match this runtime package" {
 		t.Fatal("tampered artifact accepted")
+	}
+}
+
+// TestTwoHostRuntimeRedirectsAcrossHosts exercises the actual host flag wiring.
+func TestTwoHostRuntimeRedirectsAcrossHosts(t *testing.T) {
+	clearPortalEnvironment(t)
+	dir := configuredPublicArtifact(t)
+	var listen string
+	ready := make(chan struct{})
+	var once sync.Once
+	output := writeFunc(func(data []byte) (int, error) {
+		once.Do(func() { close(ready) })
+		return len(data), nil
+	})
+	cancel, done, join := startRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"}, output, recordedListener(&listen))
+	defer join()
+	select {
+	case <-ready:
+	case <-done:
+		t.Fatal("two-host runtime stopped before serving")
+	case <-time.After(5 * time.Second):
+		t.Fatal("two-host runtime did not begin startup")
+	}
+	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, tc := range []struct{ host, path, location string }{
+		{"portal.devantler.tech", "/", "/portal/"},
+		{"portal.devantler.tech", "/da/", "https://devantler.tech/da/"},
+		{"devantler.tech", "/portal/", "https://portal.devantler.tech/portal/"},
+	} {
+		req, err := http.NewRequest(http.MethodGet, "http://"+listen+tc.path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = tc.host
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("two-host runtime did not answer %s%s: %v", tc.host, tc.path, err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusFound || res.Header.Get("Location") != tc.location {
+			t.Fatalf("%s%s: status=%d location=%q, want 302 %q", tc.host, tc.path, res.StatusCode, res.Header.Get("Location"), tc.location)
+		}
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("two-host runtime did not stop cleanly")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("two-host runtime did not stop")
+	}
+}
+
+// TestInvalidHostArgumentsNeverListen refuses partial, duplicate or malformed hosts before serving.
+func TestInvalidHostArgumentsNeverListen(t *testing.T) {
+	dir := configuredPublicArtifact(t)
+	listened := false
+	listen := func(string, string) (net.Listener, error) {
+		listened = true
+		return nil, errors.New("unexpected listener")
+	}
+	for _, hosts := range [][]string{
+		{"--public-host", "devantler.tech"},
+		{"--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "www.devantler.tech"},
+		{"--public-host", "Devantler.tech", "--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech:443", "--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech", "--portal-host", "other.devantler.tech"},
+		{"--public-host", "localhost", "--portal-host", "portal.devantler.tech"},
+	} {
+		args := append([]string{"--public", dir, "--listen", "127.0.0.1:0"}, hosts...)
+		if err := runWithListen(context.Background(), args, io.Discard, listen); err == nil || err.Error() != "host arguments are invalid" {
+			t.Fatalf("%v: err=%v", hosts, err)
+		}
+	}
+	if listened {
+		t.Fatal("invalid host arguments opened a listener")
 	}
 }

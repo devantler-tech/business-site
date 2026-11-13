@@ -150,11 +150,24 @@ for (const [name, mutate] of [
   ["a different disclosure property", (d) => { d[4].spec.data[0].remoteRef.property = "other"; }],
   ["an inline disclosure value", (d) => { d[4].spec.target.template = { data: { "company-disclosure": "fictional private value" } }; }],
   ["a private-value writer", (d) => { d[4].kind = "PushSecret"; }],
+  ["public pages served on the portal host", (d) => { d[0].spec.args = d[0].spec.args.slice(0, 6); }],
+  ["swapped public and portal hosts", (d) => { d[0].spec.args.splice(6, 4, "--public-host", "portal.devantler.tech", "--portal-host", "devantler.tech"); }],
+  ["a missing portal route", (d) => { d.splice(5, 1); }],
+  ["a missing public route", (d) => { d.splice(6, 1); }],
+  ["a third route", (d) => { const extra = structuredClone(d[5]); extra.metadata.name = "business-site-extra"; d.push(extra); }],
+  ["a route claiming another hostname", (d) => { d[6].spec.hostnames.push("evil.devantler.tech"); }],
+  ["a portal route on the public listener", (d) => { d[5].spec.parentRefs[0].sectionName = "https-devantler-tech"; }],
+  ["a route on the shared platform listener", (d) => { d[6].spec.parentRefs[0].sectionName = "https"; }],
+  ["a route to another backend", (d) => { d[5].spec.rules[0].backendRefs[0].name = "other"; }],
+  ["a route with a request filter", (d) => { d[6].spec.rules[0].filters = [{ type: "RequestRedirect", requestRedirect: { hostname: "evil.example" } }]; }],
+  ["a route in another namespace", (d) => { d[5].metadata.namespace = "foreign"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
     // Each target is selected by kind, independent of Kustomize's sort order.
     const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore", "ExternalSecret"].map((kind) => rendered.find((d) => d.kind === kind));
+    // The two routes follow at indexes 5 (portal) and 6 (public), selected by name.
+    for (const name of ["business-site-portal", "business-site-public"]) docs.push(rendered.find((d) => d.kind === "HTTPRoute" && d.metadata.name === name));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
