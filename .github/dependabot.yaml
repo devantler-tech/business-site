@@ -33,8 +33,11 @@ updates:
     # tenant (its publish-workflow-canonical-approvals list): the platform refuses a
     # release signed by any other. Every devantler-tech/.github release moved it, so
     # releases after v3.0.0 were signed by unapproved revisions and the platform could
-    # not pin them (devantler-tech/platform#5267). Move this pin by hand, in its own
-    # change, once the platform approves a newer revision.
+    # not pin them (devantler-tech/platform#5267). The platform's image admission
+    # check trusts fewer revisions than that list, so the pin must be in both: v3.0.0
+    # and v3.2.1 were signed by v19.0.12, and the platform refused to start them.
+    # Move this pin by hand, in its own change, once the platform approves a newer
+    # revision in both places.
     ignore:
       - dependency-name: "devantler-tech/.github/.github/workflows/publish-app.yaml"
   - package-ecosystem: npm
