@@ -49,28 +49,35 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
      sends the invoice through the API, keyed for idempotency on the accepted
      proposal version. The order is funded when Numina reports the invoice
      settled (`payment_state` closed or paid, nothing outstanding). Numina has no
-     webhooks, so the portal reads that state by polling. For monthly hosting the
-     portal creates each period's invoice itself, because Numina subscriptions
-     have no API. This is #549.
+     webhooks, so the portal reads that state by polling. This is #549.
    - **Card or MobilePay.** Stripe Checkout takes one-off payments; a Stripe
      subscription takes monthly card payments. MobilePay is single-use only, so
      it is never offered for a subscription. Stripe sends the receipt, and
      Numina's Stripe integration books the sale, fee and payout. The order is
      funded by a signature-verified Stripe event for its exact Checkout Session
      or subscription invoice; a browser return is never proof.
-2. **Quotes are generated, not written.** The portal generates each proposal
+2. **Monthly hosting and retainers are billed in advance.** Each month is
+   billed on the 1st for that month, due in 14 days. On the invoice path the
+   portal creates that invoice itself, because Numina subscriptions have no API.
+   A card subscription charges on the same day.
+3. **Quotes are generated, not written.** The portal generates each proposal
    from the customer's request and the published offerings and VAT-inclusive
-   prices (#154). The customer accepts that exact version in the portal, as
-   today. The portal holds the quote because Numina's API cannot create offers.
-   Moving quotes into Numina is a later decision if that API appears.
-3. **Superseded and retired:** the external invoice records (`portal-invoices`,
+   prices (#154). For a request outside the published offerings, the Agentic
+   Engineer drafts the scope and price from the request. The maintainer approves
+   that draft before the quote reaches the customer, as for every client request.
+   The customer accepts the exact version in the portal, as today.
+4. **Numina is the target backend for quotes.** Its API cannot create offers
+   yet, so the portal holds quotes until it can. The maintainer is requesting
+   that API from Numina. Once it ships, migrate quotes to Numina, keeping
+   acceptance in the portal.
+5. **Superseded and retired:** the external invoice records (`portal-invoices`,
    #117) and the bank-credit evidence ledger (`portal-credit-reconciliation`,
    #120). Neither was ever deployed. Numina is the record for invoices and
    payments.
-4. **Work approval keeps its rule and changes its evidence.** Paid work still
+6. **Work approval keeps its rule and changes its evidence.** Paid work still
    needs an accepted version and settled funding, but the funding now comes from
    the order's one collection path (decision 1), not from the retired ledger.
-5. **Stripe Invoicing is not used.** Numina issues invoices and Stripe only
+7. **Stripe Invoicing is not used.** Numina issues invoices and Stripe only
    collects cards. This replaces the Stripe Invoicing preference in #21.
 
 ## Unchanged
