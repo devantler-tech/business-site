@@ -204,3 +204,64 @@ func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
 		t.Fatal("tampered artifact accepted")
 	}
 }
+
+// TestPortalOnlyRuntimeRedirectsRootToThePortal exercises the actual flag wiring.
+func TestPortalOnlyRuntimeRedirectsRootToThePortal(t *testing.T) {
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
+		t.Setenv(name, "")
+	}
+	dir := configuredPublicArtifact(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	var listen string
+	listenTCP := func(network, address string) (net.Listener, error) {
+		listener, err := net.Listen(network, address)
+		if err == nil {
+			listen = listener.Addr().String()
+		}
+		return listener, err
+	}
+	ready := make(chan struct{})
+	var once sync.Once
+	output := writeFunc(func(data []byte) (int, error) {
+		once.Do(func() { close(ready) })
+		return len(data), nil
+	})
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	defer func() {
+		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
+			t.Error("runtime fixture cleanup did not join its worker")
+		}
+	}()
+	go func() {
+		defer close(stopped)
+		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0", "--portal-only"}, output, listenTCP)
+	}()
+	select {
+	case <-ready:
+	case <-done:
+		t.Fatal("portal-only runtime stopped before serving")
+	case <-time.After(5 * time.Second):
+		t.Fatal("portal-only runtime did not begin startup")
+	}
+	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for path, location := range map[string]string{"/": "/portal/", "/da/": "https://devantler.tech/da/"} {
+		res, err := client.Get("http://" + listen + path)
+		if err != nil {
+			t.Fatalf("portal-only runtime did not answer %s: %v", path, err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusFound || res.Header.Get("Location") != location {
+			t.Fatalf("%s: status=%d location=%q, want 302 %q", path, res.StatusCode, res.Header.Get("Location"), location)
+		}
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("portal-only runtime did not stop cleanly")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("portal-only runtime did not stop")
+	}
+}

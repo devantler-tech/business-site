@@ -58,9 +58,9 @@ test("the disruption budget admits two or three replicas", () => {
   }
 });
 
-test("the real admission command accepts the exact proposed staging destination", () => {
+test("the real admission command accepts the exact portal destination", () => {
   const docs = yaml.loadAll(render());
-  docs.find((d) => d?.kind === "WebApp").spec.host = "business-site.platform.devantler.tech";
+  docs.find((d) => d?.kind === "WebApp").spec.host = "portal.devantler.tech";
   const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
@@ -72,9 +72,12 @@ for (const host of [
   "www.devantler.tech",
   "*.platform.devantler.tech",
   "business-site.*.devantler.tech",
-  "business-site.platform.devantler.tech.attacker.invalid",
-  "business-site.platform.devantler.tech.",
-  "BUSINESS-SITE.platform.devantler.tech",
+  "business-site.platform.devantler.tech",
+  "portal.devantler.tech.attacker.invalid",
+  "portal.devantler.tech.",
+  "PORTAL.devantler.tech",
+  "*.devantler.tech",
+  "portal.platform.devantler.tech",
   "wedding.platform.devantler.tech",
   "business-site.platform.lan",
   "",
@@ -102,6 +105,7 @@ for (const [name, mutate] of [
   ["portal activation input", (d) => { d[0].spec.env = [{ name: "PORTAL_IDENTITY", value: "true" }]; }],
   ["migration arguments", (d) => { d[0].spec.args = ["--migrate", "--migration-database-file", "/private/db"]; }],
   ["a broken public directory", (d) => { d[0].spec.args[1] = "/missing"; }],
+  ["public pages served on the portal host", (d) => { d[0].spec.args = d[0].spec.args.filter((a) => a !== "--portal-only"); }],
   ["root execution", (d) => { d[0].spec.runAsUser = 0; }],
   ["a foreign primary group", (d) => { d[0].spec.runAsGroup = 65533; }],
   ["a writable root", (d) => { d[0].spec.readOnlyRootFilesystem = false; }],

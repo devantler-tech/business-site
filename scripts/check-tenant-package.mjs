@@ -60,7 +60,7 @@ export function validateTenantPackage(input) {
   assert.equal(spec.name, "business-site");
   // Only the independently verified baseline is admitted before publisher receipt adoption.
   assert.equal(spec.image, "ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e");
-  assert.equal(spec.host, "business-site.platform.devantler.tech");
+  assert.equal(spec.host, "portal.devantler.tech");
   assert.equal(spec.port, 8080);
   assert.equal(spec.probePath, "/healthz");
   assert.ok(Number.isInteger(spec.replicas) && spec.replicas >= 2 && spec.replicas <= 3);
@@ -80,7 +80,7 @@ export function validateTenantPackage(input) {
   assert.equal(spec.runAsUser, 65532);
   assert.equal(spec.runAsGroup, 65532);
   assert.equal(spec.readOnlyRootFilesystem, true);
-  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure"]);
+  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--portal-only"]);
   assert.deepEqual(spec.secretProjections, [{ secretName: "business-site-disclosure", items: [{ key: "company-disclosure", path: "disclosure" }] }]);
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },

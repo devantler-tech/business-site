@@ -169,3 +169,66 @@ func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
 		t.Fatal("ambiguous path reached private handler")
 	}
 }
+
+// TestPortalOnlyRedirectsPublicPagesToTheirOneHost keeps the portal host free of
+// duplicate public pages: / opens the portal and every other page leaves for
+// the public site, while private routes and unsafe paths keep their behavior.
+func TestPortalOnlyRedirectsPublicPagesToTheirOneHost(t *testing.T) {
+	calls := 0
+	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusTeapot)
+	})
+	h := PortalOnly(portal)
+	for _, tc := range []struct {
+		method, path string
+		status       int
+		location     string
+	}{
+		{"GET", "/", 302, "/portal/"},
+		{"GET", "/?lang=da", 302, "/portal/?lang=da"},
+		{"HEAD", "/", 302, "/portal/"},
+		{"GET", "/da/", 302, "https://devantler.tech/da/"},
+		{"GET", "/projects", 302, "https://devantler.tech/projects"},
+		{"GET", "/assets/site.css?v=1", 302, "https://devantler.tech/assets/site.css?v=1"},
+		{"POST", "/", 405, ""},
+		{"GET", "/healthz", 200, ""},
+		{"GET", "/portal", 418, ""},
+		{"GET", "/portal/", 418, ""},
+		{"POST", "/portal/sign-in", 418, ""},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+			if w.Code != tc.status || w.Header().Get("Location") != tc.location {
+				t.Fatalf("status=%d location=%q; want %d %q", w.Code, w.Header().Get("Location"), tc.status, tc.location)
+			}
+			if tc.status == 302 && w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("portal-host redirect is cacheable")
+			}
+			if tc.method == "HEAD" && w.Body.Len() != 0 {
+				t.Fatal("HEAD has body")
+			}
+		})
+	}
+	if calls != 3 {
+		t.Fatalf("portal handler calls = %d, want 3", calls)
+	}
+	// Unsafe spellings never become redirects to another origin.
+	for _, path := range []string{"//evil.example/", "/%2f%2fevil.example", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 404 || w.Header().Get("Location") != "" {
+			t.Fatalf("unsafe path %q: %d location=%q", path, w.Code, w.Header().Get("Location"))
+		}
+	}
+	if calls != 3 {
+		t.Fatal("ambiguous path reached private handler")
+	}
+	// Without a configured portal, private paths miss rather than redirect.
+	w := httptest.NewRecorder()
+	PortalOnly(nil).ServeHTTP(w, httptest.NewRequest("GET", "/portal/", nil))
+	if w.Code != 404 || w.Header().Get("Location") != "" {
+		t.Fatalf("closed portal: %d location=%q", w.Code, w.Header().Get("Location"))
+	}
+}

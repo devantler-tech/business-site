@@ -6,7 +6,7 @@ metadata:
 spec:
   name: business-site
   image: ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e
-  host: business-site.platform.devantler.tech
+  host: portal.devantler.tech
   port: 8080
   replicas: 2
   probePath: /healthz
@@ -24,6 +24,7 @@ spec:
     - 0.0.0.0:8080
     - --company-disclosure-projection
     - /run/webapp-inputs/disclosure
+    - --portal-only
   secretProjections:
     - secretName: business-site-disclosure
       items:

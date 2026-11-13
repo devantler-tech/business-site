@@ -279,10 +279,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   retained HTTP journey and authority checkpoints without a Node worker. ADR 0017
   records the rejected private-frontend experiment; public Svelte remains selected.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
-- `deploy/` is a dormant public-only Kustomize package using the namespace-bound
-  Platform WebApp contract; read `deploy/README.md` before changing it. It has no
-  registered consumer, proposes only `business-site.platform.devantler.tech` for public staging,
-  and grants no portal activation. Platform hostname approval and registration remain separate.
+- `deploy/` is the Kustomize package for the namespace-bound Platform WebApp contract;
+  read `deploy/README.md` before changing it. It serves only `portal.devantler.tech`, where
+  `--portal-only` opens the portal at `/` and redirects public pages to devantler.tech, and it
+  grants no portal activation. Platform hostname approval and registration remain separate.
   The source-owned runtime release/publisher callers are default-off behind the
   explicit `RUNTIME_PUBLICATION_ENABLED` repository variable. Original main-CI
   archive admission, the accepted original-image verifier and independent paired

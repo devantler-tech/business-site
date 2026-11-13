@@ -49,13 +49,13 @@ reviewed restart. Controller synchronization and real projection/rotation behavi
 remain separate live acceptance. No disclosure value belongs in this repository,
 image or publication receipt. Tests use fictional values in disposable volumes.
 
-The package proposes exactly `business-site.platform.devantler.tech` for public
-staging. Its validator rejects the former example name, the production address,
-wildcards, lookalikes and other tenants' names. This source decision is not
-Platform approval: the current route policy still denies this unregistered
-tenant. Before registration, separately review that exact hostname's allowlist,
-selected input materialization and network/controller behavior. Do not apply this
-directory to an ambient cluster. No DNS change or production cutover is included.
+The package serves the portal at exactly `portal.devantler.tech` ([ADR 0020](../docs/adr/0020-public-staging-hostname.md)
+as amended on 2026-11-13). Its `--portal-only` argument makes `/` open the portal and
+redirects every public page to `https://devantler.tech`, which GitHub Pages keeps serving.
+The validator refuses the former staging and example names, the production address,
+wildcards, lookalikes and other tenants' names. Platform admits the hostname and its
+certificate separately (devantler-tech/platform#6177). Do not apply this directory to an
+ambient cluster.
 
 Issue #102 retains actual platform consumption proof and each adopted signed pair.
 The input declarations tracked by #300 require their own newly verified signed

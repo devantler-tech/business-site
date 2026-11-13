@@ -117,36 +117,85 @@ func miss(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PublicOrigin is the public site's one host. The portal host never serves its pages.
+const PublicOrigin = "https://devantler.tech"
+
+// unsafePath rejects encoded, ambiguous or uncleaned paths before any routing.
+func unsafePath(r *http.Request) bool {
+	p := r.URL.Path
+	return r.URL.RawPath != "" || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/"
+}
+
+// servePrivate delegates the portal unchanged and reports whether it took the request.
+func servePrivate(w http.ResponseWriter, r *http.Request, portal http.Handler) bool {
+	p := r.URL.Path
+	if p != "/portal" && !strings.HasPrefix(p, "/portal/") {
+		return false
+	}
+	if portal == nil {
+		miss(w, r)
+	} else {
+		portal.ServeHTTP(w, r)
+	}
+	return true
+}
+
+// readOnly answers health and method refusals and reports whether it did.
+func readOnly(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return true
+	}
+	if r.URL.Path == "/healthz" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodHead {
+			_, _ = io.WriteString(w, "ok\n")
+		}
+		return true
+	}
+	return false
+}
+
+// PortalOnly serves the portal on its own host. / opens the portal, and every
+// other page redirects to the public site, so no page is served under two hosts.
+// Redirect targets are fixed: only the checked path and query are carried over.
+func PortalOnly(portal http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if unsafePath(r) {
+			miss(w, r)
+			return
+		}
+		if servePrivate(w, r, portal) || readOnly(w, r) {
+			return
+		}
+		target := PublicOrigin + r.URL.Path
+		if r.URL.Path == "/" {
+			target = "/portal/"
+		}
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Location", target)
+		w.WriteHeader(http.StatusFound)
+	})
+}
+
 // Handler delegates canonical /portal requests unchanged before public lookup.
 // It has no directory listings, SPA fallback or path-cleaning redirects.
 func (a *Artifact) Handler(portal http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		p := r.URL.Path
-		if r.URL.RawPath != "" || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/" {
+		if unsafePath(r) {
 			miss(w, r)
 			return
 		}
-		if p == "/portal" || strings.HasPrefix(p, "/portal/") {
-			if portal == nil {
-				miss(w, r)
-			} else {
-				portal.ServeHTTP(w, r)
-			}
-			return
-		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.Header().Set("Allow", "GET, HEAD")
-			w.Header().Set("Cache-Control", "no-store")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		if p == "/healthz" {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.Header().Set("Cache-Control", "no-store")
-			if r.Method != http.MethodHead {
-				_, _ = io.WriteString(w, "ok\n")
-			}
+		if servePrivate(w, r, portal) || readOnly(w, r) {
 			return
 		}
 		name := strings.TrimPrefix(p, "/")

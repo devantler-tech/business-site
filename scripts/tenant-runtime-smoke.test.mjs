@@ -29,7 +29,7 @@ function get(port, route) {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { body += chunk; });
-      res.on("end", () => resolve({ status: res.statusCode, body }));
+      res.on("end", () => resolve({ status: res.statusCode, body, location: res.headers.location }));
     });
     req.on("error", reject);
     req.on("timeout", () => req.destroy(new Error("owned container request timed out")));
@@ -46,7 +46,7 @@ test("rendered package arguments fail closed without the required disclosure", (
   assert.equal(result.stderr, "company disclosure projection is unavailable\n");
 });
 
-test("the real image serves bilingual public routes with exactly the package arguments and portal closed", async () => {
+test("the real image serves the closed portal host with exactly the package arguments", async () => {
   const fixture = containerGroupDisclosureFixture(image, docker);
   let id;
   try {
@@ -81,10 +81,14 @@ test("the real image serves bilingual public routes with exactly the package arg
     assert.equal(container.HostConfig.NanoCpus, 500000000);
     assert.ok(!(container.Config.Env ?? []).some((value) => value.startsWith("PORTAL_")));
     const port = container.NetworkSettings.Ports["8080/tcp"][0].HostPort;
-    assert.deepEqual(await get(port, spec.probePath), { status: 200, body: "ok\n" });
-    for (const route of ["/", "/da/", "/company/", "/da/company/"]) {
+    const probe = await get(port, spec.probePath);
+    assert.deepEqual([probe.status, probe.body], [200, "ok\n"]);
+    // The portal host opens the portal at / and sends public pages to their one host.
+    const root = await get(port, "/");
+    assert.deepEqual([root.status, root.location], [302, "/portal/"]);
+    for (const route of ["/da/", "/company/", "/da/company/"]) {
       const response = await get(port, route);
-      assert.equal(response.status, 200, route);
+      assert.deepEqual([response.status, response.location], [302, `https://devantler.tech${route}`], route);
       assert.doesNotMatch(response.body, /__BUSINESS_ADDRESS_LINE_/);
     }
     for (const route of ["/portal/", "/portal/sign-in"]) assert.equal((await get(port, route)).status, 404, route);

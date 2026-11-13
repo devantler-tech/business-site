@@ -49,3 +49,26 @@ wildcards, suffix lookalikes, nonliteral spellings and other tenants' names with
 no rejected-input disclosure. Existing restricted-image and disabled-portal
 checks remain mandatory. These checks prove source/package behavior, not actual
 Platform admission or live staging.
+
+## Amendment — portal host, 13 November 2026
+
+The maintainer chose `portal.devantler.tech` as the portal's address (#554). The
+public site stays on GitHub Pages at `devantler.tech`. Moving it off Pages is a
+separate, later step, and no longer gates the portal.
+
+The package now proposes exactly `portal.devantler.tech`, replacing
+`business-site.platform.devantler.tech`. Its validator refuses the old staging
+name, the production website address, wildcards and lookalikes.
+
+The runtime gains one option, `--portal-only`, which the package sets:
+
+- `/` redirects to `/portal/`;
+- every other public path redirects to the same path on `https://devantler.tech`;
+- `/portal…` and `/healthz` are served as before.
+
+The redirects are temporary (302) and not cacheable, so later hosting changes
+stay cheap. Unsafe paths still miss rather than redirect, and the portal itself
+stays default-off.
+
+Platform route, TLS and the Tenant re-pin are devantler-tech/platform#6177.
+external-dns creates the DNS record from the route.

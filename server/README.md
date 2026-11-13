@@ -366,6 +366,19 @@ separate `EffectivePublicDigest`, never the address or filename. This is a
 deployment configuration check, not provider/portal activation or compliance
 certification. Restart deliberately to rotate the projected disclosure.
 
+### Portal host
+
+`--portal-only` serves the portal on its own host, `portal.devantler.tech`. In this mode:
+
+- `/` redirects to `/portal/`;
+- every other public path redirects to the same path on `https://devantler.tech`, where GitHub
+  Pages serves the public site, so no page appears under two hosts;
+- `/portal…` and `/healthz` are served unchanged.
+
+Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
+never a redirect. The option changes routing only: the portal stays behind its own default-off
+gates. The deployment package sets it (`deploy/webapp.yaml`).
+
 The same runtime/container smoke scripts support both profiles. Their production
 controls use fictional private input outside the build context; image controls
 exercise both an owner-only volume and a root-owned, matching-group atomic

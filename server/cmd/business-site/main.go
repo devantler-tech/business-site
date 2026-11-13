@@ -60,6 +60,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
+	portalOnly := options.Bool("portal-only", false, "serve only the portal: / opens it and public pages redirect to "+webapp.PublicOrigin)
 	identityPhase := registerIdentityPhaseOptions(options)
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
@@ -179,7 +180,11 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		// Serve owns and closes the listener; this fallback may find it closed.
 		_ = listener.Close()
 	}()
-	return runtimeapp.ServeReady(ctx, listener, artifact.Handler(portal), func() {
+	handler := artifact.Handler(portal)
+	if *portalOnly {
+		handler = webapp.PortalOnly(portal)
+	}
+	return runtimeapp.ServeReady(ctx, listener, handler, func() {
 		_, _ = fmt.Fprintf(output, "runtime ready; listen=%s; private routes remain independently gated\n", listener.Addr())
 	})
 }
