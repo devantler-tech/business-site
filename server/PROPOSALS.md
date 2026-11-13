@@ -1,5 +1,9 @@
 # Private draft proposals
 
+> [ADR 0030](../docs/adr/0030-numina-first-billing.md) replaces hand-written versions with
+> proposals generated from the request and the published prices. Client acceptance below is
+> unchanged.
+
 An authorized operator can prepare immutable scope and price versions for an
 existing project request. The private request-detail page shows complete history
 and a native English/Danish form. A draft is **not accepted or approved for work**;

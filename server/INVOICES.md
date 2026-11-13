@@ -1,5 +1,8 @@
 # Private external invoice records
 
+> **Superseded** by [ADR 0030](../docs/adr/0030-numina-first-billing.md): Numina issues and
+> tracks invoices. This module is retired under #117 and was never deployed.
+
 The operator can record an invoice issued outside the portal on a request with
 current client acceptance. This is private bookkeeping metadata, not invoice
 generation, a legal-validity check, payment confirmation or permission to start

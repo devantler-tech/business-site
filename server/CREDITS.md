@@ -1,5 +1,9 @@
 # Private bank-credit evidence
 
+> **Superseded** by [ADR 0030](../docs/adr/0030-numina-first-billing.md): Numina matches
+> bank payments and Stripe confirms card payments. This module is retired under #120 and
+> was never deployed.
+
 An operator can record observed transfers against an existing external invoice.
 This is a manual evidence ledger, not a connection to a bank, payment processing,
 accounting certification or permission to start client work. The accepted proposal,
