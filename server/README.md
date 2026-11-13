@@ -371,11 +371,11 @@ certification. Restart deliberately to rotate the projected disclosure.
 `--public-host` and `--portal-host` let one runtime serve the public site and the portal on
 their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 
-| Host | `/portal…` | Public pages |
-|---|---|---|
-| portal host | served; `/` redirects to `/portal/` | redirect to the public host |
-| `www.` + public host | redirect to the public host | redirect to the public host |
-| any other host | redirect to the portal host | served |
+| Host                 | `/portal…`                          | Public pages                |
+|----------------------|-------------------------------------|-----------------------------|
+| portal host          | served; `/` redirects to `/portal/` | redirect to the public host |
+| `www.` + public host | redirect to the public host         | redirect to the public host |
+| any other host       | redirect to the portal host         | served                      |
 
 Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
 never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
