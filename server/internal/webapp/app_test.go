@@ -235,7 +235,7 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 	}
 	// Unsafe spellings never become redirects to another origin, on any host.
 	for _, host := range []string{"portal.devantler.tech", "devantler.tech", "www.devantler.tech"} {
-		for _, path := range []string{"//evil.example/", "/%2f%2f127.0.0.1/", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
+		for _, path := range []string{"//evil.example/", "/%2f%2f127.0.0.1/", "/%3Fx=1", "/%23x", "/%20", "/caf%C3%A9", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
 			r := httptest.NewRequest("GET", path, nil)
 			r.Host = host
 			w := httptest.NewRecorder()

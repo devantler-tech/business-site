@@ -119,9 +119,11 @@ func miss(w http.ResponseWriter, r *http.Request) {
 }
 
 // unsafePath rejects encoded, ambiguous or uncleaned paths before any routing.
+// EscapedPath also catches encodings Go leaves out of RawPath, such as %3F,
+// which would otherwise decode into a redirect target's query or fragment.
 func unsafePath(r *http.Request) bool {
 	p := r.URL.Path
-	return r.URL.RawPath != "" || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/"
+	return r.URL.RawPath != "" || strings.Contains(r.URL.EscapedPath(), "%") || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\%\x00") || strings.Contains(p, "//") || path.Clean(p) != strings.TrimSuffix(p, "/") && p != "/"
 }
 
 // servePrivate delegates the portal unchanged and reports whether it took the request.
