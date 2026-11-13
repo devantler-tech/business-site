@@ -57,7 +57,7 @@ test('the pinned checker examines the complete tracked server source', () => {
   const version = spawnSync('cspell', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '10.4.0');
+  assert.equal(version.stdout.trim(), '10.4.1');
   const tracked = spawnSync('git', ['ls-files', '-z', '--', 'server'], {
     cwd: root, encoding: 'utf8', timeout: 30000,
   });
