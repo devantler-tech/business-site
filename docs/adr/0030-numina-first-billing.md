@@ -43,7 +43,10 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
 
 1. **One collection path per order, chosen by the customer when accepting.** An
    order never has both a Numina invoice and a Stripe charge, so nothing is
-   booked twice.
+   booked twice. The risk is real:
+   [Numina-Technologies/mcp#4](https://github.com/Numina-Technologies/mcp/issues/4)
+   reports that the `numina-stripe` booking skill books a Stripe payout as new
+   sales even when that revenue was already invoiced in Numina.
    - **Invoice (default; bank transfer or EAN).** On acceptance the portal
      creates or updates the customer's Numina contact. It then creates, books and
      sends the invoice through the API, keyed for idempotency on the accepted
@@ -67,9 +70,9 @@ Numina's public API, read on 2026-11-13 from `developers.numina.app/openapi.json
    that draft before the quote reaches the customer, as for every client request.
    The customer accepts the exact version in the portal, as today.
 4. **Numina is the target backend for quotes.** Its API cannot create offers
-   yet, so the portal holds quotes until it can. The maintainer is requesting
-   that API from Numina. Once it ships, migrate quotes to Numina, keeping
-   acceptance in the portal.
+   yet, so the portal holds quotes until it can. The request for that API is
+   [Numina-Technologies/mcp#14](https://github.com/Numina-Technologies/mcp/issues/14).
+   When it ships, migrate quotes to Numina, keeping acceptance in the portal.
 5. **Superseded and retired:** the external invoice records (`portal-invoices`,
    #117) and the bank-credit evidence ledger (`portal-credit-reconciliation`,
    #120). Neither was ever deployed. Numina is the record for invoices and
