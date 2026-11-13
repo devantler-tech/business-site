@@ -52,21 +52,9 @@ func configuredPublicArtifact(t *testing.T) string {
 func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 	// Private migration configuration cannot turn ordinary web startup into DDL.
 	t.Setenv("PORTAL_MIGRATION_DATABASE_FILE", "/missing/private-migration-file")
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
-		t.Setenv(name, "")
-	}
+	clearPortalEnvironment(t)
 	dir := configuredPublicArtifact(t)
-	ctx, cancel := context.WithCancel(context.Background())
 	var listen string
-	listenTCP := func(network, address string) (net.Listener, error) {
-		listener, err := net.Listen(network, address)
-		if err == nil {
-			// The readiness channel synchronizes this address with the HTTP client.
-			// The runtime retains this exact listener until serving shuts down.
-			listen = listener.Addr().String()
-		}
-		return listener, err
-	}
 	ready := make(chan struct{})
 	var once sync.Once
 	outputReleased := make(chan struct{})
@@ -81,17 +69,10 @@ func TestPackagedPublicRuntimeStartsAndCancels(t *testing.T) {
 		<-outputReleased
 		return len(data), nil
 	})
-	done := make(chan error, 1)
-	stopped := make(chan struct{})
+	cancel, done, join := startRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, recordedListener(&listen))
 	defer func() {
 		releaseOutput()
-		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
-			t.Error("runtime fixture cleanup did not join its worker")
-		}
-	}()
-	go func() {
-		defer close(stopped)
-		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0"}, output, listenTCP)
+		join()
 	}()
 	select {
 	case <-ready:
@@ -142,6 +123,45 @@ func cancelAndJoinRuntime(cancel context.CancelFunc, stopped <-chan struct{}, ti
 		return nil
 	case <-time.After(timeout):
 		return context.DeadlineExceeded
+	}
+}
+
+// clearPortalEnvironment keeps a runtime under test public-only.
+func clearPortalEnvironment(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
+		t.Setenv(name, "")
+	}
+}
+
+// recordedListener opens a real listener and records its address in listen.
+// The readiness channel synchronizes this address with the HTTP client, and
+// the runtime retains this exact listener until serving shuts down.
+func recordedListener(listen *string) func(string, string) (net.Listener, error) {
+	return func(network, address string) (net.Listener, error) {
+		listener, err := net.Listen(network, address)
+		if err == nil {
+			*listen = listener.Addr().String()
+		}
+		return listener, err
+	}
+}
+
+// startRuntime runs the runtime in a worker. join cancels it and reports a
+// worker that does not stop within five seconds.
+func startRuntime(t *testing.T, args []string, output io.Writer, listenTCP func(string, string) (net.Listener, error)) (context.CancelFunc, <-chan error, func()) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		done <- runWithListen(ctx, args, output, listenTCP)
+	}()
+	return cancel, done, func() {
+		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
+			t.Error("runtime fixture cleanup did not join its worker")
+		}
 	}
 }
 
@@ -208,36 +228,17 @@ func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
 
 // TestTwoHostRuntimeRedirectsAcrossHosts exercises the actual host flag wiring.
 func TestTwoHostRuntimeRedirectsAcrossHosts(t *testing.T) {
-	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
-		t.Setenv(name, "")
-	}
+	clearPortalEnvironment(t)
 	dir := configuredPublicArtifact(t)
-	ctx, cancel := context.WithCancel(context.Background())
 	var listen string
-	listenTCP := func(network, address string) (net.Listener, error) {
-		listener, err := net.Listen(network, address)
-		if err == nil {
-			listen = listener.Addr().String()
-		}
-		return listener, err
-	}
 	ready := make(chan struct{})
 	var once sync.Once
 	output := writeFunc(func(data []byte) (int, error) {
 		once.Do(func() { close(ready) })
 		return len(data), nil
 	})
-	done := make(chan error, 1)
-	stopped := make(chan struct{})
-	defer func() {
-		if err := cancelAndJoinRuntime(cancel, stopped, 5*time.Second); err != nil {
-			t.Error("runtime fixture cleanup did not join its worker")
-		}
-	}()
-	go func() {
-		defer close(stopped)
-		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"}, output, listenTCP)
-	}()
+	cancel, done, join := startRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"}, output, recordedListener(&listen))
+	defer join()
 	select {
 	case <-ready:
 	case <-done:

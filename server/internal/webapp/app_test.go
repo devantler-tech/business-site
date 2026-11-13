@@ -20,12 +20,19 @@ func publicFixture() fstest.MapFS {
 	}
 }
 
-// TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
-func TestPublicRoutesAndClosedPortal(t *testing.T) {
+// loadPublicFixture loads the synthetic public artifact or stops the test.
+func loadPublicFixture(t *testing.T) *Artifact {
+	t.Helper()
 	a, err := Load(publicFixture())
 	if err != nil {
 		t.Fatal(err)
 	}
+	return a
+}
+
+// TestPublicRoutesAndClosedPortal preserves visitor routes while reserving private paths.
+func TestPublicRoutesAndClosedPortal(t *testing.T) {
+	a := loadPublicFixture(t)
 	h := a.Handler(nil)
 	for _, tc := range []struct {
 		method, path string
@@ -137,10 +144,7 @@ func TestSnapshotAndDigestBindActualPublicBytes(t *testing.T) {
 
 // TestPrivateRoutingNeverFallsBackOrRedirects preserves handler authority and rejects ambiguity.
 func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
-	a, err := Load(publicFixture())
-	if err != nil {
-		t.Fatal(err)
-	}
+	a := loadPublicFixture(t)
 	calls := 0
 	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
@@ -173,10 +177,7 @@ func TestPrivateRoutingNeverFallsBackOrRedirects(t *testing.T) {
 // TestHostHandlerShowsEachPageOnOneHost serves the public site and the portal
 // from one runtime, redirecting each host's foreign paths to the other host.
 func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
-	a, err := Load(publicFixture())
-	if err != nil {
-		t.Fatal(err)
-	}
+	a := loadPublicFixture(t)
 	calls := 0
 	portal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
@@ -234,7 +235,7 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 	}
 	// Unsafe spellings never become redirects to another origin, on any host.
 	for _, host := range []string{"portal.devantler.tech", "devantler.tech", "www.devantler.tech"} {
-		for _, path := range []string{"//evil.example/", "/%2f%2fevil.example", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
+		for _, path := range []string{"//evil.example/", "/%2f%2f127.0.0.1/", "/assets/../portal/sign-in", "/portal\\sign-in", "/%70ortal/sign-in"} {
 			r := httptest.NewRequest("GET", path, nil)
 			r.Host = host
 			w := httptest.NewRecorder()
