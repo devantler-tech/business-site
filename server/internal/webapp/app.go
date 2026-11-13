@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"mime"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -117,9 +118,6 @@ func miss(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PublicOrigin is the public site's one host. The portal host never serves its pages.
-const PublicOrigin = "https://devantler.tech"
-
 // unsafePath rejects encoded, ambiguous or uncleaned paths before any routing.
 func unsafePath(r *http.Request) bool {
 	p := r.URL.Path
@@ -159,29 +157,64 @@ func readOnly(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// PortalOnly serves the portal on its own host. / opens the portal, and every
-// other page redirects to the public site, so no page is served under two hosts.
-// Redirect targets are fixed: only the checked path and query are carried over.
-func PortalOnly(portal http.Handler) http.Handler {
+// Hosts names the public site's host and the portal's own host.
+type Hosts struct{ Public, Portal string }
+
+// requestHost is the request's lowercase host name without port or trailing dot.
+func requestHost(r *http.Request) string {
+	host := r.Host
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		host = name
+	}
+	return strings.TrimSuffix(strings.ToLower(host), ".")
+}
+
+// redirect sends a GET or HEAD to a fixed origin, keeping only the checked path and query.
+func redirect(w http.ResponseWriter, r *http.Request, target string) {
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Location", target)
+	w.WriteHeader(http.StatusFound)
+}
+
+// HostHandler serves one runtime under two hosts without showing a page twice.
+// On the portal host, / opens the portal and public pages redirect to the public
+// host. On every other host (the public host, its www name, a staging name or a
+// health probe's address), /portal… redirects to the portal host and public
+// pages are served; www additionally redirects to the public host.
+func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
+	public := a.Handler(nil)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if unsafePath(r) {
 			miss(w, r)
 			return
 		}
-		if servePrivate(w, r, portal) || readOnly(w, r) {
-			return
+		p := r.URL.Path
+		private := p == "/portal" || strings.HasPrefix(p, "/portal/")
+		switch requestHost(r) {
+		case hosts.Portal:
+			if servePrivate(w, r, portal) || readOnly(w, r) {
+				return
+			}
+			if p == "/" {
+				redirect(w, r, "/portal/")
+			} else {
+				redirect(w, r, "https://"+hosts.Public+p)
+			}
+		case "www." + hosts.Public:
+			if !readOnly(w, r) {
+				redirect(w, r, "https://"+hosts.Public+p)
+			}
+		default:
+			if !private {
+				public.ServeHTTP(w, r)
+			} else if !readOnly(w, r) {
+				redirect(w, r, "https://"+hosts.Portal+p)
+			}
 		}
-		target := PublicOrigin + r.URL.Path
-		if r.URL.Path == "/" {
-			target = "/portal/"
-		}
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Location", target)
-		w.WriteHeader(http.StatusFound)
 	})
 }
 

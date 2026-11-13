@@ -23,9 +23,10 @@ const restrictions = ["--read-only", "--cap-drop=ALL", "--security-opt=no-new-pr
   `--cpus=${parseInt(spec.cpuLimit, 10) / 1000}`, `--user=${spec.runAsUser}:${spec.runAsGroup}`];
 
 /** Keep requests on the isolated loopback publication of this owned container. */
-function get(port, route) {
+function get(port, route, host) {
   return new Promise((resolve, reject) => {
-    const req = request({ hostname: "127.0.0.1", port, path: route, timeout: 5000 }, (res) => {
+    const headers = host ? { Host: host } : {};
+    const req = request({ hostname: "127.0.0.1", port, path: route, headers, timeout: 5000 }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { body += chunk; });
@@ -46,7 +47,7 @@ test("rendered package arguments fail closed without the required disclosure", (
   assert.equal(result.stderr, "company disclosure projection is unavailable\n");
 });
 
-test("the real image serves the closed portal host with exactly the package arguments", async () => {
+test("the real image serves both hosts with exactly the package arguments and the portal closed", async () => {
   const fixture = containerGroupDisclosureFixture(image, docker);
   let id;
   try {
@@ -83,15 +84,18 @@ test("the real image serves the closed portal host with exactly the package argu
     const port = container.NetworkSettings.Ports["8080/tcp"][0].HostPort;
     const probe = await get(port, spec.probePath);
     assert.deepEqual([probe.status, probe.body], [200, "ok\n"]);
-    // The portal host opens the portal at / and sends public pages to their one host.
-    const root = await get(port, "/");
-    assert.deepEqual([root.status, root.location], [302, "/portal/"]);
-    for (const route of ["/da/", "/company/", "/da/company/"]) {
-      const response = await get(port, route);
-      assert.deepEqual([response.status, response.location], [302, `https://devantler.tech${route}`], route);
+    // devantler.tech serves the public pages; the portal host only redirects them.
+    for (const route of ["/", "/da/", "/company/", "/da/company/"]) {
+      const response = await get(port, route, "devantler.tech");
+      assert.equal(response.status, 200, route);
       assert.doesNotMatch(response.body, /__BUSINESS_ADDRESS_LINE_/);
+      const away = await get(port, route, "portal.devantler.tech");
+      const expected = route === "/" ? "/portal/" : `https://devantler.tech${route}`;
+      assert.deepEqual([away.status, away.location], [302, expected], route);
     }
-    for (const route of ["/portal/", "/portal/sign-in"]) assert.equal((await get(port, route)).status, 404, route);
+    const toPortal = await get(port, "/portal/", "devantler.tech");
+    assert.deepEqual([toPortal.status, toPortal.location], [302, "https://portal.devantler.tech/portal/"]);
+    for (const route of ["/portal/", "/portal/sign-in"]) assert.equal((await get(port, route, "portal.devantler.tech")).status, 404, route);
     assert.doesNotMatch(docker("logs", id), /Example|1234 Exampletown/);
   } finally {
     try { if (id) docker("rm", "--force", id); }

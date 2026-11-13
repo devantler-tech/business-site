@@ -13,12 +13,13 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 5, "resource count");
+  assert.equal(docs.length, 7, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
   const store = docs.find((d) => d?.kind === "SecretStore");
   const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
+  const routes = docs.filter((d) => d?.kind === "HTTPRoute");
   for (const resource of [app, network, budget]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
     keys(resource.metadata, ["name", "namespace"]);
@@ -55,12 +56,27 @@ export function validateTenantPackage(input) {
     target: { name: "business-site-disclosure", creationPolicy: "Owner" },
     data: [{ secretKey: "company-disclosure", remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" } }],
   });
+  // Each public name attaches to its own listener; nothing else may claim a host.
+  const route = (name, listeners, hostnames) => ({
+    apiVersion: "gateway.networking.k8s.io/v1",
+    kind: "HTTPRoute",
+    metadata: { name, namespace: "business-site" },
+    spec: {
+      parentRefs: listeners.map((sectionName) => ({ name: "platform", namespace: "kube-system", sectionName })),
+      hostnames,
+      rules: [{ backendRefs: [{ name: "business-site", port: 80 }] }],
+    },
+  });
+  assert.deepEqual(routes.sort((a, b) => a.metadata.name.localeCompare(b.metadata.name)), [
+    route("business-site-portal", ["https-portal-devantler-tech"], ["portal.devantler.tech"]),
+    route("business-site-public", ["https-devantler-tech", "https-www-devantler-tech"], ["devantler.tech", "www.devantler.tech"]),
+  ]);
   const spec = app.spec;
   keys(spec, ["name", "image", "host", "port", "replicas", "probePath", "cpuRequest", "memoryRequest", "cpuLimit", "memoryLimit", "args", "runAsUser", "runAsGroup", "readOnlyRootFilesystem", "secretProjections"]);
   assert.equal(spec.name, "business-site");
   // Only the independently verified baseline is admitted before publisher receipt adoption.
   assert.equal(spec.image, "ghcr.io/devantler-tech/business-site@sha256:6f64cba41b8d545c927db23cff5f4fc82dfefca3cfa350ad1ce40757339d708e");
-  assert.equal(spec.host, "portal.devantler.tech");
+  assert.equal(spec.host, "business-site.platform.devantler.tech");
   assert.equal(spec.port, 8080);
   assert.equal(spec.probePath, "/healthz");
   assert.ok(Number.isInteger(spec.replicas) && spec.replicas >= 2 && spec.replicas <= 3);
@@ -80,7 +96,7 @@ export function validateTenantPackage(input) {
   assert.equal(spec.runAsUser, 65532);
   assert.equal(spec.runAsGroup, 65532);
   assert.equal(spec.readOnlyRootFilesystem, true);
-  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--portal-only"]);
+  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"]);
   assert.deepEqual(spec.secretProjections, [{ secretName: "business-site-disclosure", items: [{ key: "company-disclosure", path: "disclosure" }] }]);
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },

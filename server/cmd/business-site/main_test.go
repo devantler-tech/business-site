@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -205,8 +206,8 @@ func TestCheckCommandUsesActualPublicArtifactAndRejectsTampering(t *testing.T) {
 	}
 }
 
-// TestPortalOnlyRuntimeRedirectsRootToThePortal exercises the actual flag wiring.
-func TestPortalOnlyRuntimeRedirectsRootToThePortal(t *testing.T) {
+// TestTwoHostRuntimeRedirectsAcrossHosts exercises the actual host flag wiring.
+func TestTwoHostRuntimeRedirectsAcrossHosts(t *testing.T) {
 	for _, name := range []string{"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL", "PORTAL_CLIENT_SECRET_FILE", "PORTAL_CLIENT_SECRET_PROJECTION_FILE"} {
 		t.Setenv(name, "")
 	}
@@ -235,33 +236,70 @@ func TestPortalOnlyRuntimeRedirectsRootToThePortal(t *testing.T) {
 	}()
 	go func() {
 		defer close(stopped)
-		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0", "--portal-only"}, output, listenTCP)
+		done <- runWithListen(ctx, []string{"--public", dir, "--listen", "127.0.0.1:0", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"}, output, listenTCP)
 	}()
 	select {
 	case <-ready:
 	case <-done:
-		t.Fatal("portal-only runtime stopped before serving")
+		t.Fatal("two-host runtime stopped before serving")
 	case <-time.After(5 * time.Second):
-		t.Fatal("portal-only runtime did not begin startup")
+		t.Fatal("two-host runtime did not begin startup")
 	}
 	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	for path, location := range map[string]string{"/": "/portal/", "/da/": "https://devantler.tech/da/"} {
-		res, err := client.Get("http://" + listen + path)
+	for _, tc := range []struct{ host, path, location string }{
+		{"portal.devantler.tech", "/", "/portal/"},
+		{"portal.devantler.tech", "/da/", "https://devantler.tech/da/"},
+		{"devantler.tech", "/portal/", "https://portal.devantler.tech/portal/"},
+	} {
+		req, err := http.NewRequest(http.MethodGet, "http://"+listen+tc.path, nil)
 		if err != nil {
-			t.Fatalf("portal-only runtime did not answer %s: %v", path, err)
+			t.Fatal(err)
+		}
+		req.Host = tc.host
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("two-host runtime did not answer %s%s: %v", tc.host, tc.path, err)
 		}
 		_ = res.Body.Close()
-		if res.StatusCode != http.StatusFound || res.Header.Get("Location") != location {
-			t.Fatalf("%s: status=%d location=%q, want 302 %q", path, res.StatusCode, res.Header.Get("Location"), location)
+		if res.StatusCode != http.StatusFound || res.Header.Get("Location") != tc.location {
+			t.Fatalf("%s%s: status=%d location=%q, want 302 %q", tc.host, tc.path, res.StatusCode, res.Header.Get("Location"), tc.location)
 		}
 	}
 	cancel()
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Fatal("portal-only runtime did not stop cleanly")
+			t.Fatal("two-host runtime did not stop cleanly")
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("portal-only runtime did not stop")
+		t.Fatal("two-host runtime did not stop")
+	}
+}
+
+// TestInvalidHostArgumentsNeverListen refuses partial, duplicate or malformed hosts before serving.
+func TestInvalidHostArgumentsNeverListen(t *testing.T) {
+	dir := configuredPublicArtifact(t)
+	listened := false
+	listen := func(string, string) (net.Listener, error) {
+		listened = true
+		return nil, errors.New("unexpected listener")
+	}
+	for _, hosts := range [][]string{
+		{"--public-host", "devantler.tech"},
+		{"--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "www.devantler.tech"},
+		{"--public-host", "Devantler.tech", "--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech:443", "--portal-host", "portal.devantler.tech"},
+		{"--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech", "--portal-host", "other.devantler.tech"},
+		{"--public-host", "localhost", "--portal-host", "portal.devantler.tech"},
+	} {
+		args := append([]string{"--public", dir, "--listen", "127.0.0.1:0"}, hosts...)
+		if err := runWithListen(context.Background(), args, io.Discard, listen); err == nil || err.Error() != "host arguments are invalid" {
+			t.Fatalf("%v: err=%v", hosts, err)
+		}
+	}
+	if listened {
+		t.Fatal("invalid host arguments opened a listener")
 	}
 }

@@ -50,25 +50,39 @@ no rejected-input disclosure. Existing restricted-image and disabled-portal
 checks remain mandatory. These checks prove source/package behavior, not actual
 Platform admission or live staging.
 
-## Amendment — portal host, 13 November 2026
+## Amendment — public site and portal hosts, 13 November 2026
 
-The maintainer chose `portal.devantler.tech` as the portal's address (#554). The
-public site stays on GitHub Pages at `devantler.tech`. Moving it off Pages is a
-separate, later step, and no longer gates the portal.
+The maintainer chose `portal.devantler.tech` for the portal (#554). He also made
+moving `devantler.tech` off GitHub Pages a priority, because the site is
+commercial. One release of this package now serves both hosts.
 
-The package now proposes exactly `portal.devantler.tech`, replacing
-`business-site.platform.devantler.tech`. Its validator refuses the old staging
-name, the production website address, wildcards and lookalikes.
+The WebApp keeps `business-site.platform.devantler.tech`. The platform's WebApp
+route attaches only to the shared `*.platform.devantler.tech` listener, and this
+name is where the public pages are checked before the DNS switch. Two
+package-owned routes add the public names, each on its own gateway listener:
 
-The runtime gains one option, `--portal-only`, which the package sets:
+- `business-site-public`: `devantler.tech` and `www.devantler.tech`;
+- `business-site-portal`: `portal.devantler.tech`.
 
-- `/` redirects to `/portal/`;
-- every other public path redirects to the same path on `https://devantler.tech`;
-- `/portal…` and `/healthz` are served as before.
+The runtime routes by host, set by `--public-host devantler.tech` and
+`--portal-host portal.devantler.tech`:
 
-The redirects are temporary (302) and not cacheable, so later hosting changes
-stay cheap. Unsafe paths still miss rather than redirect, and the portal itself
-stays default-off.
+| Host | `/portal…` | Public pages |
+|---|---|---|
+| `portal.devantler.tech` | served (`/` opens `/portal/`) | redirect to devantler.tech |
+| `www.devantler.tech` | redirect to devantler.tech | redirect to devantler.tech |
+| any other host | redirect to portal.devantler.tech | served |
 
-Platform route, TLS and the Tenant re-pin are devantler-tech/platform#6177.
-external-dns creates the DNS record from the route.
+"Any other host" includes `devantler.tech`, the staging name and a health
+probe's address. So nothing appears under two hosts.
+
+Redirects are temporary (302) and not cacheable. Unsafe paths still miss rather
+than redirect. Both host arguments are required together, must be distinct DNS
+names, and are checked before a listener opens.
+
+The validator admits exactly these two routes, with their hostnames, listeners
+and backend. It still admits only the staging name as the WebApp host. Platform
+listeners, certificates, the route allow-list and the Tenant re-pin are
+devantler-tech/platform#6177. The DNS switch and the retirement of the Pages
+publication follow under devantler-tech/monorepo#3939. The portal stays
+default-off.

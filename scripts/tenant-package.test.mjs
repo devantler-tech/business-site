@@ -58,9 +58,9 @@ test("the disruption budget admits two or three replicas", () => {
   }
 });
 
-test("the real admission command accepts the exact portal destination", () => {
+test("the real admission command accepts the exact proposed staging destination", () => {
   const docs = yaml.loadAll(render());
-  docs.find((d) => d?.kind === "WebApp").spec.host = "portal.devantler.tech";
+  docs.find((d) => d?.kind === "WebApp").spec.host = "business-site.platform.devantler.tech";
   const result = check(docs.map((d) => yaml.dump(d)).join("---\n"));
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
@@ -72,12 +72,9 @@ for (const host of [
   "www.devantler.tech",
   "*.platform.devantler.tech",
   "business-site.*.devantler.tech",
-  "business-site.platform.devantler.tech",
-  "portal.devantler.tech.attacker.invalid",
-  "portal.devantler.tech.",
-  "PORTAL.devantler.tech",
-  "*.devantler.tech",
-  "portal.platform.devantler.tech",
+  "business-site.platform.devantler.tech.attacker.invalid",
+  "business-site.platform.devantler.tech.",
+  "BUSINESS-SITE.platform.devantler.tech",
   "wedding.platform.devantler.tech",
   "business-site.platform.lan",
   "",
@@ -105,7 +102,6 @@ for (const [name, mutate] of [
   ["portal activation input", (d) => { d[0].spec.env = [{ name: "PORTAL_IDENTITY", value: "true" }]; }],
   ["migration arguments", (d) => { d[0].spec.args = ["--migrate", "--migration-database-file", "/private/db"]; }],
   ["a broken public directory", (d) => { d[0].spec.args[1] = "/missing"; }],
-  ["public pages served on the portal host", (d) => { d[0].spec.args = d[0].spec.args.filter((a) => a !== "--portal-only"); }],
   ["root execution", (d) => { d[0].spec.runAsUser = 0; }],
   ["a foreign primary group", (d) => { d[0].spec.runAsGroup = 65533; }],
   ["a writable root", (d) => { d[0].spec.readOnlyRootFilesystem = false; }],
@@ -154,11 +150,24 @@ for (const [name, mutate] of [
   ["a different disclosure property", (d) => { d[4].spec.data[0].remoteRef.property = "other"; }],
   ["an inline disclosure value", (d) => { d[4].spec.target.template = { data: { "company-disclosure": "fictional private value" } }; }],
   ["a private-value writer", (d) => { d[4].kind = "PushSecret"; }],
+  ["public pages served on the portal host", (d) => { d[0].spec.args = d[0].spec.args.slice(0, 6); }],
+  ["swapped public and portal hosts", (d) => { d[0].spec.args.splice(6, 4, "--public-host", "portal.devantler.tech", "--portal-host", "devantler.tech"); }],
+  ["a missing portal route", (d) => { d.splice(5, 1); }],
+  ["a missing public route", (d) => { d.splice(6, 1); }],
+  ["a third route", (d) => { const extra = structuredClone(d[5]); extra.metadata.name = "business-site-extra"; d.push(extra); }],
+  ["a route claiming another hostname", (d) => { d[6].spec.hostnames.push("evil.devantler.tech"); }],
+  ["a portal route on the public listener", (d) => { d[5].spec.parentRefs[0].sectionName = "https-devantler-tech"; }],
+  ["a route on the shared platform listener", (d) => { d[6].spec.parentRefs[0].sectionName = "https"; }],
+  ["a route to another backend", (d) => { d[5].spec.rules[0].backendRefs[0].name = "other"; }],
+  ["a route with a request filter", (d) => { d[6].spec.rules[0].filters = [{ type: "RequestRedirect", requestRedirect: { hostname: "evil.example" } }]; }],
+  ["a route in another namespace", (d) => { d[5].metadata.namespace = "foreign"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
     // Each target is selected by kind, independent of Kustomize's sort order.
     const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore", "ExternalSecret"].map((kind) => rendered.find((d) => d.kind === kind));
+    // The two routes follow at indexes 5 (portal) and 6 (public), selected by name.
+    for (const name of ["business-site-portal", "business-site-public"]) docs.push(rendered.find((d) => d.kind === "HTTPRoute" && d.metadata.name === name));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
