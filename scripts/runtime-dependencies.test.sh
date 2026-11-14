@@ -26,7 +26,12 @@ reject() {
 }
 sed '/^| golang.org\/x\/net /d' "$inventory" >"$scratch/missing.md"
 reject 1 bash "$checker" "$scratch/business-site" "$scratch/missing.md"
-sed 's/v0.37.0/v0.36.0/' "$inventory" >"$scratch/stale.md"
+# Derive the stale row from the inventory itself, so a dependency bump cannot turn this into a no-op.
+sed -E '/^[|] golang[.]org[/]x[/]net /s/[|] v[^ |]+ /| v0.0.0-stale /' "$inventory" >"$scratch/stale.md"
+if cmp -s "$inventory" "$scratch/stale.md"; then
+  echo 'The stale fixture did not change the inventory.' >&2
+  exit 1
+fi
 reject 1 bash "$checker" "$scratch/business-site" "$scratch/stale.md"
 cp "$inventory" "$scratch/extra.md"
 printf '| go.uber.org/mock | v0.6.0 | test-only module |\n' >>"$scratch/extra.md"
