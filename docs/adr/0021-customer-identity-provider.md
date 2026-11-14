@@ -3,6 +3,7 @@
 - Status: Accepted for source preparation; runtime and activation need separate proof.
 - Date: 2026-10-23
 - Scope: business-site #302/#303/#305; monorepo #3936/#3939 remain open.
+- Amended by [ADR 0031](0031-upstream-zitadel-image.md): the unmodified upstream image, pinned by digest.
 
 ## Decision
 

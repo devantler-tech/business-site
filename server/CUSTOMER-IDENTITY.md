@@ -284,8 +284,9 @@ GOTOOLCHAIN=local go test -race ./internal/customeridentity ./cmd/customer-ident
 
 Both complete ordinary cohorts include these packages. Payload tests prove source
 preparation, not native service/browser acceptance. #303 tracks real local flow and
-resource proof; #305 owns signed runtime delivery; #302 retains deployed acceptance
-and real mail before separate activation. Synthetic brokers do not satisfy those gates.
+resource proof; #305 owns runtime delivery of the unmodified upstream ZITADEL image,
+pinned by digest ([ADR 0031](../docs/adr/0031-upstream-zitadel-image.md)); #302 retains
+deployed acceptance and real mail before separate activation. Synthetic brokers do not satisfy those gates.
 
 Login V1 is embedded and supported for normal v4 operation. Login V2 adds a separate
 Next.js service, API credential and routing; select it for a demonstrated need and

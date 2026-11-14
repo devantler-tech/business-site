@@ -79,7 +79,6 @@ The initial source snapshot came from
 [monorepo commit 830043b5b273229ec029cf51f41fb3b4b6471c0d](https://github.com/devantler-tech/monorepo/tree/830043b5b273229ec029cf51f41fb3b4b6471c0d/docs);
 original history remains there. [Asset provenance](src/assets/PROVENANCE.md) and
 [illustration prompts](src/assets/editorial/PROMPTS.md) distinguish generated illustrations
-from real photographs, captures and authored diagrams. An explicit AGPL-3.0-only grant covers
-only the [identity build-tool file scope](third_party/zitadel-build-tools/README.md).
-All other code, content and assets retain their existing terms; public source and dependency
+from real photographs, captures and authored diagrams.
+Code, content and assets retain their existing terms; public source and dependency
 notices do not grant unrestricted reuse. Check the applicable terms before reusing them.

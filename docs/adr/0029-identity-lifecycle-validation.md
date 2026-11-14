@@ -1,5 +1,7 @@
 # 0029: Validate the private identity lifecycle before deployment
 
+Status: Superseded by [ADR 0031](0031-upstream-zitadel-image.md).
+
 ## Decision
 
 Use a separate, explicit `--lifecycle-smoke` mode in the existing native image

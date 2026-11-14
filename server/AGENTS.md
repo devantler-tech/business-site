@@ -1,44 +1,6 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
-`cmd/identity-release` explicitly retains and verifies the frozen identity base's
-original source data; read its README. Preserve its embedded closed profile,
-complete OCI/layer/package/descriptor joins, original modes, private read-only
-capsule, external seal and deterministic archive readback. It never executes
-retained content, verifies OpenPGP/image signatures, publishes or activates users.
-Keep those four proof fields false; publisher admission remains separate.
-Its explicit base-transport unpacker requires both external seals and the same
-closed capsule plan, rejects altered transport and preserves source archives
-as opaque data in a new private reservation. It grants no distribution authority.
-Its explicit `prepare-handoff` operation binds the original local archives and
-raw native witness bytes to caller-supplied source/run metadata. Preserve its
-closed input roles, complete stable snapshots and exclusive manifest output.
-It neither repeats the native engines nor authenticates the supplied CI identity;
-all publication and activation claims stay false. No raw archive upload is added.
-`cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
-Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
-importing portal authority or entering the frozen identity service's graph.
-CI builds the command with this module's exact compiler before selecting the
-unchanged upstream compiler. Preserve its complete tests, external-seal readback
-and narrow evidence fields; it never grants image or portal activation.
-The explicit `restore-go-inputs` operation admits only the three sealed source
-capsules and fixed trust policy into a new owned native cache. Preserve literal
-conflict refusal, physical input/output separation and failed-write cleanup.
-Its separate sealed file proxy enumerates only verified retained versions, never
-claims upstream latest, and preserves native deprecation/retraction/checksum
-checks. Keep writable native caches separate and prohibit network/direct fallbacks.
-Its network-denied native Go reader is not full generation/compilation replay;
-both overall proof flags must remain false until issue #343's full acceptance.
-Its separate native generator checkpoint reads fourteen actual executables before
-the console overwrites API OpenAPI 2.28. Preserve exact compiler/platform/command
-joins, complete original build metadata, path-and-version effective unions and
-external-seal readback. Metadata observation is not generator source retention or
-complete cold-build replay; both overall proof flags remain false.
-`cmd/zitadel-bsr-sources` is a separate otherwise inert standard-library source
-package verifier in the same module; read its README. Preserve the frozen BSR
-profile, complete native digest and export joins, external seals, bounded I/O,
-canonical private modes and verified-snapshot restore/cache checks. It does not
-run upstream commands or complete native Linux replay or source admission.
 `cmd/customer-identity-config` explicitly prepares dormant native ZITADEL/Dex
 documents with no network, user, secret-value or activation operations. Read
 `CUSTOMER-IDENTITY.md`. Preserve skipped first-instance bootstrap, closed user and
