@@ -61,7 +61,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: devantler-tech/.github
-          ref: 467f07582436a26b62cf4aa756423512f85ba0c0
+          ref: a76d5df9371cf712a8f60307fde060825a34cf35
           path: .runtime-publisher
           persist-credentials: false
       - name: Verify the original image signature and complete provenance
