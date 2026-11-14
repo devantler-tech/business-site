@@ -10,7 +10,6 @@ require (
 	github.com/justinas/nosurf v1.2.0
 	github.com/open-feature/go-sdk v1.20.0
 	github.com/open-feature/go-sdk-contrib/providers/from-env v0.1.7
-	golang.org/x/mod v0.42.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.38.0
 )

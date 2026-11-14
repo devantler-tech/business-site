@@ -1,6 +1,6 @@
 # Original identity image and corresponding source publication
 
-Status: Proposed. Delivery: #308.
+Status: Superseded by [ADR 0031](0031-upstream-zitadel-image.md); never accepted. Delivery: #308.
 
 ## Decision
 

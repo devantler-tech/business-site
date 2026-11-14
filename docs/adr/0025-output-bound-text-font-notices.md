@@ -1,6 +1,6 @@
 # Output-bound identity text-font notices
 
-Status: Accepted
+Status: Superseded by [ADR 0031](0031-upstream-zitadel-image.md); previously Accepted.
 
 ## Context
 
