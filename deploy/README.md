@@ -5,6 +5,26 @@ WebApp interface. The source-owned runtime publisher can publish this package af
 explicit release admission; no workflow applies it to a cluster. Pages remains
 the public deployment; portal access stays disabled.
 
+The whole directory is published as one artifact and split into Kustomize overlays
+([ADR 0016 in the monorepo](https://github.com/devantler-tech/monorepo/blob/main/docs/adr/0016-dev-and-prod-deployments.md)):
+
+- `kustomization.yaml` is the prod entry the platform reconciles at the artifact root. It
+  only includes `prod/`.
+- `base/` holds what prod and dev share: the WebApp (the publisher pins its image in
+  `base/webapp.yaml`) and its network policy.
+- `prod/` adds what only prod owns: the public and portal routes, the disruption budget,
+  and the SecretStore and ExternalSecret that read the disclosure from prod OpenBao.
+- `dev/` (#542) patches the base for the dev namespace `business-site-dev`: one replica,
+  the WebApp renamed to its namespace, `dev.devantler.tech` instead of the prod hostnames,
+  and no host routing. It adds no route, certificate, DNS record, disruption budget or
+  secret store; the platform owns dev ingress behind sign-on (devantler-tech/platform#6126).
+  Dev still needs its own `business-site-disclosure` Secret before it can start, and the
+  site's flags are build-time, so they cannot be switched on from this overlay; both stay
+  with #542.
+
+Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
+must render, and `deploy` must render exactly what `deploy/prod` renders.
+
 From the repository root, with Node 24, installed root dependencies, Kubectl and
 Docker available:
 
@@ -51,8 +71,8 @@ image or publication receipt. Tests use fictional values in disposable volumes.
 
 The WebApp uses exactly `business-site.platform.devantler.tech`, where the public pages are
 checked before a DNS switch. Two routes add the public names on their own gateway listeners:
-`http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
-`http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
+`prod/http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
+`prod/http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
 `--portal-host` arguments route by host, so nothing is served twice: `portal.devantler.tech`
 opens the portal at `/` and redirects public pages to devantler.tech, `www` redirects to the
 apex, and every other host serves the public pages and redirects `/portal…` to

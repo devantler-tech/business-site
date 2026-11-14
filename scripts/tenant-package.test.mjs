@@ -24,6 +24,62 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
+test("the artifact root reconciles exactly the prod overlay", () => {
+  // The platform reconciles prod at the artifact root; it must stay the prod overlay.
+  assert.equal(render(), render(path.join(root, "deploy/prod")));
+});
+
+test("the shared base holds only the WebApp and its network policy", () => {
+  const kinds = yaml.loadAll(render(path.join(root, "deploy/base"))).map((d) => d.kind).sort();
+  assert.deepEqual(kinds, ["CiliumNetworkPolicy", "WebApp"]);
+});
+
+/** Every scalar in a rendered document set, so a value cannot hide in an unexpected field. */
+function scalars(value) {
+  if (value === null || typeof value !== "object") return [value];
+  return Object.values(value).flatMap(scalars);
+}
+
+test("the dev overlay renders the shared base with only its own differences", () => {
+  const dir = path.join(root, "deploy/dev");
+  const first = render(dir);
+  assert.equal(render(dir), first, "the dev overlay must render deterministically");
+  const dev = yaml.loadAll(first);
+  const prod = yaml.loadAll(render());
+  assert.deepEqual(dev.map((d) => d.kind).sort(), ["CiliumNetworkPolicy", "WebApp"],
+    "dev adds no route, certificate, DNS record, disruption budget or secret store");
+  for (const doc of dev) assert.equal(doc.metadata.namespace, "business-site-dev");
+  const app = dev.find((d) => d.kind === "WebApp");
+  const prodApp = prod.find((d) => d.kind === "WebApp");
+  // A tenant WebApp's name and spec.name equal its namespace.
+  assert.equal(app.metadata.name, "business-site-dev");
+  assert.equal(app.spec.name, "business-site-dev");
+  assert.equal(app.spec.replicas, 1);
+  assert.equal(app.spec.host, "dev.devantler.tech");
+  assert.equal(app.spec.image, prodApp.spec.image, "dev runs the same published image as prod");
+  assert.deepEqual(app.spec.args, prodApp.spec.args.slice(0, 6), "dev drops only prod's host routing");
+  const omit = (spec, ...keys) => Object.fromEntries(Object.entries(spec).filter(([key]) => !keys.includes(key)));
+  assert.deepEqual(omit(app.spec, "name", "host", "replicas", "args"), omit(prodApp.spec, "name", "host", "replicas", "args"),
+    "every other WebApp input comes unchanged from base");
+  const policy = dev.find((d) => d.kind === "CiliumNetworkPolicy");
+  const prodPolicy = prod.find((d) => d.kind === "CiliumNetworkPolicy");
+  assert.deepEqual(policy.spec.endpointSelector, { matchLabels: { "app.kubernetes.io/name": "business-site-dev" } });
+  assert.deepEqual(omit(policy.spec, "endpointSelector"), omit(prodPolicy.spec, "endpointSelector"));
+  // No prod hostname, secret path or secret store reaches dev, in any field.
+  const prodHosts = new Set([prodApp.spec.host,
+    ...prod.filter((d) => d.kind === "HTTPRoute").flatMap((d) => d.spec.hostnames),
+    ...prodApp.spec.args.filter((_, i, all) => ["--public-host", "--portal-host"].includes(all[i - 1]))]);
+  for (const name of ["devantler.tech", "www.devantler.tech", "portal.devantler.tech", "business-site.platform.devantler.tech"]) {
+    assert.ok(prodHosts.has(name), "the prod hostname inventory must be complete before it is compared");
+  }
+  const prodPaths = prod.filter((d) => d.kind === "ExternalSecret").flatMap((d) => d.spec.data.map((x) => x.remoteRef.key));
+  assert.ok(prodPaths.length > 0);
+  for (const value of scalars(dev)) {
+    assert.ok(!prodHosts.has(value), `dev must not carry the prod hostname ${value}`);
+    for (const secretPath of prodPaths) assert.ok(!String(value).includes(secretPath), "dev must not read a prod secret path");
+  }
+});
+
 test("the rendered network policy explicitly enables egress default deny", () => {
   const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
   // Cilium's documented default-deny rule is one empty rule, not an empty list.
