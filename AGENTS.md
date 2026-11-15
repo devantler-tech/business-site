@@ -152,7 +152,8 @@ whose address the runtime reads from its private projected file.
 The same release enables the EN/DA privacy notice and customer terms (`/privacy/`, `/terms/`),
 whose copy lives in `src/components/business/legal-copy.ts`. The privacy notice's portal
 section stays behind the default-off `FEATURE_PORTAL_PRIVACY` until the portal is activated;
-the activation sets it in `scripts/package-runtime.sh`. They link to the address rather
+the activation flips its `false` pin in `scripts/package-runtime.sh` and
+`scripts/vat-activation.test.mjs`. They link to the address rather
 than repeat it. Change them with any change to hosting, providers, retention, prices or terms
 (#19); never call the business compliant.
 Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optional hosting
