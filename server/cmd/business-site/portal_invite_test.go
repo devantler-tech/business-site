@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -158,22 +157,8 @@ func TestPortalSettingsProjectionWithoutKeysServesPublicOnly(t *testing.T) {
 	unsetPortalEnvironment(t)
 	dir := configuredPublicArtifact(t)
 	settings := portalSettingsFile(t, "# Portal sign-in is off until its settings are added.\n\n", 0440)
-	var listen string
-	ready := make(chan struct{})
-	var once sync.Once
-	output := writeFunc(func(data []byte) (int, error) {
-		once.Do(func() { close(ready) })
-		return len(data), nil
-	})
-	cancel, done, join := startRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0", "--portal-settings-projection", settings}, output, recordedListener(&listen))
+	listen, cancel, done, join := startAnnouncedRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0", "--portal-settings-projection", settings})
 	defer join()
-	select {
-	case <-ready:
-	case err := <-done:
-		t.Fatalf("comment-only settings stopped public startup: %v", err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("comment-only settings did not start public serving")
-	}
 	client := &http.Client{Timeout: 2 * time.Second}
 	for route, want := range map[string]int{"/": http.StatusOK, "/portal/sign-in": http.StatusNotFound} {
 		res, err := client.Get("http://" + listen + route)

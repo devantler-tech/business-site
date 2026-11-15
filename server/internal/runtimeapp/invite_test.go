@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/pem"
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,20 +46,8 @@ func runInviteCommand(t *testing.T, binary, settings, user string, environment .
 // operator's one-shot invitation reuses that file and role inside the pod.
 func TestOperatorPortalInviteUsesProjectedSettings(t *testing.T) {
 	binary, public := buildActualCommand(t)
-	var issuer string
-	var discoveries atomic.Int32
-	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/openid-configuration" {
-			http.NotFound(w, r)
-			return
-		}
-		discoveries.Add(1)
-		if err := json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}); err != nil {
-			t.Error("synthetic discovery response failed")
-		}
-	}))
-	t.Cleanup(broker.Close)
-	issuer = broker.URL
+	broker, discoveries, _ := syntheticBroker(t)
+	issuer := broker.URL
 	database := runtimeFixtureDatabase(t)
 	migrator := createFixtureDatabase(t, database)
 	if err := identity.MigrateWithRuntimeRole(t.Context(), migrator, "portal_runtime"); err != nil {
