@@ -5,7 +5,7 @@ import { request } from "node:http";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { validateTenantPackage } from "./check-tenant-package.mjs";
-import { containerGroupDisclosureFixture } from "./runtime-disclosure-fixture.mjs";
+import { containerGroupDisclosureFixture, runtimeSecretFixture } from "./runtime-disclosure-fixture.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const spec = validateTenantPackage(execFileSync("kubectl", ["kustomize", `${root}/deploy`], {
@@ -38,22 +38,48 @@ function get(port, route, host) {
   });
 }
 
+// The public receipt check reports the public snapshot only and refuses portal
+// settings, so it uses the package arguments without that one input.
+const settingsFlag = spec.args.indexOf("--portal-settings-projection");
+assert.ok(settingsFlag > 0);
+const publicArgs = spec.args.filter((_, index) => index !== settingsFlag && index !== settingsFlag + 1);
+
+/** Mount one synthetic projection at the package's fixed input directory. */
+const atInputs = (fixture) => [fixture.mount[0], fixture.mount[1].replace(",target=/projection,", ",target=/run/webapp-inputs,")];
+
 test("rendered package arguments fail closed without the required disclosure", () => {
-  const result = spawnSync("docker", ["run", "--rm", "--network=none", ...restrictions,
-    image, ...spec.args, "--check-serving-public"], { encoding: "utf8", timeout: 30000 });
-  assert.ifError(result.error);
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, "");
-  assert.equal(result.stderr, "company disclosure projection is unavailable\n");
+  for (const args of [spec.args, [...publicArgs, "--check-serving-public"]]) {
+    const result = spawnSync("docker", ["run", "--rm", "--network=none", ...restrictions,
+      image, ...args], { encoding: "utf8", timeout: 30000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "company disclosure projection is unavailable\n");
+  }
+});
+
+// Serving needs the platform's whole runtime Secret, so it must exist before this package.
+test("rendered package arguments fail closed without the portal settings item", () => {
+  const fixture = containerGroupDisclosureFixture(image, docker);
+  try {
+    const result = spawnSync("docker", ["run", "--rm", "--network=none", ...restrictions,
+      ...atInputs(fixture), image, ...spec.args], { encoding: "utf8", timeout: 30000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "portal settings projection is unavailable\n");
+  } finally {
+    fixture.close();
+  }
 });
 
 test("the real image serves both hosts with exactly the package arguments and the portal closed", async () => {
-  const fixture = containerGroupDisclosureFixture(image, docker);
+  const fixture = containerGroupDisclosureFixture(image, docker, 0, 65532, 0o440, runtimeSecretFixture);
   let id;
   try {
     assert.equal(fixture.mount.length, 2);
     assert.match(fixture.mount[1], /,target=\/projection,readonly$/);
-    const mount = [fixture.mount[0], fixture.mount[1].replace(",target=/projection,", ",target=/run/webapp-inputs,")];
+    const mount = atInputs(fixture);
     const version = JSON.parse(docker("run", "--rm", "--network=none", ...restrictions, image, "--version"));
     assert.equal(version.Repository, "devantler-tech/business-site");
     assert.equal(version.PublicProfile, "production-template");
@@ -61,7 +87,7 @@ test("the real image serves both hosts with exactly the package arguments and th
     assert.match(version.SourceRevision, /^[a-f0-9]{40}$/);
     if (process.env.EXPECTED_SOURCE_SHA) assert.equal(version.SourceRevision, process.env.EXPECTED_SOURCE_SHA);
     const receipt = JSON.parse(docker("run", "--rm", "--network=none", ...restrictions, ...mount,
-      image, ...spec.args, "--check-serving-public"));
+      image, ...publicArgs, "--check-serving-public"));
     assert.equal(receipt.SourceRevision, version.SourceRevision);
     assert.equal(receipt.PublicDigest, version.PublicDigest);
     assert.notEqual(receipt.EffectivePublicDigest, receipt.PublicDigest);
