@@ -90,14 +90,14 @@ func parseClientOrderForm(r *http.Request) (string, bool) {
 // clientOrderAction serves one of the client's own order forms on the
 // receipt: ending monthly billing where they ordered it (Consumer Contracts
 // Act, section 28 a), or confirming a withdrawal (section 20 a).
-func (b *browser) clientOrderAction(act func(context.Context, Principal, string, string) error) http.HandlerFunc {
+func (b *browser) clientOrderAction(act func(context.Context, Principal, string, string, mailContext) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		order, valid := parseClientOrderForm(r)
 		if !valid {
 			b.render(w, r, 400, "error", "", "")
 			return
 		}
-		b.clientOrderResult(w, r, act(r.Context(), b.principal(r.Context()), r.PathValue("id"), order))
+		b.clientOrderResult(w, r, act(r.Context(), b.principal(r.Context()), r.PathValue("id"), order, mailContext{Lang: language(r), Portal: b.origin + b.base()}))
 	}
 }
 
@@ -106,7 +106,7 @@ func (b *browser) clientOrderAction(act func(context.Context, Principal, string,
 // billed changes. An end already recorded, by anyone, stands, so a retry
 // succeeds. A card order's subscription is then asked to end when it would
 // next renew.
-func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, id, orderID string) error {
+func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, id, orderID string, _ mailContext) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginClientProposalWrite, true)

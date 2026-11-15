@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's twenty-nine identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's thirty-one identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal/mail tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -300,7 +300,9 @@ SELECT/INSERT only; a withdrawn order is never billed or charged again and funds
 approval, and its subscription end takes precedence over one scheduled earlier. v22 records the
 client's optional request to start early, dated with the order; without it no work is approved
 within the withdrawal period. After a withdrawal that followed an early start, the operator
-records the amount owed once, and a completion record ends the right of withdrawal.
+records the amount owed once, and a completion record ends the right of withdrawal. v23 queues
+the order confirmation and withdrawal receipt with what causes them and sends them through the
+site's SES sender (`BILLING.md`, *Emails*), SELECT/INSERT only.
 
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real

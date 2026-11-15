@@ -35,6 +35,7 @@ type projectOrder struct {
 	EarlyStart                 *time.Time // the client's request to start within the withdrawal period
 	Completed                  *time.Time // the operator's record that the work is completely finished
 	Owed, Paid                 *int64     // a withdrawal's amount owed for work done, and what was paid
+	Mail                       []orderMailState
 	WithdrawalEnd              *time.Time // when Stripe ends a withdrawn order's subscription
 }
 
@@ -94,7 +95,7 @@ func firstOfNextMonth(t time.Time) time.Time {
 
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
-func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart bool) (projectOrder, error) {
+func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart bool, mc mailContext) (projectOrder, error) {
 	if !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
 	}
@@ -134,9 +135,18 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if earlyStart {
 		early = &placed
 	}
+	orderID := secret()
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		secret(), id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed, early); err != nil {
+		orderID, id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed, early); err != nil {
 		return projectOrder{}, errTriageStorage
+	}
+	// The order's confirmation on a durable medium (section 13), queued with it.
+	when := projectOrder{Placed: placed}
+	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope,
+		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
+		OneTimeDKK: current.Proposal.OneTimeMinor / 100, MonthlyDKK: current.Proposal.MonthlyMinor / 100, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
+		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {
+		return projectOrder{}, err
 	}
 	saved, err := readOrderTx(ctx, tx, id, client)
 	if err != nil {
@@ -177,6 +187,9 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 		return projectOrder{}, err
 	}
 	if err = readWithdrawal(ctx, tx, &o); err != nil {
+		return projectOrder{}, err
+	}
+	if err = readOrderMail(ctx, tx, &o); err != nil {
 		return projectOrder{}, err
 	}
 	return o, nil
@@ -266,7 +279,7 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart)
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, mailContext{Lang: language(r), Portal: b.origin + b.base()})
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
 		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin+b.base(), language(r)); checkoutErr != nil {

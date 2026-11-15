@@ -186,6 +186,10 @@ v22 records the client's request, when ordering, to start work within the withdr
 and `portal_withdrawal_settlements`, the amount owed for the work done before a withdrawal. Grant
 SELECT/INSERT only on both; the order's new column is written only when the order is inserted.
 
+v23 adds the portal's own emails (#21): `portal_mail_outbox`, an order confirmation or withdrawal
+receipt queued with its order or withdrawal, and `portal_mail_deliveries`, one record per sent
+email. Grant SELECT/INSERT only on both.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

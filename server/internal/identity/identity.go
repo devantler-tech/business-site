@@ -109,6 +109,8 @@ type Foundation struct {
 	cards  atomic.Pointer[CardBilling]
 	// vatRate is the Stripe tax rate last confirmed as inclusive 25% VAT.
 	vatRate atomic.Pointer[string]
+	// mail is the site's mail sender for the portal's own emails.
+	mail atomic.Pointer[mailer]
 	// site is the public website's origin, linked from a portal at the root of
 	// its own host. A portal sharing the public host links to "/" instead.
 	site string

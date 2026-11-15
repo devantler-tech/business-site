@@ -28,6 +28,7 @@ type Config struct {
 	secretProjected                                bool
 	billing                                        billingConfig
 	cards                                          cardConfig
+	mail                                           mailConfig
 	// publicSite is the public website a portal on its own host links back to.
 	publicSite string
 }
@@ -140,13 +141,17 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	if err != nil || (count == 0 && cards != (cardConfig{})) {
 		return Config{}, ErrConfig
 	}
+	mailing, err := readMailConfig(getenv)
+	if err != nil || (count == 0 && mailing != (mailConfig{})) {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
 	if count != 5 || !filepath.IsAbs(c.secretFile) {
 		return Config{}, ErrConfig
 	}
-	c.billing, c.cards = billing, cards
+	c.billing, c.cards, c.mail = billing, cards, mailing
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -222,7 +227,13 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		pool.Close()
 		return nil, closed, ErrConfig
 	}
-	return handler, func() { stopBilling(); pool.Close() }, nil
+	stopMail, err := startMail(foundation, c.mail)
+	if err != nil {
+		stopBilling()
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	return handler, func() { stopMail(); stopBilling(); pool.Close() }, nil
 }
 
 // connectPortal opens the bounded runtime pool, then checks its restricted login
