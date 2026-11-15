@@ -95,6 +95,8 @@ if [[ "${MISSING_STRIPE:-false}" == true ]]; then rm "$5/external-secret-stripe.
 if [[ "${ALTER_NUMINA:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.key="apps/other/numina"' "$5/external-secret-numina.yaml"; fi
 if [[ "${MISSING_MIGRATION:-false}" == true ]]; then rm "$5/job-portal-migration.yaml"; fi
 if [[ "${ALTER_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[1]="--migration-database-file"' "$5/job-portal-migration.yaml"; fi
+if [[ "${MISSING_RETENTION:-false}" == true ]]; then rm "$5/cronjob-portal-retention.yaml"; fi
+if [[ "${ALTER_RETENTION:-false}" == true ]]; then yq -i '.spec.schedule="* * * * *"' "$5/cronjob-portal-retention.yaml"; fi
 FIXTURE
 chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
 # Restore independent signed-subject fixtures and clear receipts/read counters between controls.
@@ -146,7 +148,7 @@ if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a move
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
 reset_fixture
 verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
-for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true MISSING_STRIPE=true ALTER_NUMINA=true MISSING_MIGRATION=true ALTER_MIGRATION=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
+for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true MISSING_STRIPE=true ALTER_NUMINA=true MISSING_MIGRATION=true ALTER_MIGRATION=true MISSING_RETENTION=true ALTER_RETENTION=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
   if verify "$context"; then fail 'failed signature/pull, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'

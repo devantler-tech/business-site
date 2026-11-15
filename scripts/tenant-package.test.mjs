@@ -243,6 +243,18 @@ for (const [name, mutate] of [
   ["no migration deadline", (d) => { delete d[9].spec.activeDeadlineSeconds; }],
   ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
   ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
+  ["a missing retention CronJob", (d) => { d.splice(10, 1); }],
+  ["a retention CronJob on another image", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
+  ["a retention CronJob that migrates", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args = structuredClone(d[9].spec.template.spec.containers[0].args); }],
+  ["the strict file option in the retention CronJob", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args[1] = "--migration-database-file"; }],
+  ["overlapping retention runs", (d) => { d[10].spec.concurrencyPolicy = "Allow"; }],
+  ["a retention purge more than once a day", (d) => { d[10].spec.schedule = "*/5 * * * *"; }],
+  ["retention retries", (d) => { d[10].spec.jobTemplate.spec.backoffLimit = 3; }],
+  ["no retention deadline", (d) => { delete d[10].spec.jobTemplate.spec.activeDeadlineSeconds; }],
+  ["a retention pod running as root", (d) => { d[10].spec.jobTemplate.spec.template.spec.securityContext.runAsUser = 0; }],
+  ["a retention pod with a service-account token", (d) => { d[10].spec.jobTemplate.spec.template.spec.automountServiceAccountToken = true; }],
+  ["the web runtime Secret in the retention CronJob", (d) => { d[10].spec.jobTemplate.spec.template.spec.volumes[0].secret.secretName = "business-site-runtime"; }],
+  ["a retention pod labelled as the web workload", (d) => { d[10].spec.jobTemplate.spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
@@ -255,8 +267,8 @@ for (const [name, mutate] of [
     for (const name of ["business-site-portal", "business-site-public"]) docs.push(named("HTTPRoute", name));
     // The billing synchronizations follow at indexes 7 (Numina) and 8 (Stripe).
     for (const name of ["business-site-numina", "business-site-stripe"]) docs.push(named("ExternalSecret", name));
-    // The migration Job follows at index 9.
-    docs.push(named("Job", "business-site-portal-migration"));
+    // The migration Job follows at index 9 and the retention CronJob at 10.
+    docs.push(named("Job", "business-site-portal-migration"), named("CronJob", "business-site-portal-retention"));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
@@ -267,9 +279,9 @@ for (const [name, mutate] of [
   });
 }
 
-test("the migration Job runs whatever image the publisher pins in the WebApp", () => {
+test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
   // The shared publisher rewrites only webapp.yaml's WebApp image; the package
-  // build copies it into the Job, so the Job never runs another release's image.
+  // build copies it into both jobs, so neither runs another release's image.
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
   try {
     cpSync(path.join(root, "deploy"), fixture, { recursive: true });
@@ -277,8 +289,13 @@ test("the migration Job runs whatever image the publisher pins in the WebApp", (
     const app = yaml.load(readFileSync(path.join(fixture, "webapp.yaml"), "utf8"));
     app.spec.image = pinned;
     writeFileSync(path.join(fixture, "webapp.yaml"), yaml.dump(app));
-    const job = yaml.loadAll(render(fixture)).find((d) => d?.kind === "Job");
+    const rendered = yaml.loadAll(render(fixture));
+    const job = rendered.find((d) => d?.kind === "Job");
     assert.equal(job.spec.template.spec.containers[0].image, pinned);
+    const cron = rendered.find((d) => d?.kind === "CronJob");
+    assert.equal(cron.spec.jobTemplate.spec.template.spec.containers[0].image, pinned);
+    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/cronjob-portal-retention.yaml"), "utf8"));
+    assert.equal(cronSource.spec.jobTemplate.spec.template.spec.containers[0].image, undefined, "the source CronJob names no image of its own");
     const source = yaml.load(readFileSync(path.join(root, "deploy/job-portal-migration.yaml"), "utf8"));
     assert.equal(source.spec.template.spec.containers[0].image, undefined, "the source Job names no image of its own");
   } finally {
