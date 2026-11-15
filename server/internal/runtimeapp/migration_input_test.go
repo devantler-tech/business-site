@@ -98,3 +98,87 @@ func TestMigrationInputOwnership(t *testing.T) {
 		}
 	}
 }
+
+// A Kubernetes Secret projection is root-owned and, with the pod's fsGroup,
+// readable by that group: the kubelet writes 0440 root:<fsGroup>. Only the
+// projected transport admits that group read, and only for this process's own
+// primary group; the strict private-file transport keeps refusing it.
+func TestMigrationProjectedConnection(t *testing.T) {
+	dir, version := kubeletProjection(t, "database-url")
+	file := filepath.Join(version, "database-url")
+	if err := os.WriteFile(file, []byte("postgres://fixture\n"), 0400); err != nil {
+		t.Fatal("owned projected connection failed")
+	}
+	if err := os.Chown(file, -1, os.Getegid()); err != nil {
+		t.Fatal("owned projected connection group failed")
+	}
+	projected := filepath.Join(dir, "database-url")
+	nonRoot := os.Geteuid() > 0 && os.Getegid() > 0
+	for _, tc := range []struct {
+		mode              os.FileMode
+		projected, strict bool
+	}{
+		{0400, true, true},
+		{0440, true, false},
+		{0460, false, false},
+		{0450, false, false},
+		{0444, false, false},
+		{0404, false, false},
+	} {
+		if err := os.Chmod(file, tc.mode); err != nil {
+			t.Fatal("owned projected connection mode failed")
+		}
+		value, err := migrationProjectedConnection(projected)
+		if accepted := err == nil && value == "postgres://fixture"; accepted != (tc.projected && nonRoot) || !accepted && err != ErrMigration {
+			t.Fatalf("projected transport decided mode %o wrongly", tc.mode)
+		}
+		value, err = migrationConnection(projected)
+		if accepted := err == nil && value == "postgres://fixture"; accepted != tc.strict {
+			t.Fatalf("strict transport decided mode %o wrongly", tc.mode)
+		}
+	}
+}
+
+// A group-read bit is this process's only when the file's group is its own
+// primary group; another group or unknown metadata is refused.
+func TestMigrationOwnGroup(t *testing.T) {
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal("owned metadata fixture unavailable")
+	}
+	own := uint32(os.Getegid())
+	for _, tc := range []struct {
+		metadata any
+		allowed  bool
+	}{
+		{&syscall.Stat_t{Gid: own}, own > 0},
+		{&syscall.Stat_t{Gid: own + 1}, false},
+		{(*syscall.Stat_t)(nil), false},
+		{nil, false},
+	} {
+		if migrationOwnGroup(migrationOwnershipFixture{FileInfo: info, metadata: tc.metadata}) != tc.allowed {
+			t.Fatal("projected group read did not bind to the process's own group")
+		}
+	}
+}
+
+// kubeletProjection lays out a Secret projection the way the kubelet does: a
+// timestamped generation directory, the ..data link to it and one link per
+// entry. It returns the projection directory and the generation directory.
+func kubeletProjection(t *testing.T, names ...string) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	version := filepath.Join(dir, "..2026_11_15_00_00_00.1")
+	if err := os.Mkdir(version, 0755); err != nil {
+		t.Fatal("owned projection generation failed")
+	}
+	if err := os.Symlink(filepath.Base(version), filepath.Join(dir, "..data")); err != nil {
+		t.Fatal("owned projection generation link failed")
+	}
+	for _, name := range names {
+		if err := os.Symlink("..data/"+name, filepath.Join(dir, name)); err != nil {
+			t.Fatal("owned projection entry link failed")
+		}
+	}
+	return dir, version
+}

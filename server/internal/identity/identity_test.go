@@ -175,6 +175,7 @@ GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime;
 GRANT SELECT,INSERT,UPDATE ON portal_order_charges,portal_card_checkouts TO portal_runtime;
 GRANT SELECT,INSERT ON portal_stripe_events TO portal_runtime;
 GRANT SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries TO portal_runtime;
+GRANT SELECT ON portal_schema_version TO portal_runtime;
 DELETE FROM portal_work_current;
 DELETE FROM portal_work_revocations;
 DELETE FROM portal_work_approvals;

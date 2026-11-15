@@ -753,6 +753,7 @@
     "vurderer",
     "tidsplan",
     "tmpfs",
+    "kubelet",
     "automount",
     "seccomp"
   ],
