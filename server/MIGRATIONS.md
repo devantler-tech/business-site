@@ -156,6 +156,10 @@ Numina contact map, and SELECT/INSERT/UPDATE on charges, whose state, provider r
 send/settle markers change as an invoice advances. Never grant DELETE, TRUNCATE, references,
 triggers, maintenance, delegation or ownership on them to the runtime or an assumable role.
 
+v17 adds `portal_card_checkouts` and `portal_stripe_events` after unchanged v1–v16. Grant
+SELECT/INSERT/UPDATE on card checkouts (a newer session replaces an expired one and completion
+is recorded) and SELECT/INSERT only on Stripe events, which are applied once and never changed.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

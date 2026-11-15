@@ -11,6 +11,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/devantler-tech/business-site/server/internal/numina"
+	"github.com/devantler-tech/business-site/server/internal/stripe"
 )
 
 var numinaVATCode = regexp.MustCompile(`^[A-Z0-9]{1,10}$`)
@@ -78,4 +79,52 @@ func startInvoiceBilling(f *identity.Foundation, b billingConfig) (func(), error
 		f.RunInvoiceBilling(ctx, identity.InvoiceBilling{Numina: client, SalesAccount: b.salesAccount, VATCode: b.vatCode, Now: time.Now}, 15*time.Minute)
 	}()
 	return func() { cancel(); <-done }, nil
+}
+
+// cardConfig is the optional Stripe card path (ADR 0030, #553).
+type cardConfig struct {
+	keyFile, webhookSecretFile, baseURL string
+}
+
+// readCardConfig reads the optional Stripe card path: both secret files, or
+// neither. The API URL is optional and HTTPS only.
+func readCardConfig(getenv func(string) string) (cardConfig, error) {
+	c := cardConfig{keyFile: getenv("PORTAL_STRIPE_KEY_FILE"), webhookSecretFile: getenv("PORTAL_STRIPE_WEBHOOK_SECRET_FILE"), baseURL: getenv("PORTAL_STRIPE_API_URL")}
+	if c == (cardConfig{}) {
+		return c, nil
+	}
+	if !filepath.IsAbs(c.keyFile) || !filepath.IsAbs(c.webhookSecretFile) {
+		return cardConfig{}, ErrConfig
+	}
+	if c.baseURL == "" {
+		c.baseURL = stripe.DefaultBaseURL
+	}
+	if u, err := url.Parse(c.baseURL); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return cardConfig{}, ErrConfig
+	}
+	return c, nil
+}
+
+// enableCardBilling reads the Stripe key and webhook secret from their
+// projected files. Nothing is charged while portal-card-billing is off.
+func enableCardBilling(f *identity.Foundation, c cardConfig) error {
+	if c == (cardConfig{}) {
+		return nil
+	}
+	if os.Geteuid() <= 0 || os.Getegid() <= 0 {
+		return ErrConfig
+	}
+	var values [2]string
+	for i, file := range []string{c.keyFile, c.webhookSecretFile} {
+		data, err := projectionBytes(file)
+		if err != nil {
+			return ErrConfig
+		}
+		values[i] = trimInputLineEnding(string(data))
+	}
+	client, err := stripe.New(c.baseURL, values[0], nil)
+	if err != nil {
+		return ErrConfig
+	}
+	return f.EnableCardBilling(identity.CardBilling{Stripe: client, WebhookSecret: values[1], Now: time.Now})
 }
