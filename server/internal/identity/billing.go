@@ -380,12 +380,9 @@ func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now 
 	if !s.invoiceBillingReady(ctx) {
 		return errBillingPaused
 	}
-	description := invoiceLine(c.Order.Scope)
-	if c.Period != "acceptance" {
-		description += " — " + c.Period
-	} else {
-		// The unit price already includes the discount; the line names it.
-		description = launchLine(description, "da", c.Order.Launch)
+	items, err := s.invoiceItems(ctx, cfg, *c)
+	if err != nil {
+		return err
 	}
 	created, err := cfg.Numina.CreateInvoice(ctx, c.Identity, numina.NewInvoice{
 		ContactID:          contactID,
@@ -394,7 +391,7 @@ func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now 
 		Currency:           "DKK",
 		SalesAccountNumber: cfg.SalesAccount,
 		VATCode:            cfg.VATCode,
-		Items:              []numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(c.NetMinor), VATCode: cfg.VATCode}},
+		Items:              items,
 		Memo:               "Portal reference: " + c.Identity,
 	})
 	if err != nil {
@@ -514,4 +511,42 @@ func (s *Foundation) numinaContact(ctx context.Context, api NuminaAPI, client st
 		return "", errTriageStorage
 	}
 	return contactID, nil
+}
+
+// invoiceItems are a charge's invoice lines: the order's own price, then one
+// line per add-on the period charges. Every price is in whole kroner, so each
+// line's net amount is exact and the lines add up to the charge.
+func (s *Foundation) invoiceItems(ctx context.Context, cfg InvoiceBilling, c billingCharge) ([]numina.Line, error) {
+	addons, err := readOrderAddons(ctx, s.pool, c.Order.ID)
+	if err != nil {
+		return nil, err
+	}
+	description := invoiceLine(c.Order.Scope)
+	if c.Period != "acceptance" {
+		description += " — " + c.Period
+	} else {
+		// The unit price already includes the discount; the line names it.
+		description = launchLine(description, "da", c.Order.Launch)
+	}
+	base := c.GrossMinor
+	var lines []numina.Line
+	for _, a := range periodAddons(addons, c.Period) {
+		net, _, ok := splitVAT(a.UnitMinor)
+		if !ok {
+			return nil, errors.New("portal: an add-on price has no exact VAT split")
+		}
+		base -= a.TotalMinor()
+		lines = append(lines, numina.Line{Description: addonLine(a, "da"), Quantity: a.Quantity, UnitPrice: numina.Amount(net), VATCode: cfg.VATCode})
+	}
+	if base < 0 {
+		return nil, errors.New("portal: add-ons exceed the charge")
+	}
+	if base > 0 {
+		net, _, ok := splitVAT(base)
+		if !ok {
+			return nil, errors.New("portal: the order price has no exact VAT split")
+		}
+		lines = append([]numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(net), VATCode: cfg.VATCode}}, lines...)
+	}
+	return lines, nil
 }

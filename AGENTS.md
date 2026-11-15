@@ -178,6 +178,9 @@ This public invitation does not authorize portal orders or change server-side co
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
 amounts and any changes are agreed before work begins. The portal's generated draft starts from
 the guide prices (ADR 0030); the operator reviews it before sharing, and the customer accepts it.
+The standard add-ons in `server/internal/identity/offerings.json` are the only extras with fixed
+prices; anything else is a fixed quote. When a customer asks for something outside the offer, file
+or bump an `addon-candidate` issue that describes only the request, never the customer.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects
 include optimization, accessibility improvements, bug fixes and routine upkeep in their agreed
 monthly price; new features and larger iterations require a new agreement. Human support is not
