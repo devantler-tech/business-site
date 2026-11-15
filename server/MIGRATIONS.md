@@ -94,6 +94,17 @@ list lives beside the embedded migrations in `internal/identity/migrate.go`
 (`runtimeGrants`); a migration that changes runtime access updates both.
 Without `--runtime-role`, the job grants nothing, as before.
 
+In Kubernetes, the kubelet writes a Secret projection root-owned, and with the
+pod's `fsGroup` it is readable by that group (mode 0440), which the private-file
+option refuses. A Job reading a Secret uses `--migration-database-projection`
+instead of `--migration-database-file`, running as a non-root UID whose primary
+group is the `fsGroup`. Only that group may read the file, and no other user may.
+Every other check above is unchanged, and the two options cannot be combined.
+
+```sh
+/app/business-site --migrate --migration-database-projection /run/portal-migration/database-url --runtime-role portal_web
+```
+
 No server, version, public-check, disclosure or portal-settings option may be
 combined with this mode. Repeated migration options are rejected. The operation is off by default;
 browser dependency settings and identity flags cannot activate it. Unbound
@@ -133,6 +144,15 @@ request/proposal/visibility/acceptance/invoice/credit history belongs to that ro
 DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledger.
 Actual
 web startup independently checks this boundary and refuses incomplete grants.
+
+The web role may also read the ledger (SELECT only on `portal_schema_version`, which
+holds version numbers and checksums, never records). Web startup refuses to serve the
+portal until the ledger holds every migration that release embeds, with unchanged
+checksums. A new web revision and its migration job start together, so the revision
+serves only after its job has finished. A ledger with later versions is accepted,
+so an older release keeps serving while a newer one migrates. The job itself refuses
+a ledger newer than the versions it embeds, so roll back to such a release only if
+it is compatible.
 
 v14 adds `portal_work_approvals`, `portal_work_revocations` and
 `portal_work_current` after unchanged v1–v13. Grant SELECT/INSERT on all three,

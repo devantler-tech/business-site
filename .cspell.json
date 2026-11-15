@@ -752,7 +752,8 @@
     "opgaver",
     "vurderer",
     "tidsplan",
-    "tmpfs"
+    "tmpfs",
+    "kubelet"
   ],
   "overrides": [
     {

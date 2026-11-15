@@ -99,6 +99,7 @@ var runtimeGrants = []string{
 	"SELECT,INSERT,UPDATE ON portal_card_checkouts",
 	"SELECT,INSERT ON portal_stripe_events",
 	"SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements,portal_mail_outbox,portal_mail_deliveries",
+	"SELECT ON portal_schema_version",
 }
 
 // managedTables are every relation the migrations own. Granting first revokes
@@ -152,7 +153,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 	if _, err = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS portal_schema_version (version integer PRIMARY KEY, checksum text NOT NULL)`); err != nil {
 		return fmt.Errorf("migration ledger: %w", err)
 	}
-	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema}
+	migrations := orderedMigrations()
 	rows, err := tx.Query(ctx, `SELECT version,checksum FROM portal_schema_version ORDER BY version`)
 	if err != nil {
 		return fmt.Errorf("read migration: %w", err)
@@ -169,8 +170,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 			rows.Close()
 			return errors.New("unsupported identity schema version")
 		}
-		sum := sha256.Sum256([]byte(migrations[applied]))
-		if checksum != hex.EncodeToString(sum[:]) {
+		if checksum != migrationChecksum(migrations[applied]) {
 			rows.Close()
 			return errors.New("changed identity schema")
 		}
@@ -184,8 +184,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 		if _, err = tx.Exec(ctx, migrations[i]); err != nil {
 			return fmt.Errorf("apply identity schema: %w", err)
 		}
-		sum := sha256.Sum256([]byte(migrations[i]))
-		if _, err = tx.Exec(ctx, `INSERT INTO portal_schema_version VALUES($1,$2)`, i+1, hex.EncodeToString(sum[:])); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO portal_schema_version VALUES($1,$2)`, i+1, migrationChecksum(migrations[i])); err != nil {
 			return fmt.Errorf("record migration: %w", err)
 		}
 	}
@@ -196,6 +195,38 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
+	}
+	return nil
+}
+
+// orderedMigrations lists the embedded migrations; version N is element N-1.
+func orderedMigrations() []string {
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema}
+}
+
+// migrationChecksum is the ledger's record of one migration's exact bytes.
+func migrationChecksum(migration string) string {
+	sum := sha256.Sum256([]byte(migration))
+	return hex.EncodeToString(sum[:])
+}
+
+// CheckSchemaCurrent refuses a store whose ledger does not yet hold every
+// migration this release embeds, with unchanged checksums. The migration job and
+// a new web revision start together, so this keeps the new revision from serving
+// the portal until its job has migrated the store. A ledger with later versions
+// is accepted: migrations only add, so an older release keeps serving while a
+// newer one rolls out. It reads the ledger only and changes nothing.
+func CheckSchemaCurrent(ctx context.Context, pool queryRower) error {
+	migrations := orderedMigrations()
+	checksums := make([]string, len(migrations))
+	for i, migration := range migrations {
+		checksums[i] = migrationChecksum(migration)
+	}
+	var current bool
+	err := pool.QueryRow(ctx, `SELECT count(*) = cardinality($1::text[]) FROM portal_schema_version v
+ WHERE v.version BETWEEN 1 AND cardinality($1::text[]) AND v.checksum = ($1::text[])[v.version]`, checksums).Scan(&current)
+	if err != nil || !current {
+		return ErrDenied
 	}
 	return nil
 }

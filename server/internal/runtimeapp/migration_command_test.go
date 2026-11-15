@@ -321,7 +321,7 @@ func TestMigrationCancellationInterruptsActualLockWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	if err := MigrateDatabase(ctx, file, ""); err != ErrMigration || time.Since(started) > 750*time.Millisecond {
+	if err := MigrateDatabase(ctx, file, "", false); err != ErrMigration || time.Since(started) > 750*time.Millisecond {
 		t.Fatal("migration job ignored operation cancellation")
 	}
 	var absent bool
@@ -535,6 +535,39 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 	}
 }
 
+// The package's Kubernetes Job reads its connection from a Secret projection
+// that the kubelet writes 0440 root:<fsGroup>. The compiled job migrates through
+// --migration-database-projection, and the strict file option refuses the same file.
+func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
+	_, pool, database := migrationCommandFixture(t)
+	dir, version := kubeletProjection(t, "ca.crt", "database-url")
+	trust, err := os.ReadFile(database.Query().Get("sslrootcert"))
+	if err != nil {
+		t.Fatal("owned CA source for the kubelet-shaped projection unavailable")
+	}
+	query := database.Query()
+	query.Set("sslrootcert", filepath.Join(dir, "ca.crt"))
+	database.RawQuery = query.Encode()
+	binary := buildMigrationCommand(t)
+	for name, content := range map[string][]byte{"ca.crt": trust, "database-url": []byte(database.String())} {
+		file := filepath.Join(version, name)
+		if err := os.WriteFile(file, content, 0400); err != nil || os.Chown(file, -1, os.Getegid()) != nil || os.Chmod(file, 0440) != nil {
+			t.Fatal("owned kubelet-shaped projection failed")
+		}
+	}
+	connection := filepath.Join(dir, "database-url")
+	if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-file", connection); err == nil || output != "portal schema migration failed\n" {
+		t.Fatal("strict private-file option accepted a group-readable projection")
+	}
+	if output, err := runMigrationCommand(t, binary, "--migrate", "--migration-database-projection", connection); err != nil || output != "portal schema migration completed\n" {
+		t.Fatal("actual job refused the kubelet-shaped projection")
+	}
+	var versions int
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 23 {
+		t.Fatal("projected migration did not apply every version")
+	}
+}
+
 // A current ledger is not permission to report success with a non-owning role.
 // Each control changes only its uniquely named, fully migrated disposable store.
 func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
@@ -652,12 +685,18 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
 	if identity.CheckRuntimeRole(t.Context(), runtime) == nil {
 		t.Fatal("a web role without grants passed the runtime check")
 	}
+	if identity.CheckSchemaCurrent(t.Context(), runtime) == nil {
+		t.Fatal("a web role that cannot read the ledger passed the schema check")
+	}
 	for range 2 {
 		if output, err := runMigrationCommand(t, binary, append(args, "--runtime-role", "portal_runtime")...); err != nil || output != "portal schema migration completed\n" {
 			t.Fatal("migration with an eligible runtime role failed")
 		}
 		if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {
 			t.Fatal("granted web role failed the runtime check")
+		}
+		if err := identity.CheckSchemaCurrent(t.Context(), runtime); err != nil {
+			t.Fatal("granted web role failed the schema check after its migration")
 		}
 	}
 	// Broader earlier grants converge back to the documented set on the next job.
@@ -673,7 +712,8 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
 	var exact bool
 	if err := pool.QueryRow(t.Context(), `SELECT NOT has_table_privilege('portal_runtime','portal_sessions','TRUNCATE')
  AND NOT has_table_privilege('portal_runtime','portal_requests','UPDATE')
- AND NOT has_table_privilege('portal_runtime','portal_schema_version','SELECT')
+ AND has_table_privilege('portal_runtime','portal_schema_version','SELECT')
+ AND NOT has_table_privilege('portal_runtime','portal_schema_version','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
  AND has_table_privilege('portal_runtime','portal_order_charges','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_orders','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_numina_contacts','DELETE')
