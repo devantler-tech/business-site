@@ -64,13 +64,9 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if err := b.svc.persistVisibility(t.Context(), operator, proposalRequestID, visibilityDecision{Key: secret(), ExpectedProposal: 1, Proposal: 1, Action: "share"}); err != nil {
 		t.Fatal(err)
 	}
-	client := enroll(t, b.svc, b.f, "card-consent", "private-client-key", "client")
-	review, err := b.svc.prepareProposalReview(t.Context(), client, proposalRequestID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.svc.acceptProposal(t.Context(), client, proposalRequestID, review.Key); err != nil {
-		t.Fatal(err)
+	triageSignIn(t, b, "card-client", "private-client-key", "client")
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/proposal-acceptance", acceptanceForm(t, b), b.site.URL); status != 303 {
+		t.Fatalf("acceptance=%d", status)
 	}
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','',1)`); err != nil {
 		t.Fatal(err)
@@ -85,7 +81,6 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if err := b.svc.EnableCardBilling(CardBilling{Stripe: api, WebhookSecret: webhookSecret, Now: time.Now}); err != nil {
 		t.Fatal(err)
 	}
-	triageSignIn(t, b, "card-client", "private-client-key", "client")
 	return b, fake
 }
 
