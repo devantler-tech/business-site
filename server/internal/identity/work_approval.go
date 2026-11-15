@@ -48,7 +48,7 @@ func (s *Foundation) workApprovalGate(ctx context.Context) bool {
 }
 
 func (s *Foundation) approvalsReady(ctx context.Context) bool {
-	return s.creditsReady(ctx) && s.workApprovalGate(ctx)
+	return s.acceptanceReady(ctx) && s.workApprovalGate(ctx)
 }
 
 // beginWorkRequest derives both workspaces before deterministic membership

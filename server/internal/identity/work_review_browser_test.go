@@ -54,11 +54,7 @@ const workReviewPath = "/portal/operator/requests/" + proposalRequestID + "/work
 func workBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
 	b := creditFixture(t)
-	credit := creditForm(t, b)
-	credit.Set("amount_dkk", "1234.56")
-	if status, _, _ := b.request("POST", creditPath, credit, b.site.URL); status != 303 {
-		t.Fatal("fictional full credit failed")
-	}
+	recordFixtureCredit(t, b, 0, 123456, "Fictional credited funds observed by the operator")
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +238,6 @@ func TestWorkReviewNativeDecisionAndRevocation(t *testing.T) {
 	}
 	revoke := workNativeForm(t, body, "work-revocations")
 	flags := workApprovalFlags()
-	delete(flags, "portal-credit-reconciliation")
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
 		t.Fatal(err)
 	}
@@ -399,13 +394,7 @@ func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	// Equal totals after a changed observation are still different evidence.
 	_, body, _ = b.request("GET", workReviewPath+"?invoice=1", nil, "")
 	stale := workNativeForm(t, body, "work-approvals")
-	correction := creditForm(t, b)
-	correction.Set("credit_expected", "1")
-	correction.Set("amount_dkk", "1234.56")
-	correction.Set("note", "A different fictional observation with equal funds")
-	if status, _, _ := b.request("POST", creditPath, correction, b.site.URL); status != 303 {
-		t.Fatal("fixture correction failed")
-	}
+	recordFixtureCredit(t, b, 1, 123456, "A different fictional observation with equal funds")
 	if status, _, _ := b.request("POST", path, stale, b.site.URL); status != 409 {
 		t.Fatal("changed evidence admitted stale review")
 	}

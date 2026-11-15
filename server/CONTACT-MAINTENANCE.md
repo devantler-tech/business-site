@@ -1,7 +1,9 @@
 # Private presentation maintenance inventory
 
-The ordinary Go suite checks all 120 real private documents: 28 portal, 12 contact,
-38 request, 30 triage and 12 credit documents. Both languages, complete frames,
+The ordinary Go suite checks all 98 real private documents: 24 portal, 12 contact,
+38 request and 24 triage documents. The retired invoice and credit screens
+(#117, #120) left the inventory with their 22 documents: the credits template,
+three triage invoice states and two portal error states, in both languages. Both languages, complete frames,
 native forms, escaping, accessible associations and declared error states remain
 mandatory. The test uses actual page builders and templates with fictional display
 values; it does not authenticate a person or prove browser accessibility.
@@ -11,8 +13,8 @@ Go frame: absent/current/paused/expired/selected, eligible/ineligible invoice re
 bounded terminal history and closed funding gates with revocation retained. Its
 explicit form comparisons, exact displayed facts, active section associations and
 negative controls live in `work_review_render_test.go`. Shared frame, actual-route
-and quality checks cover this sixth template. The original 120 frozen references
-below remain unchanged; no new renderer output is used to regenerate them.
+and quality checks cover this fifth template. The remaining original frozen
+references are unchanged; no new renderer output is used to regenerate them.
 
 From `server/`, with the exact compiler in `go.mod`:
 
@@ -68,13 +70,11 @@ Its fixture is `portal_links_test.go` blob
 | triage.html   | fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9 |
 | credits.html  | dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3 |
 
-The original tables remain unchanged. Ordinary validation uses the complete separate
-30-triage/12-credit invoice table recorded twice from signed snapshot
-`90ade40aa63a54b62012e89a820277dc56eddb5c` with Go 1.27.2 and C locale. The
-identical recording digest is
-`4b63e182146ca253ce135d26c49f2b21f706755b0b21fc5a2d7335c56a1b1cb3`.
-Only triage cases 12–14/27–29 and the 12 credit bodies differ from the original.
-Missing or malformed ordinary references fail without historical fallback.
+The original tables remain unchanged apart from removing the retired entries.
+The separate ordinary invoice table (recorded from signed snapshot
+`90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
+retired invoice and credit bodies, so it was removed with them; triage now uses
+the original references. Missing or malformed references fail without fallback.
 Validation never generates its own expected values from the application renderer.
 
 Ordinary request validation retains all 38 states. The 12 new/invalid forms
@@ -94,8 +94,7 @@ its receipt and operator views. This does not renew the retired comparison.
 
 The test-only `-contact-maintenance-task` option selects the frozen original
 expectations, not an application flag or a renewed experiment. Its registered
-literal name hint and complete descendants remain checked. The preserved
-ordinary-billing controls prove that task mode rejects the newer invoice bodies.
+literal name hint and complete descendants remain checked.
 
 [ADR 0014](../docs/adr/0014-private-contact-renderer-experiment.md),
 [ADR 0015](../docs/adr/0015-private-contact-comparator-amendment.md),

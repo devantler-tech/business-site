@@ -80,9 +80,7 @@ never make these expensive real-process controls optional to fit the ordinary su
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers, separately default-off free project-request intake and default-off
-Numina invoice and Stripe card billing (`BILLING.md`); no agent endpoint exists. Read `REQUESTS.md` for the request boundary and
-`INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
-bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
+Numina invoice and Stripe card billing (`BILLING.md`); no agent endpoint exists. Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
 no client decision route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
@@ -125,7 +123,7 @@ OSV's supported executable override rebuilds the same scanner version with the
 module-selected stable compiler before analysis. Preserve its complete target,
 arguments and exit status; run `bash scripts/scan-go-source.test.sh` from the
 repository root. A compiler-selection or analysis error is never a clean scan.
-Lychee's test-only preprocessor renders all six actual private templates in EN/DA.
+Lychee's test-only preprocessor renders all five actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
 public links and documents retain normal Lychee checking; no status is exempted.
@@ -231,22 +229,13 @@ New unshared drafts remain
 readable only through the old shared snapshot and are never acceptable or exposed.
 No environment activation mapping, credited funds or worker eligibility is added.
 
-External invoice metadata additionally requires independent false-default
-`portal-invoices`; review retirement under business-site#117 by 15 November 2026.
-Read `INVOICES.md`. Record only explicit external references, purpose/period and
-exact DKK net, VAT and positive payable-total minor units against current accepted proposal content. Never
-derive a first-month invoice from proposal prices. v10 follows unchanged v1–v9;
-its composite foreign key preserves the immutable acceptance binding. Retain
-SELECT/INSERT-only runtime privileges, content/actor-bound retries, bounded
-history and the shared request/operator lock. Optional display SDK waits precede
-private reads. v12 appends explicit net/VAT columns after unchanged v1–v11;
-bounded net plus VAT must equal the existing payable amount. Preserve legacy
-NULL/NULL facts as unrecorded, with exact absent-component retries only for
-those old receipts. A NOT VALID non-NULL constraint preserves historical rows
-while refusing incomplete new SQL inserts. Never infer rates or reclassify old
-receipts; bind both components in retry equality. Bank-credit status still uses
-the payable total, not net. Historical invoices grant no payment, monthly or execution
-authority; no environment activation mapping or client/agent invoice route exists.
+The external invoice-record and bank-credit evidence modules (#117, #120) are
+retired by ADR 0030: Numina is the record for invoices and bank payments. Their
+v10–v12 tables stay as historical schema, nothing in the portal writes them, and
+work approval still reads them as evidence until #268 binds approvals to the
+order's funding record (`BILLING.md`). Their former gates `portal-invoices` and
+`portal-credit-reconciliation` no longer exist. Test fixtures in
+`retired_evidence_fixture_test.go` seed that historical evidence for work-approval tests.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
@@ -297,18 +286,6 @@ signature-verified webhook for its exact Checkout Session or subscription invoic
 apply each event once, never from a browser return, and never also invoice it in Numina. The
 webhook alone bypasses sessions and CSRF; keep its body bound and signature check first.
 
-Manual bank-credit evidence additionally requires independent false-default
-`portal-credit-reconciliation`; review retirement under business-site#120 by
-15 November 2026. Read `CREDITS.md`. v11 follows unchanged v1–v10. Reserve each
-case-sensitive source/reference pair globally to its immutable invoice/client,
-including after invalidation. Append corrections under the shared request lock;
-never sum historical confirmations. Unverified/disputed evidence prevents full
-credit, and excess is distinct. Keep 32 identities per invoice and 16 revisions
-per identity, reserving the last for invalidation. Preserve complete history,
-content/actor-bound retries and SELECT/INSERT-only runtime permissions. Historical
-money remains recordable after a re-quote but never approves its replacement.
-No environment mapping, bank connection, client/agent route or work-start
-authority is introduced. Optional display SDK waits precede private reads.
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real
 restricted-login positive control and mismatched-login refusal controls.

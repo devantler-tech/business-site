@@ -15,7 +15,7 @@ import (
 
 func workApprovalFlags() map[string]memprovider.InMemoryFlag {
 	flags := acceptanceMemoryFlags()
-	for _, key := range []string{"portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"} {
+	for _, key := range []string{"portal-work-approvals"} {
 		flags[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
 	}
 	return flags
@@ -104,7 +104,7 @@ func changeApprovalFixture(ctx context.Context, t *testing.T, b *browserFixture,
 func TestWorkApprovalGatesAndClientDenial(t *testing.T) {
 	b, op := approvalFixture(t)
 	input := preparedApproval(t, b, op)
-	for _, key := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"} {
+	for _, key := range []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-work-approvals"} {
 		for _, state := range []string{"absent", "false", "wrong type"} {
 			t.Run(key+"/"+state, func(t *testing.T) {
 				setApprovalGate(t, b, key, map[string]any{"absent": nil, "false": false, "wrong type": "true"}[state])
@@ -346,12 +346,11 @@ func TestWorkApprovalFundingWatermarkAndRevocation(t *testing.T) {
 	if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "invalidated", Expected: 3, Note: "Fictional invalidation"}); err != nil {
 		t.Fatal(err)
 	}
-	// Revocation does not depend on funding, client access or the optional credit gate.
+	// Revocation does not depend on funding or client access.
 	if err := b.svc.Revoke(t.Context(), b.f.issuer, "credit-fixture-client"); err != nil {
 		t.Fatal(err)
 	}
 	flags := workApprovalFlags()
-	delete(flags, "portal-credit-reconciliation")
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
 		t.Fatal(err)
 	}
