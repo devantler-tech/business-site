@@ -121,13 +121,14 @@ type actualReadiness struct {
 }
 
 // launchActualCommand lets the actual child bind once; it never reserves a port.
-func launchActualCommand(t *testing.T, binary, public, listen string, environment []string) *actualCommandProcess {
+// Optional serving arguments follow the fixed public directory and listener.
+func launchActualCommand(t *testing.T, binary, public, listen string, environment []string, extra ...string) *actualCommandProcess {
 	t.Helper()
 	// testing cancels its context before Cleanup; the owner still needs its
 	// bounded opportunity to interrupt and reap the child normally.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 45*time.Second)
 	p := &actualCommandProcess{ctx: ctx, cancel: cancel, ready: make(chan actualReadiness, 1), exited: make(chan struct{})}
-	p.command = exec.CommandContext(ctx, binary, "--public", public, "--listen", listen)
+	p.command = exec.CommandContext(ctx, binary, append([]string{"--public", public, "--listen", listen}, extra...)...)
 	for _, value := range os.Environ() {
 		if !strings.HasPrefix(value, "PORTAL_") && !strings.HasPrefix(value, "portal-") && !strings.HasPrefix(value, "SSL_CERT_FILE=") {
 			p.command.Env = append(p.command.Env, value)

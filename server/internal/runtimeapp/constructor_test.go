@@ -158,6 +158,27 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	t.Helper()
 	ctx := context.Background()
+	migrator := createFixtureDatabase(t, database)
+	if err := identity.Migrate(ctx, migrator); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// createFixtureDatabase creates one uniquely named database owned by the fixture
+// migrator, points database at it and returns a migrator pool with no schema yet.
+// Cleanup closes that pool before dropping only this database.
+func createFixtureDatabase(t *testing.T, database *url.URL) *pgxpool.Pool {
+	t.Helper()
+	ctx := context.Background()
 	adminURL := *database
 	adminURL.Path = "/postgres"
 	adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
@@ -188,19 +209,8 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer migrator.Close()
-	if err := identity.Migrate(ctx, migrator); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(migrator.Close)
+	return migrator
 }
 
 // fixtureTLSDatabase requires PostgreSQL TLS negotiation before bridging the validated fixture.

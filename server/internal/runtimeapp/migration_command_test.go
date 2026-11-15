@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -320,7 +321,7 @@ func TestMigrationCancellationInterruptsActualLockWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	if err := MigrateDatabase(ctx, file); err != ErrMigration || time.Since(started) > 750*time.Millisecond {
+	if err := MigrateDatabase(ctx, file, ""); err != ErrMigration || time.Since(started) > 750*time.Millisecond {
 		t.Fatal("migration job ignored operation cancellation")
 	}
 	var absent bool
@@ -608,5 +609,71 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})
+	}
+}
+
+// The compiled job's --runtime-role grants exactly the documented web privileges
+// in the migration transaction. identity.CheckRuntimeRole, the web startup gate,
+// refuses the role without them and accepts it afterward; repeats converge.
+func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
+	file, pool, database := migrationCommandFixture(t)
+	binary := buildMigrationCommand(t)
+	runtimeURL := runtimeFixtureDatabase(t)
+	runtimeURL.Path = database.Path
+	runtime, err := pgxpool.New(t.Context(), runtimeURL.String())
+	if err != nil {
+		t.Fatal("disposable runtime pool unavailable")
+	}
+	t.Cleanup(runtime.Close)
+	// Without PUBLIC's default schema usage, only the job's explicit grant admits the web role.
+	if _, err := pool.Exec(t.Context(), "REVOKE USAGE ON SCHEMA public FROM PUBLIC"); err != nil {
+		t.Fatal("disposable schema usage preparation failed")
+	}
+	args := []string{"--migrate", "--migration-database-file", file}
+	// The migration login, an administrator, an absent role, an invalid name,
+	// a predefined role and PUBLIC are refused. Those reaching SQL fail inside
+	// the migration transaction, so no partial schema or grant remains.
+	for _, role := range []string{"portal_migrator", "portal_fixture_owner", "portal_absent_runtime", "Portal_Runtime", "pg_monitor", "public"} {
+		if output, err := runMigrationCommand(t, binary, append(args, "--runtime-role", role)...); err == nil || output != "portal schema migration failed\n" {
+			t.Fatalf("ineligible runtime role %s was accepted or exposed", role)
+		}
+		var absent bool
+		if err := pool.QueryRow(t.Context(), "SELECT to_regclass('public.portal_schema_version') IS NULL").Scan(&absent); err != nil || !absent {
+			t.Fatal("refused runtime role left a partial migration")
+		}
+	}
+	if output, err := runMigrationCommand(t, binary, args...); err != nil || output != "portal schema migration completed\n" {
+		t.Fatal("ordinary migration without a runtime role failed")
+	}
+	if identity.CheckRuntimeRole(t.Context(), runtime) == nil {
+		t.Fatal("a web role without grants passed the runtime check")
+	}
+	for range 2 {
+		if output, err := runMigrationCommand(t, binary, append(args, "--runtime-role", "portal_runtime")...); err != nil || output != "portal schema migration completed\n" {
+			t.Fatal("migration with an eligible runtime role failed")
+		}
+		if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {
+			t.Fatal("granted web role failed the runtime check")
+		}
+	}
+	// Broader earlier grants converge back to the documented set on the next job.
+	if _, err := pool.Exec(t.Context(), "GRANT UPDATE ON portal_requests TO portal_runtime; GRANT TRUNCATE ON portal_sessions TO portal_runtime"); err != nil {
+		t.Fatal("broader grant fixture failed")
+	}
+	if identity.CheckRuntimeRole(t.Context(), runtime) == nil {
+		t.Fatal("broader web privileges passed the runtime check")
+	}
+	if output, err := runMigrationCommand(t, binary, append(args, "--runtime-role", "portal_runtime")...); err != nil || output != "portal schema migration completed\n" {
+		t.Fatal("repeat migration did not reset runtime privileges")
+	}
+	var exact bool
+	if err := pool.QueryRow(t.Context(), `SELECT NOT has_table_privilege('portal_runtime','portal_sessions','TRUNCATE')
+ AND NOT has_table_privilege('portal_runtime','portal_requests','UPDATE')
+ AND NOT has_table_privilege('portal_runtime','portal_schema_version','SELECT')
+ AND (SELECT count(*) FROM portal_schema_version)=15`).Scan(&exact); err != nil || !exact {
+		t.Fatal("repeat migration retained privileges beyond the documented set")
+	}
+	if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {
+		t.Fatal("reset web role failed the runtime check")
 	}
 }

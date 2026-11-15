@@ -62,7 +62,10 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
 	publicHost := options.String("public-host", "", "public site host; with --portal-host, each host redirects the other's pages")
 	portalHost := options.String("portal-host", "", "portal host; / opens the portal there")
+	portalSettings := options.String("portal-settings-projection", "", "confined projected portal settings file for serving or one invitation")
+	runtimeRole := options.String("runtime-role", "", "existing web login that the migration grants its runtime privileges")
 	identityPhase := registerIdentityPhaseOptions(options)
+	portalInvite := registerPortalInviteOptions(options)
 	if err := options.Parse(args); err != nil || options.NArg() != 0 {
 		return errors.New("runtime arguments are invalid")
 	}
@@ -76,13 +79,16 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if identityPhase.selected(seen) {
 		return identityPhase.run(ctx, options, seen, output)
 	}
-	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 {
+	if portalInvite.selected(seen) {
+		return portalInvite.run(ctx, options, seen, *portalSettings, output)
+	}
+	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 || seen["runtime-role"] > 1 {
 		return runtimeapp.ErrMigration
 	}
-	if *migrate || seen["migration-database-file"] != 0 {
-		allowed := *migrate && *migrationFile != ""
+	if *migrate || seen["migration-database-file"] != 0 || seen["runtime-role"] != 0 {
+		allowed := *migrate && *migrationFile != "" && (seen["runtime-role"] == 0 || *runtimeRole != "")
 		options.Visit(func(option *flag.Flag) {
-			if option.Name != "migrate" && option.Name != "migration-database-file" {
+			if option.Name != "migrate" && option.Name != "migration-database-file" && option.Name != "runtime-role" {
 				allowed = false
 			}
 		})
@@ -103,7 +109,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 				}
 			}
 		}
-		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile); err != nil {
+		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile, *runtimeRole); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(output, "portal schema migration completed")
@@ -115,6 +121,11 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	projected := seen["company-disclosure-projection"] != 0
 	if projected && (seen["company-disclosure-projection"] != 1 || seen["company-disclosure-file"] != 0 || *projection == "" || *check || *version || publicProfile != "production-template") {
 		return runtimeapp.ErrCompanyProjection
+	}
+	// Portal settings configure serving only; public checks and receipts never read them.
+	settingsProjected := seen["portal-settings-projection"] != 0
+	if settingsProjected && (seen["portal-settings-projection"] != 1 || *portalSettings == "" || *check || *version || *checkServing) {
+		return runtimeapp.ErrPortalSettings
 	}
 	if *check {
 		artifact, err := loadPublic(*public)
@@ -153,6 +164,11 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	}
 	if *checkServing {
 		return json.NewEncoder(output).Encode(struct{ Repository, SourceRevision, PublicDigest, EffectivePublicDigest, PublicProfile string }{"devantler-tech/business-site", revision, publicDigest, artifact.Digest(), publicProfile})
+	}
+	if settingsProjected {
+		if err := runtimeapp.ApplyPortalSettingsProjection(*portalSettings); err != nil {
+			return err
+		}
 	}
 	cfg, err := runtimeapp.ReadConfig(os.Getenv)
 	if err != nil {

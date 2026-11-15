@@ -175,9 +175,27 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err != nil {
 		return nil, closed, ErrConfig
 	}
-	cfg, err := pgxpool.ParseConfig(c.database)
+	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	pool, broker, err := connectPortal(startup, c)
 	if err != nil {
 		return nil, closed, ErrConfig
+	}
+	handler, err := identity.New(pool, broker, flags).Browser(c.callback, secret)
+	if err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	return handler, pool.Close, nil
+}
+
+// connectPortal opens the bounded runtime pool, then checks its restricted login
+// and grants before discovering the broker. Errors are generic; the caller owns
+// the returned pool.
+func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.Broker, error) {
+	cfg, err := pgxpool.ParseConfig(c.database)
+	if err != nil {
+		return nil, nil, ErrConfig
 	}
 	cfg.MaxConns = 4
 	cfg.MinConns = 0
@@ -188,13 +206,11 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	cfg.ConnConfig.RuntimeParams["search_path"] = "public"
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
 	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
-	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
 	pool, err := pgxpool.NewWithConfig(startup, cfg)
 	if err != nil {
-		return nil, closed, ErrConfig
+		return nil, nil, ErrConfig
 	}
-	fail := func() (http.Handler, func(), error) { pool.Close(); return nil, closed, ErrConfig }
+	fail := func() (*pgxpool.Pool, *identity.Broker, error) { pool.Close(); return nil, nil, ErrConfig }
 	// Assess the actual configured login, not a restricted role adopted by a
 	// broader credential. Both identities must agree before checking its grants.
 	var loginMatches bool
@@ -208,9 +224,5 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err != nil {
 		return fail()
 	}
-	handler, err := identity.New(pool, broker, flags).Browser(c.callback, secret)
-	if err != nil {
-		return fail()
-	}
-	return handler, pool.Close, nil
+	return pool, broker, nil
 }

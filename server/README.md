@@ -227,6 +227,13 @@ For the restricted image, project mode `0440` with group 65532 and searchable
 directories. Configuration is snapshotted at startup; restart to rotate it.
 Store the secret privately; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
+Where no environment is available, `--portal-settings-projection <absolute-file>`
+supplies these settings (with the projected secret input) and the production
+identity profile from one confined `KEY=value` file instead; see
+[the deploy package](../deploy/README.md#portal-settings-and-invitations). A file
+without keys keeps the portal off, and none of these variables may also be inherited.
+The exclusive `--portal-invite` mode uses the same file to create one invitation;
+see [CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#invite-a-customer).
 The Unix service runtime requires an already migrated least-privilege store. Its
 configured database login must match both the session and effective role before
 the existing permission check and broker discovery; switching a broader login

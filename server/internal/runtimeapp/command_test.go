@@ -173,9 +173,9 @@ func commandStatus(t *testing.T, address, route string, want int) {
 }
 
 // startActualCommand owns the executable through readiness, lease expiry and clean shutdown.
-func startActualCommand(t *testing.T, binary, public string, environment []string) (string, func()) {
+func startActualCommand(t *testing.T, binary, public string, environment []string, extra ...string) (string, func()) {
 	t.Helper()
-	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment)
+	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment, extra...)
 	address, err := process.awaitReady()
 	if err != nil {
 		t.Fatal(err)
