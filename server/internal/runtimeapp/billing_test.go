@@ -61,8 +61,8 @@ func TestCardConfigIsOptionalAndStrict(t *testing.T) {
 	if c, err := readCardConfig(env(nil)); err != nil || c != (cardConfig{}) {
 		t.Fatal("absent card configuration was not empty", err)
 	}
-	c, err := readCardConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/run/stripe/key", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/run/stripe/webhook"}))
-	if err != nil || c.baseURL != "https://api.stripe.com" {
+	c, err := readCardConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/run/stripe/key", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/run/stripe/webhook", "PORTAL_STRIPE_TAX_RATE": "txr_moms25"}))
+	if err != nil || c.baseURL != "https://api.stripe.com" || c.taxRate != "txr_moms25" {
 		t.Fatalf("defaults differ: %+v %v", c, err)
 	}
 	for name, values := range map[string]map[string]string{
@@ -70,14 +70,17 @@ func TestCardConfigIsOptionalAndStrict(t *testing.T) {
 		"webhook secret without key": {"PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w"},
 		"relative files":             {"PORTAL_STRIPE_KEY_FILE": "k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "w"},
 		"URL without files":          {"PORTAL_STRIPE_API_URL": "https://api.stripe.com"},
-		"plain HTTP":                 {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_API_URL": "http://api.stripe.com"},
-		"URL with a path":            {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_API_URL": "https://api.stripe.com/v1"},
+		"plain HTTP":                 {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_TAX_RATE": "txr_moms25", "PORTAL_STRIPE_API_URL": "http://api.stripe.com"},
+		"URL with a path":            {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_TAX_RATE": "txr_moms25", "PORTAL_STRIPE_API_URL": "https://api.stripe.com/v1"},
+		"files without a tax rate":   {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w"},
+		"malformed tax rate":         {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_TAX_RATE": "25"},
+		"tax rate without files":     {"PORTAL_STRIPE_TAX_RATE": "txr_moms25"},
 	} {
 		if _, err := readCardConfig(env(values)); err == nil {
 			t.Errorf("%s was accepted", name)
 		}
 	}
-	if _, err := ReadConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w"})); err == nil {
+	if _, err := ReadConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_TAX_RATE": "txr_moms25"})); err == nil {
 		t.Fatal("card billing configured without a portal")
 	}
 	if err := enableCardBilling(nil, cardConfig{}); err != nil {

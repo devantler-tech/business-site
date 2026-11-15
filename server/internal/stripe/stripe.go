@@ -71,8 +71,15 @@ type Line struct {
 // or "subscription" for monthly lines only. Payment methods
 // are left to the Dashboard: Stripe offers MobilePay only for one-off
 // payments, because MobilePay does not support recurring charges.
+//
+// TaxRate is the Dashboard's inclusive 25% Danish VAT rate. Every line carries
+// it, so the invoice Stripe issues for the payment shows the net amount, the
+// VAT rate and the VAT amount. A one-off payment asks Stripe for that paid
+// invoice; a subscription gets one for every charge anyway. Checkout collects
+// the client's address and, for a business, its name and VAT number for it.
 type Checkout struct {
 	Mode               string
+	TaxRate            string
 	Lines              []Line
 	ClientReference    string
 	CustomerEmail      string
@@ -105,6 +112,14 @@ func (c Checkout) form() (url.Values, error) {
 		"mode": {c.Mode}, "client_reference_id": {c.ClientReference},
 		"success_url": {c.SuccessURL}, "cancel_url": {c.CancelURL},
 		"locale": {c.Locale}, "integration_identifier": {integrationIdentifier},
+		"billing_address_collection": {"required"}, "tax_id_collection[enabled]": {"true"},
+	}
+	if !taxRateID.MatchString(c.TaxRate) {
+		return nil, errors.New("stripe: checkout needs a tax rate")
+	}
+	if c.Mode == "payment" {
+		f.Set("invoice_creation[enabled]", "true")
+		f.Set("invoice_creation[invoice_data][rendering_options][amount_tax_display]", "exclude_tax")
 	}
 	if c.CustomerEmail != "" {
 		f.Set("customer_email", c.CustomerEmail)
@@ -119,6 +134,7 @@ func (c Checkout) form() (url.Values, error) {
 		f.Set(p+"[price_data][currency]", "dkk")
 		f.Set(p+"[price_data][unit_amount]", strconv.FormatInt(line.AmountMinor, 10))
 		f.Set(p+"[price_data][product_data][name]", line.Name)
+		f.Set(p+"[tax_rates][0]", c.TaxRate)
 		if line.Monthly {
 			monthly = true
 			f.Set(p+"[price_data][recurring][interval]", "month")
@@ -171,6 +187,7 @@ var (
 	paymentIntentID = regexp.MustCompile(`^pi_[A-Za-z0-9_]{1,250}$`)
 	subscriptionID  = regexp.MustCompile(`^sub_[A-Za-z0-9_]{1,250}$`)
 	invoiceID       = regexp.MustCompile(`^in_[A-Za-z0-9_]{1,250}$`)
+	taxRateID       = regexp.MustCompile(`^txr_[A-Za-z0-9_]{1,250}$`)
 )
 
 // GetInvoice reads one invoice, for example to learn whose subscription a
@@ -187,6 +204,29 @@ func (c *Client) GetInvoice(ctx context.Context, id string) (Invoice, error) {
 		return Invoice{}, errors.New("stripe: response malformed")
 	}
 	return i, nil
+}
+
+// TaxRate is the subset of a tax rate the portal checks before using it.
+type TaxRate struct {
+	ID         string  `json:"id"`
+	Active     bool    `json:"active"`
+	Inclusive  bool    `json:"inclusive"`
+	Percentage float64 `json:"percentage"`
+}
+
+// GetTaxRate reads one tax rate.
+func (c *Client) GetTaxRate(ctx context.Context, id string) (TaxRate, error) {
+	if !taxRateID.MatchString(id) {
+		return TaxRate{}, errors.New("stripe: invalid tax rate")
+	}
+	var r TaxRate
+	if err := c.call(ctx, http.MethodGet, "/v1/tax_rates/"+id, url.Values{}, "", &r); err != nil {
+		return TaxRate{}, err
+	}
+	if r.ID != id {
+		return TaxRate{}, errors.New("stripe: response malformed")
+	}
+	return r, nil
 }
 
 // CancelSubscriptionNow ends a subscription immediately, without proration,

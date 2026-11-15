@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/stripe"
@@ -22,22 +23,49 @@ type StripeAPI interface {
 	CancelSubscriptionAt(ctx context.Context, subscription string, at time.Time) (time.Time, error)
 	CancelSubscriptionNow(ctx context.Context, subscription string) (time.Time, error)
 	GetInvoice(ctx context.Context, id string) (stripe.Invoice, error)
+	GetTaxRate(ctx context.Context, id string) (stripe.TaxRate, error)
 }
 
 // CardBilling configures the card and MobilePay path (ADR 0030, #553).
+// TaxRate is the Stripe Dashboard's inclusive 25% Danish VAT rate, so the
+// invoice Stripe issues for each payment is a full VAT invoice.
 type CardBilling struct {
 	Stripe        StripeAPI
 	WebhookSecret string
+	TaxRate       string
 	Now           func() time.Time
 }
 
 // EnableCardBilling supplies the Stripe client. The false-default
 // portal-card-billing gate still decides whether anything happens.
 func (s *Foundation) EnableCardBilling(cfg CardBilling) error {
-	if cfg.Stripe == nil || cfg.WebhookSecret == "" || cfg.Now == nil {
+	if cfg.Stripe == nil || cfg.WebhookSecret == "" || !strings.HasPrefix(cfg.TaxRate, "txr_") || cfg.Now == nil {
 		return errors.New("card billing is not configured")
 	}
 	s.cards.Store(&cfg)
+	return nil
+}
+
+// errVATRate refuses Checkout while the configured tax rate is not an active,
+// inclusive 25% rate. An exclusive rate would add VAT on top of the agreed
+// price, and any other percentage would put the wrong VAT on the invoice.
+var errVATRate = errors.New("card billing: the Stripe tax rate is not inclusive 25% VAT")
+
+// confirmVATRate reads the configured tax rate from Stripe until it is
+// confirmed once, before any Checkout uses it.
+func (s *Foundation) confirmVATRate(ctx context.Context, cfg *CardBilling) error {
+	if confirmed := s.vatRate.Load(); confirmed != nil && *confirmed == cfg.TaxRate {
+		return nil
+	}
+	rate, err := cfg.Stripe.GetTaxRate(ctx, cfg.TaxRate)
+	if err != nil {
+		return err
+	}
+	if !rate.Active || !rate.Inclusive || rate.Percentage != 25 {
+		log.Printf("portal: the Stripe tax rate is not an active inclusive 25%% rate")
+		return errVATRate
+	}
+	s.vatRate.Store(&cfg.TaxRate)
 	return nil
 }
 
@@ -158,7 +186,10 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 		if !latest.Replaceable() {
 			continue
 		}
-		checkout := stripe.Checkout{Mode: "payment", ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
+		if err := s.confirmVATRate(ctx, cfg); err != nil {
+			return err
+		}
+		checkout := stripe.Checkout{Mode: "payment", TaxRate: cfg.TaxRate, ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
 			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: name, AmountMinor: o.OneTimeMinor}}}
 		if purpose == "monthly" {
 			// Card only by Stripe's own rules: MobilePay has no recurring use.

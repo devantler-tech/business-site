@@ -32,6 +32,8 @@ type fakeStripe struct {
 	invoices   map[string]map[string]any // invoices by ID, for GET /v1/invoices/{id}
 	cancels    []url.Values              // subscription end requests, with "subscription" added
 	failCancel bool                      // answer the next subscription end with 500
+	taxRate    map[string]any            // the configured tax rate, for GET /v1/tax_rates/{id}
+	taxReads   int
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +102,9 @@ func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(invoice)
+	case r.Method == "GET" && r.URL.Path == "/v1/tax_rates/txr_moms25":
+		f.taxReads++
+		_ = json.NewEncoder(w).Encode(f.taxRate)
 	case r.Method == "DELETE":
 		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
 		f.cancels = append(f.cancels, url.Values{"subscription": {subscription}, "immediately": {"true"}})
@@ -149,14 +154,15 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','',1)`); err != nil {
 		t.Fatal(err)
 	}
-	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}, intents: map[string]string{}, invoices: map[string]map[string]any{}}
+	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}, intents: map[string]string{}, invoices: map[string]map[string]any{},
+		taxRate: map[string]any{"id": "txr_moms25", "active": true, "inclusive": true, "percentage": 25.0}}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
 	api, err := stripe.New(server.URL, "rk_test_fixture", server.Client().Transport)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.svc.EnableCardBilling(CardBilling{Stripe: api, WebhookSecret: webhookSecret, Now: time.Now}); err != nil {
+	if err := b.svc.EnableCardBilling(CardBilling{Stripe: api, WebhookSecret: webhookSecret, TaxRate: "txr_moms25", Now: time.Now}); err != nil {
 		t.Fatal(err)
 	}
 	return b, fake
@@ -309,6 +315,19 @@ func TestPrivateCardSubscriptionChargesMonthlyInAdvance(t *testing.T) {
 	if monthly.Get("mode") != "subscription" || monthly.Get("line_items[0][price_data][unit_amount]") != "12500" || monthly.Get("line_items[0][price_data][recurring][interval]") != "month" || monthly.Has("line_items[1][quantity]") || monthly.Get("subscription_data[proration_behavior]") != "none" || monthly.Get("subscription_data[metadata][portal_order]") != orderID(t, b) {
 		t.Fatalf("subscription checkout differs: %v", monthly)
 	}
+	// Both carry Danish VAT inside the agreed price, so Stripe's invoices show
+	// net, rate and VAT. The one-off payment asks for its paid invoice.
+	for _, s := range sessions {
+		if s.Get("line_items[0][tax_rates][0]") != "txr_moms25" || s.Get("billing_address_collection") != "required" || s.Get("tax_id_collection[enabled]") != "true" {
+			t.Fatalf("checkout lacks the VAT invoice fields: %v", s)
+		}
+	}
+	if oneOff.Get("invoice_creation[enabled]") != "true" || oneOff.Get("invoice_creation[invoice_data][rendering_options][amount_tax_display]") != "exclude_tax" || monthly.Has("invoice_creation[enabled]") {
+		t.Fatal("only the one-off payment should ask Stripe for a paid invoice")
+	}
+	if fake.taxReads != 1 {
+		t.Fatalf("the tax rate was read %d times, want once", fake.taxReads)
+	}
 	if body := receipt(t, b, "en"); strings.Count(body, `class="checkout-link"`) != 2 {
 		t.Fatal("receipt does not offer both payments")
 	}
@@ -395,6 +414,51 @@ func TestPrivateCardRetriesKeepEverySession(t *testing.T) {
 	}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", restart, b.site.URL); status != 403 {
 		t.Fatalf("closed card gate admitted a card order: %d", status)
+	}
+}
+
+// TestPrivateCardRefusesAnUnconfirmedVATRate proves that no Checkout is made
+// with a tax rate that would add VAT on top of the agreed price or put a wrong
+// rate on the invoice, and that a corrected rate is then used.
+func TestPrivateCardRefusesAnUnconfirmedVATRate(t *testing.T) {
+	b, fake := cardOrderFixture(t, 299500, 0)
+	rate := func(r map[string]any) {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		fake.taxRate = r
+	}
+	restart := func() {
+		t.Helper()
+		body := receipt(t, b, "en")
+		csrf := csrfInput.FindStringSubmatch(body)
+		acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
+		if strings.Contains(body, "checkout.stripe.invalid") || len(csrf) != 2 || len(acceptance) != 2 {
+			t.Fatal("the receipt does not offer to start the payment again")
+		}
+		f := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "acceptance": {acceptance[1]}, "collection": {"card"}}
+		if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
+			t.Fatalf("restart refused: %d", status)
+		}
+	}
+	rate(map[string]any{"id": "txr_moms25", "active": true, "inclusive": false, "percentage": 25.0})
+	placeCardOrder(t, b)
+	for _, wrong := range []map[string]any{
+		{"id": "txr_moms25", "active": true, "inclusive": true, "percentage": 20.0},
+		{"id": "txr_moms25", "active": false, "inclusive": true, "percentage": 25.0},
+	} {
+		if len(fake.sessions()) != 0 {
+			t.Fatal("a checkout was created with an unconfirmed tax rate")
+		}
+		rate(wrong)
+		restart()
+	}
+	if len(fake.sessions()) != 0 {
+		t.Fatal("a checkout was created with an inactive tax rate")
+	}
+	rate(map[string]any{"id": "txr_moms25", "active": true, "inclusive": true, "percentage": 25.0})
+	restart()
+	if sessions := fake.sessions(); len(sessions) != 1 || sessions[0].Get("line_items[0][tax_rates][0]") != "txr_moms25" {
+		t.Fatal("the corrected tax rate was not used")
 	}
 }
 
