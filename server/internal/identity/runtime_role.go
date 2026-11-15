@@ -91,23 +91,31 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	return checkBillingRole(ctx, pool)
 }
 
-// checkBillingRole requires SELECT/INSERT on orders, charges and the Numina
-// contact map and UPDATE on charges only. Orders and the contact map are never
-// changed, and nothing is deleted, directly, by delegation or assumable role.
+// Billing tables the web runtime only reads and appends to, and the two state
+// tables it also updates. Every billing table refuses deletion and delegation.
+var (
+	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events"}
+	billingStateTables = []string{"portal_order_charges", "portal_card_checkouts"}
+)
+
+// checkBillingRole requires SELECT/INSERT on every billing table and UPDATE on
+// the state tables only. Fixed tables are never changed, and nothing is
+// deleted, directly, by delegation or assumable role.
 func checkBillingRole(ctx context.Context, pool queryRower) error {
 	var allowed bool
 	err := pool.QueryRow(ctx, `SELECT
  (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
-  FROM unnest(ARRAY['portal_orders','portal_order_charges','portal_numina_contacts']) table_name
+  FROM unnest($1::text[]||$2::text[]) table_name
   CROSS JOIN unnest(ARRAY['SELECT','INSERT']) privilege)
- AND has_table_privilege(current_user,'portal_order_charges','UPDATE')
+ AND (SELECT bool_and(has_table_privilege(current_user,table_name,'UPDATE')) FROM unnest($2::text[]) table_name)
  AND NOT EXISTS (
   SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
-   EXISTS (SELECT 1 FROM unnest(ARRAY['portal_orders','portal_numina_contacts']) immutable(table_name)
-    WHERE has_any_column_privilege(role.oid,immutable.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION')
-     OR has_table_privilege(role.oid,immutable.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
-   OR has_any_column_privilege(role.oid,'portal_order_charges','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
-   OR has_table_privilege(role.oid,'portal_order_charges','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
+   EXISTS (SELECT 1 FROM unnest($1::text[]) fixed(table_name)
+    WHERE has_any_column_privilege(role.oid,fixed.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION'))
+   OR EXISTS (SELECT 1 FROM unnest($2::text[]) state(table_name)
+    WHERE has_any_column_privilege(role.oid,state.table_name,'REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION'))
+   OR EXISTS (SELECT 1 FROM unnest($1::text[]||$2::text[]) billing(table_name)
+    WHERE has_table_privilege(role.oid,billing.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))))`, billingFixedTables, billingStateTables).Scan(&allowed)
 	if err != nil || !allowed {
 		return ErrDenied
 	}

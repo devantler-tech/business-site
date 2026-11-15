@@ -166,10 +166,11 @@ cancellation are not handled by the portal yet; they are a launch prerequisite.
 
 Migration v16 adds `portal_orders` (SELECT/INSERT), `portal_order_charges`
 (SELECT/INSERT/UPDATE, for state changes) and `portal_numina_contacts` (SELECT/INSERT) after
-unchanged v1–v15. Migration v17 adds `portal_card_checkouts` (SELECT/INSERT/UPDATE: a newer
-session replaces an expired one) and `portal_stripe_events` (SELECT/INSERT). The runtime
-never deletes them. Grant these to the runtime role before either gate is switched on; until
-then the tables stay empty.
+unchanged v1–v15. Migration v17 adds `portal_card_checkouts` (SELECT/INSERT/UPDATE, for state changes)
+and `portal_stripe_events` (SELECT/INSERT). The migration grants exactly these to the runtime
+role. The runtime refuses to start if it can change orders, the contact map or Stripe events,
+or delete, truncate or pass on access to any billing table, directly or through another role.
+Until a gate is switched on, the tables stay empty.
 
 ## Tests
 
