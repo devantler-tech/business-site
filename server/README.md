@@ -109,8 +109,8 @@ acceptance records an audited
 version/content-bound receipt after explicit review; it never approves payments or
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
-Private external invoice records and bank-credit evidence are retired (ADR 0030,
-# 117, #120): [portal billing](BILLING.md) issues Numina invoices and collects
+Private external invoice records and bank-credit evidence are retired by ADR 0030
+(#117, #120): [portal billing](BILLING.md) issues Numina invoices and collects
 cards through Stripe instead. Their historical tables remain, unwritten, as work
 approval evidence until #268 binds approvals to an order's funding record.
 
