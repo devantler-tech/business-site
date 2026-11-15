@@ -4,6 +4,7 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -138,7 +139,7 @@ func TestEarlyStartWithdrawalSettlement(t *testing.T) {
 		t.Fatal("the receipt does not say the work done is paid for")
 	}
 	_, body, f := operatorOrderForm(t, b, "settling-operator")
-	if !strings.Contains(body, `name="owed_dkk"`) || !strings.Contains(body, `max="3094"`) {
+	if !strings.Contains(body, `name="owed_dkk"`) || !strings.Contains(body, `max="3094"`) || !strings.Contains(body, "refund only what was paid beyond it") {
 		t.Fatal("the operator page offers no settlement up to the agreed amounts")
 	}
 	for name, owed := range map[string]string{"negative": "-1", "decimal": "10.5", "leading zero": "01"} {
@@ -228,5 +229,31 @@ func TestWithdrawalWithoutEarlyStartOwesNothing(t *testing.T) {
 	f.Set("owed_dkk", "100")
 	if status, _, _ := b.request("POST", settlementPath, f, b.site.URL); status != 409 {
 		t.Fatalf("a settlement without an early start was admitted: %d", status)
+	}
+}
+
+// TestPrivateCardRestartKeepsTheEarlyStartRequest lets a client whose payment
+// session closed start the payment again without changing their request to
+// start early.
+func TestPrivateCardRestartKeepsTheEarlyStartRequest(t *testing.T) {
+	b, fake := cardOrderFixture(t, 299500, 0)
+	body := receipt(t, b, "en")
+	csrf := csrfInput.FindStringSubmatch(body)
+	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
+	if len(csrf) != 2 || len(acceptance) != 2 {
+		t.Fatal("receipt has no order form")
+	}
+	order := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "acceptance": {acceptance[1]}, "collection": {"card"}, "early_start": {"yes"}}
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", order, b.site.URL); status != 303 {
+		t.Fatalf("early-start card order refused: %d", status)
+	}
+	if sendEvent(t, b, "evt_expired", "checkout.session.expired", map[string]any{"id": "cs_test_1", "mode": "payment", "payment_status": "unpaid", "amount_total": 299500, "currency": "dkk"}, webhookSecret) != 200 {
+		t.Fatal("expiry refused")
+	}
+	if body := receipt(t, b, "en"); !strings.Contains(body, `name="collection" value="card"><input type="hidden" name="early_start" value="yes">`) {
+		t.Fatal("the restart form drops the early-start request")
+	}
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", order, b.site.URL); status != 303 || len(fake.sessions()) != 2 {
+		t.Fatalf("restart with the same request refused: %d", status)
 	}
 }

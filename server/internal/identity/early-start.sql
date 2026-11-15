@@ -19,7 +19,7 @@ CREATE TABLE portal_order_completions (
 -- refunded.
 CREATE TABLE portal_withdrawal_settlements (
   order_id text PRIMARY KEY REFERENCES portal_order_withdrawals(order_id),
-  owed_minor bigint NOT NULL CHECK(owed_minor BETWEEN 0 AND 1000000000),
+  owed_minor bigint NOT NULL CHECK(owed_minor BETWEEN 0 AND 2000000000),
   operator_issuer text NOT NULL,
   operator_subject text NOT NULL,
   recorded_at timestamptz NOT NULL DEFAULT clock_timestamp()

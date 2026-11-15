@@ -16,7 +16,9 @@ func earlyStartReady(placed time.Time, early *time.Time) bool {
 	return early != nil || !time.Now().Before(withdrawalDeadline(placed))
 }
 
-var wholeDKK = regexp.MustCompile(`^(0|[1-9][0-9]{0,6})$`)
+// wholeDKK is an amount owed in whole DKK; the order's own amounts bound it
+// further (SettlementLimitDKK).
+var wholeDKK = regexp.MustCompile(`^(0|[1-9][0-9]{0,7})$`)
 
 // parseOperatorOrderForm admits exactly an operator's order form: the order
 // and, for a withdrawal settlement, the amount owed in whole DKK.
