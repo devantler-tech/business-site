@@ -35,6 +35,11 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_stripe_events(id,type) VALUES('evt_reset','checkout.session.completed')`); err != nil {
 		t.Fatal("fixture Stripe event unavailable", err)
 	}
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_order_ends(order_id,last_month,source) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','2026-12-01','stripe');
+ INSERT INTO portal_card_cancellations(subscription_id,order_id,cancel_at) VALUES('sub_reset','CCCCCCCCCCCCCCCCCCCCCCCCCC',clock_timestamp());
+ INSERT INTO portal_charge_reversals(order_id,period,reason,reference) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','acceptance','refunded','ch_reset')`); err != nil {
+		t.Fatal("fixture order end and reversal unavailable", err)
+	}
 	tables := []string{
 		"portal_login_attempts", "portal_invitations", "portal_memberships",
 		"portal_sessions", "portal_contacts", "portal_requests", "portal_proposals",
@@ -42,6 +47,7 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 		"portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
 		"portal_membership_transitions", "portal_work_approvals", "portal_work_revocations", "portal_work_current",
 		"portal_orders", "portal_order_charges", "portal_numina_contacts", "portal_card_checkouts", "portal_stripe_events",
+		"portal_order_ends", "portal_card_cancellations", "portal_charge_reversals",
 	}
 	for _, table := range tables {
 		var count int

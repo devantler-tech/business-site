@@ -29,6 +29,8 @@ type projectOrder struct {
 	OneTimeMinor, MonthlyMinor int64
 	MonthlyFrom, Placed        time.Time
 	Charges                    []orderCharge
+	End                        *orderEnd
+	Subscribed                 bool // a card order's monthly subscription exists
 }
 
 func (o projectOrder) OneTimeDKK() int64 { return o.OneTimeMinor / 100 }
@@ -43,6 +45,7 @@ type orderCharge struct {
 	Number                             *int
 	GrossMinor                         int64
 	Sent                               bool
+	Reversal                           string // refunded or disputed: no longer funds the order
 }
 
 func (c orderCharge) GrossDKK() int64 { return c.GrossMinor / 100 }
@@ -143,20 +146,24 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	rows, err := tx.Query(ctx, `SELECT period,state,coalesce(provider_ref,''),identity,provider_number,gross_minor,sent FROM portal_order_charges WHERE order_id=$1 ORDER BY period='acceptance' DESC,period DESC LIMIT 120`, o.ID)
+	rows, err := tx.Query(ctx, `SELECT c.period,c.state,coalesce(c.provider_ref,''),c.identity,c.provider_number,c.gross_minor,c.sent,coalesce((SELECT min(r.reason) FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period),'') FROM portal_order_charges c WHERE c.order_id=$1 ORDER BY c.period='acceptance' DESC,c.period DESC LIMIT 120`, o.ID)
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var c orderCharge
-		if err = rows.Scan(&c.Period, &c.State, &c.Reference, &c.Identity, &c.Number, &c.GrossMinor, &c.Sent); err != nil {
+		if err = rows.Scan(&c.Period, &c.State, &c.Reference, &c.Identity, &c.Number, &c.GrossMinor, &c.Sent, &c.Reversal); err != nil {
 			return projectOrder{}, errTriageStorage
 		}
 		o.Charges = append(o.Charges, c)
 	}
 	if rows.Err() != nil {
 		return projectOrder{}, errTriageStorage
+	}
+	rows.Close()
+	if err = readOrderEnd(ctx, tx, &o); err != nil {
+		return projectOrder{}, err
 	}
 	return o, nil
 }

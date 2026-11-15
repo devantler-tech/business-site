@@ -114,6 +114,39 @@ card order, so nothing is booked twice.
   - The paid amount and currency must equal the order's amount for that period exactly.
     A browser return to the receipt is never proof of payment.
 
+## Ending and reversing orders
+
+- **Ending monthly billing.** On the request page, an operator chooses an order's last billed
+  month, from the current month on, and records it once (`portal_order_ends`). The same month
+  again is a retry; a different one is refused.
+  - On the invoice path, the Numina sync creates no monthly charge after that month.
+  - On the card path, the portal asks Stripe to end the subscription at 00:00 UTC on the 1st
+    after that month, exactly when it would renew, without proration. Stripe's confirmed date
+    is recorded (`portal_card_cancellations`) and shown. Until Stripe confirms, the page
+    offers to ask again, even after that month. Once the renewal has passed unconfirmed, the
+    portal ends the subscription at once; a month it charged never funds the order and is
+    refunded by hand. A subscription that completes after the order ended is asked to end as
+    soon as it is recorded.
+  - A renewal paid after the last billed month never funds a month, and an ended order offers
+    no new subscription Checkout.
+- **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
+  after failed renewals, records the order's end, unless an operator already ended it. The last
+  billed month is the one the subscription had paid in advance when it ended. An end that
+  arrives before the subscription's Checkout completion answers `500` when it carries the
+  portal's order marker, so Stripe retries it.
+- **Refunds and disputes.** `charge.refunded` (any refunded amount) and
+  `charge.dispute.created` record a reversal against the funded charge
+  (`portal_charge_reversals`). The charge keeps its settlement, but no longer funds the order,
+  and the client and the operator see it as refunded or disputed.
+  - A charge names only its PaymentIntent, so the portal asks Stripe which Checkout Session or
+    invoice that PaymentIntent paid, and only references the portal stored count. Anything
+    else belongs to another integration and is ignored.
+  - A refund or dispute of one of the portal's own payments that is not funded yet answers
+    `500`, so Stripe retries it after the payment event: a one-time Checkout Session the portal
+    stored, or an invoice of one of its subscriptions, known or carrying its order marker.
+  - A won dispute is not restored automatically; the operator decides.
+- **Numina credit notes stay manual.** The operator issues a credit note in Numina by hand.
+
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance
@@ -154,17 +187,18 @@ orders and answers the webhook with `404`, so Stripe retries until it is on agai
 
 Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site/stripe`:
 
-- property `api-key`: a **restricted** key (`rk_live_…`) with Checkout Sessions write access,
-  or `rk_test_…` from a Stripe sandbox for development;
+- property `api-key`: a **restricted** key (`rk_live_…`) with write access to Checkout Sessions
+  and Subscriptions and read access to Invoices, or `rk_test_…` from a Stripe sandbox for
+  development;
 - property `webhook-secret`: the `whsec_…` signing secret of a webhook endpoint at
   `https://portal.devantler.tech/portal/stripe/webhook`, created with API version
   `2026-10-28.endive` and the events `checkout.session.completed`,
   `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
-  `checkout.session.expired` and `invoice.paid`.
+  `checkout.session.expired`, `invoice.paid`, `customer.subscription.deleted`,
+  `charge.refunded` and `charge.dispute.created`.
 
 Before the card path goes live, the maintainer also asks Numina support to switch on Numina's
-Stripe integration, and turns on Stripe's emailed receipts. Refunds, disputes and subscription
-cancellation are not handled by the portal yet; they are a launch prerequisite.
+Stripe integration, and turns on Stripe's emailed receipts.
 
 ## Storage and privileges
 
@@ -172,7 +206,9 @@ Migration v16 adds `portal_orders` (SELECT/INSERT), `portal_order_charges`
 (SELECT/INSERT/UPDATE, for state changes) and `portal_numina_contacts` (SELECT/INSERT) after
 unchanged v1–v15. Migration v17 adds `portal_card_checkouts` (SELECT/INSERT/UPDATE, for state changes)
 and `portal_stripe_events` (SELECT/INSERT). The migration grants exactly these to the runtime
-role. The runtime refuses to start if it can change orders, the contact map or Stripe events,
+role. Migration v18 adds `portal_order_ends`, `portal_card_cancellations` and
+`portal_charge_reversals` (SELECT/INSERT each). The runtime refuses to start if it can change
+orders, the contact map, Stripe events, order ends, cancellations or reversals,
 or delete, truncate or pass on access to any billing table, directly or through another role.
 Until a gate is switched on, the tables stay empty.
 
@@ -189,5 +225,8 @@ API: one-off and subscription Checkout shapes, a forged signature, an unpaid the
 asynchronously paid session, a replayed event, an early subscription invoice retried after
 completion, a foreign subscription ignored, a monthly invoice, a wrong amount, a session past
 its expiry time kept until Stripe expires it, a failed payment restarted even when its unpaid
-completion arrives late, and the closed gate. `internal/numina` and `internal/stripe` test the clients. Real Numina
+completion arrives late, and the closed gate. The order-end tests cover an invoice order that
+stops after its last month, refused and repeated end forms, a card subscription ended at its next
+renewal after a failed first request, a refund and a dispute that stop funding, another
+integration's refund ignored, and a subscription Stripe ended on its own. `internal/numina` and `internal/stripe` test the clients. Real Numina
 sandbox and Stripe test-mode proof against the real services are launch steps.

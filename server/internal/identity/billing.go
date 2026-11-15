@@ -50,6 +50,7 @@ type billingOrder struct {
 	ID, Client, Scope          string
 	OneTimeMinor, MonthlyMinor int64
 	MonthlyFrom, Placed        time.Time
+	LastMonth                  *time.Time // the last billed month, once ended (#591)
 }
 
 type billingCharge struct {
@@ -135,7 +136,8 @@ func monthPeriod(t time.Time) string { return t.Format("2006-01") }
 
 // recordDueCharges records each due period's identity before any Numina call:
 // the acceptance invoice, then each month from the order's first billed month
-// up to the current Copenhagen month. Amounts include 25% VAT.
+// up to the current Copenhagen month or the order's last billed month,
+// whichever comes first. Amounts include 25% VAT.
 func (s *Foundation) recordDueCharges(ctx context.Context, now time.Time) error {
 	orders, err := s.invoiceOrders(ctx)
 	if err != nil {
@@ -149,7 +151,7 @@ func (s *Foundation) recordDueCharges(ctx context.Context, now time.Time) error 
 			periods["acceptance"] = o.OneTimeMinor
 		}
 		if o.MonthlyMinor > 0 {
-			for m := o.MonthlyFrom; !m.After(current); m = m.AddDate(0, 1, 0) {
+			for m := o.MonthlyFrom; !m.After(current) && (o.LastMonth == nil || !m.After(*o.LastMonth)); m = m.AddDate(0, 1, 0) {
 				periods[monthPeriod(m)] = o.MonthlyMinor
 			}
 		}
@@ -177,7 +179,7 @@ func splitVAT(gross int64) (int64, int64, bool) {
 }
 
 func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' ORDER BY o.placed_at,o.id`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,(SELECT e.last_month FROM portal_order_ends e WHERE e.order_id=o.id) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' ORDER BY o.placed_at,o.id`)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -185,7 +187,7 @@ func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) 
 	var result []billingOrder
 	for rows.Next() {
 		var o billingOrder
-		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed); err != nil {
+		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.LastMonth); err != nil {
 			return nil, errTriageStorage
 		}
 		result = append(result, o)
