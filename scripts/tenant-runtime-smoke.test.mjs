@@ -96,6 +96,14 @@ test("the real image serves both hosts with exactly the package arguments and th
     const toPortal = await get(port, "/portal/", "devantler.tech");
     assert.deepEqual([toPortal.status, toPortal.location], [302, "https://portal.devantler.tech/portal/"]);
     for (const route of ["/portal/", "/portal/sign-in"]) assert.equal((await get(port, route, "portal.devantler.tech")).status, 404, route);
+    // Each page keeps the one address GitHub Pages gave it, and a miss shows the built 404 page (#583).
+    const www = await get(port, "/about/", "www.devantler.tech");
+    assert.deepEqual([www.status, www.location], [301, "https://devantler.tech/about/"]);
+    const folder = await get(port, "/about", "devantler.tech");
+    assert.deepEqual([folder.status, folder.location], [301, "/about/"]);
+    const missing = await get(port, "/this-page-does-not-exist/", "devantler.tech");
+    assert.equal(missing.status, 404);
+    assert.match(missing.body, /<title>Page not found \| Devantler Tech<\/title>/);
     assert.doesNotMatch(docker("logs", id), /Example|1234 Exampletown/);
   } finally {
     try { if (id) docker("rm", "--force", id); }

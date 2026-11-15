@@ -172,13 +172,13 @@ func requestHost(r *http.Request) string {
 }
 
 // redirect sends a GET or HEAD to a fixed origin, keeping only the checked path and query.
-func redirect(w http.ResponseWriter, r *http.Request, target string) {
+func redirect(w http.ResponseWriter, r *http.Request, target string, status int) {
 	if r.URL.RawQuery != "" {
 		target += "?" + r.URL.RawQuery
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Location", target)
-	w.WriteHeader(http.StatusFound)
+	w.WriteHeader(status)
 }
 
 // HostHandler serves one runtime under two hosts without showing a page twice.
@@ -202,26 +202,44 @@ func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
 				return
 			}
 			if p == "/" {
-				redirect(w, r, "/portal/")
+				redirect(w, r, "/portal/", http.StatusFound)
 			} else {
-				redirect(w, r, "https://"+hosts.Public+p)
+				redirect(w, r, "https://"+hosts.Public+p, http.StatusFound)
 			}
 		case "www." + hosts.Public:
 			if !readOnly(w, r) {
-				redirect(w, r, "https://"+hosts.Public+p)
+				redirect(w, r, "https://"+hosts.Public+p, http.StatusMovedPermanently)
 			}
 		default:
 			if !private {
 				public.ServeHTTP(w, r)
 			} else if !readOnly(w, r) {
-				redirect(w, r, "https://"+hosts.Portal+p)
+				redirect(w, r, "https://"+hosts.Portal+p, http.StatusFound)
 			}
 		}
 	})
 }
 
+// notFound answers a public miss with the built 404 page, as GitHub Pages did.
+// Like miss, it never reflects the requested path and is not cacheable.
+func (a *Artifact) notFound(w http.ResponseWriter, r *http.Request) {
+	page, found := a.files["404.html"]
+	if !found {
+		miss(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(page)
+	}
+}
+
 // Handler delegates canonical /portal requests unchanged before public lookup.
-// It has no directory listings, SPA fallback or path-cleaning redirects.
+// It has no directory listings or SPA fallback. A folder requested without its
+// trailing slash redirects permanently to the slash form, as GitHub Pages did,
+// so each page has one address.
 func (a *Artifact) Handler(portal http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -245,11 +263,14 @@ func (a *Artifact) Handler(portal http.Handler) http.Handler {
 		}
 		data, found := a.files[name]
 		if !found && !strings.HasSuffix(p, "/") {
-			name += "/index.html"
-			data, found = a.files[name]
+			if _, folder := a.files[name+"/index.html"]; folder {
+				// p passed unsafePath, so it is one absolute path on this host.
+				redirect(w, r, p+"/", http.StatusMovedPermanently)
+				return
+			}
 		}
 		if !found {
-			miss(w, r)
+			a.notFound(w, r)
 			return
 		}
 		contentType := mime.TypeByExtension(path.Ext(name))

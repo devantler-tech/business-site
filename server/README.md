@@ -377,8 +377,11 @@ their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 | `www.` + public host | redirect to the public host         | redirect to the public host |
 | any other host       | redirect to the portal host         | served                      |
 
-Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
-never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
+Redirects carry `Cache-Control: no-store`. The `www` redirect is 301, as it was on GitHub Pages;
+the redirects between the public and portal hosts are 302. On a host that serves public pages, a
+folder requested without its trailing slash (`/about`) redirects with 301 to `/about/`, and a
+missing page returns 404 with the built `404.html`. Unsafe or encoded paths still return a plain
+404, never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
 and are checked before a listener opens. Routing changes nothing else: the portal stays behind
 its own default-off gates.
 
