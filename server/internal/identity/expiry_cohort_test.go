@@ -124,7 +124,7 @@ func TestPrivateReadersRetainRealExpiry(t *testing.T) {
 	}
 	for _, outcome := range []string{"false", "error"} {
 		probes = append(probes, browserExpiryProbe(t, base, "client", "portal-proposal-acceptance", outcome))
-		for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices"} {
+		for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoice-billing"} {
 			probes = append(probes, browserExpiryProbe(t, base, "operator", key, outcome))
 		}
 	}
