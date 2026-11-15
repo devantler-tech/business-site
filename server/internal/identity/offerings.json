@@ -95,5 +95,15 @@
   "vat": {
     "en": "Prices include 25% Danish VAT.",
     "da": "Priserne er inkl. 25 % moms."
+  },
+  "launchDiscount": {
+    "percent": 25,
+    "limit": 50,
+    "appliesTo": "setup",
+    "requiresHosting": true,
+    "text": {
+      "en": "Launch offer: 25% off the one-time price for the first 50 customers who order with hosting.",
+      "da": "Lanceringstilbud: 25 % rabat på engangsprisen for de første 50 kunder, der bestiller med hosting."
+    }
   }
 }
