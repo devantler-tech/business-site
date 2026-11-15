@@ -538,6 +538,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 // The package's Kubernetes Job reads its connection from a Secret projection
 // that the kubelet writes 0440 root:<fsGroup>. The compiled job migrates through
 // --migration-database-projection, and the strict file option refuses the same file.
+// The retention purge reads the same projection.
 func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
 	_, pool, database := migrationCommandFixture(t)
 	dir, version := kubeletProjection(t, "ca.crt", "database-url")
@@ -565,6 +566,12 @@ func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
 	var versions int
 	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 23 {
 		t.Fatal("projected migration did not apply every version")
+	}
+	if output, err := runMigrationCommand(t, binary, "--retention-purge", "--migration-database-file", connection); err == nil || output != "portal retention purge failed\n" {
+		t.Fatal("strict private-file option accepted a group-readable projection for the purge")
+	}
+	if output, err := runMigrationCommand(t, binary, "--retention-purge", "--migration-database-projection", connection); err != nil || output != "portal retention purge completed: 0 former clients\n" {
+		t.Fatalf("the purge refused the kubelet-shaped projection: %q", output)
 	}
 }
 

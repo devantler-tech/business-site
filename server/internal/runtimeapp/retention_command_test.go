@@ -33,6 +33,9 @@ func TestActualExecutableRetentionPurge(t *testing.T) {
 		{"--retention-purge", "--migration-database-file", file, "--runtime-role", "portal_web"},
 		{"--retention-purge", "--retention-purge", "--migration-database-file", file},
 		{"--retention-purge", "--migration-database-file", "relative"},
+		{"--retention-purge", "--migration-database-projection", "relative"},
+		{"--retention-purge", "--migration-database-file", file, "--migration-database-projection", file},
+		{"--retention-purge", "--migration-database-projection", file, "--migration-database-projection", file},
 	} {
 		if output, err := runMigrationCommand(t, binary, args...); err == nil || output != "portal retention purge failed\n" {
 			t.Errorf("%v was admitted: %q", args, output)

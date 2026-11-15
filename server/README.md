@@ -264,8 +264,9 @@ establishes a production deployment.
 
 The privacy notice keeps a former client's portal records for 3 years after their last
 portal membership ended (#614). The same executable's exclusive one-shot
-`--retention-purge --migration-database-file <file>` mode deletes them. It runs as the
-migration role, because the web runtime can delete none of this history, and checks first
+`--retention-purge --migration-database-file <file>` mode deletes them; a Kubernetes job
+passes `--migration-database-projection <file>` instead, as for the migration (MIGRATIONS.md).
+It runs as the migration role, because the web runtime can delete none of this history, and checks first
 that the role owns the complete schema. A client is due when all their memberships were client
 memberships, none is still active, no invitation is pending, and the last membership change lies
 more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
