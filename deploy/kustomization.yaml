@@ -11,7 +11,9 @@ resources:
   - external-secret-numina.yaml
   - external-secret-stripe.yaml
   - job-portal-migration.yaml
-# The publisher pins only the WebApp's image; the migration Job runs that same image.
+  - cronjob-portal-retention.yaml
+# The publisher pins only the WebApp's image; the migration Job and the retention
+# CronJob run that same image.
 replacements:
   - source:
       kind: WebApp
@@ -23,5 +25,12 @@ replacements:
           name: business-site-portal-migration
         fieldPaths:
           - spec.template.spec.containers.[name=migrate].image
+        options:
+          create: true
+      - select:
+          kind: CronJob
+          name: business-site-portal-retention
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=purge].image
         options:
           create: true

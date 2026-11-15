@@ -1,0 +1,79 @@
+# Runs the portal retention purge once a day (server/README.md, "Retention purge
+# job"), with the release's own image: kustomization.yaml copies the WebApp's
+# pinned image into it. It reads the migration Job's Secret as the migration
+# role, and its pods carry the migration Job's label, so the platform's migration
+# network policy is the only path to the database. A failed run deletes nothing
+# and the next day's run tries again.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: business-site-portal-retention
+  namespace: business-site
+spec:
+  schedule: "17 3 * * *"
+  timeZone: Europe/Copenhagen
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: business-site-portal-migration
+            app.kubernetes.io/component: retention-purge
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: purge
+              args:
+                - --retention-purge
+                - --migration-database-projection
+                - /run/portal-migration/database-url
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 500m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: migration
+                  mountPath: /run/portal-migration
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: migration
+              secret:
+                secretName: business-site-portal-db-migration
+                defaultMode: 0400
+                items:
+                  - key: database-url
+                    path: database-url
+                  - key: ca.crt
+                    path: ca.crt
+            # As for the migration Job: the CA copy needs a sticky temp directory,
+            # and only a memory emptyDir is 1777.
+            - name: tmp
+              emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi

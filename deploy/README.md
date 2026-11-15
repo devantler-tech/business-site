@@ -152,6 +152,26 @@ With sign-in on, invite customers from a web pod as
   delete the Job, and Flux runs it again. A ledger newer than the release refuses the Job, so
   roll forward rather than back.
 
+## Portal retention purge
+
+`cronjob-portal-retention.yaml` runs the retention purge
+([server/README.md](../server/README.md#retention-purge-job)) every day at 03:17 Copenhagen
+time. It deletes the portal records of former clients 3 years after their last membership ended,
+as the privacy notice states:
+
+- **Image and input.** Same as the migration Job. `kustomization.yaml` copies the WebApp's
+  pinned image into it, and it reads the platform's `business-site-portal-db-migration` Secret
+  through `--migration-database-projection`, as the migration role. The runtime cannot delete
+  this history.
+- **Network.** Its pods carry the migration Job's `app.kubernetes.io/name:
+  business-site-portal-migration` label, with `app.kubernetes.io/component: retention-purge`.
+  The platform's migration policy is therefore its only path to the database.
+- **Runs.** `concurrencyPolicy: Forbid`, no retries and a 300-second deadline. A failed run
+  deletes nothing; a later run tries again. Flux does not wait on a CronJob, so a failed run
+  never makes the tenant unhealthy. Each run logs only how many former clients lost records.
+- **Before the migration.** While a new release's migration Job has not finished, the purge's
+  schema ownership check refuses to run, so it never deletes against an older schema.
+
 ## Portal billing inputs
 
 The portal invoices through Numina and takes cards through Stripe
