@@ -88,7 +88,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       assert.ok(links(main).some(([,href]) => href === `/${prefix}company/`),`${kind} page links to the postal address instead of copying it`);
       const required = kind === "privacy"
         ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
-        : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
+        : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","sætte kryds","helt udført","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","ticking the box","completely finished","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
       for (const phrase of required) assert.ok(text(main).includes(phrase),`${kind} page is missing: ${phrase}`);
       // List items carry the withdrawal form and the recipients; headings alone must not satisfy them.
       const items = walk(main).filter(node => node.tagName === "li").map(text);
