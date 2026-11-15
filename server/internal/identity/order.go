@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -56,6 +57,27 @@ func (s *Foundation) invoiceBillingReady(ctx context.Context) bool {
 	return err == nil && enabled && s.ready(ctx)
 }
 
+// orderReady opens ordering and order display when either collection path is on.
+func (s *Foundation) orderReady(ctx context.Context) bool {
+	return s.invoiceBillingReady(ctx) || s.cardBillingReady(ctx)
+}
+
+// pathReady binds collectionReady to one path for a final checkpoint.
+func (s *Foundation) pathReady(collection string) func(context.Context) bool {
+	return func(ctx context.Context) bool { return s.collectionReady(ctx, collection) }
+}
+
+// collectionReady is the gate for one collection path.
+func (s *Foundation) collectionReady(ctx context.Context, collection string) bool {
+	switch collection {
+	case "invoice":
+		return s.invoiceBillingReady(ctx)
+	case "card":
+		return s.cardBillingReady(ctx)
+	}
+	return false
+}
+
 // firstOfNextMonth is where monthly billing starts for an order placed at t.
 func firstOfNextMonth(t time.Time) time.Time {
 	local := t.In(copenhagen)
@@ -65,7 +87,7 @@ func firstOfNextMonth(t time.Time) time.Time {
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
 func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string) (projectOrder, error) {
-	if !s.invoiceBillingReady(ctx) || collection != "invoice" {
+	if !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
 	}
 	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
@@ -89,7 +111,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		if existing.Acceptance != acceptance || existing.Collection != collection {
 			return projectOrder{}, errProposalConflict
 		}
-		return existing, s.commitOrder(ctx, p, tx)
+		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
 	case !errors.Is(err, pgx.ErrNoRows):
 		return projectOrder{}, err
 	}
@@ -106,7 +128,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	return saved, s.commitOrder(ctx, p, tx)
+	return saved, s.commitOrder(ctx, p, tx, s.pathReady(collection))
 }
 
 // readOrderTx reads the request's order and its charges inside a scoped,
@@ -141,33 +163,33 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 
 // readClientOrder returns the client's own order, or nil when none is placed.
 func (s *Foundation) readClientOrder(ctx context.Context, p Principal, id string) (*projectOrder, error) {
-	if !s.invoiceBillingReady(ctx) {
+	if !s.orderReady(ctx) {
 		return nil, ErrDenied
 	}
 	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
 	if err != nil {
 		return nil, err
 	}
-	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx) })
+	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx, s.orderReady) })
 }
 
 // readOperatorOrder returns a request's order for a current operator.
 func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id string) (*projectOrder, error) {
-	if !s.invoiceBillingReady(ctx) || s.proposalOperator(ctx, p) != nil {
+	if !s.orderReady(ctx) || s.proposalOperator(ctx, p) != nil {
 		return nil, ErrDenied
 	}
 	tx, client, err := s.beginProposalWrite(ctx, p, id)
 	if err != nil {
 		return nil, err
 	}
-	return readOrderFor(ctx, tx, id, client, func() error { return commitProposalWrite(ctx, p, tx, s.invoiceBillingReady) })
+	return readOrderFor(ctx, tx, id, client, func() error { return commitProposalWrite(ctx, p, tx, s.orderReady) })
 }
 
 // commitOrder is the final checkpoint for order writes and reads: the billing
 // gate, not only the acceptance gates, must still be open, along with the
 // principal's expiry and the request's cancellation.
-func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx) error {
-	if !s.invoiceBillingReady(ctx) {
+func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool) error {
+	if !ready(ctx) {
 		return ErrDenied
 	}
 	return s.commitClientProposal(ctx, p, tx, time.Time{})
@@ -208,7 +230,7 @@ func parseOrderForm(r *http.Request) (string, string, bool) {
 
 // submitOrder places the client's order and returns to the receipt.
 func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
-	if !b.foundation.invoiceBillingReady(r.Context()) {
+	if !b.foundation.orderReady(r.Context()) {
 		http.NotFound(w, r)
 		return
 	}
@@ -217,7 +239,13 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	_, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection)
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection)
+	if err == nil && order.Collection == "card" {
+		// The receipt offers to start the payment again if this fails.
+		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin, language(r)); checkoutErr != nil {
+			log.Printf("portal: card checkout not created")
+		}
+	}
 	switch {
 	case errors.Is(err, errProposalConflict):
 		b.render(w, r, 409, "error", "", "")

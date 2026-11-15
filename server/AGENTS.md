@@ -80,7 +80,7 @@ never make these expensive real-process controls optional to fit the ordinary su
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers, separately default-off free project-request intake and default-off
-Numina invoice billing (`BILLING.md`); no card payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
+Numina invoice and Stripe card billing (`BILLING.md`); no agent endpoint exists. Read `REQUESTS.md` for the request boundary and
 `INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
 bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's twenty identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's twenty-two identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -291,6 +291,11 @@ add UPDATE for their state. Every step requires the acceptance gates plus false-
 before any Numina call, find a lost creation by its memo before retrying, settle only on
 `paid` with nothing outstanding, and hold what the path must not decide (no contact
 profile, a customer outside Denmark). The Numina key never reaches logs or diagnostics.
+v17 appends the card path's Checkout Sessions and applied Stripe events. The false-default
+`portal-card-billing` gate has no environment mapping. Fund a card order only from a
+signature-verified webhook for its exact Checkout Session or subscription invoice and amount,
+apply each event once, never from a browser return, and never also invoice it in Numina. The
+webhook alone bypasses sessions and CSRF; keep its body bound and signature check first.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

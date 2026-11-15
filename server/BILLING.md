@@ -19,7 +19,8 @@ both a Numina invoice and a Stripe charge.
   iteration is a new request.
 - The order copies the accepted one-time and monthly amounts. Monthly billing starts on the 1st
   of the month after the order.
-- Today the only path is **invoice** (bank transfer or EAN). Card and MobilePay come with #553.
+- The paths are **invoice** (bank transfer or EAN), the default, and **card** (card or
+  MobilePay through Stripe). Each has its own gate; the client sees only the paths that are on.
 
 ## The invoice path (Numina)
 
@@ -67,6 +68,52 @@ The client's receipt shows each invoice as being prepared, invoiced and awaiting
 paid. The operator's request page shows the order, each charge's state, Numina invoice number
 and whether it was sent. Reminders (rykker) stay a Numina task.
 
+## The card path (Stripe)
+
+The client can instead pay by card or MobilePay. Stripe sends the receipt, and Numina's own
+Stripe integration books the sale, fee and payout. The portal makes no Numina invoice for a
+card order, so nothing is booked twice.
+
+- **Checkout.** Placing a card order creates one Stripe Checkout Session per amount and shows
+  each as a **Continue to payment** link on the receipt. The portal's CSP allows form posts only
+  to itself, so the order form never redirects to Stripe.
+  - The one-time amount uses `mode=payment`, by card or MobilePay.
+  - The monthly amount uses `mode=subscription`, card only, with `proration_behavior=none` and
+    its billing anchor at 00:00 UTC on the 1st of the first billed month (01:00 or 02:00 in
+    Copenhagen). Nothing is charged before the anchor; Stripe then charges on the 1st of each
+    month, and renews on the anchor's UTC day. If that month has already begun, the anchor is
+    the next 1st.
+  - The two are separate sessions because Stripe refuses one-time prices in a subscription
+    without proration. Payment methods come from the Stripe Dashboard: no session sets
+    `payment_method_types`, and Stripe offers MobilePay only for one-off payments.
+  - Amounts are VAT-inclusive DKK; Stripe Tax is not used.
+- **Sessions are kept.** Every session is stored with its order, purpose and attempt
+  (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. Only
+  Stripe closes a session: when it reports the session expired or its asynchronous payment
+  failed, the receipt offers **Start card payment**, which creates a new attempt with `Idempotency-Key`
+  `portal-<order>-<purpose>-checkout-<n>` plus a fresh random suffix for each try. Stripe caches a
+  failed reply, even a `500`, under its key, so a fixed key could never recover. A session whose
+  reply was lost was never shown to anyone and only expires, and one session is stored per attempt. An open, processing or paid session is never
+  replaced, not even past its expiry time, because Stripe never expires a completed session and
+  its completion may still be on its way. A closed session stays closed when an unpaid completion
+  arrives after its failure, and a replaced one still resolves to its own order.
+- **Funding comes only from signed webhooks.** `POST /portal/stripe/webhook` sits outside
+  sessions and CSRF, reads at most 256 KiB, verifies `Stripe-Signature` (HMAC-SHA256, five
+  minutes' tolerance) and applies each event exactly once (`portal_stripe_events`). A failed
+  step answers `500`, so Stripe retries. Events are resolved only through the portal's own
+  stored sessions and subscriptions; any other session is ignored.
+  - `checkout.session.completed` with `payment_status` `paid`, or
+    `checkout.session.async_payment_succeeded`, funds the one-time amount. An unpaid
+    completion marks the session as processing.
+  - A subscription's completion records its subscription ID. Each `invoice.paid` with
+    `billing_reason` `subscription_cycle` funds its month. An invoice that arrives before the
+    completion event is deferred with `500` when it carries the portal's order marker, and
+    ignored when it does not (another integration on the same account).
+  - `checkout.session.expired` and `checkout.session.async_payment_failed` never fund; they
+    close the session.
+  - The paid amount and currency must equal the order's amount for that period exactly.
+    A browser return to the receipt is never proof of payment.
+
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance
@@ -98,12 +145,36 @@ read-only projection for that entry, the platform role's read permission on it, 
 allow rule to `api.numina.app` (the package denies egress by default), and the runtime grants
 below. None of these is added here.
 
+The card path has its own false-default `portal-card-billing` flag, also without an environment
+mapping. It is enabled only when both `PORTAL_STRIPE_KEY_FILE` and
+`PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files (`PORTAL_STRIPE_API_URL` is optional,
+HTTPS only). In production all three come from the portal settings projection, and the two
+files are separate projected secrets such as `/run/webapp-inputs/stripe-api-key`. Turning the flag off hides the card choice and the payment link, refuses card
+orders and answers the webhook with `404`, so Stripe retries until it is on again.
+
+Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site/stripe`:
+
+- property `api-key`: a **restricted** key (`rk_live_…`) with Checkout Sessions write access,
+  or `rk_test_…` from a Stripe sandbox for development;
+- property `webhook-secret`: the `whsec_…` signing secret of a webhook endpoint at
+  `https://portal.devantler.tech/portal/stripe/webhook`, created with API version
+  `2026-10-28.endive` and the events `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
+  `checkout.session.expired` and `invoice.paid`.
+
+Before the card path goes live, the maintainer also asks Numina support to switch on Numina's
+Stripe integration, and turns on Stripe's emailed receipts. Refunds, disputes and subscription
+cancellation are not handled by the portal yet; they are a launch prerequisite.
+
 ## Storage and privileges
 
 Migration v16 adds `portal_orders` (SELECT/INSERT), `portal_order_charges`
 (SELECT/INSERT/UPDATE, for state changes) and `portal_numina_contacts` (SELECT/INSERT) after
-unchanged v1–v15. The runtime never deletes them. Grant these to the runtime role before the
-gate is switched on; until then the tables stay empty.
+unchanged v1–v15. Migration v17 adds `portal_card_checkouts` (SELECT/INSERT/UPDATE, for state changes)
+and `portal_stripe_events` (SELECT/INSERT). The migration grants exactly these to the runtime
+role. The runtime refuses to start if it can change orders, the contact map or Stripe events,
+or delete, truncate or pass on access to any billing table, directly or through another role.
+Until a gate is switched on, the tables stay empty.
 
 ## Tests
 
@@ -113,4 +184,10 @@ refused second path, creation, booking and sending once, an unmatched payment th
 settle, a matched one that does, the next month's invoice, a lost create reply found by its
 memo, a foreign customer held even with a Danish draft, an operator's replacement invoice
 followed, a sandbox that cannot email, and the closed gate.
-`internal/numina` tests the client itself. Real Numina sandbox proof is a launch step.
+`TestPrivateCard*` send genuinely signed events to the real HTTPS handler and a fake Stripe
+API: one-off and subscription Checkout shapes, a forged signature, an unpaid then
+asynchronously paid session, a replayed event, an early subscription invoice retried after
+completion, a foreign subscription ignored, a monthly invoice, a wrong amount, a session past
+its expiry time kept until Stripe expires it, a failed payment restarted even when its unpaid
+completion arrives late, and the closed gate. `internal/numina` and `internal/stripe` test the clients. Real Numina
+sandbox and Stripe test-mode proof against the real services are launch steps.

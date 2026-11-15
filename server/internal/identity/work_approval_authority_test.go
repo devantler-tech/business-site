@@ -392,15 +392,9 @@ func TestWorkApprovalUnknownLegacyTaxDenied(t *testing.T) {
 	b, op := approvalFixture(t)
 	migrator := migrationDB(t)
 	rewindInvoiceTaxFixture(t, migrator)
-	if err := Migrate(t.Context(), migrator); err != nil {
+	// Replaying the migrations restores exactly the runtime role's grants.
+	if err := MigrateWithRuntimeRole(t.Context(), migrator, "portal_runtime"); err != nil {
 		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(t.Context(), `GRANT SELECT ON portal_membership_transitions TO portal_runtime;
- GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime;
- GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime;
- GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime;
- GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime`); err != nil {
-		t.Fatal("restored fixture grants failed", err)
 	}
 	if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, errProposalConflict) {
 		t.Fatal("unknown historical tax admitted a work review", err)
