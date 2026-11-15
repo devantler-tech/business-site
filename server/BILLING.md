@@ -175,7 +175,8 @@ Stripe invoice is the sale's document, and Numina books the money once.
     first charge, or at once if a month was already charged. That end takes precedence over
     one scheduled earlier, unless the earlier one comes first, and Stripe's confirmation is
     recorded on its own (`portal_withdrawal_cancellations`); the earlier record stays as it
-    was. If Stripe does not confirm, the operator's page says so, to finish in the Stripe
+    was. No end of monthly billing is admitted after a withdrawal, so nothing can push that
+    end back. If Stripe does not confirm, the operator's page says so, to finish in the Stripe
     Dashboard. A renewal after it never funds a month, and a withdrawn order funds no work
     approval.
   - Refunds stay with the operator, whose page shows the withdrawal. They refund what was paid

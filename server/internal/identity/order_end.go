@@ -130,7 +130,8 @@ func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, i
 
 // orderWrite opens the request's locked write as begin authorizes it and
 // reads its order, which must be the one the form named and, for an end of
-// monthly billing, bill monthly.
+// monthly billing, bill monthly and not be withdrawn: the withdrawal's own,
+// earlier end must stand.
 func (s *Foundation) orderWrite(ctx context.Context, p Principal, id, orderID string, begin func(context.Context, Principal, string) (pgx.Tx, string, error), monthly bool) (pgx.Tx, projectOrder, error) {
 	if !s.orderReady(ctx) {
 		return nil, projectOrder{}, ErrDenied
@@ -140,7 +141,7 @@ func (s *Foundation) orderWrite(ctx context.Context, p Principal, id, orderID st
 		return nil, projectOrder{}, err
 	}
 	o, err := readOrderTx(ctx, tx, id, client)
-	if err == nil && (o.ID != orderID || (monthly && o.MonthlyMinor == 0)) {
+	if err == nil && (o.ID != orderID || (monthly && (o.MonthlyMinor == 0 || o.Withdrawn != nil))) {
 		err = errProposalConflict
 	}
 	if err != nil {
@@ -188,7 +189,8 @@ func (s *Foundation) endMonthlyBilling(ctx context.Context, p Principal, id, ord
 // scheduleCardEnd asks Stripe to end the order's subscription at 00:00 UTC on
 // the 1st after the last billed month, exactly when it would renew, and records
 // Stripe's confirmation. It is safe to repeat, and does nothing for an order
-// that is not ended or has no subscription yet.
+// that is not ended, has no subscription yet or was withdrawn: a withdrawal
+// keeps its own, earlier end (endWithdrawnSubscription).
 func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	if !s.cardBillingReady(ctx) {
 		return ErrDenied
@@ -196,7 +198,7 @@ func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	var subscription string
 	var last time.Time
 	err := s.pool.QueryRow(ctx, `SELECT c.subscription_id,e.last_month FROM portal_order_ends e JOIN portal_card_checkouts c ON c.order_id=e.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL
- WHERE e.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations x WHERE x.subscription_id=c.subscription_id) ORDER BY c.attempt DESC LIMIT 1`, order).Scan(&subscription, &last)
+ WHERE e.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations x WHERE x.subscription_id=c.subscription_id) AND NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=e.order_id) ORDER BY c.attempt DESC LIMIT 1`, order).Scan(&subscription, &last)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

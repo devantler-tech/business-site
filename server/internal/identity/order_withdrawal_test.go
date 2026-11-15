@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"html"
 	"net/url"
 	"strconv"
 	"strings"
@@ -232,5 +233,27 @@ func TestPrivateCardWithdrawalKeepsAnEarlierEnd(t *testing.T) {
 	var recorded bool
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations x JOIN portal_card_cancellations c USING(subscription_id) WHERE x.cancel_at=c.cancel_at)`).Scan(&recorded); err != nil || cancels != 1 || !recorded {
 		t.Fatalf("an earlier end was asked again (%d requests) or not taken over: %v", cancels, err)
+	}
+}
+
+// TestPrivateCardWithdrawalKeepsItsCutoff refuses a later end of monthly
+// billing after a withdrawal, so Stripe's earlier end is never pushed back.
+func TestPrivateCardWithdrawalKeepsItsCutoff(t *testing.T) {
+	b, fake := subscribedCardOrder(t)
+	withdraw(t, b)
+	order := orderID(t, b)
+	triageSignIn(t, b, "after-withdrawal-operator", "operator-workspace", "operator")
+	_, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
+	csrf := csrfInput.FindStringSubmatch(body)
+	if len(csrf) != 2 || strings.Contains(body, `name="last_month"`) {
+		t.Fatal("the operator page offers to end a withdrawn order's billing")
+	}
+	f := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "order": {order}}
+	if status, _, _ := b.request("POST", orderEndPath, endForm(f, currentMonth(time.Now()).AddDate(0, 3, 0)), b.site.URL); status != 409 {
+		t.Fatalf("a later end after the withdrawal was admitted: %d", status)
+	}
+	var ends int
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_order_ends`).Scan(&ends); err != nil || ends != 0 || len(stripeCancels(fake)) != 1 {
+		t.Fatal("the withdrawal's end was changed", ends, err)
 	}
 }
