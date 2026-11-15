@@ -47,79 +47,125 @@ func (s *Foundation) cardBillingReady(ctx context.Context) bool {
 	return err == nil && enabled && s.ready(ctx)
 }
 
-// orderCheckout is the card order's current Stripe Checkout link.
+// orderCheckout is a card order's latest Checkout Session for one purpose:
+// "one-time" (card or MobilePay, paid now) or "monthly" (a card subscription).
 type orderCheckout struct {
-	URL     string
-	Expires time.Time
-	Done    bool
+	Purpose, URL, State string
+	Expires             time.Time
 }
 
-// readCheckout returns a card order's stored Checkout link without creating one.
-func (s *Foundation) readCheckout(ctx context.Context, order string) (*orderCheckout, error) {
-	var c orderCheckout
-	err := s.pool.QueryRow(ctx, `SELECT url,expires_at,completed FROM portal_card_checkouts WHERE order_id=$1`, order).Scan(&c.URL, &c.Expires, &c.Done)
+// Open reports a Checkout the client can still complete.
+func (c orderCheckout) Open() bool { return c.State == "open" }
+
+// Replaceable reports a Checkout that can no longer be completed.
+func (c orderCheckout) Replaceable() bool { return c.State == "closed" }
+
+// cardPurposes are the Checkout Sessions a card order needs, in display order.
+func cardPurposes(oneTime, monthly int64) []string {
+	var purposes []string
+	if oneTime > 0 {
+		purposes = append(purposes, "one-time")
+	}
+	if monthly > 0 {
+		purposes = append(purposes, "monthly")
+	}
+	return purposes
+}
+
+// latestCheckout returns the newest session for one purpose. An open session
+// past its expiry is reported closed: Stripe can no longer complete it.
+func (s *Foundation) latestCheckout(ctx context.Context, order, purpose string) (orderCheckout, int, error) {
+	c := orderCheckout{Purpose: purpose}
+	var attempt int
+	err := s.pool.QueryRow(ctx, `SELECT url,state,expires_at,attempt FROM portal_card_checkouts WHERE order_id=$1 AND purpose=$2 ORDER BY attempt DESC LIMIT 1`, order, purpose).Scan(&c.URL, &c.State, &c.Expires, &attempt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return orderCheckout{Purpose: purpose, State: "closed"}, 0, nil
 	}
 	if err != nil {
-		return nil, errTriageStorage
+		return orderCheckout{}, 0, errTriageStorage
 	}
-	if !c.Done && !s.cards.Load().Now().Before(c.Expires) {
-		return nil, nil
+	if c.State == "open" && !s.cards.Load().Now().Before(c.Expires) {
+		c.State = "closed"
 	}
-	return &c, nil
+	return c, attempt, nil
 }
 
-// cardCheckout returns an open Checkout Session for a card order, creating a
-// new one when none exists or the last one expired. A browser return is never
-// proof of payment; only the signed webhook funds the order.
-func (s *Foundation) cardCheckout(ctx context.Context, order, origin, lang string) (orderCheckout, error) {
-	if !s.cardBillingReady(ctx) {
-		return orderCheckout{}, ErrDenied
-	}
-	if open, err := s.readCheckout(ctx, order); err != nil || open != nil {
-		if open == nil {
-			return orderCheckout{}, err
+// readCheckouts returns a card order's latest session for each purpose it needs.
+func (s *Foundation) readCheckouts(ctx context.Context, o projectOrder) ([]orderCheckout, error) {
+	var result []orderCheckout
+	for _, purpose := range cardPurposes(o.OneTimeMinor, o.MonthlyMinor) {
+		c, _, err := s.latestCheckout(ctx, o.ID, purpose)
+		if err != nil {
+			return nil, err
 		}
-		return *open, nil
+		result = append(result, c)
+	}
+	return result, nil
+}
+
+// firstAnchor is the subscription's first charge: 00:00 UTC on the 1st of the
+// order's first billed month, or of the next month once that has begun. Stripe
+// renews on the anchor's UTC day, so a UTC midnight keeps every renewal on the
+// 1st; in Copenhagen that is 01:00 or 02:00 on the same day.
+func firstAnchor(monthlyFrom, now time.Time) time.Time {
+	anchor := time.Date(monthlyFrom.Year(), monthlyFrom.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for !anchor.After(now) {
+		anchor = anchor.AddDate(0, 1, 0)
+	}
+	return anchor
+}
+
+// ensureCheckouts creates a Checkout Session for every purpose whose latest
+// session is closed or missing. Sessions that are open, processing or paid are
+// kept. A browser return is never proof of payment; only the signed webhook
+// funds the order.
+func (s *Foundation) ensureCheckouts(ctx context.Context, order, origin, lang string) error {
+	if !s.cardBillingReady(ctx) {
+		return ErrDenied
 	}
 	var o projectOrder
 	var requestID, scope, email string
-	var attempt int
-	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),coalesce((SELECT k.attempt FROM portal_card_checkouts k WHERE k.order_id=o.id),0)
+	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,'')
  FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version
  LEFT JOIN portal_contacts c ON c.client_id=o.client_id WHERE o.id=$1 AND o.collection='card'`, order).
-		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &attempt)
+		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email)
 	if err != nil {
-		return orderCheckout{}, errTriageStorage
+		return errTriageStorage
 	}
 	if lang != "da" {
 		lang = "en"
 	}
 	back := origin + "/portal/requests/" + requestID + "?lang=" + lang
-	checkout := stripe.Checkout{Mode: "payment", ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back, Metadata: map[string]string{"portal_order": o.ID}}
 	name := invoiceLine(scope)
-	if o.OneTimeMinor > 0 {
-		checkout.Lines = append(checkout.Lines, stripe.Line{Name: name, AmountMinor: o.OneTimeMinor})
+	cfg := s.cards.Load()
+	for _, purpose := range cardPurposes(o.OneTimeMinor, o.MonthlyMinor) {
+		latest, attempt, err := s.latestCheckout(ctx, o.ID, purpose)
+		if err != nil {
+			return err
+		}
+		if !latest.Replaceable() {
+			continue
+		}
+		checkout := stripe.Checkout{Mode: "payment", ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
+			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: name, AmountMinor: o.OneTimeMinor}}}
+		if purpose == "monthly" {
+			// Card only by Stripe's own rules: MobilePay has no recurring use.
+			// Nothing is charged before the anchor; it then charges each month.
+			checkout.Mode = "subscription"
+			checkout.BillingCycleAnchor = firstAnchor(o.MonthlyFrom, cfg.Now())
+			checkout.Lines = []stripe.Line{{Name: name, AmountMinor: o.MonthlyMinor, Monthly: true}}
+		}
+		attempt++
+		created, err := cfg.Stripe.CreateCheckout(ctx, "portal-"+o.ID+"-"+purpose+"-checkout-"+strconv.Itoa(attempt), checkout)
+		if err != nil {
+			return err
+		}
+		if _, err = s.pool.Exec(ctx, `INSERT INTO portal_card_checkouts(session_id,order_id,purpose,attempt,url,expires_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(session_id) DO NOTHING`,
+			created.ID, o.ID, purpose, attempt, created.URL, time.Unix(created.ExpiresAt, 0)); err != nil {
+			return errTriageStorage
+		}
 	}
-	if o.MonthlyMinor > 0 {
-		// Monthly card payments start on the order's first billed month, in
-		// advance on the 1st; nothing is charged for the days before it.
-		checkout.Mode = "subscription"
-		checkout.BillingCycleAnchor = time.Date(o.MonthlyFrom.Year(), o.MonthlyFrom.Month(), 1, 0, 0, 0, 0, copenhagen)
-		checkout.Lines = append(checkout.Lines, stripe.Line{Name: name, AmountMinor: o.MonthlyMinor, Monthly: true})
-	}
-	attempt++
-	created, err := s.cards.Load().Stripe.CreateCheckout(ctx, "portal-"+o.ID+"-checkout-"+strconv.Itoa(attempt), checkout)
-	if err != nil {
-		return orderCheckout{}, err
-	}
-	c := orderCheckout{URL: created.URL, Expires: time.Unix(created.ExpiresAt, 0)}
-	if _, err = s.pool.Exec(ctx, `INSERT INTO portal_card_checkouts(order_id,session_id,url,expires_at,attempt) VALUES($1,$2,$3,$4,$5) ON CONFLICT(order_id) DO UPDATE SET session_id=excluded.session_id,url=excluded.url,expires_at=excluded.expires_at,attempt=excluded.attempt,updated_at=clock_timestamp() WHERE NOT portal_card_checkouts.completed`,
-		o.ID, created.ID, created.URL, c.Expires, attempt); err != nil {
-		return orderCheckout{}, errTriageStorage
-	}
-	return c, nil
+	return nil
 }
 
 // stripeWebhook funds card orders from signature-verified Stripe events only.
@@ -174,11 +220,7 @@ func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) 
 		if json.Unmarshal(event.Data.Object, &session) != nil || session.ID == "" {
 			return errors.New("card billing: malformed session")
 		}
-		if event.Type == "checkout.session.expired" || event.Type == "checkout.session.async_payment_failed" {
-			err = applyCheckoutClosed(ctx, tx, session.ID)
-		} else {
-			err = applyCheckoutPaid(ctx, tx, session)
-		}
+		err = applyCheckoutEvent(ctx, tx, event.Type, session)
 	case "invoice.paid":
 		err = applySubscriptionInvoicePaid(ctx, tx, event.Data.Object)
 	}
@@ -196,22 +238,17 @@ type cardOrder struct {
 	OneTimeMinor, MonthlyMinor int64
 }
 
-// cardOrderBy finds a card order by its Checkout Session or subscription
-// column, locking its checkout row. column is one of two fixed names.
-func cardOrderBy(ctx context.Context, tx pgx.Tx, column, value string) (cardOrder, error) {
+// cardCheckoutBy finds the card order and purpose behind one of the portal's
+// own sessions, by session or subscription ID, locking that session's row.
+// column is one of two fixed names.
+func cardCheckoutBy(ctx context.Context, tx pgx.Tx, column, value string) (cardOrder, string, error) {
 	var o cardOrder
+	var purpose string
 	if column != "session_id" && column != "subscription_id" {
-		return o, errTriageStorage
+		return o, "", errTriageStorage
 	}
-	err := tx.QueryRow(ctx, `SELECT o.id,o.one_time_minor,o.monthly_minor FROM portal_card_checkouts c JOIN portal_orders o ON o.id=c.order_id WHERE c.`+column+`=$1 AND o.collection='card' FOR UPDATE OF c`, value).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
-	return o, err
-}
-
-// cardOrderByID finds a card order by its own ID.
-func cardOrderByID(ctx context.Context, tx pgx.Tx, id string) (cardOrder, error) {
-	var o cardOrder
-	err := tx.QueryRow(ctx, `SELECT id,one_time_minor,monthly_minor FROM portal_orders WHERE id=$1 AND collection='card'`, id).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
-	return o, err
+	err := tx.QueryRow(ctx, `SELECT o.id,o.one_time_minor,o.monthly_minor,c.purpose FROM portal_card_checkouts c JOIN portal_orders o ON o.id=c.order_id WHERE c.`+column+`=$1 AND o.collection='card' FOR UPDATE OF c`, value).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor, &purpose)
+	return o, purpose, err
 }
 
 // settleCardCharge records a funded period for a card order. The amount must
@@ -234,54 +271,57 @@ ON CONFLICT(order_id,period) DO UPDATE SET state='settled',provider_ref=excluded
 	return nil
 }
 
-func applyCheckoutPaid(ctx context.Context, tx pgx.Tx, session stripe.Session) error {
-	o, err := cardOrderBy(ctx, tx, "session_id", session.ID)
+// applyCheckoutEvent moves one of the portal's sessions through its states.
+// Sessions are never forgotten when replaced, so a delayed event still finds
+// its own order; a session the portal did not create is ignored.
+func applyCheckoutEvent(ctx context.Context, tx pgx.Tx, kind string, session stripe.Session) error {
+	o, purpose, err := cardCheckoutBy(ctx, tx, "session_id", session.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// A session the portal has since replaced is still funded through the
-		// order it names; anything else belongs to another integration.
-		if session.Mode != "payment" || session.PaymentStatus != "paid" || session.ClientReferenceID == "" {
-			return nil
-		}
-		o, err = cardOrderByID(ctx, tx, session.ClientReferenceID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return errTriageStorage
-		}
-		return settleCardCharge(ctx, tx, o.ID, "acceptance", session.ID, session.AmountTotal, o.OneTimeMinor, session.Currency)
+		return nil
 	}
 	if err != nil {
 		return errTriageStorage
 	}
-	if _, err = tx.Exec(ctx, `UPDATE portal_card_checkouts SET completed=true,subscription_id=nullif($2,''),updated_at=clock_timestamp() WHERE session_id=$1`, session.ID, session.Subscription); err != nil {
-		return errTriageStorage
-	}
-	// A subscription's first payment is funded by its own invoice.paid event.
-	if session.Mode != "payment" || session.PaymentStatus != "paid" {
+	setState := func(state, subscription string, from ...string) error {
+		if _, err := tx.Exec(ctx, `UPDATE portal_card_checkouts SET state=$2,subscription_id=coalesce(nullif($3,''),subscription_id),updated_at=clock_timestamp() WHERE session_id=$1 AND state=ANY($4)`, session.ID, state, subscription, from); err != nil {
+			return errTriageStorage
+		}
 		return nil
+	}
+	switch kind {
+	case "checkout.session.expired", "checkout.session.async_payment_failed":
+		// Retire the attempt so the client can start a new one.
+		return setState("closed", "", "open", "processing")
+	case "checkout.session.completed":
+		if purpose == "monthly" {
+			// The subscription's months are funded by their own invoices.
+			return setState("paid", session.Subscription, "open", "processing", "closed")
+		}
+		if session.PaymentStatus != "paid" {
+			// An asynchronous method has not settled yet.
+			return setState("processing", "", "open", "closed")
+		}
+	}
+	if purpose != "one-time" || session.Mode != "payment" || session.PaymentStatus != "paid" {
+		return nil
+	}
+	if err := setState("paid", "", "open", "processing", "closed"); err != nil {
+		return err
 	}
 	return settleCardCharge(ctx, tx, o.ID, "acceptance", session.ID, session.AmountTotal, o.OneTimeMinor, session.Currency)
 }
 
-func applyCheckoutClosed(ctx context.Context, tx pgx.Tx, session string) error {
-	// Expire the link so the client is offered a fresh Checkout next time.
-	if _, err := tx.Exec(ctx, `UPDATE portal_card_checkouts SET expires_at=least(expires_at,clock_timestamp()),updated_at=clock_timestamp() WHERE session_id=$1 AND NOT completed`, session); err != nil {
-		return errTriageStorage
-	}
-	return nil
-}
-
+// applySubscriptionInvoicePaid funds the month a subscription renewal paid for.
 func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMessage) error {
 	var invoice stripe.Invoice
 	if err := json.Unmarshal(raw, &invoice); err != nil || invoice.ID == "" {
 		return errors.New("card billing: malformed invoice")
 	}
 	subscription := invoice.SubscriptionID()
-	if subscription == "" {
+	if subscription == "" || invoice.BillingReason != "subscription_cycle" {
 		return nil
 	}
-	o, err := cardOrderBy(ctx, tx, "subscription_id", subscription)
+	o, _, err := cardCheckoutBy(ctx, tx, "subscription_id", subscription)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Not ours unless it carries the portal's order marker. Events are
 		// unordered: a portal subscription whose Checkout completion has not
@@ -294,15 +334,6 @@ func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMe
 	if err != nil {
 		return errTriageStorage
 	}
-	switch invoice.BillingReason {
-	case "subscription_create":
-		if o.OneTimeMinor == 0 {
-			return nil
-		}
-		return settleCardCharge(ctx, tx, o.ID, "acceptance", invoice.ID, invoice.AmountPaid, o.OneTimeMinor, invoice.Currency)
-	case "subscription_cycle":
-		period := monthPeriod(time.Unix(invoice.Created, 0).In(copenhagen))
-		return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, o.MonthlyMinor, invoice.Currency)
-	}
-	return nil
+	period := monthPeriod(time.Unix(invoice.Created, 0).In(copenhagen))
+	return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, o.MonthlyMinor, invoice.Currency)
 }

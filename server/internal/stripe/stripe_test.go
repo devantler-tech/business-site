@@ -62,7 +62,7 @@ func TestCheckoutRequestShape(t *testing.T) {
 	}
 	anchor := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 	s, err := c.CreateCheckout(t.Context(), "portal-X-checkout-1", Checkout{Mode: "subscription", ClientReference: "ORDER", SuccessURL: "https://portal.invalid/ok", CancelURL: "https://portal.invalid/back", Locale: "da", BillingCycleAnchor: anchor, Metadata: map[string]string{"portal_order": "ORDER"},
-		Lines: []Line{{Name: "Website", AmountMinor: 375000}, {Name: "Hosting", AmountMinor: 12500, Monthly: true}}})
+		Lines: []Line{{Name: "Hosting", AmountMinor: 12500, Monthly: true}}})
 	if err != nil || s.ID != "cs_test_1" {
 		t.Fatal("checkout failed", err)
 	}
@@ -70,8 +70,8 @@ func TestCheckoutRequestShape(t *testing.T) {
 		t.Fatal("key, idempotency key or API version not sent")
 	}
 	for field, want := range map[string]string{
-		"mode": "subscription", "line_items[0][price_data][unit_amount]": "375000", "line_items[1][price_data][recurring][interval]": "month",
-		"line_items[1][price_data][currency]": "dkk", "subscription_data[billing_cycle_anchor]": "1796083200",
+		"mode": "subscription", "line_items[0][price_data][unit_amount]": "12500", "line_items[0][price_data][recurring][interval]": "month",
+		"line_items[0][price_data][currency]": "dkk", "subscription_data[billing_cycle_anchor]": "1796083200",
 		"subscription_data[proration_behavior]": "none", "subscription_data[metadata][portal_order]": "ORDER", "client_reference_id": "ORDER",
 	} {
 		if form.Get(field) != want {
@@ -79,7 +79,7 @@ func TestCheckoutRequestShape(t *testing.T) {
 		}
 	}
 	for field := range form {
-		if strings.HasPrefix(field, "payment_method_types") || field == "line_items[0][price_data][recurring][interval]" {
+		if strings.HasPrefix(field, "payment_method_types") || strings.HasPrefix(field, "line_items[1]") {
 			t.Errorf("unexpected field %s", field)
 		}
 	}
@@ -87,11 +87,12 @@ func TestCheckoutRequestShape(t *testing.T) {
 		t.Fatalf("refusal lost its code or leaked text: %v", err)
 	}
 	for name, bad := range map[string]Checkout{
-		"monthly in payment mode":     {Mode: "payment", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
-		"no monthly in subscription":  {Mode: "subscription", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}}},
-		"subscription without anchor": {Mode: "subscription", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
-		"zero amount":                 {Mode: "payment", Lines: []Line{{Name: "x"}}},
-		"no lines":                    {Mode: "payment"},
+		"monthly in payment mode":       {Mode: "payment", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
+		"no monthly in subscription":    {Mode: "subscription", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}}},
+		"one-time line in subscription": {Mode: "subscription", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}, {Name: "y", AmountMinor: 100, Monthly: true}}},
+		"subscription without anchor":   {Mode: "subscription", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
+		"zero amount":                   {Mode: "payment", Lines: []Line{{Name: "x"}}},
+		"no lines":                      {Mode: "payment"},
 	} {
 		if _, err := c.CreateCheckout(t.Context(), "k", bad); err == nil {
 			t.Errorf("%s was sent", name)

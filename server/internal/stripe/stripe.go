@@ -66,8 +66,8 @@ type Line struct {
 	Monthly     bool
 }
 
-// Checkout describes one Checkout Session. Mode is "payment" for a one-off
-// order or "subscription" when a monthly line is present. Payment methods
+// Checkout describes one Checkout Session. Mode is "payment" for one-off lines
+// or "subscription" for monthly lines only. Payment methods
 // are left to the Dashboard: Stripe offers MobilePay only for one-off
 // payments, because MobilePay does not support recurring charges.
 type Checkout struct {
@@ -125,6 +125,14 @@ func (c Checkout) form() (url.Values, error) {
 	}
 	if monthly != (c.Mode == "subscription") {
 		return nil, errors.New("stripe: monthly lines need subscription mode")
+	}
+	if c.Mode == "subscription" {
+		for _, line := range c.Lines {
+			// Stripe refuses one-time prices without proration.
+			if !line.Monthly {
+				return nil, errors.New("stripe: a subscription carries only monthly lines")
+			}
+		}
 	}
 	target := "metadata"
 	if c.Mode == "subscription" {

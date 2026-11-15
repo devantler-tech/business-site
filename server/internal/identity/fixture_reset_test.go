@@ -29,7 +29,7 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('reset-contact-client','fixture-contact')`); err != nil {
 		t.Fatal("fixture Numina contact unavailable", err)
 	}
-	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_card_checkouts(order_id,session_id,url,expires_at,attempt) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','cs_test_reset','https://checkout.stripe.invalid/reset',clock_timestamp(),1)`); err != nil {
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_card_checkouts(order_id,purpose,session_id,url,expires_at,attempt) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','one-time','cs_test_reset','https://checkout.stripe.invalid/reset',clock_timestamp(),1)`); err != nil {
 		t.Fatal("fixture card checkout unavailable", err)
 	}
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_stripe_events(id,type) VALUES('evt_reset','checkout.session.completed')`); err != nil {
