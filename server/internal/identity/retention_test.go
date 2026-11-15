@@ -274,3 +274,53 @@ func TestRetentionDeletesARenamedMembershipsWholeHistory(t *testing.T) {
 		t.Fatalf("the renamed membership's history was kept: %d %v", history, err)
 	}
 }
+
+// TestRetentionWaitsForLiveSubscriptions keeps a former client whose card
+// subscription has no confirmed end, so the purge never strands a
+// subscription the portal could no longer stop.
+func TestRetentionWaitsForLiveSubscriptions(t *testing.T) {
+	_, order := seedEveryRelation(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	for _, seed := range []string{
+		`INSERT INTO portal_card_checkouts(order_id,purpose,session_id,url,expires_at,attempt,state,subscription_id) VALUES($1,'monthly','cs_test_live','https://checkout.stripe.invalid/live',clock_timestamp(),1,'paid','sub_live')`,
+		`UPDATE portal_memberships SET revoked=true WHERE client_id=(SELECT client_id FROM portal_orders WHERE id=$1)`,
+	} {
+		if _, err := migrator.Exec(ctx, seed, order); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := purgeAged(t, migrator); n != 0 {
+		t.Fatalf("a client with a live subscription was purged: %d", n)
+	}
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_withdrawal_cancellations(subscription_id,order_id,cancel_at) VALUES('sub_live',$1,clock_timestamp()-interval '1 day')`, order); err != nil {
+		t.Fatal(err)
+	}
+	if n := purgeAged(t, migrator); n != 1 {
+		t.Fatalf("the former client was not purged once its subscription ended: %d", n)
+	}
+}
+
+// TestRetentionDeletionDoesNotRestartTheClock purges two former clients that
+// share a member who moved from the second to the first: deleting the first
+// client's revoked membership records an event today, which must not keep the
+// shared history for three more years.
+func TestRetentionDeletionDoesNotRestartTheClock(t *testing.T) {
+	_ = fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	formerClient(t, migrator, "clock-b")
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('clock-a','clock-a-contact')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET client_id='clock-a' WHERE client_id='clock-b'`); err != nil {
+		t.Fatal(err)
+	}
+	if n := purgeAged(t, migrator); n != 2 {
+		t.Fatalf("both former clients were not purged: %d", n)
+	}
+	var history int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_membership_transitions WHERE client_id IN ('clock-a','clock-b')`).Scan(&history); err != nil || history != 0 {
+		t.Fatalf("the purge's own deletion kept the shared history: %d %v", history, err)
+	}
+}

@@ -18,7 +18,10 @@ const RetentionYears = 3
 
 // retentionDue lists the clients due for purging; with a nonempty $2, only that
 // client. Every membership event of theirs was a client membership, the last
-// one lies before the cutoff $1, and no membership or invitation is still open.
+// one lies before the cutoff $1, no membership or invitation is still open, and
+// no order still bills: every order with a monthly price has been withdrawn or
+// has ended before this month, and every card subscription has a confirmed end.
+// A purge never leaves a live subscription the portal can no longer stop.
 // An identity that moved to another client is recorded under the new client,
 // so the event that follows each of the client's events counts too.
 const retentionDue = `SELECT a.client_id FROM portal_membership_transitions a
@@ -28,6 +31,12 @@ const retentionDue = `SELECT a.client_id FROM portal_membership_transitions a
  HAVING bool_and(a.role='client') AND max(greatest(a.recorded_at,n.recorded_at)) < $1
  AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.client_id=a.client_id AND NOT m.revoked)
  AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.client_id=a.client_id AND NOT i.revoked AND i.expires_at>now())
+ AND NOT EXISTS (SELECT 1 FROM portal_orders o WHERE o.client_id=a.client_id AND o.monthly_minor>0 AND (
+   NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id)
+     AND NOT EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id AND e.last_month<date_trunc('month',now() AT TIME ZONE 'Europe/Copenhagen')::date)
+   OR EXISTS (SELECT 1 FROM portal_card_checkouts k WHERE k.order_id=o.id AND k.subscription_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now())
+     AND NOT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations c WHERE c.subscription_id=k.subscription_id AND c.cancel_at<=now()))))
  ORDER BY a.client_id`
 
 // purgeRecords deletes one client's portal records in dependency order:
@@ -80,14 +89,15 @@ const membershipLineages = `WITH RECURSIVE lineage(root,incarnation) AS (
 
 // retentionHistory lists the memberships, among those with an event under
 // client $1, whose whole history may go: their last event lies before the
-// cutoff $2; no other client their events name still has records, so no
-// other client loses the evidence that makes it due and no membership of
-// another client loses its history; and no remaining work approval cites any
-// of their events.
+// cutoff $2, not counting the deletion of a membership already revoked, which
+// a purge makes and which ends nothing; no other client their events name still
+// has records, so no other client loses the evidence that makes it due and no
+// membership of another client loses its history; and no remaining work
+// approval cites any of their events.
 var retentionHistory = membershipLineages + `
  SELECT l.root::text FROM lineage l JOIN portal_membership_transitions t ON t.incarnation=l.incarnation
  GROUP BY l.root
- HAVING bool_or(t.client_id=$1) AND max(t.recorded_at) < $2
+ HAVING bool_or(t.client_id=$1) AND max(t.recorded_at) FILTER (WHERE NOT (t.kind='delete' AND t.revoked)) < $2
  AND NOT bool_or(t.client_id<>$1 AND (` + clientHasRecords("t.client_id") + `))
  AND NOT bool_or(EXISTS (SELECT 1 FROM portal_work_approvals w WHERE t.incarnation IN (w.client_incarnation,w.operator_incarnation)))`
 

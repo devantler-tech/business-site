@@ -270,7 +270,9 @@ It runs as the migration role, because the web runtime can delete none of this h
 that the role owns the complete schema. A client is due when all their memberships were client
 memberships, none is still active, no invitation is pending, and the last membership change lies
 more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
-change. Each client goes in one transaction that locks invitations and memberships and checks the
+change. No order may still bill: monthly billing must have ended or been withdrawn, and a card
+subscription needs Stripe's confirmed end, so the purge never strands a subscription the portal
+could no longer stop. Each client goes in one transaction that locks invitations and memberships and checks the
 client again, so a redemption during the purge keeps the client. It deletes billing, email, work,
 proposals, requests, contacts, invitations and memberships, and the whole history of each of
 the client's memberships, one chain of events from its creation across renames and moves, whose
