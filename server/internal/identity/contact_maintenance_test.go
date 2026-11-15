@@ -208,7 +208,7 @@ func maintenanceAlter(t *testing.T, markup string, match func(*html.Node) bool, 
 
 // TestContactMaintenanceInventory requires the real frame in every maintained view.
 func TestContactMaintenanceInventory(t *testing.T) {
-	for name, want := range map[string]int{"portal.html": 28, "contact.html": 12, "requests.html": 38, "triage.html": 30, "credits.html": 12} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedMaintenancePages(name)
 			if err != nil || len(pages) != want {
@@ -262,124 +262,22 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	return nil
 }
 
-// Ordinary billing screens evolve independently of the rejected experiment.
-// Task-mode consumers always retain the original immutable body oracle.
+// maintenanceBodyReferences returns the frozen body oracle, except for the
+// requests template, whose newer ordinary forms have their own reference.
 func maintenanceBodyReferences(name string, task bool) []string {
 	if !task && name == "requests.html" {
 		return maintenanceOrdinaryRequestDigests
 	}
-	if !task && (name == "triage.html" || name == "credits.html") {
-		return maintenanceOrdinaryBillingDigests[name]
-	}
 	return maintenanceReferenceDigests[name]
 }
-
-// The ordinary reference cannot replace the historical experiment's oracle or
-// silently fall back to it when its own complete reference is unavailable.
-func TestContactMaintenanceBillingReferenceBoundary(t *testing.T) {
-	for _, name := range []string{"triage.html", "credits.html"} {
-		original := maintenanceOrdinaryBillingDigests[name]
-		if len(original) != 2*len(maintenanceCases[name]) || slices.Equal(original, maintenanceReferenceDigests[name]) {
-			t.Fatal("independent complete ordinary billing references required")
-		}
-		pages, err := renderedMaintenancePages(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, invalid := range [][]string{nil, original[:len(original)-1], slices.Repeat([]string{"malformed"}, len(original))} {
-			maintenanceOrdinaryBillingDigests[name] = invalid
-			if !slices.Equal(maintenanceBodyReferences(name, true), maintenanceReferenceDigests[name]) {
-				t.Fatal("ordinary override changed the frozen task oracle")
-			}
-			if !*maintenanceTask && checkMaintenanceInventoryPage(name, 0, pages[0].markup, false) == nil {
-				t.Fatal("missing or malformed ordinary billing oracle was accepted")
-			}
-		}
-		maintenanceOrdinaryBillingDigests[name] = original
-		if *maintenanceTask {
-			continue // Frozen-task bodies are checked against their original table above and by the inventory.
-		}
-		for i, page := range pages {
-			if err := checkMaintenanceInventoryPage(name, i, page.markup, false); err != nil {
-				t.Fatal("current ordinary billing body refused", err)
-			}
-			if original[i] == maintenanceReferenceDigests[name][i] {
-				continue
-			}
-			// Adapt only the registered frame label, not the billing body. The
-			// historical task must still reject this ordinary invoice change.
-			markup := strings.Replace(page.markup, "Appearance", "Colour theme", 1)
-			markup = strings.Replace(markup, "Udseende", "Farvetema", 1)
-			err := checkMaintenanceInventoryPage(name, i, markup, true)
-			if err == nil || err.Error() != "maintained page state differs from frozen reference" {
-				t.Fatal("current invoice body entered the frozen task oracle", err)
-			}
-		}
-	}
-}
-
-// BEGIN GENERATED ORDINARY BILLING REFERENCES
-// Generated twice from signed ordinary source 90ade40aa63a54b62012e89a820277dc56eddb5c.
-// Never used for a frozen comparison task; see CONTACT-MAINTENANCE.md.
-var maintenanceOrdinaryBillingDigests = map[string][]string{
-	"credits.html": {
-		"fcd1d5be809439848150d542ee4885ddc19022ac262d15a90d25440cdd6a9ad7",
-		"c54e8695eaa0454718b9748b9a49b188ac9185e816183b54ec77dc7810a5010a",
-		"4b81f3fc738e7d579a05086cc900cb7ea9b1590feed4470eff0dd257b49ca900",
-		"65a06f561b096c26266647730280bbeaa73a24a198af9b1d84ed25c5f6cf3805",
-		"dac5ff838d4ede085be4ec474e20cb2e39c74d0b97d2fb202a453da619cf793e",
-		"e935ee84312720fc291680bee78bbd1dc4fbaed1acea5e9f845fe5ecdc240ed0",
-		"e2dbd653e16287422ca2228347fb015ff74e027c03434fce7c26e05e9e707d2d",
-		"3e2c603bf39c6ac48bd2fe1bcabb3772ba7853592108db5537546381b4bc6306",
-		"f71adc9def1809f7a15f22e8acf94faa47fd4ee5bca3a0856bc0ed445f7c63be",
-		"c7c19cf42b2f70ab4deef4036da19812950917d4f822632bdb8b4bf6131894a6",
-		"da62e97dd76617a6de50d4b2c7759a229348014685f2e860eece89a3aba4d9c8",
-		"093ea8e521b452ea8fbe760ad8f5dfc2b8af1b9d52907203b4e61d99fc056205",
-	},
-	"triage.html": {
-		"8dabbc55a29a43559fe6b5ba27cd759a31eaff7119ae162664ea7b3238569673",
-		"c6d297689afbba79eef47ee712b15e91f7d6bafee1e5592e05dbab74f098db52",
-		"33a6af2890cb399106b54aa43cf453606427debc9aea08a8ab15b594ced7296d",
-		"0622fd91f7e9af9c42d5759481cecd2da84936acc21b173d1c813b1ed20246b6",
-		"030c63d05649fd0c3d2346f3afe0fb38317fce26ce0f2f2524bf02cbcf80eb1e",
-		"68f119a129ce9acfff0d66c62ff3e324a75c2a95a8cd18dd428a31928bb2b493",
-		"a726b3568e13bf1917827063416c27232f52adfbc0aafb4b0f44c67ac1074856",
-		"bfe30b905bcafac1f589c55bf9b63011dd9b475f29cf99248eb0ffd7510dedbb",
-		"bdd64bfca46461e50cdcd7ba6397c6c11a62e9b913f5fdce1d4505fbf1904980",
-		"1d00ea15686a90add4cafe5853358005b958a0621acfb2b01f1a2ebb92eb1e9b",
-		"41d46d9f603d4f9e601adda2af056bf1ebcdcd83ea965fcbc653bf423465fb76",
-		"e9e34df25350c9ad10d12af63b036fbfaf6ec932ac3abb34ea1cb447673aee37",
-		"e580e185f0f62fc3dba6af7ffffdd1fd3de4ef8c46fbaad15c4610e43c307282",
-		"7d52f017e0af84a64bd453a1837750b67b607846b2a8066441b97d637146dac1",
-		"e233dba1c675610a6d37ea69c6cff978a2cf20fa55bf70679978fe71b975cb14",
-		"c191a924fb08fbc09a245df740a42be494534cf11352aa234ac399e848c67153",
-		"3344f0e632cefa65f526aaf4c12a3920d7b2c21d07dcdd2d3ffec0b363a24a5b",
-		"bd37eb7b628dc67ad07df539b3ef8edfc738e6cbeaaa9024a3b957e00d834c91",
-		"78d71798b3c918af41eac556fb85b1f0c1397e22a3c36c962603ebe63ca87946",
-		"4e9d71c15a412a76ddadbfd48179ebe5bb31a471e859aedb0a1b611feb4a2cce",
-		"6558f914752c4eee555256063c58fb963fb779165dc6b228b989c81cb9cfb742",
-		"54dca502a052cdba07370df7aea51254ce4357ae0742900606a389a1514f47d6",
-		"606ee1722e70aae976ab60a2d08148f7d3f663998f0f49b4030e0338d962bfb5",
-		"a2f1ae5f008547cb7133b85e3ac8609a0f13bb6003870d2d524d480f6118b5ba",
-		"1d507c49c44f968e5ae5eeef185dce5b32d205918259f95ce342f35f4ae34b28",
-		"c554a70b28a6cd51e33a4008182868ec1558e4e603ec07a3ad162761f997006b",
-		"c97472f834d21ab72e25aa2a593d877c890ce921093a33a8e4030b05b96e789f",
-		"51df3015f0d625692e9e87d20600468c9ae5782b2088131b6d2336f53afad96e",
-		"e5aea9cc768183489c9fd99b013f927bd10c561963277ffc7bf837233a41a307",
-		"6e28b37a70689eb95ca2d6ec9be9e60e8b3edbf9f6d979a2c78d764ff23a1e41",
-	},
-}
-
-// END GENERATED ORDINARY BILLING REFERENCES
 
 // The case order is frozen with portal_links_test.go at a1be787. Repeated URIs
 // are different states, not duplicate evidence. Contact has explicit assertions.
 var maintenanceCases = map[string][]string{
 	"contact.html":  maintenanceContactViews[:],
-	"portal.html":   {"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict", "invoice-error", "credit-error"},
+	"portal.html":   {"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"},
 	"requests.html": {"website-new", "website-invalid", "website-receipt", "website-shared", "app-new", "app-invalid", "app-receipt", "app-shared", "service-new", "service-invalid", "service-receipt", "service-shared", "empty-list", "populated-list", "conflict", "review", "acceptance-conflict", "accepted-current", "accepted-historical"},
-	"triage.html":   {"empty-inbox", "populated-inbox", "paginated-inbox", "website-detail", "app-detail", "service-detail", "empty-drafts", "history", "full", "hostile", "sharing", "withdrawal", "invoice", "invoice-full", "invoice-credits"},
-	"credits.html":  {"empty", "confirmed", "disputed", "invalidated", "full-bound", "historical"},
+	"triage.html":   {"empty-inbox", "populated-inbox", "paginated-inbox", "website-detail", "app-detail", "service-detail", "empty-drafts", "history", "full", "hostile", "sharing", "withdrawal"},
 }
 
 // Only the proposal-draft form has a random rand.Text key in these fictional
@@ -548,20 +446,6 @@ var maintenanceFrameReferences = map[string][]string{
 		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
 		"05494f267b6fbd2fe1bda8da0b8527bb424eba1256cbc33a8e8a38602be5097f",
 	},
-	"credits.html": {
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"203362b05d25eced543ad1fbe066bf55b5e8f71912ade6f644be6ed8f1ab0618",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-		"2f924f6904911899870b0eda7cbab35ea9499d4738033c411614e04c31d72334",
-	},
 	"portal.html": {
 		"9aa418e549b64fc3a3f2b6df896107d9f334a3f195059cbb75373cbfd9f79df1",
 		"03bcdc9ac3d0970bfc526ebd1202968625798f14e783929a4b15a3d684ecd533",
@@ -575,8 +459,6 @@ var maintenanceFrameReferences = map[string][]string{
 		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
 		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
 		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
-		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
-		"5c8edcdcf7fe1bd44406265f5ad583df6e93de69d9eb6c4198e19a4da08216fd",
 		"26bb2cdffc500ba751af8e9aba076c92f62c3cb865ee9d7b7b503222af48bb43",
 		"99ba466be152ba1746c90df5a2b77a309de4b966ca7afdc94ae68c45c164ba93",
 		"9d0a89caa7f160527ade13df6ceb2af5dff34cad1f695af4824a260675b94aad",
@@ -585,8 +467,6 @@ var maintenanceFrameReferences = map[string][]string{
 		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
 		"99ba466be152ba1746c90df5a2b77a309de4b966ca7afdc94ae68c45c164ba93",
 		"9d0a89caa7f160527ade13df6ceb2af5dff34cad1f695af4824a260675b94aad",
-		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
-		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
 		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
 		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
 		"a09ca51470e7724548e823a69985797ccc07aecd53ace3ccbf6010c2c78fd58e",
@@ -645,15 +525,9 @@ var maintenanceFrameReferences = map[string][]string{
 		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
 		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
 		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
-		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
-		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
-		"d74dec31314bf0102be0b6788957e0efb02e2c1b75fc07bb291205cee89a9c89",
 		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
 		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
 		"67a9d246f76c59d66e11d2715d607baea1303fff5f1201b639f01593713390bc",
-		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
-		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
-		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
 		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
 		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
 		"4b33bc38523bbb82c44c42abc5e975e71a227b6e3ccc67573b52936eb1630edc",
@@ -766,20 +640,6 @@ func maintenanceMainDigest(markup string, draftKey bool) (string, error) {
 // Generated only from the ordinary immutable a1be787 source, never from the
 // maintenance task under test. See CONTACT-MAINTENANCE.md for its provenance.
 var maintenanceReferenceDigests = map[string][]string{
-	"credits.html": {
-		"3575e88878d4f6e886a60b12c3bd2f8fa3b29ab456237d36b8ed5782b297ae27",
-		"6aee0bfd9320df558563fcd84dfa4ec4c3eafaffda039040b53a5407882e3f63",
-		"9addcd1df510a5fb2af0e0154b399d630dd8a1beb57d5894dd7de34c19f183a7",
-		"179c565da41c3e452d4ef0cbf467106d85d9501de9775b6b2ca2d330960b1c42",
-		"73070a2b426d84c20eef99e0aacdd74da5de7afbc778f93e382e6112697d8aa2",
-		"bed8527c03701f5eb52649f996ef914260a826f2497694abd489998fe84d5a83",
-		"b230236a262bf281f433638395c6c3085514272a8cecc27cca4f8de04f07579d",
-		"e427aaa9bebb2c2627647ebd9ad19abc4238e21c8558d4809ffb6f3aef2abaec",
-		"82dd76552f394d44b50dfcc06c29753efe84f15e4d20bf9df4509b68f71cbf23",
-		"665a646e8224432393f17d8b198782912cbeb2ae159feb8b64c4aab389152d81",
-		"174f46a14bd96f43c869466c2cf522a603477887f532f7b5612d4c7428d0b7e9",
-		"75a27c9abd4c6cfc1a4943804df305324e91a34997333aa2f117be7903a16597",
-	},
 	"portal.html": {
 		"2c3b37fbca59ddb85d649dcb775fc8535a7633e4e9f92cddace170ecd8554512",
 		"37bee4a39a255dec1eae234ecb6dd440a06c29825c104fb10da6f7687e972019",
@@ -793,8 +653,6 @@ var maintenanceReferenceDigests = map[string][]string{
 		"5d19e77d7c5399566bf5afad843ef5fe357cdfa1bec32a4f7e1c51dc799973ca",
 		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
 		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
-		"2091965848c296695f0e0c86f880f2a26b00e5918fa204e447c6ee9c986908bb",
-		"9bc08d143dfca308344d056026c3ff20f15e9cec8b52acc8b9aed86bf4380cea",
 		"97517c38d4a151f1e2d1e780a7100533f595d8151791caffccdf53f841542e77",
 		"717acfefd67649d54421e4180e227277389a5c2cc1bf43fb392f2537422b49b0",
 		"49ed961f44a9e595bcee42da5dab29fb20fe60efedfd29abbdc4380eedcbd626",
@@ -807,8 +665,6 @@ var maintenanceReferenceDigests = map[string][]string{
 		"a19d7e30316b1be3b7a461044dd4cbfbb5481a2492528b3afbc90ea0527afde0",
 		"22fe594eabcc1252342ef696d06c04aecbd24f0e348dab247895bdcf103799cb",
 		"22fe594eabcc1252342ef696d06c04aecbd24f0e348dab247895bdcf103799cb",
-		"f8ab8c7327f6cbd16d15edf3fb836c6af086c4181febe22e8375d44a213c4314",
-		"1870d6ec724cc978c369b534c97c38c37ffbd813ca87e7631c75b9b4b96acc34",
 	},
 	"requests.html": {
 		"2c6c8d8098ea574e7df5748556e250fc4b5fe9e5cce2cdb5898b96907a1bb245",
@@ -863,9 +719,6 @@ var maintenanceReferenceDigests = map[string][]string{
 		"1d00ea15686a90add4cafe5853358005b958a0621acfb2b01f1a2ebb92eb1e9b",
 		"41d46d9f603d4f9e601adda2af056bf1ebcdcd83ea965fcbc653bf423465fb76",
 		"e9e34df25350c9ad10d12af63b036fbfaf6ec932ac3abb34ea1cb447673aee37",
-		"26da58801f11793648c26f5a0e206e29e2329484d9f84b0e8b60df5d1d1fca76",
-		"685994fee03f603d04edd5c912b2386dc049b23d6e2eed81065ec219c964b9fe",
-		"4c2744e152eeebd6bea425d704042beae2d51e6df3e374026ab30da7506208a9",
 		"c191a924fb08fbc09a245df740a42be494534cf11352aa234ac399e848c67153",
 		"3344f0e632cefa65f526aaf4c12a3920d7b2c21d07dcdd2d3ffec0b363a24a5b",
 		"bd37eb7b628dc67ad07df539b3ef8edfc738e6cbeaaa9024a3b957e00d834c91",
@@ -878,9 +731,6 @@ var maintenanceReferenceDigests = map[string][]string{
 		"1d507c49c44f968e5ae5eeef185dce5b32d205918259f95ce342f35f4ae34b28",
 		"c554a70b28a6cd51e33a4008182868ec1558e4e603ec07a3ad162761f997006b",
 		"c97472f834d21ab72e25aa2a593d877c890ce921093a33a8e4030b05b96e789f",
-		"fd573225638ed03449ef6f68bd159fcd364c7756fedab7b27791a7a9f9812ff5",
-		"ca0a4b50ea19c05cc48f964aa6156a2bfa86d4c35cbe3398d8900dee84664eb4",
-		"bf30f5144bb203a060bd11030b8c9dbe9e407a42ab6e2be1b064715ea0993a51",
 	},
 }
 
@@ -911,7 +761,7 @@ func TestContactMaintenanceAncestorRejections(t *testing.T) {
 // TestContactMaintenanceNonContactRejections preserves each case's main content,
 // not merely the number of documents or the shared frame around an empty main.
 func TestContactMaintenanceNonContactRejections(t *testing.T) {
-	for _, name := range []string{"portal.html", "requests.html", "triage.html", "credits.html"} {
+	for _, name := range []string{"portal.html", "requests.html", "triage.html"} {
 		pages, err := renderedMaintenancePages(name)
 		if err != nil {
 			t.Fatal(err)
@@ -968,7 +818,7 @@ func maintenanceMainRange(t *testing.T, markup string) (int, int) {
 // No missing or malformed input may disappear behind key canonicalization.
 func TestContactMaintenanceReferenceKeys(t *testing.T) {
 	pages, err := renderedMaintenancePages("triage.html")
-	if err != nil || len(pages) != 30 {
+	if err != nil || len(pages) != 24 {
 		t.Fatal("actual triage inventory unavailable")
 	}
 	for i, page := range pages {
