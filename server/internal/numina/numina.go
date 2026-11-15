@@ -96,6 +96,7 @@ type Invoice struct {
 	Status             string       `json:"status"`
 	ContactID          string       `json:"contact_id"`
 	IssueDate          string       `json:"issue_date"`
+	Currency           string       `json:"currency"`
 	Total              json.Number  `json:"total"`
 	Memo               string       `json:"memo"`
 	PaymentState       *string      `json:"payment_state"`

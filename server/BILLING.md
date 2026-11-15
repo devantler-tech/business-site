@@ -32,7 +32,9 @@ For each invoice-path order it:
    the current Copenhagen month. Each charge has a durable identity,
    `portal-<order>-<period>`, and exact net and VAT amounts inside the VAT-inclusive price.
 2. Finds or creates the client's **Numina contact** from the portal contact profile (company or
-   name, email, attention person, country DK). Numina does not protect contact creation against
+   name, email, attention person). The portal profile has no country, so a new contact has
+   none: the operator confirms it in Numina, and only a contact whose country is `DK` is
+   invoiced automatically with Danish VAT. Numina does not protect contact creation against
    retries, so a contact with the same email is reused. Later passes update only name and email,
    so EAN, CVR and address details set in Numina are kept.
 3. Creates the **draft invoice** with the identity as `Idempotency-Key` and in the memo. Before
@@ -50,8 +52,8 @@ For each invoice-path order it:
 
 A charge is **held** when the portal must not decide it alone: the client has no contact
 profile yet, two Numina contacts share the client's email, the Numina contact's country is not
-Denmark (which needs reverse charge or another VAT treatment), or a draft's total differs from
-the charge. The operator page shows each held charge's reference. Invoice it by hand in Numina
+confirmed as Denmark (another country needs reverse charge or another VAT treatment), or a
+draft's total or currency differs from the charge. The operator page shows each held charge's reference. Invoice it by hand in Numina
 with that reference in the memo: the portal adopts any invoice (never a credit note) whose memo
 carries it, follows its payment, and leaves sending to whoever booked it. A draft it adopts is
 booked only when its total is exactly the charge. Each pass tries held charges again, so fixing

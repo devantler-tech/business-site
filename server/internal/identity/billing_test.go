@@ -25,6 +25,7 @@ type fakeNumina struct {
 	sends           int
 	contactCreates  int
 	failCreateReply bool  // store the invoice, then answer 500 as if the reply was lost
+	failBookReply   bool  // book the invoice, then answer 500 as if the reply was lost
 	forbidSend      bool  // a sandbox company cannot send email
 	totalOffset     int64 // added to a created invoice's total, as a wrong VAT code would
 	onCreate        func()
@@ -110,7 +111,7 @@ func (f *fakeNumina) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			net, _ := numina.Minor(line.UnitPrice)
 			total += int64(line.Quantity) * net * 125 / 100
 		}
-		inv := &fakeInvoice{Invoice: numina.Invoice{ID: f.id("invoice"), Type: "invoice", Status: "draft", ContactID: in.ContactID, IssueDate: in.IssueDate, Memo: in.Memo, Total: numina.Amount(total + f.totalOffset)}, Items: in.Items, VAT: in.VATCode, Due: in.DueDate}
+		inv := &fakeInvoice{Invoice: numina.Invoice{ID: f.id("invoice"), Type: "invoice", Status: "draft", ContactID: in.ContactID, IssueDate: in.IssueDate, Memo: in.Memo, Currency: in.Currency, Total: numina.Amount(total + f.totalOffset)}, Items: in.Items, VAT: in.VATCode, Due: in.DueDate}
 		if f.onCreate != nil {
 			f.onCreate()
 		}
@@ -149,6 +150,11 @@ func (f *fakeNumina) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				owed := numina.Amount(0)
 				inv.OutstandingBalance = &owed
 			}
+			if f.failBookReply {
+				f.failBookReply = false
+				reply(500, map[string]string{"error": "server_error"})
+				return
+			}
 			reply(200, inv.Invoice)
 		case r.Method == "POST" && len(parts) == 4 && parts[3] == "send":
 			if f.forbidSend {
@@ -164,6 +170,16 @@ func (f *fakeNumina) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		reply(404, map[string]string{"error": "not_found"})
+	}
+}
+
+// confirmDenmark sets every contact's country to DK, as the operator does in Numina.
+func (f *fakeNumina) confirmDenmark() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, c := range f.contacts {
+		c.CountryCode = "DK"
+		f.contacts[id] = c
 	}
 }
 
@@ -269,6 +285,10 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT monthly_from=(date_trunc('month',placed_at AT TIME ZONE 'Europe/Copenhagen')+interval '1 month')::date FROM portal_orders`).Scan(&oneTimestamp); err != nil || !oneTimestamp {
 		t.Fatal("the first billed month does not follow the order's own timestamp", err)
 	}
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 0 || chargeStates(t, b)["acceptance"] != "held" {
+		t.Fatal("an invoice was made before the contact's country was confirmed", err)
+	}
+	fake.confirmDenmark()
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +301,7 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 		}
 	}
 	for _, c := range fake.contacts {
-		if c.Name != "Fictional Bakery ApS" || c.Email != "client@example.invalid" || c.AttnPerson != "Fictional Client" || c.CountryCode != "DK" {
+		if c.Name != "Fictional Bakery ApS" || c.Email != "client@example.invalid" || c.AttnPerson != "Fictional Client" {
 			t.Fatalf("contact differs: %+v", c)
 		}
 	}
@@ -320,15 +340,20 @@ func TestInvoiceBillingRecoversALostCreateReply(t *testing.T) {
 	b := billingFixture(t)
 	fake, cfg := newFakeNumina(t)
 	placeInvoiceOrder(t, b)
+	fake.contacts["contact-dk"] = numina.Contact{ID: "contact-dk", Name: "Fictional Bakery ApS", Email: "client@example.invalid", CountryCode: "DK"}
 	fake.failCreateReply = true
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err == nil || chargeStates(t, b)["acceptance"] != "pending" {
 		t.Fatal("lost reply was not reported as a failed charge")
 	}
+	fake.failBookReply = true
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err == nil || chargeStates(t, b)["acceptance"] != "created" {
+		t.Fatal("lost booking reply was not reported as a failed charge")
+	}
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if fake.count() != 1 || chargeStates(t, b)["acceptance"] != "booked" {
-		t.Fatalf("retry duplicated the invoice: %d", fake.count())
+	if fake.count() != 1 || chargeStates(t, b)["acceptance"] != "booked" || fake.sends != 1 {
+		t.Fatalf("retries duplicated the invoice or never sent it: %d invoices, %d sends", fake.count(), fake.sends)
 	}
 }
 
@@ -498,8 +523,13 @@ func TestInvoiceBillingBooksOnlyExactTotalsWhileTheGateIsOpen(t *testing.T) {
 		if inv.Booked {
 			t.Fatal("a draft with a different total was booked")
 		}
-		fixed := numina.Amount(299500)
-		inv.Total = fixed
+		inv.Total, inv.Currency = numina.Amount(299500), "EUR"
+	}
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" {
+		t.Fatal("a draft in another currency was not held", err)
+	}
+	for _, inv := range fake.invoices {
+		inv.Currency = "DKK"
 	}
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "booked" || fake.count() != 1 {
 		t.Fatal("a corrected draft was not booked", err)
