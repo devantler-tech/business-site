@@ -57,19 +57,8 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 	t.Helper()
 	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
-	var issuer string
-	var discoveries atomic.Int32
-	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/openid-configuration" {
-			http.NotFound(w, r)
-			return
-		}
-		discoveries.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}})
-	}))
-	defer broker.Close()
-	issuer = broker.URL
+	broker, discoveries, _ := syntheticBroker(t)
+	issuer := broker.URL
 	gateway := fixtureTLSDatabase(t, database.Host, broker.TLS.Certificates[0])
 	database.Host = gateway
 	dir := t.TempDir()
@@ -158,6 +147,27 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	t.Helper()
 	ctx := context.Background()
+	migrator := createFixtureDatabase(t, database)
+	if err := identity.Migrate(ctx, migrator); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// createFixtureDatabase creates one uniquely named database owned by the fixture
+// migrator, points database at it and returns a migrator pool with no schema yet.
+// Cleanup closes that pool before dropping only this database.
+func createFixtureDatabase(t *testing.T, database *url.URL) *pgxpool.Pool {
+	t.Helper()
+	ctx := context.Background()
 	adminURL := *database
 	adminURL.Path = "/postgres"
 	adminURL.User = url.UserPassword("portal_fixture_owner", "fixture-only")
@@ -188,19 +198,38 @@ func prepareConstructorDatabase(t *testing.T, database *url.URL) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer migrator.Close()
-	if err := identity.Migrate(ctx, migrator); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, "GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, "REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA public TO portal_runtime; GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrator.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(migrator.Close)
+	return migrator
+}
+
+// syntheticBroker serves only OIDC discovery for its own loopback TLS URL. It
+// counts completed discoveries, and the first request after a stored delay waits
+// that long so slow but valid broker startup is testable. Cleanup closes it.
+func syntheticBroker(t *testing.T) (*httptest.Server, *atomic.Int32, *atomic.Int64) {
+	t.Helper()
+	var issuer string
+	discoveries, delay := &atomic.Int32{}, &atomic.Int64{}
+	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		if wait := time.Duration(delay.Swap(0)); wait > 0 {
+			select {
+			case <-time.After(wait):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		discoveries.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}); err != nil {
+			t.Error("synthetic discovery response failed")
+		}
+	}))
+	t.Cleanup(broker.Close)
+	issuer = broker.URL
+	return broker, discoveries, delay
 }
 
 // fixtureTLSDatabase requires PostgreSQL TLS negotiation before bridging the validated fixture.

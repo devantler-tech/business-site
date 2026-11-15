@@ -540,6 +540,7 @@
     "relnamespace",
     "relowner",
     "rolbypassrls",
+    "rolcanlogin",
     "rolcreatedb",
     "rolcreaterole",
     "rolname",

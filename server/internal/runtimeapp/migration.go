@@ -19,11 +19,13 @@ import (
 var ErrMigration = errors.New("portal schema migration failed")
 
 // MigrateDatabase runs the existing embedded transaction under a separate,
-// constrained role. This explicit job neither serves HTTP nor enables identity.
-func MigrateDatabase(ctx context.Context, filename string) error {
+// constrained role. A nonempty runtimeRole names the existing web login that the
+// same transaction grants exactly its runtime privileges; empty grants nothing.
+// This explicit job neither serves HTTP nor enables identity.
+func MigrateDatabase(ctx context.Context, filename, runtimeRole string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
 	connection, err := migrationConnection(filename)
@@ -31,7 +33,7 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	cfg, err := migrationConfig(connection)
-	if err != nil {
+	if err != nil || runtimeRole == cfg.ConnConfig.User {
 		return ErrMigration
 	}
 	cfg.MaxConns = 1
@@ -45,7 +47,13 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	defer pool.Close()
-	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
+	migrate := identity.Migrate
+	if runtimeRole != "" {
+		migrate = func(ctx context.Context, pool *pgxpool.Pool) error {
+			return identity.MigrateWithRuntimeRole(ctx, pool, runtimeRole)
+		}
+	}
+	if !migrationRoleAllowed(ctx, pool, false) || migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
 		return ErrMigration
 	}
 	return nil

@@ -301,7 +301,12 @@ parsed login before its permission gate and broker discovery. Preserve the real
 restricted-login positive control and mismatched-login refusal controls.
 The actual executable's `--migrate` job requires a private verified-TLS migration
 connection file, rejects broad/assumable authority and mixed server options, and
-has fixed connection/statement/lock/overall deadlines. Read `MIGRATIONS.md` before
+has fixed connection/statement/lock/overall deadlines. Its optional `--runtime-role`
+grants an existing web login exactly `runtimeGrants` (beside the embedded
+migrations) in the migration transaction; change both together, and keep
+`CheckRuntimeRole` the independent startup gate. `--portal-settings-projection`
+only installs the existing `PORTAL_*` settings from one confined file and refuses
+inherited ones; `--portal-invite` is a trusted operator command, not an API. Read `MIGRATIONS.md` before
 changing it. Normal web startup must never read migration credentials or perform
 DDL. Exercise the compiled job against its uniquely named disposable databases;
 source proof never authorizes a production migration or customer activation.

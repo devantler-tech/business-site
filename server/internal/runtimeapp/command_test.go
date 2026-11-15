@@ -1,15 +1,12 @@
 package runtimeapp
 
 import (
-	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -20,28 +17,10 @@ import (
 func TestActualExecutableStagingIdentity(t *testing.T) {
 	dir := t.TempDir()
 	binary, public := buildActualCommand(t)
-	var issuer string
-	var discoveryDelay atomic.Int64
+	broker, _, discoveryDelay := syntheticBroker(t)
+	issuer := broker.URL
+	// Slow but valid broker startup must leave time for the enabled assertion.
 	discoveryDelay.Store(int64(5 * time.Second))
-	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/openid-configuration" {
-			http.NotFound(w, r)
-			return
-		}
-		// Slow but valid broker startup must leave time for the enabled assertion.
-		if delay := time.Duration(discoveryDelay.Swap(0)); delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-r.Context().Done():
-				return
-			}
-		}
-		if err := json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}); err != nil {
-			t.Error("synthetic discovery response failed")
-		}
-	}))
-	t.Cleanup(broker.Close)
-	issuer = broker.URL
 	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
 	database.Host = fixtureTLSDatabase(t, database.Host, broker.TLS.Certificates[0])
@@ -173,9 +152,9 @@ func commandStatus(t *testing.T, address, route string, want int) {
 }
 
 // startActualCommand owns the executable through readiness, lease expiry and clean shutdown.
-func startActualCommand(t *testing.T, binary, public string, environment []string) (string, func()) {
+func startActualCommand(t *testing.T, binary, public string, environment []string, extra ...string) (string, func()) {
 	t.Helper()
-	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment)
+	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment, extra...)
 	address, err := process.awaitReady()
 	if err != nil {
 		t.Fatal(err)

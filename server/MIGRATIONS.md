@@ -76,8 +76,26 @@ arguments:
 ./business-site --migrate --migration-database-file "$MIGRATION_FILE"
 ```
 
-No server, version, public-check or disclosure option may be combined with this
-mode. Repeated migration options are rejected. The operation is off by default;
+To also grant the web login its runtime privileges, name that existing login:
+
+```sh
+./business-site --migrate --migration-database-file "$MIGRATION_FILE" --runtime-role portal_web
+```
+
+The role must be a lowercase SQL identifier, differ from the migration login,
+be able to log in, have no superuser, bypass-RLS, create-role, create-database
+or replication attribute, and not be able to assume the migration role. In the
+same transaction as the schema changes, the job revokes what the migration role
+earlier granted that role on every managed table, then grants schema usage and
+exactly the privileges listed below. Grants made by another role are not
+revoked; web startup still checks the runtime boundary below. A refused role
+or grant rolls back the whole job; re-running converges on the same grants. The
+list lives beside the embedded migrations in `internal/identity/migrate.go`
+(`runtimeGrants`); a migration that changes runtime access updates both.
+Without `--runtime-role`, the job grants nothing, as before.
+
+No server, version, public-check, disclosure or portal-settings option may be
+combined with this mode. Repeated migration options are rejected. The operation is off by default;
 browser dependency settings and identity flags cannot activate it. Unbound
 ordinary Go builds are not distributable migration jobs.
 
@@ -98,10 +116,11 @@ obstacle is understood.
 
 ## Web-runtime permissions and deployment proof
 
-Migration does not create roles, grant web permissions, invite clients, change
-membership, dispatch offers or enable any release flag. The reviewed store
-provisioning must give the separate web role schema usage and only its required
-table DML: SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
+Migration does not create roles, invite clients, change membership, dispatch
+offers or enable any release flag. It grants web permissions only to an explicit
+`--runtime-role`; otherwise the reviewed store provisioning must grant them. The
+separate web role gets schema usage and only its required table DML:
+SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
 memberships, sessions and contacts; SELECT/INSERT only on immutable requests and
 proposals, proposal-visibility events, acceptance receipts, external invoices,
 bank-transfer identities and credit revisions; SELECT/INSERT/UPDATE
@@ -121,7 +140,7 @@ and UPDATE only on the current pointer's `approval_id` and `generation` columns.
 Do not grant request/client key updates, immutable-history mutation, DELETE,
 TRUNCATE, references, triggers, maintenance, delegation or ownership to the
 runtime or an assumable role. The compiled migration job must own these relations
-as well as every earlier managed relation. It does not grant the web permissions.
+as well as every earlier managed relation. Only `--runtime-role` grants the web permissions.
 See [the approval boundary](WORK-APPROVALS.md); this migration adds no endpoint
 or client-work execution authority.
 

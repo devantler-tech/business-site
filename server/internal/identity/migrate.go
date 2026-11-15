@@ -7,7 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -56,10 +59,52 @@ var workApprovalsSchema string
 //go:embed other-requests.sql
 var otherRequestsSchema string
 
+// runtimeGrants is the web role's complete table privilege set after the
+// migrations above (v1–v15), as MIGRATIONS.md documents. A migration that adds
+// or changes runtime access updates this list in the same change; web startup's
+// CheckRuntimeRole independently refuses an incomplete or broader web role.
+var runtimeGrants = []string{
+	"SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts",
+	"SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions",
+	"SELECT,INSERT,UPDATE ON portal_proposal_reviews",
+	"SELECT ON portal_membership_transitions",
+	"SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current",
+	"UPDATE(approval_id,generation) ON portal_work_current",
+}
+
+// managedTables are every relation the migrations own. Granting first revokes
+// the migration role's earlier grants on all of them, so re-runs converge.
+const managedTables = "portal_schema_version,portal_login_attempts,portal_invitations,portal_memberships,portal_membership_transitions,portal_sessions,portal_contacts,portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions,portal_work_approvals,portal_work_revocations,portal_work_current"
+
+// errRuntimeRole hides which eligibility condition a named web role failed.
+var errRuntimeRole = errors.New("runtime role is not eligible")
+
+var runtimeRoleName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+
+// ValidRuntimeRoleName accepts one lowercase unquoted SQL identifier that cannot
+// name PUBLIC or a predefined role. Eligibility is checked again in SQL.
+func ValidRuntimeRoleName(name string) bool {
+	return runtimeRoleName.MatchString(name) && name != "public" && !strings.HasPrefix(name, "pg_")
+}
+
 // Migrate serializes ordered schema migrations across processes and records each
 // checksum in the same transaction. Unknown/drifted versions fail, never reset
 // data. Run with a separate migration role before constructing the runtime.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return migrate(ctx, pool, "")
+}
+
+// MigrateWithRuntimeRole migrates, then grants the existing web login exactly
+// runtimeGrants and schema usage in the same transaction: a refused role or
+// grant leaves neither schema changes nor privileges behind.
+func MigrateWithRuntimeRole(ctx context.Context, pool *pgxpool.Pool, role string) error {
+	if !ValidRuntimeRoleName(role) {
+		return errRuntimeRole
+	}
+	return migrate(ctx, pool, role)
+}
+
+func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error {
 	if pool == nil {
 		return errors.New("migration database is required")
 	}
@@ -115,8 +160,42 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 			return fmt.Errorf("record migration: %w", err)
 		}
 	}
+	if runtimeRole != "" {
+		if err = grantRuntime(ctx, tx, runtimeRole); err != nil {
+			return err
+		}
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit migration: %w", err)
+	}
+	return nil
+}
+
+// grantRuntime refuses a missing, privileged or migration-assumable web login,
+// then resets and grants its privileges. GRANT without grant authority can only
+// warn, so schema usage is confirmed afterward; the migration role owns tables.
+func grantRuntime(ctx context.Context, tx pgx.Tx, role string) error {
+	var eligible bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolname=$1 AND r.rolcanlogin
+ AND NOT (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication)
+ AND r.rolname<>current_user AND r.rolname<>session_user
+ AND NOT pg_has_role(r.oid,current_user,'MEMBER'))`, role).Scan(&eligible)
+	if err != nil || !eligible {
+		return errRuntimeRole
+	}
+	grantee := pgx.Identifier{role}.Sanitize()
+	statements := []string{"REVOKE ALL ON " + managedTables + " FROM " + grantee, "GRANT USAGE ON SCHEMA public TO " + grantee}
+	for _, grant := range runtimeGrants {
+		statements = append(statements, "GRANT "+grant+" TO "+grantee)
+	}
+	for _, statement := range statements {
+		if _, err = tx.Exec(ctx, statement); err != nil {
+			return fmt.Errorf("grant runtime privileges: %w", err)
+		}
+	}
+	var usable bool
+	if err = tx.QueryRow(ctx, `SELECT has_schema_privilege($1,'public','USAGE')`, role).Scan(&usable); err != nil || !usable {
+		return errRuntimeRole
 	}
 	return nil
 }
