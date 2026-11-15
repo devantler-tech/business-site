@@ -82,7 +82,12 @@ func TestClientSendsKeyAndTokenAndHidesResponseText(t *testing.T) {
 	if seen.Header.Get("Authorization") != "Bearer fictional-token" || seen.Header.Get("Idempotency-Key") != "portal-KEY-acceptance" {
 		t.Fatal("token or idempotency key not sent")
 	}
-	if items, _ := body["items"].([]any); len(items) != 1 || items[0].(map[string]any)["unit_price"] != 2396.0 {
+	items, _ := body["items"].([]any)
+	var line map[string]any
+	if len(items) == 1 {
+		line, _ = items[0].(map[string]any)
+	}
+	if line["unit_price"] != 2396.0 || line["vat_code"] != "" {
 		t.Fatalf("unit price not sent as a number: %v", body["items"])
 	}
 	err = c.SendInvoice(t.Context(), "k", "inv-1")
