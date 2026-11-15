@@ -169,10 +169,16 @@ func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) 
 		return nil
 	}
 	switch event.Type {
-	case "checkout.session.completed", "checkout.session.async_payment_succeeded":
-		err = applyCheckoutPaid(ctx, tx, event.Data.Object)
-	case "checkout.session.expired", "checkout.session.async_payment_failed":
-		err = applyCheckoutClosed(ctx, tx, event.Data.Object)
+	case "checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.expired", "checkout.session.async_payment_failed":
+		var session stripe.Session
+		if json.Unmarshal(event.Data.Object, &session) != nil || session.ID == "" {
+			return errors.New("card billing: malformed session")
+		}
+		if event.Type == "checkout.session.expired" || event.Type == "checkout.session.async_payment_failed" {
+			err = applyCheckoutClosed(ctx, tx, session.ID)
+		} else {
+			err = applyCheckoutPaid(ctx, tx, session)
+		}
 	case "invoice.paid":
 		err = applySubscriptionInvoicePaid(ctx, tx, event.Data.Object)
 	}
@@ -190,9 +196,14 @@ type cardOrder struct {
 	OneTimeMinor, MonthlyMinor int64
 }
 
-func checkoutOrder(ctx context.Context, tx pgx.Tx, session string) (cardOrder, error) {
+// cardOrderBy finds a card order by its Checkout Session or subscription
+// column, locking its checkout row. column is one of two fixed names.
+func cardOrderBy(ctx context.Context, tx pgx.Tx, column, value string) (cardOrder, error) {
 	var o cardOrder
-	err := tx.QueryRow(ctx, `SELECT o.id,o.one_time_minor,o.monthly_minor FROM portal_card_checkouts c JOIN portal_orders o ON o.id=c.order_id WHERE c.session_id=$1 AND o.collection='card' FOR UPDATE OF c`, session).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
+	if column != "session_id" && column != "subscription_id" {
+		return o, errTriageStorage
+	}
+	err := tx.QueryRow(ctx, `SELECT o.id,o.one_time_minor,o.monthly_minor FROM portal_card_checkouts c JOIN portal_orders o ON o.id=c.order_id WHERE c.`+column+`=$1 AND o.collection='card' FOR UPDATE OF c`, value).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
 	return o, err
 }
 
@@ -216,12 +227,8 @@ ON CONFLICT(order_id,period) DO UPDATE SET state='settled',provider_ref=excluded
 	return nil
 }
 
-func applyCheckoutPaid(ctx context.Context, tx pgx.Tx, raw json.RawMessage) error {
-	var session stripe.Session
-	if err := json.Unmarshal(raw, &session); err != nil || session.ID == "" {
-		return errors.New("card billing: malformed session")
-	}
-	o, err := checkoutOrder(ctx, tx, session.ID)
+func applyCheckoutPaid(ctx context.Context, tx pgx.Tx, session stripe.Session) error {
+	o, err := cardOrderBy(ctx, tx, "session_id", session.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Not a portal session (another integration on the same account).
 		return nil
@@ -239,13 +246,9 @@ func applyCheckoutPaid(ctx context.Context, tx pgx.Tx, raw json.RawMessage) erro
 	return settleCardCharge(ctx, tx, o.ID, "acceptance", session.ID, session.AmountTotal, o.OneTimeMinor, session.Currency)
 }
 
-func applyCheckoutClosed(ctx context.Context, tx pgx.Tx, raw json.RawMessage) error {
-	var session stripe.Session
-	if err := json.Unmarshal(raw, &session); err != nil || session.ID == "" {
-		return errors.New("card billing: malformed session")
-	}
+func applyCheckoutClosed(ctx context.Context, tx pgx.Tx, session string) error {
 	// Expire the link so the client is offered a fresh Checkout next time.
-	if _, err := tx.Exec(ctx, `UPDATE portal_card_checkouts SET expires_at=least(expires_at,clock_timestamp()),updated_at=clock_timestamp() WHERE session_id=$1 AND NOT completed`, session.ID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE portal_card_checkouts SET expires_at=least(expires_at,clock_timestamp()),updated_at=clock_timestamp() WHERE session_id=$1 AND NOT completed`, session); err != nil {
 		return errTriageStorage
 	}
 	return nil
@@ -260,8 +263,7 @@ func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMe
 	if subscription == "" {
 		return nil
 	}
-	var o cardOrder
-	err := tx.QueryRow(ctx, `SELECT o.id,o.one_time_minor,o.monthly_minor FROM portal_card_checkouts c JOIN portal_orders o ON o.id=c.order_id WHERE c.subscription_id=$1 AND o.collection='card'`, subscription).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
+	o, err := cardOrderBy(ctx, tx, "subscription_id", subscription)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Not ours unless it carries the portal's order marker. Events are
 		// unordered: a portal subscription whose Checkout completion has not
