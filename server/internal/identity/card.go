@@ -155,11 +155,15 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, origin, lang st
 			checkout.Lines = []stripe.Line{{Name: name, AmountMinor: o.MonthlyMinor, Monthly: true}}
 		}
 		attempt++
-		created, err := cfg.Stripe.CreateCheckout(ctx, "portal-"+o.ID+"-"+purpose+"-checkout-"+strconv.Itoa(attempt), checkout)
+		// Each try has its own key: Stripe caches a failed reply, even a 500,
+		// under its key, so a fixed key could never recover. A session whose
+		// reply was lost was never shown to anyone and only expires, and the
+		// table keeps one session per attempt if two tries race.
+		created, err := cfg.Stripe.CreateCheckout(ctx, "portal-"+o.ID+"-"+purpose+"-checkout-"+strconv.Itoa(attempt)+"-"+secret(), checkout)
 		if err != nil {
 			return err
 		}
-		if _, err = s.pool.Exec(ctx, `INSERT INTO portal_card_checkouts(session_id,order_id,purpose,attempt,url,expires_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(session_id) DO NOTHING`,
+		if _, err = s.pool.Exec(ctx, `INSERT INTO portal_card_checkouts(session_id,order_id,purpose,attempt,url,expires_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
 			created.ID, o.ID, purpose, attempt, created.URL, time.Unix(created.ExpiresAt, 0)); err != nil {
 			return errTriageStorage
 		}

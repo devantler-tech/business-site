@@ -27,7 +27,7 @@ type fakeStripe struct {
 	requests  []url.Values
 	keys      map[string]string
 	bodies    map[string]string // a key's request, so a changed reuse is refused like Stripe does
-	loseReply bool              // create the session, then answer 500 as if the reply was lost
+	loseReply bool              // create the session but answer 500, cached under its key like Stripe
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -38,22 +38,29 @@ func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	key := r.Header.Get("Idempotency-Key")
+	key, body := r.Header.Get("Idempotency-Key"), r.PostForm.Encode()
 	id, ok := f.keys[key]
-	if ok && f.bodies[key] != r.PostForm.Encode() {
+	switch {
+	case ok && f.bodies[key] != body:
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"error":{"type":"idempotency_error"}}`))
 		return
-	}
-	if !ok {
-		f.requests = append(f.requests, r.PostForm)
-		id = fmt.Sprintf("cs_test_%d", len(f.requests))
-		f.keys[key], f.bodies[key] = id, r.PostForm.Encode()
-	}
-	if f.loseReply {
-		f.loseReply = false
+	case ok && id == "":
+		// Stripe replays a cached failure, even a 500, for the same key.
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	case !ok:
+		f.requests = append(f.requests, r.PostForm)
+		id = fmt.Sprintf("cs_test_%d", len(f.requests))
+		f.bodies[key] = body
+		if f.loseReply {
+			// The session exists, but the caller only ever sees a 500.
+			f.loseReply = false
+			f.keys[key] = ""
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		f.keys[key] = id
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "url": "https://checkout.stripe.invalid/c/pay/" + id, "mode": r.PostForm.Get("mode"), "status": "open", "expires_at": time.Now().Add(24 * time.Hour).Unix()})
 }
@@ -329,25 +336,25 @@ func TestPrivateCardRetriesKeepEverySession(t *testing.T) {
 }
 
 // TestPrivateCardRecoversALostCheckoutReply covers a session Stripe created
-// whose reply was lost: the client restarts in another language, and the
-// changed request gets its own session instead of Stripe's idempotency refusal.
+// but answered with a 500, which Stripe caches under its key: restarting with
+// unchanged details still gets a session of its own.
 func TestPrivateCardRecoversALostCheckoutReply(t *testing.T) {
 	b, fake := cardOrderFixture(t, 299500, 0)
 	fake.mu.Lock()
 	fake.loseReply = true
 	fake.mu.Unlock()
 	placeCardOrder(t, b)
-	body := receipt(t, b, "da")
+	body := receipt(t, b, "en")
 	csrf := csrfInput.FindStringSubmatch(body)
 	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
-	if !strings.Contains(body, "Start kortbetaling") || len(csrf) != 2 || len(acceptance) != 2 {
+	if !strings.Contains(body, "Start card payment") || len(csrf) != 2 || len(acceptance) != 2 {
 		t.Fatal("a lost Checkout reply did not offer a new attempt")
 	}
-	restart := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"da"}, "acceptance": {acceptance[1]}, "collection": {"card"}}
+	restart := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "acceptance": {acceptance[1]}, "collection": {"card"}}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", restart, b.site.URL); status != 303 || len(fake.sessions()) != 2 {
-		t.Fatalf("the changed retry did not create its own session: %d", len(fake.sessions()))
+		t.Fatalf("the unchanged retry did not create its own session: %d", len(fake.sessions()))
 	}
-	if body := receipt(t, b, "da"); !strings.Contains(body, `href="https://checkout.stripe.invalid/c/pay/cs_test_2"`) {
+	if body := receipt(t, b, "en"); !strings.Contains(body, `href="https://checkout.stripe.invalid/c/pay/cs_test_2"`) {
 		t.Fatal("the recovered session is not offered")
 	}
 }
