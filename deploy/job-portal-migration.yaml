@@ -1,0 +1,73 @@
+# Runs the portal schema migration once per release (server/MIGRATIONS.md), with
+# the release's own image: kustomization.yaml copies the WebApp's pinned image
+# into this Job, and Flux recreates the Job when that image changes. The platform
+# supplies the Secret and the network policy for this pod label. Web startup
+# refuses to serve the portal until this release's migrations are recorded.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: business-site-portal-migration
+  namespace: business-site
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 240
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: business-site-portal-migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          args:
+            - --migrate
+            - --migration-database-projection
+            - /run/portal-migration/database-url
+            - --runtime-role
+            - portal_web
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: migration
+              mountPath: /run/portal-migration
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: migration
+          secret:
+            secretName: business-site-portal-db-migration
+            defaultMode: 0400
+            items:
+              - key: database-url
+                path: database-url
+              - key: ca.crt
+                path: ca.crt
+        # The job copies the CA to a private temp file and trusts only a sticky
+        # temp directory: a memory emptyDir is 1777, a disk one is not.
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi

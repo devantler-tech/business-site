@@ -10,3 +10,18 @@ resources:
   - external-secret-disclosure.yaml
   - external-secret-numina.yaml
   - external-secret-stripe.yaml
+  - job-portal-migration.yaml
+# The publisher pins only the WebApp's image; the migration Job runs that same image.
+replacements:
+  - source:
+      kind: WebApp
+      name: business-site
+      fieldPath: spec.image
+    targets:
+      - select:
+          kind: Job
+          name: business-site-portal-migration
+        fieldPaths:
+          - spec.template.spec.containers.[name=migrate].image
+        options:
+          create: true

@@ -752,7 +752,9 @@
     "opgaver",
     "vurderer",
     "tidsplan",
-    "tmpfs"
+    "tmpfs",
+    "automount",
+    "seccomp"
   ],
   "overrides": [
     {

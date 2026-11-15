@@ -30,8 +30,8 @@ default-denied. Cilium matches these names only after its DNS proxy has seen the
 lookup, which the platform's `business-site-dns-visibility` policy provides
 (devantler-tech/platform#6337); a tenant policy may not name kube-system itself.
 Other platform policies remain additive, so this is not an overriding deny
-of every platform-granted connection. No migration input is configured, and the
-package itself sets no database, broker or activation value. The checker accepts only the committed,
+of every platform-granted connection. The package itself sets no database, broker or
+activation value; the migration Job below only names the platform's migration Secret. The checker accepts only the committed,
 independently verified baseline image; a same-repository digest alone is insufficient.
 That baseline predates the host and portal-settings arguments, so the smoke test
 needs an image built from current source, as CI supplies.
@@ -122,11 +122,34 @@ whitespace and CR line endings are refused. The staging lease and the owner-only
 secret file stay environment-only, and no portal variable may also be inherited
 from the environment. Errors never include values or paths. Restart to rotate.
 
-Run the schema job before serving, with migration login `portal_migrator`
-(which owns database `portal`) and `--runtime-role portal_web`; see
-[MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job). With sign-in on,
-invite customers from a web pod as
+With sign-in on, invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
+
+## Portal schema migration
+
+`job-portal-migration.yaml` runs the schema migration once per release
+([MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job)), as login `portal_migrator`
+(which owns database `portal`) with `--runtime-role portal_web`:
+
+- **Image.** The shared publisher pins only the WebApp's image. `kustomization.yaml` copies
+  that image into the Job, so the Job always runs its own release. The Job carries the
+  `kustomize.toolkit.fluxcd.io/force` annotation, so Flux recreates it when the image changes.
+- **Input.** The platform supplies Secret `business-site-portal-db-migration` with `database-url`
+  and `ca.crt` (devantler-tech/platform#6372). It is mounted read-only at `/run/portal-migration`
+  with mode 0400 and `fsGroup` 65532, which the kubelet writes as 0440 root:65532. So the Job
+  uses `--migration-database-projection`; the strict `--migration-database-file` refuses group
+  bits. The CA is copied to a private file under `/tmp`, a memory `emptyDir`, which is sticky
+  (1777) as the job requires. A disk `emptyDir` is not.
+- **Network.** Its pods carry `app.kubernetes.io/name: business-site-portal-migration`, so
+  neither the web policy nor the disruption budget selects them. The platform's
+  `business-site-portal-migration` policy allows only TCP 5432 to the portal database and DNS.
+- **Order.** Flux applies the Job and the new WebApp together and cannot order them within one
+  package. With the portal on, web startup refuses to serve until the ledger holds the release's
+  migrations, so new pods become ready only after the Job. Old pods keep serving meanwhile.
+- **Failure.** It retries at most twice within 240 seconds, inside Flux's five-minute health
+  wait. A failed Job leaves only this tenant's Kustomization unhealthy. Find the cause, then
+  delete the Job, and Flux runs it again. A ledger newer than the release refuses the Job, so
+  roll forward rather than back.
 
 ## Portal billing inputs
 
