@@ -64,7 +64,7 @@ test("the rendered package projects the platform's runtime Secret with portal se
   assert.notEqual(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
   assert.deepEqual(app.spec.secretProjections, [{
     secretName: "business-site-runtime",
-    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
+    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca", "smtp-username", "smtp-password"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
   }]);
   // Each projected file the runtime reads is a path the projection actually supplies.
   for (const flag of ["--company-disclosure-projection", "--portal-settings-projection"]) {

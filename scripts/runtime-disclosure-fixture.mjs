@@ -13,6 +13,8 @@ export const runtimeSecretFixture = {
   "portal-settings": "# Portal sign-in is off.\n",
   "portal-client-secret": "fictional-portal-client-secret",
   "portal-database-ca": "fictional database trust material\n",
+  "smtp-username": "fictional-smtp-username",
+  "smtp-password": "fictional-smtp-password",
 };
 
 /** Read-only numeric listing verifies the actual copied file, never an input-header assumption. */

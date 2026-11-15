@@ -113,6 +113,8 @@ export function validateTenantPackage(input) {
       { key: "portal-settings", path: "portal-settings" },
       { key: "portal-client-secret", path: "portal-client-secret" },
       { key: "portal-database-ca", path: "portal-database-ca" },
+      { key: "smtp-username", path: "smtp-username" },
+      { key: "smtp-password", path: "smtp-password" },
     ],
   }]);
   assert.deepEqual(network.spec, {
