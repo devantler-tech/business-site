@@ -9,7 +9,7 @@ mandatory. The test uses actual page builders and templates with fictional displ
 values; it does not authenticate a person or prove browser accessibility.
 
 The separate work-review inventory adds eighteen real EN/DA documents in the same
-Go frame: absent/current/paused/expired/selected, eligible/ineligible invoice review,
+Go frame: absent/current/paused/expired/selected, eligible/ineligible funding review,
 bounded terminal history and closed funding gates with revocation retained. Its
 explicit form comparisons, exact displayed facts, active section associations and
 negative controls live in `work_review_render_test.go`. Shared frame, actual-route

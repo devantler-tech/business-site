@@ -8,6 +8,15 @@ import (
 // prepare the client's consent. Credit controls do not need unrelated extra logins.
 func creditFixture(t *testing.T) *browserFixture {
 	t.Helper()
+	b := acceptedProposalFixture(t)
+	recordFixtureInvoice(t, b)
+	return b
+}
+
+// acceptedProposalFixture shares the fixture proposal and records the client's
+// acceptance, with the same synthetic decisions as the credit fixture.
+func acceptedProposalFixture(t *testing.T) *browserFixture {
+	t.Helper()
 	b := sharingFixture(t)
 	saveVisibility(t, b, visibilityForm(t, b, "0", "1", "1", "share"))
 	creditFixtureFlags(t, b)
@@ -19,7 +28,6 @@ func creditFixture(t *testing.T) *browserFixture {
 	if _, err := b.svc.acceptProposal(t.Context(), client, proposalRequestID, review.Key); err != nil {
 		t.Fatal("fixture consent failed", err)
 	}
-	recordFixtureInvoice(t, b)
 	return b
 }
 

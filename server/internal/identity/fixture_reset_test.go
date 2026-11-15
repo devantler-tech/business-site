@@ -20,25 +20,29 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 		t.Fatal("fixture session unavailable", err)
 	}
 	migrator := migrationDB(t)
-	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from) SELECT 'CCCCCCCCCCCCCCCCCCCCCCCCCC',request_id,client_id,id,client_issuer,client_subject,'invoice',100,0,date '2026-12-01' FROM portal_proposal_acceptances LIMIT 1`); err != nil {
+	// The approval fixture's funded order supplies the billing rows; retired
+	// invoice and credit evidence is seeded through its fixture writers.
+	recordFixtureInvoice(t, b)
+	recordFixtureCredit(t, b, 0, 123456, "Fictional reset credit")
+	var order string
+	if err := migrator.QueryRow(t.Context(), `SELECT id FROM portal_orders`).Scan(&order); err != nil {
 		t.Fatal("fixture order unavailable", err)
-	}
-	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_order_charges(order_id,period,identity,gross_minor,net_minor,vat_minor) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','acceptance','portal-CCCCCCCCCCCCCCCCCCCCCCCCCC-acceptance',125,100,25)`); err != nil {
-		t.Fatal("fixture charge unavailable", err)
 	}
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('reset-contact-client','fixture-contact')`); err != nil {
 		t.Fatal("fixture Numina contact unavailable", err)
 	}
-	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_card_checkouts(order_id,purpose,session_id,url,expires_at,attempt) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','one-time','cs_test_reset','https://checkout.stripe.invalid/reset',clock_timestamp(),1)`); err != nil {
-		t.Fatal("fixture card checkout unavailable", err)
+	for _, seed := range []string{
+		`INSERT INTO portal_card_checkouts(order_id,purpose,session_id,url,expires_at,attempt) VALUES($1,'one-time','cs_test_reset','https://checkout.stripe.invalid/reset',clock_timestamp(),1)`,
+		`INSERT INTO portal_order_ends(order_id,last_month,source) VALUES($1,'2026-12-01','stripe')`,
+		`INSERT INTO portal_card_cancellations(subscription_id,order_id,cancel_at) VALUES('sub_reset',$1,clock_timestamp())`,
+		`INSERT INTO portal_charge_reversals(order_id,period,reason,reference) VALUES($1,'acceptance','refunded','ch_reset')`,
+	} {
+		if _, err := migrator.Exec(t.Context(), seed, order); err != nil {
+			t.Fatal("fixture billing row unavailable", err)
+		}
 	}
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_stripe_events(id,type) VALUES('evt_reset','checkout.session.completed')`); err != nil {
 		t.Fatal("fixture Stripe event unavailable", err)
-	}
-	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_order_ends(order_id,last_month,source) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','2026-12-01','stripe');
- INSERT INTO portal_card_cancellations(subscription_id,order_id,cancel_at) VALUES('sub_reset','CCCCCCCCCCCCCCCCCCCCCCCCCC',clock_timestamp());
- INSERT INTO portal_charge_reversals(order_id,period,reason,reference) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','acceptance','refunded','ch_reset')`); err != nil {
-		t.Fatal("fixture order end and reversal unavailable", err)
 	}
 	tables := []string{
 		"portal_login_attempts", "portal_invitations", "portal_memberships",

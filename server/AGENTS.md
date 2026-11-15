@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's twenty-two identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's twenty-five identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -234,10 +234,11 @@ No environment activation mapping, credited funds or worker eligibility is added
 The external invoice-record and bank-credit evidence modules (#117, #120) are
 retired by ADR 0030: Numina is the record for invoices and bank payments. Their
 v10–v12 tables stay as historical schema, nothing in the portal writes them, and
-work approval still reads them as evidence until #268 binds approvals to the
-order's funding record (`BILLING.md`). Their former gates `portal-invoices` and
-`portal-credit-reconciliation` no longer exist. Test fixtures in
-`retired_evidence_fixture_test.go` seed that historical evidence for work-approval tests.
+earlier work approvals still reference them. New approvals bind the order's
+funding charge instead (#268, migration v19, `WORK-APPROVALS.md`). Their former
+gates `portal-invoices` and `portal-credit-reconciliation` no longer exist. Test
+fixtures in `retired_evidence_fixture_test.go` seed that historical evidence for
+migration-history tests.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
@@ -287,6 +288,11 @@ v17 appends the card path's Checkout Sessions and applied Stripe events. The fal
 signature-verified webhook for its exact Checkout Session or subscription invoice and amount,
 apply each event once, never from a browser return, and never also invoice it in Numina. The
 webhook alone bypasses sessions and CSRF; keep its body bound and signature check first.
+v18 appends order ends, Stripe-confirmed subscription ends and charge reversals, each
+SELECT/INSERT only. Never bill after an order's last month, count a refunded or disputed charge
+as funding, or trust a reversal or end that does not resolve to the portal's own stored session,
+invoice or subscription. v19 binds every new work approval to its order's settled funding charge,
+never refunded or disputed, through composite keys; earlier approvals keep their invoice binding.
 
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real

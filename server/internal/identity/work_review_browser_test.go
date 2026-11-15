@@ -32,7 +32,7 @@ func TestWorkReviewSingleConnection(t *testing.T) {
 	b.mu.Lock()
 	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
 	b.mu.Unlock()
-	status, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	status, body, _ := b.request("GET", workReviewPath+"?review=funding", nil, "")
 	if status != 200 {
 		t.Fatalf("one-connection review could not finish: %d", status)
 	}
@@ -53,8 +53,8 @@ const workReviewPath = "/portal/operator/requests/" + proposalRequestID + "/work
 // The only money is fictional evidence in the disposable fixture.
 func workBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
-	b := creditFixture(t)
-	recordFixtureCredit(t, b, 0, 123456, "Fictional credited funds observed by the operator")
+	b := acceptedProposalFixture(t)
+	fundFixtureOrder(t)
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
 		t.Fatal(err)
 	}
@@ -69,9 +69,9 @@ func TestWorkReviewOriginalSessionAtFinalWait(t *testing.T) {
 		for _, operation := range []string{"review", "approve", "revoke"} {
 			t.Run(change+"/"+operation, func(t *testing.T) {
 				b := workBrowserFixture(t)
-				_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
+				_, body, _ := b.request("GET", workReviewPath+"?review=funding", nil, "")
 				form := workNativeForm(t, body, "work-approvals")
-				path, method, at := workReviewPath+"?invoice=1", "GET", int32(4)
+				path, method, at := workReviewPath+"?review=funding", "GET", int32(4)
 				if operation != "review" {
 					path, method = strings.TrimSuffix(workReviewPath, "work-review")+"work-approvals", "POST"
 				}
@@ -150,7 +150,7 @@ func TestWorkReviewOriginalSessionAtFinalWait(t *testing.T) {
 						if got.status != want {
 							t.Errorf("unchanged session refused: %d", got.status)
 						}
-					} else if got.status < 400 || strings.Contains(got.body, "TEST-2026-01") || strings.Contains(got.body, `class="work-history-item"`) {
+					} else if got.status < 400 || strings.Contains(got.body, fixtureFundingReference) || strings.Contains(got.body, `class="work-history-item"`) {
 						t.Errorf("deleted session retained work authority: %s status=%d", operation, got.status)
 					}
 				case <-time.After(5 * time.Second):
@@ -203,8 +203,8 @@ func TestWorkReviewNativeDecisionAndRevocation(t *testing.T) {
 	b := workBrowserFixture(t)
 	var body string
 	for _, lang := range []string{"en", "da"} {
-		status, document, h := b.request("GET", workReviewPath+"?invoice=1&lang="+lang, nil, "")
-		if status != 200 || h.Get("Cache-Control") != "no-store" || !strings.Contains(document, `lang="`+lang+`"`) || !strings.Contains(document, "TEST-2026-01") || !strings.Contains(document, "transfer-01") {
+		status, document, h := b.request("GET", workReviewPath+"?review=funding&lang="+lang, nil, "")
+		if status != 200 || h.Get("Cache-Control") != "no-store" || !strings.Contains(document, `lang="`+lang+`"`) || !strings.Contains(document, fixtureFundingReference) || !strings.Contains(document, `data-work-funding="acceptance"`) {
 			t.Fatalf("exact private bilingual review unavailable: %s status=%d", lang, status)
 		}
 		for _, price := range []string{`data-work-price="one-time">2995 DKK`, `data-work-price="monthly">99 DKK`} {
@@ -214,7 +214,7 @@ func TestWorkReviewNativeDecisionAndRevocation(t *testing.T) {
 		}
 		body = document
 	}
-	if status, _, _ := b.request("HEAD", workReviewPath+"?invoice=1", nil, ""); status != 200 {
+	if status, _, _ := b.request("HEAD", workReviewPath+"?review=funding", nil, ""); status != 200 {
 		t.Fatal("safe HEAD unavailable")
 	}
 	var count int
@@ -254,10 +254,10 @@ func TestWorkReviewNativeDecisionAndRevocation(t *testing.T) {
 // closed field set, same-origin CSRF boundary and current operator-only access.
 func TestWorkReviewForgedFieldsCSRFAndClientDenial(t *testing.T) {
 	b := workBrowserFixture(t)
-	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	_, body, _ := b.request("GET", workReviewPath+"?review=funding", nil, "")
 	form := workNativeForm(t, body, "work-approvals")
 	path := strings.TrimSuffix(workReviewPath, "work-review") + "work-approvals"
-	for _, field := range []string{"client_id", "operator", "currency", "amount_minor", "execution", "work_expected", "invoice", "evidence_hash", "acceptance", "work_key"} {
+	for _, field := range []string{"client_id", "operator", "currency", "amount_minor", "execution", "work_expected", "order", "evidence_hash", "acceptance", "work_key"} {
 		f := form.Clone()
 		f.Set(field, "forged")
 		if status, _, _ := b.request("POST", path, f, b.site.URL); status != 400 {
@@ -265,7 +265,7 @@ func TestWorkReviewForgedFieldsCSRFAndClientDenial(t *testing.T) {
 		}
 	}
 	f := form.Clone()
-	f.Add("invoice", "1")
+	f.Add("order", form.Get("order"))
 	if status, _, _ := b.request("POST", path, f, b.site.URL); status != 400 {
 		t.Fatal("ambiguous native field admitted")
 	}
@@ -283,7 +283,7 @@ func TestWorkReviewForgedFieldsCSRFAndClientDenial(t *testing.T) {
 		triageSignIn(t, b, "work-client-"+workspace, workspace, "client")
 		f = form.Clone()
 		f.Set("csrf_token", b.csrf("/portal/"))
-		if status, document, _ := b.request("GET", workReviewPath+"?invoice=1", nil, ""); status != 403 || strings.Contains(document, "TEST-2026-01") {
+		if status, document, _ := b.request("GET", workReviewPath+"?review=funding", nil, ""); status != 403 || strings.Contains(document, fixtureFundingReference) {
 			t.Fatal("client read operator funding")
 		}
 		if status, _, _ := b.request("POST", path, f, b.site.URL); status != 403 {
@@ -309,7 +309,7 @@ func TestWorkReviewGateIsIndependentAndClosedRoutesDoNotLeak(t *testing.T) {
 		for _, suffix := range []string{"work-review", "work-approvals", "work-revocations"} {
 			for _, method := range []string{"GET", "HEAD", "POST"} {
 				status, document, h := b.request(method, strings.TrimSuffix(workReviewPath, "work-review")+suffix, nil, "")
-				if status != 404 || strings.Contains(document, "TEST-2026-01") || len(h.Values("Set-Cookie")) != 0 {
+				if status != 404 || strings.Contains(document, fixtureFundingReference) || len(h.Values("Set-Cookie")) != 0 {
 					t.Fatalf("closed independent gate exposed %s %s", method, suffix)
 				}
 			}
@@ -330,7 +330,7 @@ func TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame(t *testing.T) {
 			for _, suffix := range []string{"work-review", "work-approvals", "work-revocations"} {
 				for _, method := range []string{"GET", "POST"} {
 					status, body, _ := b.request(method, strings.TrimSuffix(workReviewPath, "work-review")+suffix, nil, "")
-					if status != 404 || strings.Contains(body, "TEST-2026-01") {
+					if status != 404 || strings.Contains(body, fixtureFundingReference) {
 						t.Fatal("unhealthy SDK released work data/action")
 					}
 				}
@@ -343,7 +343,7 @@ func TestWorkReviewUnhealthyProviderNeverReleasesPrivateFrame(t *testing.T) {
 // available to a current operator when the old approval's authority is invalid.
 func TestWorkReviewRevocationAfterActorConsentAndDeadlineLoss(t *testing.T) {
 	b := workBrowserFixture(t)
-	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	_, body, _ := b.request("GET", workReviewPath+"?review=funding", nil, "")
 	form := workNativeForm(t, body, "work-approvals")
 	if status, _, _ := b.request("POST", strings.TrimSuffix(workReviewPath, "work-review")+"work-approvals", form, b.site.URL); status != 303 {
 		t.Fatal("fixture approval unavailable")
@@ -371,9 +371,9 @@ func TestWorkReviewRevocationAfterActorConsentAndDeadlineLoss(t *testing.T) {
 // from simultaneous native submissions and refuses stale or foreign-actor retries.
 func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	b := workBrowserFixture(t)
-	_, body, _ := b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	_, body, _ := b.request("GET", workReviewPath+"?review=funding", nil, "")
 	a := workNativeForm(t, body, "work-approvals")
-	_, body, _ = b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	_, body, _ = b.request("GET", workReviewPath+"?review=funding", nil, "")
 	c := workNativeForm(t, body, "work-approvals")
 	path := strings.TrimSuffix(workReviewPath, "work-review") + "work-approvals"
 	first, second := concurrentPortalPosts(b, path, a, c)
@@ -382,7 +382,7 @@ func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	}
 	_, body, _ = b.request("GET", workReviewPath, nil, "")
 	staleRevocation := workNativeForm(t, body, "work-revocations")
-	_, body, _ = b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	_, body, _ = b.request("GET", workReviewPath+"?review=funding", nil, "")
 	fresh := workNativeForm(t, body, "work-approvals")
 	first, second = concurrentPortalPosts(b, path, fresh, fresh)
 	if first != 303 || second != 303 {
@@ -391,10 +391,10 @@ func TestWorkReviewConcurrentDecisionsAndChangedEvidence(t *testing.T) {
 	if status, _, _ := b.request("POST", strings.TrimSuffix(workReviewPath, "work-review")+"work-revocations", staleRevocation, b.site.URL); status != 409 {
 		t.Fatal("stale native revocation cleared a newer decision")
 	}
-	// Equal totals after a changed observation are still different evidence.
-	_, body, _ = b.request("GET", workReviewPath+"?invoice=1", nil, "")
+	// Equal totals with a changed payment reference are still different evidence.
+	_, body, _ = b.request("GET", workReviewPath+"?review=funding", nil, "")
 	stale := workNativeForm(t, body, "work-approvals")
-	recordFixtureCredit(t, b, 1, 123456, "A different fictional observation with equal funds")
+	changeFixtureFunding(t, "reference")
 	if status, _, _ := b.request("POST", path, stale, b.site.URL); status != 409 {
 		t.Fatal("changed evidence admitted stale review")
 	}
@@ -428,7 +428,7 @@ func TestWorkReviewBoundedHistoryAndFailedRead(t *testing.T) {
 	}
 	slices.Sort(ids)
 	slices.Reverse(ids)
-	page, err := b.svc.readWorkReview(t.Context(), op, proposalRequestID, 0, triageCursor{})
+	page, err := b.svc.readWorkReview(t.Context(), op, proposalRequestID, false, triageCursor{})
 	if err != nil || len(page.History) != 20 || page.Next.ID == "" {
 		t.Fatal("first bounded history unavailable", err)
 	}
@@ -436,7 +436,7 @@ func TestWorkReviewBoundedHistoryAndFailedRead(t *testing.T) {
 	for _, d := range page.History {
 		seen = append(seen, d.ID)
 	}
-	page, err = b.svc.readWorkReview(t.Context(), op, proposalRequestID, 0, page.Next)
+	page, err = b.svc.readWorkReview(t.Context(), op, proposalRequestID, false, page.Next)
 	if err != nil || len(page.History) != 3 || page.Next.ID != "" {
 		t.Fatal("second bounded history unavailable", err)
 	}
@@ -458,11 +458,11 @@ func TestWorkReviewBoundedHistoryAndFailedRead(t *testing.T) {
 			t.Error("fixture read grant restoration failed", err)
 		}
 	})
-	page, err = b.svc.readWorkReview(t.Context(), op, proposalRequestID, 0, triageCursor{})
+	page, err = b.svc.readWorkReview(t.Context(), op, proposalRequestID, false, triageCursor{})
 	if err == nil || len(page.History) != 0 {
 		t.Fatal("failed history read was presented as a successful empty result")
 	}
-	for _, raw := range []string{"invoice=0", "invoice=51", "invoice=1&invoice=2", "cursor=bad", "client_id=forged", fmt.Sprintf("invoice=%d", 1<<31)} {
+	for _, raw := range []string{"review=other", "review=", "review=funding&review=funding", "invoice=1", "cursor=bad", "client_id=forged", fmt.Sprintf("review=%d", 1<<31)} {
 		_, _, valid := workReviewQuery(httptest.NewRequest("GET", "https://example.invalid/portal/?"+raw, nil))
 		if valid {
 			t.Errorf("ambiguous review query admitted: %s", raw)

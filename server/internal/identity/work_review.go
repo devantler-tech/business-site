@@ -22,7 +22,9 @@ const (
 
 type workHistoryItem struct {
 	ID, Acceptance, Terminal string
-	Invoice, Version         int
+	Period                   string // the funding charge; empty for a legacy invoice binding
+	Invoice                  *int
+	Version                  int
 	Decided, Expires         time.Time
 	Ended                    *time.Time
 }
@@ -30,7 +32,6 @@ type workHistoryItem struct {
 type workCandidate struct {
 	Evidence workEvidence
 	Input    workApprovalInput
-	Funding  creditHistory
 }
 
 type workReviewData struct {
@@ -41,14 +42,13 @@ type workReviewData struct {
 	CanReview               bool
 	History                 []workHistoryItem
 	Next                    triageCursor
-	Invoices                []projectInvoice
 	Candidate               *workCandidate
 }
 
 // readWorkHistory is a bounded, descending keyset read. A storage/scan failure
 // never becomes an empty history; original database instants and IDs break ties.
 func readWorkHistory(ctx context.Context, tx pgx.Tx, id, client string, cursor triageCursor) ([]workHistoryItem, error) {
-	rows, err := tx.Query(ctx, `SELECT a.id,a.acceptance_id,a.invoice_sequence,a.proposal_version,a.decided_at,a.expires_at,COALESCE(r.reason,''),r.recorded_at
+	rows, err := tx.Query(ctx, `SELECT a.id,a.acceptance_id,COALESCE(a.charge_period,''),a.invoice_sequence,a.proposal_version,a.decided_at,a.expires_at,COALESCE(r.reason,''),r.recorded_at
  FROM portal_work_approvals a LEFT JOIN portal_work_revocations r ON r.approval_id=a.id AND r.request_id=a.request_id AND r.client_id=a.client_id
  WHERE a.request_id=$1 AND a.client_id=$2 AND ($3='' OR (a.decided_at,a.id COLLATE "C") < ($4::timestamptz,$3 COLLATE "C"))
  ORDER BY a.decided_at DESC,a.id COLLATE "C" DESC LIMIT 21`, id, client, cursor.ID, cursor.Submitted)
@@ -59,7 +59,7 @@ func readWorkHistory(ctx context.Context, tx pgx.Tx, id, client string, cursor t
 	var history []workHistoryItem
 	for rows.Next() {
 		var item workHistoryItem
-		if err := rows.Scan(&item.ID, &item.Acceptance, &item.Invoice, &item.Version, &item.Decided, &item.Expires, &item.Terminal, &item.Ended); err != nil {
+		if err := rows.Scan(&item.ID, &item.Acceptance, &item.Period, &item.Invoice, &item.Version, &item.Decided, &item.Expires, &item.Terminal, &item.Ended); err != nil {
 			return nil, errTriageStorage
 		}
 		history = append(history, item)
@@ -72,17 +72,17 @@ func readWorkHistory(ctx context.Context, tx pgx.Tx, id, client string, cursor t
 
 // readWorkReview keeps history/revocation available without old funding gates.
 // Overview validates the selected receipt through the existing policy. A fresh
-// invoice review instead captures candidate evidence under the same request lock;
+// funding review instead captures candidate evidence under the same request lock;
 // it deliberately does not claim to have revalidated an older selected decision.
 // Each path takes a single globally ordered membership set, never two sets in
 // different orders across requests.
-func (s *Foundation) readWorkReview(ctx context.Context, p Principal, id string, invoice int, cursor triageCursor) (workReviewData, error) {
-	return s.readWorkReviewChecked(ctx, p, id, invoice, cursor, nil)
+func (s *Foundation) readWorkReview(ctx context.Context, p Principal, id string, review bool, cursor triageCursor) (workReviewData, error) {
+	return s.readWorkReviewChecked(ctx, p, id, review, cursor, nil)
 }
 
 // readWorkReviewChecked retains one evidence transaction through the caller's
 // final private-response checkpoint, including overview and candidate reads.
-func (s *Foundation) readWorkReviewChecked(ctx context.Context, p Principal, id string, invoice int, cursor triageCursor, checkpoint func(context.Context, pgx.Tx, workReviewData) error) (workReviewData, error) {
+func (s *Foundation) readWorkReviewChecked(ctx context.Context, p Principal, id string, review bool, cursor triageCursor, checkpoint func(context.Context, pgx.Tx, workReviewData) error) (workReviewData, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	tx, client, viewer, err := s.beginWorkRequest(ctx, p, id, s.workApprovalGate)
@@ -104,15 +104,9 @@ func (s *Foundation) readWorkReviewChecked(ctx context.Context, p Principal, id 
 		page.Next = triageCursor{Submitted: last.Decided, ID: last.ID}
 		page.History = page.History[:workHistorySize]
 	}
-	if page.CanReview {
-		page.Invoices, err = readWorkInvoices(ctx, tx, id, client)
-		if err != nil {
-			return workReviewData{}, err
-		}
-	}
 	deadline := time.Time{}
 	switch {
-	case invoice == 0 && page.CanReview:
+	case !review && page.CanReview:
 		var valid bool
 		page.Current, valid, err = inspectWorkCurrent(ctx, tx, id, client, page.Pointer, viewer)
 		if err != nil {
@@ -141,17 +135,13 @@ func (s *Foundation) readWorkReviewChecked(ctx context.Context, p Principal, id 
 				page.State = workPaused
 			}
 		}
-		if invoice > 0 && page.CanReview {
-			evidence, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, invoice, viewer, viewer)
+		if review && page.CanReview {
+			evidence, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, viewer, viewer)
 			if evidenceErr != nil && !errors.Is(evidenceErr, errProposalConflict) {
 				return workReviewData{}, evidenceErr
 			}
 			if evidenceErr == nil {
-				funding, err := readCreditHistory(ctx, tx, id, client, invoice)
-				if err != nil {
-					return workReviewData{}, err
-				}
-				page.Candidate = &workCandidate{Evidence: evidence, Funding: funding, Input: workApprovalInput{Key: secret(), Acceptance: evidence.Acceptance, EvidenceHash: hash, Invoice: invoice, Expected: page.Pointer.Generation}}
+				page.Candidate = &workCandidate{Evidence: evidence, Input: workApprovalInput{Key: secret(), Acceptance: evidence.Acceptance, Order: evidence.Order.ID, EvidenceHash: hash, Expected: page.Pointer.Generation}}
 			}
 		}
 		if err := requireWorkViewer(ctx, tx, viewer); err != nil {

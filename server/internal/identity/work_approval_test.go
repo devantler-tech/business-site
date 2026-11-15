@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
@@ -25,43 +24,19 @@ func TestWorkApprovalSchema(t *testing.T) {
 	}
 }
 
-// An allocated transfer without its first observation is unknown evidence, not
-// an absent zero that matching funds from another identity may silently mask.
-func TestWorkApprovalRefusesIncompleteTransferHistory(t *testing.T) {
-	for _, gap := range []string{"reservation without revision", "missing middle revision"} {
-		t.Run(gap, func(t *testing.T) {
+// Funding that is no longer settled, or was refunded or disputed, pauses a
+// recorded approval and admits no fresh one.
+func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
+	for _, change := range []string{"unsettled", "refunded", "disputed"} {
+		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
-			input := preparedApproval(t, b, op)
-			if _, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input); err != nil {
-				t.Fatal(err)
+			savedApproval(t, b, op)
+			changeFixtureFunding(t, change)
+			if _, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); err != nil || valid {
+				t.Fatalf("changed funding preserved authority: valid=%v err=%v", valid, err)
 			}
-			if gap == "reservation without revision" {
-				tx, client, err := b.svc.beginProposalWrite(t.Context(), op, proposalRequestID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer rollbackProposalWrite(t.Context(), tx)
-				if err := reserveCreditTransfer(t.Context(), tx, proposalRequestID, client, 1, creditRevision{Source: "fixture-bank", Reference: "unobserved-transfer"}); err != nil {
-					t.Fatal("owned malformed reservation fixture failed", err)
-				}
-				if err := tx.Commit(t.Context()); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				for i, state := range []string{"disputed", "confirmed"} {
-					if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: state, Expected: i + 1, AmountMinor: 123456, Note: "Fictional correction"}); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if _, err := migrationDB(t).Exec(t.Context(), `DELETE FROM portal_credit_revisions WHERE source='fixture-bank' AND reference='transfer-01' AND revision=2`); err != nil {
-					t.Fatal("owned malformed history fixture failed", err)
-				}
-			}
-			if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, errTriageStorage) {
-				t.Errorf("incomplete history admitted a fresh approval review: %v", err)
-			}
-			if _, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); !errors.Is(err, errTriageStorage) || valid {
-				t.Errorf("incomplete history was not unavailable: valid=%v err=%v", valid, err)
+			if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID); !errors.Is(err, errProposalConflict) {
+				t.Errorf("changed funding admitted a fresh review: %v", err)
 			}
 		})
 	}
@@ -95,14 +70,11 @@ func approvalFixture(t *testing.T) (*browserFixture, Principal) {
 	if err != nil {
 		t.Fatal("fixture consent unavailable", err)
 	}
-	invoice := projectInvoice{Key: secret(), Acceptance: acceptance.ID, Reference: "TEST-2026-01", Purpose: "Fictional agreed iteration installment", AmountMinor: 123456, NetMinor: pgtype.Int8{Int64: 100000, Valid: true}, VATMinor: pgtype.Int8{Int64: 23456, Valid: true}}
-	if err := b.svc.persistInvoice(t.Context(), author, proposalRequestID, invoice); err != nil {
-		t.Fatal("fixture invoice unavailable", err)
+	if acceptance.ID == "" {
+		t.Fatal("fixture consent has no identity")
 	}
+	fundFixtureOrder(t)
 	op := enroll(t, b.svc, b.f, "approval-operator", "operator-workspace", "operator")
-	if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "confirmed", AmountMinor: 123456, Note: "Fictional credited funds"}); err != nil {
-		t.Fatal("fixture funding unavailable", err)
-	}
 	return b, op
 }
 
@@ -110,7 +82,7 @@ func approvalFixture(t *testing.T) (*browserFixture, Principal) {
 // historical retry, permanent supersession and revocation without resurrection.
 func TestWorkApprovalExactBindingAndTerminalHistory(t *testing.T) {
 	b, op := approvalFixture(t)
-	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
+	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 	if err != nil {
 		t.Fatal("funded approval review unavailable", err)
 	}
@@ -134,7 +106,7 @@ func TestWorkApprovalExactBindingAndTerminalHistory(t *testing.T) {
 	if err != nil || retry.ID != a.ID || !retry.Decided.Equal(a.Decided) || !retry.Expires.Equal(a.Expires) {
 		t.Fatal("retry renewed or lost the original approval", err)
 	}
-	next, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
+	next, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 	if err != nil || next.Expected != 1 {
 		t.Fatal("next comparison token unavailable", err)
 	}
