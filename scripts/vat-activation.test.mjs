@@ -9,7 +9,7 @@ import { load } from 'js-yaml';
 const ci = load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
 // The served production image is CI's production-template package. Its packager,
 // not the workflow, selects the presentation, so CI passes none of these settings.
-const presentation = ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_VAT_PRICES', 'FEATURE_CUSTOMER_SCOPE'];
+const presentation = ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_PORTAL_PRIVACY', 'FEATURE_VAT_PRICES', 'FEATURE_CUSTOMER_SCOPE'];
 const runtimeJob = workflow => workflow.jobs?.['test-combined-runtime'];
 const productionPackages = workflow => runtimeJob(workflow)?.steps?.filter(step => step.run === 'bash scripts/package-runtime.sh --release --production-template') ?? [];
 const currentRuntimeCI = workflow => {
@@ -17,7 +17,7 @@ const currentRuntimeCI = workflow => {
   return packages.length === 1 && [workflow.env, runtimeJob(workflow)?.env, packages[0].env]
     .every(env => presentation.every(flag => !Object.hasOwn(env ?? {}, flag)));
 };
-const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' &&
+const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' && state.FEATURE_PORTAL_PRIVACY === 'false' &&
   !Object.hasOwn(state, 'FEATURE_VAT_PRICES') && !Object.hasOwn(state, 'FEATURE_CUSTOMER_SCOPE');
 const packagerSource = readFileSync('scripts/package-runtime.sh', 'utf8');
 /** Run the actual (or a changed) packager; the build double records every FEATURE_ setting it receives. */
@@ -122,7 +122,7 @@ for (const mode of ['missing', 'duplicate', 'skipped', 'ignored', 'no-address', 
 test('the actual production runtime packager selects confirmed VAT, identity and customer invitation', () => {
   assert.ok(currentRuntimeCI(ci), 'CI builds the production package once and passes it no presentation setting');
   assert.ok(current(productionPresentation()));
-  assert.ok(current(productionPresentation(packagerSource, { FEATURE_COMPANY_IDENTITY: 'false', FEATURE_OFFER_COPY: 'true' })),
+  assert.ok(current(productionPresentation(packagerSource, { FEATURE_COMPANY_IDENTITY: 'false', FEATURE_OFFER_COPY: 'true', FEATURE_PORTAL_PRIVACY: 'true' })),
     'inherited settings cannot change the production presentation');
 });
 for (const flag of presentation) {
@@ -150,6 +150,8 @@ for (const [mode, from, to] of [
   ['offer removed', ' "FEATURE_OFFER_COPY=false"', ''],
   ['revised offer', '"FEATURE_OFFER_COPY=false"', '"FEATURE_OFFER_COPY=true"'],
   ['ambiguous offer', '"FEATURE_OFFER_COPY=false"', '"FEATURE_OFFER_COPY=ambiguous"'],
+  ['portal privacy unpinned', ' "FEATURE_PORTAL_PRIVACY=false"', ''],
+  ['portal privacy released', '"FEATURE_PORTAL_PRIVACY=false"', '"FEATURE_PORTAL_PRIVACY=true"'],
   ['legacy VAT', production, `${production} "FEATURE_VAT_PRICES=false"`],
   ['stale audience', production, `${production} "FEATURE_CUSTOMER_SCOPE=false"`],
 ]) {
