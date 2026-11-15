@@ -77,8 +77,11 @@ var clientOrderEndsSchema string
 //go:embed order-withdrawals.sql
 var orderWithdrawalsSchema string
 
+//go:embed early-start.sql
+var earlyStartSchema string
+
 // runtimeGrants is the web role's complete table privilege set after the
-// migrations above (v1–v21), as MIGRATIONS.md documents. A migration that adds
+// migrations above (v1–v22), as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
 // CheckRuntimeRole independently refuses an incomplete or broader web role.
 var runtimeGrants = []string{
@@ -92,12 +95,12 @@ var runtimeGrants = []string{
 	"SELECT,INSERT,UPDATE ON portal_order_charges",
 	"SELECT,INSERT,UPDATE ON portal_card_checkouts",
 	"SELECT,INSERT ON portal_stripe_events",
-	"SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations",
+	"SELECT,INSERT ON portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements",
 }
 
 // managedTables are every relation the migrations own. Granting first revokes
 // the migration role's earlier grants on all of them, so re-runs converge.
-const managedTables = "portal_schema_version,portal_login_attempts,portal_invitations,portal_memberships,portal_membership_transitions,portal_sessions,portal_contacts,portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions,portal_work_approvals,portal_work_revocations,portal_work_current,portal_orders,portal_order_charges,portal_numina_contacts,portal_card_checkouts,portal_stripe_events,portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations"
+const managedTables = "portal_schema_version,portal_login_attempts,portal_invitations,portal_memberships,portal_membership_transitions,portal_sessions,portal_contacts,portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_reviews,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions,portal_work_approvals,portal_work_revocations,portal_work_current,portal_orders,portal_order_charges,portal_numina_contacts,portal_card_checkouts,portal_stripe_events,portal_order_ends,portal_card_cancellations,portal_charge_reversals,portal_order_withdrawals,portal_withdrawal_cancellations,portal_order_completions,portal_withdrawal_settlements"
 
 // errRuntimeRole hides which eligibility condition a named web role failed.
 var errRuntimeRole = errors.New("runtime role is not eligible")
@@ -146,7 +149,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 	if _, err = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS portal_schema_version (version integer PRIMARY KEY, checksum text NOT NULL)`); err != nil {
 		return fmt.Errorf("migration ledger: %w", err)
 	}
-	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema}
+	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema}
 	rows, err := tx.Query(ctx, `SELECT version,checksum FROM portal_schema_version ORDER BY version`)
 	if err != nil {
 		return fmt.Errorf("read migration: %w", err)

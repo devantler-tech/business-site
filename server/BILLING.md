@@ -180,9 +180,29 @@ Stripe invoice is the sale's document, and Numina books the money once.
     Dashboard. A renewal after it never funds a month, and a withdrawn order funds no work
     approval.
   - Refunds stay with the operator, whose page shows the withdrawal. They refund what was paid
-    within 14 days by the same payment method: a Stripe refund, or a Numina credit note. They
-    also confirm the withdrawal to the client by email. The client's receipt shows the time
-    and asks them to keep it.
+    without undue delay and within 14 days by the same payment method: a Stripe refund, or a
+    Numina credit note. They also confirm the withdrawal to the client by email. The client's
+    receipt shows the time and asks them to keep it.
+- **Starting work within the withdrawal period.** No work starts within the 14 days unless
+  the client asks for it (Consumer Contracts Act, sections 18(2)(2), 21 and 25).
+  - The order step offers one optional box, never ticked in advance: **Begynd arbejdet inden for
+    fortrydelsesfristen på 14 dage. Jeg er klar over, at jeg betaler for det udførte arbejde,
+    hvis jeg fortryder, og at jeg mister fortrydelsesretten, når arbejdet er helt udført.** /
+    **Start the work within the 14-day withdrawal period. I understand that if I withdraw, I
+    pay for the work done until then, and that I lose the right of withdrawal once the work is
+    completely finished.** A ticked box is recorded on the order with its own timestamp
+    (`early_start_at`, migration v22). A retry cannot change it, and the receipt and the
+    operator's page show it.
+  - Without it, the receipt says when work may start, and no work approval is admitted
+    before the withdrawal period has ended (`WORK-APPROVALS.md`).
+  - With it, the operator marks the work **completely finished** once it is
+    (`portal_order_completions`). That ends the right of withdrawal: the receipt says so,
+    and a withdrawal is refused.
+  - A client who withdraws after an early start pays for the work done until then, in
+    proportion to the whole agreement. The operator records that amount once, in whole DKK
+    and at most the order's one-time and monthly amounts (`portal_withdrawal_settlements`).
+    The receipt then shows it, and says that the rest is refunded only when the client paid
+    more. Without an early start the client owes nothing, so no amount can be recorded.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
   after failed renewals, records the order's end, unless the operator or the client already
   ended it. The last billed month is the one the subscription had paid in advance when it
