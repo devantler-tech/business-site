@@ -104,17 +104,7 @@ func TestMigrationInputOwnership(t *testing.T) {
 // projected transport admits that group read, and only for this process's own
 // primary group; the strict private-file transport keeps refusing it.
 func TestMigrationProjectedConnection(t *testing.T) {
-	dir := t.TempDir()
-	version := filepath.Join(dir, "..2026_11_15_00_00_00.1")
-	if err := os.Mkdir(version, 0755); err != nil {
-		t.Fatal("owned projection generation failed")
-	}
-	if err := os.Symlink(filepath.Base(version), filepath.Join(dir, "..data")); err != nil {
-		t.Fatal("owned projection generation link failed")
-	}
-	if err := os.Symlink("..data/database-url", filepath.Join(dir, "database-url")); err != nil {
-		t.Fatal("owned projection entry link failed")
-	}
+	dir, version := kubeletProjection(t, "database-url")
 	file := filepath.Join(version, "database-url")
 	if err := os.WriteFile(file, []byte("postgres://fixture\n"), 0400); err != nil {
 		t.Fatal("owned projected connection failed")
@@ -170,4 +160,25 @@ func TestMigrationOwnGroup(t *testing.T) {
 			t.Fatal("projected group read did not bind to the process's own group")
 		}
 	}
+}
+
+// kubeletProjection lays out a Secret projection the way the kubelet does: a
+// timestamped generation directory, the ..data link to it and one link per
+// entry. It returns the projection directory and the generation directory.
+func kubeletProjection(t *testing.T, names ...string) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	version := filepath.Join(dir, "..2026_11_15_00_00_00.1")
+	if err := os.Mkdir(version, 0755); err != nil {
+		t.Fatal("owned projection generation failed")
+	}
+	if err := os.Symlink(filepath.Base(version), filepath.Join(dir, "..data")); err != nil {
+		t.Fatal("owned projection generation link failed")
+	}
+	for _, name := range names {
+		if err := os.Symlink("..data/"+name, filepath.Join(dir, name)); err != nil {
+			t.Fatal("owned projection entry link failed")
+		}
+	}
+	return dir, version
 }

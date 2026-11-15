@@ -540,26 +540,16 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 // --migration-database-projection, and the strict file option refuses the same file.
 func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
 	_, pool, database := migrationCommandFixture(t)
-	binary := buildMigrationCommand(t)
-	certificate, err := os.ReadFile(database.Query().Get("sslrootcert"))
+	dir, version := kubeletProjection(t, "ca.crt", "database-url")
+	trust, err := os.ReadFile(database.Query().Get("sslrootcert"))
 	if err != nil {
-		t.Fatal("owned projected certificate source unavailable")
-	}
-	dir := t.TempDir()
-	version := filepath.Join(dir, "..2026_11_15_00_00_00.1")
-	if err := os.Mkdir(version, 0755); err != nil {
-		t.Fatal("owned projection generation failed")
-	}
-	if err := os.Symlink(filepath.Base(version), filepath.Join(dir, "..data")); err != nil {
-		t.Fatal("owned projection generation link failed")
+		t.Fatal("owned CA source for the kubelet-shaped projection unavailable")
 	}
 	query := database.Query()
 	query.Set("sslrootcert", filepath.Join(dir, "ca.crt"))
 	database.RawQuery = query.Encode()
-	for name, content := range map[string][]byte{"ca.crt": certificate, "database-url": []byte(database.String())} {
-		if err := os.Symlink("..data/"+name, filepath.Join(dir, name)); err != nil {
-			t.Fatal("owned projection entry link failed")
-		}
+	binary := buildMigrationCommand(t)
+	for name, content := range map[string][]byte{"ca.crt": trust, "database-url": []byte(database.String())} {
 		file := filepath.Join(version, name)
 		if err := os.WriteFile(file, content, 0400); err != nil || os.Chown(file, -1, os.Getegid()) != nil || os.Chmod(file, 0440) != nil {
 			t.Fatal("owned kubelet-shaped projection failed")
