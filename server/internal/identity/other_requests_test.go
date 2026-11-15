@@ -136,6 +136,7 @@ func TestRequestKindMigrationPreservesLegacyRequests(t *testing.T) {
 	runtime := fixtureDB(t)
 	migrator := migrationDB(t)
 	ctx := t.Context()
+	rewindOrdersFixture(t, migrator)
 	if _, err := migrator.Exec(ctx, `ALTER TABLE portal_requests DROP CONSTRAINT portal_requests_product_check;
 ALTER TABLE portal_requests ADD CONSTRAINT portal_requests_product_check CHECK(product IN ('website','app','service'));
 DELETE FROM portal_schema_version WHERE version=15`); err != nil {
@@ -161,7 +162,7 @@ DELETE FROM portal_schema_version WHERE version=15`); err != nil {
 	if err := migrator.QueryRow(ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=14`).Scan(&after); err != nil || before != after {
 		t.Fatal("request-kind migration changed historical checksums", err)
 	}
-	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_schema_version`).Scan(&versions); err != nil || versions != 15 {
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_schema_version`).Scan(&versions); err != nil || versions != 16 {
 		t.Fatal("new request-kind migration is missing or not idempotent", err)
 	}
 	if err := runtime.QueryRow(ctx, `SELECT count(*) FROM portal_requests WHERE client_id='legacy-client' AND title='Existing project' AND brief='Existing brief' AND product IN ('website','app','service')`).Scan(&legacy); err != nil || legacy != 3 {

@@ -79,8 +79,8 @@ Preserve each package's existing 90-second bound;
 never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
-profile handlers and separately default-off free project-request intake; no order,
-payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
+profile handlers, separately default-off free project-request intake and default-off
+Numina invoice billing (`BILLING.md`); no card payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
 `INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
 bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's seventeen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's twenty identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -283,6 +283,14 @@ v15 extends only the existing request-product constraint with `other` after
 unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
 Both languages show the category and case-by-case assessment boundary; the
 existing independent false-default identity/request gates remain mandatory.
+
+v16 appends orders, per-period charges and the Numina contact map after unchanged
+v1–v15. Read `BILLING.md`. Orders and the contact map are SELECT/INSERT; charges
+add UPDATE for their state. Every step requires the acceptance gates plus false-default
+`portal-invoice-billing`, which has no environment mapping. Record a charge's identity
+before any Numina call, find a lost creation by its memo before retrying, settle only on
+`paid` with nothing outstanding, and hold what the path must not decide (no contact
+profile, a customer outside Denmark). The Numina key never reaches logs or diagnostics.
 
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by

@@ -159,7 +159,7 @@ func fixtureDB(t testing.TB) *pgxpool.Pool {
 		t.Fatalf("migrate actual PostgreSQL: %v", err)
 	}
 	// Reset the same grants and rows in one durable transaction. Ordered row
-	// deletion avoids recreating seventeen table files on every serial fixture;
+	// deletion avoids recreating twenty table files on every serial fixture;
 	// membership deletion must record its event before history is cleared.
 	if err = pgx.BeginFunc(context.Background(), migrator, func(tx pgx.Tx) error {
 		_, resetErr := tx.Exec(context.Background(), `
@@ -171,12 +171,17 @@ REVOKE ALL ON portal_membership_transitions FROM portal_runtime;
 GRANT SELECT ON portal_membership_transitions TO portal_runtime;
 GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime;
 GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime;
+GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime;
+GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime;
 DELETE FROM portal_work_current;
 DELETE FROM portal_work_revocations;
 DELETE FROM portal_work_approvals;
 DELETE FROM portal_credit_revisions;
 DELETE FROM portal_credit_transfers;
 DELETE FROM portal_invoices;
+DELETE FROM portal_order_charges;
+DELETE FROM portal_orders;
+DELETE FROM portal_numina_contacts;
 DELETE FROM portal_proposal_reviews;
 DELETE FROM portal_proposal_acceptances;
 DELETE FROM portal_proposal_visibility;
