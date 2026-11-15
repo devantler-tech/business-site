@@ -18,6 +18,8 @@ var ErrPortalSettings = errors.New("portal settings projection is unavailable")
 var projectedPortalSettings = []string{
 	"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL",
 	"PORTAL_CLIENT_SECRET_PROJECTION_FILE", "PORTAL_IDENTITY_PROFILE", "PORTAL_IDENTITY_FLAG",
+	// The optional Numina invoice path (BILLING.md); the key itself stays in its projected file.
+	"PORTAL_NUMINA_TOKEN_FILE", "PORTAL_NUMINA_API_URL", "PORTAL_NUMINA_SALES_ACCOUNT", "PORTAL_NUMINA_VAT_CODE",
 }
 
 // inheritedPortalSettings are every setting ReadConfig and the activation
