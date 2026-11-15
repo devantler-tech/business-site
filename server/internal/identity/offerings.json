@@ -1,0 +1,99 @@
+{
+  "offerings": [
+    {
+      "id": "website",
+      "setup": 3750,
+      "monthly": 125,
+      "text": {
+        "en": {
+          "title": "A professional website",
+          "description": "Present what you do with a clear, professional website.",
+          "includes": [
+            "Up to 5 straightforward pages",
+            "Mobile-friendly design",
+            "Your content, services and contact details",
+            "Basic search and sharing metadata"
+          ],
+          "boundary": "You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately."
+        },
+        "da": {
+          "title": "En professionel hjemmeside",
+          "description": "Præsenter det, du laver, med en klar og professionel hjemmeside.",
+          "includes": [
+            "Op til 5 enkle sider",
+            "Mobilvenligt design",
+            "Dit indhold, dine ydelser og kontaktoplysninger",
+            "Grundlæggende metadata til søgning og deling"
+          ],
+          "boundary": "Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt."
+        }
+      }
+    },
+    {
+      "id": "app",
+      "setup": 10000,
+      "monthly": 375,
+      "text": {
+        "en": {
+          "title": "A web app",
+          "description": "Replace a recurring manual task with a tool made for the way you work.",
+          "includes": [
+            "One clearly defined workflow",
+            "A focused browser-based interface",
+            "Agreed data inputs and outputs",
+            "Testing and a practical handover"
+          ],
+          "boundary": "The starting price covers an agreed first version. Further development is scoped and quoted separately. Complex permissions, payments, sensitive data and integrations need a separate scope."
+        },
+        "da": {
+          "title": "En webapp",
+          "description": "Erstat en tilbagevendende manuel opgave med et værktøj til din måde at arbejde på.",
+          "includes": [
+            "Én klart afgrænset arbejdsgang",
+            "En fokuseret brugerflade i browseren",
+            "Aftalte data ind og ud",
+            "Test og en praktisk overdragelse"
+          ],
+          "boundary": "Startprisen dækker en aftalt første version. Videreudvikling aftales og prissættes særskilt. Komplekse adgangsrettigheder, betaling, følsomme data og integrationer kræver en særskilt aftale."
+        }
+      }
+    },
+    {
+      "id": "service",
+      "setup": 6250,
+      "monthly": 250,
+      "text": {
+        "en": {
+          "title": "A web service",
+          "description": "Connect a process or let two systems exchange useful information.",
+          "includes": [
+            "One bounded automation or connection",
+            "Agreed inputs, outputs and limits",
+            "Basic operating documentation",
+            "Testing against the agreed use case"
+          ],
+          "boundary": "External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price."
+        },
+        "da": {
+          "title": "En webservice",
+          "description": "Forbind en proces, eller lad to systemer udveksle nyttig information.",
+          "includes": [
+            "Én afgrænset automatisering eller forbindelse",
+            "Aftalte input, output og begrænsninger",
+            "Grundlæggende driftsdokumentation",
+            "Test af den aftalte anvendelse"
+          ],
+          "boundary": "Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen."
+        }
+      }
+    }
+  ],
+  "hosting": {
+    "en": "Your project can run on the Devantler Tech platform when its needs fit. Traffic, storage and any external services determine the final monthly price. If a new feature increases those costs, you receive a revised quote before it is added.",
+    "da": "Dit projekt kan køre på Devantler Tech-platformen, når behovet passer. Trafik, lagerplads og eventuelle eksterne tjenester afgør den endelige månedspris. Hvis en ny funktion øger udgifterne, får du et revideret tilbud, før den tilføjes."
+  },
+  "vat": {
+    "en": "Prices include 25% Danish VAT.",
+    "da": "Priserne er inkl. 25 % moms."
+  }
+}

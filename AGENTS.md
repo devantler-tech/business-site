@@ -163,7 +163,8 @@ require a separate assessment before any offer. Every package uses the same appr
 no historical no-VAT setting remains.
 This public invitation does not authorize portal orders or change server-side country eligibility.
 Monthly quotes are rounded totals based on hosting costs plus a fixed service fee to Nikolai;
-amounts and any changes are agreed before work begins, never inferred from the starter guide.
+amounts and any changes are agreed before work begins. The portal's generated draft starts from
+the guide prices (ADR 0030); the operator reviews it before sharing, and the customer accepts it.
 The revised offer is preview-only under default-off `FEATURE_OFFER_COPY`. Hosted client projects
 include optimization, accessibility improvements, bug fixes and routine upkeep in their agreed
 monthly price; new features and larger iterations require a new agreement. Human support is not
