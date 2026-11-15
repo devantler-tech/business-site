@@ -59,9 +59,10 @@ checked before a DNS switch. Two routes add the public names on their own gatewa
 `http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
 `http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
 `--portal-host` arguments route by host, so nothing is served twice: `portal.devantler.tech`
-opens the portal at `/` and redirects public pages to devantler.tech, `www` redirects to the
+serves the portal at its root (`/`, `/sign-in`, …; an old `/portal…` address redirects 301
+without the prefix) and redirects public pages to devantler.tech, `www` redirects to the
 apex, and every other host serves the public pages and redirects `/portal…` to
-portal.devantler.tech ([ADR 0020](../docs/adr/0020-public-staging-hostname.md), amended
+the same path at the root of portal.devantler.tech ([ADR 0020](../docs/adr/0020-public-staging-hostname.md), amended
 2026-11-13). The validator admits exactly these names and routes and refuses wildcards,
 lookalikes and other tenants' names. Platform admits the hostnames, listeners and certificates
 separately (devantler-tech/platform#6177). Do not apply this directory to an ambient cluster.
@@ -92,7 +93,7 @@ broker connection and sign-in off. The accepted keys keep their existing meaning
 | `PORTAL_DATABASE_URL`                  | verified-TLS `postgres://` URI for `portal_web` (below) |
 | `PORTAL_OIDC_ISSUER`                   | `https://login.devantler.tech`                          |
 | `PORTAL_OIDC_CLIENT_ID`                | `business-portal`                                       |
-| `PORTAL_CALLBACK_URL`                  | `https://portal.devantler.tech/portal/callback`         |
+| `PORTAL_CALLBACK_URL`                  | `https://portal.devantler.tech/callback`                |
 | `PORTAL_CLIENT_SECRET_PROJECTION_FILE` | `/run/webapp-inputs/portal-client-secret`               |
 | `PORTAL_IDENTITY_PROFILE`              | `production`, only when sign-in is switched on          |
 | `PORTAL_IDENTITY_FLAG`                 | provider JSON for `portal-identity`, with the profile   |

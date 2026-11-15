@@ -34,7 +34,7 @@ func Prepare(enabled bool, inputs Endpoints) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("customer ZITADEL requires a canonical HTTPS origin")
 	}
-	portal, err := endpoint(inputs.PortalCallback, "/portal/callback")
+	portal, err := endpoint(inputs.PortalCallback, "/callback")
 	if err != nil {
 		return nil, errors.New("portal requires a canonical HTTPS callback")
 	}
@@ -124,7 +124,7 @@ func nativeProvider(idp, portal *url.URL) map[string]any {
 				"IgnoreUnknownUsernames": true, "AllowDomainDiscovery": false, "DisableLoginWithPhone": true,
 				"PasswordlessType": 0, "PasswordCheckLifetime": "15m", "ExternalLoginCheckLifetime": "15m",
 				"MfaInitSkipLifetime": "0s", "SecondFactorCheckLifetime": "15m", "MultiFactorCheckLifetime": "15m",
-				"DefaultRedirectURI": "https://" + portal.Host + "/portal",
+				"DefaultRedirectURI": "https://" + portal.Host + "/",
 			},
 			"Restrictions":             map[string]bool{"DisallowPublicOrgRegistration": true},
 			"PasswordComplexityPolicy": map[string]int{"MinLength": 14},

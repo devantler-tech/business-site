@@ -14,13 +14,15 @@ GOTOOLCHAIN=local go run ./cmd/customer-identity-config
 GOTOOLCHAIN=local go run ./cmd/customer-identity-config --prepare \
   --dex-issuer=https://login.example.invalid \
   --zitadel-issuer=https://accounts.example.invalid \
-  --portal-callback=https://site.example.invalid/portal/callback
+  --portal-callback=https://site.example.invalid/callback
 ```
 
 These fictional destinations cannot be deployed publicly. Supply separately
 approved canonical HTTPS origins on distinct hosts. Ports, IPs, user information,
 wildcards, paths on either issuer, queries, fragments and alternate spellings fail.
-The portal callback must end exactly in `/portal/callback`.
+The portal callback must be exactly `/callback` on the portal's own host, because the portal
+lives at that host's root (`https://portal.devantler.tech/callback` in production). It is the
+only redirect URI the generated Dex client registers.
 
 ## Native consumers and private provisioning
 

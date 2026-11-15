@@ -138,7 +138,7 @@ func TestPortalLinkRenderFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			clone, err := template.ParseFS(browserFiles, "web/*.html")
+			clone, err := template.New("portal").Funcs(templateFuncs(internalRoot)).ParseFS(browserFiles, "web/*.html")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -219,10 +219,15 @@ func renderedLinkPages(name string) ([]linkPage, error) {
 // renderedLinkPagesUsing applies the complete fictional view inventory to one
 // compiled template set without replacing the process-wide production renderer.
 func renderedLinkPagesUsing(name string, templates *template.Template) ([]linkPage, error) {
+	return renderedLinkPagesFor(name, templates, &browser{})
+}
+
+// renderedLinkPagesFor renders the same inventory through a chosen browser, so a
+// root-mounted portal can be compared with the shared-host one.
+func renderedLinkPagesFor(name string, templates *template.Template, b *browser) ([]linkPage, error) {
 	if name == "work-review.html" {
-		return renderedWorkLinkPages(templates)
+		return renderedWorkLinkPagesFor(templates, b)
 	}
-	b := &browser{}
 	request := projectRequest{ID: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", Key: "fictional-submission", Product: "website", Title: "Fictional request", Brief: "Synthetic link-validation content", Submitted: time.Date(2026, 10, 1, 12, 0, 0, 123000, time.UTC)}
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {

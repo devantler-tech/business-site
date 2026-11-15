@@ -86,3 +86,21 @@ listeners, certificates, the route allow-list and the Tenant re-pin are
 devantler-tech/platform#6177. The DNS switch and the retirement of the Pages
 publication follow under devantler-tech/monorepo#3939. The portal stays
 default-off.
+
+## Amendment, 2026-11-15: the portal at the root of its host
+
+The maintainer found `https://portal.devantler.tech/portal/` repetitive: the host already says
+"portal". The portal now lives at the root of `portal.devantler.tech`. Its pages are `/`,
+`/sign-in`, `/requests` and so on, and its callback is `https://portal.devantler.tech/callback`.
+
+| Host | Portal | Public pages |
+|---|---|---|
+| `portal.devantler.tech` | served at `/`; an old `/portal…` address redirects 301 without the prefix | redirect to devantler.tech |
+| `www.devantler.tech` | redirect to devantler.tech | redirect to devantler.tech |
+| any other host | `/portal…` redirects to the same path at the root of portal.devantler.tech | served |
+
+The Stripe webhook is `https://portal.devantler.tech/stripe/webhook`; the maintainer moved the
+endpoint in Stripe on 2026-11-15 (editing its URL keeps the signing secret). Old `/portal…`
+addresses redirect only for GET and HEAD, so nothing is ever redirected for Stripe. Inside the
+runtime, routes and feature gates stay registered once under `/portal`, and a root-mounted
+portal maps each request onto them, so a gate can never be skipped by the shorter address.

@@ -24,21 +24,23 @@ import (
 )
 
 type browserFixture struct {
-	t                   testing.TB
-	f                   brokerFixture
-	svc                 *Foundation
-	pool                *pgxpool.Pool
-	flags               *openfeature.EvaluationAPI
-	site, broker        *httptest.Server
-	client              *http.Client
-	mu                  sync.RWMutex
-	handler             http.Handler
-	subject             string
-	claims              map[string]any
-	expectedScope       string
-	codes               map[string]url.Values
-	exchanges           atomic.Int32
-	redirectExchange    bool
+	t                testing.TB
+	f                brokerFixture
+	svc              *Foundation
+	pool             *pgxpool.Pool
+	flags            *openfeature.EvaluationAPI
+	site, broker     *httptest.Server
+	client           *http.Client
+	mu               sync.RWMutex
+	handler          http.Handler
+	subject          string
+	claims           map[string]any
+	expectedScope    string
+	codes            map[string]url.Values
+	exchanges        atomic.Int32
+	redirectExchange bool
+	// callbackPath is the portal callback the broker expects; "" means "/portal/callback".
+	callbackPath        string
 	unexpectedExchanges atomic.Int32
 }
 
@@ -109,7 +111,7 @@ func newBrowserFixtureOnPool(t testing.TB, pool *pgxpool.Pool) *browserFixture {
 			if scope == "" {
 				scope = "openid"
 			}
-			if q.Get("client_id") != "portal-fixture" || q.Get("response_type") != "code" || q.Get("scope") != scope || q.Get("nonce") == "" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || q.Get("redirect_uri") != b.site.URL+"/portal/callback" {
+			if q.Get("client_id") != "portal-fixture" || q.Get("response_type") != "code" || q.Get("scope") != scope || q.Get("nonce") == "" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || q.Get("redirect_uri") != b.callbackURL() {
 				http.Error(w, "invalid synthetic authorization", 400)
 				return
 			}
@@ -649,4 +651,12 @@ func TestBrowserErrorsPreserveChosenLanguage(t *testing.T) {
 	if s != 400 || !strings.Contains(body, `lang="da"`) || !strings.Contains(body, "Login kunne ikke gennemføres") {
 		t.Fatal("Danish sign-in failure switched language")
 	}
+}
+
+// callbackURL is the portal callback registered with the synthetic broker.
+func (b *browserFixture) callbackURL() string {
+	if b.callbackPath == "" {
+		return b.site.URL + "/portal/callback"
+	}
+	return b.site.URL + b.callbackPath
 }

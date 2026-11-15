@@ -47,6 +47,10 @@ func workRenderFixture(view string) (workReviewData, bool) {
 // renderedWorkLinkPages exercises both languages of each explicit work state
 // through the actual template set for method-aware route and asset validation.
 func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
+	return renderedWorkLinkPagesFor(templates, &browser{})
+}
+
+func renderedWorkLinkPagesFor(templates *template.Template, b *browser) ([]linkPage, error) {
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {
 		for _, view := range workRenderViews {
@@ -57,7 +61,7 @@ func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
 				q.Set("review", "funding")
 				r.URL.RawQuery = q.Encode()
 			}
-			page := (&browser{}).workPage(r, d, review)
+			page := b.workPage(r, d, review)
 			page.CSRF, page.RevocationKey = "fictional-form-nonce", "EEEEEEEEEEEEEEEEEEEEEEEEEE"
 			var body bytes.Buffer
 			if err := templates.ExecuteTemplate(&body, "work-review.html", page); err != nil {

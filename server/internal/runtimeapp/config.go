@@ -150,7 +150,7 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	callback, err := url.Parse(c.callback)
-	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || callback.Path != "/portal/callback" || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
+	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || (callback.Path != "/portal/callback" && callback.Path != "/callback") || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
 		return Config{}, ErrConfig
 	}
 	db, err := pgxpool.ParseConfig(c.database)
@@ -253,4 +253,22 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 		return fail()
 	}
 	return pool, broker, nil
+}
+
+// FitsPortalHost reports whether the configured portal matches the runtime's host
+// routing. With its own host the portal lives at that host's root, so its callback
+// must be exactly https://<host>/callback; sharing the public host, it lives under
+// /portal and its callback path is /portal/callback. No configured portal fits both.
+func (c Config) FitsPortalHost(host string) bool {
+	if c == (Config{}) {
+		return true
+	}
+	callback, err := url.Parse(c.callback)
+	if err != nil {
+		return false
+	}
+	if host == "" {
+		return callback.Path == "/portal/callback"
+	}
+	return callback.Host == host && callback.Path == "/callback"
 }

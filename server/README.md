@@ -37,7 +37,11 @@ cannot transfer clients or revive revoked access. Membership is re-read on every
 authorization, which requires a concrete server-owned record client ID.
 
 `Browser` constructs sign-in, callback, private workspace, operator and logout handlers
-for one fixed HTTPS callback at `/portal/callback`. The callback consumes the
+for one fixed HTTPS callback. A callback at `/callback` mounts the portal at the root of its
+own host (`https://portal.devantler.tech/callback` in production); `/portal/callback` mounts it
+under `/portal` on a host it shares with the public site. Routes and feature gates are
+registered once under `/portal`; at the root, each request is mapped onto them and every
+redirect and rendered link drops the prefix. The callback consumes the
 browser-bound attempt before exchanging the authorization code with its S256 PKCE
 verifier. Code exchange is bounded and cannot follow redirects. Signed issuer,
 audience, expiry and nonce checks remain mandatory. No return URL, email, provider
@@ -209,7 +213,8 @@ With no `PORTAL_*` dependencies, startup serves public pages without broker/stor
 connections and reserves private routes as non-cacheable 404s. For later private
 wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),
 `PORTAL_OIDC_ISSUER`, `PORTAL_OIDC_CLIENT_ID`, fixed HTTPS `PORTAL_CALLBACK_URL`
-ending `/portal/callback`, and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
+(`https://<portal host>/callback` with `--portal-host`, otherwise ending `/portal/callback`;
+startup refuses any other pairing), and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
 `PORTAL_CLIENT_SECRET_PROJECTION_FILE`. The ordinary file input requires owner-only
 permissions. The explicit projection input supports a non-root Unix process and
 a root/current-user-owned regular file with read access for its primary group only;
@@ -371,11 +376,16 @@ certification. Restart deliberately to rotate the projected disclosure.
 `--public-host` and `--portal-host` let one runtime serve the public site and the portal on
 their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 
-| Host                 | `/portal…`                          | Public pages                |
-|----------------------|-------------------------------------|-----------------------------|
-| portal host          | served; `/` redirects to `/portal/` | redirect to the public host |
-| `www.` + public host | redirect to the public host         | redirect to the public host |
-| any other host       | redirect to the portal host         | served                      |
+| Host                 | Portal                                                    | Public pages                |
+|----------------------|-----------------------------------------------------------|-----------------------------|
+| portal host          | served at the root; `/portal…` redirects 301 without it   | redirect to the public host |
+| `www.` + public host | redirect to the public host                               | redirect to the public host |
+| any other host       | `/portal…` redirects to the portal host, without `/portal` | served                      |
+
+On the portal host a path the public site serves (other than `/`) goes to the public host and
+everything else goes to the portal, so a public page must never take a portal path such as
+`/sign-in`, `/requests` or `/contact`. The Stripe webhook is `/stripe/webhook`; a POST to an old
+`/portal…` address is refused, not redirected, because Stripe does not follow redirects.
 
 Redirects carry `Cache-Control: no-store`. The `www` redirect is 301, as it was on GitHub Pages;
 the redirects between the public and portal hosts are 302. On a host that serves public pages, a

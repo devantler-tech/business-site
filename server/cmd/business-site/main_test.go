@@ -258,10 +258,15 @@ func TestTwoHostRuntimeRedirectsAcrossHosts(t *testing.T) {
 	listen, cancel, done, join := startAnnouncedRuntime(t, []string{"--public", dir, "--listen", "127.0.0.1:0", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"})
 	defer join()
 	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	for _, tc := range []struct{ host, path, location string }{
-		{"portal.devantler.tech", "/", "/portal/"},
-		{"portal.devantler.tech", "/da/", "https://devantler.tech/da/"},
-		{"devantler.tech", "/portal/", "https://portal.devantler.tech/portal/"},
+	for _, tc := range []struct {
+		host, path, location string
+		status               int
+	}{
+		// No portal is configured here, so the portal host's root stays closed.
+		{"portal.devantler.tech", "/", "", http.StatusNotFound},
+		{"portal.devantler.tech", "/portal/sign-in", "/sign-in", http.StatusMovedPermanently},
+		{"portal.devantler.tech", "/da/", "https://devantler.tech/da/", http.StatusFound},
+		{"devantler.tech", "/portal/", "https://portal.devantler.tech/", http.StatusFound},
 	} {
 		req, err := http.NewRequest(http.MethodGet, "http://"+listen+tc.path, nil)
 		if err != nil {
@@ -272,11 +277,14 @@ func TestTwoHostRuntimeRedirectsAcrossHosts(t *testing.T) {
 		if err != nil {
 			t.Fatalf("two-host runtime did not answer %s%s: %v", tc.host, tc.path, err)
 		}
+		// Drain the body so the connection stays reusable and shutdown is not held open.
+		_, _ = io.Copy(io.Discard, res.Body)
 		_ = res.Body.Close()
-		if res.StatusCode != http.StatusFound || res.Header.Get("Location") != tc.location {
-			t.Fatalf("%s%s: status=%d location=%q, want 302 %q", tc.host, tc.path, res.StatusCode, res.Header.Get("Location"), tc.location)
+		if res.StatusCode != tc.status || res.Header.Get("Location") != tc.location {
+			t.Fatalf("%s%s: status=%d location=%q, want %d %q", tc.host, tc.path, res.StatusCode, res.Header.Get("Location"), tc.status, tc.location)
 		}
 	}
+	client.CloseIdleConnections()
 	cancel()
 	select {
 	case err := <-done:

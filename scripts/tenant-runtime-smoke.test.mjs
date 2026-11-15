@@ -89,13 +89,19 @@ test("the real image serves both hosts with exactly the package arguments and th
       const response = await get(port, route, "devantler.tech");
       assert.equal(response.status, 200, route);
       assert.doesNotMatch(response.body, /__BUSINESS_ADDRESS_LINE_/);
+      if (route === "/") continue;
       const away = await get(port, route, "portal.devantler.tech");
-      const expected = route === "/" ? "/portal/" : `https://devantler.tech${route}`;
-      assert.deepEqual([away.status, away.location], [302, expected], route);
+      assert.deepEqual([away.status, away.location], [302, `https://devantler.tech${route}`], route);
     }
-    const toPortal = await get(port, "/portal/", "devantler.tech");
-    assert.deepEqual([toPortal.status, toPortal.location], [302, "https://portal.devantler.tech/portal/"]);
-    for (const route of ["/portal/", "/portal/sign-in"]) assert.equal((await get(port, route, "portal.devantler.tech")).status, 404, route);
+    // The portal lives at the root of its host; /portal… addresses move there without the prefix.
+    const toPortal = await get(port, "/portal/sign-in", "devantler.tech");
+    assert.deepEqual([toPortal.status, toPortal.location], [302, "https://portal.devantler.tech/sign-in"]);
+    for (const [route, location] of [["/portal/", "/"], ["/portal/sign-in", "/sign-in"]]) {
+      const old = await get(port, route, "portal.devantler.tech");
+      assert.deepEqual([old.status, old.location], [301, location], route);
+    }
+    // The portal stays off in the package: its root addresses are closed.
+    for (const route of ["/", "/sign-in"]) assert.equal((await get(port, route, "portal.devantler.tech")).status, 404, route);
     // Each page keeps the one address GitHub Pages gave it, and a miss shows the built 404 page (#583).
     const www = await get(port, "/about/", "www.devantler.tech");
     assert.deepEqual([www.status, www.location], [301, "https://devantler.tech/about/"]);

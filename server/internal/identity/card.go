@@ -126,7 +126,7 @@ func firstAnchor(monthlyFrom, now time.Time) time.Time {
 // session is closed or missing. Sessions that are open, processing or paid are
 // kept. A browser return is never proof of payment; only the signed webhook
 // funds the order.
-func (s *Foundation) ensureCheckouts(ctx context.Context, order, origin, lang string) error {
+func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang string) error {
 	if !s.cardBillingReady(ctx) {
 		return ErrDenied
 	}
@@ -147,7 +147,7 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, origin, lang st
 	if lang != "da" {
 		lang = "en"
 	}
-	back := origin + "/portal/requests/" + requestID + "?lang=" + lang
+	back := portal + "/requests/" + requestID + "?lang=" + lang
 	name := invoiceLine(scope)
 	cfg := s.cards.Load()
 	for _, purpose := range cardPurposes(o.OneTimeMinor, o.MonthlyMinor) {
