@@ -191,7 +191,8 @@ func (b *browser) stripeWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.handleStripeEvent(r.Context(), event); err != nil {
-		log.Printf("portal: card billing event not processed: %s", event.Type)
+		// Stripe retries the event and shows it as failed in its Dashboard.
+		log.Print("portal: a card billing event was not processed")
 		http.Error(w, "Event not processed", http.StatusInternalServerError)
 		return
 	}
