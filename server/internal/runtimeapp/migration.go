@@ -21,14 +21,19 @@ var ErrMigration = errors.New("portal schema migration failed")
 // MigrateDatabase runs the existing embedded transaction under a separate,
 // constrained role. A nonempty runtimeRole names the existing web login that the
 // same transaction grants exactly its runtime privileges; empty grants nothing.
-// This explicit job neither serves HTTP nor enables identity.
-func MigrateDatabase(ctx context.Context, filename, runtimeRole string) error {
+// This explicit job neither serves HTTP nor enables identity. With projected,
+// the connection file is a Kubernetes Secret projection for this job's group.
+func MigrateDatabase(ctx context.Context, filename, runtimeRole string, projected bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
-	connection, err := migrationConnection(filename)
+	read := migrationConnection
+	if projected {
+		read = migrationProjectedConnection
+	}
+	connection, err := read(filename)
 	if err != nil {
 		return ErrMigration
 	}
@@ -153,5 +158,5 @@ func migrationConfig(connection string) (*pgxpool.Config, error) {
 // the secret reader's same-descriptor/nonblocking confinement while permitting
 // ordinary readable certificate permissions and a bounded 64 KiB CA bundle.
 func migrationCertificate(filename string) ([]byte, error) {
-	return readMigrationInput(filename, 65536, 0022)
+	return readMigrationInput(filename, 65536, 0022, false)
 }

@@ -60,6 +60,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
+	migrationProjection := options.String("migration-database-projection", "", "migration connection file in a Kubernetes Secret projection for the non-root job group")
 	publicHost := options.String("public-host", "", "public site host; with --portal-host, each host redirects the other's pages")
 	portalHost := options.String("portal-host", "", "portal host; / opens the portal there")
 	portalSettings := options.String("portal-settings-projection", "", "confined projected portal settings file for serving or one invitation")
@@ -82,17 +83,23 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if portalInvite.selected(seen) {
 		return portalInvite.run(ctx, options, seen, *portalSettings, output)
 	}
-	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 || seen["runtime-role"] > 1 {
+	inputs := seen["migration-database-file"] + seen["migration-database-projection"]
+	if seen["migrate"] > 1 || inputs > 1 || seen["runtime-role"] > 1 {
 		return runtimeapp.ErrMigration
 	}
-	if *migrate || seen["migration-database-file"] != 0 || seen["runtime-role"] != 0 {
-		allowed := *migrate && *migrationFile != "" && (seen["runtime-role"] == 0 || *runtimeRole != "")
+	if *migrate || inputs != 0 || seen["runtime-role"] != 0 {
+		projected := seen["migration-database-projection"] == 1
+		input := *migrationFile
+		if projected {
+			input = *migrationProjection
+		}
+		allowed := *migrate && input != "" && (seen["runtime-role"] == 0 || *runtimeRole != "")
 		options.Visit(func(option *flag.Flag) {
-			if option.Name != "migrate" && option.Name != "migration-database-file" && option.Name != "runtime-role" {
+			if option.Name != "migrate" && option.Name != "migration-database-file" && option.Name != "migration-database-projection" && option.Name != "runtime-role" {
 				allowed = false
 			}
 		})
-		if !allowed || seen["migrate"] != 1 || seen["migration-database-file"] != 1 {
+		if !allowed || seen["migrate"] != 1 || inputs != 1 {
 			return runtimeapp.ErrMigration
 		}
 		if !validPackageIdentity() {
@@ -109,7 +116,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 				}
 			}
 		}
-		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile, *runtimeRole); err != nil {
+		if err := runtimeapp.MigrateDatabase(ctx, input, *runtimeRole, projected); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(output, "portal schema migration completed")

@@ -267,6 +267,10 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 	if err := identity.CheckRuntimeRole(startup, pool); err != nil {
 		return fail()
 	}
+	// Serve only once this release's migration job has migrated the store.
+	if err := identity.CheckSchemaCurrent(startup, pool); err != nil {
+		return fail()
+	}
 	broker, err := identity.NewBroker(startup, c.issuer, c.client)
 	if err != nil {
 		return fail()
