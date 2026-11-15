@@ -138,7 +138,7 @@ func TestPortalLinkRenderFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			clone, err := template.New("portal").Funcs(templateFuncs(internalRoot)).ParseFS(browserFiles, "web/*.html")
+			clone, err := template.New("portal").Funcs(templateFuncs(internalRoot, "")).ParseFS(browserFiles, "web/*.html")
 			if err != nil {
 				t.Fatal(err)
 			}

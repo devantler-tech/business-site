@@ -14,7 +14,7 @@ import (
 func TestPrivateFrameChangeReachesEveryPage(t *testing.T) {
 	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
-			pages, err := template.New("portal").Funcs(templateFuncs(internalRoot)).ParseFS(browserFiles, "web/*.html")
+			pages, err := template.New("portal").Funcs(templateFuncs(internalRoot, "")).ParseFS(browserFiles, "web/*.html")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -11,6 +11,9 @@ import (
 	"github.com/devantler-tech/business-site/server/internal/webapp"
 )
 
+// fixtureSite is the public website a root-mounted fixture portal links back to.
+const fixtureSite = "https://public.example.invalid"
+
 // prefixedLink finds a rendered address that still names the internal "/portal" mount.
 var prefixedLink = regexp.MustCompile(`(?i)\b(?:href|action|src|formaction)\s*=\s*"/portal(?:[/?"])`)
 
@@ -22,14 +25,15 @@ var freshKey = regexp.MustCompile(`(name="[a-z_]*key" value=")[^"]*"`)
 // two must be identical, so every root address names exactly the internal route
 // the shared-host link contract already validates, and none keeps the prefix.
 func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
-	stripPrefix := strings.NewReplacer(`="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
+	// A shared host links the public site as "/"; a root portal names its origin.
+	stripPrefix := strings.NewReplacer(`href="/"`, `href="`+fixtureSite+`/"`, `="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
 	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
-			shared, err := renderedLinkPagesFor(name, pages(internalRoot), &browser{})
+			shared, err := renderedLinkPagesFor(name, pages(internalRoot, ""), &browser{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			root, err := renderedLinkPagesFor(name, pages(""), &browser{atRoot: true})
+			root, err := renderedLinkPagesFor(name, pages("", fixtureSite), &browser{atRoot: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,7 +88,7 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 		t.Fatalf("callback status=%d location=%q; want 303 /?lang=da", status, header.Get("Location"))
 	}
 	status, body, _ = b.request("GET", "/?lang=da", nil, "")
-	if status != 200 || !strings.Contains(body, `action="/logout?lang=da"`) || prefixedLink.MatchString(body) {
+	if status != 200 || !strings.Contains(body, `action="/logout?lang=da"`) || !strings.Contains(body, `class="back" href="`+fixtureSite+`/"`) || prefixedLink.MatchString(body) {
 		t.Fatalf("root home: status=%d prefixed=%v", status, prefixedLink.MatchString(body))
 	}
 	for path, want := range map[string]string{"/portal/": "/", "/portal/sign-in?lang=da": "/sign-in?lang=da", "/portal/requests": "/requests"} {
@@ -141,9 +145,33 @@ func (b *browserFixture) atRoot() http.Handler {
 		b.t.Fatal(err)
 	}
 	b.callbackPath = "/callback"
+	if err := b.svc.LinkPublicSite(fixtureSite); err != nil {
+		b.t.Fatal(err)
+	}
 	h := portalHandler(b.t, b.svc, b.callbackURL())
 	b.mu.Lock()
 	b.handler = fixturePublic(b.t).HostHandler(h, webapp.Hosts{Public: "public.example.invalid", Portal: site.Hostname()})
 	b.mu.Unlock()
 	return h
+}
+
+// TestRootPortalNeedsItsPublicSite refuses a root-mounted portal that cannot link
+// back to the public website, and accepts only a bare HTTPS origin for it.
+func TestRootPortalNeedsItsPublicSite(t *testing.T) {
+	b := newBrowserFixture(t)
+	svc := New(b.pool, b.f.broker, b.flags.NewClient())
+	if h, err := svc.Browser(b.site.URL+"/callback", "synthetic-client-secret"); err == nil || h != nil {
+		t.Fatal("root portal accepted without a public site")
+	}
+	for _, origin := range []string{"", "http://public.example.invalid", "https://public.example.invalid/", "https://public.example.invalid/da/", "https://user@public.example.invalid", "https://public.example.invalid?x=1"} {
+		if svc.LinkPublicSite(origin) == nil {
+			t.Fatalf("public site %q accepted", origin)
+		}
+	}
+	if err := svc.LinkPublicSite(fixtureSite); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Browser(b.site.URL+"/callback", "synthetic-client-secret"); err != nil {
+		t.Fatalf("root portal with its public site refused: %v", err)
+	}
 }

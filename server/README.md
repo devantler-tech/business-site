@@ -41,7 +41,9 @@ for one fixed HTTPS callback. A callback at `/callback` mounts the portal at the
 own host (`https://portal.devantler.tech/callback` in production); `/portal/callback` mounts it
 under `/portal` on a host it shares with the public site. Routes and feature gates are
 registered once under `/portal`; at the root, each request is mapped onto them and every
-redirect and rendered link drops the prefix. The callback consumes the
+redirect and rendered link drops the prefix. Links back to the public website then name
+its origin (`https://<--public-host>`), because `/` there is the portal itself; a root-mounted
+portal without it is refused. The callback consumes the
 browser-bound attempt before exchanging the authorization code with its S256 PKCE
 verifier. Code exchange is bounded and cannot follow redirects. Signed issuer,
 audience, expiry and nonce checks remain mandatory. No return URL, email, provider

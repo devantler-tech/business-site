@@ -23,3 +23,18 @@ func TestFitsPortalHost(t *testing.T) {
 		t.Fatal("no configured portal must fit every routing")
 	}
 }
+
+// TestWithPublicHostKeepsAnUnconfiguredPortalOff must not turn "no portal" into a
+// configured one, or startup would try to connect private dependencies.
+func TestWithPublicHostKeepsAnUnconfiguredPortalOff(t *testing.T) {
+	if (Config{}).WithPublicHost("devantler.tech") != (Config{}) {
+		t.Fatal("public host configured an absent portal")
+	}
+	c := Config{callback: "https://portal.devantler.tech/callback"}
+	if got := c.WithPublicHost("devantler.tech").publicSite; got != "https://devantler.tech" {
+		t.Fatalf("public site = %q", got)
+	}
+	if got := c.WithPublicHost("").publicSite; got != "" {
+		t.Fatalf("empty host set public site %q", got)
+	}
+}

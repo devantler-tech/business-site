@@ -28,6 +28,8 @@ type Config struct {
 	secretProjected                                bool
 	billing                                        billingConfig
 	cards                                          cardConfig
+	// publicSite is the public website a portal on its own host links back to.
+	publicSite string
 }
 
 // billingConfig is the optional Numina invoice path (ADR 0030). Its own
@@ -200,6 +202,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		return nil, closed, ErrConfig
 	}
 	foundation := identity.New(pool, broker, flags)
+	if c.publicSite != "" {
+		if err := foundation.LinkPublicSite(c.publicSite); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
 	if err := enableCardBilling(foundation, c.cards); err != nil {
 		pool.Close()
 		return nil, closed, ErrConfig
@@ -271,4 +279,14 @@ func (c Config) FitsPortalHost(host string) bool {
 		return callback.Path == "/portal/callback"
 	}
 	return callback.Host == host && callback.Path == "/callback"
+}
+
+// WithPublicHost records the public website a portal on its own host links back
+// to. It leaves an unconfigured portal unconfigured, and has no effect without a host.
+func (c Config) WithPublicHost(host string) Config {
+	if c == (Config{}) || host == "" {
+		return c
+	}
+	c.publicSite = "https://" + host
+	return c
 }

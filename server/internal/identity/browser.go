@@ -19,17 +19,19 @@ import (
 var browserFiles embed.FS
 
 // browserPage renders every private page with portal links under "/portal".
-var browserPage = pages(internalRoot)
+var browserPage = pages(internalRoot, "")
 
-// templateFuncs binds the visible portal root used by every rendered link.
-func templateFuncs(root string) template.FuncMap {
-	return template.FuncMap{"root": func() string { return root }}
+// templateFuncs binds the addresses every rendered link starts with: root is the
+// portal's visible mount, site the public website's origin ("" on a shared host).
+func templateFuncs(root, site string) template.FuncMap {
+	return template.FuncMap{"root": func() string { return root }, "site": func() string { return site }}
 }
 
 // pages parses the private templates. They write portal links as {{root}}: "/portal"
-// when the portal shares a host with the public site, "" when it has its own host.
-func pages(root string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+// when the portal shares a host with the public site, "" when it has its own host;
+// links to the public website start with {{site}}.
+func pages(root, site string) *template.Template {
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
@@ -89,9 +91,16 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Persist = false
 	atRoot := u.Path == "/callback"
+	if atRoot && s.site == "" {
+		return nil, ErrDenied
+	}
 	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
 	b.atRoot = atRoot
-	b.page = pages(b.base())
+	site := ""
+	if atRoot {
+		site = s.site
+	}
+	b.page = pages(b.base(), site)
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, _ error) {
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")
@@ -532,4 +541,16 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
 	}
 	return d
+}
+
+// LinkPublicSite names the public website's origin (https://host, no path), which
+// a portal at the root of its own host links back to. Browser refuses such a
+// portal without it, since "/" there is the portal itself.
+func (s *Foundation) LinkPublicSite(origin string) error {
+	u, err := url.Parse(origin)
+	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != origin {
+		return ErrDenied
+	}
+	s.site = origin
+	return nil
 }
