@@ -28,12 +28,29 @@ func withdrawalForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	return f
 }
 
-func withdrawal(t *testing.T, b *browserFixture) (withdrawn bool, last time.Time, from time.Time) {
+// withdraw confirms the client's withdrawal from the English receipt.
+func withdraw(t *testing.T, b *browserFixture) {
 	t.Helper()
-	if err := b.pool.QueryRow(b.f.ctx, `SELECT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.client_subject IS NOT NULL),coalesce((SELECT last_month FROM portal_order_ends WHERE source='client'),'0001-01-01'),(SELECT monthly_from FROM portal_orders)`).Scan(&withdrawn, &last, &from); err != nil {
+	if status, _, _ := b.request("POST", withdrawalPath, withdrawalForm(t, b, "en"), b.site.URL); status != 303 {
+		t.Fatalf("withdrawal refused: %d", status)
+	}
+}
+
+// stripeCancels copies the subscription end requests Stripe has received.
+func stripeCancels(fake *fakeStripe) []url.Values {
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	return append([]url.Values(nil), fake.cancels...)
+}
+
+// withdrawal reports whether the client's withdrawal is recorded, whether it
+// left the order's end untouched, and the first billed month.
+func withdrawal(t *testing.T, b *browserFixture) (withdrawn, ends bool, from time.Time) {
+	t.Helper()
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.client_subject IS NOT NULL),EXISTS (SELECT 1 FROM portal_order_ends),(SELECT monthly_from FROM portal_orders)`).Scan(&withdrawn, &ends, &from); err != nil {
 		t.Fatal(err)
 	}
-	return withdrawn, last, from
+	return withdrawn, ends, from
 }
 
 // TestInvoiceBillingClientWithdraws records the client's withdrawal within
@@ -59,9 +76,8 @@ func TestInvoiceBillingClientWithdraws(t *testing.T) {
 			t.Fatalf("withdrawal or retry refused: %d", status)
 		}
 	}
-	withdrawn, last, from := withdrawal(t, b)
-	if !withdrawn || !last.Equal(from.AddDate(0, -1, 0)) {
-		t.Fatalf("withdrawal not recorded, or monthly billing does not end before %v (%v)", from, last)
+	if withdrawn, ends, _ := withdrawal(t, b); !withdrawn || ends {
+		t.Fatal("withdrawal not recorded as its own record")
 	}
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 0 || len(chargeStates(t, b)) != 0 {
 		t.Fatal("a withdrawn order was invoiced", err)
@@ -84,15 +100,15 @@ func TestInvoiceBillingClientWithdraws(t *testing.T) {
 // for the operator to refund, but never funds the order.
 func TestPrivateCardClientWithdraws(t *testing.T) {
 	b, fake := subscribedCardOrder(t)
-	if status, _, _ := b.request("POST", withdrawalPath, withdrawalForm(t, b, "en"), b.site.URL); status != 303 {
-		t.Fatalf("withdrawal refused: %d", status)
-	}
+	withdraw(t, b)
 	_, _, from := withdrawal(t, b)
-	fake.mu.Lock()
-	cancels := append([]url.Values(nil), fake.cancels...)
-	fake.mu.Unlock()
-	if len(cancels) != 1 || cancels[0].Get("subscription") != "sub_1" || cancels[0].Get("cancel_at") != strconv.FormatInt(from.Unix(), 10) {
+	cancels := stripeCancels(fake)
+	if len(cancels) != 1 || cancels[0].Get("subscription") != "sub_1" || cancels[0].Get("cancel_at") != strconv.FormatInt(from.Unix(), 10) || cancels[0].Get("proration_behavior") != "none" {
 		t.Fatalf("the subscription does not end before its first charge: %v", cancels)
+	}
+	var confirmed time.Time
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT cancel_at FROM portal_withdrawal_cancellations WHERE subscription_id='sub_1'`).Scan(&confirmed); err != nil || !confirmed.Equal(from) {
+		t.Fatal("Stripe's confirmed end was not recorded", err)
 	}
 	_, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang=en", nil, "")
 	if !strings.Contains(body, "You withdrew from the agreement on") || strings.Contains(body, "checkout.stripe.invalid") || strings.Contains(body, "End monthly billing") {
@@ -168,11 +184,53 @@ func TestInvoiceBillingInvoicesNothingAfterAWithdrawal(t *testing.T) {
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" {
 		t.Fatal("acceptance charge not held for the contact's country", err)
 	}
-	if status, _, _ := b.request("POST", withdrawalPath, withdrawalForm(t, b, "en"), b.site.URL); status != 303 {
-		t.Fatalf("withdrawal refused: %d", status)
-	}
+	withdraw(t, b)
 	fake.confirmDenmark()
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 0 || fake.sends != 0 || chargeStates(t, b)["acceptance"] != "held" {
 		t.Fatal("a charge recorded before the withdrawal was invoiced after it", err)
+	}
+}
+
+// TestPrivateCardWithdrawalOverridesALaterEnd ends the subscription before its
+// first charge even when an operator had already scheduled a later end, and
+// keeps that earlier record as it was.
+func TestPrivateCardWithdrawalOverridesALaterEnd(t *testing.T) {
+	b, fake := subscribedCardOrder(t)
+	client := b.client
+	f, _ := operatorEndForm(t, b, "later-end-operator")
+	operator := b.client
+	later := currentMonth(time.Now()).AddDate(0, 3, 0)
+	if status, _, _ := b.request("POST", orderEndPath, endForm(f, later), b.site.URL); status != 303 {
+		t.Fatalf("operator end refused: %d", status)
+	}
+	b.client = client
+	withdraw(t, b)
+	_, _, from := withdrawal(t, b)
+	cancels := stripeCancels(fake)
+	if len(cancels) != 2 || cancels[0].Get("cancel_at") != strconv.FormatInt(later.AddDate(0, 1, 0).Unix(), 10) || cancels[1].Get("cancel_at") != strconv.FormatInt(from.Unix(), 10) {
+		t.Fatalf("the withdrawal did not bring the subscription's end forward: %v", cancels)
+	}
+	var operatorEnd, withdrawalEnd time.Time
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT (SELECT cancel_at FROM portal_card_cancellations),(SELECT cancel_at FROM portal_withdrawal_cancellations)`).Scan(&operatorEnd, &withdrawalEnd); err != nil || !operatorEnd.Equal(later.AddDate(0, 1, 0)) || !withdrawalEnd.Equal(from) {
+		t.Fatal("the earlier end was changed or the withdrawal's end not recorded", err)
+	}
+	b.client = operator
+	if _, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, ""); !strings.Contains(body, "Stripe ends the subscription on "+from.Format("2006-01-02")) {
+		t.Fatal("the operator page does not show the withdrawal's end")
+	}
+}
+
+// TestPrivateCardWithdrawalKeepsAnEarlierEnd asks Stripe nothing more when the
+// subscription already ends no later than the withdrawal would end it.
+func TestPrivateCardWithdrawalKeepsAnEarlierEnd(t *testing.T) {
+	b, fake := subscribedCardOrder(t)
+	if status, _, _ := b.request("POST", clientEndPath, clientEndForm(t, b, "en"), b.site.URL); status != 303 {
+		t.Fatalf("client end refused: %d", status)
+	}
+	withdraw(t, b)
+	cancels := len(stripeCancels(fake))
+	var recorded bool
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations x JOIN portal_card_cancellations c USING(subscription_id) WHERE x.cancel_at=c.cancel_at)`).Scan(&recorded); err != nil || cancels != 1 || !recorded {
+		t.Fatalf("an earlier end was asked again (%d requests) or not taken over: %v", cancels, err)
 	}
 }

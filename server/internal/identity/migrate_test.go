@@ -71,7 +71,7 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // rewindWithdrawalsFixture removes only the disposable v21 withdrawal table.
 func rewindWithdrawalsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_order_withdrawals;
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_withdrawal_cancellations,portal_order_withdrawals;
  DELETE FROM portal_schema_version WHERE version=21`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-withdrawal schema", err)
 	}

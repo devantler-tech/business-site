@@ -84,7 +84,9 @@ func (o projectOrder) Withdrawable() bool {
 // readWithdrawal adds the order's withdrawal, if any, to an order read in tx.
 func readWithdrawal(ctx context.Context, tx pgx.Tx, o *projectOrder) error {
 	var at time.Time
-	err := tx.QueryRow(ctx, `SELECT withdrawn_at FROM portal_order_withdrawals WHERE order_id=$1`, o.ID).Scan(&at)
+	err := tx.QueryRow(ctx, `SELECT w.withdrawn_at,(SELECT max(x.cancel_at) FROM portal_withdrawal_cancellations x WHERE x.order_id=w.order_id),
+ EXISTS (SELECT 1 FROM portal_card_checkouts c WHERE c.order_id=w.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL)
+ FROM portal_order_withdrawals w WHERE w.order_id=$1`, o.ID).Scan(&at, &o.WithdrawalEnd, &o.Subscribed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -114,20 +116,54 @@ func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) VALUES($1,$2,$3) ON CONFLICT(order_id) DO NOTHING`, o.ID, p.issuer, p.subject); err != nil {
 		return errTriageStorage
 	}
-	if o.MonthlyMinor > 0 {
-		// The month before the first billed one: no month is billed. An end
-		// already recorded stands; billing still stops at the withdrawal.
-		if _, err = tx.Exec(ctx, `INSERT INTO portal_order_ends(order_id,last_month,source,client_issuer,client_subject) VALUES($1,$2,'client',$3,$4) ON CONFLICT(order_id) DO NOTHING`, o.ID, o.MonthlyFrom.AddDate(0, -1, 0), p.issuer, p.subject); err != nil {
-			return errTriageStorage
-		}
-	}
 	if err = s.commitOrder(ctx, p, tx, s.orderReady); err != nil {
 		return err
 	}
-	if o.Collection == "card" && o.MonthlyMinor > 0 && s.scheduleCardEnd(ctx, o.ID) != nil {
-		// The withdrawal is recorded; the operator's page offers to ask
-		// Stripe again until it confirms.
-		log.Printf("portal: card subscription end not confirmed")
+	if o.Collection == "card" && o.MonthlyMinor > 0 && s.endWithdrawnSubscription(ctx, o.ID) != nil {
+		// The withdrawal is recorded. The operator's page shows the
+		// unconfirmed end, to finish in the Stripe Dashboard.
+		log.Printf("portal: withdrawn card subscription end not confirmed")
+	}
+	return nil
+}
+
+// endWithdrawnSubscription ends a withdrawn order's card subscription when it
+// would first charge, or at once if it already has, and records Stripe's
+// confirmation. It takes precedence over an end scheduled earlier unless that
+// one comes first, and changes none of the recorded history. It does nothing
+// for an order that is not withdrawn, has no subscription or is confirmed.
+func (s *Foundation) endWithdrawnSubscription(ctx context.Context, order string) error {
+	if !s.cardBillingReady(ctx) {
+		return ErrDenied
+	}
+	var subscription string
+	var from time.Time
+	var scheduled *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT c.subscription_id,o.monthly_from,(SELECT x.cancel_at FROM portal_card_cancellations x WHERE x.subscription_id=c.subscription_id)
+ FROM portal_order_withdrawals w JOIN portal_orders o ON o.id=w.order_id JOIN portal_card_checkouts c ON c.order_id=w.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL
+ WHERE w.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_withdrawal_cancellations y WHERE y.subscription_id=c.subscription_id) ORDER BY c.attempt DESC LIMIT 1`, order).Scan(&subscription, &from, &scheduled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return errTriageStorage
+	}
+	api, now := s.cards.Load().Stripe, time.Now()
+	var confirmed time.Time
+	switch {
+	case scheduled != nil && (!scheduled.After(now) || !scheduled.After(from)):
+		// Stripe already ends it no later than the withdrawal would.
+		confirmed = *scheduled
+	case from.After(now):
+		confirmed, err = api.CancelSubscriptionAt(ctx, subscription, from)
+	default:
+		confirmed, err = api.CancelSubscriptionNow(ctx, subscription)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err = s.pool.Exec(ctx, `INSERT INTO portal_withdrawal_cancellations(subscription_id,order_id,cancel_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, subscription, order, confirmed); err != nil {
+		return errTriageStorage
 	}
 	return nil
 }

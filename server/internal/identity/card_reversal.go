@@ -143,8 +143,8 @@ func applySubscriptionDeleted(ctx context.Context, tx pgx.Tx, raw json.RawMessag
 }
 
 // scheduleSubscriptionEnd ends a newly recorded subscription whose order was
-// already ended, for example when its Checkout completed after the operator's
-// decision.
+// already ended or withdrawn, for example when its Checkout completed after
+// the operator's decision or the client's withdrawal.
 func (s *Foundation) scheduleSubscriptionEnd(ctx context.Context, subscription string) error {
 	var order string
 	err := s.pool.QueryRow(ctx, `SELECT order_id FROM portal_card_checkouts WHERE subscription_id=$1`, subscription).Scan(&order)
@@ -154,5 +154,8 @@ func (s *Foundation) scheduleSubscriptionEnd(ctx context.Context, subscription s
 	if err != nil {
 		return errTriageStorage
 	}
-	return s.scheduleCardEnd(ctx, order)
+	if err = s.scheduleCardEnd(ctx, order); err != nil {
+		return err
+	}
+	return s.endWithdrawnSubscription(ctx, order)
 }

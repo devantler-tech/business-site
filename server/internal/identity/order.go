@@ -32,6 +32,7 @@ type projectOrder struct {
 	End                        *orderEnd
 	Subscribed                 bool       // a card order's monthly subscription exists
 	Withdrawn                  *time.Time // when the client withdrew from the order
+	WithdrawalEnd              *time.Time // when Stripe ends a withdrawn order's subscription
 }
 
 func (o projectOrder) OneTimeDKK() int64 { return o.OneTimeMinor / 100 }

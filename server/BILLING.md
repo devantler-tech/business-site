@@ -171,9 +171,12 @@ Stripe invoice is the sale's document, and Numina books the money once.
   - The withdrawal is recorded once (`portal_order_withdrawals`, migration v21) and stops all
     further billing. The invoice path creates, books and sends nothing more, not even the
     first invoice or one held before the withdrawal; a booked invoice is only followed to its
-    payment. The card path offers no Checkout. Monthly billing ends before its first month: a
-    card subscription ends when it would first charge, or at once if a month was already
-    charged. A renewal after it never funds a month, and a withdrawn order funds no work
+    payment. The card path offers no Checkout, and the card subscription ends when it would
+    first charge, or at once if a month was already charged. That end takes precedence over
+    one scheduled earlier, unless the earlier one comes first, and Stripe's confirmation is
+    recorded on its own (`portal_withdrawal_cancellations`); the earlier record stays as it
+    was. If Stripe does not confirm, the operator's page says so, to finish in the Stripe
+    Dashboard. A renewal after it never funds a month, and a withdrawn order funds no work
     approval.
   - Refunds stay with the operator, whose page shows the withdrawal. They refund what was paid
     within 14 days by the same payment method: a Stripe refund, or a Numina credit note. They
