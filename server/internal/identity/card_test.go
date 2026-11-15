@@ -249,12 +249,19 @@ func TestPrivateCardExpiredCheckoutCanBeRestarted(t *testing.T) {
 	if status != 200 || !strings.Contains(body, "cs_test_2") || !strings.Contains(body, "Fortsæt til betaling") {
 		t.Fatal("new checkout link not shown")
 	}
+	// A customer who still paid on the replaced session is funded, not ignored.
+	if sendEvent(t, b, "evt_old", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk", "client_reference_id": orderID(t, b)}, webhookSecret) != 200 || chargeStates(t, b)["acceptance"] != "settled" {
+		t.Fatal("a payment on a replaced session was lost")
+	}
+	if sendEvent(t, b, "evt_foreign_session", "checkout.session.completed", map[string]any{"id": "cs_test_other", "mode": "payment", "payment_status": "paid", "amount_total": 100, "currency": "dkk", "client_reference_id": "NOTANORDERNOTANORDERNOTANO"}, webhookSecret) != 200 {
+		t.Fatal("another integration's session was not ignored")
+	}
 	cardFlags(t, b, false)
 	status, body, _ = b.request("GET", "/portal/requests/"+proposalRequestID+"?lang=en", nil, "")
 	if status != 200 || strings.Contains(body, "checkout.stripe.invalid") {
 		t.Fatal("closed card gate still shows a payment link")
 	}
-	if sendEvent(t, b, "evt_off", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk"}, webhookSecret) != 404 || len(chargeStates(t, b)) != 0 {
+	if sendEvent(t, b, "evt_off", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk"}, webhookSecret) != 404 || len(chargeStates(t, b)) != 1 {
 		t.Fatal("closed card gate accepted a webhook")
 	}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", restart, b.site.URL); status != 403 {
