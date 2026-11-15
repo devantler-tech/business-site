@@ -28,22 +28,8 @@ func MigrateDatabase(ctx context.Context, filename, runtimeRole string) error {
 	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
-	connection, err := migrationConnection(filename)
-	if err != nil {
-		return ErrMigration
-	}
-	cfg, err := migrationConfig(connection)
-	if err != nil || runtimeRole == cfg.ConnConfig.User {
-		return ErrMigration
-	}
-	cfg.MaxConns = 1
-	cfg.MinConns = 0
-	cfg.MinIdleConns = 0
-	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
-	// Do not inherit service/PGOPTIONS startup parameters from the operator host.
-	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": "business-site-migration"}
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
+	pool, user, err := openMigrationPool(ctx, filename, "business-site-migration")
+	if err != nil || runtimeRole == user {
 		return ErrMigration
 	}
 	defer pool.Close()
@@ -57,6 +43,58 @@ func MigrateDatabase(ctx context.Context, filename, runtimeRole string) error {
 		return ErrMigration
 	}
 	return nil
+}
+
+// openMigrationPool opens one bounded connection as the migration role from its
+// confined connection file, and returns the role's name.
+func openMigrationPool(ctx context.Context, filename, application string) (*pgxpool.Pool, string, error) {
+	connection, err := migrationConnection(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := migrationConfig(connection)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg.MaxConns = 1
+	cfg.MinConns = 0
+	cfg.MinIdleConns = 0
+	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	// Do not inherit service/PGOPTIONS startup parameters from the operator host.
+	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": application}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, "", err
+	}
+	return pool, cfg.ConnConfig.User, nil
+}
+
+// ErrRetention is the entire public diagnostic of the retention purge.
+var ErrRetention = errors.New("portal retention purge failed")
+
+// PurgeRetention deletes the portal records of every former client whose
+// memberships all ended more than identity.RetentionYears ago. It runs as the
+// migration role, which owns the complete schema, and reports only how many
+// clients it purged.
+func PurgeRetention(ctx context.Context, filename string) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+		return 0, ErrRetention
+	}
+	pool, _, err := openMigrationPool(ctx, filename, "business-site-retention")
+	if err != nil {
+		return 0, ErrRetention
+	}
+	defer pool.Close()
+	if !migrationRoleAllowed(ctx, pool, true) {
+		return 0, ErrRetention
+	}
+	purged, err := identity.PurgeExpiredClients(ctx, pool, time.Now())
+	if err != nil {
+		return purged, ErrRetention
+	}
+	return purged, nil
 }
 
 // migrationRoleAllowed checks authority before DDL and a complete owned schema
