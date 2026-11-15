@@ -30,19 +30,30 @@ default-denied. Cilium matches these names only after its DNS proxy has seen the
 lookup, which the platform's `business-site-dns-visibility` policy provides
 (devantler-tech/platform#6337); a tenant policy may not name kube-system itself.
 Other platform policies remain additive, so this is not an overriding deny
-of every platform-granted connection. No database, migration, broker or private
-activation setting is configured. The checker accepts only the committed,
+of every platform-granted connection. No migration input is configured, and the
+package itself sets no database, broker or activation value. The checker accepts only the committed,
 independently verified baseline image; a same-repository digest alone is insufficient.
+That baseline predates the host and portal-settings arguments, so the smoke test
+needs an image built from current source, as CI supplies.
 
-The application-owned namespaced `openbao` SecretStore authenticates as only the
-`business-site` service account, using the dedicated `business-site` role. Its
-ExternalSecret reads only `company-disclosure` from the planned
-`apps/business-site/public-disclosure` KV-v2 entry and owns the same-namespace
-`business-site-disclosure` Secret. The WebApp projects that selected key read-only
-at the fixed mount with mode 0440 and the application's primary group. No shared
-ClusterSecretStore, bulk import, private-value writer or inline value is admitted.
+The WebApp projects the one Secret the platform composes in this namespace,
+`business-site-runtime`, read-only at `/run/webapp-inputs` with mode 0440 and the
+application's primary group. It admits exactly four items: `company-disclosure` as
+`disclosure`, and `portal-settings`, `portal-client-secret` and `portal-database-ca`
+at their own names. While sign-in is off, `portal-settings` holds only a `#`
+comment line, so the portal reads none of the other portal items. Serving needs
+both the disclosure and the settings file: without that Secret or either item the
+Pods do not start, so the Secret must exist before this package is applied.
 
-These declarations neither provision the Platform authentication role nor create
+The application-owned namespaced `openbao` SecretStore and its ExternalSecret stay
+declared but are no longer projected; removing them is a later cleanup. The
+SecretStore authenticates as only the `business-site` service account, using the
+dedicated `business-site` role. Its ExternalSecret reads only `company-disclosure`
+from the planned `apps/business-site/public-disclosure` KV-v2 entry and owns the
+same-namespace `business-site-disclosure` Secret. No shared ClusterSecretStore,
+bulk import, private-value writer or inline value is admitted.
+
+The retained declarations neither provision the Platform authentication role nor create
 the private value. Before registration, Platform must separately bind that role
 to this exact service account and namespace, with read permission limited to
 exact entries, including the disclosure entry and the two billing entries below.
@@ -80,8 +91,10 @@ The WebApp has no environment variables, so the portal reads its settings from
 one projected file selected with `--portal-settings-projection
 /run/webapp-inputs/portal-settings`. The file uses the same confinement as the
 disclosure projection (root- or process-owned, mode 0440 with the application's
-primary group, at most 16 KiB). These manifests do not add it yet; the
-platform wires it with the portal database and broker egress.
+primary group, at most 16 KiB). The WebApp passes that argument and projects the
+file from `business-site-runtime`. Switching sign-in on changes that Secret's
+settings item, adds the platform's database and broker egress and restarts the
+Pods; these manifests stay unchanged.
 
 Lines are `KEY=value`, separated by LF. Blank lines and lines starting with `#`
 are ignored; a file with no keys keeps the portal as it is today: no portal database or

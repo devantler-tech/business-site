@@ -103,8 +103,18 @@ export function validateTenantPackage(input) {
   assert.equal(spec.runAsUser, 65532);
   assert.equal(spec.runAsGroup, 65532);
   assert.equal(spec.readOnlyRootFilesystem, true);
-  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"]);
-  assert.deepEqual(spec.secretProjections, [{ secretName: "business-site-disclosure", items: [{ key: "company-disclosure", path: "disclosure" }] }]);
+  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech", "--portal-settings-projection", "/run/webapp-inputs/portal-settings"]);
+  // The platform composes this one Secret. Its settings item keeps sign-in off
+  // until it holds activation keys; no migration or other private input is admitted.
+  assert.deepEqual(spec.secretProjections, [{
+    secretName: "business-site-runtime",
+    items: [
+      { key: "company-disclosure", path: "disclosure" },
+      { key: "portal-settings", path: "portal-settings" },
+      { key: "portal-client-secret", path: "portal-client-secret" },
+      { key: "portal-database-ca", path: "portal-database-ca" },
+    ],
+  }]);
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
     ingress: [{ fromEntities: ["ingress"], toPorts: [{ ports: [{ port: "8080", protocol: "TCP" }] }] }],

@@ -61,7 +61,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   The source-owned runtime release/publisher callers are default-off behind the
   explicit `RUNTIME_PUBLICATION_ENABLED` repository variable. Original main-CI
   archive admission, the accepted original-image verifier and independent paired
-  publication readback are mandatory. Keep private dependencies and migration inputs absent.
+  publication readback are mandatory. Keep private dependencies and migration inputs absent;
+  portal settings and their private inputs come only from the platform's projected
+  `business-site-runtime` Secret.
 - The platform serves devantler.tech from that signed runtime; GitHub Pages is retired
   (devantler-tech/platform#6177). `scripts/publishing-contract.test.sh` refuses any workflow that
   builds or deploys a Pages site. Both former Pages publishers remain only at historical

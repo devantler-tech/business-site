@@ -43,28 +43,34 @@ test("the billing keys synchronize through the same namespaced store without bei
   assert.deepEqual(secret("business-site-stripe").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
   assert.deepEqual(secret("business-site-numina").spec.data.map((d) => d.secretKey), ["api-key"]);
   assert.deepEqual(secret("business-site-stripe").spec.data.map((d) => d.secretKey), ["api-key", "webhook-secret"]);
-  // The platform WebApp mounts one Secret, never optionally, so a missing billing
-  // entry must not be able to stop the public pages from starting.
-  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-disclosure"]);
-  assert.ok(!app.spec.args.some((arg) => arg.includes("portal-settings")));
+  // The platform WebApp mounts one Secret, never optionally: the platform's
+  // business-site-runtime. The billing keys are not in it, so a missing billing
+  // entry cannot stop the public pages from starting.
+  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-runtime"]);
+  assert.ok(!app.spec.secretProjections.some((p) => /numina|stripe/.test(p.secretName)));
 });
 
-test("the rendered package supplies the required disclosure through its own namespaced store", () => {
+test("the rendered package projects the platform's runtime Secret with portal settings", () => {
   const docs = yaml.loadAll(render());
   const store = docs.find((d) => d?.kind === "SecretStore");
   const disclosure = docs.find((d) => d?.kind === "ExternalSecret" && d.metadata.name === "business-site-disclosure");
   const app = docs.find((d) => d?.kind === "WebApp");
-  assert.ok(store, "the required file needs an application-owned store declaration");
-  assert.ok(disclosure, "the required file needs an explicit synchronization declaration");
+  // The platform composes business-site-runtime; the retained application-owned
+  // disclosure synchronization stays valid but is no longer projected.
   assert.equal(store.metadata.namespace, "business-site");
   assert.equal(store.spec.provider.vault.auth.kubernetes.role, "business-site");
   assert.deepEqual(store.spec.provider.vault.auth.kubernetes.serviceAccountRef, { name: "business-site" });
   assert.deepEqual(disclosure.spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
-  assert.equal(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
-  assert.deepEqual(disclosure.spec.data, [{
-    secretKey: app.spec.secretProjections[0].items[0].key,
-    remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" },
+  assert.notEqual(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
+  assert.deepEqual(app.spec.secretProjections, [{
+    secretName: "business-site-runtime",
+    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
   }]);
+  // Each projected file the runtime reads is a path the projection actually supplies.
+  for (const flag of ["--company-disclosure-projection", "--portal-settings-projection"]) {
+    const file = app.spec.args[app.spec.args.indexOf(flag) + 1];
+    assert.ok(app.spec.secretProjections[0].items.some((item) => `/run/webapp-inputs/${item.path}` === file), flag);
+  }
   assert.equal(check(render()).status, 0);
 });
 
@@ -133,6 +139,18 @@ for (const [name, mutate] of [
   ["an extra private key", (d) => { d[0].spec.secretProjections[0].items.push({ key: "db", path: "db" }); }],
   ["a traversal projection", (d) => { d[0].spec.secretProjections[0].items[0].path = "../disclosure"; }],
   ["an additional Secret projection", (d) => { d[0].spec.secretProjections.push({ secretName: "other", items: [] }); }],
+  ["the retired disclosure-only Secret", (d) => { d[0].spec.secretProjections[0].secretName = "business-site-disclosure"; }],
+  ["a foreign runtime Secret", (d) => { d[0].spec.secretProjections[0].secretName = "other-runtime"; }],
+  ["a missing portal settings item", (d) => { d[0].spec.secretProjections[0].items.splice(1, 1); }],
+  ["a missing portal client secret item", (d) => { d[0].spec.secretProjections[0].items.splice(2, 1); }],
+  ["a missing database trust item", (d) => { d[0].spec.secretProjections[0].items.splice(3, 1); }],
+  ["a migration credential item", (d) => { d[0].spec.secretProjections[0].items.push({ key: "migration-database", path: "migration-database" }); }],
+  ["a renamed settings path", (d) => { d[0].spec.secretProjections[0].items[1].path = "settings"; }],
+  ["a settings key projected at another key's path", (d) => { d[0].spec.secretProjections[0].items[1].key = "portal-client-secret"; }],
+  ["a missing settings argument", (d) => { d[0].spec.args.splice(-2, 2); }],
+  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.length - 1] = "/tmp/portal-settings"; }],
+  ["a repeated settings argument", (d) => { d[0].spec.args.push("--portal-settings-projection", "/run/webapp-inputs/portal-settings"); }],
+  ["a one-shot invitation argument", (d) => { d[0].spec.args.push("--portal-invite"); }],
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
   ["an empty egress list without default-deny enforcement", (d) => { d[1].spec.egress = []; }],
