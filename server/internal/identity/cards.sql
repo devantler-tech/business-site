@@ -1,14 +1,19 @@
--- ADR 0030 card path: each card order's current Stripe Checkout Session. A new
--- session replaces an expired one; a completed session is never replaced.
+-- ADR 0030 card path: every Stripe Checkout Session the portal created for a
+-- card order, kept so a delayed or replaced session still resolves to its
+-- order. A one-off amount and a monthly subscription are separate sessions
+-- (Stripe refuses one-time prices in a subscription without proration).
 CREATE TABLE portal_card_checkouts (
-  order_id text PRIMARY KEY REFERENCES portal_orders(id),
-  session_id text NOT NULL UNIQUE CHECK(session_id ~ '^cs_[A-Za-z0-9_]{1,250}$'),
+  session_id text PRIMARY KEY CHECK(session_id ~ '^cs_[A-Za-z0-9_]{1,250}$'),
+  order_id text NOT NULL REFERENCES portal_orders(id),
+  purpose text NOT NULL CHECK(purpose IN ('one-time','monthly')),
+  attempt integer NOT NULL CHECK(attempt BETWEEN 1 AND 1000),
   url text NOT NULL CHECK(url LIKE 'https://%' AND length(url) <= 2048),
   expires_at timestamptz NOT NULL,
-  attempt integer NOT NULL CHECK(attempt BETWEEN 1 AND 1000),
-  completed boolean NOT NULL DEFAULT false,
+  state text NOT NULL DEFAULT 'open' CHECK(state IN ('open','processing','paid','closed')),
   subscription_id text UNIQUE CHECK(subscription_id IS NULL OR subscription_id ~ '^sub_[A-Za-z0-9_]{1,250}$'),
-  updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  UNIQUE(order_id,purpose,attempt),
+  CHECK(subscription_id IS NULL OR purpose = 'monthly')
 );
 
 -- Each signature-verified Stripe event is applied exactly once.

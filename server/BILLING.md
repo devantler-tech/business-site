@@ -74,31 +74,39 @@ The client can instead pay by card or MobilePay. Stripe sends the receipt, and N
 Stripe integration books the sale, fee and payout. The portal makes no Numina invoice for a
 card order, so nothing is booked twice.
 
-- **Checkout.** Placing a card order creates a Stripe Checkout Session and shows the client a
-  **Continue to payment** link on the receipt. The portal's CSP allows form posts only to itself,
-  so the order form never redirects to Stripe. A one-off order uses `mode=payment`. An order with
-  a monthly amount uses `mode=subscription`, with the one-time line charged at once and the
-  monthly line anchored to the 1st of the first billed month (Copenhagen time), with no
-  proration. Payment methods come from the Stripe Dashboard: the session never sets
-  `payment_method_types`, and Stripe offers MobilePay only for one-off payments, so it is
-  never offered for a subscription. Amounts are VAT-inclusive DKK; Stripe Tax is not used.
-- **Retries.** Each session is created with `Idempotency-Key` `portal-<order>-checkout-<n>`. An
-  expired or failed session is replaced by a new attempt; the receipt then shows **Start card
-  payment**.
+- **Checkout.** Placing a card order creates one Stripe Checkout Session per amount and shows
+  each as a **Continue to payment** link on the receipt. The portal's CSP allows form posts only
+  to itself, so the order form never redirects to Stripe.
+  - The one-time amount uses `mode=payment`, by card or MobilePay.
+  - The monthly amount uses `mode=subscription`, card only, with `proration_behavior=none` and
+    its billing anchor at 00:00 UTC on the 1st of the first billed month (01:00 or 02:00 in
+    Copenhagen). Nothing is charged before the anchor; Stripe then charges on the 1st of each
+    month, and renews on the anchor's UTC day. If that month has already begun, the anchor is
+    the next 1st.
+  - The two are separate sessions because Stripe refuses one-time prices in a subscription
+    without proration. Payment methods come from the Stripe Dashboard: no session sets
+    `payment_method_types`, and Stripe offers MobilePay only for one-off payments.
+  - Amounts are VAT-inclusive DKK; Stripe Tax is not used.
+- **Sessions are kept.** Every session is stored with its order, purpose and attempt
+  (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. A
+  session that expires or whose asynchronous payment fails is closed, and the receipt offers
+  **Start card payment**, which creates a new attempt with `Idempotency-Key`
+  `portal-<order>-<purpose>-checkout-<n>`. An open, processing or paid session is never
+  replaced, and a replaced one still resolves to its own order if a payment lands on it later.
 - **Funding comes only from signed webhooks.** `POST /portal/stripe/webhook` sits outside
   sessions and CSRF, reads at most 256 KiB, verifies `Stripe-Signature` (HMAC-SHA256, five
   minutes' tolerance) and applies each event exactly once (`portal_stripe_events`). A failed
-  step answers `500`, so Stripe retries. Events are resolved through Stripe's own IDs: the
-  Checkout Session for one-off payments, the subscription for its invoices.
+  step answers `500`, so Stripe retries. Events are resolved only through the portal's own
+  stored sessions and subscriptions; any other session is ignored.
   - `checkout.session.completed` with `payment_status` `paid`, or
-    `checkout.session.async_payment_succeeded`, funds a one-off order.
-  - For a subscription, completion records the subscription ID. Its `invoice.paid` with
-    `billing_reason` `subscription_create` funds the one-time amount, and each
-    `subscription_cycle` invoice funds its month. An invoice that arrives before the completion
-    event is deferred with `500` when it carries the portal's order marker, and ignored when it
-    does not (another integration on the same account).
+    `checkout.session.async_payment_succeeded`, funds the one-time amount. An unpaid
+    completion marks the session as processing.
+  - A subscription's completion records its subscription ID. Each `invoice.paid` with
+    `billing_reason` `subscription_cycle` funds its month. An invoice that arrives before the
+    completion event is deferred with `500` when it carries the portal's order marker, and
+    ignored when it does not (another integration on the same account).
   - `checkout.session.expired` and `checkout.session.async_payment_failed` never fund; they
-    retire the link.
+    close the session.
   - The paid amount and currency must equal the order's amount for that period exactly.
     A browser return to the receipt is never proof of payment.
 

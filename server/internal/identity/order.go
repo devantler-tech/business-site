@@ -242,7 +242,7 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection)
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
-		if _, checkoutErr := b.foundation.cardCheckout(r.Context(), order.ID, b.origin, language(r)); checkoutErr != nil {
+		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin, language(r)); checkoutErr != nil {
 			log.Printf("portal: card checkout not created")
 		}
 	}

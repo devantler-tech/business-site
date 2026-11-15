@@ -201,9 +201,12 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			}
 			page.BillingEnabled, page.InvoiceOption, page.CardOption = true, invoiceOption, cardOption
 			if page.Order != nil && page.Order.Collection == "card" && cardOption {
-				if page.Checkout, err = b.foundation.readCheckout(r.Context(), page.Order.ID); err != nil {
+				if page.Checkouts, err = b.foundation.readCheckouts(r.Context(), *page.Order); err != nil {
 					b.triageError(w, r, err)
 					return
+				}
+				for _, c := range page.Checkouts {
+					page.CheckoutRestart = page.CheckoutRestart || c.Replaceable()
 				}
 			}
 			for _, a := range page.Acceptances {
@@ -265,7 +268,8 @@ type requestPageData struct {
 	CardOption        bool
 	Order             *projectOrder
 	OrderAcceptance   string
-	Checkout          *orderCheckout
+	Checkouts         []orderCheckout
+	CheckoutRestart   bool
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
