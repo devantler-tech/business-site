@@ -292,7 +292,9 @@ v18 appends order ends, Stripe-confirmed subscription ends and charge reversals,
 SELECT/INSERT only. Never bill after an order's last month, count a refunded or disputed charge
 as funding, or trust a reversal or end that does not resolve to the portal's own stored session,
 invoice or subscription. v19 binds every new work approval to its order's settled funding charge,
-never refunded or disputed, through composite keys; earlier approvals keep their invoice binding.
+never refunded or disputed, through composite keys; earlier approvals keep their invoice binding. v20
+adds the client as an order end's source: the client ends monthly billing after the current
+month, recorded once with the client's identity under the request's client lock.
 
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real
