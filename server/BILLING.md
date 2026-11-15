@@ -19,7 +19,8 @@ both a Numina invoice and a Stripe charge.
   iteration is a new request.
 - The order copies the accepted one-time and monthly amounts. Monthly billing starts on the 1st
   of the month after the order.
-- Today the only path is **invoice** (bank transfer or EAN). Card and MobilePay come with #553.
+- The paths are **invoice** (bank transfer or EAN), the default, and **card** (card or
+  MobilePay through Stripe). Each has its own gate; the client sees only the paths that are on.
 
 ## The invoice path (Numina)
 
@@ -62,6 +63,40 @@ The client's receipt shows each invoice as being prepared, invoiced and awaiting
 paid. The operator's request page shows the order, each charge's state, Numina invoice number
 and whether it was sent. Reminders (rykker) stay a Numina task.
 
+## The card path (Stripe)
+
+The client can instead pay by card or MobilePay. Stripe sends the receipt, and Numina's own
+Stripe integration books the sale, fee and payout. The portal makes no Numina invoice for a
+card order, so nothing is booked twice.
+
+- **Checkout.** Placing a card order creates a Stripe Checkout Session and shows the client a
+  **Continue to payment** link on the receipt. The portal's CSP allows form posts only to itself,
+  so the order form never redirects to Stripe. A one-off order uses `mode=payment`. An order with
+  a monthly amount uses `mode=subscription`, with the one-time line charged at once and the
+  monthly line anchored to the 1st of the first billed month (Copenhagen time), with no
+  proration. Payment methods come from the Stripe Dashboard: the session never sets
+  `payment_method_types`, and Stripe offers MobilePay only for one-off payments, so it is
+  never offered for a subscription. Amounts are VAT-inclusive DKK; Stripe Tax is not used.
+- **Retries.** Each session is created with `Idempotency-Key` `portal-<order>-checkout-<n>`. An
+  expired or failed session is replaced by a new attempt; the receipt then shows **Start card
+  payment**.
+- **Funding comes only from signed webhooks.** `POST /portal/stripe/webhook` sits outside
+  sessions and CSRF, reads at most 256 KiB, verifies `Stripe-Signature` (HMAC-SHA256, five
+  minutes' tolerance) and applies each event exactly once (`portal_stripe_events`). A failed
+  step answers `500`, so Stripe retries. Events are resolved through Stripe's own IDs: the
+  Checkout Session for one-off payments, the subscription for its invoices.
+  - `checkout.session.completed` with `payment_status` `paid`, or
+    `checkout.session.async_payment_succeeded`, funds a one-off order.
+  - For a subscription, completion records the subscription ID. Its `invoice.paid` with
+    `billing_reason` `subscription_create` funds the one-time amount, and each
+    `subscription_cycle` invoice funds its month. An invoice that arrives before the completion
+    event is deferred with `500` when it carries the portal's order marker, and ignored when it
+    does not (another integration on the same account).
+  - `checkout.session.expired` and `checkout.session.async_payment_failed` never fund; they
+    retire the link.
+  - The paid amount and currency must equal the order's amount for that period exactly.
+    A browser return to the receipt is never proof of payment.
+
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance
@@ -93,12 +128,34 @@ read-only projection for that entry, the platform role's read permission on it, 
 allow rule to `api.numina.app` (the package denies egress by default), and the runtime grants
 below. None of these is added here.
 
+The card path has its own false-default `portal-card-billing` flag, also without an environment
+mapping. It is enabled only when both `PORTAL_STRIPE_KEY_FILE` and
+`PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files (`PORTAL_STRIPE_API_URL` is optional,
+HTTPS only). Turning the flag off hides the card choice and the payment link, refuses card
+orders and answers the webhook with `404`, so Stripe retries until it is on again.
+
+Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site/stripe`:
+
+- property `api-key`: a **restricted** key (`rk_live_…`) with Checkout Sessions write access,
+  or `rk_test_…` from a Stripe sandbox for development;
+- property `webhook-secret`: the `whsec_…` signing secret of a webhook endpoint at
+  `https://portal.devantler.tech/portal/stripe/webhook`, created with API version
+  `2026-10-28.endive` and the events `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
+  `checkout.session.expired` and `invoice.paid`.
+
+Before the card path goes live, the maintainer also asks Numina support to switch on Numina's
+Stripe integration, and turns on Stripe's emailed receipts. Refunds, disputes and subscription
+cancellation are not handled by the portal yet; they are a launch prerequisite.
+
 ## Storage and privileges
 
 Migration v16 adds `portal_orders` (SELECT/INSERT), `portal_order_charges`
 (SELECT/INSERT/UPDATE, for state changes) and `portal_numina_contacts` (SELECT/INSERT) after
-unchanged v1–v15. The runtime never deletes them. Grant these to the runtime role before the
-gate is switched on; until then the tables stay empty.
+unchanged v1–v15. Migration v17 adds `portal_card_checkouts` (SELECT/INSERT/UPDATE: a newer
+session replaces an expired one) and `portal_stripe_events` (SELECT/INSERT). The runtime
+never deletes them. Grant these to the runtime role before either gate is switched on; until
+then the tables stay empty.
 
 ## Tests
 
@@ -107,4 +164,9 @@ against an in-memory Numina with its documented retry rules: order placement and
 refused second path, creation, booking and sending once, an unmatched payment that does not
 settle, a matched one that does, the next month's invoice, a lost create reply found by its
 memo, a foreign customer held, a sandbox that cannot email, and the closed gate.
-`internal/numina` tests the client itself. Real Numina sandbox proof is a launch step.
+`TestPrivateCard*` send genuinely signed events to the real HTTPS handler and a fake Stripe
+API: one-off and subscription Checkout shapes, a forged signature, an unpaid then
+asynchronously paid session, a replayed event, an early subscription invoice retried after
+completion, a foreign subscription ignored, a monthly invoice, a wrong amount, an expired
+session restarted, and the closed gate. `internal/numina` and `internal/stripe` test the clients. Real Numina
+sandbox and Stripe test-mode proof against the real services are launch steps.

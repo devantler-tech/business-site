@@ -130,6 +130,11 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.Error(w, "Portal unavailable", 421)
 			return
 		}
+		// Stripe signs its webhook; it carries no session, CSRF token or Origin.
+		if r.URL.Path == "/portal/stripe/webhook" {
+			b.stripeWebhook(w, r)
+			return
+		}
 		if r.Method != "GET" && r.Method != "HEAD" {
 			limit := int64(8192)
 			// A 1,200-character Unicode brief can expand under native form encoding.

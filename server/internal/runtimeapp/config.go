@@ -27,6 +27,7 @@ type Config struct {
 	database, issuer, client, callback, secretFile string
 	secretProjected                                bool
 	billing                                        billingConfig
+	cards                                          cardConfig
 }
 
 // billingConfig is the optional Numina invoice path (ADR 0030). Its own
@@ -133,13 +134,17 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	if err != nil || (count == 0 && billing != (billingConfig{})) {
 		return Config{}, ErrConfig
 	}
+	cards, err := readCardConfig(getenv)
+	if err != nil || (count == 0 && cards != (cardConfig{})) {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
 	if count != 5 || !filepath.IsAbs(c.secretFile) {
 		return Config{}, ErrConfig
 	}
-	c.billing = billing
+	c.billing, c.cards = billing, cards
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -195,6 +200,10 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		return nil, closed, ErrConfig
 	}
 	foundation := identity.New(pool, broker, flags)
+	if err := enableCardBilling(foundation, c.cards); err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
 	handler, err := foundation.Browser(c.callback, secret)
 	if err != nil {
 		pool.Close()

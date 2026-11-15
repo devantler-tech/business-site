@@ -161,7 +161,9 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 	// checkpoints still authorize every request independently.
 	sharing := id != "" && b.foundation.sharingReady(r.Context())
 	acceptance := id != "" && b.foundation.acceptanceReady(r.Context())
-	billing := acceptance && b.foundation.invoiceBillingReady(r.Context())
+	billing := acceptance && b.foundation.orderReady(r.Context())
+	invoiceOption := billing && b.foundation.invoiceBillingReady(r.Context())
+	cardOption := billing && b.foundation.cardBillingReady(r.Context())
 	rows, err := b.foundation.readRequests(r.Context(), b.principal(r.Context()), id)
 	if missingProjectRequest(id, rows, err) {
 		http.NotFound(w, r)
@@ -197,7 +199,13 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 				b.triageError(w, r, err)
 				return
 			}
-			page.BillingEnabled = true
+			page.BillingEnabled, page.InvoiceOption, page.CardOption = true, invoiceOption, cardOption
+			if page.Order != nil && page.Order.Collection == "card" && cardOption {
+				if page.Checkout, err = b.foundation.readCheckout(r.Context(), page.Order.ID); err != nil {
+					b.triageError(w, r, err)
+					return
+				}
+			}
 			for _, a := range page.Acceptances {
 				if page.Order == nil && a.Current && (a.Proposal.OneTimeMinor > 0 || a.Proposal.MonthlyMinor > 0) {
 					page.OrderAcceptance = a.ID
@@ -253,8 +261,11 @@ type requestPageData struct {
 	CanAccept         bool
 	AcceptanceEnabled bool
 	BillingEnabled    bool
+	InvoiceOption     bool
+	CardOption        bool
 	Order             *projectOrder
 	OrderAcceptance   string
+	Checkout          *orderCheckout
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {

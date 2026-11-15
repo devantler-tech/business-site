@@ -2,7 +2,7 @@ package identity
 
 import "testing"
 
-// TestFixtureResetClearsEveryRelation seeds all twenty relations, including
+// TestFixtureResetClearsEveryRelation seeds all twenty-two relations, including
 // real consent, funding and authority history, before exercising the next reset.
 // It must remain serial: resetting a database is not concurrent fixture isolation.
 func TestFixtureResetClearsEveryRelation(t *testing.T) {
@@ -29,13 +29,19 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('reset-contact-client','fixture-contact')`); err != nil {
 		t.Fatal("fixture Numina contact unavailable", err)
 	}
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_card_checkouts(order_id,session_id,url,expires_at,attempt) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','cs_test_reset','https://checkout.stripe.invalid/reset',clock_timestamp(),1)`); err != nil {
+		t.Fatal("fixture card checkout unavailable", err)
+	}
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_stripe_events(id,type) VALUES('evt_reset','checkout.session.completed')`); err != nil {
+		t.Fatal("fixture Stripe event unavailable", err)
+	}
 	tables := []string{
 		"portal_login_attempts", "portal_invitations", "portal_memberships",
 		"portal_sessions", "portal_contacts", "portal_requests", "portal_proposals",
 		"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances",
 		"portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
 		"portal_membership_transitions", "portal_work_approvals", "portal_work_revocations", "portal_work_current",
-		"portal_orders", "portal_order_charges", "portal_numina_contacts",
+		"portal_orders", "portal_order_charges", "portal_numina_contacts", "portal_card_checkouts", "portal_stripe_events",
 	}
 	for _, table := range tables {
 		var count int
