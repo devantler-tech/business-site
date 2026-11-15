@@ -62,6 +62,11 @@ func (s *Foundation) orderReady(ctx context.Context) bool {
 	return s.invoiceBillingReady(ctx) || s.cardBillingReady(ctx)
 }
 
+// pathReady binds collectionReady to one path for a final checkpoint.
+func (s *Foundation) pathReady(collection string) func(context.Context) bool {
+	return func(ctx context.Context) bool { return s.collectionReady(ctx, collection) }
+}
+
 // collectionReady is the gate for one collection path.
 func (s *Foundation) collectionReady(ctx context.Context, collection string) bool {
 	switch collection {
@@ -106,7 +111,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		if existing.Acceptance != acceptance || existing.Collection != collection {
 			return projectOrder{}, errProposalConflict
 		}
-		return existing, s.commitOrder(ctx, p, tx)
+		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
 	case !errors.Is(err, pgx.ErrNoRows):
 		return projectOrder{}, err
 	}
@@ -123,7 +128,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	return saved, s.commitOrder(ctx, p, tx)
+	return saved, s.commitOrder(ctx, p, tx, s.pathReady(collection))
 }
 
 // readOrderTx reads the request's order and its charges inside a scoped,
@@ -165,7 +170,7 @@ func (s *Foundation) readClientOrder(ctx context.Context, p Principal, id string
 	if err != nil {
 		return nil, err
 	}
-	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx) })
+	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx, s.orderReady) })
 }
 
 // readOperatorOrder returns a request's order for a current operator.
@@ -183,8 +188,8 @@ func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id stri
 // commitOrder is the final checkpoint for order writes and reads: the billing
 // gate, not only the acceptance gates, must still be open, along with the
 // principal's expiry and the request's cancellation.
-func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx) error {
-	if !s.invoiceBillingReady(ctx) {
+func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx, ready func(context.Context) bool) error {
+	if !ready(ctx) {
 		return ErrDenied
 	}
 	return s.commitClientProposal(ctx, p, tx, time.Time{})
