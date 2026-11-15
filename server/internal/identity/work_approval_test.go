@@ -24,10 +24,10 @@ func TestWorkApprovalSchema(t *testing.T) {
 	}
 }
 
-// Funding that is no longer settled, or was refunded or disputed, pauses a
-// recorded approval and admits no fresh one.
+// Funding that is no longer settled, was refunded or disputed, or belongs to a
+// withdrawn order pauses a recorded approval and admits no fresh one.
 func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
-	for _, change := range []string{"unsettled", "refunded", "disputed"} {
+	for _, change := range []string{"unsettled", "refunded", "disputed", "withdrawn"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
 			savedApproval(t, b, op)

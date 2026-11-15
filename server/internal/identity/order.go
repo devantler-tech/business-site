@@ -30,7 +30,8 @@ type projectOrder struct {
 	MonthlyFrom, Placed        time.Time
 	Charges                    []orderCharge
 	End                        *orderEnd
-	Subscribed                 bool // a card order's monthly subscription exists
+	Subscribed                 bool       // a card order's monthly subscription exists
+	Withdrawn                  *time.Time // when the client withdrew from the order
 }
 
 func (o projectOrder) OneTimeDKK() int64 { return o.OneTimeMinor / 100 }
@@ -163,6 +164,9 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 	}
 	rows.Close()
 	if err = readOrderEnd(ctx, tx, &o); err != nil {
+		return projectOrder{}, err
+	}
+	if err = readWithdrawal(ctx, tx, &o); err != nil {
 		return projectOrder{}, err
 	}
 	return o, nil

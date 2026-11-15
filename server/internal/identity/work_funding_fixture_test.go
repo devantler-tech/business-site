@@ -35,6 +35,7 @@ func changeFixtureFunding(t *testing.T, change string) {
 		"disputed":  `INSERT INTO portal_charge_reversals(order_id,period,reason,reference) SELECT order_id,period,'disputed','du_fixture' FROM portal_order_charges`,
 		"amount":    `UPDATE portal_order_charges SET gross_minor=gross_minor-125,net_minor=net_minor-100,vat_minor=vat_minor-25`,
 		"reference": `UPDATE portal_order_charges SET provider_ref='fixture-funding-reference-2'`,
+		"withdrawn": `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) SELECT order_id,'https://fixture.invalid','fixture-client' FROM portal_order_charges`,
 	}[change]
 	if !ok {
 		t.Fatal("unsupported funding change")

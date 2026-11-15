@@ -410,10 +410,10 @@ func TestWorkApprovalWaitsForAConcurrentReversal(t *testing.T) {
 	}
 }
 
-// A settled charge that is not exactly the agreed amount, or a charge that is
-// not settled, is not funding.
+// A settled charge that is not exactly the agreed amount, a charge that is not
+// settled, or one of a withdrawn order is not funding.
 func TestWorkApprovalIneligibleFundingDenied(t *testing.T) {
-	for _, change := range []string{"unsettled", "refunded", "disputed", "amount"} {
+	for _, change := range []string{"unsettled", "refunded", "disputed", "amount", "withdrawn"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
 			changeFixtureFunding(t, change)

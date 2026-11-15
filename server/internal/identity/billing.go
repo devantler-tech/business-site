@@ -179,7 +179,7 @@ func splitVAT(gross int64) (int64, int64, bool) {
 }
 
 func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,(SELECT e.last_month FROM portal_order_ends e WHERE e.order_id=o.id) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' ORDER BY o.placed_at,o.id`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,(SELECT e.last_month FROM portal_order_ends e WHERE e.order_id=o.id) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id) ORDER BY o.placed_at,o.id`)
 	if err != nil {
 		return nil, errTriageStorage
 	}

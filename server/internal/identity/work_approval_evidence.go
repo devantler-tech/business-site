@@ -115,7 +115,8 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 	}
 	var settled *time.Time
 	err = tx.QueryRow(ctx, `SELECT c.gross_minor,c.net_minor,c.vat_minor,coalesce(c.provider_ref,''),c.settled_at FROM portal_order_charges c
- WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
+ WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)
+ AND NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=c.order_id)`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return workOrder{}, workFunding{}, errProposalConflict
 	}
