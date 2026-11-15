@@ -225,7 +225,6 @@ func billingFixture(t *testing.T) *browserFixture {
 	return b
 }
 
-// orderForm reads the receipt's own order form.
 // orderFormFields reads the receipt and its order form's acceptance and CSRF token.
 func orderFormFields(t *testing.T, b *browserFixture, lang string) (url.Values, string) {
 	t.Helper()
@@ -238,6 +237,7 @@ func orderFormFields(t *testing.T, b *browserFixture, lang string) (url.Values, 
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}}, body
 }
 
+// orderForm reads the receipt's own order form.
 func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	t.Helper()
 	f, body := orderFormFields(t, b, lang)
