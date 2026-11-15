@@ -90,6 +90,7 @@ func TestPrivateCardClientEndsTheSubscription(t *testing.T) {
 	cardFlags(t, b, true)
 	clientSession := b.client
 	g, _ := operatorEndForm(t, b, "card-end-operator")
+	operatorSession := b.client
 	if status, _, _ := b.request("POST", clientEndPath, g, b.site.URL); status == 303 {
 		t.Fatal("an operator ended the order through the client's form")
 	}
@@ -98,14 +99,27 @@ func TestPrivateCardClientEndsTheSubscription(t *testing.T) {
 		t.Fatal("a refused end was recorded", err)
 	}
 	b.client = clientSession
+	// Stripe's first answer fails: the client's end still stands, and the
+	// operator's page offers to ask Stripe again.
+	fake.mu.Lock()
+	fake.failCancel = true
+	fake.mu.Unlock()
 	if status, _, _ := b.request("POST", clientEndPath, clientEndForm(t, b, "en"), b.site.URL); status != 303 {
 		t.Fatalf("client end refused: %d", status)
 	}
+	b.client = operatorSession
+	if _, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, ""); !strings.Contains(body, "Ask Stripe again") {
+		t.Fatal("an unconfirmed client end is not offered again to the operator")
+	}
+	if status, _, _ := b.request("POST", orderEndPath, endForm(g, currentMonth(time.Now())), b.site.URL); status != 303 {
+		t.Fatalf("asking Stripe again refused: %d", status)
+	}
+	b.client = clientSession
 	fake.mu.Lock()
 	cancels := append([]url.Values(nil), fake.cancels...)
 	fake.mu.Unlock()
 	renewal := currentMonth(time.Now()).AddDate(0, 1, 0)
-	if len(cancels) != 1 || cancels[0].Get("subscription") != "sub_1" || cancels[0].Get("cancel_at") != strconv.FormatInt(renewal.Unix(), 10) || cancels[0].Get("proration_behavior") != "none" {
+	if len(cancels) != 2 || cancels[1].Get("subscription") != "sub_1" || cancels[1].Get("cancel_at") != strconv.FormatInt(renewal.Unix(), 10) || cancels[1].Get("proration_behavior") != "none" {
 		t.Fatalf("subscription end request differs: %v", cancels)
 	}
 	if source, _, operator := clientEnd(t, b); source != "client" || operator {

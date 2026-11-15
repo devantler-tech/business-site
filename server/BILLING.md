@@ -143,7 +143,9 @@ card order, so nothing is booked twice.
   current client membership as the order, and the end is recorded once with the client's
   identity (`source` `client`, migration v20). It then works exactly like an operator's end on
   both paths. An end that is already recorded stands, and the form is shown only while no end
-  is recorded and the order's own path is on.
+  is recorded and the order's own path is on. If Stripe does not confirm the card
+  subscription's end, the client's end still stands and the operator's page offers to ask
+  Stripe again.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
   after failed renewals, records the order's end, unless the operator or the client already
   ended it. The last billed month is the one the subscription had paid in advance when it

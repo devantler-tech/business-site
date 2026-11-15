@@ -117,8 +117,10 @@ func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, i
 	if err = s.commitOrder(ctx, p, tx, s.pathReady(o.Collection)); err != nil {
 		return err
 	}
-	if o.Collection == "card" {
-		return s.scheduleCardEnd(ctx, o.ID)
+	if o.Collection == "card" && s.scheduleCardEnd(ctx, o.ID) != nil {
+		// The end is recorded, so the client's form is gone; the operator's
+		// page offers to ask Stripe again until it confirms.
+		log.Printf("portal: card subscription end not confirmed")
 	}
 	return nil
 }
