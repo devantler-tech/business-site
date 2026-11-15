@@ -267,13 +267,17 @@ portal membership ended (#614). The same executable's exclusive one-shot
 `--retention-purge --migration-database-file <file>` mode deletes them. It runs as the
 migration role, because the web runtime can delete none of this history, and checks first
 that the role owns the complete schema. A client is due when all their memberships were client
-memberships, none is still active, and the last membership change lies more than
-`identity.RetentionYears` (3) years back. Each client goes in one transaction: billing, email,
-work, proposals, requests, contacts, invitations and memberships, and the membership history
-of every identity with no membership left. It prints only how many former clients it purged.
+memberships, none is still active, no invitation is pending, and the last membership change lies
+more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
+change. Each client goes in one transaction that locks invitations and memberships and checks the
+client again, so a redemption during the purge keeps the client. It deletes billing, email, work,
+proposals, requests, contacts, invitations and memberships, and the whole membership history of
+each of the client's identities whose last change is also 3 years old, who holds no other
+client's membership and whom no remaining work approval cites. It prints only how many former
+clients lost records.
 Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
-out after 30 days. The platform runs it daily beside the migration job, with
-`concurrencyPolicy: Forbid`.
+out after 30 days. A daily CronJob in the package (`deploy/`) is to run it beside the portal
+migration Job, on the same image and migration credential, with `concurrencyPolicy: Forbid`.
 
 ### Separate native identity preparation job
 
