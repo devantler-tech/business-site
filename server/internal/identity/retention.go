@@ -15,11 +15,24 @@ import (
 // and other accounting records live in Numina and Stripe, not here.
 const RetentionYears = 3
 
-// purgeClient deletes one client's portal records in dependency order: billing
-// and email first, then work, proposals, requests, contacts and invitations,
-// and last the memberships and the membership history of identities with no
-// membership left.
-var purgeClient = []string{
+// retentionDue lists the clients due for purging; with a nonempty $2, only that
+// client. Every membership event of theirs was a client membership, the last
+// one lies before the cutoff $1, and no membership or invitation is still open.
+// An identity that moved to another client is recorded under the new client,
+// so the event that follows each of the client's events counts too.
+const retentionDue = `SELECT a.client_id FROM portal_membership_transitions a
+ LEFT JOIN portal_membership_transitions n ON n.previous_incarnation=a.incarnation
+ WHERE $2::text='' OR a.client_id=$2::text
+ GROUP BY a.client_id
+ HAVING bool_and(a.role='client') AND max(greatest(a.recorded_at,n.recorded_at)) < $1
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.client_id=a.client_id AND NOT m.revoked)
+ AND NOT EXISTS (SELECT 1 FROM portal_invitations i WHERE i.client_id=a.client_id AND NOT i.revoked AND i.expires_at>now())
+ ORDER BY a.client_id`
+
+// purgeRecords deletes one client's portal records in dependency order:
+// billing and email first, then work, proposals, requests, contacts and
+// invitations. The memberships and their history go last, in purgeOne.
+var purgeRecords = []string{
 	`DELETE FROM portal_mail_deliveries WHERE outbox_id IN (SELECT m.id FROM portal_mail_outbox m JOIN portal_orders o ON o.id=m.order_id WHERE o.client_id=$1)`,
 	`DELETE FROM portal_mail_outbox WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_withdrawal_settlements WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
@@ -46,21 +59,28 @@ var purgeClient = []string{
 	`DELETE FROM portal_requests WHERE client_id=$1`,
 	`DELETE FROM portal_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_invitations WHERE client_id=$1`,
-	// The membership trigger records each deletion; the history of every
-	// identity that has no membership left then goes too.
-	`DELETE FROM portal_memberships WHERE client_id=$1`,
-	`DELETE FROM portal_membership_transitions t WHERE EXISTS (SELECT 1 FROM portal_membership_transitions x WHERE x.client_id=$1 AND x.issuer=t.issuer AND x.subject=t.subject)
- AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=t.issuer AND m.subject=t.subject)`,
 }
+
+// retentionHistory lists the identities, among those with any membership
+// event under client $1, whose whole membership history may go: their last
+// event lies before the cutoff $2, they hold no membership of another client,
+// and no remaining work approval cites any of their events.
+const retentionHistory = `SELECT t.issuer,t.subject FROM portal_membership_transitions t
+ WHERE EXISTS (SELECT 1 FROM portal_membership_transitions a WHERE a.client_id=$1 AND a.issuer=t.issuer AND a.subject=t.subject)
+ GROUP BY t.issuer,t.subject
+ HAVING max(t.recorded_at) < $2
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=t.issuer AND m.subject=t.subject AND m.client_id<>$1)
+ AND NOT EXISTS (SELECT 1 FROM portal_work_approvals w JOIN portal_membership_transitions x ON x.incarnation IN (w.client_incarnation,w.operator_incarnation)
+   WHERE x.issuer=t.issuer AND x.subject=t.subject)`
 
 // PurgeExpiredClients deletes the portal records of every client whose
 // memberships were all client memberships and all ended more than
-// RetentionYears before now. Each client goes in one transaction. It needs the
+// RetentionYears before now, and reports how many clients lost records. Each
+// client goes in one transaction that first rechecks it. It needs the
 // migration role: the web runtime can delete none of this history.
 func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time) (int, error) {
-	rows, err := pool.Query(ctx, `SELECT t.client_id FROM portal_membership_transitions t GROUP BY t.client_id
- HAVING bool_and(t.role='client') AND max(t.recorded_at) < $1
- AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.client_id=t.client_id AND NOT m.revoked) ORDER BY t.client_id`, now.AddDate(-RetentionYears, 0, 0))
+	cutoff := now.AddDate(-RetentionYears, 0, 0)
+	rows, err := pool.Query(ctx, retentionDue, cutoff, "")
 	if err != nil {
 		return 0, errTriageStorage
 	}
@@ -68,27 +88,76 @@ func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time)
 	if err != nil {
 		return 0, errTriageStorage
 	}
-	for i, client := range clients {
-		if err := purgeOne(ctx, pool, client); err != nil {
-			return i, err
+	purged := 0
+	for _, client := range clients {
+		deleted, err := purgeOne(ctx, pool, client, cutoff)
+		if err != nil {
+			return purged, err
+		}
+		if deleted {
+			purged++
 		}
 	}
-	return len(clients), nil
+	return purged, nil
 }
 
-func purgeOne(ctx context.Context, pool *pgxpool.Pool, client string) error {
+// purgeOne deletes one client's records if the client is still due. Holding
+// both tables in SHARE ROW EXCLUSIVE mode keeps invitations and memberships
+// from changing until it commits, so a redeemed invitation either shows in
+// the recheck or waits for the purge and then finds no invitation. Locking
+// invitations first follows the order in which redemption writes them.
+func purgeOne(ctx context.Context, pool *pgxpool.Pool, client string, cutoff time.Time) (bool, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return errTriageStorage
+		return false, errTriageStorage
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	for _, statement := range purgeClient {
-		if _, err := tx.Exec(ctx, statement, client); err != nil {
-			return errors.Join(errTriageStorage, err)
+	if _, err = tx.Exec(ctx, `LOCK TABLE portal_invitations, portal_memberships IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+		return false, errors.Join(errTriageStorage, err)
+	}
+	var due string
+	if err = tx.QueryRow(ctx, retentionDue, cutoff, client).Scan(&due); errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	} else if err != nil {
+		return false, errors.Join(errTriageStorage, err)
+	}
+	var deleted int64
+	for _, statement := range purgeRecords {
+		tag, err := tx.Exec(ctx, statement, client)
+		if err != nil {
+			return false, errors.Join(errTriageStorage, err)
 		}
+		deleted += tag.RowsAffected()
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return errTriageStorage
+	// Read which histories may go before deleting the memberships records
+	// their deletion as new events.
+	rows, err := tx.Query(ctx, retentionHistory, client, cutoff)
+	if err != nil {
+		return false, errors.Join(errTriageStorage, err)
 	}
-	return nil
+	var issuers, subjects []string
+	var issuer, subject string
+	if _, err = pgx.ForEachRow(rows, []any{&issuer, &subject}, func() error {
+		issuers, subjects = append(issuers, issuer), append(subjects, subject)
+		return nil
+	}); err != nil {
+		return false, errors.Join(errTriageStorage, err)
+	}
+	for _, step := range []struct {
+		statement string
+		args      []any
+	}{
+		{`DELETE FROM portal_memberships WHERE client_id=$1`, []any{client}},
+		{`DELETE FROM portal_membership_transitions WHERE (issuer,subject) IN (SELECT * FROM unnest($1::text[],$2::text[]))`, []any{issuers, subjects}},
+	} {
+		tag, err := tx.Exec(ctx, step.statement, step.args...)
+		if err != nil {
+			return false, errors.Join(errTriageStorage, err)
+		}
+		deleted += tag.RowsAffected()
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return false, errTriageStorage
+	}
+	return deleted > 0, nil
 }
