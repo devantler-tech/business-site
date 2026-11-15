@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -66,9 +67,21 @@ func TestCheckoutRequestShape(t *testing.T) {
 	if err != nil || s.ID != "cs_test_1" {
 		t.Fatal("checkout failed", err)
 	}
-	if headers.Get("Authorization") != "Bearer rk_test_fixture" || headers.Get("Idempotency-Key") != "portal-X-checkout-1" || headers.Get("Stripe-Version") != APIVersion {
+	first := headers.Get("Idempotency-Key")
+	if headers.Get("Authorization") != "Bearer rk_test_fixture" || !regexp.MustCompile(`^portal-X-checkout-1-[0-9a-f]{16}$`).MatchString(first) || headers.Get("Stripe-Version") != APIVersion {
 		t.Fatal("key, idempotency key or API version not sent")
 	}
+	// The same request reuses its key; a changed one never does.
+	same := Checkout{Mode: "subscription", ClientReference: "ORDER", SuccessURL: "https://portal.invalid/ok", CancelURL: "https://portal.invalid/back", Locale: "da", BillingCycleAnchor: anchor, Metadata: map[string]string{"portal_order": "ORDER"},
+		Lines: []Line{{Name: "Hosting", AmountMinor: 12500, Monthly: true}}}
+	if _, err := c.CreateCheckout(t.Context(), "portal-X-checkout-1", same); err != nil || headers.Get("Idempotency-Key") != first {
+		t.Fatal("an identical retry changed its idempotency key", err)
+	}
+	same.Locale = "en"
+	if _, err := c.CreateCheckout(t.Context(), "portal-X-checkout-1", same); err != nil || headers.Get("Idempotency-Key") == first || !strings.HasPrefix(headers.Get("Idempotency-Key"), "portal-X-checkout-1-") {
+		t.Fatal("a changed retry reused the idempotency key", err)
+	}
+	same.Locale = "da"
 	for field, want := range map[string]string{
 		"mode": "subscription", "line_items[0][price_data][unit_amount]": "12500", "line_items[0][price_data][recurring][interval]": "month",
 		"line_items[0][price_data][currency]": "dkk", "subscription_data[billing_cycle_anchor]": "1796083200",

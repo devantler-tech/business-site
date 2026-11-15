@@ -23,9 +23,11 @@ const webhookSecret = "whsec_fixture"
 // fakeStripe answers Checkout Session creation like Stripe, honouring the
 // idempotency key, and records every request for inspection.
 type fakeStripe struct {
-	mu       sync.Mutex
-	requests []url.Values
-	keys     map[string]string
+	mu        sync.Mutex
+	requests  []url.Values
+	keys      map[string]string
+	bodies    map[string]string // a key's request, so a changed reuse is refused like Stripe does
+	loseReply bool              // create the session, then answer 500 as if the reply was lost
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -36,11 +38,22 @@ func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	id, ok := f.keys[r.Header.Get("Idempotency-Key")]
+	key := r.Header.Get("Idempotency-Key")
+	id, ok := f.keys[key]
+	if ok && f.bodies[key] != r.PostForm.Encode() {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"type":"idempotency_error"}}`))
+		return
+	}
 	if !ok {
 		f.requests = append(f.requests, r.PostForm)
 		id = fmt.Sprintf("cs_test_%d", len(f.requests))
-		f.keys[r.Header.Get("Idempotency-Key")] = id
+		f.keys[key], f.bodies[key] = id, r.PostForm.Encode()
+	}
+	if f.loseReply {
+		f.loseReply = false
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "url": "https://checkout.stripe.invalid/c/pay/" + id, "mode": r.PostForm.Get("mode"), "status": "open", "expires_at": time.Now().Add(24 * time.Hour).Unix()})
 }
@@ -72,7 +85,7 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','',1)`); err != nil {
 		t.Fatal(err)
 	}
-	fake := &fakeStripe{keys: map[string]string{}}
+	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
 	api, err := stripe.New(server.URL, "rk_test_fixture", server.Client().Transport)
@@ -312,5 +325,29 @@ func TestPrivateCardRetriesKeepEverySession(t *testing.T) {
 	}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", restart, b.site.URL); status != 403 {
 		t.Fatalf("closed card gate admitted a card order: %d", status)
+	}
+}
+
+// TestPrivateCardRecoversALostCheckoutReply covers a session Stripe created
+// whose reply was lost: the client restarts in another language, and the
+// changed request gets its own session instead of Stripe's idempotency refusal.
+func TestPrivateCardRecoversALostCheckoutReply(t *testing.T) {
+	b, fake := cardOrderFixture(t, 299500, 0)
+	fake.mu.Lock()
+	fake.loseReply = true
+	fake.mu.Unlock()
+	placeCardOrder(t, b)
+	body := receipt(t, b, "da")
+	csrf := csrfInput.FindStringSubmatch(body)
+	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
+	if !strings.Contains(body, "Start kortbetaling") || len(csrf) != 2 || len(acceptance) != 2 {
+		t.Fatal("a lost Checkout reply did not offer a new attempt")
+	}
+	restart := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"da"}, "acceptance": {acceptance[1]}, "collection": {"card"}}
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", restart, b.site.URL); status != 303 || len(fake.sessions()) != 2 {
+		t.Fatalf("the changed retry did not create its own session: %d", len(fake.sessions()))
+	}
+	if body := receipt(t, b, "da"); !strings.Contains(body, `href="https://checkout.stripe.invalid/c/pay/cs_test_2"`) {
+		t.Fatal("the recovered session is not offered")
 	}
 }

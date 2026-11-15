@@ -149,21 +149,27 @@ func (c Checkout) form() (url.Values, error) {
 	return f, nil
 }
 
-// CreateCheckout creates a Checkout Session. The key makes a retry within
-// Stripe's 24-hour idempotency window return the original session.
+// CreateCheckout creates a Checkout Session. Its Idempotency-Key is the given
+// key bound to a digest of the exact request. A retry with the same parameters
+// returns the original session within Stripe's 24-hour window. A retry whose
+// parameters changed (another language, email or anchor) gets a fresh key
+// instead of Stripe's refusal to reuse one. A session whose reply was lost was
+// never shown to anyone, so it can only expire.
 func (c *Client) CreateCheckout(ctx context.Context, key string, checkout Checkout) (Session, error) {
 	form, err := checkout.form()
 	if err != nil {
 		return Session{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/checkout/sessions", strings.NewReader(form.Encode()))
+	body := form.Encode()
+	digest := sha256.Sum256([]byte(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/checkout/sessions", strings.NewReader(body))
 	if err != nil {
 		return Session{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Stripe-Version", APIVersion)
-	req.Header.Set("Idempotency-Key", key)
+	req.Header.Set("Idempotency-Key", key+"-"+hex.EncodeToString(digest[:8]))
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return Session{}, errors.New("stripe: request failed")

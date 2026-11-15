@@ -91,7 +91,10 @@ card order, so nothing is booked twice.
   (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. Only
   Stripe closes a session: when it reports the session expired or its asynchronous payment
   failed, the receipt offers **Start card payment**, which creates a new attempt with `Idempotency-Key`
-  `portal-<order>-<purpose>-checkout-<n>`. An open, processing or paid session is never
+  `portal-<order>-<purpose>-checkout-<n>` plus a digest of the exact request. An identical retry
+  returns the same session, and a retry with changed details (another language, email or anchor)
+  gets a new one instead of Stripe's refusal. A session whose reply was lost was never shown, so it
+  only expires. An open, processing or paid session is never
   replaced, not even past its expiry time, because Stripe never expires a completed session and
   its completion may still be on its way. A closed session stays closed when an unpaid completion
   arrives after its failure, and a replaced one still resolves to its own order.
