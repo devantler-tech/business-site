@@ -180,6 +180,12 @@ Stripe's confirmed end of a withdrawn order's card subscription, which takes pre
 end scheduled earlier. Grant SELECT/INSERT only on both, like the other fixed billing tables:
 neither is changed or deleted.
 
+v22 records the client's request, when ordering, to start work within the withdrawal period
+(#21): `portal_orders` gains `early_start_at`, dated with the order. It also adds
+`portal_order_completions`, the operator's record that early-started work is completely finished,
+and `portal_withdrawal_settlements`, the amount owed for the work done before a withdrawal. Grant
+SELECT/INSERT only on both; the order's new column is written only when the order is inserted.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

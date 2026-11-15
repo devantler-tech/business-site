@@ -91,7 +91,7 @@ func TestInvoiceBillingClientWithdraws(t *testing.T) {
 		t.Fatal("the receipt does not show the withdrawal")
 	}
 	triageSignIn(t, b, "withdrawal-operator", "operator-workspace", "operator")
-	if _, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, ""); !strings.Contains(body, "The client withdrew from the agreement on") || !strings.Contains(body, "Refund what was paid within 14 days") {
+	if _, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, ""); !strings.Contains(body, "The client withdrew from the agreement on") || !strings.Contains(body, "Refund what was paid without undue delay and within 14 days") {
 		t.Fatal("the operator page does not show the withdrawal")
 	}
 }

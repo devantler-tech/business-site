@@ -32,6 +32,9 @@ type projectOrder struct {
 	End                        *orderEnd
 	Subscribed                 bool       // a card order's monthly subscription exists
 	Withdrawn                  *time.Time // when the client withdrew from the order
+	EarlyStart                 *time.Time // the client's request to start within the withdrawal period
+	Completed                  *time.Time // the operator's record that the work is completely finished
+	Owed, Paid                 *int64     // a withdrawal's amount owed for work done, and what was paid
 	WithdrawalEnd              *time.Time // when Stripe ends a withdrawn order's subscription
 }
 
@@ -91,7 +94,7 @@ func firstOfNextMonth(t time.Time) time.Time {
 
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
-func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string) (projectOrder, error) {
+func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart bool) (projectOrder, error) {
 	if !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
 	}
@@ -113,7 +116,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	existing, err := readOrderTx(ctx, tx, id, client)
 	switch {
 	case err == nil:
-		if existing.Acceptance != acceptance || existing.Collection != collection {
+		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart {
 			return projectOrder{}, errProposalConflict
 		}
 		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
@@ -125,8 +128,14 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	}
 	// One timestamp dates the order and its first billed month.
 	placed := time.Now()
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-		secret(), id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed); err != nil {
+	// The client's express request to start within the withdrawal period is
+	// dated with the order itself.
+	var early *time.Time
+	if earlyStart {
+		early = &placed
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		secret(), id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed, early); err != nil {
 		return projectOrder{}, errTriageStorage
 	}
 	saved, err := readOrderTx(ctx, tx, id, client)
@@ -140,8 +149,8 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 // request-locked transaction. It grants no authority itself.
 func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrder, error) {
 	var o projectOrder
-	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
-		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed)
+	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,o.early_start_at,(SELECT x.completed_at FROM portal_order_completions x WHERE x.order_id=o.id) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
+		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.EarlyStart, &o.Completed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return projectOrder{}, err
 	}
@@ -222,22 +231,28 @@ func readOrderFor(ctx context.Context, tx pgx.Tx, id, client string, commit func
 }
 
 // parseOrderForm admits only the acceptance, the chosen path and form plumbing.
-func parseOrderForm(r *http.Request) (string, string, bool) {
+func parseOrderForm(r *http.Request) (string, string, bool, bool) {
 	if err := r.ParseForm(); err != nil {
-		return "", "", false
+		return "", "", false, false
 	}
 	for name, values := range r.PostForm {
 		if len(values) != 1 {
-			return "", "", false
+			return "", "", false, false
 		}
 		switch name {
 		case "csrf_token", "lang", "acceptance", "collection":
+		case "early_start":
+			// The optional request, never ticked in advance, to start within the
+			// withdrawal period.
+			if values[0] != "yes" {
+				return "", "", false, false
+			}
 		default:
-			return "", "", false
+			return "", "", false, false
 		}
 	}
 	acceptance, collection := r.PostForm.Get("acceptance"), r.PostForm.Get("collection")
-	return acceptance, collection, opaqueRequestID.MatchString(acceptance) && collection != ""
+	return acceptance, collection, r.PostForm.Has("early_start"), opaqueRequestID.MatchString(acceptance) && collection != ""
 }
 
 // submitOrder places the client's order and returns to the receipt.
@@ -246,12 +261,12 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	acceptance, collection, valid := parseOrderForm(r)
+	acceptance, collection, earlyStart, valid := parseOrderForm(r)
 	if !valid {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection)
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart)
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
 		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin+b.base(), language(r)); checkoutErr != nil {

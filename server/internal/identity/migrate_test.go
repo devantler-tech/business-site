@@ -68,9 +68,21 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindEarlyStartFixture removes only the disposable v22 early start, completion
+// and settlement records.
+func rewindEarlyStartFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_withdrawal_settlements,portal_order_completions;
+ ALTER TABLE portal_orders DROP COLUMN early_start_at;
+ DELETE FROM portal_schema_version WHERE version=22`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-early-start schema", err)
+	}
+}
+
 // rewindWithdrawalsFixture removes only the disposable v21 withdrawal table.
 func rewindWithdrawalsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindEarlyStartFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_withdrawal_cancellations,portal_order_withdrawals;
  DELETE FROM portal_schema_version WHERE version=21`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-withdrawal schema", err)

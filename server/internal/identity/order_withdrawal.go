@@ -76,17 +76,35 @@ func (o projectOrder) WithdrawUntil() string {
 	return withdrawalDeadline(o.Placed).AddDate(0, 0, -1).Format("2006-01-02")
 }
 
+// WorkStartsFrom is the first day work may start without the client's
+// request to start early: the day after the withdrawal period, as YYYY-MM-DD.
+func (o projectOrder) WorkStartsFrom() string {
+	return withdrawalDeadline(o.Placed).Format("2006-01-02")
+}
+
+// RightEnded reports that early-started work is completely finished, which
+// ends the right of withdrawal (section 18(2)(2)).
+func (o projectOrder) RightEnded() bool { return o.EarlyStart != nil && o.Completed != nil }
+
 // Withdrawable reports whether the client may still withdraw.
 func (o projectOrder) Withdrawable() bool {
-	return o.Withdrawn == nil && time.Now().Before(withdrawalDeadline(o.Placed))
+	return o.Withdrawn == nil && !o.RightEnded() && time.Now().Before(withdrawalDeadline(o.Placed))
 }
+
+// OwedDKK is a withdrawal's recorded amount owed for the work done.
+func (o projectOrder) OwedDKK() int64 { return *o.Owed / 100 }
+
+// Refunds reports that what was paid exceeds the amount owed for the work done.
+func (o projectOrder) Refunds() bool { return o.Owed != nil && o.Paid != nil && *o.Paid > *o.Owed }
 
 // readWithdrawal adds the order's withdrawal, if any, to an order read in tx.
 func readWithdrawal(ctx context.Context, tx pgx.Tx, o *projectOrder) error {
 	var at time.Time
 	err := tx.QueryRow(ctx, `SELECT w.withdrawn_at,(SELECT max(x.cancel_at) FROM portal_withdrawal_cancellations x WHERE x.order_id=w.order_id),
- EXISTS (SELECT 1 FROM portal_card_checkouts c WHERE c.order_id=w.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL)
- FROM portal_order_withdrawals w WHERE w.order_id=$1`, o.ID).Scan(&at, &o.WithdrawalEnd, &o.Subscribed)
+ EXISTS (SELECT 1 FROM portal_card_checkouts c WHERE c.order_id=w.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL),
+ (SELECT s.owed_minor FROM portal_withdrawal_settlements s WHERE s.order_id=w.order_id),
+ (SELECT sum(c.gross_minor)::bigint FROM portal_order_charges c WHERE c.order_id=w.order_id AND c.state='settled')
+ FROM portal_order_withdrawals w WHERE w.order_id=$1`, o.ID).Scan(&at, &o.WithdrawalEnd, &o.Subscribed, &o.Owed, &o.Paid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -101,7 +119,8 @@ func readWithdrawal(ctx context.Context, tx pgx.Tx, o *projectOrder) error {
 // stops all further billing: no new charge or Checkout, monthly billing ends
 // before its first month, and a card subscription ends before it would first
 // renew, or at once if a month has been charged. What was paid is refunded by
-// the operator, by the same payment method, within 14 days (section 22).
+// the operator, by the same payment method, within 14 days (section 22), less
+// the work done if the client asked for an early start (section 21).
 func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -110,7 +129,7 @@ func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID
 		return err
 	}
 	defer rollbackProposalWrite(ctx, tx)
-	if o.Withdrawn == nil && !time.Now().Before(withdrawalDeadline(o.Placed)) {
+	if o.Withdrawn == nil && (o.RightEnded() || !time.Now().Before(withdrawalDeadline(o.Placed))) {
 		return errProposalConflict
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) VALUES($1,$2,$3) ON CONFLICT(order_id) DO NOTHING`, o.ID, p.issuer, p.subject); err != nil {

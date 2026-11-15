@@ -266,6 +266,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-approvals", b.approveWork)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-revocations", b.revokeWork)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/order-end", b.endOrder)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/order-completion", b.completeOrder)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/withdrawal-settlement", b.settleWithdrawal)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)

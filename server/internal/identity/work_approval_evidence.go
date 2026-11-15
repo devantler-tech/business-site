@@ -90,12 +90,19 @@ func lockWorkMembers(ctx context.Context, tx pgx.Tx, wanted []workMember) ([]wor
 // exactly the agreed amount, never refunded or disputed, is not funding.
 func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance string) (workOrder, workFunding, error) {
 	var o workOrder
-	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom)
+	var placed time.Time
+	var early *time.Time
+	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &placed, &early)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return workOrder{}, workFunding{}, errProposalConflict
 	}
 	if err != nil {
 		return workOrder{}, workFunding{}, errTriageStorage
+	}
+	if !earlyStartReady(placed, early) {
+		// Without the client's request to start early, no work starts within
+		// the withdrawal period.
+		return workOrder{}, workFunding{}, errProposalConflict
 	}
 	f := workFunding{Period: "acceptance"}
 	want := o.OneTimeMinor

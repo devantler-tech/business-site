@@ -3,7 +3,6 @@ package identity
 import (
 	"html"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,14 +15,11 @@ const orderEndPath = "/portal/operator/requests/" + proposalRequestID + "/order-
 // form: its CSRF token and order.
 func operatorEndForm(t *testing.T, b *browserFixture, subject string) (url.Values, string) {
 	t.Helper()
-	triageSignIn(t, b, subject, "operator-workspace", "operator")
-	status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
-	csrf := csrfInput.FindStringSubmatch(body)
-	order := regexp.MustCompile(`name="order" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
-	if status != 200 || len(csrf) != 2 || len(order) != 2 || !strings.Contains(body, "End monthly billing") {
-		t.Fatalf("operator page offers no end form: %d", status)
+	_, body, f := operatorOrderForm(t, b, subject)
+	if !strings.Contains(body, "End monthly billing") {
+		t.Fatal("operator page offers no end form")
 	}
-	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "order": {order[1]}}, body
+	return f, body
 }
 
 // endForm returns the form with a last billed month.

@@ -162,7 +162,7 @@ DELETE FROM portal_schema_version WHERE version=15`); err != nil {
 	if err := migrator.QueryRow(ctx, `SELECT string_agg(version::text||':'||checksum,',' ORDER BY version) FROM portal_schema_version WHERE version<=14`).Scan(&after); err != nil || before != after {
 		t.Fatal("request-kind migration changed historical checksums", err)
 	}
-	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_schema_version`).Scan(&versions); err != nil || versions != 21 {
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_schema_version`).Scan(&versions); err != nil || versions != 22 {
 		t.Fatal("new request-kind migration is missing or not idempotent", err)
 	}
 	if err := runtime.QueryRow(ctx, `SELECT count(*) FROM portal_requests WHERE client_id='legacy-client' AND title='Existing project' AND brief='Existing brief' AND product IN ('website','app','service')`).Scan(&legacy); err != nil || legacy != 3 {

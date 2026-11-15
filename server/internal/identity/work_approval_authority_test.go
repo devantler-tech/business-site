@@ -411,9 +411,10 @@ func TestWorkApprovalWaitsForAConcurrentReversal(t *testing.T) {
 }
 
 // A settled charge that is not exactly the agreed amount, a charge that is not
-// settled, or one of a withdrawn order is not funding.
+// settled, or one of a withdrawn order is not funding, and no work starts within
+// the withdrawal period without the client's request to start early.
 func TestWorkApprovalIneligibleFundingDenied(t *testing.T) {
-	for _, change := range []string{"unsettled", "refunded", "disputed", "amount", "withdrawn"} {
+	for _, change := range []string{"unsettled", "refunded", "disputed", "amount", "withdrawn", "no-early-start"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
 			changeFixtureFunding(t, change)
@@ -539,5 +540,15 @@ func TestWorkApprovalFinalSDKAndDatabaseDeadline(t *testing.T) {
 	}
 	if got, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); err != nil || valid || got.ID != d.ID {
 		t.Fatal("expired selection supplied authority or fallback", err)
+	}
+}
+
+// Without the client's request to start early, work may be approved once the
+// withdrawal period has ended.
+func TestWorkApprovalAfterTheWithdrawalPeriod(t *testing.T) {
+	b, op := approvalFixture(t)
+	changeFixtureFunding(t, "period-passed")
+	if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID); err != nil {
+		t.Fatal("work after the withdrawal period was refused", err)
 	}
 }
