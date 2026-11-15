@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -61,17 +62,38 @@ var purgeRecords = []string{
 	`DELETE FROM portal_invitations WHERE client_id=$1`,
 }
 
+// clientTables hold a client's records by client_id; the order and email
+// tables hang off portal_orders.
+var clientTables = []string{"portal_memberships", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
+	"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers",
+	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current"}
+
 // retentionHistory lists the identities, among those with any membership
 // event under client $1, whose whole membership history may go: their last
-// event lies before the cutoff $2, they hold no membership of another client,
-// and no remaining work approval cites any of their events.
-const retentionHistory = `SELECT t.issuer,t.subject FROM portal_membership_transitions t
+// event lies before the cutoff $2; no other client their events name still
+// has records, so no other client loses the evidence that makes it due and
+// no other membership remains; no remaining work approval cites any of their
+// events; and no other identity's history continues from theirs.
+var retentionHistory = `SELECT t.issuer,t.subject FROM portal_membership_transitions t
  WHERE EXISTS (SELECT 1 FROM portal_membership_transitions a WHERE a.client_id=$1 AND a.issuer=t.issuer AND a.subject=t.subject)
  GROUP BY t.issuer,t.subject
  HAVING max(t.recorded_at) < $2
- AND NOT EXISTS (SELECT 1 FROM portal_memberships m WHERE m.issuer=t.issuer AND m.subject=t.subject AND m.client_id<>$1)
+ AND NOT EXISTS (SELECT 1 FROM portal_membership_transitions o WHERE o.issuer=t.issuer AND o.subject=t.subject AND o.client_id<>$1
+   AND (` + clientHasRecords("o.client_id") + `))
  AND NOT EXISTS (SELECT 1 FROM portal_work_approvals w JOIN portal_membership_transitions x ON x.incarnation IN (w.client_incarnation,w.operator_incarnation)
-   WHERE x.issuer=t.issuer AND x.subject=t.subject)`
+   WHERE x.issuer=t.issuer AND x.subject=t.subject)
+ AND NOT EXISTS (SELECT 1 FROM portal_membership_transitions r JOIN portal_membership_transitions p ON p.incarnation=r.previous_incarnation
+   WHERE p.issuer=t.issuer AND p.subject=t.subject AND (r.issuer<>t.issuer OR r.subject<>t.subject))`
+
+// clientHasRecords is a condition that the client named by column has a
+// record in any of clientTables.
+func clientHasRecords(column string) string {
+	conditions := make([]string, len(clientTables))
+	for i, table := range clientTables {
+		conditions[i] = "EXISTS (SELECT 1 FROM " + table + " r WHERE r.client_id=" + column + ")"
+	}
+	return strings.Join(conditions, " OR ")
+}
 
 // PurgeExpiredClients deletes the portal records of every client whose
 // memberships were all client memberships and all ended more than

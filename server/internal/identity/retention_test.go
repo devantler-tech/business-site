@@ -201,3 +201,51 @@ func purgeAged(t *testing.T, migrator *pgxpool.Pool) int {
 	}
 	return n
 }
+
+// TestRetentionKeepsEvidenceOtherClientsNeed purges two former clients that
+// share one member's history: purging the first keeps the history the second
+// needs to be found, and purging the second then deletes it.
+func TestRetentionKeepsEvidenceOtherClientsNeed(t *testing.T) {
+	_ = fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	formerClient(t, migrator, "chain-a")
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('chain-b','chain-b-contact')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`UPDATE portal_memberships SET client_id='chain-b' WHERE client_id='chain-a'`,
+		`DELETE FROM portal_memberships WHERE client_id='chain-b'`,
+	} {
+		if _, err := migrator.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := purgeAged(t, migrator); n != 2 || numinaContacts(t, migrator, "chain-a") != 0 || numinaContacts(t, migrator, "chain-b") != 0 {
+		t.Fatalf("both former clients were not purged: %d", n)
+	}
+	var history int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_membership_transitions WHERE client_id IN ('chain-a','chain-b')`).Scan(&history); err != nil || history != 0 {
+		t.Fatalf("the shared history was kept: %d %v", history, err)
+	}
+}
+
+// TestRetentionKeepsHistoryARenamedIdentityContinues purges a former client
+// whose member was renamed into another client's membership, and keeps the
+// history the renamed membership continues from.
+func TestRetentionKeepsHistoryARenamedIdentityContinues(t *testing.T) {
+	_ = fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	formerClient(t, migrator, "renamed-from")
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET subject='renamed-member',client_id='renamed-to',revoked=false WHERE client_id='renamed-from'`); err != nil {
+		t.Fatal(err)
+	}
+	if n := purgeAged(t, migrator); n != 1 || numinaContacts(t, migrator, "renamed-from") != 0 {
+		t.Fatalf("the former client was not purged: %d", n)
+	}
+	var history, members int
+	if err := migrator.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_membership_transitions WHERE client_id='renamed-from'),(SELECT count(*) FROM portal_memberships WHERE client_id='renamed-to' AND NOT revoked)`).Scan(&history, &members); err != nil || history == 0 || members != 1 {
+		t.Fatalf("history=%d members=%d %v", history, members, err)
+	}
+}

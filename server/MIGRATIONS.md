@@ -219,8 +219,9 @@ baseline and subsequent immutable events stay with the database across process
 restarts and deletion/re-enrollment. Do not prune them or reset incarnations as
 routine maintenance. The only pruning is the retention purge (README, *Retention purge job*):
 3 years after a client's last membership ended, it deletes the client's approvals, then the
-history of identities with no other membership whose last change is as old. History that a
-remaining approval cites stays, so no approval outlives the history that invalidates it.
+history of its identities whose last change is as old. History that names another client with
+records, that a remaining approval cites or that another history continues from stays, so no
+approval outlives the history that invalidates it.
 There is no application history cap; physical database/storage failures still
 refuse a transaction rather than claim unrecorded success.
 
