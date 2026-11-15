@@ -187,6 +187,10 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 		lang = "en"
 	}
 	back := portal + "/requests/" + requestID + "?lang=" + lang
+	addons, err := readOrderAddons(ctx, s.pool, o.ID)
+	if err != nil {
+		return err
+	}
 	name := invoiceLine(scope)
 	cfg := s.cards.Load()
 	for _, purpose := range cardPurposes(o.OneTimeMinor, o.MonthlyMinor) {
@@ -201,13 +205,13 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 			return err
 		}
 		checkout := stripe.Checkout{Mode: "payment", TaxRate: cfg.TaxRate, ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
-			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: launchLine(name, lang, o.Launch), AmountMinor: o.OneTimeMinor}}}
+			Metadata: map[string]string{"portal_order": o.ID}, Lines: checkoutLines(launchLine(name, lang, o.Launch), o.OneTimeMinor, periodAddons(addons, "acceptance"), lang, false)}
 		if purpose == "monthly" {
 			// Card only by Stripe's own rules: MobilePay has no recurring use.
 			// Nothing is charged before the anchor; it then charges each month.
 			checkout.Mode = "subscription"
 			checkout.BillingCycleAnchor = firstAnchor(o.MonthlyFrom, cfg.Now())
-			checkout.Lines = []stripe.Line{{Name: name, AmountMinor: o.MonthlyMinor, Monthly: true}}
+			checkout.Lines = checkoutLines(name, o.MonthlyMinor, periodAddons(addons, "monthly"), lang, true)
 		}
 		attempt++
 		// Each try has its own key: Stripe caches a failed reply, even a 500,
@@ -424,4 +428,18 @@ func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMe
 		return nil
 	}
 	return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, o.MonthlyMinor, invoice.Currency)
+}
+
+// checkoutLines are a Checkout's lines: the order's own price, then one line
+// per add-on, adding up to total.
+func checkoutLines(name string, total int64, addons []orderAddon, lang string, monthly bool) []stripe.Line {
+	var lines []stripe.Line
+	for _, a := range addons {
+		total -= a.TotalMinor()
+		lines = append(lines, stripe.Line{Name: addonLine(a, lang), AmountMinor: a.TotalMinor(), Monthly: monthly})
+	}
+	if total > 0 {
+		lines = append([]stripe.Line{{Name: name, AmountMinor: total, Monthly: monthly}}, lines...)
+	}
+	return lines
 }
