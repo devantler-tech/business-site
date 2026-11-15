@@ -13,12 +13,15 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 7, "resource count");
+  assert.equal(docs.length, 9, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
   const store = docs.find((d) => d?.kind === "SecretStore");
-  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
+  const secrets = docs.filter((d) => d?.kind === "ExternalSecret");
+  const secret = (name) => secrets.find((d) => d?.metadata?.name === name);
+  const [disclosure, numina, stripe] = ["business-site-disclosure", "business-site-numina", "business-site-stripe"].map(secret);
+  assert.equal(secrets.length, 3, "external secret count");
   const routes = docs.filter((d) => d?.kind === "HTTPRoute");
   for (const resource of [app, network, budget]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
@@ -33,7 +36,7 @@ export function validateTenantPackage(input) {
     maxUnavailable: 1,
     selector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
   });
-  for (const [resource, name] of [[store, "openbao"], [disclosure, "business-site-disclosure"]]) {
+  for (const [resource, name] of [[store, "openbao"], [disclosure, "business-site-disclosure"], [numina, "business-site-numina"], [stripe, "business-site-stripe"]]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
     keys(resource.metadata, ["name", "namespace"]);
     assert.equal(resource.apiVersion, "external-secrets.io/v1");
@@ -50,12 +53,16 @@ export function validateTenantPackage(input) {
       },
     },
   });
-  assert.deepEqual(disclosure.spec, {
+  // Each Secret reads named properties of one exact entry through the namespaced store.
+  const synchronized = (target, key, properties) => ({
     refreshInterval: "1h",
     secretStoreRef: { name: "openbao", kind: "SecretStore" },
-    target: { name: "business-site-disclosure", creationPolicy: "Owner" },
-    data: [{ secretKey: "company-disclosure", remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" } }],
+    target: { name: target, creationPolicy: "Owner" },
+    data: properties.map(([secretKey, property]) => ({ secretKey, remoteRef: { key, property } })),
   });
+  assert.deepEqual(disclosure.spec, synchronized("business-site-disclosure", "apps/business-site/public-disclosure", [["company-disclosure", "company-disclosure"]]));
+  assert.deepEqual(numina.spec, synchronized("business-site-numina", "apps/business-site/numina", [["api-key", "api-key"]]));
+  assert.deepEqual(stripe.spec, synchronized("business-site-stripe", "apps/business-site/stripe", [["api-key", "api-key"], ["webhook-secret", "webhook-secret"]]));
   // Each public name attaches to its own listener; nothing else may claim a host.
   const route = (name, listeners, hostnames) => ({
     apiVersion: "gateway.networking.k8s.io/v1",
@@ -101,7 +108,11 @@ export function validateTenantPackage(input) {
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
     ingress: [{ fromEntities: ["ingress"], toPorts: [{ ports: [{ port: "8080", protocol: "TCP" }] }] }],
-    egress: [{}],
+    // Exact HTTPS names for the two billing APIs; nothing else leaves the pod.
+    egress: [{
+      toFQDNs: [{ matchName: "api.numina.app" }, { matchName: "api.stripe.com" }],
+      toPorts: [{ ports: [{ port: "443", protocol: "TCP" }] }],
+    }],
   });
   return spec;
 }

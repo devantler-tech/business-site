@@ -23,9 +23,13 @@ The package uses two replicas (the validator permits two or three), a
 half-core/256 MiB limit and the real `/healthz` probe, plus an application-owned
 disruption budget allowing one unavailable Pod.
 These are provisional bounds, not load, availability, actual drain or recovery evidence.
-Only gateway ingress to the application port is opened. Cilium's documented
-`egress: [{}]` enables egress default deny; this package adds no outbound allow
-rule. Other platform policies remain additive, so this is not an overriding deny
+Only gateway ingress to the application port is opened. The only outbound rule
+allows HTTPS (TCP 443) to exactly `api.numina.app` and `api.stripe.com`, for
+the portal's default-off billing (below); its presence keeps every other egress
+default-denied. Cilium matches these names only after its DNS proxy has seen the
+lookup, which the platform's `business-site-dns-visibility` policy provides
+(devantler-tech/platform#6337); a tenant policy may not name kube-system itself.
+Other platform policies remain additive, so this is not an overriding deny
 of every platform-granted connection. No database, migration, broker or private
 activation setting is configured. The checker accepts only the committed,
 independently verified baseline image; a same-repository digest alone is insufficient.
@@ -40,9 +44,10 @@ ClusterSecretStore, bulk import, private-value writer or inline value is admitte
 
 These declarations neither provision the Platform authentication role nor create
 the private value. Before registration, Platform must separately bind that role
-to this exact service account and namespace, with read permission limited to the
-disclosure entry. The owner must materialize the confirmed disclosure privately
-through the supported non-printing store mechanism. A missing or unsafe required
+to this exact service account and namespace, with read permission limited to
+exact entries, including the disclosure entry and the two billing entries below.
+The owner must materialize the confirmed disclosure privately through the
+supported non-printing store mechanism. A missing or unsafe required
 file must prevent serving; a fictional placeholder is not a production input.
 The runtime snapshots the file at startup, so disclosure rotation requires a
 reviewed restart. Controller synchronization and real projection/rotation behavior
@@ -79,7 +84,8 @@ platform wires it with the portal database and broker egress.
 
 Lines are `KEY=value`, separated by LF. Blank lines and lines starting with `#`
 are ignored; a file with no keys keeps the portal as it is today: no portal database or
-broker connection and sign-in off. The accepted keys keep their existing meaning:
+broker connection and sign-in off. The accepted keys keep their existing meaning
+(the billing keys are under [Portal billing inputs](#portal-billing-inputs)):
 
 | Key                                    | Value                                                   |
 |----------------------------------------|---------------------------------------------------------|
@@ -107,6 +113,67 @@ Run the schema job before serving, with migration login `portal_migrator`
 [MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job). With sign-in on,
 invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
+
+## Portal billing inputs
+
+The portal invoices through Numina and takes cards through Stripe
+([BILLING.md](../server/BILLING.md)). Both paths stay off behind the
+false-default `portal-invoice-billing` and `portal-card-billing` flags, which
+have no environment mapping. Two ExternalSecrets read their keys through the
+same namespaced `openbao` store:
+
+| ExternalSecret and Secret | OpenBao KV-v2 entry         | Keys                        |
+|---------------------------|-----------------------------|-----------------------------|
+| `business-site-numina`    | `apps/business-site/numina` | `api-key`                   |
+| `business-site-stripe`    | `apps/business-site/stripe` | `api-key`, `webhook-secret` |
+
+The maintainer stores both values; nothing here creates them. The platform's
+`business-site` role reads exactly these two entries, with no metadata, list or
+write access (devantler-tech/platform#6337). An ExternalSecret that cannot sync
+keeps the tenant's Flux reconciliation from becoming healthy. Adopt a release
+containing these files only after the role change is deployed and both entries
+exist.
+
+The WebApp does not project these Secrets yet. The platform's WebApp admits one
+Secret projection and mounts it with `optional: false`. It refuses a second
+projected Secret, and a missing projected key keeps every new Pod from
+starting, including the public pages. When the one projected Secret also
+carries these keys, add these items to it:
+
+| Secret key              | File under `/run/webapp-inputs/` |
+|-------------------------|----------------------------------|
+| Numina `api-key`        | `numina-api-key`                 |
+| Stripe `api-key`        | `stripe-api-key`                 |
+| Stripe `webhook-secret` | `stripe-webhook-secret`          |
+
+Each file uses the disclosure projection's confinement: a nonempty regular
+file, root- or process-owned, mode 0440 with the application's primary group,
+at most 16 KiB. One trailing LF or CRLF is removed. The runtime reads a file
+only when the portal settings name it, so until then nothing reads these keys.
+
+To configure a path, add its lines to the portal settings file. The runtime
+refuses billing lines unless the five dependency keys above are present:
+
+```text
+PORTAL_NUMINA_TOKEN_FILE=/run/webapp-inputs/numina-api-key
+PORTAL_STRIPE_KEY_FILE=/run/webapp-inputs/stripe-api-key
+PORTAL_STRIPE_WEBHOOK_SECRET_FILE=/run/webapp-inputs/stripe-webhook-secret
+```
+
+The Numina line alone starts the invoice sync, which invoices nothing while its
+flag is off. The two Stripe lines come together or not at all. Omit the
+optional settings to keep their defaults:
+
+| Key                           | Default                  |
+|-------------------------------|--------------------------|
+| `PORTAL_NUMINA_API_URL`       | `https://api.numina.app` |
+| `PORTAL_NUMINA_SALES_ACCOUNT` | `1000`                   |
+| `PORTAL_NUMINA_VAT_CODE`      | `U25`                    |
+| `PORTAL_STRIPE_API_URL`       | `https://api.stripe.com` |
+
+The Numina settings other than the key file are refused without it. Another API
+origin also needs its own egress rule. The flags still decide whether anything
+is invoiced or charged.
 
 ## Offline publication receipt admission
 

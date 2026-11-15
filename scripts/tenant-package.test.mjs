@@ -24,16 +24,35 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
-test("the rendered network policy explicitly enables egress default deny", () => {
+test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
   const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
-  // Cilium's documented default-deny rule is one empty rule, not an empty list.
-  assert.deepEqual(network.spec.egress, [{}]);
+  // One named-destination rule keeps egress default deny for every other peer.
+  assert.deepEqual(network.spec.egress, [{
+    toFQDNs: [{ matchName: "api.numina.app" }, { matchName: "api.stripe.com" }],
+    toPorts: [{ ports: [{ port: "443", protocol: "TCP" }] }],
+  }]);
+  assert.equal(network.spec.enableDefaultDeny, undefined);
+});
+
+test("the billing keys synchronize through the same namespaced store without being projected", () => {
+  const docs = yaml.loadAll(render());
+  const store = docs.find((d) => d?.kind === "SecretStore");
+  const app = docs.find((d) => d?.kind === "WebApp");
+  const secret = (name) => docs.find((d) => d?.kind === "ExternalSecret" && d.metadata.name === name);
+  assert.deepEqual(secret("business-site-numina").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
+  assert.deepEqual(secret("business-site-stripe").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
+  assert.deepEqual(secret("business-site-numina").spec.data.map((d) => d.secretKey), ["api-key"]);
+  assert.deepEqual(secret("business-site-stripe").spec.data.map((d) => d.secretKey), ["api-key", "webhook-secret"]);
+  // The platform WebApp mounts one Secret, never optionally, so a missing billing
+  // entry must not be able to stop the public pages from starting.
+  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-disclosure"]);
+  assert.ok(!app.spec.args.some((arg) => arg.includes("portal-settings")));
 });
 
 test("the rendered package supplies the required disclosure through its own namespaced store", () => {
   const docs = yaml.loadAll(render());
   const store = docs.find((d) => d?.kind === "SecretStore");
-  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
+  const disclosure = docs.find((d) => d?.kind === "ExternalSecret" && d.metadata.name === "business-site-disclosure");
   const app = docs.find((d) => d?.kind === "WebApp");
   assert.ok(store, "the required file needs an application-owned store declaration");
   assert.ok(disclosure, "the required file needs an explicit synchronization declaration");
@@ -161,13 +180,42 @@ for (const [name, mutate] of [
   ["a route to another backend", (d) => { d[5].spec.rules[0].backendRefs[0].name = "other"; }],
   ["a route with a request filter", (d) => { d[6].spec.rules[0].filters = [{ type: "RequestRedirect", requestRedirect: { hostname: "evil.example" } }]; }],
   ["a route in another namespace", (d) => { d[5].metadata.namespace = "foreign"; }],
+  ["a missing Numina synchronization", (d) => { d.splice(7, 1); }],
+  ["a missing Stripe synchronization", (d) => { d.splice(8, 1); }],
+  ["a duplicate billing synchronization", (d) => { d[8] = structuredClone(d[7]); }],
+  ["a Numina key from another entry", (d) => { d[7].spec.data[0].remoteRef.key = "apps/business-site/public-disclosure"; }],
+  ["a Numina key from another tenant", (d) => { d[7].spec.data[0].remoteRef.key = "apps/other/numina"; }],
+  ["a different Numina property", (d) => { d[7].spec.data[0].remoteRef.property = "token"; }],
+  ["a Numina synchronization through the shared cluster store", (d) => { d[7].spec.secretStoreRef.kind = "ClusterSecretStore"; }],
+  ["a Numina Secret overwriting the disclosure", (d) => { d[7].spec.target.name = "business-site-disclosure"; }],
+  ["a merged Numina Secret", (d) => { d[7].spec.target.creationPolicy = "Merge"; }],
+  ["an inline Numina value", (d) => { d[7].spec.target.template = { data: { "api-key": "fictional private value" } }; }],
+  ["a bulk Stripe import", (d) => { d[8].spec.dataFrom = [{ extract: { key: "apps/business-site/stripe" } }]; }],
+  ["an extra Stripe property", (d) => { d[8].spec.data.push({ secretKey: "publishable-key", remoteRef: { key: "apps/business-site/stripe", property: "publishable-key" } }); }],
+  ["a missing Stripe webhook secret", (d) => { d[8].spec.data.pop(); }],
+  ["a Stripe key from the Numina entry", (d) => { d[8].spec.data[0].remoteRef.key = "apps/business-site/numina"; }],
+  ["a billing key projected into the WebApp", (d) => { d[0].spec.secretProjections = [{ secretName: "business-site-stripe", items: [{ key: "api-key", path: "stripe-api-key" }] }]; }],
+  ["a third billing API", (d) => { d[1].spec.egress[0].toFQDNs.push({ matchName: "api.example.invalid" }); }],
+  ["a billing API wildcard", (d) => { d[1].spec.egress[0].toFQDNs[1] = { matchPattern: "*.stripe.com" }; }],
+  ["a catch-all name pattern", (d) => { d[1].spec.egress[0].toFQDNs = [{ matchPattern: "*" }]; }],
+  ["plain-HTTP billing egress", (d) => { d[1].spec.egress[0].toPorts[0].ports[0].port = "80"; }],
+  ["an extra billing port", (d) => { d[1].spec.egress[0].toPorts[0].ports.push({ port: "8443", protocol: "TCP" }); }],
+  ["port-only billing egress", (d) => { delete d[1].spec.egress[0].toFQDNs; }],
+  ["unrestricted billing ports", (d) => { delete d[1].spec.egress[0].toPorts; }],
+  ["a second egress rule", (d) => { d[1].spec.egress.push(structuredClone(d[1].spec.egress[0])); }],
+  ["the previous egress-free policy", (d) => { d[1].spec.egress = [{}]; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
     // Each target is selected by kind, independent of Kustomize's sort order.
-    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore", "ExternalSecret"].map((kind) => rendered.find((d) => d.kind === kind));
+    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore"].map((kind) => rendered.find((d) => d.kind === kind));
+    const named = (kind, name) => rendered.find((d) => d.kind === kind && d.metadata.name === name);
+    // Index 4 is the disclosure synchronization, selected by name.
+    docs.push(named("ExternalSecret", "business-site-disclosure"));
     // The two routes follow at indexes 5 (portal) and 6 (public), selected by name.
-    for (const name of ["business-site-portal", "business-site-public"]) docs.push(rendered.find((d) => d.kind === "HTTPRoute" && d.metadata.name === name));
+    for (const name of ["business-site-portal", "business-site-public"]) docs.push(named("HTTPRoute", name));
+    // The billing synchronizations follow at indexes 7 (Numina) and 8 (Stripe).
+    for (const name of ["business-site-numina", "business-site-stripe"]) docs.push(named("ExternalSecret", name));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
