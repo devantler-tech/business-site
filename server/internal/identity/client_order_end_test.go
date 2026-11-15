@@ -12,18 +12,29 @@ import (
 
 const clientEndPath = "/portal/requests/" + proposalRequestID + "/order-end"
 
-// clientEndForm reads the client's own end form from the receipt: its CSRF
-// token and order, under a button that names the action and the last month.
-func clientEndForm(t *testing.T, b *browserFixture, lang string) url.Values {
+// receiptOrderForm reads the receipt in lang with the CSRF token and order
+// that the client's own order forms post.
+func receiptOrderForm(t *testing.T, b *browserFixture, lang string) (string, url.Values) {
 	t.Helper()
 	status, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang="+lang, nil, "")
 	csrf := csrfInput.FindStringSubmatch(body)
 	order := regexp.MustCompile(`name="order" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
-	label := map[string]string{"da": "Opsig månedlig betaling", "en": "End monthly billing"}[lang]
-	if status != 200 || len(csrf) != 2 || len(order) != 2 || !strings.Contains(body, ">"+label+"</button>") || !strings.Contains(body, " "+currentMonth(time.Now()).Format("2006-01")+",") {
-		t.Fatalf("receipt offers the client no end form: %d", status)
+	if status != 200 || len(csrf) != 2 || len(order) != 2 {
+		t.Fatalf("receipt has no client order form: %d", status)
 	}
-	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "order": {order[1]}}
+	return body, url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "order": {order[1]}}
+}
+
+// clientEndForm reads the client's own end form from the receipt, under a
+// button that names the action and the last month.
+func clientEndForm(t *testing.T, b *browserFixture, lang string) url.Values {
+	t.Helper()
+	body, f := receiptOrderForm(t, b, lang)
+	label := map[string]string{"da": "Opsig månedlig betaling", "en": "End monthly billing"}[lang]
+	if !strings.Contains(body, ">"+label+"</button>") || !strings.Contains(body, " "+currentMonth(time.Now()).Format("2006-01")+",") {
+		t.Fatal("receipt offers the client no end form")
+	}
+	return f
 }
 
 func clientEnd(t *testing.T, b *browserFixture) (source string, last time.Time, operator bool) {

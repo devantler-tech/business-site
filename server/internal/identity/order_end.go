@@ -68,8 +68,8 @@ func (b *browser) endOrder(w http.ResponseWriter, r *http.Request) {
 	b.proposalMutationResult(w, r, err, "error")
 }
 
-// parseClientOrderEndForm admits exactly the client's end form: the order.
-func parseClientOrderEndForm(r *http.Request) (string, bool) {
+// parseClientOrderForm admits exactly a client's end or withdrawal form: the order.
+func parseClientOrderForm(r *http.Request) (string, bool) {
 	if err := r.ParseForm(); err != nil {
 		return "", false
 	}
@@ -87,15 +87,18 @@ func parseClientOrderEndForm(r *http.Request) (string, bool) {
 	return order, opaqueRequestID.MatchString(order)
 }
 
-// clientEndOrder lets the order's client end its monthly billing where they
-// ordered it (Consumer Contracts Act, section 28 a).
-func (b *browser) clientEndOrder(w http.ResponseWriter, r *http.Request) {
-	order, valid := parseClientOrderEndForm(r)
-	if !valid {
-		b.render(w, r, 400, "error", "", "")
-		return
+// clientOrderAction serves one of the client's own order forms on the
+// receipt: ending monthly billing where they ordered it (Consumer Contracts
+// Act, section 28 a), or confirming a withdrawal (section 20 a).
+func (b *browser) clientOrderAction(act func(context.Context, Principal, string, string) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		order, valid := parseClientOrderForm(r)
+		if !valid {
+			b.render(w, r, 400, "error", "", "")
+			return
+		}
+		b.clientOrderResult(w, r, act(r.Context(), b.principal(r.Context()), r.PathValue("id"), order))
 	}
-	b.clientOrderResult(w, r, b.foundation.clientEndMonthlyBilling(r.Context(), b.principal(r.Context()), r.PathValue("id"), order))
 }
 
 // clientEndMonthlyBilling ends the order's monthly billing after the current
@@ -106,7 +109,7 @@ func (b *browser) clientEndOrder(w http.ResponseWriter, r *http.Request) {
 func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, id, orderID string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	tx, o, err := s.orderEndWrite(ctx, p, id, orderID, s.beginClientProposalWrite)
+	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginClientProposalWrite, true)
 	if err != nil {
 		return err
 	}
@@ -125,9 +128,11 @@ func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, i
 	return nil
 }
 
-// orderEndWrite opens the request's locked write as begin authorizes it and
-// reads its order, which must be the one the form named and bill monthly.
-func (s *Foundation) orderEndWrite(ctx context.Context, p Principal, id, orderID string, begin func(context.Context, Principal, string) (pgx.Tx, string, error)) (pgx.Tx, projectOrder, error) {
+// orderWrite opens the request's locked write as begin authorizes it and
+// reads its order, which must be the one the form named and, for an end of
+// monthly billing, bill monthly and not be withdrawn: the withdrawal's own,
+// earlier end must stand.
+func (s *Foundation) orderWrite(ctx context.Context, p Principal, id, orderID string, begin func(context.Context, Principal, string) (pgx.Tx, string, error), monthly bool) (pgx.Tx, projectOrder, error) {
 	if !s.orderReady(ctx) {
 		return nil, projectOrder{}, ErrDenied
 	}
@@ -136,7 +141,7 @@ func (s *Foundation) orderEndWrite(ctx context.Context, p Principal, id, orderID
 		return nil, projectOrder{}, err
 	}
 	o, err := readOrderTx(ctx, tx, id, client)
-	if err == nil && (o.ID != orderID || o.MonthlyMinor == 0) {
+	if err == nil && (o.ID != orderID || (monthly && (o.MonthlyMinor == 0 || o.Withdrawn != nil))) {
 		err = errProposalConflict
 	}
 	if err != nil {
@@ -152,7 +157,7 @@ func (s *Foundation) orderEndWrite(ctx context.Context, p Principal, id, orderID
 func (s *Foundation) endMonthlyBilling(ctx context.Context, p Principal, id, orderID string, last time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	tx, o, err := s.orderEndWrite(ctx, p, id, orderID, s.beginOperatorWrite)
+	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginOperatorWrite, true)
 	if err != nil {
 		return err
 	}
@@ -184,7 +189,8 @@ func (s *Foundation) endMonthlyBilling(ctx context.Context, p Principal, id, ord
 // scheduleCardEnd asks Stripe to end the order's subscription at 00:00 UTC on
 // the 1st after the last billed month, exactly when it would renew, and records
 // Stripe's confirmation. It is safe to repeat, and does nothing for an order
-// that is not ended or has no subscription yet.
+// that is not ended, has no subscription yet or was withdrawn: a withdrawal
+// keeps its own, earlier end (endWithdrawnSubscription).
 func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	if !s.cardBillingReady(ctx) {
 		return ErrDenied
@@ -192,7 +198,7 @@ func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	var subscription string
 	var last time.Time
 	err := s.pool.QueryRow(ctx, `SELECT c.subscription_id,e.last_month FROM portal_order_ends e JOIN portal_card_checkouts c ON c.order_id=e.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL
- WHERE e.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations x WHERE x.subscription_id=c.subscription_id) ORDER BY c.attempt DESC LIMIT 1`, order).Scan(&subscription, &last)
+ WHERE e.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_card_cancellations x WHERE x.subscription_id=c.subscription_id) AND NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=e.order_id) ORDER BY c.attempt DESC LIMIT 1`, order).Scan(&subscription, &last)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

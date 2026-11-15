@@ -159,6 +159,30 @@ Stripe invoice is the sale's document, and Numina books the money once.
   is recorded and the order's own path is on. If Stripe does not confirm the card
   subscription's end, the client's end still stands and the operator's page offers to ask
   Stripe again.
+- **The client withdraws.** A consumer may withdraw from the agreement for 14 days after the
+  order, through a withdrawal function in the portal (Consumer Contracts Act, sections 18,
+  19 and 20 a). The portal cannot tell a business from a consumer, so every client gets it.
+  - The receipt shows **Fortryd aftale** / **Withdraw from contract** with the last day. It
+    opens a separate **Bekræft fortrydelse** / **Confirm withdrawal**
+    (`POST /requests/{id}/withdrawal`), under the same request lock and client membership as
+    the order. The period ends at midnight in Copenhagen after the 14th day. A last day that
+    is a weekend, a public holiday, Constitution Day, 24 or 31 December moves to the next
+    working day (section 19(6)).
+  - The withdrawal is recorded once (`portal_order_withdrawals`, migration v21) and stops all
+    further billing. The invoice path creates, books and sends nothing more, not even the
+    first invoice or one held before the withdrawal; a booked invoice is only followed to its
+    payment. The card path offers no Checkout, and the card subscription ends when it would
+    first charge, or at once if a month was already charged. That end takes precedence over
+    one scheduled earlier, unless the earlier one comes first, and Stripe's confirmation is
+    recorded on its own (`portal_withdrawal_cancellations`); the earlier record stays as it
+    was. No end of monthly billing is admitted after a withdrawal, so nothing can push that
+    end back. If Stripe does not confirm, the operator's page says so, to finish in the Stripe
+    Dashboard. A renewal after it never funds a month, and a withdrawn order funds no work
+    approval.
+  - Refunds stay with the operator, whose page shows the withdrawal. They refund what was paid
+    within 14 days by the same payment method: a Stripe refund, or a Numina credit note. They
+    also confirm the withdrawal to the client by email. The client's receipt shows the time
+    and asks them to keep it.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
   after failed renewals, records the order's end, unless the operator or the client already
   ended it. The last billed month is the one the subscription had paid in advance when it

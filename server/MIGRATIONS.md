@@ -174,6 +174,12 @@ v20 lets a client end their own order's monthly billing (#21) after unchanged v1
 `portal_order_ends` gains the `client` source with the client's issuer and subject, and a
 check requires exactly those for a client end. No grant changes: the end is still recorded once.
 
+v21 adds `portal_order_withdrawals` (#21) after unchanged v1–v20: a client's withdrawal from an
+order, recorded once with the client's identity. It also adds `portal_withdrawal_cancellations`,
+Stripe's confirmed end of a withdrawn order's card subscription, which takes precedence over an
+end scheduled earlier. Grant SELECT/INSERT only on both, like the other fixed billing tables:
+neither is changed or deleted.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
