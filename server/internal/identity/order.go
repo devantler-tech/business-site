@@ -146,38 +146,33 @@ func (s *Foundation) readClientOrder(ctx context.Context, p Principal, id string
 	if err != nil {
 		return nil, err
 	}
-	defer rollbackProposalWrite(ctx, tx)
-	o, err := readOrderTx(ctx, tx, id, client)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, s.commitClientProposal(ctx, p, tx, time.Time{})
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &o, s.commitClientProposal(ctx, p, tx, time.Time{})
+	return readOrderFor(ctx, tx, id, client, func() error { return s.commitClientProposal(ctx, p, tx, time.Time{}) })
 }
 
 // readOperatorOrder returns a request's order for a current operator.
 func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id string) (*projectOrder, error) {
-	if !s.invoiceBillingReady(ctx) {
+	if !s.invoiceBillingReady(ctx) || s.proposalOperator(ctx, p) != nil {
 		return nil, ErrDenied
-	}
-	if err := s.proposalOperator(ctx, p); err != nil {
-		return nil, err
 	}
 	tx, client, err := s.beginProposalWrite(ctx, p, id)
 	if err != nil {
 		return nil, err
 	}
+	return readOrderFor(ctx, tx, id, client, func() error { return commitProposalWrite(ctx, p, tx, s.invoiceBillingReady) })
+}
+
+// readOrderFor reads the order in an already scoped, request-locked transaction
+// and finishes through the caller's own final authorization checkpoint.
+func readOrderFor(ctx context.Context, tx pgx.Tx, id, client string, commit func() error) (*projectOrder, error) {
 	defer rollbackProposalWrite(ctx, tx)
 	o, err := readOrderTx(ctx, tx, id, client)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, commitProposalWrite(ctx, p, tx, s.invoiceBillingReady)
+		return nil, commit()
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &o, commitProposalWrite(ctx, p, tx, s.invoiceBillingReady)
+	return &o, commit()
 }
 
 // parseOrderForm admits only the acceptance, the chosen path and form plumbing.

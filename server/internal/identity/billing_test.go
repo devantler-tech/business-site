@@ -205,6 +205,14 @@ func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}, "collection": {"invoice"}}
 }
 
+// placeInvoiceOrder submits the receipt's own order form for the invoice path.
+func placeInvoiceOrder(t *testing.T, b *browserFixture) {
+	t.Helper()
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", orderForm(t, b, "en"), b.site.URL); status != 303 {
+		t.Fatal("order refused")
+	}
+}
+
 func chargeStates(t *testing.T, b *browserFixture) map[string]string {
 	t.Helper()
 	rows, err := b.pool.Query(b.f.ctx, `SELECT period,state FROM portal_order_charges`)
@@ -301,9 +309,7 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 func TestInvoiceBillingRecoversALostCreateReply(t *testing.T) {
 	b := billingFixture(t)
 	fake, cfg := newFakeNumina(t)
-	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", orderForm(t, b, "en"), b.site.URL); status != 303 {
-		t.Fatal("order refused")
-	}
+	placeInvoiceOrder(t, b)
 	fake.failCreateReply = true
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err == nil || chargeStates(t, b)["acceptance"] != "pending" {
 		t.Fatal("lost reply was not reported as a failed charge")
@@ -321,9 +327,7 @@ func TestInvoiceBillingRecoversALostCreateReply(t *testing.T) {
 func TestInvoiceBillingHoldsWhatItMustNotDecide(t *testing.T) {
 	b := billingFixture(t)
 	fake, cfg := newFakeNumina(t)
-	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", orderForm(t, b, "en"), b.site.URL); status != 303 {
-		t.Fatal("order refused")
-	}
+	placeInvoiceOrder(t, b)
 	fake.contacts["contact-x"] = numina.Contact{ID: "contact-x", Name: "Fictional Bakery ApS", Email: "client@example.invalid", CountryCode: "SE"}
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 0 || chargeStates(t, b)["acceptance"] != "held" {
 		t.Fatalf("foreign customer was invoiced with Danish VAT: %v", err)
@@ -385,9 +389,7 @@ func TestInvoiceBillingStaysClosedWhenTheGateIsOff(t *testing.T) {
 // unchanged v1–v15 and that the runtime cannot rewrite orders or contacts.
 func TestInvoiceBillingMigrationKeepsHistoryAndPrivileges(t *testing.T) {
 	b := billingFixture(t)
-	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", orderForm(t, b, "en"), b.site.URL); status != 303 {
-		t.Fatal("order refused")
-	}
+	placeInvoiceOrder(t, b)
 	for _, statement := range []string{`UPDATE portal_orders SET collection='card'`, `DELETE FROM portal_orders`, `UPDATE portal_numina_contacts SET contact_id='x'`, `DELETE FROM portal_order_charges`} {
 		if _, err := b.pool.Exec(b.f.ctx, statement); err == nil {
 			t.Fatalf("runtime ran %q", statement)
