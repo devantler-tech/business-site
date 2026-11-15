@@ -64,7 +64,7 @@ func (s *Foundation) readCheckout(ctx context.Context, order string) (*orderChec
 	if err != nil {
 		return nil, errTriageStorage
 	}
-	if !c.Done && !s.cards.Load().Now().Before(c.Expires.Add(-5*time.Minute)) {
+	if !c.Done && !s.cards.Load().Now().Before(c.Expires) {
 		return nil, nil
 	}
 	return &c, nil
@@ -207,6 +207,13 @@ func cardOrderBy(ctx context.Context, tx pgx.Tx, column, value string) (cardOrde
 	return o, err
 }
 
+// cardOrderByID finds a card order by its own ID.
+func cardOrderByID(ctx context.Context, tx pgx.Tx, id string) (cardOrder, error) {
+	var o cardOrder
+	err := tx.QueryRow(ctx, `SELECT id,one_time_minor,monthly_minor FROM portal_orders WHERE id=$1 AND collection='card'`, id).Scan(&o.ID, &o.OneTimeMinor, &o.MonthlyMinor)
+	return o, err
+}
+
 // settleCardCharge records a funded period for a card order. The amount must
 // equal the order's amount for that period exactly, in DKK.
 func settleCardCharge(ctx context.Context, tx pgx.Tx, order, period, reference string, paid, want int64, currency string) error {
@@ -230,8 +237,19 @@ ON CONFLICT(order_id,period) DO UPDATE SET state='settled',provider_ref=excluded
 func applyCheckoutPaid(ctx context.Context, tx pgx.Tx, session stripe.Session) error {
 	o, err := cardOrderBy(ctx, tx, "session_id", session.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// Not a portal session (another integration on the same account).
-		return nil
+		// A session the portal has since replaced is still funded through the
+		// order it names; anything else belongs to another integration.
+		if session.Mode != "payment" || session.PaymentStatus != "paid" || session.ClientReferenceID == "" {
+			return nil
+		}
+		o, err = cardOrderByID(ctx, tx, session.ClientReferenceID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return errTriageStorage
+		}
+		return settleCardCharge(ctx, tx, o.ID, "acceptance", session.ID, session.AmountTotal, o.OneTimeMinor, session.Currency)
 	}
 	if err != nil {
 		return errTriageStorage
