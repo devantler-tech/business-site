@@ -160,6 +160,28 @@ with hosting. The portal applies exactly that rule and refuses to start with any
   the discount is valid on a Danish invoice. No Stripe coupon or negative Numina line is needed.
 - The order confirmation email names the discount, and the operator's page shows the place.
 
+## Add-ons
+
+The standard add-ons (`addons` in `internal/identity/offerings.json`, which mirrors the public
+site) are the only extras with fixed prices. Anything else is a fixed quote. Each has an id, a
+kind (`one-time` or `monthly`), a VAT-inclusive price in whole kroner, the offerings it fits,
+an optional unit limit (`max`, for example per extra language) and EN/DA text. The portal
+refuses to start with an add-on it cannot sell.
+
+- The receipt lists the add-ons that fit the request's offering, monthly ones only when the
+  proposal includes hosting. The client ticks them and shows the price again: the summary
+  before the order button then lists each add-on and the total. The order form carries the
+  choice, and a retry with another choice is a conflict.
+- At most one feature-request priority tier (`tier`: priority or express) per order.
+- The order stores each add-on with its unit price at the time (`portal_order_addons`,
+  migration v25), and its one-time and monthly prices include them. Invoices, card payments,
+  funding and withdrawals therefore use the totals unchanged.
+- The launch discount takes off the proposal's own one-time price only, never an add-on.
+- The Numina invoice has the order's own line, then one line per add-on the period charges:
+  one-time add-ons on the first invoice, monthly ones on every monthly invoice. Stripe Checkout
+  has the same lines, one-time ones on the payment and monthly ones on the subscription.
+- The confirmation email, the receipt and the operator's page list the add-ons.
+
 ## Ending and reversing orders
 
 - **Ending monthly billing.** On the request page, an operator chooses an order's last billed
