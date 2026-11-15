@@ -19,11 +19,13 @@ import (
 var ErrMigration = errors.New("portal schema migration failed")
 
 // MigrateDatabase runs the existing embedded transaction under a separate,
-// constrained role. This explicit job neither serves HTTP nor enables identity.
-func MigrateDatabase(ctx context.Context, filename string) error {
+// constrained role. A nonempty runtimeRole names the existing web login that the
+// same transaction grants exactly its runtime privileges; empty grants nothing.
+// This explicit job neither serves HTTP nor enables identity.
+func MigrateDatabase(ctx context.Context, filename, runtimeRole string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
 	connection, err := migrationConnection(filename)
@@ -31,7 +33,7 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	cfg, err := migrationConfig(connection)
-	if err != nil {
+	if err != nil || runtimeRole == cfg.ConnConfig.User {
 		return ErrMigration
 	}
 	cfg.MaxConns = 1
@@ -45,7 +47,13 @@ func MigrateDatabase(ctx context.Context, filename string) error {
 		return ErrMigration
 	}
 	defer pool.Close()
-	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
+	migrate := identity.Migrate
+	if runtimeRole != "" {
+		migrate = func(ctx context.Context, pool *pgxpool.Pool) error {
+			return identity.MigrateWithRuntimeRole(ctx, pool, runtimeRole)
+		}
+	}
+	if !migrationRoleAllowed(ctx, pool, false) || migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
 		return ErrMigration
 	}
 	return nil
@@ -65,7 +73,7 @@ func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool
  AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND starts_with(p.proname,'portal_') AND p.proowner<>r.oid)
  AND (NOT $1::boolean OR (
    SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
-   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_membership_transitions','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions','portal_work_approvals','portal_work_revocations','portal_work_current']) managed(name)
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_membership_transitions','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions','portal_work_approvals','portal_work_revocations','portal_work_current','portal_orders','portal_order_charges','portal_numina_contacts']) managed(name)
    LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
  AND (NOT $1::boolean OR (
    SELECT bool_and(t.oid IS NOT NULL AND t.typtype='d' AND t.typowner=r.oid AND t.typbasetype=managed.base::regtype)

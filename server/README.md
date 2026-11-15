@@ -227,6 +227,13 @@ For the restricted image, project mode `0440` with group 65532 and searchable
 directories. Configuration is snapshotted at startup; restart to rotate it.
 Store the secret privately; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
+Where no environment is available, `--portal-settings-projection <absolute-file>`
+supplies these settings (with the projected secret input) and the production
+identity profile from one confined `KEY=value` file instead; see
+[the deploy package](../deploy/README.md#portal-settings-and-invitations). A file
+without keys keeps the portal off, and none of these variables may also be inherited.
+The exclusive `--portal-invite` mode uses the same file to create one invitation;
+see [CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#invite-a-customer).
 The Unix service runtime requires an already migrated least-privilege store. Its
 configured database login must match both the session and effective role before
 the existing permission check and broker discovery; switching a broader login
@@ -377,8 +384,11 @@ their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 | `www.` + public host | redirect to the public host         | redirect to the public host |
 | any other host       | redirect to the portal host         | served                      |
 
-Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
-never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
+Redirects carry `Cache-Control: no-store`. The `www` redirect is 301, as it was on GitHub Pages;
+the redirects between the public and portal hosts are 302. On a host that serves public pages, a
+folder requested without its trailing slash (`/about`) redirects with 301 to `/about/`, and a
+missing page returns 404 with the built `404.html`. Unsafe or encoded paths still return a plain
+404, never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
 and are checked before a listener opens. Routing changes nothing else: the portal stays behind
 its own default-off gates.
 
@@ -525,11 +535,11 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-clear the seventeen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables between tests. The migrator deletes rows in dependency order within the
+clear the twenty fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing tables between tests. The migrator deletes rows in dependency order within the
 same transaction as the grant reset, retaining real constraints and membership
 recording without rebuilding table files on every fixture. Database fixtures stay
 serial; this is not concurrent reset isolation. The reset control populates every
-relation first and requires all seventeen to be empty afterward. Domain-only work
+relation first and requires all twenty to be empty afterward. Domain-only work
 approval controls own their real database, TLS broker and feature provider but do
 not start an unused application server or session manager; browser journeys retain
 their separate complete HTTP fixtures. Never reuse a database

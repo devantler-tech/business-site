@@ -131,6 +131,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	proposalsEnabled := id != "" && b.foundation.proposalsReady(r.Context())
 	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
+	billingEnabled := acceptanceEnabled && b.foundation.invoiceBillingReady(r.Context())
 	invoicesEnabled := acceptanceEnabled && b.foundation.invoicesReady(r.Context())
 	creditsEnabled := invoicesEnabled && b.foundation.creditsReady(r.Context())
 	workEnabled := id != "" && b.foundation.workApprovalGate(r.Context())
@@ -152,6 +153,11 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		b.proposalPresentation(r, &page, proposals)
+		if len(rows) == 1 {
+			// Set here, not in proposalPresentation: the frozen maintenance
+			// inventory renders proposal states without a generated draft.
+			page.Generated, page.GeneratedOK = generatedProposal(rows[0].Product, rows[0].Title, page.Lang)
+		}
 		if sharingEnabled {
 			page.Visibility, err = b.foundation.readVisibility(r.Context(), p, id)
 			if err != nil {
@@ -169,6 +175,13 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		page.AcceptanceEnabled = true
+		if billingEnabled {
+			if page.Order, err = b.foundation.readOperatorOrder(r.Context(), p, id); err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+			page.BillingEnabled = true
+		}
 	}
 	if invoicesEnabled {
 		page.Invoices, err = b.foundation.readInvoices(r.Context(), p, id)
@@ -235,6 +248,8 @@ type triagePageData struct {
 	Next, LanguageURL string
 	ProposalsEnabled  bool
 	Proposals         []projectProposal
+	Generated         projectProposal
+	GeneratedOK       bool
 	ExpectedVersion   int
 	ProposalKey       string
 	SharingEnabled    bool
@@ -242,6 +257,8 @@ type triagePageData struct {
 	Visibility        proposalVisibility
 	AcceptanceEnabled bool
 	Acceptances       []proposalAcceptance
+	BillingEnabled    bool
+	Order             *projectOrder
 	InvoicesEnabled   bool
 	CreditsEnabled    bool
 	InvoiceKey        string

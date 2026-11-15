@@ -2,7 +2,7 @@ package identity
 
 import "testing"
 
-// TestFixtureResetClearsEveryRelation seeds all seventeen relations, including
+// TestFixtureResetClearsEveryRelation seeds all twenty relations, including
 // real consent, funding and authority history, before exercising the next reset.
 // It must remain serial: resetting a database is not concurrent fixture isolation.
 func TestFixtureResetClearsEveryRelation(t *testing.T) {
@@ -19,12 +19,23 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 	if _, err := migrationDB(t).Exec(t.Context(), `INSERT INTO portal_sessions(token,data,expiry) VALUES('fixture-reset-session','fixture-reset-data',clock_timestamp()+interval '1 hour')`); err != nil {
 		t.Fatal("fixture session unavailable", err)
 	}
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from) SELECT 'CCCCCCCCCCCCCCCCCCCCCCCCCC',request_id,client_id,id,client_issuer,client_subject,'invoice',100,0,date '2026-12-01' FROM portal_proposal_acceptances LIMIT 1`); err != nil {
+		t.Fatal("fixture order unavailable", err)
+	}
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_order_charges(order_id,period,identity,gross_minor,net_minor,vat_minor) VALUES('CCCCCCCCCCCCCCCCCCCCCCCCCC','acceptance','portal-CCCCCCCCCCCCCCCCCCCCCCCCCC-acceptance',125,100,25)`); err != nil {
+		t.Fatal("fixture charge unavailable", err)
+	}
+	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES('reset-contact-client','fixture-contact')`); err != nil {
+		t.Fatal("fixture Numina contact unavailable", err)
+	}
 	tables := []string{
 		"portal_login_attempts", "portal_invitations", "portal_memberships",
 		"portal_sessions", "portal_contacts", "portal_requests", "portal_proposals",
 		"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances",
 		"portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
 		"portal_membership_transitions", "portal_work_approvals", "portal_work_revocations", "portal_work_current",
+		"portal_orders", "portal_order_charges", "portal_numina_contacts",
 	}
 	for _, table := range tables {
 		var count int

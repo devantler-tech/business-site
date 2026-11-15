@@ -68,6 +68,46 @@ contain these declarations and cannot be relabeled as doing so.
 See [the original source-contract decision](../docs/adr/0019-public-tenant-package.md)
 and [the staging-hostname decision](../docs/adr/0020-public-staging-hostname.md).
 
+## Portal settings and invitations
+
+The WebApp has no environment variables, so the portal reads its settings from
+one projected file selected with `--portal-settings-projection
+/run/webapp-inputs/portal-settings`. The file uses the same confinement as the
+disclosure projection (root- or process-owned, mode 0440 with the application's
+primary group, at most 16 KiB). These manifests do not add it yet; the
+platform wires it with the portal database and broker egress.
+
+Lines are `KEY=value`, separated by LF. Blank lines and lines starting with `#`
+are ignored; a file with no keys keeps the portal as it is today: no portal database or
+broker connection and sign-in off. The accepted keys keep their existing meaning:
+
+| Key                                    | Value                                                   |
+|----------------------------------------|---------------------------------------------------------|
+| `PORTAL_DATABASE_URL`                  | verified-TLS `postgres://` URI for `portal_web` (below) |
+| `PORTAL_OIDC_ISSUER`                   | `https://login.devantler.tech`                          |
+| `PORTAL_OIDC_CLIENT_ID`                | `business-portal`                                       |
+| `PORTAL_CALLBACK_URL`                  | `https://portal.devantler.tech/portal/callback`         |
+| `PORTAL_CLIENT_SECRET_PROJECTION_FILE` | `/run/webapp-inputs/portal-client-secret`               |
+| `PORTAL_IDENTITY_PROFILE`              | `production`, only when sign-in is switched on          |
+| `PORTAL_IDENTITY_FLAG`                 | provider JSON for `portal-identity`, with the profile   |
+
+The database URI names host `business-site-portal-db-rw.business-site.svc`,
+port 5432, database `portal` and login `portal_web` with its password, and the query
+`sslmode=verify-full&sslrootcert=/run/webapp-inputs/portal-database-ca`.
+
+The five dependency keys come all together or not at all. With them but no
+activation keys, startup checks the database login and grants and discovers
+Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
+whitespace and CR line endings are refused. The staging lease and the owner-only
+secret file stay environment-only, and no portal variable may also be inherited
+from the environment. Errors never include values or paths. Restart to rotate.
+
+Run the schema job before serving, with migration login `portal_migrator`
+(which owns database `portal`) and `--runtime-role portal_web`; see
+[MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job). With sign-in on,
+invite customers from a web pod as
+[CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
+
 ## Offline publication receipt admission
 
 With the exact Go compiler from `server/go.mod`, run this from `server/` against

@@ -104,7 +104,7 @@ func nativeDexConfig(inputs Endpoints, credentials dexCredentials) map[string]an
 			"pkce": map[string]any{"enforce": true, "codeChallengeMethodsSupported": []string{"S256"}},
 		},
 		"connectors": []any{map[string]any{
-			"type": "oidc", "id": "customer-zitadel", "name": "Devantler Tech account",
+			"type": "oidc", "id": ZitadelConnectorID, "name": "Devantler Tech account",
 			"config": provider,
 		}},
 		"staticClients": []any{portalClient},

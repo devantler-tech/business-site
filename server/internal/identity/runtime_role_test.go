@@ -64,6 +64,12 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable trigger bypass", "CREATE ROLE portal_fixture_membership_mutator NOLOGIN; GRANT SET ON PARAMETER session_replication_role TO portal_fixture_membership_mutator; GRANT portal_fixture_membership_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"assumable recorder EXECUTE", "CREATE ROLE portal_fixture_membership_mutator NOLOGIN; GRANT EXECUTE ON FUNCTION portal_record_membership_transition() TO portal_fixture_membership_mutator; GRANT portal_fixture_membership_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"invoice column UPDATE", "GRANT UPDATE(amount_minor) ON portal_invoices TO portal_runtime; SET ROLE portal_runtime", false},
+		{"missing order INSERT", "REVOKE INSERT ON portal_orders FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"missing charge UPDATE", "REVOKE UPDATE ON portal_order_charges FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable order UPDATE", "GRANT UPDATE(collection) ON portal_orders TO portal_runtime; SET ROLE portal_runtime", false},
+		{"Numina contact DELETE", "GRANT DELETE ON portal_numina_contacts TO portal_runtime; SET ROLE portal_runtime", false},
+		{"charge DELETE", "GRANT DELETE ON portal_order_charges TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable order UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(one_time_minor) ON portal_orders TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"assumable invoice column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(reference) ON portal_invoices TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"acceptance column UPDATE", "GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_runtime; SET ROLE portal_runtime", false},
 		{"assumable acceptance column UPDATE", "CREATE ROLE portal_fixture_column_mutator NOLOGIN; GRANT UPDATE(content_hash) ON portal_proposal_acceptances TO portal_fixture_column_mutator; GRANT portal_fixture_column_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
@@ -200,7 +206,7 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 			if _, err := tx.Exec(ctx, "REVOKE TRUNCATE ON portal_memberships FROM portal_runtime; GRANT SELECT ON portal_membership_transitions TO portal_runtime"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := tx.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_work_approvals,portal_work_revocations,portal_work_current FROM portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime`); err != nil {
+			if _, err := tx.Exec(ctx, `GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_work_approvals,portal_work_revocations,portal_work_current FROM portal_runtime; GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime; GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime`); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := tx.Exec(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON portal_login_attempts,portal_invitations,portal_memberships,portal_sessions,portal_contacts TO portal_runtime; GRANT SELECT,INSERT ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions TO portal_runtime; REVOKE UPDATE,DELETE,TRUNCATE ON portal_requests,portal_proposals,portal_proposal_visibility,portal_proposal_acceptances,portal_invoices,portal_credit_transfers,portal_credit_revisions FROM portal_runtime; GRANT SELECT,INSERT,UPDATE ON portal_proposal_reviews TO portal_runtime; REVOKE DELETE,TRUNCATE ON portal_proposal_reviews FROM portal_runtime"); err != nil {

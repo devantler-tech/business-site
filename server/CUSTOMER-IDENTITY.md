@@ -276,6 +276,34 @@ deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
 Google, Microsoft, Apple and GitHub remain unconfigured.
 
+## Invite a customer
+
+Invitations need the web pod's portal settings with the production identity
+profile and an enabled flag (see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
+
+1. In the ZITADEL console at `https://accounts.devantler.tech`, create the
+   customer as a human user with their email address, unverified, and let
+   ZITADEL send its invitation mail. Copy the user's ID from the user page.
+2. Run the one-shot invitation inside a running web pod, as the web process
+   and with its own settings file and restricted database login:
+
+   ```sh
+   kubectl exec -n business-site deploy/business-site -- /app/business-site \
+     --portal-invite --portal-settings-projection /run/webapp-inputs/portal-settings \
+     --invite-zitadel-user 345678901234567890 --invite-client client-a \
+     --invite-role client --invite-days 7
+   ```
+
+   `--invite-client` is the new membership's lowercase workspace ID,
+   `--invite-role` is `client` or `operator` and `--invite-days` is 1–7. The
+   command computes the customer Dex subject for that user through the
+   `customer-zitadel` connector, binds the invitation to the configured Dex
+   issuer and prints only `portal invitation code: <code>`. Missing settings,
+   sign-in switched off or any mixed option is refused with a fixed message.
+3. Send the code to the customer through an approved private channel. On first
+   sign-in at `https://portal.devantler.tech` they enter it once; it is
+   consumed with their first successful sign-in and grants no other identity.
+
 ## Validation and remaining proof
 
 ```sh

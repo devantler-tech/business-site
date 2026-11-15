@@ -79,8 +79,8 @@ Preserve each package's existing 90-second bound;
 never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
-profile handlers and separately default-off free project-request intake; no order,
-payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
+profile handlers, separately default-off free project-request intake and default-off
+Numina invoice billing (`BILLING.md`); no card payment or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
 `INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
 bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's seventeen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's twenty identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -199,6 +199,9 @@ and content-bound retry keys, and retain original intake order. Grant their tabl
 SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
 not a dispatched offer, agreement, payment or work authorization. Keep credited
 funds, worker claims and API/MCP execution separate from draft preparation.
+Generated drafts (#552) come from `internal/identity/offerings.json` and post the
+ordinary proposal form; keep that file equal to the public offer copy and prices
+(`scripts/proposal-offerings.test.mjs`). Requests outside the offerings are priced by hand.
 
 Explicit sharing/withdrawal additionally requires false-default
 `portal-proposal-sharing`; review retirement under business-site#78 by 13 November 2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only
@@ -281,6 +284,14 @@ unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
 Both languages show the category and case-by-case assessment boundary; the
 existing independent false-default identity/request gates remain mandatory.
 
+v16 appends orders, per-period charges and the Numina contact map after unchanged
+v1–v15. Read `BILLING.md`. Orders and the contact map are SELECT/INSERT; charges
+add UPDATE for their state. Every step requires the acceptance gates plus false-default
+`portal-invoice-billing`, which has no environment mapping. Record a charge's identity
+before any Numina call, find a lost creation by its memo before retrying, settle only on
+`paid` with nothing outstanding, and hold what the path must not decide (no contact
+profile, a customer outside Denmark). The Numina key never reaches logs or diagnostics.
+
 Manual bank-credit evidence additionally requires independent false-default
 `portal-credit-reconciliation`; review retirement under business-site#120 by
 15 November 2026. Read `CREDITS.md`. v11 follows unchanged v1–v10. Reserve each
@@ -298,7 +309,12 @@ parsed login before its permission gate and broker discovery. Preserve the real
 restricted-login positive control and mismatched-login refusal controls.
 The actual executable's `--migrate` job requires a private verified-TLS migration
 connection file, rejects broad/assumable authority and mixed server options, and
-has fixed connection/statement/lock/overall deadlines. Read `MIGRATIONS.md` before
+has fixed connection/statement/lock/overall deadlines. Its optional `--runtime-role`
+grants an existing web login exactly `runtimeGrants` (beside the embedded
+migrations) in the migration transaction; change both together, and keep
+`CheckRuntimeRole` the independent startup gate. `--portal-settings-projection`
+only installs the existing `PORTAL_*` settings from one confined file and refuses
+inherited ones; `--portal-invite` is a trusted operator command, not an API. Read `MIGRATIONS.md` before
 changing it. Normal web startup must never read migration credentials or perform
 DDL. Exercise the compiled job against its uniquely named disposable databases;
 source proof never authorizes a production migration or customer activation.

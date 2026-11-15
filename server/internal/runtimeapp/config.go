@@ -26,6 +26,14 @@ var ErrConfig = errors.New("portal configuration is invalid")
 type Config struct {
 	database, issuer, client, callback, secretFile string
 	secretProjected                                bool
+	billing                                        billingConfig
+}
+
+// billingConfig is the optional Numina invoice path (ADR 0030). Its own
+// false-default gate still decides whether anything is invoiced.
+type billingConfig struct {
+	tokenFile, baseURL, vatCode string
+	salesAccount                int
 }
 
 // IdentityProvider keeps ordinary startup closed. An explicit production profile
@@ -121,12 +129,17 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 			count++
 		}
 	}
+	billing, err := readBillingConfig(getenv)
+	if err != nil || (count == 0 && billing != (billingConfig{})) {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
 	if count != 5 || !filepath.IsAbs(c.secretFile) {
 		return Config{}, ErrConfig
 	}
+	c.billing = billing
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -175,9 +188,33 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err != nil {
 		return nil, closed, ErrConfig
 	}
-	cfg, err := pgxpool.ParseConfig(c.database)
+	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	pool, broker, err := connectPortal(startup, c)
 	if err != nil {
 		return nil, closed, ErrConfig
+	}
+	foundation := identity.New(pool, broker, flags)
+	handler, err := foundation.Browser(c.callback, secret)
+	if err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	stopBilling, err := startInvoiceBilling(foundation, c.billing)
+	if err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	return handler, func() { stopBilling(); pool.Close() }, nil
+}
+
+// connectPortal opens the bounded runtime pool, then checks its restricted login
+// and grants before discovering the broker. Errors are generic; the caller owns
+// the returned pool.
+func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.Broker, error) {
+	cfg, err := pgxpool.ParseConfig(c.database)
+	if err != nil {
+		return nil, nil, ErrConfig
 	}
 	cfg.MaxConns = 4
 	cfg.MinConns = 0
@@ -188,13 +225,11 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	cfg.ConnConfig.RuntimeParams["search_path"] = "public"
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
 	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
-	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
 	pool, err := pgxpool.NewWithConfig(startup, cfg)
 	if err != nil {
-		return nil, closed, ErrConfig
+		return nil, nil, ErrConfig
 	}
-	fail := func() (http.Handler, func(), error) { pool.Close(); return nil, closed, ErrConfig }
+	fail := func() (*pgxpool.Pool, *identity.Broker, error) { pool.Close(); return nil, nil, ErrConfig }
 	// Assess the actual configured login, not a restricted role adopted by a
 	// broader credential. Both identities must agree before checking its grants.
 	var loginMatches bool
@@ -208,9 +243,5 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err != nil {
 		return fail()
 	}
-	handler, err := identity.New(pool, broker, flags).Browser(c.callback, secret)
-	if err != nil {
-		return fail()
-	}
-	return handler, pool.Close, nil
+	return pool, broker, nil
 }
