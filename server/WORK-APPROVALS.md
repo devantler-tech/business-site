@@ -127,5 +127,5 @@ disposable and use no real payment, customer or bank connection. Passing source
 tests and a merged foundation are not deployed identity, recovery, legal
 clearance or permission for an agent to execute client work. The eighteen new
 EN/DA work documents have explicit state/form/fact expectations and common-frame
-and method-aware link controls. The original 120 document/body references remain
-unchanged; they are not regenerated from the new renderer.
+and method-aware link controls. The 98 original document/body references that remain
+after the invoice and credit screens were retired are unchanged; they are not regenerated from the new renderer.
