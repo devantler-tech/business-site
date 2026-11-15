@@ -253,7 +253,7 @@ func TestPrivateCardExpiredCheckoutCanBeRestarted(t *testing.T) {
 	if sendEvent(t, b, "evt_old", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk", "client_reference_id": orderID(t, b)}, webhookSecret) != 200 || chargeStates(t, b)["acceptance"] != "settled" {
 		t.Fatal("a payment on a replaced session was lost")
 	}
-	if sendEvent(t, b, "evt_foreign_session", "checkout.session.completed", map[string]any{"id": "cs_test_other", "mode": "payment", "payment_status": "paid", "amount_total": 100, "currency": "dkk", "client_reference_id": "NOTANORDERNOTANORDERNOTANO"}, webhookSecret) != 200 {
+	if sendEvent(t, b, "evt_foreign_session", "checkout.session.completed", map[string]any{"id": "cs_test_other", "mode": "payment", "payment_status": "paid", "amount_total": 100, "currency": "dkk", "client_reference_id": "ZZZZZZZZZZZZZZZZZZZZZZZZZZ"}, webhookSecret) != 200 {
 		t.Fatal("another integration's session was not ignored")
 	}
 	cardFlags(t, b, false)
