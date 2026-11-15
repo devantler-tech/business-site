@@ -11,6 +11,9 @@ Paths below are as the portal serves them at the root of its own host, `portal.d
 When it shares a host with the public site (local runs and most tests), each is under `/portal`.
 
 After the client accepts the current proposal, the receipt page asks how they want to pay.
+Just before the button it repeats the scope, the one-time and monthly prices and their terms.
+The button reads **Bestil med betalingspligt** / **Order with obligation to pay**, as the
+Consumer Contracts Act, section 12, requires of an order button.
 Placing the order binds that acceptance to exactly one collection path, so an order never has
 both a Numina invoice and a Stripe charge.
 

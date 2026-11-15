@@ -234,6 +234,13 @@ func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	if status != 200 || len(acceptance) != 2 || len(csrf) != 2 || !strings.Contains(body, `value="invoice" checked`) {
 		t.Fatalf("receipt has no order form: %d", status)
 	}
+	// The Consumer Contracts Act, section 12: the price comes just before a
+	// button that says the order obliges the client to pay.
+	button := map[string]string{"da": "Bestil med betalingspligt", "en": "Order with obligation to pay"}[lang]
+	_, form, found := strings.Cut(body, `id="order-boundary"`)
+	if summary, label := strings.Index(form, "2995 DKK"), strings.Index(form, ">"+button+"</button>"); !found || summary < 0 || label < summary || !strings.Contains(form[summary:label], "99 DKK") {
+		t.Fatalf("%s order form lacks its price summary before the %q button", lang, button)
+	}
 	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}, "collection": {"invoice"}}
 }
 
