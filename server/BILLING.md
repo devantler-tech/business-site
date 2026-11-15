@@ -11,6 +11,9 @@ Paths below are as the portal serves them at the root of its own host, `portal.d
 When it shares a host with the public site (local runs and most tests), each is under `/portal`.
 
 After the client accepts the current proposal, the receipt page asks how they want to pay.
+Just before the button it repeats the scope, the one-time and monthly prices and their terms.
+The button reads **Bestil med betalingspligt** / **Order with obligation to pay**, as the
+Consumer Contracts Act, section 12, requires of an order button.
 Placing the order binds that acceptance to exactly one collection path, so an order never has
 both a Numina invoice and a Stripe charge.
 
@@ -73,9 +76,10 @@ and whether it was sent. Reminders (rykker) stay a Numina task.
 
 ## The card path (Stripe)
 
-The client can instead pay by card or MobilePay. Stripe sends the receipt, and Numina's own
-Stripe integration books the sale, fee and payout. The portal makes no Numina invoice for a
-card order, so nothing is booked twice.
+The client can instead pay by card or MobilePay. Stripe issues and emails a full VAT invoice for
+each payment, and Numina's own Stripe integration books the sale, fee and payout from Stripe's
+payout. The portal makes no Numina invoice for a card order, so nothing is booked twice: the
+Stripe invoice is the sale's document, and Numina books the money once.
 
 - **Checkout.** Placing a card order creates one Stripe Checkout Session per amount and shows
   each as a **Continue to payment** link on the receipt. The portal's CSP allows form posts only
@@ -89,7 +93,19 @@ card order, so nothing is booked twice.
   - The two are separate sessions because Stripe refuses one-time prices in a subscription
     without proration. Payment methods come from the Stripe Dashboard: no session sets
     `payment_method_types`, and Stripe offers MobilePay only for one-off payments.
-  - Amounts are VAT-inclusive DKK; Stripe Tax is not used.
+  - Amounts are VAT-inclusive DKK, and every line carries the configured tax rate: a manual,
+    inclusive 25% Danish VAT rate (`PORTAL_STRIPE_TAX_RATE`). Stripe Tax is not used. Before
+    its first Checkout, the server reads that rate from Stripe and refuses to create any session
+    until it is active, inclusive and exactly 25%. An exclusive rate would add VAT on top of the
+    agreed price, and another percentage would put the wrong VAT on the invoice.
+  - **A full VAT invoice for every payment.** Checkout requires the billing address and offers a
+    business its legal name and VAT number (`tax_id_collection`). The one-time session sets
+    `invoice_creation[enabled]`, so Stripe issues a paid invoice that shows line amounts without
+    VAT (`amount_tax_display=exclude_tax`), the VAT rate and the VAT amount. A subscription
+    already gets an invoice for every charge. That invoice is the full invoice a business
+    customer needs under the VAT order, section 58(1); a card receipt alone is not. Stripe charges
+    0.4% of the amount, at most USD 2, for each one-time invoice; subscription invoices are part
+    of Stripe Billing's fee.
 - **Sessions are kept.** Every session is stored with its order, purpose and attempt
   (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. Only
   Stripe closes a session: when it reports the session expired or its asynchronous payment
@@ -132,11 +148,22 @@ card order, so nothing is booked twice.
     soon as it is recorded.
   - A renewal paid after the last billed month never funds a month, and an ended order offers
     no new subscription Checkout.
+- **The client ends monthly billing.** A consumer must be able to end a subscription where
+  they agreed to it, here the portal (Consumer Contracts Act, section 28 a). On the receipt,
+  **Opsig månedlig betaling** / **End monthly billing** (`POST /requests/{id}/order-end`)
+  makes the current month the last billed one. The notice is never more than the rest of that
+  month, and nothing already invoiced or paid changes. It uses the same request lock and
+  current client membership as the order, and the end is recorded once with the client's
+  identity (`source` `client`, migration v20). It then works exactly like an operator's end on
+  both paths. An end that is already recorded stands, and the form is shown only while no end
+  is recorded and the order's own path is on. If Stripe does not confirm the card
+  subscription's end, the client's end still stands and the operator's page offers to ask
+  Stripe again.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
-  after failed renewals, records the order's end, unless an operator already ended it. The last
-  billed month is the one the subscription had paid in advance when it ended. An end that
-  arrives before the subscription's Checkout completion answers `500` when it carries the
-  portal's order marker, so Stripe retries it.
+  after failed renewals, records the order's end, unless the operator or the client already
+  ended it. The last billed month is the one the subscription had paid in advance when it
+  ended. An end that arrives before the subscription's Checkout completion answers `500` when
+  it carries the portal's order marker, so Stripe retries it.
 - **Refunds and disputes.** `charge.refunded` (any refunded amount) and
   `charge.dispute.created` record a reversal against the funded charge
   (`portal_charge_reversals`). The charge keeps its settlement, but no longer funds the order,
@@ -182,17 +209,18 @@ allow rule to `api.numina.app` (the package denies egress by default), and the r
 below. None of these is added here.
 
 The card path has its own false-default `portal-card-billing` flag, also without an environment
-mapping. It is enabled only when both `PORTAL_STRIPE_KEY_FILE` and
-`PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files (`PORTAL_STRIPE_API_URL` is optional,
-HTTPS only). In production all three come from the portal settings projection, and the two
-files are separate projected secrets such as `/run/webapp-inputs/stripe-api-key`. Turning the flag off hides the card choice and the payment link, refuses card
+mapping. It is enabled only when `PORTAL_STRIPE_KEY_FILE` and
+`PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files and `PORTAL_STRIPE_TAX_RATE` names the
+VAT tax rate (`txr_…`); `PORTAL_STRIPE_API_URL` is optional, HTTPS only. In production all of
+them come from the portal settings projection, and the two files are separate projected
+secrets such as `/run/webapp-inputs/stripe-api-key`. Turning the flag off hides the card choice and the payment link, refuses card
 orders and answers the webhook with `404`, so Stripe retries until it is on again.
 
 Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site/stripe`:
 
 - property `api-key`: a **restricted** key (`rk_live_…`) with write access to Checkout Sessions
-  and Subscriptions and read access to Invoices, or `rk_test_…` from a Stripe sandbox for
-  development;
+  and Subscriptions and read access to Invoices and Tax Rates, or `rk_test_…` from a Stripe
+  sandbox for development;
 - property `webhook-secret`: the `whsec_…` signing secret of a webhook endpoint at
   `https://portal.devantler.tech/stripe/webhook`, created with API version
   `2026-10-28.endive` and the events `checkout.session.completed`,
@@ -200,8 +228,18 @@ Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site
   `checkout.session.expired`, `invoice.paid`, `customer.subscription.deleted`,
   `charge.refunded` and `charge.dispute.created`.
 
+For the invoice, the maintainer also sets up the Stripe account; none of this is a secret:
+
+- a tax rate *Moms*, 25%, **inclusive**, country DK, whose `txr_…` ID is
+  `PORTAL_STRIPE_TAX_RATE`;
+- the public business details Stripe prints as the seller: legal name and address;
+- the company's VAT number (DK46830385) as the account's default tax ID on invoices;
+- invoice numbers that run in one sequence across the account;
+- the default invoice template showing amounts without VAT, which subscription invoices use;
+- emailed receipts and invoices for successful payments.
+
 Before the card path goes live, the maintainer also asks Numina support to switch on Numina's
-Stripe integration, and turns on Stripe's emailed receipts.
+Stripe integration.
 
 ## Storage and privileges
 

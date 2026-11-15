@@ -36,13 +36,33 @@ func endForm(f url.Values, month time.Time) url.Values {
 	return g
 }
 
-// TestInvoiceBillingStopsAfterTheLastBilledMonth ends an invoice order's
-// monthly billing in the month it was placed: no monthly invoice follows.
-func TestInvoiceBillingStopsAfterTheLastBilledMonth(t *testing.T) {
+// bookedDanishOrder places a Danish invoice order and books its acceptance
+// invoice, with the client still signed in.
+func bookedDanishOrder(t *testing.T) (*browserFixture, *fakeNumina, InvoiceBilling) {
+	t.Helper()
 	b, fake, cfg := danishOrderFixture(t)
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "booked" {
 		t.Fatal("acceptance invoice not booked", err)
 	}
+	return b, fake, cfg
+}
+
+// subscribedCardOrder places a card order with a one-time and a monthly
+// amount whose subscription sub_1 has completed, with the client signed in.
+func subscribedCardOrder(t *testing.T) (*browserFixture, *fakeStripe) {
+	t.Helper()
+	b, fake := cardOrderFixture(t, 375000, 12500)
+	placeCardOrder(t, b)
+	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
+		t.Fatal("subscription completion refused")
+	}
+	return b, fake
+}
+
+// TestInvoiceBillingStopsAfterTheLastBilledMonth ends an invoice order's
+// monthly billing in the month it was placed: no monthly invoice follows.
+func TestInvoiceBillingStopsAfterTheLastBilledMonth(t *testing.T) {
+	b, fake, cfg := bookedDanishOrder(t)
 	f, _ := operatorEndForm(t, b, "end-operator")
 	now := currentMonth(time.Now())
 	if status, _, _ := b.request("POST", orderEndPath, endForm(f, now.AddDate(0, -1, 0)), b.site.URL); status != 409 {
@@ -89,11 +109,7 @@ func TestInvoiceBillingStopsAfterTheLastBilledMonth(t *testing.T) {
 // is asked to end the subscription when it would next renew, a failed request
 // can be repeated, and a renewal after the end never funds a month.
 func TestPrivateCardEndsMonthlyBillingAtTheNextRenewal(t *testing.T) {
-	b, fake := cardOrderFixture(t, 375000, 12500)
-	placeCardOrder(t, b)
-	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
-		t.Fatal("subscription completion refused")
-	}
+	b, fake := subscribedCardOrder(t)
 	order := orderID(t, b)
 	f, _ := operatorEndForm(t, b, "card-end-operator")
 	now := currentMonth(time.Now())

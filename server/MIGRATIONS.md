@@ -170,6 +170,10 @@ name their order and its settled funding charge, and composite foreign keys bind
 client, acceptance and exact amounts. Earlier rows keep their invoice binding unchanged, and a
 check refuses a row with both bindings or neither. No grant changes.
 
+v20 lets a client end their own order's monthly billing (#21) after unchanged v1–v19.
+`portal_order_ends` gains the `client` source with the client's issuer and subject, and a
+check requires exactly those for a client end. No grant changes: the end is still recorded once.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

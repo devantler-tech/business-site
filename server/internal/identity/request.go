@@ -211,7 +211,7 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			}
 			for _, a := range page.Acceptances {
 				if page.Order == nil && a.Current && (a.Proposal.OneTimeMinor > 0 || a.Proposal.MonthlyMinor > 0) {
-					page.OrderAcceptance = a.ID
+					page.OrderAcceptance, page.OrderProposal = a.ID, &a.Proposal
 				}
 			}
 		}
@@ -268,6 +268,7 @@ type requestPageData struct {
 	CardOption        bool
 	Order             *projectOrder
 	OrderAcceptance   string
+	OrderProposal     *projectProposal
 	Checkouts         []orderCheckout
 	CheckoutRestart   bool
 }

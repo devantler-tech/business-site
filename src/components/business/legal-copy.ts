@@ -14,6 +14,14 @@ export type LegalPage = { title: string; description: string; intro: string; upd
 const updated = { en: 'Last updated 15 November 2026.', da: 'Senest opdateret 15. november 2026.' } as const;
 const companyPath = { en: '/company/', da: '/da/company/' } as const;
 
+/** The trader line of the terms; the phone number appears once company.json has one. */
+export function traderLine(locale: Locale, facts: { cvr: string; owner: string; email: string; phone?: string }): string {
+  const phone = facts.phone?.trim();
+  return locale === 'da'
+    ? `Devantler Tech, CVR ${facts.cvr}, en enkeltmandsvirksomhed drevet af ${facts.owner}. E-mail: ${facts.email}.${phone ? ` Telefon: ${phone}.` : ''}`
+    : `Devantler Tech, CVR ${facts.cvr}, a sole proprietorship run by ${facts.owner}. Email: ${facts.email}.${phone ? ` Phone: ${phone}.` : ''}`;
+}
+
 // Portal-only text is unreleased content: it renders only with FEATURE_PORTAL_PRIVACY (default off).
 const privacy = (portal: boolean) => ({
   en: {
@@ -142,7 +150,7 @@ const terms = {
     updated: updated.en,
     sections: [
       { title: 'Who you agree with', blocks: [
-        `Devantler Tech, CVR ${company.cvr}, a sole proprietorship run by ${company.owner}. Email: ${company.email}.`,
+        traderLine('en', company),
         { links: [{ href: companyPath.en, label: 'Company information and postal address' }] },
       ] },
       { title: 'Proposal and agreement', blocks: [
@@ -199,7 +207,7 @@ const terms = {
     updated: updated.da,
     sections: [
       { title: 'Hvem du indgår aftale med', blocks: [
-        `Devantler Tech, CVR ${company.cvr}, en enkeltmandsvirksomhed drevet af ${company.owner}. E-mail: ${company.email}.`,
+        traderLine('da', company),
         { links: [{ href: companyPath.da, label: 'Virksomhedsoplysninger og postadresse' }] },
       ] },
       { title: 'Tilbud og aftale', blocks: [

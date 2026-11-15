@@ -20,6 +20,8 @@ const links = node => walk(node).filter(item => item.tagName === "a").map(item =
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
 const portalPrivacy = process.env.FEATURE_PORTAL_PRIVACY === "true";
+/** The published phone number, or "" until the business adds one to company.json. */
+const companyPhone = JSON.parse(readFileSync(new URL("../../src/data/company.json", import.meta.url), "utf8")).phone?.trim() ?? "";
 
 /** Validate inline text exactly as the rendered paragraph joins its text nodes.
  * @param {string} candidate @param {string} locale
@@ -84,6 +86,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       assert.ok(page.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${kind}/`));
       for (const language of ["en","da","x-default"]) assert.ok(page.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${kind}/`));
       for (const fact of ["46830385","ned@devantler.tech"]) assert.ok(text(main).includes(fact),`${kind} page names the registered business`);
+      if (kind === "terms") assert.ok(companyPhone ? text(main).includes(companyPhone) : !/Phone:|Telefon:/.test(text(main)), "terms name the phone number exactly when one is set");
       assert.ok(links(main).some(([,href]) => href === `/${prefix}company/`),`${kind} page links to the postal address instead of copying it`);
       const required = kind === "privacy"
         ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
@@ -108,6 +111,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
 
     const registration = locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship';
     for (const fact of ["Devantler Tech","46830385",registration,"Nikolai Emil Damm","ned@devantler.tech"]) assert.ok(text(disclosure).includes(fact),"registered company fact is missing");
+    assert.equal(!!find(actual,"data-company-phone"), companyPhone !== "", "company page shows the phone number exactly when one is set");
+    if (companyPhone) assert.ok(text(disclosure).includes(companyPhone), "company page shows the published phone number");
     {
       const document = actual.find(node => node.tagName === 'html');
       assert.ok(document, 'current disclosure has a document element');
@@ -133,6 +138,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
   }
   for (const file of files(candidate)) {
     const bytes = readFileSync(file);
+    // Consumer law needs the phone only before an agreement: on the company page and the terms.
+    if (companyPhone) assert.ok(!bytes.includes(Buffer.from(companyPhone)) || /^(?:da\/)?(?:company|terms)\/(?:index\.html|__data\.json)$/.test(file.slice(candidate.length + 1)), `phone number leaked into ${file.slice(candidate.length + 1)}`);
     for (const needle of ["company-address-fixture-187", "1234 Exampletown"]) {
       assert.ok(!bytes.includes(Buffer.from(needle)) || (identity && !template && companyPages.has(file)), "address leaked outside the two disclosure HTML pages");
     }

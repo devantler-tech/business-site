@@ -6,7 +6,7 @@ import { assertCompanyOutput } from "./company-output.mjs";
 
 const options = {identity:true,scope:true,template:false,address:process.env.COMPANY_POSTAL_ADDRESS ?? ""};
 assertCompanyOutput("web/build",options);
-for (const kind of ["missing-locale", "missing-address", "unrelated-script-leak", "second-line-leak", "stale-registration", "stale-footer", "missing-legal-page", "broken-withdrawal-form"]) {
+for (const kind of ["missing-locale", "missing-address", "unrelated-script-leak", "second-line-leak", "stale-registration", "stale-footer", "missing-legal-page", "broken-withdrawal-form", "phone-leak"]) {
   const scratch = mkdtempSync(join(tmpdir(),"company-output-187-"));
   try {
     const candidate = join(scratch,"candidate");
@@ -16,6 +16,7 @@ for (const kind of ["missing-locale", "missing-address", "unrelated-script-leak"
       const page = join(candidate,"company/index.html");
       writeFileSync(page,readFileSync(page,"utf8").replace(/<address\b[\s\S]*?<\/address>/,""));
     }
+    if (kind === "phone-leak") writeFileSync(join(candidate,"about/__data.json"),JSON.parse(readFileSync("src/data/company.json","utf8")).phone);
     if (kind === "missing-legal-page") rmSync(join(candidate,"da/terms/index.html"));
     if (kind === "broken-withdrawal-form") {
       const page = join(candidate,"terms/index.html");
@@ -34,7 +35,7 @@ for (const kind of ["missing-locale", "missing-address", "unrelated-script-leak"
         writeFileSync(page, changed);
       }
     }
-    assert.throws(() => assertCompanyOutput(candidate,options), kind === "missing-locale" || kind === "missing-legal-page" ? /required bilingual page is missing/ : kind === "broken-withdrawal-form" ? /terms list is missing/ : kind === "missing-address" ? /required address/ : kind === "stale-registration" ? /registered company fact is missing/ : kind === "stale-footer" ? /ordinary registration/ : /address leaked outside/,kind);
+    assert.throws(() => assertCompanyOutput(candidate,options), kind === "missing-locale" || kind === "missing-legal-page" ? /required bilingual page is missing/ : kind === "broken-withdrawal-form" ? /terms list is missing/ : kind === "phone-leak" ? /phone number leaked/ : kind === "missing-address" ? /required address/ : kind === "stale-registration" ? /registered company fact is missing/ : kind === "stale-footer" ? /ordinary registration/ : /address leaked outside/,kind);
     console.log(`Rejected real company artifact control: ${kind}`);
   } finally { rmSync(scratch,{recursive:true,force:true}); }
 }

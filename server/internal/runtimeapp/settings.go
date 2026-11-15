@@ -21,7 +21,7 @@ var projectedPortalSettings = []string{
 	// The optional Numina invoice path (BILLING.md); the key itself stays in its projected file.
 	"PORTAL_NUMINA_TOKEN_FILE", "PORTAL_NUMINA_API_URL", "PORTAL_NUMINA_SALES_ACCOUNT", "PORTAL_NUMINA_VAT_CODE",
 	// The optional Stripe card path; its key and webhook secret stay in projected files.
-	"PORTAL_STRIPE_KEY_FILE", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE", "PORTAL_STRIPE_API_URL",
+	"PORTAL_STRIPE_KEY_FILE", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE", "PORTAL_STRIPE_API_URL", "PORTAL_STRIPE_TAX_RATE",
 }
 
 // inheritedPortalSettings are every setting ReadConfig and the activation

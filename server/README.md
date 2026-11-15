@@ -136,8 +136,8 @@ v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exac
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
 v13 (durable membership incarnations), v14 (expiring work-approval evidence),
 v15 (the case-by-case other-request category), v16 (orders and Numina charges), v17 (card
-Checkouts and Stripe events), v18 (order ends and charge reversals) and v19 (work approval bound
-to the order's funding)
+Checkouts and Stripe events), v18 (order ends and charge reversals), v19 (work approval bound
+to the order's funding) and v20 (an order end chosen by its client)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.

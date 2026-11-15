@@ -68,27 +68,95 @@ func (b *browser) endOrder(w http.ResponseWriter, r *http.Request) {
 	b.proposalMutationResult(w, r, err, "error")
 }
 
+// parseClientOrderEndForm admits exactly the client's end form: the order.
+func parseClientOrderEndForm(r *http.Request) (string, bool) {
+	if err := r.ParseForm(); err != nil {
+		return "", false
+	}
+	for name, values := range r.PostForm {
+		if len(values) != 1 {
+			return "", false
+		}
+		switch name {
+		case "csrf_token", "lang", "order":
+		default:
+			return "", false
+		}
+	}
+	order := r.PostForm.Get("order")
+	return order, opaqueRequestID.MatchString(order)
+}
+
+// clientEndOrder lets the order's client end its monthly billing where they
+// ordered it (Consumer Contracts Act, section 28 a).
+func (b *browser) clientEndOrder(w http.ResponseWriter, r *http.Request) {
+	order, valid := parseClientOrderEndForm(r)
+	if !valid {
+		b.render(w, r, 400, "error", "", "")
+		return
+	}
+	b.clientOrderResult(w, r, b.foundation.clientEndMonthlyBilling(r.Context(), b.principal(r.Context()), r.PathValue("id"), order))
+}
+
+// clientEndMonthlyBilling ends the order's monthly billing after the current
+// month: the notice is at most the rest of that month, and nothing already
+// billed changes. An end already recorded, by anyone, stands, so a retry
+// succeeds. A card order's subscription is then asked to end when it would
+// next renew.
+func (s *Foundation) clientEndMonthlyBilling(ctx context.Context, p Principal, id, orderID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	tx, o, err := s.orderEndWrite(ctx, p, id, orderID, s.beginClientProposalWrite)
+	if err != nil {
+		return err
+	}
+	defer rollbackProposalWrite(ctx, tx)
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_order_ends(order_id,last_month,source,client_issuer,client_subject) VALUES($1,$2,'client',$3,$4) ON CONFLICT(order_id) DO NOTHING`, o.ID, currentMonth(time.Now()), p.issuer, p.subject); err != nil {
+		return errTriageStorage
+	}
+	if err = s.commitOrder(ctx, p, tx, s.pathReady(o.Collection)); err != nil {
+		return err
+	}
+	if o.Collection == "card" && s.scheduleCardEnd(ctx, o.ID) != nil {
+		// The end is recorded, so the client's form is gone; the operator's
+		// page offers to ask Stripe again until it confirms.
+		log.Printf("portal: card subscription end not confirmed")
+	}
+	return nil
+}
+
+// orderEndWrite opens the request's locked write as begin authorizes it and
+// reads its order, which must be the one the form named and bill monthly.
+func (s *Foundation) orderEndWrite(ctx context.Context, p Principal, id, orderID string, begin func(context.Context, Principal, string) (pgx.Tx, string, error)) (pgx.Tx, projectOrder, error) {
+	if !s.orderReady(ctx) {
+		return nil, projectOrder{}, ErrDenied
+	}
+	tx, client, err := begin(ctx, p, id)
+	if err != nil {
+		return nil, projectOrder{}, err
+	}
+	o, err := readOrderTx(ctx, tx, id, client)
+	if err == nil && (o.ID != orderID || o.MonthlyMinor == 0) {
+		err = errProposalConflict
+	}
+	if err != nil {
+		rollbackProposalWrite(ctx, tx)
+		return nil, projectOrder{}, err
+	}
+	return tx, o, nil
+}
+
 // endMonthlyBilling records the order's last billed month once; the same month
 // again is a retry and a different one a conflict. A card order's subscription
 // is then asked to end when it would next renew.
 func (s *Foundation) endMonthlyBilling(ctx context.Context, p Principal, id, orderID string, last time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if !s.orderReady(ctx) {
-		return ErrDenied
-	}
-	tx, client, err := s.beginOperatorWrite(ctx, p, id)
+	tx, o, err := s.orderEndWrite(ctx, p, id, orderID, s.beginOperatorWrite)
 	if err != nil {
 		return err
 	}
 	defer rollbackProposalWrite(ctx, tx)
-	o, err := readOrderTx(ctx, tx, id, client)
-	if err != nil {
-		return err
-	}
-	if o.ID != orderID || o.MonthlyMinor == 0 {
-		return errProposalConflict
-	}
 	ready := s.pathReady(o.Collection)
 	if o.End == nil && last.Before(currentMonth(time.Now())) {
 		// Earlier months may already be invoiced or charged.

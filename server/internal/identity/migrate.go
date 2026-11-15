@@ -71,8 +71,11 @@ var orderEndsSchema string
 //go:embed work-funding.sql
 var workFundingSchema string
 
+//go:embed client-order-ends.sql
+var clientOrderEndsSchema string
+
 // runtimeGrants is the web role's complete table privilege set after the
-// migrations above (v1–v19), as MIGRATIONS.md documents. A migration that adds
+// migrations above (v1–v20), as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
 // CheckRuntimeRole independently refuses an incomplete or broader web role.
 var runtimeGrants = []string{
@@ -140,7 +143,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 	if _, err = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS portal_schema_version (version integer PRIMARY KEY, checksum text NOT NULL)`); err != nil {
 		return fmt.Errorf("migration ledger: %w", err)
 	}
-	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema}
+	migrations := []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema}
 	rows, err := tx.Query(ctx, `SELECT version,checksum FROM portal_schema_version ORDER BY version`)
 	if err != nil {
 		return fmt.Errorf("read migration: %w", err)
