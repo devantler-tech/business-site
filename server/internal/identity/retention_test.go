@@ -249,3 +249,28 @@ func TestRetentionKeepsHistoryARenamedIdentityContinues(t *testing.T) {
 		t.Fatalf("history=%d members=%d %v", history, members, err)
 	}
 }
+
+// TestRetentionDeletesARenamedMembershipsWholeHistory purges a former client
+// whose member was renamed and renamed back: the membership's history is one
+// chain of events across both names, and it goes as a whole.
+func TestRetentionDeletesARenamedMembershipsWholeHistory(t *testing.T) {
+	_ = fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	formerClient(t, migrator, "cycle-client")
+	for _, statement := range []string{
+		`UPDATE portal_memberships SET subject='cycle-renamed' WHERE client_id='cycle-client'`,
+		`UPDATE portal_memberships SET subject='cycle-client-member' WHERE client_id='cycle-client'`,
+	} {
+		if _, err := migrator.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := purgeAged(t, migrator); n != 1 || numinaContacts(t, migrator, "cycle-client") != 0 {
+		t.Fatalf("the former client was not purged: %d", n)
+	}
+	var history int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_membership_transitions WHERE client_id='cycle-client'`).Scan(&history); err != nil || history != 0 {
+		t.Fatalf("the renamed membership's history was kept: %d %v", history, err)
+	}
+}

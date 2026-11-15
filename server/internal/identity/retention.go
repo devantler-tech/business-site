@@ -68,22 +68,35 @@ var clientTables = []string{"portal_memberships", "portal_invitations", "portal_
 	"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers",
 	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current"}
 
-// retentionHistory lists the identities, among those with any membership
-// event under client $1, whose whole membership history may go: their last
-// event lies before the cutoff $2; no other client their events name still
-// has records, so no other client loses the evidence that makes it due and
-// no other membership remains; no remaining work approval cites any of their
-// events; and no other identity's history continues from theirs.
-var retentionHistory = `SELECT t.issuer,t.subject FROM portal_membership_transitions t
- WHERE EXISTS (SELECT 1 FROM portal_membership_transitions a WHERE a.client_id=$1 AND a.issuer=t.issuer AND a.subject=t.subject)
- GROUP BY t.issuer,t.subject
- HAVING max(t.recorded_at) < $2
- AND NOT EXISTS (SELECT 1 FROM portal_membership_transitions o WHERE o.issuer=t.issuer AND o.subject=t.subject AND o.client_id<>$1
-   AND (` + clientHasRecords("o.client_id") + `))
- AND NOT EXISTS (SELECT 1 FROM portal_work_approvals w JOIN portal_membership_transitions x ON x.incarnation IN (w.client_incarnation,w.operator_incarnation)
-   WHERE x.issuer=t.issuer AND x.subject=t.subject)
- AND NOT EXISTS (SELECT 1 FROM portal_membership_transitions r JOIN portal_membership_transitions p ON p.incarnation=r.previous_incarnation
-   WHERE p.issuer=t.issuer AND p.subject=t.subject AND (r.issuer<>t.issuer OR r.subject<>t.subject))`
+// membershipLineages pairs every membership event with the first event of
+// its membership. An insert or baseline starts the chain, and each update or
+// deletion continues the event before it, whichever identity or client it
+// names, so a whole chain can go without leaving an event without its
+// predecessor.
+const membershipLineages = `WITH RECURSIVE lineage(root,incarnation) AS (
+ SELECT incarnation,incarnation FROM portal_membership_transitions WHERE previous_incarnation IS NULL
+ UNION ALL
+ SELECT l.root,t.incarnation FROM lineage l JOIN portal_membership_transitions t ON t.previous_incarnation=l.incarnation)`
+
+// retentionHistory lists the memberships, among those with an event under
+// client $1, whose whole history may go: their last event lies before the
+// cutoff $2; no other client their events name still has records, so no
+// other client loses the evidence that makes it due and no membership of
+// another client loses its history; and no remaining work approval cites any
+// of their events.
+var retentionHistory = membershipLineages + `
+ SELECT l.root::text FROM lineage l JOIN portal_membership_transitions t ON t.incarnation=l.incarnation
+ GROUP BY l.root
+ HAVING bool_or(t.client_id=$1) AND max(t.recorded_at) < $2
+ AND NOT bool_or(t.client_id<>$1 AND (` + clientHasRecords("t.client_id") + `))
+ AND NOT bool_or(EXISTS (SELECT 1 FROM portal_work_approvals w WHERE t.incarnation IN (w.client_incarnation,w.operator_incarnation)))`
+
+// deleteHistory deletes the whole chains that start with the events $1.
+const deleteHistory = `WITH RECURSIVE chain(incarnation) AS (
+ SELECT unnest($1::text[])::uuid
+ UNION ALL
+ SELECT t.incarnation FROM chain c JOIN portal_membership_transitions t ON t.previous_incarnation=c.incarnation)
+ DELETE FROM portal_membership_transitions WHERE incarnation IN (SELECT incarnation FROM chain)`
 
 // clientHasRecords is a condition that the client named by column has a
 // record in any of clientTables.
@@ -157,12 +170,8 @@ func purgeOne(ctx context.Context, pool *pgxpool.Pool, client string, cutoff tim
 	if err != nil {
 		return false, errors.Join(errTriageStorage, err)
 	}
-	var issuers, subjects []string
-	var issuer, subject string
-	if _, err = pgx.ForEachRow(rows, []any{&issuer, &subject}, func() error {
-		issuers, subjects = append(issuers, issuer), append(subjects, subject)
-		return nil
-	}); err != nil {
+	roots, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
 		return false, errors.Join(errTriageStorage, err)
 	}
 	for _, step := range []struct {
@@ -170,7 +179,7 @@ func purgeOne(ctx context.Context, pool *pgxpool.Pool, client string, cutoff tim
 		args      []any
 	}{
 		{`DELETE FROM portal_memberships WHERE client_id=$1`, []any{client}},
-		{`DELETE FROM portal_membership_transitions WHERE (issuer,subject) IN (SELECT * FROM unnest($1::text[],$2::text[]))`, []any{issuers, subjects}},
+		{deleteHistory, []any{roots}},
 	} {
 		tag, err := tx.Exec(ctx, step.statement, step.args...)
 		if err != nil {
