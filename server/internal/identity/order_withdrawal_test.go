@@ -21,7 +21,7 @@ func withdrawalForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT placed_at FROM portal_orders`).Scan(&placed); err != nil {
 		t.Fatal(err)
 	}
-	last := placed.In(copenhagen).AddDate(0, 0, withdrawalDays).Format("2006-01-02")
+	last := projectOrder{Placed: placed}.WithdrawUntil()
 	if !strings.Contains(body, "<summary>"+labels[0]+"</summary>") || !strings.Contains(body, ">"+labels[1]+"</button>") || !strings.Contains(body, " "+last+".") && !strings.Contains(body, " "+last+" ") {
 		t.Fatalf("receipt offers no withdrawal until %s", last)
 	}
@@ -112,7 +112,7 @@ func TestPrivateCardClientWithdraws(t *testing.T) {
 func TestOrderWithdrawalEndsAfterFourteenDays(t *testing.T) {
 	b, _, _ := danishOrderFixture(t)
 	f := withdrawalForm(t, b, "en")
-	if _, err := migrationDB(t).Exec(t.Context(), `UPDATE portal_orders SET placed_at=placed_at-interval '15 days'`); err != nil {
+	if _, err := migrationDB(t).Exec(t.Context(), `UPDATE portal_orders SET placed_at=placed_at-interval '30 days'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang=en", nil, ""); strings.Contains(body, "Withdraw from contract") {
@@ -126,19 +126,53 @@ func TestOrderWithdrawalEndsAfterFourteenDays(t *testing.T) {
 	}
 }
 
+// TestWithdrawalDeadlineCountsFromTheNextDay counts 14 days from the day
+// after the order, in Copenhagen, and moves a last day that is a weekend,
+// public holiday, Constitution Day, 24 or 31 December to the next working day
+// (Consumer Contracts Act, section 19(6)).
 func TestWithdrawalDeadlineCountsFromTheNextDay(t *testing.T) {
 	for placed, last := range map[string]string{
-		"2026-11-15T10:00:00Z": "2026-11-29",
+		"2026-11-16T10:00:00Z": "2026-11-30", // a Monday
 		"2026-11-15T23:30:00Z": "2026-11-30", // already 16 November in Copenhagen
-		"2026-03-20T12:00:00Z": "2026-04-03", // across the switch to summer time
+		"2026-11-14T10:00:00Z": "2026-11-30", // Saturday 28 November
+		"2026-11-15T10:00:00Z": "2026-11-30", // Sunday 29 November
+		"2026-03-20T12:00:00Z": "2026-04-07", // Good Friday to Easter Monday, after the switch to summer time
+		"2026-12-10T12:00:00Z": "2026-12-28", // 24 December to the weekend
+		"2027-12-17T12:00:00Z": "2028-01-03", // 31 December, New Year's Day and the weekend
+		"2027-04-22T12:00:00Z": "2027-05-07", // Ascension Day
+		"2027-05-03T12:00:00Z": "2027-05-18", // Whit Monday
+		"2028-05-22T12:00:00Z": "2028-06-06", // Constitution Day
 	} {
 		at, _ := time.Parse(time.RFC3339, placed)
 		o := projectOrder{Placed: at}
 		if o.WithdrawUntil() != last {
 			t.Errorf("an order placed %s may be withdrawn until %s, want %s", placed, o.WithdrawUntil(), last)
 		}
-		if deadline := withdrawalDeadline(at); deadline.In(copenhagen).Hour() != 0 || deadline.In(copenhagen).Format("2006-01-02") <= last {
+		if deadline := withdrawalDeadline(at).In(copenhagen); deadline.Hour() != 0 || deadline.Minute() != 0 || deadline.AddDate(0, 0, -1).Format("2006-01-02") != last {
 			t.Errorf("the period for %s ends at %v, not at midnight after %s", placed, deadline, last)
 		}
+	}
+	for year, want := range map[int]string{2024: "2024-03-31", 2025: "2025-04-20", 2026: "2026-04-05", 2027: "2027-03-28", 2028: "2028-04-16"} {
+		if got := easterSunday(year).Format("2006-01-02"); got != want {
+			t.Errorf("Easter %d is %s, want %s", year, got, want)
+		}
+	}
+}
+
+// TestInvoiceBillingInvoicesNothingAfterAWithdrawal leaves a charge recorded
+// before the withdrawal without an invoice, even when its hold is later lifted.
+func TestInvoiceBillingInvoicesNothingAfterAWithdrawal(t *testing.T) {
+	b := billingFixture(t)
+	fake, cfg := newFakeNumina(t)
+	placeInvoiceOrder(t, b)
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" {
+		t.Fatal("acceptance charge not held for the contact's country", err)
+	}
+	if status, _, _ := b.request("POST", withdrawalPath, withdrawalForm(t, b, "en"), b.site.URL); status != 303 {
+		t.Fatalf("withdrawal refused: %d", status)
+	}
+	fake.confirmDenmark()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 0 || fake.sends != 0 || chargeStates(t, b)["acceptance"] != "held" {
+		t.Fatal("a charge recorded before the withdrawal was invoiced after it", err)
 	}
 }

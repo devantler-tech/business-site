@@ -16,10 +16,59 @@ const withdrawalDays = 14
 
 // withdrawalDeadline is when the right of withdrawal ends: the period starts
 // the day after the order, so it ends at midnight in Copenhagen after the
-// 14th day.
+// 14th day. A last day that is a public holiday, a Saturday, Constitution Day,
+// 24 or 31 December moves to the next working day (section 19(6)).
 func withdrawalDeadline(placed time.Time) time.Time {
 	local := placed.In(copenhagen)
-	return time.Date(local.Year(), local.Month(), local.Day()+withdrawalDays+1, 0, 0, 0, 0, copenhagen)
+	last := time.Date(local.Year(), local.Month(), local.Day()+withdrawalDays, 0, 0, 0, 0, time.UTC)
+	for closedDay(last) {
+		last = last.AddDate(0, 0, 1)
+	}
+	return time.Date(last.Year(), last.Month(), last.Day()+1, 0, 0, 0, 0, copenhagen)
+}
+
+// closedDay reports a date on which a withdrawal period cannot end: a
+// weekend, a Danish public holiday, Constitution Day, 24 or 31 December.
+func closedDay(d time.Time) bool {
+	if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+		return true
+	}
+	switch d.Month() {
+	case time.January:
+		if d.Day() == 1 {
+			return true
+		}
+	case time.June:
+		if d.Day() == 5 {
+			return true
+		}
+	case time.December:
+		if d.Day() == 24 || d.Day() == 25 || d.Day() == 26 || d.Day() == 31 {
+			return true
+		}
+	}
+	// Maundy Thursday, Good Friday, Easter Monday, Ascension Day and Whit
+	// Monday; Easter and Whit Sunday are Sundays.
+	easter := easterSunday(d.Year())
+	for _, offset := range []int{-3, -2, 1, 39, 50} {
+		if d.Equal(easter.AddDate(0, 0, offset)) {
+			return true
+		}
+	}
+	return false
+}
+
+// easterSunday is Easter Sunday of a Gregorian year (the anonymous algorithm).
+func easterSunday(year int) time.Time {
+	a, b, c := year%19, year/100, year%100
+	d, e := b/4, b%4
+	f := (b + 8) / 25
+	g := (b - f + 1) / 3
+	h := (19*a + b - d - g + 15) % 30
+	i, k := c/4, c%4
+	l := (32 + 2*e + 2*i - h - k) % 7
+	m := (a + 11*h + 22*l) / 451
+	return time.Date(year, time.Month((h+l-7*m+114)/31), (h+l-7*m+114)%31+1, 0, 0, 0, 0, time.UTC)
 }
 
 // WithdrawUntil is the last day the client may withdraw, as YYYY-MM-DD.

@@ -59,6 +59,7 @@ type billingCharge struct {
 	Reference               string
 	GrossMinor, NetMinor    int64
 	Sent                    bool
+	Withdrawn               bool // the client withdrew from the order
 }
 
 // SyncInvoiceBilling creates, books and sends the Numina invoice for every due
@@ -199,7 +200,7 @@ func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) 
 }
 
 func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent,EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id) FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -208,7 +209,7 @@ func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
 	for rows.Next() {
 		var c billingCharge
 		o := &c.Order
-		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent); err != nil {
+		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent, &c.Withdrawn); err != nil {
 			return nil, errTriageStorage
 		}
 		result = append(result, c)
@@ -232,6 +233,11 @@ func (s *Foundation) setCharge(ctx context.Context, c billingCharge, set string,
 // is created, booking is idempotent at Numina, and sending carries its own key.
 // The gate is rechecked before every call that changes something at Numina.
 func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge) error {
+	if c.Withdrawn && c.State != "booked" {
+		// Nothing is invoiced after a withdrawal. A booked invoice is only
+		// followed to its payment, for the operator's refund or credit note.
+		return nil
+	}
 	if c.Reference == "" || c.State == "held" {
 		err := s.attachInvoice(ctx, cfg, now, &c)
 		if errors.Is(err, errChargeHeld) {
@@ -288,7 +294,7 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 		}
 		c.State = "booked"
 	}
-	if !c.Sent {
+	if !c.Sent && !c.Withdrawn {
 		if !s.invoiceBillingReady(ctx) {
 			return nil
 		}

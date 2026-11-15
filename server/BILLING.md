@@ -165,12 +165,16 @@ Stripe invoice is the sale's document, and Numina books the money once.
   - The receipt shows **Fortryd aftale** / **Withdraw from contract** with the last day. It
     opens a separate **Bekræft fortrydelse** / **Confirm withdrawal**
     (`POST /requests/{id}/withdrawal`), under the same request lock and client membership as
-    the order. The period ends at midnight in Copenhagen after the 14th day.
+    the order. The period ends at midnight in Copenhagen after the 14th day. A last day that
+    is a weekend, a public holiday, Constitution Day, 24 or 31 December moves to the next
+    working day (section 19(6)).
   - The withdrawal is recorded once (`portal_order_withdrawals`, migration v21) and stops all
-    further billing. The invoice path creates no new invoice, not even the first, and the card
-    path offers no Checkout. Monthly billing ends before its first month: a card subscription
-    ends when it would first charge, or at once if a month was already charged. A renewal after
-    it never funds a month, and a withdrawn order funds no work approval.
+    further billing. The invoice path creates, books and sends nothing more, not even the
+    first invoice or one held before the withdrawal; a booked invoice is only followed to its
+    payment. The card path offers no Checkout. Monthly billing ends before its first month: a
+    card subscription ends when it would first charge, or at once if a month was already
+    charged. A renewal after it never funds a month, and a withdrawn order funds no work
+    approval.
   - Refunds stay with the operator, whose page shows the withdrawal. They refund what was paid
     within 14 days by the same payment method: a Stripe refund, or a Numina credit note. They
     also confirm the withdrawal to the client by email. The client's receipt shows the time
