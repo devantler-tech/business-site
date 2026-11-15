@@ -87,6 +87,12 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
         : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
       for (const phrase of required) assert.ok(text(main).includes(phrase),`${kind} page is missing: ${phrase}`);
+      // List items carry the withdrawal form and the recipients; headings alone must not satisfy them.
+      const items = walk(main).filter(node => node.tagName === "li").map(text);
+      const listed = kind === "privacy"
+        ? ["Numina","Stripe","Cloudflare"]
+        : (locale === "da" ? ["Forbrugerens underskrift","Bestilt den (*)/modtaget den (*)"] : ["Signature of consumer(s)","Ordered on (*)/received on (*)"]);
+      for (const phrase of listed) assert.ok(items.some(item => item.includes(phrase)),`${kind} list is missing: ${phrase}`);
     }
     const path = join(candidate,`${prefix}company/index.html`);
     if (!identity) { assert.equal(existsSync(path),false,"disabled company route must be absent, not merely empty"); continue; }
@@ -113,6 +119,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);
+    for (const kind of ["/privacy/","/terms/"]) assert.equal(links(footer).some(([,href]) => href === kind),identity,"supporting footer links the privacy notice and terms");
     if (identity) {
       assert.ok(text(footer).includes('Sole proprietorship'), 'supporting footer independently identifies the ordinary business');
       assert.doesNotMatch(text(footer), /\bPMV\b/i);

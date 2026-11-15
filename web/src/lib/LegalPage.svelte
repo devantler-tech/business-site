@@ -14,7 +14,7 @@
         {#each section.blocks as block}
           {#if typeof block === "string"}<p>{block}</p>
           {:else if "list" in block}<ul>{#each block.list as item}<li>{item}</li>{/each}</ul>
-          {:else}<ul class="links">{#each block.links as link}<li><a href={link.href}>{link.label}</a></li>{/each}</ul>{/if}
+          {:else}<ul class="links" role="list">{#each block.links as link}<li><a href={link.href}>{link.label}</a></li>{/each}</ul>{/if}
         {/each}
       </section>
     {/each}
