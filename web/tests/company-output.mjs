@@ -55,6 +55,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         assert.doesNotMatch(text(footer), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current footer cannot retain PMV wording');
       }
       assert.equal(walk(footer).some(node => attr(node,"href") === `/${prefix}company/`),identity);
+      for (const kind of ["privacy/","terms/"]) assert.equal(links(footer).some(([,href]) => href === `/${prefix}${kind}`),identity,"privacy and terms footer links follow company identity");
       assert.equal(actual.some(node => attr(node,"href") === "mailto:ned@devantler.tech"),identity);
       assert.equal(!!find(actual,"data-customer-scope"),scope);
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
@@ -71,6 +72,21 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
 
         assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"],["other",undefined,undefined]]);
       }
+    }
+    for (const kind of ["privacy","terms"]) {
+      const legalPath = join(candidate,`${prefix}${kind}/index.html`);
+      if (!identity) { assert.equal(existsSync(legalPath),false,`disabled ${kind} route must be absent, not merely empty`); continue; }
+      const page = load(legalPath), main = find(page,"data-legal-page");
+      assert.ok(main && attr(main,"data-legal-page") === kind,`${kind} page renders its legal content`);
+      assert.ok(page.some(node => node.tagName === "html" && attr(node,"lang") === locale));
+      assert.ok(page.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${kind}/`));
+      for (const language of ["en","da","x-default"]) assert.ok(page.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${kind}/`));
+      for (const fact of ["46830385","ned@devantler.tech"]) assert.ok(text(main).includes(fact),`${kind} page names the registered business`);
+      assert.ok(links(main).some(([,href]) => href === `/${prefix}company/`),`${kind} page links to the postal address instead of copying it`);
+      const required = kind === "privacy"
+        ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
+        : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
+      for (const phrase of required) assert.ok(text(main).includes(phrase),`${kind} page is missing: ${phrase}`);
     }
     const path = join(candidate,`${prefix}company/index.html`);
     if (!identity) { assert.equal(existsSync(path),false,"disabled company route must be absent, not merely empty"); continue; }

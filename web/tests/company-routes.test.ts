@@ -13,3 +13,14 @@ test("disabled company identity cannot emit disclosure routes", () => {
   }
   assert.throws(() => checkUnseenRoutes(["/[[locale]]/company"], "true"), /Unexpected/);
 });
+
+test("privacy and terms pages follow the company identity release in both locales", () => {
+  for (const kind of ["privacy", "terms"]) {
+    assert.deepEqual(frontendEntries("true").filter(path => path.endsWith(`/${kind}/`)), [`/${kind}/`, `/da/${kind}/`]);
+    for (const identity of [undefined, "false"]) {
+      assert.deepEqual(frontendEntries(identity).filter(path => path.endsWith(`/${kind}/`)), []);
+      assert.doesNotThrow(() => checkUnseenRoutes([`/[[locale]]/${kind}`], identity));
+    }
+    assert.throws(() => checkUnseenRoutes([`/[[locale]]/${kind}`], "true"), /Unexpected/);
+  }
+});
