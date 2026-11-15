@@ -150,6 +150,12 @@ existing requests, indexes and runtime grants are preserved. Unknown categories
 still fail the database constraint. This adds no priced product, payment or
 execution authority and enables no release gate.
 
+v16 adds `portal_orders`, `portal_order_charges` and `portal_numina_contacts` after
+unchanged v1–v15 (see [portal billing](BILLING.md)). Grant SELECT/INSERT on orders and the
+Numina contact map, and SELECT/INSERT/UPDATE on charges, whose state, provider reference and
+send/settle markers change as an invoice advances. Never grant DELETE, TRUNCATE, references,
+triggers, maintenance, delegation or ownership on them to the runtime or an assumable role.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

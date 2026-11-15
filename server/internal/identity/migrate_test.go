@@ -68,8 +68,18 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindOrdersFixture removes only the disposable v16 order and billing tables.
+func rewindOrdersFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_order_charges,portal_orders,portal_numina_contacts;
+ DELETE FROM portal_schema_version WHERE version=16`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-order schema", err)
+	}
+}
+
 func rewindWorkApprovalFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindOrdersFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_requests DROP CONSTRAINT portal_requests_product_check;
  ALTER TABLE portal_requests ADD CONSTRAINT portal_requests_product_check CHECK(product IN ('website','app','service'));
  DELETE FROM portal_schema_version WHERE version=15`); err != nil {

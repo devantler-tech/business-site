@@ -85,7 +85,33 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	if err := CheckMembershipRecorder(ctx, pool); err != nil {
 		return err
 	}
-	return checkWorkApprovalRole(ctx, pool)
+	if err := checkWorkApprovalRole(ctx, pool); err != nil {
+		return err
+	}
+	return checkBillingRole(ctx, pool)
+}
+
+// checkBillingRole requires SELECT/INSERT on orders, charges and the Numina
+// contact map and UPDATE on charges only. Orders and the contact map are never
+// changed, and nothing is deleted, directly, by delegation or assumable role.
+func checkBillingRole(ctx context.Context, pool queryRower) error {
+	var allowed bool
+	err := pool.QueryRow(ctx, `SELECT
+ (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
+  FROM unnest(ARRAY['portal_orders','portal_order_charges','portal_numina_contacts']) table_name
+  CROSS JOIN unnest(ARRAY['SELECT','INSERT']) privilege)
+ AND has_table_privilege(current_user,'portal_order_charges','UPDATE')
+ AND NOT EXISTS (
+  SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
+   EXISTS (SELECT 1 FROM unnest(ARRAY['portal_orders','portal_numina_contacts']) immutable(table_name)
+    WHERE has_any_column_privilege(role.oid,immutable.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION')
+     OR has_table_privilege(role.oid,immutable.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))
+   OR has_any_column_privilege(role.oid,'portal_order_charges','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
+   OR has_table_privilege(role.oid,'portal_order_charges','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
+	if err != nil || !allowed {
+		return ErrDenied
+	}
+	return nil
 }
 
 // checkWorkApprovalRole distinguishes immutable evidence from the two mutable
