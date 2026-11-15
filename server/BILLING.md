@@ -135,11 +135,22 @@ card order, so nothing is booked twice.
     soon as it is recorded.
   - A renewal paid after the last billed month never funds a month, and an ended order offers
     no new subscription Checkout.
+- **The client ends monthly billing.** A consumer must be able to end a subscription where
+  they agreed to it, here the portal (Consumer Contracts Act, section 28 a). On the receipt,
+  **Opsig månedlig betaling** / **End monthly billing** (`POST /requests/{id}/order-end`)
+  makes the current month the last billed one. The notice is never more than the rest of that
+  month, and nothing already invoiced or paid changes. It uses the same request lock and
+  current client membership as the order, and the end is recorded once with the client's
+  identity (`source` `client`, migration v20). It then works exactly like an operator's end on
+  both paths. An end that is already recorded stands, and the form is shown only while no end
+  is recorded and the order's own path is on. If Stripe does not confirm the card
+  subscription's end, the client's end still stands and the operator's page offers to ask
+  Stripe again.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
-  after failed renewals, records the order's end, unless an operator already ended it. The last
-  billed month is the one the subscription had paid in advance when it ended. An end that
-  arrives before the subscription's Checkout completion answers `500` when it carries the
-  portal's order marker, so Stripe retries it.
+  after failed renewals, records the order's end, unless the operator or the client already
+  ended it. The last billed month is the one the subscription had paid in advance when it
+  ended. An end that arrives before the subscription's Checkout completion answers `500` when
+  it carries the portal's order marker, so Stripe retries it.
 - **Refunds and disputes.** `charge.refunded` (any refunded amount) and
   `charge.dispute.created` record a reversal against the funded charge
   (`portal_charge_reversals`). The charge keeps its settlement, but no longer funds the order,

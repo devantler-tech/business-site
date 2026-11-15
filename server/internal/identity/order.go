@@ -253,6 +253,11 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 			log.Printf("portal: card checkout not created")
 		}
 	}
+	b.clientOrderResult(w, r, err)
+}
+
+// clientOrderResult answers a client's order form and returns to the receipt.
+func (b *browser) clientOrderResult(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errProposalConflict):
 		b.render(w, r, 409, "error", "", "")

@@ -68,10 +68,24 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindClientOrderEndsFixture removes only the disposable v20 client ends,
+// with the synthetic subscription ends that follow them.
+func rewindClientOrderEndsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DELETE FROM portal_card_cancellations WHERE order_id IN (SELECT order_id FROM portal_order_ends WHERE source='client');
+ DELETE FROM portal_order_ends WHERE source='client';
+ ALTER TABLE portal_order_ends DROP CONSTRAINT portal_order_end_client, DROP CONSTRAINT portal_order_end_source, DROP COLUMN client_issuer, DROP COLUMN client_subject,
+  ADD CONSTRAINT portal_order_ends_source_check CHECK(source IN ('operator','stripe'));
+ DELETE FROM portal_schema_version WHERE version=20`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-client-end schema", err)
+	}
+}
+
 // rewindWorkFundingFixture removes only the disposable v19 funding binding,
 // with the synthetic approvals that use it.
 func rewindWorkFundingFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindClientOrderEndsFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DELETE FROM portal_work_current WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
  DELETE FROM portal_work_revocations WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
  DELETE FROM portal_work_approvals WHERE order_id IS NOT NULL;
