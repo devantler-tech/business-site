@@ -677,7 +677,9 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND has_table_privilege('portal_runtime','portal_order_charges','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_orders','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_numina_contacts','DELETE')
- AND (SELECT count(*) FROM portal_schema_version)=16`).Scan(&exact); err != nil || !exact {
+ AND has_table_privilege('portal_runtime','portal_card_checkouts','UPDATE')
+ AND NOT has_table_privilege('portal_runtime','portal_stripe_events','UPDATE')
+ AND (SELECT count(*) FROM portal_schema_version)=17`).Scan(&exact); err != nil || !exact {
 		t.Fatal("repeat migration retained privileges beyond the documented set")
 	}
 	if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {

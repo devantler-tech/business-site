@@ -131,7 +131,8 @@ below. None of these is added here.
 The card path has its own false-default `portal-card-billing` flag, also without an environment
 mapping. It is enabled only when both `PORTAL_STRIPE_KEY_FILE` and
 `PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files (`PORTAL_STRIPE_API_URL` is optional,
-HTTPS only). Turning the flag off hides the card choice and the payment link, refuses card
+HTTPS only). In production all three come from the portal settings projection, and the two
+files are separate projected secrets such as `/run/webapp-inputs/stripe-api-key`. Turning the flag off hides the card choice and the payment link, refuses card
 orders and answers the webhook with `404`, so Stripe retries until it is on again.
 
 Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site/stripe`:
