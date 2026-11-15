@@ -43,8 +43,8 @@ boundary spaces. Parsed inputs and rendered evidence are not rewritten. Normal
 and task bodies use separate explicit expectations; the task hint is not removed
 from its fingerprint.
 
-The non-contact oracle covers 108 documents in explicit state order. There are
-106 distinct reference bodies: sharing-invalid and sharing-conflict intentionally
+The non-contact oracle covers 86 documents in explicit state order. There are
+84 distinct reference bodies: sharing-invalid and sharing-conflict intentionally
 have the same portal main in each language. Controls do not claim to distinguish
 those aliases. Each draft's real random submission key must first satisfy its
 unique native input, expected state and 26-character RFC 4648 base32 shape before

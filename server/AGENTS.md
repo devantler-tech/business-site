@@ -38,12 +38,14 @@ Retain the closed receipt/member schema, bounded same-descriptor snapshot, compl
 CRC checks and caller-bound original source/run/attempt. Its ordinary tests include
 the compiled command. Admission is not signature, current-CI, release or deployment
 proof; #276 owns the separate publisher caller and independent signed-pair proof.
-The shared test-only maintenance inventory preserves all 120 original Go documents.
+The shared test-only maintenance inventory preserves the 98 original Go documents of the
+screens that still exist; #117 and #120 retired the 22 invoice and credit documents with
+their screens.
 The separate work-review inventory adds 18 actual EN/DA documents with explicit
 state, native-form and evidence expectations; retain both inventories.
 Read `CONTACT-MAINTENANCE.md` before changing it.
 Keep its explicit task option separate from ordinary source checks; preserve
-all five families, both languages, complete counts and negative controls. Markup
+all four remaining families, both languages, complete counts and negative controls. Markup
 inventory is not authenticated/browser proof or a completed comparison.
 The offline `cmd/contact-trial-inputs` checks frozen source identities for #213;
 read `CONTACT-TRIAL-INPUTS.md` before changing it. Preserve its closed presentation
