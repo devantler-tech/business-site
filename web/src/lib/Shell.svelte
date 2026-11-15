@@ -15,7 +15,7 @@
     guidePath = "",
     customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "privacy" | "terms" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
   const frame = getContext<() => BusinessFrame>(businessFrameContext);
   let business = $derived(frame());
   const words = {
@@ -108,7 +108,7 @@
     <p>{business.footer.identity}</p><p>{business.footer.note}</p>
     {#if business.identity}<p>CVR {business.identity.cvr} · {business.footer.registration}</p><a class="company-email" href={business.inquiryUrl}>{business.identity.email}</a>{/if}
   </div>
-  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a></div>
+  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a></div>
 </footer>
 
 <style>
