@@ -199,6 +199,9 @@ and content-bound retry keys, and retain original intake order. Grant their tabl
 SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
 not a dispatched offer, agreement, payment or work authorization. Keep credited
 funds, worker claims and API/MCP execution separate from draft preparation.
+Generated drafts (#552) come from `internal/identity/offerings.json` and post the
+ordinary proposal form; keep that file equal to the public offer copy and prices
+(`scripts/proposal-offerings.test.mjs`). Requests outside the offerings are priced by hand.
 
 Explicit sharing/withdrawal additionally requires false-default
 `portal-proposal-sharing`; review retirement under business-site#78 by 13 November 2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only

@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { createBusinessCopy, vatInclusiveOffers } from '../src/components/business/business-copy.ts';
+
+// The portal generates proposals from server/internal/identity/offerings.json
+// (ADR 0030, #552). It must say exactly what the published site says, at the
+// same VAT-inclusive prices, or a generated quote would contradict the offer.
+const catalogue = JSON.parse(readFileSync(new URL('../server/internal/identity/offerings.json', import.meta.url), 'utf8'));
+const published = createBusinessCopy(true, false);
+
+test('generated proposals use the published VAT-inclusive prices', () => {
+  assert.deepEqual(catalogue.offerings.map(({ id, setup, monthly }) => ({ id, setup, monthly })),
+    vatInclusiveOffers.map(({ id, setup, monthly }) => ({ id, setup, monthly })));
+});
+
+test('generated proposals use the published offering copy in both languages', () => {
+  for (const lang of ['en', 'da']) {
+    assert.deepEqual(catalogue.offerings.map(offering => offering.text[lang]),
+      published[lang].offerCopy.map(({ title, description, includes, boundary }) => ({ title, description, includes, boundary })), lang);
+    assert.equal(catalogue.hosting[lang], published[lang].hostingText, `${lang} hosting`);
+    assert.ok(published[lang].priceNote.endsWith(catalogue.vat[lang]), `${lang} VAT note`);
+  }
+});
+
+test('the drift check notices a changed price', () => {
+  const changed = structuredClone(catalogue);
+  changed.offerings[0].setup += 1;
+  assert.notDeepEqual(changed.offerings.map(({ id, setup, monthly }) => ({ id, setup, monthly })),
+    vatInclusiveOffers.map(({ id, setup, monthly }) => ({ id, setup, monthly })));
+});

@@ -152,6 +152,11 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		b.proposalPresentation(r, &page, proposals)
+		if len(rows) == 1 {
+			// Set here, not in proposalPresentation: the frozen maintenance
+			// inventory renders proposal states without a generated draft.
+			page.Generated, page.GeneratedOK = generatedProposal(rows[0].Product, rows[0].Title, page.Lang)
+		}
 		if sharingEnabled {
 			page.Visibility, err = b.foundation.readVisibility(r.Context(), p, id)
 			if err != nil {
@@ -235,6 +240,8 @@ type triagePageData struct {
 	Next, LanguageURL string
 	ProposalsEnabled  bool
 	Proposals         []projectProposal
+	Generated         projectProposal
+	GeneratedOK       bool
 	ExpectedVersion   int
 	ProposalKey       string
 	SharingEnabled    bool
