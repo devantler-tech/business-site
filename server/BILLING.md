@@ -133,6 +133,33 @@ Stripe invoice is the sale's document, and Numina books the money once.
   - The paid amount and currency must equal the order's amount for that period exactly.
     A browser return to the receipt is never proof of payment.
 
+## Launch discount
+
+The published launch offer (`launchDiscount` in `internal/identity/offerings.json`, which
+mirrors the public site) takes 25% off the one-time price for the first 50 customers who order
+with hosting. The portal applies exactly that rule and refuses to start with any other
+`appliesTo` or `requiresHosting`:
+
+- An order qualifies when it has both a one-time and a monthly (hosting) price. The discount is
+  `percent` of the one-time price, rounded to whole kroner. Hosting always keeps its full price.
+- Places count customers, not orders. A client takes at most one place, with their first
+  qualifying order, and only that order is discounted. A place is never reused: a withdrawn or
+  ended order keeps it, and the retention purge removes only who held it.
+- The order takes its place in the same transaction that inserts it, under a transaction-scoped
+  advisory lock, so two orders never take the same place and the 51st order finds none
+  (`portal_launch_places`, migration v24, with a unique place number as a second guard).
+- The order stores the discounted one-time price, so invoices, card payments, work funding,
+  withdrawals and settlements use it unchanged.
+- The shared proposal, the order summary before the button and the order receipt show the
+  discount as its own line, with the offer's sentence. The order form carries whether it
+  showed the discount. If the last place went in between, the order is refused and the receipt
+  shows the full price with the reason, so nobody is charged a price they did not see.
+- The Numina invoice line and the Stripe Checkout line carry the discounted unit price, and
+  their description names the full price and the discount, for example
+  `… — normalpris 6000 DKK, lanceringsrabat 25 % −1500 DKK`. A unit price that already includes
+  the discount is valid on a Danish invoice. No Stripe coupon or negative Numina line is needed.
+- The order confirmation email names the discount, and the operator's page shows the place.
+
 ## Ending and reversing orders
 
 - **Ending monthly billing.** On the request page, an operator chooses an order's last billed
