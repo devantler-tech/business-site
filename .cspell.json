@@ -753,7 +753,9 @@
     "vurderer",
     "tidsplan",
     "tmpfs",
-    "kubelet"
+    "kubelet",
+    "automount",
+    "seccomp"
   ],
   "overrides": [
     {

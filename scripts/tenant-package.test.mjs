@@ -222,6 +222,27 @@ for (const [name, mutate] of [
   ["unrestricted billing ports", (d) => { delete d[1].spec.egress[0].toPorts; }],
   ["a second egress rule", (d) => { d[1].spec.egress.push(structuredClone(d[1].spec.egress[0])); }],
   ["the previous egress-free policy", (d) => { d[1].spec.egress = [{}]; }],
+  ["a missing migration Job", (d) => { d.splice(9, 1); }],
+  ["a second migration Job", (d) => { const extra = structuredClone(d[9]); extra.metadata.name = "business-site-extra"; d.push(extra); }],
+  ["a migration Job on another image", (d) => { d[9].spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
+  ["a mutable migration image tag", (d) => { d[9].spec.template.spec.containers[0].image = "ghcr.io/devantler-tech/business-site:latest"; }],
+  ["a migration Job that serves the web", (d) => { d[9].spec.template.spec.containers[0].args = structuredClone(d[0].spec.args); }],
+  ["the strict file option, which cannot read a Secret projection", (d) => { d[9].spec.template.spec.containers[0].args[1] = "--migration-database-file"; }],
+  ["a migration without the web role grant", (d) => { d[9].spec.template.spec.containers[0].args.splice(3, 2); }],
+  ["a migration granting another role", (d) => { d[9].spec.template.spec.containers[0].args[4] = "portal_migrator"; }],
+  ["a migration Job running as root", (d) => { d[9].spec.template.spec.securityContext.runAsUser = 0; }],
+  ["a migration Job without its file group", (d) => { delete d[9].spec.template.spec.securityContext.fsGroup; }],
+  ["a migration Job with a service-account token", (d) => { d[9].spec.template.spec.automountServiceAccountToken = true; }],
+  ["a disk-backed migration temp directory", (d) => { delete d[9].spec.template.spec.volumes[1].emptyDir.medium; }],
+  ["a writable migration root", (d) => { d[9].spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem = false; }],
+  ["a group-readable migration Secret mode", (d) => { d[9].spec.template.spec.volumes[0].secret.defaultMode = 0o440; }],
+  ["the web runtime Secret in the migration Job", (d) => { d[9].spec.template.spec.volumes[0].secret.secretName = "business-site-runtime"; }],
+  ["an extra migration Secret item", (d) => { d[9].spec.template.spec.volumes[0].secret.items.push({ key: "password", path: "password" }); }],
+  ["migration input from the environment", (d) => { d[9].spec.template.spec.containers[0].envFrom = [{ secretRef: { name: "business-site-portal-db-migration" } }]; }],
+  ["unbounded migration retries", (d) => { d[9].spec.backoffLimit = 10; }],
+  ["no migration deadline", (d) => { delete d[9].spec.activeDeadlineSeconds; }],
+  ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
+  ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
@@ -234,6 +255,8 @@ for (const [name, mutate] of [
     for (const name of ["business-site-portal", "business-site-public"]) docs.push(named("HTTPRoute", name));
     // The billing synchronizations follow at indexes 7 (Numina) and 8 (Stripe).
     for (const name of ["business-site-numina", "business-site-stripe"]) docs.push(named("ExternalSecret", name));
+    // The migration Job follows at index 9.
+    docs.push(named("Job", "business-site-portal-migration"));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
@@ -243,6 +266,25 @@ for (const [name, mutate] of [
     assert.match(result.stderr, /^tenant package: rejected /);
   });
 }
+
+test("the migration Job runs whatever image the publisher pins in the WebApp", () => {
+  // The shared publisher rewrites only webapp.yaml's WebApp image; the package
+  // build copies it into the Job, so the Job never runs another release's image.
+  const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
+  try {
+    cpSync(path.join(root, "deploy"), fixture, { recursive: true });
+    const pinned = `ghcr.io/devantler-tech/business-site@sha256:${"b".repeat(64)}`;
+    const app = yaml.load(readFileSync(path.join(fixture, "webapp.yaml"), "utf8"));
+    app.spec.image = pinned;
+    writeFileSync(path.join(fixture, "webapp.yaml"), yaml.dump(app));
+    const job = yaml.loadAll(render(fixture)).find((d) => d?.kind === "Job");
+    assert.equal(job.spec.template.spec.containers[0].image, pinned);
+    const source = yaml.load(readFileSync(path.join(root, "deploy/job-portal-migration.yaml"), "utf8"));
+    assert.equal(source.spec.template.spec.containers[0].image, undefined, "the source Job names no image of its own");
+  } finally {
+    rmSync(fixture, { recursive: true });
+  }
+});
 
 test("a local Kustomize overlay cannot smuggle an unsupported resource into validation", () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));

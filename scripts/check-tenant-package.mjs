@@ -13,7 +13,7 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 9, "resource count");
+  assert.equal(docs.length, 10, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
@@ -117,6 +117,53 @@ export function validateTenantPackage(input) {
       { key: "smtp-password", path: "smtp-password" },
     ],
   }]);
+  // The one migration Job runs this release's own image with only migration
+  // arguments. It reads the platform's migration Secret and nothing else, so the
+  // package names that Secret but carries no migration input.
+  assert.deepEqual(docs.find((d) => d?.kind === "Job"), {
+    apiVersion: "batch/v1",
+    kind: "Job",
+    metadata: {
+      name: "business-site-portal-migration",
+      namespace: "business-site",
+      annotations: { "kustomize.toolkit.fluxcd.io/force": "enabled" },
+    },
+    spec: {
+      backoffLimit: 2,
+      activeDeadlineSeconds: 240,
+      template: {
+        metadata: { labels: { "app.kubernetes.io/name": "business-site-portal-migration" } },
+        spec: {
+          restartPolicy: "Never",
+          automountServiceAccountToken: false,
+          enableServiceLinks: false,
+          securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: "RuntimeDefault" } },
+          containers: [{
+            name: "migrate",
+            image: spec.image,
+            args: ["--migrate", "--migration-database-projection", "/run/portal-migration/database-url", "--runtime-role", "portal_web"],
+            resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { cpu: "500m", memory: "128Mi" } },
+            securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
+            volumeMounts: [
+              { name: "migration", mountPath: "/run/portal-migration", readOnly: true },
+              { name: "tmp", mountPath: "/tmp" },
+            ],
+          }],
+          volumes: [
+            {
+              name: "migration",
+              secret: {
+                secretName: "business-site-portal-db-migration",
+                defaultMode: 0o400,
+                items: [{ key: "database-url", path: "database-url" }, { key: "ca.crt", path: "ca.crt" }],
+              },
+            },
+            { name: "tmp", emptyDir: { medium: "Memory", sizeLimit: "1Mi" } },
+          ],
+        },
+      },
+    },
+  });
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
     ingress: [{ fromEntities: ["ingress"], toPorts: [{ ports: [{ port: "8080", protocol: "TCP" }] }] }],
