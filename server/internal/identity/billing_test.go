@@ -26,6 +26,7 @@ type fakeNumina struct {
 	contactCreates  int
 	failCreateReply bool  // store the invoice, then answer 500 as if the reply was lost
 	failBookReply   bool  // book the invoice, then answer 500 as if the reply was lost
+	failGetInvoice  bool  // answer one invoice read with 500
 	forbidSend      bool  // a sandbox company cannot send email
 	totalOffset     int64 // added to a created invoice's total, as a wrong VAT code would
 	onCreate        func()
@@ -164,6 +165,11 @@ func (f *fakeNumina) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.sends++
 			reply(200, inv.Invoice)
 		case r.Method == "GET" && len(parts) == 3:
+			if f.failGetInvoice {
+				f.failGetInvoice = false
+				reply(500, map[string]string{"error": "server_error"})
+				return
+			}
 			reply(200, inv.Invoice)
 		default:
 			reply(404, map[string]string{"error": "not_found"})
@@ -337,10 +343,7 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 // TestInvoiceBillingRecoversALostCreateReply proves that an invoice created
 // at Numina whose reply was lost is found by its memo, not created twice.
 func TestInvoiceBillingRecoversALostCreateReply(t *testing.T) {
-	b := billingFixture(t)
-	fake, cfg := newFakeNumina(t)
-	placeInvoiceOrder(t, b)
-	fake.contacts["contact-dk"] = numina.Contact{ID: "contact-dk", Name: "Fictional Bakery ApS", Email: "client@example.invalid", CountryCode: "DK"}
+	b, fake, cfg := danishOrderFixture(t)
 	fake.failCreateReply = true
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err == nil || chargeStates(t, b)["acceptance"] != "pending" {
 		t.Fatal("lost reply was not reported as a failed charge")
@@ -461,6 +464,42 @@ func syncNextMonth(t *testing.T, b *browserFixture, cfg InvoiceBilling) string {
 	return firstOfNextMonth(time.Now()).Format("2006-01")
 }
 
+// danishOrderFixture places an invoice order for a client whose Numina contact
+// the operator has already confirmed as Danish.
+func danishOrderFixture(t *testing.T) (*browserFixture, *fakeNumina, InvoiceBilling) {
+	t.Helper()
+	b := billingFixture(t)
+	fake, cfg := newFakeNumina(t)
+	placeInvoiceOrder(t, b)
+	fake.contacts["contact-dk"] = numina.Contact{ID: "contact-dk", Name: "Fictional Bakery ApS", Email: "client@example.invalid", CountryCode: "DK"}
+	return b, fake, cfg
+}
+
+// bookedAfterSync runs one pass and returns the booked acceptance charge's
+// Numina invoice and whether it counts as sent.
+func bookedAfterSync(t *testing.T, b *browserFixture, cfg InvoiceBilling) (string, bool) {
+	t.Helper()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	var reference string
+	var sent bool
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT provider_ref,sent FROM portal_order_charges WHERE period='acceptance' AND state='booked'`).Scan(&reference, &sent); err != nil {
+		t.Fatal("acceptance charge not booked", err)
+	}
+	return reference, sent
+}
+
+// heldForAWrongTotal makes Numina's draft differ from the charge by one minor
+// unit and checks that the charge is held, not booked.
+func heldForAWrongTotal(t *testing.T, b *browserFixture, fake *fakeNumina, cfg InvoiceBilling) {
+	t.Helper()
+	fake.totalOffset = 1
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.count() != 1 {
+		t.Fatal("a draft with a different total was not held", err)
+	}
+}
+
 // identityOf returns the charge identity the operator page shows for a period.
 func identityOf(t *testing.T, b *browserFixture, period string) string {
 	t.Helper()
@@ -482,19 +521,28 @@ func TestInvoiceBillingAdoptsTheOperatorsInvoiceForAHeldCharge(t *testing.T) {
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.contactCreates != 0 {
 		t.Fatalf("foreign customer not held, or the contact was not found by email: %v", err)
 	}
+	// A draft the operator started with Danish VAT is not booked for a
+	// customer outside Denmark.
+	fake.mu.Lock()
+	fake.invoices["draft-1"] = &fakeInvoice{Invoice: numina.Invoice{ID: "draft-1", Type: "invoice", Status: "draft", ContactID: "contact-se", Currency: "DKK", Total: numina.Amount(299500), Memo: "Portal reference: " + identityOf(t, b, "acceptance")}}
+	fake.mu.Unlock()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.invoices["draft-1"].Booked {
+		t.Fatal("a draft for a customer outside Denmark was booked", err)
+	}
 	reverseCharge := numina.Amount(239600)
 	booked, open := 7, "open"
 	fake.mu.Lock()
 	fake.invoices["manual-1"] = &fakeInvoice{Booked: true, Invoice: numina.Invoice{ID: "manual-1", Type: "invoice", Status: "sent", ContactID: "contact-se", InvoiceNumber: &booked, PaymentState: &open, OutstandingBalance: &reverseCharge, Total: reverseCharge, Memo: "Reverse charge. Portal reference: " + identityOf(t, b, "acceptance")}}
 	fake.invoices["credit-1"] = &fakeInvoice{Invoice: numina.Invoice{ID: "credit-1", Type: "creditNote", Status: "sent", ContactID: "contact-se", Memo: "Portal reference: " + identityOf(t, b, "acceptance")}}
+	fake.failGetInvoice = true
 	fake.mu.Unlock()
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
-		t.Fatal(err)
+	// Adoption records that the operator sends this invoice, so reading it
+	// failing right after cannot make a retry send it.
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err == nil {
+		t.Fatal("a failed invoice read was not reported")
 	}
-	var reference string
-	var sent bool
-	if err := b.pool.QueryRow(b.f.ctx, `SELECT provider_ref,sent FROM portal_order_charges WHERE period='acceptance' AND state='booked'`).Scan(&reference, &sent); err != nil || reference != "manual-1" || !sent || fake.sends != 0 || fake.count() != 2 {
-		t.Fatalf("hand-made invoice not adopted (or a credit note was, or it was re-sent): %q %v", reference, err)
+	if reference, sent := bookedAfterSync(t, b, cfg); reference != "manual-1" || !sent || fake.sends != 0 || fake.count() != 3 {
+		t.Fatalf("hand-made invoice not adopted (or a credit note was, or it was re-sent): %q", reference)
 	}
 	fake.pay("paid", "0")
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "settled" {
@@ -515,10 +563,7 @@ func TestInvoiceBillingBooksOnlyExactTotalsWhileTheGateIsOpen(t *testing.T) {
 		t.Fatal("ambiguous Numina contacts were not held", err)
 	}
 	delete(fake.contacts, "c2")
-	fake.totalOffset = 1
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.count() != 1 {
-		t.Fatal("a draft with a different total was not held", err)
-	}
+	heldForAWrongTotal(t, b, fake, cfg)
 	for _, inv := range fake.invoices {
 		if inv.Booked {
 			t.Fatal("a draft with a different total was booked")
@@ -545,5 +590,24 @@ func TestInvoiceBillingBooksOnlyExactTotalsWhileTheGateIsOpen(t *testing.T) {
 	}
 	if fake.sends != 1 {
 		t.Fatal("the closed gate did not stop sending")
+	}
+}
+
+// TestInvoiceBillingFollowsTheOperatorsReplacementInvoice covers a draft held
+// for its total: the operator issues a correct invoice by hand with the charge
+// identity, and the portal follows it without creating another.
+func TestInvoiceBillingFollowsTheOperatorsReplacementInvoice(t *testing.T) {
+	b, fake, cfg := danishOrderFixture(t)
+	heldForAWrongTotal(t, b, fake, cfg)
+	total, open, number := numina.Amount(299500), "open", 9
+	fake.mu.Lock()
+	fake.invoices["manual-2"] = &fakeInvoice{Booked: true, Invoice: numina.Invoice{ID: "manual-2", Type: "invoice", Status: "sent", ContactID: "contact-dk", Currency: "DKK", InvoiceNumber: &number, PaymentState: &open, OutstandingBalance: &total, Total: total, Memo: "Portal reference: " + identityOf(t, b, "acceptance")}}
+	fake.mu.Unlock()
+	if reference, sent := bookedAfterSync(t, b, cfg); reference != "manual-2" || !sent || fake.sends != 0 || fake.count() != 2 {
+		t.Fatalf("the replacement invoice was not followed: %q", reference)
+	}
+	fake.pay("paid", "0")
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "settled" {
+		t.Fatal("the replacement invoice was not followed to settlement", err)
 	}
 }

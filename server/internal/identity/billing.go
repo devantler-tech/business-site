@@ -226,13 +226,12 @@ func (s *Foundation) setCharge(ctx context.Context, c billingCharge, set string,
 }
 
 // driveCharge advances one charge by every step that is still missing. Each
-// step is safe to repeat: creation is found by its memo identity before it is
-// retried, booking is idempotent at Numina, and sending carries its own key.
+// step is safe to repeat: an invoice is found by its memo identity before one
+// is created, booking is idempotent at Numina, and sending carries its own key.
 // The gate is rechecked before every call that changes something at Numina.
 func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge) error {
-	adopted := false
-	if c.Reference == "" {
-		ref, existing, err := s.findOrCreateInvoice(ctx, cfg, now, c)
+	if c.Reference == "" || c.State == "held" {
+		err := s.attachInvoice(ctx, cfg, now, &c)
 		if errors.Is(err, errChargeHeld) {
 			return s.holdCharge(ctx, c)
 		}
@@ -242,10 +241,6 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 		if err != nil {
 			return err
 		}
-		if err = s.setCharge(ctx, c, `state='created',provider_ref=$3`, ref); err != nil {
-			return err
-		}
-		c.Reference, c.State, adopted = ref, "created", existing
 	}
 	invoice, err := cfg.Numina.GetInvoice(ctx, c.Reference)
 	if err != nil {
@@ -256,9 +251,17 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 	}
 	if c.State != "booked" {
 		if invoice.Status == "draft" {
-			// Book only a draft whose total is exactly the charge. A different
-			// total (another VAT treatment, a typo) waits for the operator.
+			// Book only a Danish customer's draft whose total is exactly the
+			// charge. Anything else (another VAT treatment, a typo) waits for
+			// the operator.
 			if total, ok := numina.Minor(invoice.Total); !ok || total != c.GrossMinor || invoice.Currency != "DKK" {
+				return s.holdCharge(ctx, c)
+			}
+			dk, err := danish(ctx, cfg.Numina, invoice.ContactID)
+			if err != nil {
+				return err
+			}
+			if !dk {
 				return s.holdCharge(ctx, c)
 			}
 			if !s.invoiceBillingReady(ctx) {
@@ -270,7 +273,7 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 			if err = s.setCharge(ctx, c, `state='booked',provider_number=$3`, invoice.InvoiceNumber); err != nil {
 				return err
 			}
-		} else if adopted || c.State == "held" {
+		} else if c.State == "held" {
 			// Booked by the operator: follow its payment, leave sending to them.
 			if err = s.setCharge(ctx, c, `state='booked',provider_number=$3,sent=true`, invoice.InvoiceNumber); err != nil {
 				return err
@@ -312,40 +315,44 @@ func (s *Foundation) holdCharge(ctx context.Context, c billingCharge) error {
 	return errChargeHeld
 }
 
-// findOrCreateInvoice returns the Numina invoice for the charge and whether it
-// already existed. It adopts any
-// invoice to the contact whose memo carries the charge identity, including one
-// the operator made by hand for a held charge, and creates one only when none
-// exists and the customer is in Denmark.
-func (s *Foundation) findOrCreateInvoice(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge) (string, bool, error) {
+// attachInvoice gives the charge its Numina invoice. An invoice to the contact
+// whose memo carries the charge identity comes first, a booked one before a
+// draft: the operator's own for a held charge, or one whose create reply was
+// lost. Whoever booked an invoice also sends it, and that is saved with its
+// reference, so a retry never sends it again. A held charge keeps its own
+// invoice until the operator books one; otherwise a new invoice is created,
+// but only for a customer the operator has confirmed as Danish.
+func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now time.Time, c *billingCharge) error {
 	contactID, err := s.numinaContact(ctx, cfg.Numina, c.Order.Client)
 	if err != nil {
-		return "", false, err
+		return err
 	}
 	today := now.In(copenhagen)
 	from := c.Order.Placed.In(copenhagen).AddDate(0, 0, -1).Format(time.DateOnly)
 	existing, err := cfg.Numina.ListInvoices(ctx, contactID, from, today.AddDate(0, 0, 1).Format(time.DateOnly))
 	if err != nil {
-		return "", false, err
+		return err
 	}
-	for _, invoice := range existing {
-		// Credit notes inherit the memo of the invoice they credit.
-		if invoice.Type == "invoice" && strings.Contains(invoice.Memo, c.Identity) {
-			return invoice.ID, true, nil
-		}
+	found, ok := memoInvoice(existing, c.Identity, c.Reference)
+	switch {
+	case ok && found.Status != "draft":
+		c.Reference, c.State, c.Sent = found.ID, "booked", true
+		return s.setCharge(ctx, *c, `state='booked',provider_ref=$3,provider_number=$4,sent=true`, found.ID, found.InvoiceNumber)
+	case ok && c.Reference == "":
+		c.Reference, c.State = found.ID, "created"
+		return s.setCharge(ctx, *c, `state='created',provider_ref=$3`, found.ID)
+	case c.Reference != "":
+		return nil
 	}
-	contact, err := cfg.Numina.GetContact(ctx, contactID)
+	dk, err := danish(ctx, cfg.Numina, contactID)
 	if err != nil {
-		return "", false, err
+		return err
 	}
-	// Only a contact the operator has confirmed as Danish gets an automatic
-	// invoice with Danish VAT. The portal profile has no country, and a
-	// customer elsewhere needs reverse charge or another treatment.
-	if contact.CountryCode != "DK" {
-		return "", false, errChargeHeld
+	if !dk {
+		return errChargeHeld
 	}
 	if !s.invoiceBillingReady(ctx) {
-		return "", false, errBillingPaused
+		return errBillingPaused
 	}
 	description := invoiceLine(c.Order.Scope)
 	if c.Period != "acceptance" {
@@ -362,12 +369,47 @@ func (s *Foundation) findOrCreateInvoice(ctx context.Context, cfg InvoiceBilling
 		Memo:               "Portal reference: " + c.Identity,
 	})
 	if err != nil {
-		return "", false, err
+		return err
 	}
 	if created.ID == "" {
-		return "", false, errors.New("numina: created invoice has no id")
+		return errors.New("numina: created invoice has no id")
 	}
-	return created.ID, false, nil
+	c.Reference, c.State = created.ID, "created"
+	return s.setCharge(ctx, *c, `state='created',provider_ref=$3`, created.ID)
+}
+
+// memoInvoice returns the newest invoice other than skip whose memo carries
+// the charge identity, a booked one before a draft. Credit notes inherit the
+// memo of the invoice they credit, so only invoices count.
+func memoInvoice(list []numina.Invoice, identity, skip string) (numina.Invoice, bool) {
+	var draft numina.Invoice
+	for _, invoice := range list {
+		if invoice.Type != "invoice" || invoice.ID == "" || invoice.ID == skip || !strings.Contains(invoice.Memo, identity) {
+			continue
+		}
+		if invoice.Status != "draft" {
+			return invoice, true
+		}
+		if draft.ID == "" {
+			draft = invoice
+		}
+	}
+	return draft, draft.ID != ""
+}
+
+// danish reports whether the operator has confirmed the Numina contact's
+// country as DK. Only then may an invoice carry Danish VAT automatically: the
+// portal profile has no country, and a customer elsewhere needs reverse charge
+// or another treatment.
+func danish(ctx context.Context, api NuminaAPI, contactID string) (bool, error) {
+	if contactID == "" {
+		return false, nil
+	}
+	contact, err := api.GetContact(ctx, contactID)
+	if err != nil {
+		return false, err
+	}
+	return contact.CountryCode == "DK", nil
 }
 
 // invoiceLine is the first line of the accepted scope, bounded for the invoice.

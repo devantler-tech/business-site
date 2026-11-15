@@ -53,10 +53,13 @@ For each invoice-path order it:
 A charge is **held** when the portal must not decide it alone: the client has no contact
 profile yet, two Numina contacts share the client's email, the Numina contact's country is not
 confirmed as Denmark (another country needs reverse charge or another VAT treatment), or a
-draft's total or currency differs from the charge. The operator page shows each held charge's reference. Invoice it by hand in Numina
-with that reference in the memo: the portal adopts any invoice (never a credit note) whose memo
-carries it, follows its payment, and leaves sending to whoever booked it. A draft it adopts is
-booked only when its total is exactly the charge. Each pass tries held charges again, so fixing
+draft's total or currency differs from the charge. The operator page shows each held
+charge's reference. Invoice it by hand in Numina with that reference in the memo: the portal
+adopts an invoice (never a credit note) whose memo carries it, a booked one before a draft. A
+charge that already has a rejected draft switches to a booked replacement. It follows the invoice's payment and leaves
+sending to whoever booked it, and it records that together with the reference, so a failed step
+afterwards never sends it again. A draft is booked only for a contact confirmed as Denmark and
+only when its total is exactly the charge in DKK. Each pass tries held charges again, so fixing
 the contact or the draft resumes them, and no second invoice is created once one carries the
 reference.
 
@@ -108,5 +111,6 @@ gate is switched on; until then the tables stay empty.
 against an in-memory Numina with its documented retry rules: order placement and retries, a
 refused second path, creation, booking and sending once, an unmatched payment that does not
 settle, a matched one that does, the next month's invoice, a lost create reply found by its
-memo, a foreign customer held, a sandbox that cannot email, and the closed gate.
+memo, a foreign customer held even with a Danish draft, an operator's replacement invoice
+followed, a sandbox that cannot email, and the closed gate.
 `internal/numina` tests the client itself. Real Numina sandbox proof is a launch step.
