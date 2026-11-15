@@ -82,3 +82,17 @@ countdown values and venue background before capture. No guest list, gallery pho
 schedule, invitation code or private URL appears in the image. These substitutions are not
 application changes and are not deployed. The card identifies this as an anonymized demo;
 Astro emits responsive thumbnails and links the original anonymous capture for enlargement.
+
+## `brand/`
+
+The Devantler Tech logo the maintainer approved on 2026-11-15, as vector source files. The
+square icon `devantler-tech-icon.svg` is a rounded square shaded from `#5BFF3C` to `#2CE00E`
+around the brand green `#39FF14`, with a fine white edge highlight and a custom near-black
+`#0A0D0B` "D" whose top-left corner is cut at 45°. The two wordmarks let that icon's "D" start
+"Devantler": `devantler-tech-logo-dark.svg` sets "evantler" in `#F1F5F1` and "Tech" in
+`#39FF14` for dark backgrounds, and `devantler-tech-logo-light.svg` sets them in `#0A0D0B` and
+`#15803D` for light backgrounds.
+All letters are converted to outlines (Inter, SIL Open Font License), so no font is needed to
+draw them. The site header shows the wordmark that matches the page's theme, and
+`public/favicon.png` is the icon exported at 256×256. Export other sizes from the SVGs rather
+than scaling another PNG.

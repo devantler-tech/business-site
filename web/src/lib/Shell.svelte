@@ -4,6 +4,8 @@
   import { businessFrameContext, type BusinessFrame } from "./business-frame";
   import themeScript from "../../../src/components/business/theme.js?url";
   import favicon from "../../../public/favicon.png?url";
+  import logoDark from "../../../src/assets/brand/devantler-tech-logo-dark.svg?url";
+  import logoLight from "../../../src/assets/brand/devantler-tech-logo-light.svg?url";
   import sharingImage from "virtual:business-sharing";
   let {
     locale,
@@ -76,9 +78,8 @@
 <header>
   <div class="business-header container">
     <a href={home} class="brand" aria-label="Devantler Tech"
-      ><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"
-        ><path d="M8 8h8a8 8 0 0 1 0 16H8V8Zm5 5v6h3a3 3 0 0 0 0-6h-3Z" fill="currentColor" /></svg
-      ><span>Devantler<span class="brand-tech"> Tech</span></span></a
+      ><img class="brand-logo brand-logo-dark" src={logoDark} alt="" width="573" height="108" /><img
+        class="brand-logo brand-logo-light" src={logoLight} alt="" width="573" height="108" /></a
     >
     <nav aria-label={t.navigation}>
       <a href={`${home}#services`}>{t.services}</a><a href={`${home}projects/`} aria-current={page === "projects" ? "page" : undefined}>{t.projects}</a><a
@@ -132,16 +133,29 @@
     text-decoration: none;
     color: var(--ink);
   }
-  .brand-tech {
-    color: var(--accent);
+  /* The Devantler Tech wordmark: the dark-background version by default, the
+     light-background one when the page is light, following theme.css. */
+  .brand-logo {
+    display: block;
+    width: auto;
+    height: 32px;
   }
-  .brand-mark {
-    width: 34px;
-    height: 34px;
-    margin-right: 0.45rem;
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: 8px;
+  .brand-logo-light {
+    display: none;
+  }
+  :global(:root[data-theme="light"]) .brand-logo-dark {
+    display: none;
+  }
+  :global(:root[data-theme="light"]) .brand-logo-light {
+    display: block;
+  }
+  @media (prefers-color-scheme: light) {
+    :global(:root:not([data-theme])) .brand-logo-dark {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .brand-logo-light {
+      display: block;
+    }
   }
   nav {
     display: flex;
@@ -246,9 +260,8 @@
     .brand {
       font-size: 1.1rem;
     }
-    .brand-mark {
-      width: 28px;
-      height: 28px;
+    .brand-logo {
+      height: 26px;
     }
     .controls {
       gap: 0.6rem;
