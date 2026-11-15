@@ -97,7 +97,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's twenty-five identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's twenty-six identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -294,7 +294,9 @@ as funding, or trust a reversal or end that does not resolve to the portal's own
 invoice or subscription. v19 binds every new work approval to its order's settled funding charge,
 never refunded or disputed, through composite keys; earlier approvals keep their invoice binding. v20
 adds the client as an order end's source: the client ends monthly billing after the current
-month, recorded once with the client's identity under the request's client lock.
+month, recorded once with the client's identity under the request's client lock. v21 records
+a client's withdrawal within 14 days, SELECT/INSERT only; a withdrawn order is never billed or
+charged again and funds no work approval.
 
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real
