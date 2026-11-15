@@ -165,6 +165,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/requests/{id}/work-review", b.showWorkReview)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-approvals", b.approveWork)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-revocations", b.revokeWork)
+	mux.HandleFunc("POST /portal/operator/requests/{id}/order-end", b.endOrder)
 	mux.HandleFunc("GET /portal/contact", b.contact)
 	mux.HandleFunc("POST /portal/contact", b.updateContact)
 	mux.HandleFunc("POST /portal/contact/verify", b.beginContactVerification)

@@ -18,6 +18,8 @@ import (
 // StripeAPI is the part of the Stripe client the card path uses.
 type StripeAPI interface {
 	CreateCheckout(ctx context.Context, key string, checkout stripe.Checkout) (stripe.Session, error)
+	PaymentReferences(ctx context.Context, paymentIntent string) ([]string, error)
+	CancelSubscriptionAt(ctx context.Context, subscription string, at time.Time) (time.Time, error)
 }
 
 // CardBilling configures the card and MobilePay path (ADR 0030, #553).
@@ -97,6 +99,10 @@ func (s *Foundation) readCheckouts(ctx context.Context, o projectOrder) ([]order
 		if err != nil {
 			return nil, err
 		}
+		if purpose == "monthly" && o.End != nil && c.State != "paid" {
+			// An ended order offers no new subscription.
+			continue
+		}
 		result = append(result, c)
 	}
 	return result, nil
@@ -124,12 +130,17 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, origin, lang st
 	}
 	var o projectOrder
 	var requestID, scope, email string
-	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,'')
+	var ended bool
+	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id)
  FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version
  LEFT JOIN portal_contacts c ON c.client_id=o.client_id WHERE o.id=$1 AND o.collection='card'`, order).
-		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email)
+		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &ended)
 	if err != nil {
 		return errTriageStorage
+	}
+	if ended {
+		// No new subscription after the order's monthly billing has ended.
+		o.MonthlyMinor = 0
 	}
 	if lang != "da" {
 		lang = "en"
@@ -204,8 +215,17 @@ func (b *browser) stripeWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStripeEvent records the event and applies it in one transaction, so a
-// retried event is either fully applied once or not at all.
+// retried event is either fully applied once or not at all. A refund or dispute
+// is first matched to its charge through Stripe, outside the transaction.
 func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) error {
+	var reversal *cardReversal
+	if event.Type == "charge.refunded" || event.Type == "charge.dispute.created" {
+		var err error
+		if reversal, err = s.resolveReversal(ctx, event); err != nil {
+			return err
+		}
+	}
+	var subscription string
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return errTriageStorage
@@ -225,14 +245,23 @@ func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) 
 			return errors.New("card billing: malformed session")
 		}
 		err = applyCheckoutEvent(ctx, tx, event.Type, session)
+		subscription = session.Subscription
 	case "invoice.paid":
 		err = applySubscriptionInvoicePaid(ctx, tx, event.Data.Object)
+	case "customer.subscription.deleted":
+		err = applySubscriptionDeleted(ctx, tx, event.Data.Object)
+	case "charge.refunded", "charge.dispute.created":
+		err = applyReversal(ctx, tx, reversal)
 	}
 	if err != nil {
 		return err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return errTriageStorage
+	}
+	if subscription != "" {
+		// An order ended before its subscription completed ends it now.
+		return s.scheduleSubscriptionEnd(ctx, subscription)
 	}
 	return nil
 }
@@ -340,5 +369,14 @@ func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMe
 		return errTriageStorage
 	}
 	period := monthPeriod(time.Unix(invoice.Created, 0).In(copenhagen))
+	var after bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_order_ends WHERE order_id=$1 AND to_char(last_month,'YYYY-MM') < $2)`, o.ID, period).Scan(&after); err != nil {
+		return errTriageStorage
+	}
+	if after {
+		// Stripe should not charge after the end; such a month never funds.
+		log.Printf("portal: card renewal after the order's last billed month")
+		return nil
+	}
 	return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, o.MonthlyMinor, invoice.Currency)
 }

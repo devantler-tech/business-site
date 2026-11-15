@@ -123,15 +123,21 @@ func (s *Foundation) readProposals(ctx context.Context, p Principal, id string) 
 	return result, nil
 }
 
+// beginOperatorWrite admits a current proposal operator and opens the
+// request-scoped write in which the operator's change is made.
+func (s *Foundation) beginOperatorWrite(ctx context.Context, p Principal, id string) (pgx.Tx, string, error) {
+	if err := s.proposalOperator(ctx, p); err != nil {
+		return nil, "", err
+	}
+	return s.beginProposalWrite(ctx, p, id)
+}
+
 // persistProposal serializes per-request revisions without requesting UPDATE on
 // immutable intake. Membership stays locked through commit, ordering revocation.
 func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string, d projectProposal) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if err := s.proposalOperator(ctx, p); err != nil {
-		return err
-	}
-	tx, client, err := s.beginProposalWrite(ctx, p, id)
+	tx, client, err := s.beginOperatorWrite(ctx, p, id)
 	if err != nil {
 		return err
 	}

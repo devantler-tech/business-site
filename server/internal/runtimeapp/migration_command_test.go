@@ -151,7 +151,7 @@ func TestActualExecutableMigration(t *testing.T) {
 		t.Fatal("actual command did not migrate the empty disposable database")
 	}
 	var count int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 17 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 18 {
 		t.Fatal("actual command did not apply every embedded schema version")
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)"); err != nil {
@@ -407,7 +407,7 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
 				var versions int
-				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 17 {
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 18 {
 					t.Fatal("explicit migration did not apply every embedded schema version")
 				}
 			} else {
@@ -530,7 +530,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual job refused trusted confined projected inputs")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 17 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 18 {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
@@ -577,7 +577,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 					t.Fatal("owned missing-work-approval fixture failed", err)
 				}
 			case "missing orders":
-				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_card_checkouts,portal_order_charges,portal_orders`); err != nil {
+				if _, err := pool.Exec(t.Context(), `DROP TABLE portal_charge_reversals,portal_card_cancellations,portal_order_ends,portal_card_checkouts,portal_order_charges,portal_orders`); err != nil {
 					t.Fatal("owned missing-order fixture failed", err)
 				}
 			case "disabled membership recorder":
@@ -609,7 +609,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Error("actual job reported success without owning the managed schema")
 			}
 			var preserved bool
-			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=17 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=18 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})
@@ -679,7 +679,9 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND NOT has_table_privilege('portal_runtime','portal_numina_contacts','DELETE')
  AND has_table_privilege('portal_runtime','portal_card_checkouts','UPDATE')
  AND NOT has_table_privilege('portal_runtime','portal_stripe_events','UPDATE')
- AND (SELECT count(*) FROM portal_schema_version)=17`).Scan(&exact); err != nil || !exact {
+ AND has_table_privilege('portal_runtime','portal_order_ends','INSERT')
+ AND NOT has_table_privilege('portal_runtime','portal_charge_reversals','UPDATE')
+ AND (SELECT count(*) FROM portal_schema_version)=18`).Scan(&exact); err != nil || !exact {
 		t.Fatal("repeat migration retained privileges beyond the documented set")
 	}
 	if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {

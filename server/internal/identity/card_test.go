@@ -23,17 +23,28 @@ const webhookSecret = "whsec_fixture"
 // fakeStripe answers Checkout Session creation like Stripe, honouring the
 // idempotency key, and records every request for inspection.
 type fakeStripe struct {
-	mu        sync.Mutex
-	requests  []url.Values
-	keys      map[string]string
-	bodies    map[string]string // a key's request, so a changed reuse is refused like Stripe does
-	loseReply bool              // create the session but answer 500, cached under its key like Stripe
+	mu         sync.Mutex
+	requests   []url.Values
+	keys       map[string]string
+	bodies     map[string]string // a key's request, so a changed reuse is refused like Stripe does
+	loseReply  bool              // create the session but answer 500, cached under its key like Stripe
+	intents    map[string]string // PaymentIntent → the Checkout Session or invoice it paid
+	cancels    []url.Values      // subscription end requests, with "subscription" added
+	failCancel bool              // answer the next subscription end with 500
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if r.Method != "POST" || r.URL.Path != "/v1/checkout/sessions" || r.Header.Get("Authorization") != "Bearer rk_test_fixture" {
+	if r.Header.Get("Authorization") != "Bearer rk_test_fixture" {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if r.Method == "GET" || strings.HasPrefix(r.URL.Path, "/v1/subscriptions/") {
+		f.serveLookup(w, r)
+		return
+	}
+	if r.Method != "POST" || r.URL.Path != "/v1/checkout/sessions" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -65,6 +76,40 @@ func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "url": "https://checkout.stripe.invalid/c/pay/" + id, "mode": r.PostForm.Get("mode"), "status": "open", "expires_at": time.Now().Add(24 * time.Hour).Unix()})
 }
 
+// serveLookup answers the PaymentIntent lookups and subscription ends.
+func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	switch {
+	case r.Method == "GET" && r.URL.Path == "/v1/checkout/sessions":
+		data := []map[string]string{}
+		if ref := f.intents[q.Get("payment_intent")]; strings.HasPrefix(ref, "cs_") {
+			data = append(data, map[string]string{"id": ref})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	case r.Method == "GET" && r.URL.Path == "/v1/invoice_payments" && q.Get("payment[type]") == "payment_intent":
+		data := []map[string]string{}
+		if ref := f.intents[q.Get("payment[payment_intent]")]; strings.HasPrefix(ref, "in_") {
+			data = append(data, map[string]string{"invoice": ref})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	case r.Method == "POST":
+		_ = r.ParseForm()
+		form := r.PostForm
+		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
+		form.Set("subscription", subscription)
+		f.cancels = append(f.cancels, form)
+		if f.failCancel {
+			f.failCancel = false
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		at, _ := strconv.ParseInt(form.Get("cancel_at"), 10, 64)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "cancel_at": at})
+	default:
+		w.WriteHeader(http.StatusNotFound)
+	}
+}
+
 func (f *fakeStripe) sessions() []url.Values {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -92,7 +137,7 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','',1)`); err != nil {
 		t.Fatal(err)
 	}
-	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}}
+	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}, intents: map[string]string{}}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
 	api, err := stripe.New(server.URL, "rk_test_fixture", server.Client().Transport)

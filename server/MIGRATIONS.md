@@ -160,6 +160,11 @@ v17 adds `portal_card_checkouts` and `portal_stripe_events` after unchanged v1â€
 SELECT/INSERT/UPDATE on card checkouts (every session is kept; only its state and subscription
 change) and SELECT/INSERT only on Stripe events, which are applied once and never changed.
 
+v18 adds `portal_order_ends`, `portal_card_cancellations` and `portal_charge_reversals` after
+unchanged v1â€“v17 (see [portal billing](BILLING.md#ending-and-reversing-orders)). Grant
+SELECT/INSERT only: an order's end, Stripe's confirmed subscription end and each refund or
+dispute are recorded once and never changed or deleted.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

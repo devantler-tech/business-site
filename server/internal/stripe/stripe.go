@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -156,17 +157,98 @@ func (c *Client) CreateCheckout(ctx context.Context, key string, checkout Checko
 	if err != nil {
 		return Session{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/checkout/sessions", strings.NewReader(form.Encode()))
-	if err != nil {
+	var s Session
+	if err := c.call(ctx, http.MethodPost, "/v1/checkout/sessions", form, key, &s); err != nil {
 		return Session{}, err
 	}
+	if s.ID == "" || !strings.HasPrefix(s.URL, "https://") {
+		return Session{}, errors.New("stripe: response malformed")
+	}
+	return s, nil
+}
+
+var (
+	paymentIntentID = regexp.MustCompile(`^pi_[A-Za-z0-9_]{1,250}$`)
+	subscriptionID  = regexp.MustCompile(`^sub_[A-Za-z0-9_]{1,250}$`)
+)
+
+// PaymentReferences returns the Checkout Sessions and invoices a PaymentIntent
+// paid for, so a refund or dispute can be matched to the portal's own records.
+// A charge in current API versions names only its PaymentIntent.
+func (c *Client) PaymentReferences(ctx context.Context, paymentIntent string) ([]string, error) {
+	if !paymentIntentID.MatchString(paymentIntent) {
+		return nil, errors.New("stripe: invalid payment intent")
+	}
+	var sessions struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := c.call(ctx, http.MethodGet, "/v1/checkout/sessions", url.Values{"payment_intent": {paymentIntent}, "limit": {"10"}}, "", &sessions); err != nil {
+		return nil, err
+	}
+	var payments struct {
+		Data []struct {
+			Invoice string `json:"invoice"`
+		} `json:"data"`
+	}
+	if err := c.call(ctx, http.MethodGet, "/v1/invoice_payments", url.Values{"payment[type]": {"payment_intent"}, "payment[payment_intent]": {paymentIntent}, "limit": {"10"}}, "", &payments); err != nil {
+		return nil, err
+	}
+	var refs []string
+	for _, s := range sessions.Data {
+		refs = append(refs, s.ID)
+	}
+	for _, p := range payments.Data {
+		refs = append(refs, p.Invoice)
+	}
+	return refs, nil
+}
+
+// CancelSubscriptionAt ends a subscription at the given time without
+// proration and returns the time Stripe confirmed.
+func (c *Client) CancelSubscriptionAt(ctx context.Context, subscription string, at time.Time) (time.Time, error) {
+	if !subscriptionID.MatchString(subscription) {
+		return time.Time{}, errors.New("stripe: invalid subscription")
+	}
+	var s struct {
+		ID       string `json:"id"`
+		CancelAt *int64 `json:"cancel_at"`
+	}
+	form := url.Values{"cancel_at": {strconv.FormatInt(at.Unix(), 10)}, "proration_behavior": {"none"}}
+	if err := c.call(ctx, http.MethodPost, "/v1/subscriptions/"+subscription, form, "", &s); err != nil {
+		return time.Time{}, err
+	}
+	if s.ID != subscription || s.CancelAt == nil {
+		return time.Time{}, errors.New("stripe: response malformed")
+	}
+	return time.Unix(*s.CancelAt, 0), nil
+}
+
+// call sends one request: a GET carries form as its query, a POST as its body
+// with the idempotency key, if any. Errors carry only status and Stripe's code.
+func (c *Client) call(ctx context.Context, method, path string, form url.Values, key string, out any) error {
+	target, body := c.baseURL+path, ""
+	if method == http.MethodGet {
+		target += "?" + form.Encode()
+	} else {
+		body = form.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Stripe-Version", APIVersion)
-	req.Header.Set("Idempotency-Key", key)
+	if method != http.MethodGet {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return Session{}, errors.New("stripe: request failed")
+		return errors.New("stripe: request failed")
 	}
 	defer func() {
 		// Draining is best-effort; the decoded result or status is the verdict.
@@ -174,7 +256,7 @@ func (c *Client) CreateCheckout(ctx context.Context, key string, checkout Checko
 	}()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return Session{}, errors.New("stripe: response unreadable")
+		return errors.New("stripe: response unreadable")
 	}
 	if resp.StatusCode != http.StatusOK {
 		var problem struct {
@@ -188,13 +270,12 @@ func (c *Client) CreateCheckout(ctx context.Context, key string, checkout Checko
 		if code == "" {
 			code = problem.Error.Type
 		}
-		return Session{}, &Error{Status: resp.StatusCode, Code: code}
+		return &Error{Status: resp.StatusCode, Code: code}
 	}
-	var s Session
-	if err := json.Unmarshal(data, &s); err != nil || s.ID == "" || !strings.HasPrefix(s.URL, "https://") {
-		return Session{}, errors.New("stripe: response malformed")
+	if err := json.Unmarshal(data, out); err != nil {
+		return errors.New("stripe: response malformed")
 	}
-	return s, nil
+	return nil
 }
 
 // ErrSignature is any webhook that is not provably from Stripe.
@@ -282,4 +363,23 @@ func (i Invoice) SubscriptionID() string {
 		return i.Parent.SubscriptionDetails.Subscription
 	}
 	return i.Subscription
+}
+
+// Charge is the subset of a refunded charge the portal reads.
+type Charge struct {
+	ID             string `json:"id"`
+	PaymentIntent  string `json:"payment_intent"`
+	AmountRefunded int64  `json:"amount_refunded"`
+}
+
+// Dispute is the subset of a dispute the portal reads.
+type Dispute struct {
+	ID            string `json:"id"`
+	PaymentIntent string `json:"payment_intent"`
+}
+
+// Subscription is the subset of an ended subscription the portal reads.
+type Subscription struct {
+	ID      string `json:"id"`
+	EndedAt int64  `json:"ended_at"`
 }
