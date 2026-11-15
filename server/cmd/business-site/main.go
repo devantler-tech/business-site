@@ -174,6 +174,12 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if err != nil {
 		return err
 	}
+	if !cfg.FitsPortalHost(*portalHost) {
+		return errors.New("portal callback does not match the portal host")
+	}
+	if *portalHost != "" {
+		cfg = cfg.WithPublicHost(*publicHost)
+	}
 	provider, err := runtimeapp.IdentityProvider(ctx, cfg)
 	if err != nil {
 		return err

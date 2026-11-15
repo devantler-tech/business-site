@@ -11,7 +11,7 @@ import (
 // TestZitadelPreparation closes native enrollment and defers private bootstrap.
 // A realm-path assumption or omitted registration policy must fail this contract.
 func TestZitadelPreparation(t *testing.T) {
-	data, err := Prepare(true, Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/portal/callback"})
+	data, err := Prepare(true, Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/callback"})
 	if err != nil {
 		t.Fatalf("ZITADEL uses a root issuer, not a Keycloak realm: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestPreparationDisabled(t *testing.T) {
 
 // TestPreparationRejectsUnsafeEndpoints retains each distinct origin/refusal case.
 func TestPreparationRejectsUnsafeEndpoints(t *testing.T) {
-	valid := Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/portal/callback"}
+	valid := Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/callback"}
 	// Preserve the fictional user-info input without a credential-bearing literal.
 	withUserinfo := (&url.URL{Scheme: "https", User: url.UserPassword("user", "secret"), Host: "login.example.invalid"}).String()
 	for _, bad := range []string{"", "http://login.example.invalid", withUserinfo, "https://login.example.invalid/?query=x", "https://login.example.invalid/#fragment", "https://login.example.invalid:443", "https://127.0.0.1", "https://localhost", "https://LOGIN.example.invalid", "https://login.example.invalid/other", "https://login.example.invalid/%2e%2e", "https://login.example.invalid?", "https://login.example.invalid."} {
@@ -77,13 +77,15 @@ func TestPreparationRejectsUnsafeEndpoints(t *testing.T) {
 	for _, inputs := range []Endpoints{
 		{"https://login.example.invalid#", valid.ZitadelIssuer, valid.PortalCallback},
 		{valid.DexIssuer, "https://accounts.example.invalid#", valid.PortalCallback},
-		{valid.DexIssuer, valid.ZitadelIssuer, "https://site.example.invalid/portal/callback#"},
+		{valid.DexIssuer, valid.ZitadelIssuer, "https://site.example.invalid/callback#"},
 		{valid.DexIssuer, "https://accounts.example.invalid/realms/master", valid.PortalCallback},
 		{valid.DexIssuer, "https://accounts.example.invalid/realms/customers", valid.PortalCallback},
-		{valid.DexIssuer, valid.ZitadelIssuer, "https://site.example.invalid/portal/callback/"},
+		{valid.DexIssuer, valid.ZitadelIssuer, "https://site.example.invalid/callback/"},
+		// The portal lives at the root of its own host; the old /portal callback is refused.
+		{valid.DexIssuer, valid.ZitadelIssuer, "https://site.example.invalid/portal/callback"},
 		{valid.DexIssuer, "https://login.example.invalid", valid.PortalCallback},
-		{valid.DexIssuer, valid.ZitadelIssuer, "https://login.example.invalid/portal/callback"},
-		{valid.DexIssuer, valid.ZitadelIssuer, "https://accounts.example.invalid/portal/callback"},
+		{valid.DexIssuer, valid.ZitadelIssuer, "https://login.example.invalid/callback"},
+		{valid.DexIssuer, valid.ZitadelIssuer, "https://accounts.example.invalid/callback"},
 	} {
 		t.Run(strings.Join([]string{inputs.DexIssuer, inputs.ZitadelIssuer, inputs.PortalCallback}, "|"), func(t *testing.T) {
 			if got, err := Prepare(true, inputs); err == nil || len(got) != 0 {
@@ -98,7 +100,7 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 	t.Setenv("CUSTOMER_ZITADEL_CLIENT_SECRET", "FICTIONAL_PROVIDER_SECRET_SENTINEL")
 	t.Setenv("CUSTOMER_ZITADEL_CLIENT_ID", "FICTIONAL_ID_SECRET_SENTINEL")
 	t.Setenv("CUSTOMER_PORTAL_CLIENT_SECRET", "FICTIONAL_PORTAL_SECRET_SENTINEL")
-	data, err := Prepare(true, Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/portal/callback"})
+	data, err := Prepare(true, Endpoints{"https://login.example.invalid", "https://accounts.example.invalid", "https://site.example.invalid/callback"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestPreparedNativeConfiguration(t *testing.T) {
 	}
 	config := nativeValue[map[string]any](t, connector["config"])
 	assertJSON(t, config, `{"issuer":"https://accounts.example.invalid","clientID":"${CUSTOMER_ZITADEL_CLIENT_ID}","clientSecret":"${CUSTOMER_ZITADEL_CLIENT_SECRET}","redirectURI":"https://login.example.invalid/callback","scopes":["profile","email"],"pkceChallenge":"S256","getUserInfo":true,"insecureSkipEmailVerified":false,"insecureEnableGroups":false,"insecureSkipVerify":false}`)
-	assertJSON(t, dex["staticClients"], `[{"id":"business-portal","name":"Devantler Tech portal","public":false,"secretEnv":"CUSTOMER_PORTAL_CLIENT_SECRET","redirectURIs":["https://site.example.invalid/portal/callback"]}]`)
+	assertJSON(t, dex["staticClients"], `[{"id":"business-portal","name":"Devantler Tech portal","public":false,"secretEnv":"CUSTOMER_PORTAL_CLIENT_SECRET","redirectURIs":["https://site.example.invalid/callback"]}]`)
 	assertJSON(t, dex["oauth2"], `{"responseTypes":["code"],"grantTypes":["authorization_code"],"skipApprovalScreen":false,"pkce":{"enforce":true,"codeChallengeMethodsSupported":["S256"]}}`)
 	assertJSON(t, dex["expiry"], `{"idTokens":"5m","authRequests":"5m","signingKeys":"6h"}`)
 	storage := nativeValue[map[string]any](t, dex["storage"])

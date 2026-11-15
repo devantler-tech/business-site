@@ -182,10 +182,13 @@ func redirect(w http.ResponseWriter, r *http.Request, target string, status int)
 }
 
 // HostHandler serves one runtime under two hosts without showing a page twice.
-// On the portal host, / opens the portal and public pages redirect to the public
-// host. On every other host (the public host, its www name, a staging name or a
-// health probe's address), /portal… redirects to the portal host and public
-// pages are served; www additionally redirects to the public host.
+// The portal lives at the root of its own host: "/", "/sign-in" and so on go to
+// the portal, which must be built for that host (its callback is "/callback").
+// There, a public page redirects to the public host and an old "/portal…" address
+// redirects permanently to the same path without the prefix. On every other host
+// (the public host, its www name, a staging name or a health probe's address),
+// "/portal…" redirects to the portal host's root-based path and public pages are
+// served; www additionally redirects to the public host.
 func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
 	public := a.Handler(nil)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,13 +201,19 @@ func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
 		private := p == "/portal" || strings.HasPrefix(p, "/portal/")
 		switch requestHost(r) {
 		case hosts.Portal:
-			if servePrivate(w, r, portal) || readOnly(w, r) {
-				return
-			}
-			if p == "/" {
-				redirect(w, r, "/portal/", http.StatusFound)
-			} else {
-				redirect(w, r, "https://"+hosts.Public+p, http.StatusFound)
+			switch {
+			case p == "/healthz":
+				readOnly(w, r)
+			case private:
+				if !readOnly(w, r) {
+					redirect(w, r, rootPath(p), http.StatusMovedPermanently)
+				}
+			case p != "/" && a.serves(p):
+				if !readOnly(w, r) {
+					redirect(w, r, "https://"+hosts.Public+p, http.StatusFound)
+				}
+			default:
+				servePortal(w, r, portal)
 			}
 		case "www." + hosts.Public:
 			if !readOnly(w, r) {
@@ -214,10 +223,47 @@ func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
 			if !private {
 				public.ServeHTTP(w, r)
 			} else if !readOnly(w, r) {
-				redirect(w, r, "https://"+hosts.Portal+p, http.StatusFound)
+				redirect(w, r, "https://"+hosts.Portal+rootPath(p), http.StatusFound)
 			}
 		}
 	})
+}
+
+// rootPath is the portal host's address for a "/portal…" path.
+func rootPath(p string) string {
+	if p == "/portal" {
+		return "/"
+	}
+	return strings.TrimPrefix(p, "/portal")
+}
+
+// servePortal hands a request to the portal unchanged, or denies it while the
+// portal is not configured.
+func servePortal(w http.ResponseWriter, r *http.Request, portal http.Handler) {
+	if portal == nil {
+		miss(w, r)
+		return
+	}
+	portal.ServeHTTP(w, r)
+}
+
+// serves reports whether the public site has a page or file at p, using the same
+// lookup as Handler, so the portal host can send public addresses to the public host.
+func (a *Artifact) serves(p string) bool {
+	name := strings.TrimPrefix(p, "/")
+	if name == "" {
+		name = "index.html"
+	} else if strings.HasSuffix(name, "/") {
+		name += "index.html"
+	}
+	if !publicPath(name) {
+		return false
+	}
+	if _, found := a.files[name]; found {
+		return true
+	}
+	_, folder := a.files[name+"/index.html"]
+	return folder && !strings.HasSuffix(p, "/")
 }
 
 // notFound answers a public miss with the built 404 page, as GitHub Pages did.

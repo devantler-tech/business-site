@@ -28,6 +28,8 @@ type Config struct {
 	secretProjected                                bool
 	billing                                        billingConfig
 	cards                                          cardConfig
+	// publicSite is the public website a portal on its own host links back to.
+	publicSite string
 }
 
 // billingConfig is the optional Numina invoice path (ADR 0030). Its own
@@ -150,7 +152,7 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	callback, err := url.Parse(c.callback)
-	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || callback.Path != "/portal/callback" || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
+	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || (callback.Path != "/portal/callback" && callback.Path != "/callback") || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
 		return Config{}, ErrConfig
 	}
 	db, err := pgxpool.ParseConfig(c.database)
@@ -200,6 +202,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		return nil, closed, ErrConfig
 	}
 	foundation := identity.New(pool, broker, flags)
+	if c.publicSite != "" {
+		if err := foundation.LinkPublicSite(c.publicSite); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
 	if err := enableCardBilling(foundation, c.cards); err != nil {
 		pool.Close()
 		return nil, closed, ErrConfig
@@ -253,4 +261,32 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 		return fail()
 	}
 	return pool, broker, nil
+}
+
+// FitsPortalHost reports whether the configured portal matches the runtime's host
+// routing. With its own host the portal lives at that host's root, so its callback
+// must be exactly https://<host>/callback; sharing the public host, it lives under
+// /portal and its callback path is /portal/callback. No configured portal fits both.
+func (c Config) FitsPortalHost(host string) bool {
+	if c == (Config{}) {
+		return true
+	}
+	callback, err := url.Parse(c.callback)
+	if err != nil {
+		return false
+	}
+	if host == "" {
+		return callback.Path == "/portal/callback"
+	}
+	return callback.Host == host && callback.Path == "/callback"
+}
+
+// WithPublicHost records the public website a portal on its own host links back
+// to. It leaves an unconfigured portal unconfigured, and has no effect without a host.
+func (c Config) WithPublicHost(host string) Config {
+	if c == (Config{}) || host == "" {
+		return c
+	}
+	c.publicSite = "https://" + host
+	return c
 }

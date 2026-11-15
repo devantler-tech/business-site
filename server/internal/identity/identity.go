@@ -107,6 +107,9 @@ type Foundation struct {
 	broker *Broker
 	flags  *openfeature.Client
 	cards  atomic.Pointer[CardBilling]
+	// site is the public website's origin, linked from a portal at the root of
+	// its own host. A portal sharing the public host links to "/" instead.
+	site string
 }
 
 // New accepts the application's OpenFeature client; every operation defaults off.

@@ -324,7 +324,7 @@ func (b *browser) reviewProposal(w http.ResponseWriter, r *http.Request) {
 	page.Review, page.SharedProposal = &review, &review.Proposal
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
+	_ = b.templates().ExecuteTemplate(w, "requests.html", page)
 }
 
 // confirmProposal records an explicit server-bound decision, not a payment or order.

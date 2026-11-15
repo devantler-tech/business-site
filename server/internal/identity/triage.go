@@ -183,7 +183,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "triage.html", page)
+	_ = b.templates().ExecuteTemplate(w, "triage.html", page)
 }
 
 // triagePage builds presentation only, after showTriage's current authority and
@@ -200,15 +200,15 @@ func (b *browser) triagePage(r *http.Request, rows []projectRequest, id, cursor 
 	}
 	if len(rows) > triagePageSize {
 		page.Requests = rows[:triagePageSize]
-		page.Next = triageURL(encodeTriageCursor(rows[triagePageSize-1]), page.Lang)
+		page.Next = b.visible(triageURL(encodeTriageCursor(rows[triagePageSize-1]), page.Lang))
 	}
 	other := "da"
 	if page.Lang == "da" {
 		other = "en"
 	}
-	page.LanguageURL = triageURL(cursor, other)
+	page.LanguageURL = b.visible(triageURL(cursor, other))
 	if id != "" {
-		page.LanguageURL = "/portal/operator/requests/" + id + "?lang=" + other
+		page.LanguageURL = b.visible("/portal/operator/requests/" + id + "?lang=" + other)
 	}
 	return page
 }

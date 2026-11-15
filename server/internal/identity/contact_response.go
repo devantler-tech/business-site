@@ -111,7 +111,7 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string, verification bool, authority contactAuthority) {
 	page := b.contactPage(r, d, problem, verification)
 	var buffer bytes.Buffer
-	if browserPage.ExecuteTemplate(&buffer, "contact.html", page) != nil {
+	if b.templates().ExecuteTemplate(&buffer, "contact.html", page) != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}

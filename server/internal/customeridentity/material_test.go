@@ -56,7 +56,7 @@ func materialFixture(t *testing.T, phase string) (string, string) {
 	settings := map[string]string{
 		"schemaVersion": "customer-zitadel-private-v1",
 		"dexIssuer":     "https://login.example.invalid", "zitadelIssuer": "https://accounts.example.invalid",
-		"portalCallback": "https://site.example.invalid/portal/callback",
+		"portalCallback": "https://site.example.invalid/callback",
 		"databaseHost":   "database.example.invalid", "databaseName": "customer_zitadel", "databaseUser": "identity_runtime",
 	}
 	if phase == "init" {
@@ -354,7 +354,7 @@ func TestMaterializePreservesOccupiedOutput(t *testing.T) {
 
 // TestMaterializeRejectsInvalidNativeSettings refuses unsafe database roles and issuer settings.
 func TestMaterializeRejectsInvalidNativeSettings(t *testing.T) {
-	for name, value := range map[string]any{"databaseUser": "postgres", "databaseName": "postgres", "databaseHost": true, "schemaVersion": "unknown", "portalCallback": "http://site.example.invalid/portal/callback"} {
+	for name, value := range map[string]any{"databaseUser": "postgres", "databaseName": "postgres", "databaseHost": true, "schemaVersion": "unknown", "portalCallback": "http://site.example.invalid/callback"} {
 		t.Run(name, func(t *testing.T) {
 			input, output := materialFixture(t, "serve")
 			data := materialFixtureSettings(t, input)

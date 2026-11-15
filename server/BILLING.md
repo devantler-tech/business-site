@@ -7,11 +7,14 @@ in production: the gate below is false by default and has no environment mapping
 
 ## Orders: one collection path
 
+Paths below are as the portal serves them at the root of its own host, `portal.devantler.tech`.
+When it shares a host with the public site (local runs and most tests), each is under `/portal`.
+
 After the client accepts the current proposal, the receipt page asks how they want to pay.
 Placing the order binds that acceptance to exactly one collection path, so an order never has
 both a Numina invoice and a Stripe charge.
 
-- `POST /portal/requests/{id}/orders` takes only the acceptance ID, the chosen `collection`,
+- `POST /requests/{id}/orders` takes only the acceptance ID, the chosen `collection`,
   the CSRF token and the language. It uses the same request lock and current client membership
   as acceptance, and only the **current** acceptance with a non-zero price can be ordered.
 - One order per request (`portal_orders`, migration v16). A retry with the same acceptance and
@@ -97,7 +100,7 @@ card order, so nothing is booked twice.
   replaced, not even past its expiry time, because Stripe never expires a completed session and
   its completion may still be on its way. A closed session stays closed when an unpaid completion
   arrives after its failure, and a replaced one still resolves to its own order.
-- **Funding comes only from signed webhooks.** `POST /portal/stripe/webhook` sits outside
+- **Funding comes only from signed webhooks.** `POST /stripe/webhook` sits outside
   sessions and CSRF, reads at most 256 KiB, verifies `Stripe-Signature` (HMAC-SHA256, five
   minutes' tolerance) and applies each event exactly once (`portal_stripe_events`). A failed
   step answers `500`, so Stripe retries. Events are resolved only through the portal's own
@@ -191,7 +194,7 @@ Stripe secrets belong in the OpenBao KV-v2 `secret` mount at `apps/business-site
   and Subscriptions and read access to Invoices, or `rk_test_…` from a Stripe sandbox for
   development;
 - property `webhook-secret`: the `whsec_…` signing secret of a webhook endpoint at
-  `https://portal.devantler.tech/portal/stripe/webhook`, created with API version
+  `https://portal.devantler.tech/stripe/webhook`, created with API version
   `2026-10-28.endive` and the events `checkout.session.completed`,
   `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`,
   `checkout.session.expired`, `invoice.paid`, `customer.subscription.deleted`,

@@ -54,7 +54,7 @@ func workReviewQuery(r *http.Request) (bool, triageCursor, bool) {
 // workPage localizes already-authorized evidence and preserves its funding and
 // history selectors in native navigation without writing a work decision.
 func (b *browser) workPage(r *http.Request, work workReviewData, review bool) workPageData {
-	page := workPageData{pageData: b.data(r, "work-review", "", nosurf.Token(r)), Work: work, Base: "/portal/operator/requests/" + work.Request, RevocationKey: secret(), ReviewFunding: review}
+	page := workPageData{pageData: b.data(r, "work-review", "", nosurf.Token(r)), Work: work, Base: b.visible("/portal/operator/requests/" + work.Request), RevocationKey: secret(), ReviewFunding: review}
 	page.Path = page.Base + "/work-review"
 	page.Title, page.Intro = "Work decisions", "Review an exact agreement and its funding before recording an explicit decision."
 	other := "da"
@@ -97,7 +97,7 @@ func (b *browser) showWorkReview(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := b.foundation.readWorkReviewChecked(ctx, b.principal(r.Context()), r.PathValue("id"), review, cursor, func(ctx context.Context, tx pgx.Tx, work workReviewData) error {
 		page := b.workPage(r, work, review)
-		if browserPage.ExecuteTemplate(&buffer, "work-review.html", page) != nil {
+		if b.templates().ExecuteTemplate(&buffer, "work-review.html", page) != nil {
 			return errTriageStorage
 		}
 		if !b.durableSnapshotAllowed(ctx, snapshot, work.OperatorClient, "operator", tx) {
@@ -205,5 +205,5 @@ func (b *browser) workError(w http.ResponseWriter, r *http.Request, status int) 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "portal.html", page)
+	_ = b.templates().ExecuteTemplate(w, "portal.html", page)
 }

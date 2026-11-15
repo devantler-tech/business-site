@@ -218,7 +218,7 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "requests.html", page)
+	_ = b.templates().ExecuteTemplate(w, "requests.html", page)
 }
 
 func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +275,7 @@ type requestPageData struct {
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "requests.html", b.requestPage(r, view, d, rows, problem))
+	_ = b.templates().ExecuteTemplate(w, "requests.html", b.requestPage(r, view, d, rows, problem))
 }
 
 func (b *browser) requestPage(r *http.Request, view string, d projectRequest, rows []projectRequest, problem string) requestPageData {
@@ -289,7 +289,7 @@ func (b *browser) requestPage(r *http.Request, view string, d projectRequest, ro
 		if opaqueRequestID.MatchString(d.ID) {
 			path += "/" + d.ID
 		}
-		page.LanguageURL = path + "?lang=" + other
+		page.LanguageURL = b.visible(path) + "?lang=" + other
 	}
 	page.Title = "Your project requests"
 	page.Intro = "Tell us what you would like to build. Sending a request is free and does not start paid work."

@@ -15,15 +15,27 @@ import (
 // browserHandler requires a fully configured, fixed-callback application surface.
 func browserHandler(t testing.TB, foundation *Foundation, callback string) http.Handler {
 	t.Helper()
+	return fixturePublic(t).Handler(portalHandler(t, foundation, callback))
+}
+
+// portalHandler is the configured portal alone, before any site routing.
+func portalHandler(t testing.TB, foundation *Foundation, callback string) http.Handler {
+	t.Helper()
 	h, err := foundation.Browser(callback, "synthetic-client-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
+	return h
+}
+
+// fixturePublic is the synthetic bilingual public site the portal shares a runtime with.
+func fixturePublic(t testing.TB) *webapp.Artifact {
+	t.Helper()
 	public, err := webapp.Load(fstest.MapFS{"index.html": {Data: []byte("English public site")}, "da/index.html": {Data: []byte("Dansk public site")}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return public.Handler(h)
+	return public
 }
 
 type browserGateCase struct {

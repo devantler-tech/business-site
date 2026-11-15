@@ -18,13 +18,34 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+// browserPage renders every private page with portal links under "/portal".
+var browserPage = pages(internalRoot, "")
+
+// templateFuncs binds the addresses every rendered link starts with: root is the
+// portal's visible mount, site the public website's origin ("" on a shared host).
+func templateFuncs(root, site string) template.FuncMap {
+	return template.FuncMap{"root": func() string { return root }, "site": func() string { return site }}
+}
+
+// pages parses the private templates. They write portal links as {{root}}: "/portal"
+// when the portal shares a host with the public site, "" when it has its own host;
+// links to the public website start with {{site}}.
+func pages(root, site string) *template.Template {
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+}
+
+// internalRoot is where every private route is registered and gated.
+const internalRoot = "/portal"
 
 type browser struct {
 	foundation *Foundation
 	sessions   *scs.SessionManager
 	oauth      oauth2.Config
 	origin     string
+	// atRoot serves the portal at the root of its own host: visitors see "/sign-in"
+	// for the internal "/portal/sign-in". Routes and gates stay on internal paths.
+	atRoot bool
+	page   *template.Template
 }
 
 // Browser constructs the application HTTP surface, without starting a listener,
@@ -32,7 +53,7 @@ type browser struct {
 // Private routes disappear when portal-identity is missing, false or erroneous.
 func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, error) {
 	u, err := url.Parse(callbackURL)
-	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "/portal/callback" || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
+	if s == nil || s.pool == nil || s.broker == nil || s.broker.verifier == nil || s.broker.client == nil || clientSecret == "" || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || (u.Path != internalRoot+"/callback" && u.Path != "/callback") || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" {
 		return nil, ErrDenied
 	}
 	issuer, err := url.Parse(s.broker.issuer)
@@ -69,7 +90,17 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	sm.Cookie.Persist = false
+	atRoot := u.Path == "/callback"
+	if atRoot && s.site == "" {
+		return nil, ErrDenied
+	}
 	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
+	b.atRoot = atRoot
+	site := ""
+	if atRoot {
+		site = s.site
+	}
+	b.page = pages(b.base(), site)
 	sm.ErrorFunc = func(w http.ResponseWriter, r *http.Request, _ error) {
 		w.Header().Del("Location")
 		b.render(w, r, 503, "unavailable", "", "")
@@ -83,6 +114,9 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
 	secured := sm.LoadAndSave(csrf)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atRoot {
+			r, w = b.internal(r), rootRedirects{w}
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		// no-referrer forces native form POST Origin to "null". strict-origin
 		// preserves same-origin CSRF checks without sharing callback paths/tokens.
@@ -148,6 +182,72 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 }
 
 const oidcScope = "openid"
+
+// internal maps a root-mounted request onto the internal route it names, so every
+// registration and gate below sees one path space. "/sign-in" becomes
+// "/portal/sign-in"; a visitor path that already starts with "/portal" maps to
+// "/portal/portal/..." and matches nothing.
+func (b *browser) internal(r *http.Request) *http.Request {
+	p := internalRoot + r.URL.Path
+	mapped := new(http.Request)
+	*mapped = *r
+	u := *r.URL
+	u.Path, u.RawPath = p, ""
+	mapped.URL = &u
+	return mapped
+}
+
+// templates is this portal's template set; a browser assembled without Browser
+// (as some tests do) renders with the shared "/portal" set.
+func (b *browser) templates() *template.Template {
+	if b.page != nil {
+		return b.page
+	}
+	return browserPage
+}
+
+// base is the visible path prefix of every portal page: "" at the root of its own
+// host, "/portal" when it shares a host with the public site.
+func (b *browser) base() string {
+	if b.atRoot {
+		return ""
+	}
+	return internalRoot
+}
+
+// visible is the address a visitor uses for an internal route.
+func (b *browser) visible(p string) string {
+	if !b.atRoot {
+		return p
+	}
+	return rootPath(p)
+}
+
+// rootPath drops the internal "/portal" segment from a local path and keeps any query.
+func rootPath(p string) string {
+	switch {
+	case p == internalRoot:
+		return "/"
+	case strings.HasPrefix(p, internalRoot+"/"):
+		return p[len(internalRoot):]
+	case strings.HasPrefix(p, internalRoot+"?"):
+		return "/" + p[len(internalRoot):]
+	}
+	return p
+}
+
+// rootRedirects rewrites a local redirect to its visible address. Redirects to
+// another origin, such as the identity broker, are left alone.
+type rootRedirects struct{ http.ResponseWriter }
+
+func (w rootRedirects) WriteHeader(status int) {
+	if location := w.Header().Get("Location"); location != "" {
+		w.Header().Set("Location", rootPath(location))
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w rootRedirects) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // routes is the single method-aware registration used by the secured Browser
 // and the rendered-link contract. Registration is not authentication evidence.
@@ -248,7 +348,7 @@ func (b *browser) brokerHandoff(w http.ResponseWriter, r *http.Request, address 
 	d.BrokerURL = address
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
+	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
 }
 
 // callback consumes the attempt before exchange, verifies broker proof and
@@ -400,7 +500,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 	d := b.data(r, kind, client, token)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_ = browserPage.ExecuteTemplate(w, "portal.html", d)
+	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
 }
 
 // data shares the same localized, escaped layout with the private contact form.
@@ -420,7 +520,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
-	d.LanguageURL = path + "?lang=" + other
+	d.LanguageURL = b.visible(path) + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
 	d.TriageEnabled = kind == "operator" && b.foundation.triageReady(r.Context())
 	if d.Lang == "da" {
@@ -441,4 +541,16 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
 	}
 	return d
+}
+
+// LinkPublicSite names the public website's origin (https://host, no path), which
+// a portal at the root of its own host links back to. Browser refuses such a
+// portal without it, since "/" there is the portal itself.
+func (s *Foundation) LinkPublicSite(origin string) error {
+	u, err := url.Parse(origin)
+	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.Fragment != "" || u.String() != origin {
+		return ErrDenied
+	}
+	s.site = origin
+	return nil
 }

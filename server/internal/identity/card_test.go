@@ -185,11 +185,17 @@ func placeCardOrder(t *testing.T, b *browserFixture) {
 // sendEvent posts a genuinely signed Stripe event to the real HTTPS handler.
 func sendEvent(t *testing.T, b *browserFixture, id, kind string, object map[string]any, secret string) int {
 	t.Helper()
+	return sendEventTo(t, b, "/portal/stripe/webhook", id, kind, object, secret)
+}
+
+// sendEventTo posts the signed event to one webhook address.
+func sendEventTo(t *testing.T, b *browserFixture, path, id, kind string, object map[string]any, secret string) int {
+	t.Helper()
 	payload, err := json.Marshal(map[string]any{"id": id, "type": kind, "data": map[string]any{"object": object}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, err := http.NewRequest("POST", b.site.URL+"/portal/stripe/webhook", strings.NewReader(string(payload)))
+	req, err := http.NewRequest("POST", b.site.URL+path, strings.NewReader(string(payload)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +252,7 @@ func TestPrivateCardOneOffIsFundedOnlyBySignedEvents(t *testing.T) {
 	if _, err := b.pool.Exec(b.f.ctx, `UPDATE portal_card_checkouts SET expires_at=clock_timestamp()-interval '1 minute'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.svc.ensureCheckouts(b.f.ctx, orderID(t, b), b.site.URL, "en"); err != nil || len(fake.sessions()) != 1 || strings.Contains(receipt(t, b, "en"), "Start card payment") {
+	if err := b.svc.ensureCheckouts(b.f.ctx, orderID(t, b), b.site.URL+"/portal", "en"); err != nil || len(fake.sessions()) != 1 || strings.Contains(receipt(t, b, "en"), "Start card payment") {
 		t.Fatal("a session past its expiry time was replaced before Stripe expired it", err)
 	}
 	session := map[string]any{"id": "cs_test_1", "object": "checkout.session", "mode": "payment", "payment_status": "unpaid", "amount_total": 299500, "currency": "dkk"}
