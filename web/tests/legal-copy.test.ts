@@ -13,6 +13,7 @@ test("the portal's privacy text appears only when FEATURE_PORTAL_PRIVACY is on",
       assert.ok(on.includes(phrase), `${locale} released portal text missing: ${phrase}`);
     }
     for (const page of [off, on]) assert.match(page, /Cloudflare/);
+    assert.match(on, locale === "da" ? /i 3 år efter/ : /for 3 years after/, `${locale} portal retention names its period`);
   }
 });
 
