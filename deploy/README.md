@@ -38,12 +38,13 @@ needs an image built from current source, as CI supplies.
 
 The WebApp projects the one Secret the platform composes in this namespace,
 `business-site-runtime`, read-only at `/run/webapp-inputs` with mode 0440 and the
-application's primary group. It admits exactly four items: `company-disclosure` as
-`disclosure`, and `portal-settings`, `portal-client-secret` and `portal-database-ca`
-at their own names. While sign-in is off, `portal-settings` holds only a `#`
-comment line, so the portal reads none of the other portal items. Serving needs
-both the disclosure and the settings file: without that Secret or either item the
-Pods do not start, so the Secret must exist before this package is applied.
+application's primary group. It admits exactly six items: `company-disclosure` as
+`disclosure`, and `portal-settings`, `portal-client-secret`, `portal-database-ca`,
+`smtp-username` and `smtp-password` at their own names. While sign-in is off,
+`portal-settings` holds only a `#` comment line, so the portal reads none of the other
+portal items. Serving needs both the disclosure and the settings file: without that
+Secret or any projected item the Pods do not start, so the Secret must exist before
+this package is applied.
 
 The application-owned namespaced `openbao` SecretStore and its ExternalSecret stay
 declared but are no longer projected; removing them is a later cleanup. The
@@ -214,6 +215,27 @@ settings to keep their defaults:
 The Numina settings other than the key file are refused without it. Another API
 origin also needs its own egress rule. The flags still decide whether anything
 is invoiced or charged.
+
+## Portal email inputs
+
+The portal emails order confirmations and withdrawal receipts itself
+([BILLING.md](../server/BILLING.md#emails)) through the site's send-only SES sender
+(devantler-tech/platform#5400). The platform adds that sender's OpenBao entry
+`apps/business-site/smtp` (`username`, `password`) to `business-site-runtime` as
+`smtp-username` and `smtp-password` (devantler-tech/platform#6368), and its portal egress
+policy allows `email-smtp.eu-central-1.amazonaws.com` on port 587. The WebApp projects both
+files. Nothing reads them until the portal settings name them:
+
+```text
+PORTAL_SMTP_USERNAME_FILE=/run/webapp-inputs/smtp-username
+PORTAL_SMTP_PASSWORD_FILE=/run/webapp-inputs/smtp-password
+```
+
+The two lines come together or not at all, and the files use the disclosure projection's
+confinement. `PORTAL_SMTP_ADDR` (default `email-smtp.eu-central-1.amazonaws.com:587`) and
+`PORTAL_MAIL_FROM` (default `no-reply@devantler.tech`) are optional. The portal queues email
+only for orders and withdrawals, which their false-default flags control, and sends only while
+sign-in is on.
 
 ## Offline publication receipt admission
 
