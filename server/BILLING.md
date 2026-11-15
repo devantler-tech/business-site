@@ -68,11 +68,11 @@ The sync starts only when the portal's own dependencies are configured and
 non-root, root/current-user-owned projection reader as the other portal secrets. Optional
 settings, refused unless the key file is set:
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `PORTAL_NUMINA_API_URL` | `https://api.numina.app` | Numina API origin, HTTPS only |
-| `PORTAL_NUMINA_SALES_ACCOUNT` | `1000` | Sales account for portal sales |
-| `PORTAL_NUMINA_VAT_CODE` | `U25` | Sales VAT code for 25% Danish VAT |
+| Setting                       | Default                  | Meaning                           |
+|-------------------------------|--------------------------|-----------------------------------|
+| `PORTAL_NUMINA_API_URL`       | `https://api.numina.app` | Numina API origin, HTTPS only     |
+| `PORTAL_NUMINA_SALES_ACCOUNT` | `1000`                   | Sales account for portal sales    |
+| `PORTAL_NUMINA_VAT_CODE`      | `U25`                    | Sales VAT code for 25% Danish VAT |
 
 The key belongs in the OpenBao KV-v2 `secret` mount at `apps/business-site/numina`, property
 `api-key`, beside the existing `apps/business-site/public-disclosure` entry. It needs the
