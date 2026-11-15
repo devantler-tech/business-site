@@ -8,3 +8,5 @@ resources:
   - disruption-budget.yaml
   - secret-store.yaml
   - external-secret-disclosure.yaml
+  - external-secret-numina.yaml
+  - external-secret-stripe.yaml
