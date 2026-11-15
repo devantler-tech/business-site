@@ -72,13 +72,19 @@ func (s *Foundation) SyncInvoiceBilling(ctx context.Context, cfg InvoiceBilling)
 	if !s.invoiceBillingReady(ctx) {
 		return nil
 	}
+	return s.withRunLock(ctx, invoiceBillingLock, func() error { return s.syncInvoiceCharges(ctx, cfg) })
+}
+
+// withRunLock runs fn while this replica holds the advisory lock, and skips it
+// when another replica does.
+func (s *Foundation) withRunLock(ctx context.Context, key int64, fn func() error) error {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return errTriageStorage
 	}
 	defer conn.Release()
 	var locked bool
-	if err = conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, invoiceBillingLock).Scan(&locked); err != nil {
+	if err = conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, key).Scan(&locked); err != nil {
 		return errTriageStorage
 	}
 	if !locked {
@@ -89,12 +95,17 @@ func (s *Foundation) SyncInvoiceBilling(ctx context.Context, cfg InvoiceBilling)
 		// lock is closed rather than returned to the pool.
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		if _, err := conn.Exec(cleanup, `SELECT pg_advisory_unlock($1)`, invoiceBillingLock); err != nil {
+		if _, err := conn.Exec(cleanup, `SELECT pg_advisory_unlock($1)`, key); err != nil {
 			_ = conn.Conn().Close(cleanup)
 		}
 	}()
+	return fn()
+}
+
+// syncInvoiceCharges is one locked invoice sync.
+func (s *Foundation) syncInvoiceCharges(ctx context.Context, cfg InvoiceBilling) error {
 	now := cfg.Now()
-	if err = s.recordDueCharges(ctx, now); err != nil {
+	if err := s.recordDueCharges(ctx, now); err != nil {
 		return err
 	}
 	charges, err := s.openCharges(ctx)

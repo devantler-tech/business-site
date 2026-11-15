@@ -22,6 +22,8 @@ var projectedPortalSettings = []string{
 	"PORTAL_NUMINA_TOKEN_FILE", "PORTAL_NUMINA_API_URL", "PORTAL_NUMINA_SALES_ACCOUNT", "PORTAL_NUMINA_VAT_CODE",
 	// The optional Stripe card path; its key and webhook secret stay in projected files.
 	"PORTAL_STRIPE_KEY_FILE", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE", "PORTAL_STRIPE_API_URL", "PORTAL_STRIPE_TAX_RATE",
+	// The optional sender of the portal's own emails; its credential stays in projected files.
+	"PORTAL_SMTP_USERNAME_FILE", "PORTAL_SMTP_PASSWORD_FILE", "PORTAL_SMTP_ADDR", "PORTAL_MAIL_FROM",
 }
 
 // inheritedPortalSettings are every setting ReadConfig and the activation

@@ -40,6 +40,8 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 		`INSERT INTO portal_withdrawal_cancellations(subscription_id,order_id,cancel_at) VALUES('sub_reset_withdrawal',$1,clock_timestamp())`,
 		`INSERT INTO portal_withdrawal_settlements(order_id,owed_minor,operator_issuer,operator_subject) VALUES($1,0,'https://fixture.invalid','reset-operator')`,
 		`INSERT INTO portal_order_completions(order_id,operator_issuer,operator_subject) VALUES($1,'https://fixture.invalid','reset-operator')`,
+		`INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) VALUES('AAAAAAAAAAAAAAAAAAAAAAAAAA',$1,'order-confirmation','reset@example.invalid','Reset','Reset')`,
+		`INSERT INTO portal_mail_deliveries(outbox_id) SELECT id FROM portal_mail_outbox WHERE order_id=$1`,
 	} {
 		if _, err := migrator.Exec(t.Context(), seed, order); err != nil {
 			t.Fatal("fixture billing row unavailable", err)
@@ -55,7 +57,7 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 		"portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
 		"portal_membership_transitions", "portal_work_approvals", "portal_work_revocations", "portal_work_current",
 		"portal_orders", "portal_order_charges", "portal_numina_contacts", "portal_card_checkouts", "portal_stripe_events",
-		"portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements",
+		"portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries",
 	}
 	for _, table := range tables {
 		var count int

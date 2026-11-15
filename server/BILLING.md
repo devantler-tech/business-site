@@ -221,6 +221,34 @@ Stripe invoice is the sale's document, and Numina books the money once.
   - A won dispute is not restored automatically; the operator decides.
 - **Numina credit notes stay manual.** The operator issues a credit note in Numina by hand.
 
+## Emails
+
+The portal sends two emails itself, in the language the client used:
+
+- an **order confirmation** when an order is placed (Consumer Contracts Act, section 13). It
+  restates the order, its scope, prices and terms, the payment path, the early-start request
+  or the first day work may begin, the last day to withdraw and how, and links to the terms
+  with the model withdrawal form;
+- a **withdrawal receipt** when the client withdraws (section 20 a), with what happens to
+  what they paid.
+
+Each is queued in the same transaction as the order or withdrawal that causes it
+(`portal_mail_outbox`, migration v23), once per order and kind, to the client's contact address.
+A client without one gets none, and the operator's page says so. One replica at a time (an
+advisory lock) sends the queue every minute and records each delivery
+(`portal_mail_deliveries`). A failure stops the pass and is tried again on the next one; a
+message whose delivery record was lost may arrive twice. The operator's page shows each email
+as queued or sent.
+
+Emails go through the site's send-only SES sender (platform#5400): SMTP submission on port 587
+with STARTTLS required before AUTH, From `no-reply@devantler.tech` only. The sender starts only
+when `PORTAL_SMTP_USERNAME_FILE` and `PORTAL_SMTP_PASSWORD_FILE` name the projected credential;
+`PORTAL_SMTP_ADDR` (default `email-smtp.eu-central-1.amazonaws.com:587`) and `PORTAL_MAIL_FROM`
+(default `no-reply@devantler.tech`) are optional. The credential lives in OpenBao at
+`apps/business-site/smtp` (`username`, `password`); the platform adds it to
+`business-site-runtime` (platform#6368). While SES is in its sandbox, it delivers only to
+verified addresses.
+
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance

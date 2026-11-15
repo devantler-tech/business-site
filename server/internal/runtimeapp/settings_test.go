@@ -159,11 +159,13 @@ func TestPortalSettingsProjectionFeedsExistingConfiguration(t *testing.T) {
 		settings["PORTAL_STRIPE_KEY_FILE"] = "/run/webapp-inputs/stripe-api-key"
 		settings["PORTAL_STRIPE_WEBHOOK_SECRET_FILE"] = "/run/webapp-inputs/stripe-webhook-secret"
 		settings["PORTAL_STRIPE_TAX_RATE"] = "txr_moms25"
+		settings["PORTAL_SMTP_USERNAME_FILE"] = "/run/webapp-inputs/smtp-username"
+		settings["PORTAL_SMTP_PASSWORD_FILE"] = "/run/webapp-inputs/smtp-password"
 		if err := ApplyPortalSettingsProjection(projectedIdentityFixture(t, []byte(settingsText(settings)), 0440)); err != nil {
 			t.Fatal("projected billing settings were refused")
 		}
 		cfg, err := ReadConfig(os.Getenv)
-		if err != nil || cfg.billing.tokenFile != "/run/webapp-inputs/numina-api-key" || cfg.billing.salesAccount != 1010 || cfg.billing.vatCode != "U25" || cfg.cards.keyFile != "/run/webapp-inputs/stripe-api-key" || cfg.cards.baseURL != "https://api.stripe.com" || cfg.cards.taxRate != "txr_moms25" {
+		if err != nil || cfg.billing.tokenFile != "/run/webapp-inputs/numina-api-key" || cfg.billing.salesAccount != 1010 || cfg.billing.vatCode != "U25" || cfg.cards.keyFile != "/run/webapp-inputs/stripe-api-key" || cfg.cards.baseURL != "https://api.stripe.com" || cfg.cards.taxRate != "txr_moms25" || cfg.mail.passwordFile != "/run/webapp-inputs/smtp-password" || cfg.mail.from != "no-reply@devantler.tech" {
 			t.Fatalf("projected billing settings were not read: %+v %v", cfg.billing, err)
 		}
 	})

@@ -121,7 +121,7 @@ func readWithdrawal(ctx context.Context, tx pgx.Tx, o *projectOrder) error {
 // renew, or at once if a month has been charged. What was paid is refunded by
 // the operator, by the same payment method, within 14 days (section 22), less
 // the work done if the client asked for an early start (section 21).
-func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID string) error {
+func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID string, mc mailContext) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginClientProposalWrite, false)
@@ -132,7 +132,19 @@ func (s *Foundation) withdrawOrder(ctx context.Context, p Principal, id, orderID
 	if o.Withdrawn == nil && (o.RightEnded() || !time.Now().Before(withdrawalDeadline(o.Placed))) {
 		return errProposalConflict
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) VALUES($1,$2,$3) ON CONFLICT(order_id) DO NOTHING`, o.ID, p.issuer, p.subject); err != nil {
+	var at time.Time
+	err = tx.QueryRow(ctx, `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) VALUES($1,$2,$3) ON CONFLICT(order_id) DO NOTHING RETURNING withdrawn_at`, o.ID, p.issuer, p.subject).Scan(&at)
+	switch {
+	case err == nil:
+		// The withdrawal's receipt on a durable medium (section 20 a).
+		var client string
+		if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_orders WHERE id=$1`, o.ID).Scan(&client); err != nil {
+			return errTriageStorage
+		}
+		if err = s.queueOrderMail(ctx, tx, client, "withdrawal-receipt", mc, orderMail{OrderID: o.ID, Withdrawn: at.UTC().Format("2006-01-02 15:04"), EarlyStart: o.EarlyStart != nil}); err != nil {
+			return err
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
 		return errTriageStorage
 	}
 	if err = s.commitOrder(ctx, p, tx, s.orderReady); err != nil {
