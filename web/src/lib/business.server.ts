@@ -16,12 +16,13 @@ export const business = {
   vatMarker: (locale: "en" | "da") => vatPriceMarker(locale),
 };
 
-// Only public, rendered footer data crosses the server boundary. In particular,
+// Only public, rendered footer data crosses the server boundary: the CVR and email.
+// The phone number belongs only on the company page and terms. In particular,
 // the postal address is read exclusively by the two company-page loaders.
 export function businessFrame(locale: "en" | "da") {
   const t = business.copy[locale];
   return {
-    identity: FEATURE_COMPANY_IDENTITY ? company : null,
+    identity: FEATURE_COMPANY_IDENTITY ? { cvr: company.cvr, email: company.email } : null,
     inquiryUrl: business.inquiryUrl,
     footer: { identity: t.footerIdentity, note: t.footer, registration: t.registrationType,
       about: t.aboutNav, projects: t.projectsNav, contact: t.contact },

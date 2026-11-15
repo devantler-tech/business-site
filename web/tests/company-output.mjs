@@ -132,6 +132,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
   }
   for (const file of files(candidate)) {
     const bytes = readFileSync(file);
+    // Consumer law needs the phone only before an agreement: on the company page and the terms.
+    if (companyPhone) assert.ok(!bytes.includes(Buffer.from(companyPhone)) || /^(?:da\/)?(?:company|terms)\/(?:index\.html|__data\.json)$/.test(file.slice(candidate.length + 1)), `phone number leaked into ${file.slice(candidate.length + 1)}`);
     for (const needle of ["company-address-fixture-187", "1234 Exampletown"]) {
       assert.ok(!bytes.includes(Buffer.from(needle)) || (identity && !template && companyPages.has(file)), "address leaked outside the two disclosure HTML pages");
     }
