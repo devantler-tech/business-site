@@ -26,7 +26,7 @@ changing authored Markdown or shared content inputs. Never edit generated output
 
 The public application retains English/Danish Home, About and Projects, all English Journal
 articles, three main archive pages, complete topic/author archives, six technical guides,
-RSS, CV/thesis downloads, sitemap, robots, sharing images and the existing green-orb favicon.
+RSS, CV/thesis downloads, sitemap, robots, sharing images and the Devantler Tech logo favicon.
 Historical project/template redirects preserve heading fragments and native continuation links.
 Do not invent Danish articles, feeds or guides.
 
