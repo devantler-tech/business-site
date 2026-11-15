@@ -71,8 +71,10 @@ the sync between calls.
 
 The sync starts only when the portal's own dependencies are configured and
 `PORTAL_NUMINA_TOKEN_FILE` names an absolute path to the projected API key. It uses the same
-non-root, root/current-user-owned projection reader as the other portal secrets. Optional
-settings, refused unless the key file is set:
+non-root, root/current-user-owned projection reader as the other portal secrets. In production
+these settings come from the portal settings projection (`--portal-settings-projection`), like
+the sign-in settings; the key itself is a separate projected file such as
+`/run/webapp-inputs/numina-api-key`. Optional settings, refused unless the key file is set:
 
 | Setting                       | Default                  | Meaning                           |
 |-------------------------------|--------------------------|-----------------------------------|

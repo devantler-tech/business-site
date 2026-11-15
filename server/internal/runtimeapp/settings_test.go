@@ -151,6 +151,19 @@ func TestPortalSettingsProjectionFeedsExistingConfiguration(t *testing.T) {
 			t.Cleanup(state.Shutdown)
 		}
 	})
+	t.Run("Numina billing settings are projected", func(t *testing.T) {
+		unsetPortalEnvironment(t)
+		settings := maps.Clone(dependencies)
+		settings["PORTAL_NUMINA_TOKEN_FILE"] = "/run/webapp-inputs/numina-api-key"
+		settings["PORTAL_NUMINA_SALES_ACCOUNT"] = "1010"
+		if err := ApplyPortalSettingsProjection(projectedIdentityFixture(t, []byte(settingsText(settings)), 0440)); err != nil {
+			t.Fatal("projected billing settings were refused")
+		}
+		cfg, err := ReadConfig(os.Getenv)
+		if err != nil || cfg.billing.tokenFile != "/run/webapp-inputs/numina-api-key" || cfg.billing.salesAccount != 1010 || cfg.billing.vatCode != "U25" {
+			t.Fatalf("projected billing settings were not read: %+v %v", cfg.billing, err)
+		}
+	})
 	for _, key := range inheritedPortalSettings {
 		t.Run("inherited "+key, func(t *testing.T) {
 			unsetPortalEnvironment(t)
