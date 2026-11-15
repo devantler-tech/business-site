@@ -15,7 +15,7 @@ account or publishing credentials to work on the static site.
 The [SvelteKit frontend](web/README.md) implements English/Danish
 Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
 Every local build, publication and Go package uses Svelte. A native Markdown/content build
-retains the complete articles, guides, feed, downloads and existing green-orb favicon.
+retains the complete articles, guides, feed, downloads and the Devantler Tech logo favicon.
 See the [Svelte-only decision](docs/adr/0027-svelte-only-public-build.md).
 
 ## Run the site locally
