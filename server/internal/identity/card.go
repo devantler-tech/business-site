@@ -161,10 +161,17 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 	var o projectOrder
 	var requestID, scope, email string
 	var ended, withdrawn bool
-	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id),EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id)
+	var place *int
+	var l launchPlace
+	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id),EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id),
+ l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0)
  FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version
- LEFT JOIN portal_contacts c ON c.client_id=o.client_id WHERE o.id=$1 AND o.collection='card'`, order).
-		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &ended, &withdrawn)
+ LEFT JOIN portal_contacts c ON c.client_id=o.client_id LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.id=$1 AND o.collection='card'`, order).
+		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &ended, &withdrawn, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor)
+	if place != nil {
+		l.Place = *place
+		o.Launch = &l
+	}
 	if err != nil {
 		return errTriageStorage
 	}
@@ -194,7 +201,7 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 			return err
 		}
 		checkout := stripe.Checkout{Mode: "payment", TaxRate: cfg.TaxRate, ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
-			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: name, AmountMinor: o.OneTimeMinor}}}
+			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: launchLine(name, lang, o.Launch), AmountMinor: o.OneTimeMinor}}}
 		if purpose == "monthly" {
 			// Card only by Stripe's own rules: MobilePay has no recurring use.
 			// Nothing is charged before the anchor; it then charges each month.
