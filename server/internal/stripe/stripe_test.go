@@ -61,7 +61,7 @@ func TestCheckoutRequestShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	anchor := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-	s, err := c.CreateCheckout(t.Context(), "portal-X-checkout-1", Checkout{Mode: "subscription", ClientReference: "ORDER", SuccessURL: "https://portal.invalid/ok", CancelURL: "https://portal.invalid/back", Locale: "da", BillingCycleAnchor: anchor, Metadata: map[string]string{"portal_order": "ORDER"},
+	s, err := c.CreateCheckout(t.Context(), "portal-X-checkout-1", Checkout{Mode: "subscription", TaxRate: "txr_moms25", ClientReference: "ORDER", SuccessURL: "https://portal.invalid/ok", CancelURL: "https://portal.invalid/back", Locale: "da", BillingCycleAnchor: anchor, Metadata: map[string]string{"portal_order": "ORDER"},
 		Lines: []Line{{Name: "Hosting", AmountMinor: 12500, Monthly: true}}})
 	if err != nil || s.ID != "cs_test_1" {
 		t.Fatal("checkout failed", err)
@@ -73,26 +73,42 @@ func TestCheckoutRequestShape(t *testing.T) {
 		"mode": "subscription", "line_items[0][price_data][unit_amount]": "12500", "line_items[0][price_data][recurring][interval]": "month",
 		"line_items[0][price_data][currency]": "dkk", "subscription_data[billing_cycle_anchor]": "1796083200",
 		"subscription_data[proration_behavior]": "none", "subscription_data[metadata][portal_order]": "ORDER", "client_reference_id": "ORDER",
+		"line_items[0][tax_rates][0]": "txr_moms25", "billing_address_collection": "required", "tax_id_collection[enabled]": "true",
 	} {
 		if form.Get(field) != want {
 			t.Errorf("%s=%q, want %q", field, form.Get(field), want)
 		}
 	}
 	for field := range form {
-		if strings.HasPrefix(field, "payment_method_types") || strings.HasPrefix(field, "line_items[1]") {
+		if strings.HasPrefix(field, "payment_method_types") || strings.HasPrefix(field, "line_items[1]") || strings.HasPrefix(field, "invoice_creation") {
 			t.Errorf("unexpected field %s", field)
 		}
 	}
-	if _, err := c.CreateCheckout(t.Context(), "k", Checkout{Mode: "payment", Lines: []Line{{Name: "x", AmountMinor: 1}}}); err == nil || strings.Contains(err.Error(), "private") || !strings.Contains(err.Error(), "amount_too_small") {
+	if _, err := c.CreateCheckout(t.Context(), "k", Checkout{Mode: "payment", TaxRate: "txr_moms25", Lines: []Line{{Name: "x", AmountMinor: 1}}}); err == nil || strings.Contains(err.Error(), "private") || !strings.Contains(err.Error(), "amount_too_small") {
 		t.Fatalf("refusal lost its code or leaked text: %v", err)
 	}
+	// A one-off payment asks Stripe for a paid invoice showing amounts without VAT.
+	if _, err := c.CreateCheckout(t.Context(), "k2", Checkout{Mode: "payment", TaxRate: "txr_moms25", Lines: []Line{{Name: "Website", AmountMinor: 375000}}}); err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range map[string]string{
+		"invoice_creation[enabled]": "true", "invoice_creation[invoice_data][rendering_options][amount_tax_display]": "exclude_tax",
+		"line_items[0][tax_rates][0]": "txr_moms25", "line_items[0][price_data][unit_amount]": "375000",
+		"billing_address_collection": "required", "tax_id_collection[enabled]": "true",
+	} {
+		if form.Get(field) != want {
+			t.Errorf("payment %s=%q, want %q", field, form.Get(field), want)
+		}
+	}
 	for name, bad := range map[string]Checkout{
-		"monthly in payment mode":       {Mode: "payment", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
-		"no monthly in subscription":    {Mode: "subscription", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}}},
-		"one-time line in subscription": {Mode: "subscription", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}, {Name: "y", AmountMinor: 100, Monthly: true}}},
-		"subscription without anchor":   {Mode: "subscription", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
-		"zero amount":                   {Mode: "payment", Lines: []Line{{Name: "x"}}},
-		"no lines":                      {Mode: "payment"},
+		"monthly in payment mode":       {Mode: "payment", TaxRate: "txr_moms25", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
+		"no monthly in subscription":    {Mode: "subscription", TaxRate: "txr_moms25", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}}},
+		"one-time line in subscription": {Mode: "subscription", TaxRate: "txr_moms25", BillingCycleAnchor: anchor, Lines: []Line{{Name: "x", AmountMinor: 100}, {Name: "y", AmountMinor: 100, Monthly: true}}},
+		"subscription without anchor":   {Mode: "subscription", TaxRate: "txr_moms25", Lines: []Line{{Name: "x", AmountMinor: 100, Monthly: true}}},
+		"zero amount":                   {Mode: "payment", TaxRate: "txr_moms25", Lines: []Line{{Name: "x"}}},
+		"no lines":                      {Mode: "payment", TaxRate: "txr_moms25"},
+		"no tax rate":                   {Mode: "payment", Lines: []Line{{Name: "x", AmountMinor: 100}}},
+		"not a tax rate":                {Mode: "payment", TaxRate: "moms25", Lines: []Line{{Name: "x", AmountMinor: 100}}},
 	} {
 		if _, err := c.CreateCheckout(t.Context(), "k", bad); err == nil {
 			t.Errorf("%s was sent", name)
@@ -107,5 +123,32 @@ func TestInvoiceSubscriptionInBothShapes(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(`{"id":"in_2","subscription":"sub_old"}`), &legacy); err != nil || legacy.SubscriptionID() != "sub_old" {
 		t.Fatal("legacy shape not read", err)
+	}
+}
+
+func TestGetTaxRate(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		id := strings.TrimPrefix(r.URL.Path, "/v1/tax_rates/")
+		if id == "txr_other" {
+			id = "txr_swapped"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "active": true, "inclusive": true, "percentage": 25.0, "country": "DK"})
+	}))
+	defer server.Close()
+	c, err := New(server.URL, "rk_test_fixture", server.Client().Transport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := c.GetTaxRate(t.Context(), "txr_moms25")
+	if err != nil || r != (TaxRate{ID: "txr_moms25", Active: true, Inclusive: true, Percentage: 25}) {
+		t.Fatalf("tax rate read as %+v: %v", r, err)
+	}
+	if _, err := c.GetTaxRate(t.Context(), "txr_other"); err == nil {
+		t.Fatal("a reply for another tax rate was accepted")
+	}
+	if _, err := c.GetTaxRate(t.Context(), "../charges"); err == nil || len(paths) != 2 || paths[0] != "GET /v1/tax_rates/txr_moms25" {
+		t.Fatalf("an invalid ID was sent or the path differs: %v", paths)
 	}
 }

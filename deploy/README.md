@@ -172,11 +172,14 @@ refuses billing lines unless the five dependency keys above are present:
 PORTAL_NUMINA_TOKEN_FILE=/run/webapp-inputs/numina-api-key
 PORTAL_STRIPE_KEY_FILE=/run/webapp-inputs/stripe-api-key
 PORTAL_STRIPE_WEBHOOK_SECRET_FILE=/run/webapp-inputs/stripe-webhook-secret
+PORTAL_STRIPE_TAX_RATE=txr_…
 ```
 
 The Numina line alone starts the invoice sync, which invoices nothing while its
-flag is off. The two Stripe lines come together or not at all. Omit the
-optional settings to keep their defaults:
+flag is off. The three Stripe lines come together or not at all;
+`PORTAL_STRIPE_TAX_RATE` is the ID of the inclusive 25% VAT tax rate in the
+Stripe Dashboard (`server/BILLING.md`), not a secret. Omit the optional
+settings to keep their defaults:
 
 | Key                           | Default                  |
 |-------------------------------|--------------------------|
