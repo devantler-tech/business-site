@@ -142,7 +142,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	}
 	// The order's confirmation on a durable medium (section 13), queued with it.
 	when := projectOrder{Placed: placed}
-	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope,
+	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
 		OneTimeDKK: current.Proposal.OneTimeMinor / 100, MonthlyDKK: current.Proposal.MonthlyMinor / 100, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
 		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {

@@ -39,12 +39,12 @@ type mailContext struct {
 
 // orderMail is the data of an order confirmation or withdrawal receipt.
 type orderMail struct {
-	OrderID, Scope, OneTimeTerms, MonthlyTerms, Collection string
-	OneTimeDKK, MonthlyDKK                                 int64
-	MonthlyStart, WithdrawUntil, WorkStartsFrom            string
-	Placed, Withdrawn                                      string
-	EarlyStart                                             bool
-	Portal, Terms                                          string
+	OrderID, Scope, Deliverables, OneTimeTerms, MonthlyTerms, Collection string
+	OneTimeDKK, MonthlyDKK                                               int64
+	MonthlyStart, WithdrawUntil, WorkStartsFrom                          string
+	Placed, Withdrawn                                                    string
+	EarlyStart                                                           bool
+	Portal, Terms                                                        string
 }
 
 var mailTemplates = template.Must(template.New("mail").Parse(`
@@ -55,6 +55,9 @@ Afgivet: {{.Placed}} (UTC)
 
 Omfang:
 {{.Scope}}
+
+Leverancer:
+{{.Deliverables}}
 
 {{if .OneTimeDKK}}Engangspris: {{.OneTimeDKK}} DKK{{with .OneTimeTerms}} ({{.}}){{end}}
 {{end}}{{if .MonthlyDKK}}Månedspris: {{.MonthlyDKK}} DKK forud den 1. i hver måned fra {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
@@ -74,6 +77,9 @@ Placed: {{.Placed}} (UTC)
 
 Scope:
 {{.Scope}}
+
+Deliverables:
+{{.Deliverables}}
 
 {{if .OneTimeDKK}}One-time price: {{.OneTimeDKK}} DKK{{with .OneTimeTerms}} ({{.}}){{end}}
 {{end}}{{if .MonthlyDKK}}Monthly price: {{.MonthlyDKK}} DKK in advance on the 1st of each month from {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
@@ -136,11 +142,15 @@ func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind
 // SendQueuedMail sends every queued email not yet delivered, oldest first, and
 // records each delivery once. It stops at the first failure and tries again
 // on the next pass; a message whose delivery record was lost may be sent
-// twice. It is a no-op without a sender or while another replica sends.
+// twice. It is a no-op without a sender, while another replica sends, or while
+// the portal's identity gate is closed: closing the portal stops delivery.
 func (s *Foundation) SendQueuedMail(ctx context.Context) error {
 	m := s.mail.Load()
 	if m == nil {
 		return errors.New("mail is not configured")
+	}
+	if !s.ready(ctx) {
+		return nil
 	}
 	return s.withRunLock(ctx, mailLock, func() error {
 		rows, err := s.pool.Query(ctx, `SELECT o.id,o.recipient,o.subject,o.body FROM portal_mail_outbox o WHERE NOT EXISTS (SELECT 1 FROM portal_mail_deliveries d WHERE d.outbox_id=o.id) ORDER BY o.queued_at,o.id LIMIT 20`)
@@ -152,6 +162,9 @@ func (s *Foundation) SendQueuedMail(ctx context.Context) error {
 			return errTriageStorage
 		}
 		for _, msg := range queued {
+			if !s.ready(ctx) {
+				return nil
+			}
 			if err = m.Send(ctx, msg); err != nil {
 				return err
 			}

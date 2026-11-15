@@ -58,6 +58,12 @@ func TestOrderAndWithdrawalAreConfirmedByEmail(t *testing.T) {
 		t.Fatal("a refused email counted as sent")
 	}
 	m.fail = false
+	// Closing the portal stops delivery; reopening it resumes.
+	setFixturePortalFlags(t, b, append(acceptanceFlagNames(), "portal-invoice-billing"), []any{false, true, true, true, true, true, true})
+	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 0 {
+		t.Fatal("mail was sent with the portal closed", err)
+	}
+	billingFlags(t, b, true)
 	for range 2 {
 		if err := b.svc.SendQueuedMail(t.Context()); err != nil {
 			t.Fatal(err)
@@ -65,10 +71,14 @@ func TestOrderAndWithdrawalAreConfirmedByEmail(t *testing.T) {
 	}
 	sent := m.messages()
 	order := orderID(t, b)
+	var deliverables string
+	if err := b.pool.QueryRow(t.Context(), `SELECT deliverables FROM portal_proposals ORDER BY version DESC LIMIT 1`).Scan(&deliverables); err != nil {
+		t.Fatal(err)
+	}
 	if len(sent) != 1 || sent[0].To != "client@example.invalid" || sent[0].Subject != "Ordrebekræftelse fra Devantler Tech" {
 		t.Fatalf("order confirmation not sent once to the client: %+v", sent)
 	}
-	for _, want := range []string{"Ordre: " + order, "Engangspris: 2995 DKK", "Månedspris: 99 DKK", "Betaling: faktura", "Du bad om, at arbejdet begynder inden for fortrydelsesfristen på 14 dage", "til og med ", "ned@devantler.tech", "CVR 46830385"} {
+	for _, want := range []string{"Ordre: " + order, "Leverancer:\n" + deliverables, "Engangspris: 2995 DKK", "Månedspris: 99 DKK", "Betaling: faktura", "Du bad om, at arbejdet begynder inden for fortrydelsesfristen på 14 dage", "til og med ", "ned@devantler.tech", "CVR 46830385"} {
 		if !strings.Contains(sent[0].Body, want) {
 			t.Errorf("confirmation lacks %q:\n%s", want, sent[0].Body)
 		}
