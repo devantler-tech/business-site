@@ -1,7 +1,12 @@
 # Private work decisions
 
 This internal service records an operator's explicit decision against an exact
-current agreement and fully credited external invoice. Its default-off operator
+current agreement and fully credited external invoice.
+
+> The invoice-record and bank-credit modules that produced this evidence are
+> retired (ADR 0030, #117, #120), so nothing writes it any more and no approval
+> can currently be made. #268 binds approvals to the order's funding record from
+> [portal billing](BILLING.md) instead. Its default-off operator
 screen uses the retained Go frame and native forms; it has no client decision
 form, worker, queue, API or MCP adapter. It does not activate the portal,
 start work, collect money or create a monthly entitlement. Operator review is
@@ -111,7 +116,7 @@ The independent false-default `portal-work-approvals` decision has no environmen
 activation mapping. Review retirement under
 [#268](https://github.com/devantler-tech/business-site/issues/268) by
 20 November 2026. Approval reads/writes also require the existing identity,
-request, triage, proposal, sharing, acceptance, invoice and credit gates.
+request, triage, proposal, sharing and acceptance gates.
 Revocation deliberately requires only identity, request, triage and approval
 gates, so invalid old evidence cannot trap an approval.
 

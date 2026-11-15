@@ -18,7 +18,7 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
-var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/credits.html", "web/work-review.html"))
+var browserPage = template.Must(template.ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 
 type browser struct {
 	foundation *Foundation
@@ -113,14 +113,6 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			http.NotFound(w, r)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/invoices") && !s.invoicesReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && strings.HasSuffix(r.URL.Path, "/credits") && !s.creditsReady(r.Context()) {
-			http.NotFound(w, r)
-			return
-		}
 		if strings.HasPrefix(r.URL.Path, "/portal/operator/requests/") && (strings.HasSuffix(r.URL.Path, "/work-review") || strings.HasSuffix(r.URL.Path, "/work-approvals") || strings.HasSuffix(r.URL.Path, "/work-revocations")) && !s.workApprovalGate(r.Context()) {
 			http.NotFound(w, r)
 			return
@@ -170,9 +162,6 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposal-visibility", b.submitVisibility)
-	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices", b.submitInvoice)
-	mux.HandleFunc("GET /portal/operator/requests/{id}/invoices/{invoice}/credits", b.showCredits)
-	mux.HandleFunc("POST /portal/operator/requests/{id}/invoices/{invoice}/credits", b.submitCredit)
 	mux.HandleFunc("GET /portal/operator/requests/{id}/work-review", b.showWorkReview)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-approvals", b.approveWork)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/work-revocations", b.revokeWork)
@@ -427,7 +416,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if path == "/portal/contact/verify" {
 		path = "/portal/contact"
 	}
-	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" || kind == "invoice-error" || kind == "credit-error" {
+	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
 	d.LanguageURL = path + "?lang=" + other

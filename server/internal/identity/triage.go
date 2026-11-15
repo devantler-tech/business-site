@@ -132,8 +132,6 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
 	billingEnabled := acceptanceEnabled && b.foundation.orderReady(r.Context())
-	invoicesEnabled := acceptanceEnabled && b.foundation.invoicesReady(r.Context())
-	creditsEnabled := invoicesEnabled && b.foundation.creditsReady(r.Context())
 	workEnabled := id != "" && b.foundation.workApprovalGate(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
@@ -182,15 +180,6 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			}
 			page.BillingEnabled = true
 		}
-	}
-	if invoicesEnabled {
-		page.Invoices, err = b.foundation.readInvoices(r.Context(), p, id)
-		if err != nil {
-			b.triageError(w, r, err)
-			return
-		}
-		page.InvoicesEnabled, page.InvoiceKey = true, secret()
-		page.CreditsEnabled = creditsEnabled
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -259,8 +248,4 @@ type triagePageData struct {
 	Acceptances       []proposalAcceptance
 	BillingEnabled    bool
 	Order             *projectOrder
-	InvoicesEnabled   bool
-	CreditsEnabled    bool
-	InvoiceKey        string
-	Invoices          invoiceHistory
 }
