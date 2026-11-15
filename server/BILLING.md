@@ -88,11 +88,13 @@ card order, so nothing is booked twice.
     `payment_method_types`, and Stripe offers MobilePay only for one-off payments.
   - Amounts are VAT-inclusive DKK; Stripe Tax is not used.
 - **Sessions are kept.** Every session is stored with its order, purpose and attempt
-  (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. A
-  session that expires or whose asynchronous payment fails is closed, and the receipt offers
-  **Start card payment**, which creates a new attempt with `Idempotency-Key`
+  (`portal_card_checkouts`), and moves between `open`, `processing`, `paid` and `closed`. Only
+  Stripe closes a session: when it reports the session expired or its asynchronous payment
+  failed, the receipt offers **Start card payment**, which creates a new attempt with `Idempotency-Key`
   `portal-<order>-<purpose>-checkout-<n>`. An open, processing or paid session is never
-  replaced, and a replaced one still resolves to its own order if a payment lands on it later.
+  replaced, not even past its expiry time, because Stripe never expires a completed session and
+  its completion may still be on its way. A closed session stays closed when an unpaid completion
+  arrives after its failure, and a replaced one still resolves to its own order.
 - **Funding comes only from signed webhooks.** `POST /portal/stripe/webhook` sits outside
   sessions and CSRF, reads at most 256 KiB, verifies `Stripe-Signature` (HMAC-SHA256, five
   minutes' tolerance) and applies each event exactly once (`portal_stripe_events`). A failed
@@ -183,6 +185,7 @@ followed, a sandbox that cannot email, and the closed gate.
 `TestPrivateCard*` send genuinely signed events to the real HTTPS handler and a fake Stripe
 API: one-off and subscription Checkout shapes, a forged signature, an unpaid then
 asynchronously paid session, a replayed event, an early subscription invoice retried after
-completion, a foreign subscription ignored, a monthly invoice, a wrong amount, an expired
-session restarted, and the closed gate. `internal/numina` and `internal/stripe` test the clients. Real Numina
+completion, a foreign subscription ignored, a monthly invoice, a wrong amount, a session past
+its expiry time kept until Stripe expires it, a failed payment restarted even when its unpaid
+completion arrives late, and the closed gate. `internal/numina` and `internal/stripe` test the clients. Real Numina
 sandbox and Stripe test-mode proof against the real services are launch steps.

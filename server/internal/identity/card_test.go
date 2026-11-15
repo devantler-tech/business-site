@@ -164,6 +164,14 @@ func TestPrivateCardOneOffIsFundedOnlyBySignedEvents(t *testing.T) {
 	if body := receipt(t, b, "en"); !strings.Contains(body, `href="https://checkout.stripe.invalid/c/pay/cs_test_1"`) || len(chargeStates(t, b)) != 0 {
 		t.Fatal("receipt has no payment link, or a browser return funded the order")
 	}
+	// Past its expiry time but without Stripe's expiry event, the session may
+	// still have been completed, so no replacement is made beside it.
+	if _, err := b.pool.Exec(b.f.ctx, `UPDATE portal_card_checkouts SET expires_at=clock_timestamp()-interval '1 minute'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.ensureCheckouts(b.f.ctx, orderID(t, b), b.site.URL, "en"); err != nil || len(fake.sessions()) != 1 || strings.Contains(receipt(t, b, "en"), "Start card payment") {
+		t.Fatal("a session past its expiry time was replaced before Stripe expired it", err)
+	}
 	session := map[string]any{"id": "cs_test_1", "object": "checkout.session", "mode": "payment", "payment_status": "unpaid", "amount_total": 299500, "currency": "dkk"}
 	if sendEvent(t, b, "evt_forged", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk"}, "whsec_other") != 400 {
 		t.Fatal("event signed with another secret was accepted")
@@ -268,6 +276,11 @@ func TestPrivateCardRetriesKeepEverySession(t *testing.T) {
 	unpaid := map[string]any{"id": "cs_test_1", "mode": "payment", "payment_status": "unpaid", "amount_total": 299500, "currency": "dkk"}
 	if sendEvent(t, b, "evt_unpaid", "checkout.session.completed", unpaid, webhookSecret) != 200 || sendEvent(t, b, "evt_failed", "checkout.session.async_payment_failed", unpaid, webhookSecret) != 200 {
 		t.Fatal("asynchronous failure refused")
+	}
+	// The same unpaid completion delivered again after the failure keeps the
+	// attempt closed.
+	if sendEvent(t, b, "evt_unpaid_late", "checkout.session.completed", unpaid, webhookSecret) != 200 {
+		t.Fatal("late unpaid completion refused")
 	}
 	body := receipt(t, b, "da")
 	csrf := csrfInput.FindStringSubmatch(body)

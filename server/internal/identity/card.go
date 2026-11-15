@@ -51,13 +51,14 @@ func (s *Foundation) cardBillingReady(ctx context.Context) bool {
 // "one-time" (card or MobilePay, paid now) or "monthly" (a card subscription).
 type orderCheckout struct {
 	Purpose, URL, State string
-	Expires             time.Time
 }
 
 // Open reports a Checkout the client can still complete.
 func (c orderCheckout) Open() bool { return c.State == "open" }
 
-// Replaceable reports a Checkout that can no longer be completed.
+// Replaceable reports a Checkout Stripe has said can no longer be completed:
+// it expired or its asynchronous payment failed. Stripe never expires a
+// completed session, so a replacement never runs beside a payable attempt.
 func (c orderCheckout) Replaceable() bool { return c.State == "closed" }
 
 // cardPurposes are the Checkout Sessions a card order needs, in display order.
@@ -72,20 +73,18 @@ func cardPurposes(oneTime, monthly int64) []string {
 	return purposes
 }
 
-// latestCheckout returns the newest session for one purpose. An open session
-// past its expiry is reported closed: Stripe can no longer complete it.
+// latestCheckout returns the newest session for one purpose. Only Stripe's
+// own events close a session; its local expiry time is not enough, because a
+// completion just before it may still be on its way.
 func (s *Foundation) latestCheckout(ctx context.Context, order, purpose string) (orderCheckout, int, error) {
 	c := orderCheckout{Purpose: purpose}
 	var attempt int
-	err := s.pool.QueryRow(ctx, `SELECT url,state,expires_at,attempt FROM portal_card_checkouts WHERE order_id=$1 AND purpose=$2 ORDER BY attempt DESC LIMIT 1`, order, purpose).Scan(&c.URL, &c.State, &c.Expires, &attempt)
+	err := s.pool.QueryRow(ctx, `SELECT url,state,attempt FROM portal_card_checkouts WHERE order_id=$1 AND purpose=$2 ORDER BY attempt DESC LIMIT 1`, order, purpose).Scan(&c.URL, &c.State, &attempt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return orderCheckout{Purpose: purpose, State: "closed"}, 0, nil
 	}
 	if err != nil {
 		return orderCheckout{}, 0, errTriageStorage
-	}
-	if c.State == "open" && !s.cards.Load().Now().Before(c.Expires) {
-		c.State = "closed"
 	}
 	return c, attempt, nil
 }
@@ -298,8 +297,9 @@ func applyCheckoutEvent(ctx context.Context, tx pgx.Tx, kind string, session str
 			return setState("paid", session.Subscription, "open", "processing", "closed")
 		}
 		if session.PaymentStatus != "paid" {
-			// An asynchronous method has not settled yet.
-			return setState("processing", "", "open", "closed")
+			// An asynchronous method has not settled yet. A failure that
+			// arrived first stays final, so the client can start again.
+			return setState("processing", "", "open")
 		}
 	}
 	if purpose != "one-time" || session.Mode != "payment" || session.PaymentStatus != "paid" {
