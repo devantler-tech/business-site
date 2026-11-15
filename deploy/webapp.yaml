@@ -41,3 +41,7 @@ spec:
           path: portal-client-secret
         - key: portal-database-ca
           path: portal-database-ca
+        - key: smtp-username
+          path: smtp-username
+        - key: smtp-password
+          path: smtp-password
