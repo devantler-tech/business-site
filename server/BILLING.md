@@ -39,7 +39,8 @@ For each invoice-path order it:
    creating, it lists the contact's invoices and reuses one whose memo carries the identity, so
    a lost reply never creates a second invoice. Issue date is today, due date 14 days later.
    One line: the accepted scope's first line (plus the month for monthly charges), at the net
-   price, with the configured sales account and VAT code.
+   price, with the configured sales account and the VAT code set on the line itself, so the
+   account's own default cannot change the total.
 4. **Books** the invoice (safe to repeat), then **sends** it by email with its own idempotency
    key. EAN delivery follows from the Numina contact's e-invoice settings when it is booked.
    A Numina sandbox cannot send email (`403`); booking and polling still proceed.
@@ -48,9 +49,14 @@ For each invoice-path order it:
    `covered_by_unmatched_payments`, waits until the payment is matched in Numina.
 
 A charge is **held** when the portal must not decide it alone: the client has no contact
-profile yet, or the Numina contact's country is not Denmark, which needs reverse charge or
-another VAT treatment. The operator invoices a held charge by hand in Numina. Each pass tries
-held charges again, so fixing the contact resumes them.
+profile yet, two Numina contacts share the client's email, the Numina contact's country is not
+Denmark (which needs reverse charge or another VAT treatment), or a draft's total differs from
+the charge. The operator page shows each held charge's reference. Invoice it by hand in Numina
+with that reference in the memo: the portal adopts any invoice (never a credit note) whose memo
+carries it, follows its payment, and leaves sending to whoever booked it. A draft it adopts is
+booked only when its total is exactly the charge. Each pass tries held charges again, so fixing
+the contact or the draft resumes them, and no second invoice is created once one carries the
+reference.
 
 The client's receipt shows each invoice as being prepared, invoiced and awaiting payment, or
 paid. The operator's request page shows the order, each charge's state, Numina invoice number

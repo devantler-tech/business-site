@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -66,11 +67,13 @@ type Contact struct {
 	CountryCode string `json:"country_code,omitempty"`
 }
 
-// Line is one invoice line. UnitPrice is excluding VAT, in DKK.
+// Line is one invoice line. UnitPrice is excluding VAT, in DKK. VATCode is
+// always sent: without it Numina would use the sales account's default code.
 type Line struct {
 	Description string      `json:"description"`
 	Quantity    int         `json:"quantity"`
 	UnitPrice   json.Number `json:"unit_price"`
+	VATCode     string      `json:"vat_code"`
 }
 
 // NewInvoice is a draft invoice request.
@@ -89,6 +92,7 @@ type NewInvoice struct {
 type Invoice struct {
 	ID                 string       `json:"id"`
 	InvoiceNumber      *int         `json:"invoice_number"`
+	Type               string       `json:"type"`
 	Status             string       `json:"status"`
 	ContactID          string       `json:"contact_id"`
 	IssueDate          string       `json:"issue_date"`
@@ -106,6 +110,28 @@ func (i Invoice) Settled() bool {
 	}
 	f, err := strconv.ParseFloat(i.OutstandingBalance.String(), 64)
 	return err == nil && f == 0
+}
+
+// Minor parses a Numina decimal DKK amount into exact minor units. It accepts
+// at most two decimals and never rounds.
+func Minor(amount json.Number) (int64, bool) {
+	whole, fraction, decimal := strings.Cut(amount.String(), ".")
+	if whole == "" || len(fraction) > 2 || (decimal && fraction == "") || strings.HasPrefix(whole, "-") || strings.HasPrefix(whole, "+") {
+		return 0, false
+	}
+	units, err := strconv.ParseInt(whole, 10, 64)
+	if err != nil || units > 1_000_000_000 {
+		return 0, false
+	}
+	cents := int64(0)
+	if fraction != "" {
+		parsed, err := strconv.ParseInt((fraction + "0")[:2], 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		cents = parsed
+	}
+	return units*100 + cents, true
 }
 
 // Amount formats minor units as Numina's decimal DKK amount.
@@ -187,13 +213,25 @@ func (c *Client) UpdateContact(ctx context.Context, id, name, email string) erro
 	return c.do(ctx, http.MethodPut, "/v1/contacts/"+url.PathEscape(id), nil, "", map[string]string{"name": name, "email": email}, nil)
 }
 
-// SearchContacts lists contacts whose name contains search.
-func (c *Client) SearchContacts(ctx context.Context, search string) ([]Contact, error) {
-	var page struct {
-		Contacts []Contact `json:"contacts"`
+// ListContacts returns every contact of the company.
+func (c *Client) ListContacts(ctx context.Context) ([]Contact, error) {
+	var all []Contact
+	for offset := 0; offset < 100000; {
+		var page struct {
+			Contacts   []Contact `json:"contacts"`
+			HasMore    bool      `json:"has_more"`
+			NextOffset int       `json:"next_offset"`
+		}
+		if err := c.do(ctx, http.MethodGet, "/v1/contacts", url.Values{"limit": {"500"}, "offset": {strconv.Itoa(offset)}}, "", nil, &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page.Contacts...)
+		if !page.HasMore || page.NextOffset <= offset {
+			return all, nil
+		}
+		offset = page.NextOffset
 	}
-	err := c.do(ctx, http.MethodGet, "/v1/contacts", url.Values{"search": {search}, "limit": {"100"}}, "", nil, &page)
-	return page.Contacts, err
+	return nil, errors.New("numina: contact list too long")
 }
 
 // CreateInvoice creates a draft. The key makes a retry return the original.

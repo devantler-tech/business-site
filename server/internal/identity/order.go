@@ -38,10 +38,10 @@ func (o projectOrder) MonthlyStart() string { return o.MonthlyFrom.Format("2006-
 
 // orderCharge is one billing period's funding record.
 type orderCharge struct {
-	Period, State, Reference string
-	Number                   *int
-	GrossMinor               int64
-	Sent                     bool
+	Period, State, Reference, Identity string
+	Number                             *int
+	GrossMinor                         int64
+	Sent                               bool
 }
 
 func (c orderCharge) GrossDKK() int64 { return c.GrossMinor / 100 }
@@ -89,22 +89,24 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		if existing.Acceptance != acceptance || existing.Collection != collection {
 			return projectOrder{}, errProposalConflict
 		}
-		return existing, s.commitClientProposal(ctx, p, tx, time.Time{})
+		return existing, s.commitOrder(ctx, p, tx)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return projectOrder{}, err
 	}
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		secret(), id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(time.Now())); err != nil {
+	// One timestamp dates the order and its first billed month.
+	placed := time.Now()
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		secret(), id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed); err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	placed, err := readOrderTx(ctx, tx, id, client)
+	saved, err := readOrderTx(ctx, tx, id, client)
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	return placed, s.commitClientProposal(ctx, p, tx, time.Time{})
+	return saved, s.commitOrder(ctx, p, tx)
 }
 
 // readOrderTx reads the request's order and its charges inside a scoped,
@@ -119,14 +121,14 @@ func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrde
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
-	rows, err := tx.Query(ctx, `SELECT period,state,coalesce(provider_ref,''),provider_number,gross_minor,sent FROM portal_order_charges WHERE order_id=$1 ORDER BY period='acceptance' DESC,period DESC LIMIT 120`, o.ID)
+	rows, err := tx.Query(ctx, `SELECT period,state,coalesce(provider_ref,''),identity,provider_number,gross_minor,sent FROM portal_order_charges WHERE order_id=$1 ORDER BY period='acceptance' DESC,period DESC LIMIT 120`, o.ID)
 	if err != nil {
 		return projectOrder{}, errTriageStorage
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var c orderCharge
-		if err = rows.Scan(&c.Period, &c.State, &c.Reference, &c.Number, &c.GrossMinor, &c.Sent); err != nil {
+		if err = rows.Scan(&c.Period, &c.State, &c.Reference, &c.Identity, &c.Number, &c.GrossMinor, &c.Sent); err != nil {
 			return projectOrder{}, errTriageStorage
 		}
 		o.Charges = append(o.Charges, c)
@@ -146,7 +148,7 @@ func (s *Foundation) readClientOrder(ctx context.Context, p Principal, id string
 	if err != nil {
 		return nil, err
 	}
-	return readOrderFor(ctx, tx, id, client, func() error { return s.commitClientProposal(ctx, p, tx, time.Time{}) })
+	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx) })
 }
 
 // readOperatorOrder returns a request's order for a current operator.
@@ -159,6 +161,16 @@ func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id stri
 		return nil, err
 	}
 	return readOrderFor(ctx, tx, id, client, func() error { return commitProposalWrite(ctx, p, tx, s.invoiceBillingReady) })
+}
+
+// commitOrder is the final checkpoint for order writes and reads: the billing
+// gate, not only the acceptance gates, must still be open, along with the
+// principal's expiry and the request's cancellation.
+func (s *Foundation) commitOrder(ctx context.Context, p Principal, tx pgx.Tx) error {
+	if !s.invoiceBillingReady(ctx) {
+		return ErrDenied
+	}
+	return s.commitClientProposal(ctx, p, tx, time.Time{})
 }
 
 // readOrderFor reads the order in an already scoped, request-locked transaction

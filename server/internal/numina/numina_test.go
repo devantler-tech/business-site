@@ -40,6 +40,19 @@ func TestAmountIsExactDecimalKroner(t *testing.T) {
 	}
 }
 
+func TestMinorParsesExactAmounts(t *testing.T) {
+	for in, want := range map[string]int64{"3750": 375000, "3750.0": 375000, "3750.00": 375000, "2396.5": 239650, "0.05": 5, "0": 0} {
+		if got, ok := Minor(json.Number(in)); !ok || got != want {
+			t.Errorf("Minor(%s)=%d,%v want %d", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"", "1.234", "-1", "+1", "1.", ".5", "1e3", "abc", "99999999999"} {
+		if _, ok := Minor(json.Number(in)); ok {
+			t.Errorf("Minor(%q) accepted", in)
+		}
+	}
+}
+
 func TestClientSendsKeyAndTokenAndHidesResponseText(t *testing.T) {
 	var seen *http.Request
 	var body map[string]any

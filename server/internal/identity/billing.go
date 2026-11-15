@@ -18,7 +18,7 @@ type NuminaAPI interface {
 	CreateContact(context.Context, numina.Contact) (numina.Contact, error)
 	GetContact(context.Context, string) (numina.Contact, error)
 	UpdateContact(ctx context.Context, id, name, email string) error
-	SearchContacts(context.Context, string) ([]numina.Contact, error)
+	ListContacts(context.Context) ([]numina.Contact, error)
 	CreateInvoice(ctx context.Context, key string, invoice numina.NewInvoice) (numina.Invoice, error)
 	BookInvoice(context.Context, string) (numina.Invoice, error)
 	SendInvoice(ctx context.Context, key, id string) error
@@ -80,8 +80,13 @@ func (s *Foundation) SyncInvoiceBilling(ctx context.Context, cfg InvoiceBilling)
 		return nil
 	}
 	defer func() {
-		// A lost session releases the lock too; the unlock result changes nothing.
-		_, _ = conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, invoiceBillingLock)
+		// Bounded even after cancellation; a connection that may still hold the
+		// lock is closed rather than returned to the pool.
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if _, err := conn.Exec(cleanup, `SELECT pg_advisory_unlock($1)`, invoiceBillingLock); err != nil {
+			_ = conn.Conn().Close(cleanup)
+		}
 	}()
 	now := cfg.Now()
 	if err = s.recordDueCharges(ctx, now); err != nil {
@@ -189,7 +194,7 @@ func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) 
 }
 
 func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY o.placed_at,c.period LIMIT 500`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -220,20 +225,14 @@ func (s *Foundation) setCharge(ctx context.Context, c billingCharge, set string,
 // driveCharge advances one charge by every step that is still missing. Each
 // step is safe to repeat: creation is found by its memo identity before it is
 // retried, booking is idempotent at Numina, and sending carries its own key.
+// The gate is rechecked before every call that changes something at Numina.
 func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge) error {
 	if c.Reference == "" {
-		contactID, err := s.numinaContact(ctx, cfg.Numina, c.Order.Client)
-		ref := ""
-		if err == nil {
-			ref, err = s.createInvoice(ctx, cfg, now, c, contactID)
-		}
+		ref, err := s.findOrCreateInvoice(ctx, cfg, now, c)
 		if errors.Is(err, errChargeHeld) {
-			if c.State != "held" {
-				return errors.Join(err, s.setCharge(ctx, c, `state='held'`))
-			}
-			return err
+			return s.holdCharge(ctx, c)
 		}
-		if err != nil {
+		if err != nil || ref == "" {
 			return err
 		}
 		if err = s.setCharge(ctx, c, `state='created',provider_ref=$3`, ref); err != nil {
@@ -241,17 +240,43 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 		}
 		c.Reference, c.State = ref, "created"
 	}
-	if c.State == "created" {
-		booked, err := cfg.Numina.BookInvoice(ctx, c.Reference)
-		if err != nil {
-			return err
-		}
-		if err = s.setCharge(ctx, c, `state='booked',provider_number=$3`, booked.InvoiceNumber); err != nil {
-			return err
+	invoice, err := cfg.Numina.GetInvoice(ctx, c.Reference)
+	if err != nil {
+		return err
+	}
+	if invoice.Type != "invoice" {
+		return s.holdCharge(ctx, c)
+	}
+	if c.State != "booked" {
+		if invoice.Status == "draft" {
+			// Book only a draft whose total is exactly the charge. A different
+			// total (another VAT treatment, a typo) waits for the operator.
+			if total, ok := numina.Minor(invoice.Total); !ok || total != c.GrossMinor {
+				return s.holdCharge(ctx, c)
+			}
+			if !s.invoiceBillingReady(ctx) {
+				return nil
+			}
+			if invoice, err = cfg.Numina.BookInvoice(ctx, c.Reference); err != nil {
+				return err
+			}
+			if err = s.setCharge(ctx, c, `state='booked',provider_number=$3`, invoice.InvoiceNumber); err != nil {
+				return err
+			}
+		} else {
+			// Booked outside this path, by the operator for a held charge or
+			// before a lost reply: follow its payment and leave sending to them.
+			if err = s.setCharge(ctx, c, `state='booked',provider_number=$3,sent=true`, invoice.InvoiceNumber); err != nil {
+				return err
+			}
+			c.Sent = true
 		}
 		c.State = "booked"
 	}
 	if !c.Sent {
+		if !s.invoiceBillingReady(ctx) {
+			return nil
+		}
 		// A sandbox company cannot send email (403); polling still proceeds.
 		switch err := cfg.Numina.SendInvoice(ctx, c.Identity+"-send", c.Reference); {
 		case err == nil:
@@ -263,19 +288,41 @@ func (s *Foundation) driveCharge(ctx context.Context, cfg InvoiceBilling, now ti
 			return err
 		}
 	}
-	invoice, err := cfg.Numina.GetInvoice(ctx, c.Reference)
-	if err != nil {
-		return err
-	}
 	if invoice.Settled() {
 		return s.setCharge(ctx, c, `state='settled',settled_at=clock_timestamp()`)
 	}
 	return nil
 }
 
-// createInvoice returns the Numina invoice for the charge, creating it only
-// when no invoice to the contact carries the charge identity in its memo.
-func (s *Foundation) createInvoice(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge, contactID string) (string, error) {
+// holdCharge marks a charge the operator must finish by hand and reports it.
+func (s *Foundation) holdCharge(ctx context.Context, c billingCharge) error {
+	if c.State != "held" {
+		return errors.Join(errChargeHeld, s.setCharge(ctx, c, `state='held'`))
+	}
+	return errChargeHeld
+}
+
+// findOrCreateInvoice returns the Numina invoice for the charge. It adopts any
+// invoice to the contact whose memo carries the charge identity, including one
+// the operator made by hand for a held charge, and creates one only when none
+// exists and the customer is in Denmark.
+func (s *Foundation) findOrCreateInvoice(ctx context.Context, cfg InvoiceBilling, now time.Time, c billingCharge) (string, error) {
+	contactID, err := s.numinaContact(ctx, cfg.Numina, c.Order.Client)
+	if err != nil {
+		return "", err
+	}
+	today := now.In(copenhagen)
+	from := c.Order.Placed.In(copenhagen).AddDate(0, 0, -1).Format(time.DateOnly)
+	existing, err := cfg.Numina.ListInvoices(ctx, contactID, from, today.AddDate(0, 0, 1).Format(time.DateOnly))
+	if err != nil {
+		return "", err
+	}
+	for _, invoice := range existing {
+		// Credit notes inherit the memo of the invoice they credit.
+		if invoice.Type == "invoice" && strings.Contains(invoice.Memo, c.Identity) {
+			return invoice.ID, nil
+		}
+	}
 	contact, err := cfg.Numina.GetContact(ctx, contactID)
 	if err != nil {
 		return "", err
@@ -285,16 +332,8 @@ func (s *Foundation) createInvoice(ctx context.Context, cfg InvoiceBilling, now 
 	if contact.CountryCode != "" && contact.CountryCode != "DK" {
 		return "", errChargeHeld
 	}
-	today := now.In(copenhagen)
-	from := c.Order.Placed.In(copenhagen).AddDate(0, 0, -1).Format(time.DateOnly)
-	existing, err := cfg.Numina.ListInvoices(ctx, contactID, from, today.AddDate(0, 0, 1).Format(time.DateOnly))
-	if err != nil {
-		return "", err
-	}
-	for _, invoice := range existing {
-		if strings.Contains(invoice.Memo, c.Identity) {
-			return invoice.ID, nil
-		}
+	if !s.invoiceBillingReady(ctx) {
+		return "", nil
 	}
 	description := invoiceLine(c.Order.Scope)
 	if c.Period != "acceptance" {
@@ -307,7 +346,7 @@ func (s *Foundation) createInvoice(ctx context.Context, cfg InvoiceBilling, now 
 		Currency:           "DKK",
 		SalesAccountNumber: cfg.SalesAccount,
 		VATCode:            cfg.VATCode,
-		Items:              []numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(c.NetMinor)}},
+		Items:              []numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(c.NetMinor), VATCode: cfg.VATCode}},
 		Memo:               "Portal reference: " + c.Identity,
 	})
 	if err != nil {
@@ -335,7 +374,7 @@ func invoiceLine(scope string) string {
 
 // numinaContact returns the client's Numina contact, creating or updating it
 // from the portal contact profile. Numina does not protect contact creation
-// against retries, so an existing contact with the same email is reused.
+// against retries, and names change, so an existing contact is found by email.
 func (s *Foundation) numinaContact(ctx context.Context, api NuminaAPI, client string) (string, error) {
 	var name, email, company string
 	if err := s.pool.QueryRow(ctx, `SELECT name,email,company FROM portal_contacts WHERE client_id=$1`, client).Scan(&name, &email, &company); err != nil {
@@ -357,14 +396,19 @@ func (s *Foundation) numinaContact(ctx context.Context, api NuminaAPI, client st
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", errTriageStorage
 	}
-	found, err := api.SearchContacts(ctx, display)
+	all, err := api.ListContacts(ctx)
 	if err != nil {
 		return "", err
 	}
-	for _, contact := range found {
-		if strings.EqualFold(contact.Email, email) && contact.ID != "" {
-			contactID = contact.ID
+	for _, contact := range all {
+		if contact.ID == "" || !strings.EqualFold(strings.TrimSpace(contact.Email), strings.TrimSpace(email)) {
+			continue
 		}
+		if contactID != "" {
+			// Two Numina contacts share the email; the operator decides which.
+			return "", errChargeHeld
+		}
+		contactID = contact.ID
 	}
 	if contactID == "" {
 		created, err := api.CreateContact(ctx, numina.Contact{Name: display, Email: email, AttnPerson: attn, CountryCode: "DK"})

@@ -24,8 +24,10 @@ type fakeNumina struct {
 	keys            map[string]string
 	sends           int
 	contactCreates  int
-	failCreateReply bool // store the invoice, then answer 500 as if the reply was lost
-	forbidSend      bool // a sandbox company cannot send email
+	failCreateReply bool  // store the invoice, then answer 500 as if the reply was lost
+	forbidSend      bool  // a sandbox company cannot send email
+	totalOffset     int64 // added to a created invoice's total, as a wrong VAT code would
+	onCreate        func()
 	next            int
 }
 
@@ -103,7 +105,15 @@ func (f *fakeNumina) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		var in numina.NewInvoice
 		_ = json.NewDecoder(r.Body).Decode(&in)
-		inv := &fakeInvoice{Invoice: numina.Invoice{ID: f.id("invoice"), Status: "draft", ContactID: in.ContactID, IssueDate: in.IssueDate, Memo: in.Memo}, Items: in.Items, VAT: in.VATCode, Due: in.DueDate}
+		var total int64
+		for _, line := range in.Items {
+			net, _ := numina.Minor(line.UnitPrice)
+			total += int64(line.Quantity) * net * 125 / 100
+		}
+		inv := &fakeInvoice{Invoice: numina.Invoice{ID: f.id("invoice"), Type: "invoice", Status: "draft", ContactID: in.ContactID, IssueDate: in.IssueDate, Memo: in.Memo, Total: numina.Amount(total + f.totalOffset)}, Items: in.Items, VAT: in.VATCode, Due: in.DueDate}
+		if f.onCreate != nil {
+			f.onCreate()
+		}
 		f.invoices[inv.ID] = inv
 		if f.failCreateReply {
 			// The invoice exists, but the caller never learns its ID, and
@@ -255,6 +265,10 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_orders WHERE collection='invoice' AND one_time_minor=299500 AND monthly_minor=9900`).Scan(&orders); err != nil || orders != 1 {
 		t.Fatal("order not recorded exactly once with the accepted amounts", err)
 	}
+	var oneTimestamp bool
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT monthly_from=(date_trunc('month',placed_at AT TIME ZONE 'Europe/Copenhagen')+interval '1 month')::date FROM portal_orders`).Scan(&oneTimestamp); err != nil || !oneTimestamp {
+		t.Fatal("the first billed month does not follow the order's own timestamp", err)
+	}
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +276,7 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 		t.Fatalf("acceptance invoice not created, booked and sent once: %d %d %v", fake.count(), fake.sends, chargeStates(t, b))
 	}
 	for _, inv := range fake.invoices {
-		if !inv.Booked || inv.VAT != "U25" || len(inv.Items) != 1 || inv.Items[0].UnitPrice != "2396.00" || !strings.Contains(inv.Memo, "portal-") || !strings.HasSuffix(inv.Memo, "-acceptance") {
+		if !inv.Booked || inv.VAT != "U25" || len(inv.Items) != 1 || inv.Items[0].UnitPrice != "2396.00" || inv.Items[0].VATCode != "U25" || !strings.Contains(inv.Memo, "portal-") || !strings.HasSuffix(inv.Memo, "-acceptance") {
 			t.Fatalf("invoice content differs: %+v", inv)
 		}
 	}
@@ -285,11 +299,7 @@ func TestInvoiceBillingOrderToSettlement(t *testing.T) {
 		t.Fatal("paid invoice not settled", err)
 	}
 	// Next month, the monthly invoice is created in advance.
-	cfg.Now = func() time.Time { return firstOfNextMonth(time.Now()).Add(36 * time.Hour) }
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	month := firstOfNextMonth(time.Now()).Format("2006-01")
+	month := syncNextMonth(t, b, cfg)
 	if states := chargeStates(t, b); len(states) != 2 || states[month] != "booked" || fake.count() != 2 {
 		t.Fatalf("monthly invoice not created for %s: %v", month, states)
 	}
@@ -413,5 +423,97 @@ func TestInvoiceBillingMigrationKeepsHistoryAndPrivileges(t *testing.T) {
 	}
 	if err := migrator.QueryRow(t.Context(), `SELECT count(*) FROM pg_tables WHERE tablename IN ('portal_orders','portal_order_charges','portal_numina_contacts')`).Scan(&tables); err != nil || tables != 3 {
 		t.Fatal("v16 tables were not recreated", err)
+	}
+}
+
+// syncNextMonth runs the sync as on the 2nd of next month and returns that month.
+func syncNextMonth(t *testing.T, b *browserFixture, cfg InvoiceBilling) string {
+	t.Helper()
+	cfg.Now = func() time.Time { return firstOfNextMonth(time.Now()).Add(36 * time.Hour) }
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	return firstOfNextMonth(time.Now()).Format("2006-01")
+}
+
+// identityOf returns the charge identity the operator page shows for a period.
+func identityOf(t *testing.T, b *browserFixture, period string) string {
+	t.Helper()
+	var identity string
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT identity FROM portal_order_charges WHERE period=$1`, period).Scan(&identity); err != nil {
+		t.Fatal(err)
+	}
+	return identity
+}
+
+// TestInvoiceBillingAdoptsTheOperatorsInvoiceForAHeldCharge covers a customer
+// outside Denmark: the operator invoices by hand with the charge identity in
+// the memo, and the portal follows that invoice instead of creating another.
+func TestInvoiceBillingAdoptsTheOperatorsInvoiceForAHeldCharge(t *testing.T) {
+	b := billingFixture(t)
+	fake, cfg := newFakeNumina(t)
+	placeInvoiceOrder(t, b)
+	fake.contacts["contact-se"] = numina.Contact{ID: "contact-se", Name: "Old Bakery Name AB", Email: "client@example.invalid", CountryCode: "SE"}
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.contactCreates != 0 {
+		t.Fatalf("foreign customer not held, or the contact was not found by email: %v", err)
+	}
+	reverseCharge := numina.Amount(239600)
+	booked, open := 7, "open"
+	fake.mu.Lock()
+	fake.invoices["manual-1"] = &fakeInvoice{Booked: true, Invoice: numina.Invoice{ID: "manual-1", Type: "invoice", Status: "sent", ContactID: "contact-se", InvoiceNumber: &booked, PaymentState: &open, OutstandingBalance: &reverseCharge, Total: reverseCharge, Memo: "Reverse charge. Portal reference: " + identityOf(t, b, "acceptance")}}
+	fake.invoices["credit-1"] = &fakeInvoice{Invoice: numina.Invoice{ID: "credit-1", Type: "creditNote", Status: "sent", ContactID: "contact-se", Memo: "Portal reference: " + identityOf(t, b, "acceptance")}}
+	fake.mu.Unlock()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	var reference string
+	var sent bool
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT provider_ref,sent FROM portal_order_charges WHERE period='acceptance' AND state='booked'`).Scan(&reference, &sent); err != nil || reference != "manual-1" || !sent || fake.sends != 0 || fake.count() != 2 {
+		t.Fatalf("hand-made invoice not adopted (or a credit note was, or it was re-sent): %q %v", reference, err)
+	}
+	fake.pay("paid", "0")
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "settled" {
+		t.Fatal("adopted invoice was not followed to settlement", err)
+	}
+}
+
+// TestInvoiceBillingBooksOnlyExactTotalsWhileTheGateIsOpen covers a draft whose
+// total differs from the charge, two contacts sharing an email, and the gate
+// closing between creating a draft and booking it.
+func TestInvoiceBillingBooksOnlyExactTotalsWhileTheGateIsOpen(t *testing.T) {
+	b := billingFixture(t)
+	fake, cfg := newFakeNumina(t)
+	placeInvoiceOrder(t, b)
+	fake.contacts["c1"] = numina.Contact{ID: "c1", Name: "A", Email: "CLIENT@example.invalid", CountryCode: "DK"}
+	fake.contacts["c2"] = numina.Contact{ID: "c2", Name: "B", Email: "client@example.invalid", CountryCode: "DK"}
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.count() != 0 {
+		t.Fatal("ambiguous Numina contacts were not held", err)
+	}
+	delete(fake.contacts, "c2")
+	fake.totalOffset = 1
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "held" || fake.count() != 1 {
+		t.Fatal("a draft with a different total was not held", err)
+	}
+	for _, inv := range fake.invoices {
+		if inv.Booked {
+			t.Fatal("a draft with a different total was booked")
+		}
+		fixed := numina.Amount(299500)
+		inv.Total = fixed
+	}
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "booked" || fake.count() != 1 {
+		t.Fatal("a corrected draft was not booked", err)
+	}
+	// Next month the gate closes while Numina creates the draft.
+	fake.totalOffset = 0
+	fake.onCreate = func() { billingFlags(t, b, false) }
+	month := syncNextMonth(t, b, cfg)
+	for _, inv := range fake.invoices {
+		if strings.HasSuffix(inv.Memo, month) && (inv.Booked || chargeStates(t, b)[month] != "created") {
+			t.Fatal("the closed gate did not stop booking after creation")
+		}
+	}
+	if fake.sends != 1 {
+		t.Fatal("the closed gate did not stop sending")
 	}
 }
