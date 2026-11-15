@@ -323,8 +323,7 @@ scope the data query; an application helper is not blanket database isolation.
 
 Keep fixtures fictional. No tokens, login secrets, customer records or raw
 database errors in public responses/logs. No server files under `public/` or the
-Astro content collection. Static Pages publication remains source-owned and
-uploads only `dist`; it does not deploy this module. Application code stays here,
+Astro content collection. Application code stays here,
 never in the monorepo or a separate portal source repository.
 
 Sign-in credentials select exactly one ordinary owner-only file or explicit

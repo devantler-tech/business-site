@@ -2,8 +2,8 @@
 
 This directory prepares the public website for the platform's namespace-bound
 WebApp interface. The source-owned runtime publisher can publish this package after
-explicit release admission; no workflow applies it to a cluster. Pages remains
-the public deployment; portal access stays disabled.
+explicit release admission; no workflow applies it to a cluster. The platform serves
+this package at devantler.tech since GitHub Pages was retired; portal access stays disabled.
 
 From the repository root, with Node 24, installed root dependencies, Kubectl and
 Docker available:
@@ -145,7 +145,7 @@ verifier and independent paired-artifact readback remain mandatory under #276.
 ## Source-owned runtime release
 
 The release and runtime-publisher callers remain **off** unless the repository variable
-`RUNTIME_PUBLICATION_ENABLED` is exactly `true`. They do not change Pages, select a platform
+`RUNTIME_PUBLICATION_ENABLED` is exactly `true`. They do not select a platform
 tenant, move the public hostname, enable portal identity or accept customer orders.
 
 `release-runtime.yaml` admits a complete successful original main-push CI attempt whose source

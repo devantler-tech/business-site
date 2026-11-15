@@ -9,7 +9,8 @@
 # dependency update of the site went red. package.json declares the npm major in
 # devEngines.packageManager, and npm refuses to install, audit or run with another major.
 # This test keeps the workflows on a Node line that bundles that major, so no workflow can
-# drift back unnoticed — including the publish workflow, which runs only on main.
+# drift back unnoticed — including the production runtime package and the container
+# publication job, which runs only on main.
 #
 # CHECKS
 #   1. package.json declares devEngines.packageManager as npm "^<major>.0.0" with
@@ -55,8 +56,9 @@ required_jobs=(
   ci.yaml:build-docs
   ci.yaml:audit-docs
   ci.yaml:drift-check-active-projects
+  ci.yaml:test-combined-runtime
+  ci.yaml:publish-container
   audit-docs.yaml:audit-docs
-  publish-site.yaml:build
 )
 
 # Paths the CI filter gating this test must list, so a change to any input reruns it.
@@ -307,12 +309,12 @@ yq -i 'del(.updates[] | select(.directory == "/web") | .ignore)' "${fixture}/.gi
 expect_failure "uncoordinated Node types major update" "Node types major updates must be coordinated"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version-file") = "web/.node-version"' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "second Node authority" "must read the root .node-version"
+yq -i '(.jobs.test-combined-runtime.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version-file") = "web/.node-version"' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "second Node authority" "ci.yaml:test-combined-runtime must read the root .node-version"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "24"' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "inline version overrides declaration" "must read the root .node-version"
+yq -i '(.jobs.test-combined-runtime.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "24"' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "inline version overrides declaration" "ci.yaml:test-combined-runtime must read the root .node-version"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
@@ -327,10 +329,10 @@ expect_failure "Node-only job missing setup" "ci.yaml:extra works in docs/ but h
 
 for control in '.if = "false"' '.["continue-on-error"] = true'; do
   reset_fixture
-  yq -o=json '.' "${fixture}/.github/workflows/publish-site.yaml" |
-    jq "(.jobs.build.steps[] | select((.uses // \"\") | startswith(\"actions/setup-node@\"))) |= (${control})" >"${fixture}/conditional-node.json"
-  yq -P '.' "${fixture}/conditional-node.json" >"${fixture}/.github/workflows/publish-site.yaml"
-  expect_failure "Node setup cannot be skipped: ${control}" "Node setup must run and propagate failures"
+  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" |
+    jq "(.jobs[\"test-combined-runtime\"].steps[] | select((.uses // \"\") | startswith(\"actions/setup-node@\"))) |= (${control})" >"${fixture}/conditional-node.json"
+  yq -P '.' "${fixture}/conditional-node.json" >"${fixture}/.github/workflows/ci.yaml"
+  expect_failure "Node setup cannot be skipped: ${control}" "ci.yaml:test-combined-runtime Node setup must run and propagate failures"
 done
 
 # A root-native application still audits through its wrapper, not a literal npm
@@ -342,15 +344,15 @@ yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
     {"uses": "actions/setup-node@fixture", "with": {"node-version": "22"}},
     {"run": "./scripts/audit-dependencies.sh"}
   ]
-}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "root-default audit wrapper" "publish-site.yaml:extra sets up Node 22"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "root-default audit wrapper" "publish-runtime.yaml:extra sets up Node 22"
 
 # Root defaults alone must not classify every Bash-only repository check as a
 # Node job. The wrapper/npm invocation, not the application's folder name, matters.
 reset_fixture
 yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
   "runs-on": "ubuntu-latest", "steps": [{"run": "bash scripts/editorial-contract.test.sh"}]
-}' "${fixture}/.github/workflows/publish-site.yaml"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
 check "${fixture}/package.json" "${fixture}/.github/workflows" ||
   fail "root-default Bash-only jobs must not require Node"
 
@@ -360,38 +362,38 @@ yq -i '.jobs.extra = {
     {"run": "./scripts/audit-dependencies.sh", "working-directory": "."},
     {"uses": "actions/setup-node@fixture", "with": {"node-version": "24"}}
   ]
-}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "root audit before Node setup" "publish-site.yaml:extra sets up Node after"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "root audit before Node setup" "publish-runtime.yaml:extra sets up Node after"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "22"' \
-  "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "publish on Node 22" "publish-site.yaml:build sets up Node 22, which bundles npm 10"
-
-reset_fixture
-yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
-  {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "cd docs && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ with cd" "publish-site.yaml:extra sets up Node 22"
+yq -i '(.jobs.publish-container.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "22"' \
+  "${fixture}/.github/workflows/ci.yaml"
+expect_failure "main-only publication on Node 22" "ci.yaml:publish-container sets up Node 22, which bundles npm 10"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "pushd \"docs\" && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ with a quoted pushd" "publish-site.yaml:extra sets up Node 22"
+  {"run": "cd docs && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ with cd" "publish-runtime.yaml:extra sets up Node 22"
+
+reset_fixture
+yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
+  {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
+  {"run": "pushd \"docs\" && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ with a quoted pushd" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 CD_STEP="cd \"\${GITHUB_WORKSPACE}\"/docs && ./scripts/audit-dependencies.sh" yq -i '.jobs.extra = {
   "runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": strenv(CD_STEP)}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ through a quoted variable" "publish-site.yaml:extra sets up Node 22"
+  {"run": strenv(CD_STEP)}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ through a quoted variable" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "npx astro build"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job running npx" "publish-site.yaml:extra sets up Node 22"
+  {"run": "npx astro build"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job running npx" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 yq -i '.jobs.test-docs-npm-toolchain.if = "needs.changes.outputs.docs-npm-toolchain != '"'"'true'"'"'"' \
@@ -402,8 +404,8 @@ reset_fixture
 WORKSPACE_DOCS="\${{ github.workspace }}/docs" yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
   {"run": "npm ci", "working-directory": strenv(WORKSPACE_DOCS)}]}' \
-  "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job in docs/ by workspace path" "publish-site.yaml:extra sets up Node 22"
+  "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job in docs/ by workspace path" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 cat >"${fixture}/.github/workflows/extra.yaml" <<'YAML'

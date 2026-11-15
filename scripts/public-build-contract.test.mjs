@@ -13,27 +13,13 @@ function installation(steps, build) {
   assert.equal(steps[install].if,undefined);
   assert.ok(steps[install]["continue-on-error"] == null || steps[install]["continue-on-error"] === false);
 }
-test("actual publisher and runtime consumers install both pinned package graphs", () => {
-  const publisher = load(".github/workflows/publish-site.yaml");
-  const runtime = load(".github/workflows/ci.yaml").jobs["test-combined-runtime"];
-  for (const steps of [publisher.jobs.build.steps,runtime.steps]) {
-    const build = steps.findIndex(step => ["npm run build","bash scripts/package-runtime.sh --release"].includes(step.run));
-    installation(steps,build);
-    for (const mutation of [steps.filter(step => step.run !== "npm --prefix web ci"), steps.map(step => step.run === "npm --prefix web ci" ? {...step,if:"false"} : step), steps.map(step => step.run === "npm --prefix web ci" ? {...step,"continue-on-error":true} : step)]) assert.throws(() => installation(mutation,mutation.findIndex(step => ["npm run build","bash scripts/package-runtime.sh --release"].includes(step.run))));
-  }
-});
-test("publication admits only authorized main sources and explicit publish mode", () => {
-  const workflow=load(".github/workflows/publish-site.yaml");
-  assert.equal(workflow.on.workflow_dispatch.inputs.frontend,undefined);
-  const admission=workflow.jobs.build.steps[0].run;
-  const base={...process.env,PUBLICATION_REPOSITORY:"devantler-tech/business-site",PUBLICATION_REF:"refs/heads/main",PUBLICATION_EVENT:"workflow_dispatch",PUBLICATION_ENABLED:"true",SOURCE_REVISION:"a".repeat(40),PUBLICATION_MODE:"preview"};
-  const admit=changes=>spawnSync("bash",["-c",admission],{env:{...base,...changes}}).status;
-  assert.equal(admit({}),0);
-  for(const event of ["push","schedule","workflow_dispatch"]) {
-    assert.equal(admit({PUBLICATION_MODE:"publish",PUBLICATION_EVENT:event}),0);
-    for(const enabled of ["","false","TRUE"])assert.notEqual(admit({PUBLICATION_MODE:"publish",PUBLICATION_EVENT:event,PUBLICATION_ENABLED:enabled}),0);
-  }
-  for(const changes of [{PUBLICATION_REPOSITORY:"devantler-tech/monorepo"},{PUBLICATION_REF:"refs/heads/test"},{PUBLICATION_EVENT:"pull_request"},{PUBLICATION_EVENT:"push"},{SOURCE_REVISION:"invalid"}])assert.notEqual(admit(changes),0);
+// The production runtime is the only public deployment; its release admission
+// is exercised by runtime-release.test.sh and runtime-publisher-contract.test.sh.
+test("actual production runtime builder installs both pinned package graphs", () => {
+  const steps = load(".github/workflows/ci.yaml").jobs["test-combined-runtime"].steps;
+  const build = steps.findIndex(step => step.run === "bash scripts/package-runtime.sh --release");
+  installation(steps,build);
+  for (const mutation of [steps.filter(step => step.run !== "npm --prefix web ci"), steps.map(step => step.run === "npm --prefix web ci" ? {...step,if:"false"} : step), steps.map(step => step.run === "npm --prefix web ci" ? {...step,"continue-on-error":true} : step)]) assert.throws(() => installation(mutation,mutation.findIndex(step => step.run === "bash scripts/package-runtime.sh --release")));
 });
 test("the sole public Go package retains extracted-archive and container proof", () => {
   const steps=load(".github/workflows/ci.yaml").jobs["test-combined-runtime"].steps;

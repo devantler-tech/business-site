@@ -54,9 +54,10 @@ export function validateSelection(candidate,reference,options) {
   const selected = files(candidate), baseline = typeof reference === "string" ? files(reference) : reference;
   const actual = new Map(selected);
   for (const name of selected.keys()) {
+    // A copied Pages receipt would misreport which source the runtime serves.
     assert.ok(name !== "publication-source.json","Public selection cannot copy a publisher receipt");
     assert.ok(!name.split("/").some(part => part.startsWith(".") || ["portal","server"].includes(part)) && !/\.(?:go|sql|pem|key)$/.test(name),"Public selection contains private output");
-    assert.notEqual(name,"CNAME","Public selection owns CNAME, not the candidate");
+    assert.notEqual(name,"CNAME","Public selection cannot carry retired GitHub Pages domain configuration");
   }
   // Preserve only the two inert, identity-off compatibility redirects. Never
   // copy an incumbent page, asset tree or company disclosure over the candidate.
@@ -106,10 +107,6 @@ export function validateSelection(candidate,reference,options) {
     assert.equal(digest(bytes),inventory.files[name],`Public selection stale file: ${name}`);
     assert.ok(!bytes.includes(Buffer.from(options.nonce)),"Public selection leaked its private build marker");
   }
-  const cname = baseline.get("CNAME");
-  assert.ok(cname,"Public selection missing canonical CNAME");
-  assert.equal(cname?.toString(),"devantler.tech\n","Public selection requires the canonical CNAME");
-  selected.set("CNAME",cname);
   return selected;
 }
 
@@ -125,7 +122,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   assert.equal(process.argv.length,3,"Public selection requires its caller's current build nonce");
   const reference = new Map(publicEntries().filter(path=>path.endsWith("/")).map(path=>[`${path.slice(1)}index.html`,Buffer.alloc(0)]));
   reference.set("404.html",Buffer.alloc(0));
-  reference.set("CNAME",readFileSync("public/CNAME"));
   for (const prefix of ["", "da/"]) if (!reference.has(`${prefix}company/index.html`)) reference.set(`${prefix}company/index.html`,Buffer.from(`<!doctype html><html lang="${prefix?"da":"en"}"><head><meta name="robots" content="noindex"><meta http-equiv="refresh" content="2;url=/${prefix}"><link rel="canonical" href="https://devantler.tech/${prefix}"></head><body><a href="/${prefix}">Devantler Tech</a></body></html>`));
   promoteSelection("web/build",reference,"dist",{nonce:process.argv[2],manifest:".generated/selected-public-artifact.json"});
 }

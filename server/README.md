@@ -21,7 +21,7 @@ missing broker/store also denies it. Changing the provider to false closes the
 boundary without creating a new service. Ordinary startup installs the maintained
 SDK's no-op provider. The optional [bounded staging provider](#bounded-identity-staging)
 uses operator-only process configuration; it is not production activation.
-Public Pages builds
+Public static builds
 never import this module. The existing mock preview remains a separate simulation.
 The temporary release flag's retirement task is [#34](https://github.com/devantler-tech/business-site/issues/34),
 with a review date of 10 November 2026. An overdue review is not activation
@@ -203,7 +203,7 @@ unconditionally alongside the existing identity checks. It also extracts and run
 `runtime-dist/business-site-runtime.tar.gz`, then uploads that permission-preserving
 archive as the review artifact, not a production backend. After downloading the
 artifact, extract the tar archive before running the executable; no manual `chmod`
-is required. Pages publication is unchanged and uploads only `dist`.
+is required.
 
 Packaging copies the selected Go distribution's license and patent notice. Official
 distributions keep both under `GOROOT`; Homebrew keeps `LICENSE` at the same-version
@@ -439,7 +439,7 @@ Run the same container smoke test against that digest and its matching CI runtim
 archive. Registry push, signing and post-publication testing must all succeed;
 a staging tag alone is not release proof.
 
-If publication fails, keep Pages unchanged and diagnose the specific run; do
+If publication fails, keep the platform on its current release and diagnose the specific run; do
 not deploy its unverified staging tag or rebuild an artifact under an old receipt.
 A CI rerun on the same main source can retry distribution of its newly tested
 artifact through the same gates. Roll back a future deployment only to an earlier

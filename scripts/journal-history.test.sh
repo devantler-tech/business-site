@@ -46,15 +46,15 @@ printf '%s\n' 'Another unrelated release.' >> "$fixture/unrelated.txt"
 commit unrelated.txt 2020-04-01T12:00:00Z release
 assert_date "$fixture" 2020-03-01T12:00:00.000Z
 
-# Exercise the depth configured by each actual publishing/package builder, not a
-# duplicate desired workflow. Shallow clones really reproduce the misleading date.
+# Exercise the depth configured by each actual preview/package builder, not a
+# duplicate desired workflow. test-combined-runtime builds the production image
+# the platform serves. Shallow clones really reproduce the misleading date.
 node --input-type=module - "$root" > "$scratch/checkouts" <<'JS'
 import fs from 'node:fs';
 import { load } from 'js-yaml';
 const root = process.argv[2];
 for (const [file, job] of [
   ['ci.yaml', 'build-docs'], ['ci.yaml', 'test-combined-runtime'],
-  ['publish-site.yaml', 'build'],
 ]) {
   const workflow = load(fs.readFileSync(`${root}/.github/workflows/${file}`, 'utf8'));
   const steps = workflow.jobs[job].steps.filter(step => step.uses?.startsWith('actions/checkout@'));
@@ -81,7 +81,7 @@ while IFS=$'\t' read -r label depth; do
   bash "$guard" "$clone" || fail "$label has incomplete source history"
   assert_date "$clone" 2020-03-01T12:00:00.000Z || fail "$label rewrites the unchanged article date"
 done < "$scratch/checkouts"
-[[ "$count" == 3 ]] || fail 'not every maintained builder was examined'
+[[ "$count" == 2 ]] || fail 'not every maintained builder was examined'
 
 bash "$guard" "$fixture" || fail 'complete source history rejected'
 # Require the supplied source directory to fail specifically inside the history guard.
@@ -233,4 +233,4 @@ assert.equal(date(footer[0]), new Date(Number(timestamp) * 1000).toISOString(), 
 console.log('journal output: PASS — native article modification and publication dates preserved');
 JS
 fi
-printf '%s\n' 'journal history: PASS — article edit/unrelated commits, three real checkout depths, and incomplete-history rejection'
+printf '%s\n' 'journal history: PASS — article edit/unrelated commits, both real builder checkout depths, and incomplete-history rejection'

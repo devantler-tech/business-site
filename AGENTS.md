@@ -37,10 +37,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - The adapter supplies canonical sitemap membership, excluding redirects/noindex disclosures.
   The publication validator independently checks the full route inventory, local dependencies,
   visitor privacy, forbidden private output and this build's complete file hashes/nonce.
-  Only the promoter adds CNAME; publication receipts remain publisher-owned.
+  It adds no CNAME and refuses a CNAME or copied `publication-source.json` receipt.
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
-  `server/AGENTS.md` before changing it. Its handlers are not deployed by Pages;
+  `server/AGENTS.md` before changing it. The platform runtime ships its handlers default-off;
   production authentication, customer intake and payments remain disabled.
   Customer identity source preparation uses dedicated customer Dex and self-hosted
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
@@ -62,12 +62,10 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   explicit `RUNTIME_PUBLICATION_ENABLED` repository variable. Original main-CI
   archive admission, the accepted original-image verifier and independent paired
   publication readback are mandatory. Keep private dependencies and migration inputs absent.
-- `.github/workflows/publish-site.yaml` owns main/manual/scheduled publication after the
-  reviewed #25 cutover; production deployment still requires the enabled source switch and
-  protected main-only environment. Manual artifact-only previews can run with the switch off.
-  The retired reusable publisher is available only at historical immutable Git revisions.
-  This static publisher does not deploy a private portal
-  backend, identity, customer isolation, checkout or paid subscription system.
+- The platform serves devantler.tech from that signed runtime; GitHub Pages is retired
+  (devantler-tech/platform#6177). `scripts/publishing-contract.test.sh` refuses any workflow that
+  builds or deploys a Pages site. Both former Pages publishers remain only at historical
+  immutable Git revisions.
 - New architecture decisions belong only in `docs/adr/`. Existing monorepo decisions remain
   in their original repository; the source snapshot and asset provenance are linked in the README.
 
@@ -95,7 +93,6 @@ bash scripts/dependency-overrides.test.sh
 bash scripts/audit-dependencies.test.sh
 bash scripts/scan-go-source.test.sh
 bash scripts/publishing-contract.test.sh
-bash scripts/site-publication.test.sh
 bash scripts/runtime-release.test.sh
 bash scripts/runtime-verification.test.sh
 bash scripts/runtime-publisher-contract.test.sh
@@ -118,10 +115,9 @@ project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and sy
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness
-preflight; a source merge is not publication. The #25 source-owned publication cutover is complete;
-production deployment still uses the enabled source switch and protected main-only environment;
-manual artifact-only previews do not require the production switch.
-See docs/adr/0003-source-owned-publication.md.
+preflight; a source merge is not publication. Visitors see a change only after a runtime release
+(`release-runtime.yaml`, then `publish-runtime.yaml`) and the platform's rollout of it. GitHub
+Pages publication is retired; see docs/adr/0003-source-owned-publication.md.
 
 ## Content boundaries
 
@@ -148,15 +144,16 @@ independent registry inspection. Registration/contact follow-up
 required address disclosure and deployed English/Danish proof. The maintainer has confirmed
 mail receipt and allows the registered address on the website only where legally required;
 keep the street address out of public backlog evidence. The default-off
-`FEATURE_COMPANY_IDENTITY` source default keeps ordinary local builds closed; the reviewed
-source-owned publisher explicitly enables the footer, email route and required disclosure.
+`FEATURE_COMPANY_IDENTITY` source default keeps ordinary local builds closed; the
+production-template packager explicitly enables the footer, email route and required disclosure,
+whose address the runtime reads from its private projected file.
 Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optional hosting
 125/month for a website, 10,000 plus 375/month for a focused first app version, and 6,250
 plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
 net-price floor; never add VAT again.
 These starting prices do not cap application size: larger builds use agreed, priced iterations.
 VAT-inclusive prices and current company facts are permanent in the frontend and every package
-profile. The source-owned publisher and production-template packager enable company identity and
+profile. The production-template packager enables company identity and
 the reviewed private/business customer invitation for Denmark and the EU; revised-offer copy stays
 disabled. Scope, price and applicable VAT are confirmed before agreement, and outside-EU projects
 require a separate assessment before any offer. Every package uses the same approved price state;

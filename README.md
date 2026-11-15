@@ -6,11 +6,11 @@ explore the work; use this repository to improve its content or presentation. Ho
 Projects are available in English and Danish. The Journal, CV and detailed technical guides
 are in English.
 
-The public site uses SvelteKit's prerendered static output. A separate, default-off Go portal
-foundation is implemented under [`server/`](server/README.md), but is not deployed by GitHub
-Pages. Its local browser sign-in tests do not establish production authentication, customer
-intake or payments. You do not need a database, cloud account or publishing credentials to
-work on the static site.
+The public site uses SvelteKit's prerendered static output, served by this repository's Go
+runtime on the devantler-tech platform. The same runtime carries a separate, default-off portal
+foundation under [`server/`](server/README.md). Its local browser sign-in tests do not establish
+production authentication, customer intake or payments. You do not need a database, cloud
+account or publishing credentials to work on the static site.
 
 The [SvelteKit frontend](web/README.md) implements English/Danish
 Home, About and Projects pages, the complete English Journal, technical guides and discovery assets.
@@ -60,18 +60,19 @@ canonical repository contract. Backend contributors must also follow the
 
 ## Publication is separate from a source change
 
-This repository's [`publish-site.yaml`](.github/workflows/publish-site.yaml) owns GitHub Pages
-publication on main pushes, admitted manual runs and daily ranking refreshes. Production
-publication requires `SITE_PUBLICATION_ENABLED=true` and the protected main-only deployment
-environment. Manual runs default to artifact-only `preview`, even when publication is enabled.
-Historical immutable callers retain their Git revision; there is no second publisher export on the default branch.
+The devantler-tech platform serves devantler.tech from this repository's signed runtime image;
+GitHub Pages is retired. CI builds, tests and signs that image on every main push. A runtime
+release, started with [`release-runtime.yaml`](.github/workflows/release-runtime.yaml) and
+published by [`publish-runtime.yaml`](.github/workflows/publish-runtime.yaml), verifies it and
+hands it to the platform; releasing requires `RUNTIME_PUBLICATION_ENABLED=true`. The
+[runtime package guide](deploy/README.md) covers the release checks.
 
-A source merge or preview artifact is not publication evidence. Operators check the successful
-deployment and the live [`publication-source.json`](https://devantler.tech/publication-source.json)
-receipt against its source revision and workflow run, then check the visitor paths. See the
-[source ownership](docs/adr/0003-source-owned-publication.md) and
-[frontend cutover and rollback](docs/adr/0013-svelte-public-publication.md) decisions. The static
-publisher does not deploy the portal backend, authentication or payments.
+A source merge or preview artifact is not publication evidence. Operators check the
+[runtime release](https://github.com/devantler-tech/business-site/releases) and the
+`business-site-runtime-publication` receipt of its publish run, which records the source revision,
+image and public digest, then check the visitor paths. See the
+[source ownership](docs/adr/0003-source-owned-publication.md) decision. Publishing the runtime
+does not enable the portal, authentication or payments.
 
 ## Source, assets and reuse
 
