@@ -2,10 +2,12 @@ package identity
 
 import "testing"
 
-// TestFixtureResetClearsEveryRelation seeds all twenty-two relations, including
-// real consent, funding and authority history, before exercising the next reset.
-// It must remain serial: resetting a database is not concurrent fixture isolation.
-func TestFixtureResetClearsEveryRelation(t *testing.T) {
+// seedEveryRelation seeds every portal relation, including real consent,
+// funding and authority history. The approval fixture's client owns the
+// request, order and billing rows; other clients own a contact and an
+// invitation. It returns the order.
+func seedEveryRelation(t *testing.T) (*browserFixture, string) {
+	t.Helper()
 	b, op := approvalFixture(t)
 	a := savedApproval(t, b, op)
 	if err := b.svc.revokeWorkApproval(t.Context(), op, proposalRequestID, workRevocationInput{Key: secret(), Approval: a.ID, Expected: 1}); err != nil {
@@ -50,6 +52,14 @@ func TestFixtureResetClearsEveryRelation(t *testing.T) {
 	if _, err := migrator.Exec(t.Context(), `INSERT INTO portal_stripe_events(id,type) VALUES('evt_reset','checkout.session.completed')`); err != nil {
 		t.Fatal("fixture Stripe event unavailable", err)
 	}
+	return b, order
+}
+
+// TestFixtureResetClearsEveryRelation seeds every relation before exercising
+// the next reset. It must remain serial: resetting a database is not
+// concurrent fixture isolation.
+func TestFixtureResetClearsEveryRelation(t *testing.T) {
+	b, _ := seedEveryRelation(t)
 	tables := []string{
 		"portal_login_attempts", "portal_invitations", "portal_memberships",
 		"portal_sessions", "portal_contacts", "portal_requests", "portal_proposals",

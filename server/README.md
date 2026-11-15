@@ -260,6 +260,21 @@ See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
 permissions and failure handling. No migration enables a portal operation or
 establishes a production deployment.
 
+### Retention purge job
+
+The privacy notice keeps a former client's portal records for 3 years after their last
+portal membership ended (#614). The same executable's exclusive one-shot
+`--retention-purge --migration-database-file <file>` mode deletes them. It runs as the
+migration role, because the web runtime can delete none of this history, and checks first
+that the role owns the complete schema. A client is due when all their memberships were client
+memberships, none is still active, and the last membership change lies more than
+`identity.RetentionYears` (3) years back. Each client goes in one transaction: billing, email,
+work, proposals, requests, contacts, invitations and memberships, and the membership history
+of every identity with no membership left. It prints only how many former clients it purged.
+Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
+out after 30 days. The platform runs it daily beside the migration job, with
+`concurrencyPolicy: Forbid`.
+
 ### Separate native identity preparation job
 
 The verified application executable accepts the exclusive `--identity-materialize`
