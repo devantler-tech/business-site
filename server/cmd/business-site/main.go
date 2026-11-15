@@ -60,6 +60,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	checkServing := options.Bool("check-serving-public", false, "validate the served profile and print its sanitized receipt")
 	migrate := options.Bool("migrate", false, "run one bounded schema migration job without serving HTTP")
 	migrationFile := options.String("migration-database-file", "", "private verified-TLS migration connection file")
+	retention := options.Bool("retention-purge", false, "delete former clients' portal records after their retention period, without serving HTTP")
 	publicHost := options.String("public-host", "", "public site host; with --portal-host, each host redirects the other's pages")
 	portalHost := options.String("portal-host", "", "portal host; / opens the portal there")
 	portalSettings := options.String("portal-settings-projection", "", "confined projected portal settings file for serving or one invitation")
@@ -82,6 +83,9 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if portalInvite.selected(seen) {
 		return portalInvite.run(ctx, options, seen, *portalSettings, output)
 	}
+	if seen["retention-purge"] != 0 {
+		return purgeRetention(ctx, options, seen, *retention, *migrationFile, output)
+	}
 	if seen["migrate"] > 1 || seen["migration-database-file"] > 1 || seen["runtime-role"] > 1 {
 		return runtimeapp.ErrMigration
 	}
@@ -98,16 +102,8 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 		if !validPackageIdentity() {
 			return errors.New("build a verified runtime package before starting")
 		}
-		// This is an exclusive one-shot process, never web startup. Discard its
-		// PostgreSQL-prefixed ambient settings before the native parser can read
-		// an unrelated service/credential file. The parent host is unchanged.
-		for _, setting := range os.Environ() {
-			name, _, _ := strings.Cut(setting, "=")
-			if strings.HasPrefix(name, "PG") {
-				if err := os.Unsetenv(name); err != nil {
-					return runtimeapp.ErrMigration
-				}
-			}
+		if !clearPostgresEnvironment() {
+			return runtimeapp.ErrMigration
 		}
 		if err := runtimeapp.MigrateDatabase(ctx, *migrationFile, *runtimeRole); err != nil {
 			return err
@@ -243,4 +239,46 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// clearPostgresEnvironment discards the PostgreSQL-prefixed ambient settings of
+// an exclusive one-shot database process, never web startup, before the native
+// parser can read an unrelated service/credential file. The parent host is
+// unchanged.
+func clearPostgresEnvironment() bool {
+	for _, setting := range os.Environ() {
+		name, _, _ := strings.Cut(setting, "=")
+		if strings.HasPrefix(name, "PG") {
+			if err := os.Unsetenv(name); err != nil {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// purgeRetention runs the exclusive retention purge: exactly --retention-purge
+// and one --migration-database-file, as the migration role.
+func purgeRetention(ctx context.Context, options *flag.FlagSet, seen map[string]int, retention bool, migrationFile string, output io.Writer) error {
+	allowed := retention && seen["retention-purge"] == 1 && seen["migration-database-file"] == 1 && migrationFile != ""
+	options.Visit(func(option *flag.Flag) {
+		if option.Name != "retention-purge" && option.Name != "migration-database-file" {
+			allowed = false
+		}
+	})
+	if !allowed {
+		return runtimeapp.ErrRetention
+	}
+	if !validPackageIdentity() {
+		return errors.New("build a verified runtime package before starting")
+	}
+	if !clearPostgresEnvironment() {
+		return runtimeapp.ErrRetention
+	}
+	purged, err := runtimeapp.PurgeRetention(ctx, migrationFile)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(output, "portal retention purge completed: %d former clients\n", purged)
+	return err
 }

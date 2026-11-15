@@ -197,7 +197,10 @@ trigger-bypass parameter authority to the runtime or an assumable role. These
 grants are unnecessary for ordinary sign-in and trusted provisioning. The v13
 baseline and subsequent immutable events stay with the database across process
 restarts and deletion/re-enrollment. Do not prune them or reset incarnations as
-routine maintenance. Future retention design must preserve approval invalidation.
+routine maintenance. The only pruning is the retention purge (README, *Retention purge job*):
+3 years after a client's last membership ended, it deletes the client's approvals with the
+history of identities that have no membership left, so no approval outlives the history that
+invalidates it.
 There is no application history cap; physical database/storage failures still
 refuse a transaction rather than claim unrecorded success.
 
