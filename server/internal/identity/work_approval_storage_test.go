@@ -30,7 +30,7 @@ func TestWorkApprovalFailedReadsUnavailable(t *testing.T) {
 	b, op := approvalFixture(t)
 	d := savedApproval(t, b, op)
 	migrator := migrationDB(t)
-	for _, table := range []string{"portal_work_current", "portal_work_approvals", "portal_work_revocations", "portal_invoices", "portal_credit_transfers", "portal_credit_revisions", "portal_membership_transitions"} {
+	for _, table := range []string{"portal_work_current", "portal_work_approvals", "portal_work_revocations", "portal_orders", "portal_order_charges", "portal_charge_reversals", "portal_membership_transitions"} {
 		if _, err := migrator.Exec(t.Context(), "REVOKE SELECT ON "+table+" FROM portal_runtime"); err != nil {
 			t.Fatal(err)
 		}

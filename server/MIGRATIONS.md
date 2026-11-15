@@ -165,6 +165,11 @@ unchanged v1–v17 (see [portal billing](BILLING.md#ending-and-reversing-orders)
 SELECT/INSERT only: an order's end, Stripe's confirmed subscription end and each refund or
 dispute are recorded once and never changed or deleted.
 
+v19 rebinds work approval to an order's funding (#268) after unchanged v1–v18. New approvals
+name their order and its settled funding charge, and composite foreign keys bind the request,
+client, acceptance and exact amounts. Earlier rows keep their invoice binding unchanged, and a
+check refuses a row with both bindings or neither. No grant changes.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

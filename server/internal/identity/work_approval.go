@@ -10,9 +10,8 @@ import (
 )
 
 type workApprovalInput struct {
-	Key, Acceptance, EvidenceHash string
-	Invoice                       int
-	Expected                      int64
+	Key, Acceptance, Order, EvidenceHash string
+	Expected                             int64
 }
 
 type workRevocationInput struct {
@@ -22,8 +21,10 @@ type workRevocationInput struct {
 
 type workApprovalReceipt struct {
 	ID, Request, Client, Key, Acceptance, Hash                           string
+	Order, Period                                                        string // the funding charge; empty for a legacy invoice binding
+	Invoice                                                              *int   // a legacy approval's retired invoice record
 	Expected                                                             int64
-	Invoice, Version, Event                                              int
+	Version, Event                                                       int
 	Net, VAT, Amount                                                     int64
 	ClientIssuer, ClientSubject, ClientIncarnation                       string
 	OperatorIssuer, OperatorSubject, OperatorClient, OperatorIncarnation string
@@ -125,13 +126,13 @@ func (r *workReview) close() {
 
 // prepareWorkApproval supplies a content-bound comparison, not approval or a
 // mutable review context. It does not write a session, receipt or current pointer.
-func (s *Foundation) prepareWorkApproval(ctx context.Context, p Principal, id string, invoice int) (workApprovalInput, error) {
+func (s *Foundation) prepareWorkApproval(ctx context.Context, p Principal, id string) (workApprovalInput, error) {
 	r, err := s.beginWorkReview(ctx, p, id)
 	if err != nil {
 		return workApprovalInput{}, err
 	}
 	defer r.close()
-	evidence, _, hash, err := collectWorkEvidence(r.ctx, r.tx, id, r.client, invoice, r.viewer, r.viewer)
+	evidence, _, hash, err := collectWorkEvidence(r.ctx, r.tx, id, r.client, r.viewer, r.viewer)
 	if err != nil {
 		return workApprovalInput{}, err
 	}
@@ -142,14 +143,14 @@ func (s *Foundation) prepareWorkApproval(ctx context.Context, p Principal, id st
 	if err := s.commitWork(r.ctx, p, r.tx, s.approvalsReady, time.Time{}); err != nil {
 		return workApprovalInput{}, err
 	}
-	return workApprovalInput{Key: secret(), Acceptance: evidence.Acceptance, Invoice: invoice, EvidenceHash: hash, Expected: pointer.Generation}, nil
+	return workApprovalInput{Key: secret(), Acceptance: evidence.Acceptance, Order: evidence.Order.ID, EvidenceHash: hash, Expected: pointer.Generation}, nil
 }
 
-const workApprovalColumns = `id,request_id,client_id,submission_key,expected_generation,acceptance_id,invoice_sequence,proposal_version,visibility_event,content_hash,net_minor,vat_minor,amount_minor,client_issuer,client_subject,client_incarnation::text,operator_issuer,operator_subject,operator_client,operator_incarnation::text,evidence,evidence_hash,decided_at,expires_at`
+const workApprovalColumns = `id,request_id,client_id,submission_key,expected_generation,acceptance_id,COALESCE(order_id,''),COALESCE(charge_period,''),invoice_sequence,proposal_version,visibility_event,content_hash,net_minor,vat_minor,amount_minor,client_issuer,client_subject,client_incarnation::text,operator_issuer,operator_subject,operator_client,operator_incarnation::text,evidence,evidence_hash,decided_at,expires_at`
 
 func scanWorkApproval(row pgx.Row) (workApprovalReceipt, error) {
 	var d workApprovalReceipt
-	err := row.Scan(&d.ID, &d.Request, &d.Client, &d.Key, &d.Expected, &d.Acceptance, &d.Invoice, &d.Version, &d.Event, &d.Hash, &d.Net, &d.VAT, &d.Amount, &d.ClientIssuer, &d.ClientSubject, &d.ClientIncarnation, &d.OperatorIssuer, &d.OperatorSubject, &d.OperatorClient, &d.OperatorIncarnation, &d.Evidence, &d.EvidenceHash, &d.Decided, &d.Expires)
+	err := row.Scan(&d.ID, &d.Request, &d.Client, &d.Key, &d.Expected, &d.Acceptance, &d.Order, &d.Period, &d.Invoice, &d.Version, &d.Event, &d.Hash, &d.Net, &d.VAT, &d.Amount, &d.ClientIssuer, &d.ClientSubject, &d.ClientIncarnation, &d.OperatorIssuer, &d.OperatorSubject, &d.OperatorClient, &d.OperatorIncarnation, &d.Evidence, &d.EvidenceHash, &d.Decided, &d.Expires)
 	return d, err
 }
 
@@ -177,7 +178,7 @@ type workResponseCheck func(context.Context, pgx.Tx, string) error
 func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal, id string, input workApprovalInput, check workResponseCheck) (workApprovalReceipt, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if !opaqueRequestID.MatchString(input.Key) || !opaqueRequestID.MatchString(input.Acceptance) || input.Invoice < 1 || input.Invoice > 50 || input.Expected < 0 || input.Expected == 1<<63-1 {
+	if !opaqueRequestID.MatchString(input.Key) || !opaqueRequestID.MatchString(input.Acceptance) || !opaqueRequestID.MatchString(input.Order) || input.Expected < 0 || input.Expected == 1<<63-1 {
 		return workApprovalReceipt{}, errProposalConflict
 	}
 	tx, client, viewer, err := s.beginWorkRequest(ctx, p, id, s.approvalsReady)
@@ -190,7 +191,7 @@ func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal
 		if err := requireWorkViewer(ctx, tx, viewer); err != nil {
 			return workApprovalReceipt{}, err
 		}
-		if saved.OperatorIssuer != p.issuer || saved.OperatorSubject != p.subject || saved.Expected != input.Expected || saved.Invoice != input.Invoice || saved.Acceptance != input.Acceptance || saved.EvidenceHash != input.EvidenceHash {
+		if saved.OperatorIssuer != p.issuer || saved.OperatorSubject != p.subject || saved.Expected != input.Expected || saved.Order != input.Order || saved.Acceptance != input.Acceptance || saved.EvidenceHash != input.EvidenceHash {
 			return workApprovalReceipt{}, errProposalConflict
 		}
 		return saved, s.finishWorkResponse(ctx, p, tx, s.approvalsReady, time.Time{}, viewer.Client, check)
@@ -198,7 +199,7 @@ func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return workApprovalReceipt{}, errTriageStorage
 	}
-	evidence, data, hash, err := collectWorkEvidence(ctx, tx, id, client, input.Invoice, viewer, viewer)
+	evidence, data, hash, err := collectWorkEvidence(ctx, tx, id, client, viewer, viewer)
 	if err != nil {
 		return workApprovalReceipt{}, err
 	}
@@ -206,17 +207,17 @@ func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal
 	if err != nil {
 		return workApprovalReceipt{}, err
 	}
-	if evidence.Acceptance != input.Acceptance || hash != input.EvidenceHash || pointer.Generation != input.Expected {
+	if evidence.Acceptance != input.Acceptance || evidence.Order.ID != input.Order || hash != input.EvidenceHash || pointer.Generation != input.Expected {
 		return workApprovalReceipt{}, errProposalConflict
 	}
 	if !s.approvalsReady(ctx) || !time.Now().Before(p.expires) || ctx.Err() != nil {
 		return workApprovalReceipt{}, ErrDenied
 	}
-	d := evidence.Invoice
+	f := evidence.Funding
 	row := tx.QueryRow(ctx, `WITH decision AS (SELECT clock_timestamp() AS at)
- INSERT INTO portal_work_approvals(id,request_id,client_id,submission_key,expected_generation,acceptance_id,invoice_sequence,proposal_version,visibility_event,content_hash,net_minor,vat_minor,amount_minor,client_issuer,client_subject,client_incarnation,operator_issuer,operator_subject,operator_client,operator_incarnation,evidence,evidence_hash,decided_at,expires_at)
- SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,at,at+interval '168 hours' FROM decision RETURNING `+workApprovalColumns,
-		secret(), id, client, input.Key, input.Expected, evidence.Acceptance, input.Invoice, d.Version, d.Event, d.Hash, d.NetMinor.Int64, d.VATMinor.Int64, d.AmountMinor, evidence.Acceptor.Issuer, evidence.Acceptor.Subject, evidence.Acceptor.Incarnation, p.issuer, p.subject, evidence.Actor.Client, evidence.Actor.Incarnation, data, hash)
+ INSERT INTO portal_work_approvals(id,request_id,client_id,submission_key,expected_generation,acceptance_id,order_id,charge_period,proposal_version,visibility_event,content_hash,net_minor,vat_minor,amount_minor,client_issuer,client_subject,client_incarnation,operator_issuer,operator_subject,operator_client,operator_incarnation,evidence,evidence_hash,decided_at,expires_at)
+ SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,at,at+interval '168 hours' FROM decision RETURNING `+workApprovalColumns,
+		secret(), id, client, input.Key, input.Expected, evidence.Acceptance, evidence.Order.ID, f.Period, evidence.Proposal.Version, evidence.Event, evidence.Hash, f.NetMinor, f.VATMinor, f.GrossMinor, evidence.Acceptor.Issuer, evidence.Acceptor.Subject, evidence.Acceptor.Incarnation, p.issuer, p.subject, evidence.Actor.Client, evidence.Actor.Incarnation, data, hash)
 	saved, err = scanWorkApproval(row)
 	if err != nil {
 		return workApprovalReceipt{}, creditWriteError(err)
@@ -341,7 +342,9 @@ func inspectWorkCurrent(ctx context.Context, tx pgx.Tx, id, client string, point
 		return workApprovalReceipt{}, false, errTriageStorage
 	}
 	actor := workMember{Issuer: d.OperatorIssuer, Subject: d.OperatorSubject, Client: d.OperatorClient, Role: "operator", Incarnation: d.OperatorIncarnation}
-	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, d.Invoice, actor, viewer)
+	// A legacy approval bound to a retired invoice record has no current
+	// funding evidence: its format-1 hash never matches format 2.
+	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, actor, viewer)
 	if evidenceErr != nil && !errors.Is(evidenceErr, errProposalConflict) {
 		return workApprovalReceipt{}, false, evidenceErr
 	}

@@ -129,7 +129,9 @@ Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage i
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
 v13 (durable membership incarnations), v14 (expiring work-approval evidence),
-and v15 (the case-by-case other-request category)
+v15 (the case-by-case other-request category), v16 (orders and Numina charges), v17 (card
+Checkouts and Stripe events), v18 (order ends and charge reversals) and v19 (work approval bound
+to the order's funding)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.
@@ -526,11 +528,11 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-clear the twenty-two fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card tables between tests. The migrator deletes rows in dependency order within the
+clear the twenty-five fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end tables between tests. The migrator deletes rows in dependency order within the
 same transaction as the grant reset, retaining real constraints and membership
 recording without rebuilding table files on every fixture. Database fixtures stay
 serial; this is not concurrent reset isolation. The reset control populates every
-relation first and requires all twenty-two to be empty afterward. Domain-only work
+relation first and requires all twenty-five to be empty afterward. Domain-only work
 approval controls own their real database, TLS broker and feature provider but do
 not start an unused application server or session manager; browser journeys retain
 their separate complete HTTP fixtures. Never reuse a database

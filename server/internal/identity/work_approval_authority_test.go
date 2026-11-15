@@ -23,7 +23,7 @@ func workApprovalFlags() map[string]memprovider.InMemoryFlag {
 
 func preparedApproval(t *testing.T, b *browserFixture, op Principal) workApprovalInput {
 	t.Helper()
-	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
+	input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 	if err != nil {
 		t.Fatal("approval fixture review failed", err)
 	}
@@ -108,7 +108,7 @@ func TestWorkApprovalGatesAndClientDenial(t *testing.T) {
 		for _, state := range []string{"absent", "false", "wrong type"} {
 			t.Run(key+"/"+state, func(t *testing.T) {
 				setApprovalGate(t, b, key, map[string]any{"absent": nil, "false": false, "wrong type": "true"}[state])
-				if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, ErrDenied) {
+				if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID); !errors.Is(err, ErrDenied) {
 					t.Fatal("closed gate admitted review", err)
 				}
 				if _, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input); !errors.Is(err, ErrDenied) {
@@ -307,7 +307,7 @@ func TestWorkApprovalMembershipRestorationRequiresNewDecision(t *testing.T) {
 			if _, valid, err := b.svc.currentWorkApproval(t.Context(), viewer, proposalRequestID); err != nil || valid {
 				t.Fatal("restoration revived old approval", err)
 			}
-			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
+			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 			if err != nil || input.Expected != 1 {
 				t.Fatal("restored exact principal cannot receive new review", err)
 			}
@@ -326,26 +326,20 @@ func TestWorkApprovalMembershipRestorationRequiresNewDecision(t *testing.T) {
 	}
 }
 
-// Equivalent totals are not equivalent evidence: corrections invalidate the old
-// watermark, including when a later observation returns to the original amount.
+// Changed funding evidence invalidates the old watermark, and revocation needs
+// neither valid funding nor the client's access.
 func TestWorkApprovalFundingWatermarkAndRevocation(t *testing.T) {
 	b, op := approvalFixture(t)
 	first := savedApproval(t, b, op)
-	for i, state := range []string{"disputed", "confirmed"} {
-		if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: state, Expected: i + 1, AmountMinor: 123456, Note: "Fictional revised observation"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); err != nil || valid {
-			t.Fatal("changed evidence preserved old authority", err)
-		}
+	changeFixtureFunding(t, "reference")
+	if _, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); err != nil || valid {
+		t.Fatal("changed funding evidence preserved old authority", err)
 	}
 	next := savedApproval(t, b, op)
 	if next.EvidenceHash == first.EvidenceHash {
-		t.Fatal("corrected history lost its watermark")
+		t.Fatal("changed funding lost its watermark")
 	}
-	if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", State: "invalidated", Expected: 3, Note: "Fictional invalidation"}); err != nil {
-		t.Fatal(err)
-	}
+	changeFixtureFunding(t, "refunded")
 	// Revocation does not depend on funding or client access.
 	if err := b.svc.Revoke(t.Context(), b.f.issuer, "credit-fixture-client"); err != nil {
 		t.Fatal(err)
@@ -359,66 +353,38 @@ func TestWorkApprovalFundingWatermarkAndRevocation(t *testing.T) {
 	}
 }
 
-// A fresh invoice changes the complete request watermark even if invoice one
-// remains fully funded.
-func TestWorkApprovalInvoiceWatermark(t *testing.T) {
+// The approval binds the order's exact funding charge: the database refuses a
+// receipt for different amounts or with both the order and a retired invoice.
+func TestWorkApprovalBindsTheOrdersFundingCharge(t *testing.T) {
 	b, op := approvalFixture(t)
-	first := savedApproval(t, b, op)
-	input := preparedApproval(t, b, op)
-	d, err := scanInvoice(b.pool.QueryRow(t.Context(), `SELECT `+invoiceColumns+` FROM portal_invoices i WHERE sequence=1`))
-	if err != nil {
+	d := savedApproval(t, b, op)
+	var order string
+	if err := b.pool.QueryRow(t.Context(), `SELECT id FROM portal_orders`).Scan(&order); err != nil {
 		t.Fatal(err)
 	}
-	d.Key, d.Reference, d.Expected = secret(), "FICTIONAL-02", 1
-	if err := b.svc.persistInvoice(t.Context(), op, proposalRequestID, d); err != nil {
-		t.Fatal(err)
+	if d.Order != order || d.Period != "acceptance" || d.Invoice != nil || d.Amount != 299500 || d.Net != 239600 || d.VAT != 59900 {
+		t.Fatalf("approval binding differs: %+v", d)
 	}
-	if _, valid, err := b.svc.currentWorkApproval(t.Context(), op, proposalRequestID); err != nil || valid {
-		t.Fatal("new invoice did not invalidate old watermark", err)
-	}
-	if _, err := b.svc.persistWorkApproval(t.Context(), op, proposalRequestID, input); !errors.Is(err, errProposalConflict) {
-		t.Fatal("stale review survived new invoice", err)
-	}
-	renewed := savedApproval(t, b, op)
-	if renewed.ID == first.ID || renewed.EvidenceHash == first.EvidenceHash {
-		t.Fatal("complete invoice history omitted")
-	}
-}
-
-// Replaying actual migrations preserves an old invoice's unknown components;
-// neither matching credit nor a fresh operator may fill in those tax facts.
-func TestWorkApprovalUnknownLegacyTaxDenied(t *testing.T) {
-	b, op := approvalFixture(t)
-	migrator := migrationDB(t)
-	rewindInvoiceTaxFixture(t, migrator)
-	// Replaying the migrations restores exactly the runtime role's grants.
-	if err := MigrateWithRuntimeRole(t.Context(), migrator, "portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, errProposalConflict) {
-		t.Fatal("unknown historical tax admitted a work review", err)
-	}
-	var unknown bool
-	if err := b.pool.QueryRow(t.Context(), `SELECT net_minor IS NULL AND vat_minor IS NULL AND amount_minor=123456 FROM portal_invoices WHERE sequence=1`).Scan(&unknown); err != nil || !unknown {
-		t.Fatal("approval inferred historical tax", err)
-	}
-}
-
-func TestWorkApprovalIneligibleFundingDenied(t *testing.T) {
-	for _, tc := range []struct {
-		name, state string
-		amount      int64
-	}{
-		{"partial", "confirmed", 123455}, {"excess", "confirmed", 123457},
-		{"unverified", "unverified", 123456}, {"disputed", "disputed", 123456},
-		{"invalidated", "invalidated", 0},
+	for name, change := range map[string]string{
+		"different amount": `amount_minor=299400,net_minor=239520,vat_minor=59880`,
+		"both bindings":    `invoice_sequence=1`,
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		var databaseError *pgconn.PgError
+		_, err := migrationDB(t).Exec(t.Context(), `WITH a AS (SELECT * FROM portal_work_approvals LIMIT 1) UPDATE portal_work_approvals w SET `+change+` FROM a WHERE w.id=a.id`)
+		if !errors.As(err, &databaseError) || (databaseError.Code != "23503" && databaseError.Code != "23514") {
+			t.Fatalf("%s was not refused by the binding: %v", name, err)
+		}
+	}
+}
+
+// A settled charge that is not exactly the agreed amount, or a charge that is
+// not settled, is not funding.
+func TestWorkApprovalIneligibleFundingDenied(t *testing.T) {
+	for _, change := range []string{"unsettled", "refunded", "disputed", "amount"} {
+		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)
-			if err := b.svc.persistCredit(t.Context(), op, proposalRequestID, 1, creditRevision{Key: secret(), Source: "fixture-bank", Reference: "transfer-01", Expected: 1, State: tc.state, AmountMinor: tc.amount, Note: "Fictional ineligible evidence"}); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, errProposalConflict) {
+			changeFixtureFunding(t, change)
+			if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID); !errors.Is(err, errProposalConflict) {
 				t.Fatal("ineligible funding admitted review", err)
 			}
 		})
@@ -431,7 +397,7 @@ func TestWorkApprovalConcurrentCompareAndRetry(t *testing.T) {
 	for _, identical := range []bool{true, false} {
 		t.Run(map[bool]string{true: "same retry", false: "distinct decisions"}[identical], func(t *testing.T) {
 			b, op := approvalFixture(t)
-			a, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1)
+			a, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -17,8 +18,9 @@ type workMember struct {
 	Issuer, Subject, Client, Role, Incarnation string
 }
 
-// workEvidence is a closed typed encoding. Keep all selected invoice facts,
-// complete invoice history and every latest transfer, not just matching totals.
+// workEvidence is a closed typed encoding of the exact accepted agreement, the
+// order's one collection path and its funding charge (ADR 0030, decision 6).
+// Format 2 replaces the retired invoice-record and bank-credit evidence.
 type workEvidence struct {
 	Format          int
 	Request, Client string
@@ -26,11 +28,28 @@ type workEvidence struct {
 	Event           int
 	Hash            string
 	Proposal        projectProposal
-	Invoice         projectInvoice
-	Invoices        []projectInvoice
-	Transfers       []creditRevision
+	Order           workOrder
+	Funding         workFunding
 	Acceptor, Actor workMember
 }
+
+// workOrder is the order an approval's funding belongs to.
+type workOrder struct {
+	ID, Collection             string
+	OneTimeMinor, MonthlyMinor int64
+	MonthlyFrom                time.Time
+}
+
+// workFunding is the order's first charge, settled and never reversed: the
+// accepted one-time amount, or the first month for a monthly-only order.
+type workFunding struct {
+	Period, Reference              string
+	GrossMinor, NetMinor, VATMinor int64
+	Settled                        time.Time
+}
+
+// GrossDKK is the funded amount in whole kroner.
+func (f workFunding) GrossDKK() int64 { return f.GrossMinor / 100 }
 
 // lockWorkMembers uses one global identity ordering after the request lock. It
 // also locks revoked rows: restoration cannot race this transaction's verdict.
@@ -66,79 +85,43 @@ func lockWorkMembers(ctx context.Context, tx pgx.Tx, wanted []workMember) ([]wor
 	return actual, matches, nil
 }
 
-// readWorkInvoices neither owns nor commits the caller's request transaction.
-func readWorkInvoices(ctx context.Context, tx pgx.Tx, id, client string) ([]projectInvoice, error) {
-	rows, err := tx.Query(ctx, `SELECT `+invoiceColumns+` FROM portal_invoices i WHERE i.request_id=$1 AND i.client_id=$2 ORDER BY i.sequence DESC LIMIT 51`, id, client)
+// readWorkFunding reads the request's order for the acceptance and its first
+// charge under the caller's request lock. Anything but a settled charge for
+// exactly the agreed amount, never refunded or disputed, is not funding.
+func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance string) (workOrder, workFunding, error) {
+	var o workOrder
+	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return workOrder{}, workFunding{}, errProposalConflict
+	}
 	if err != nil {
-		return nil, errTriageStorage
+		return workOrder{}, workFunding{}, errTriageStorage
 	}
-	var records []projectInvoice
-	for rows.Next() {
-		d, err := scanInvoice(rows)
-		if err != nil {
-			rows.Close()
-			return nil, errTriageStorage
-		}
-		d.Recorded = d.Recorded.UTC()
-		records = append(records, d)
+	f := workFunding{Period: "acceptance"}
+	want := o.OneTimeMinor
+	if want == 0 {
+		f.Period, want = monthPeriod(o.MonthlyFrom), o.MonthlyMinor
 	}
-	rows.Close()
-	if rows.Err() != nil || len(records) > 50 {
-		return nil, errTriageStorage
+	var settled *time.Time
+	err = tx.QueryRow(ctx, `SELECT c.gross_minor,c.net_minor,c.vat_minor,coalesce(c.provider_ref,''),c.settled_at FROM portal_order_charges c
+ WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)
+ FOR SHARE OF c`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return workOrder{}, workFunding{}, errProposalConflict
 	}
-	for i, record := range records {
-		if record.Sequence != len(records)-i {
-			return nil, errTriageStorage
-		}
-	}
-	return records, nil
-}
-
-// checkWorkTransferClosure proves the bounded reservation census as well as the
-// revision read. A matching total cannot turn unobserved or gapped history into
-// complete evidence. This is stricter approval admission, not a credit rewrite.
-func checkWorkTransferClosure(ctx context.Context, tx pgx.Tx, id, client string, invoice int, history creditHistory) error {
-	type identity struct{ source, reference string }
-	observed := make(map[identity]bool, len(history.Transfers))
-	for _, transfer := range history.Transfers {
-		if len(transfer.History) == 0 || len(transfer.History) > 16 || transfer.Latest.Revision != len(transfer.History) {
-			return errTriageStorage
-		}
-		for i, revision := range transfer.History {
-			if revision.Source != transfer.Latest.Source || revision.Reference != transfer.Latest.Reference || revision.Revision != len(transfer.History)-i || revision.Expected != revision.Revision-1 {
-				return errTriageStorage
-			}
-		}
-		observed[identity{transfer.Latest.Source, transfer.Latest.Reference}] = true
-	}
-	rows, err := tx.Query(ctx, `SELECT source,reference,ordinal FROM portal_credit_transfers WHERE request_id=$1 AND client_id=$2 AND invoice_sequence=$3 ORDER BY ordinal LIMIT 33`, id, client, invoice)
 	if err != nil {
-		return errTriageStorage
+		return workOrder{}, workFunding{}, errTriageStorage
 	}
-	count := 0
-	for rows.Next() {
-		var key identity
-		var ordinal int
-		if err := rows.Scan(&key.source, &key.reference, &ordinal); err != nil {
-			rows.Close()
-			return errTriageStorage
-		}
-		count++
-		if count > 32 || ordinal != count || !observed[key] {
-			rows.Close()
-			return errTriageStorage
-		}
+	if settled == nil || f.GrossMinor != want || f.NetMinor+f.VATMinor != f.GrossMinor || f.Reference == "" {
+		return workOrder{}, workFunding{}, errProposalConflict
 	}
-	rows.Close()
-	if rows.Err() != nil || count != len(observed) {
-		return errTriageStorage
-	}
-	return nil
+	o.MonthlyFrom, f.Settled = o.MonthlyFrom.UTC(), settled.UTC()
+	return o, f, nil
 }
 
 // collectWorkEvidence reads only under the caller's request lock. The current
 // viewer and original approving actor can be different authorized operators.
-func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, invoice int, actor, viewer workMember) (workEvidence, []byte, string, error) {
+func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, actor, viewer workMember) (workEvidence, []byte, string, error) {
 	review, acceptance, err := currentInvoiceAcceptance(ctx, tx, id, client)
 	if err != nil {
 		return workEvidence{}, nil, "", err
@@ -157,35 +140,12 @@ func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, invo
 	if !matches[0] || !matches[1] {
 		return workEvidence{}, nil, "", errProposalConflict
 	}
-	history, err := readCreditHistory(ctx, tx, id, client, invoice)
+	order, funding, err := readWorkFunding(ctx, tx, id, client, acceptance)
 	if err != nil {
 		return workEvidence{}, nil, "", err
 	}
-	if err := checkWorkTransferClosure(ctx, tx, id, client, invoice, history); err != nil {
-		return workEvidence{}, nil, "", err
-	}
-	d := history.Invoice
-	if !d.Current || d.Acceptance != acceptance || !d.NetMinor.Valid || !d.VATMinor.Valid || d.NetMinor.Int64+d.VATMinor.Int64 != d.AmountMinor || d.AmountMinor <= 0 || history.Unsettled || history.Total != d.AmountMinor {
-		return workEvidence{}, nil, "", errProposalConflict
-	}
-	invoices, err := readWorkInvoices(ctx, tx, id, client)
-	if err != nil {
-		return workEvidence{}, nil, "", err
-	}
-	d.Recorded = d.Recorded.UTC()
 	review.Proposal.Prepared = review.Proposal.Prepared.UTC()
-	evidence := workEvidence{Format: 1, Request: id, Client: client, Acceptance: acceptance, Event: review.Event, Hash: review.Hash, Proposal: review.Proposal, Invoice: d, Invoices: invoices, Acceptor: members[0], Actor: members[1]}
-	for _, transfer := range history.Transfers {
-		latest := transfer.Latest
-		latest.Recorded = latest.Recorded.UTC()
-		evidence.Transfers = append(evidence.Transfers, latest)
-	}
-	slices.SortFunc(evidence.Transfers, func(a, b creditRevision) int {
-		if result := cmp.Compare(a.Source, b.Source); result != 0 {
-			return result
-		}
-		return cmp.Compare(a.Reference, b.Reference)
-	})
+	evidence := workEvidence{Format: 2, Request: id, Client: client, Acceptance: acceptance, Event: review.Event, Hash: review.Hash, Proposal: review.Proposal, Order: order, Funding: funding, Acceptor: members[0], Actor: members[1]}
 	data, err := json.Marshal(evidence)
 	if err != nil || len(data) == 0 || len(data) > 2097152 {
 		return workEvidence{}, nil, "", errTriageStorage

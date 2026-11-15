@@ -590,10 +590,9 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 			if !valid || (pattern != "GET /portal/operator/requests" && pattern != "GET /portal/operator/requests/{id}/work-review") {
 				return errors.New("invalid target cursor")
 			}
-		case "invoice":
-			sequence, valid := proposalNumber(values[0], 50)
-			if !valid || sequence < 1 || pattern != "GET /portal/operator/requests/{id}/work-review" {
-				return errors.New("invalid target review invoice")
+		case "review":
+			if values[0] != "funding" || pattern != "GET /portal/operator/requests/{id}/work-review" {
+				return errors.New("invalid target funding review")
 			}
 		default:
 			return errors.New("unexpected target query")
