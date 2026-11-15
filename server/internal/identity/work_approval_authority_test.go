@@ -399,7 +399,9 @@ func TestWorkApprovalUnknownLegacyTaxDenied(t *testing.T) {
  GRANT SELECT,INSERT ON portal_work_approvals,portal_work_revocations,portal_work_current TO portal_runtime;
  GRANT UPDATE(approval_id,generation) ON portal_work_current TO portal_runtime;
  GRANT SELECT,INSERT ON portal_orders,portal_numina_contacts TO portal_runtime;
- GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime`); err != nil {
+ GRANT SELECT,INSERT,UPDATE ON portal_order_charges TO portal_runtime;
+ GRANT SELECT,INSERT,UPDATE ON portal_card_checkouts TO portal_runtime;
+ GRANT SELECT,INSERT ON portal_stripe_events TO portal_runtime`); err != nil {
 		t.Fatal("restored fixture grants failed", err)
 	}
 	if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID, 1); !errors.Is(err, errProposalConflict) {

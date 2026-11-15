@@ -239,6 +239,11 @@ func TestPrivateCardSubscriptionChargesMonthlyInAdvance(t *testing.T) {
 	if sendEvent(t, b, "evt_foreign", "invoice.paid", map[string]any{"id": "in_x", "billing_reason": "subscription_cycle", "amount_paid": 100, "currency": "dkk", "parent": parent("sub_other", false)}, webhookSecret) != 200 {
 		t.Fatal("another integration's subscription was not ignored")
 	}
+	// A retired session still resolves to its order, so its delayed completion
+	// records the subscription.
+	if sendEvent(t, b, "evt_sub_expired", "checkout.session.expired", map[string]any{"id": "cs_test_2", "mode": "subscription"}, webhookSecret) != 200 {
+		t.Fatal("subscription session expiry refused")
+	}
 	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 || len(chargeStates(t, b)) != 1 {
 		t.Fatal("subscription completion funded a month without its invoice")
 	}
