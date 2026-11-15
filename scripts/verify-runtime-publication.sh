@@ -113,16 +113,33 @@ done
 # Flux reads the read-only registry credentials established by the workflow's login action.
 mkdir "$work/manifests"
 flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests" || fail 'immutable manifest pull'
+# The package is the whole deploy tree: the prod entry at its root, the shared base and both overlays.
+readonly manifest_members=(kustomization.yaml base/kustomization.yaml base/webapp.yaml base/network-policy.yaml
+  prod/kustomization.yaml prod/http-route-public.yaml prod/http-route-portal.yaml prod/disruption-budget.yaml
+  prod/secret-store.yaml prod/external-secret-disclosure.yaml dev/kustomization.yaml)
+# Exact membership in the reviewed file list, never a substring match.
+is_manifest_member() {
+  local candidate
+  for candidate in "${manifest_members[@]}"; do [[ "$1" == "$candidate" ]] && return 0; done
+  return 1
+}
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
 while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
-  case "$member" in webapp.yaml | http-route-public.yaml | http-route-portal.yaml | network-policy.yaml | disruption-budget.yaml | secret-store.yaml | external-secret-disclosure.yaml | kustomization.yaml | README.md) ;; *) fail 'unexpected manifest member' ;; esac
+  case "$member" in
+    base | prod | dev)
+      [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest directory bounds'
+      continue
+      ;;
+    README.md) ;;
+    *) is_manifest_member "$member" || fail 'unexpected manifest member' ;;
+  esac
   [[ -f "$entry" && ! -L "$entry" && "$(wc -c <"$entry")" -le 1048576 ]] || fail 'manifest member bounds'
 done <<<"$entries"
-for member in webapp.yaml http-route-public.yaml http-route-portal.yaml network-policy.yaml disruption-budget.yaml secret-store.yaml external-secret-disclosure.yaml kustomization.yaml; do
+for member in "${manifest_members[@]}"; do
   [[ -f "$work/manifests/$member" && -f "deploy/$member" && ! -L "deploy/$member" ]] || fail 'missing source manifest'
   yq -o=json -I=0 '.' "deploy/$member" >"$work/source.json" || fail 'source manifest parse'
-  if [[ "$member" == webapp.yaml ]]; then
+  if [[ "$member" == base/webapp.yaml ]]; then
     jq --arg image "$image@$IMAGE_DIGEST" '.spec.image=$image' "$work/source.json" >"$work/pinned.json"
     mv "$work/pinned.json" "$work/source.json"
   fi
