@@ -36,7 +36,8 @@ type projectOrder struct {
 	Completed                  *time.Time // the operator's record that the work is completely finished
 	Owed, Paid                 *int64     // a withdrawal's amount owed for work done, and what was paid
 	Mail                       []orderMailState
-	WithdrawalEnd              *time.Time // when Stripe ends a withdrawn order's subscription
+	WithdrawalEnd              *time.Time   // when Stripe ends a withdrawn order's subscription
+	Launch                     *launchPlace // the launch place whose discount the one-time price includes
 }
 
 func (o projectOrder) OneTimeDKK() int64 { return o.OneTimeMinor / 100 }
@@ -95,7 +96,7 @@ func firstOfNextMonth(t time.Time) time.Time {
 
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
-func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart bool, mc mailContext) (projectOrder, error) {
+func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart, launch bool, mc mailContext) (projectOrder, error) {
 	if !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
 	}
@@ -117,7 +118,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	existing, err := readOrderTx(ctx, tx, id, client)
 	switch {
 	case err == nil:
-		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart {
+		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart || (existing.Launch != nil) != launch {
 			return projectOrder{}, errProposalConflict
 		}
 		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
@@ -126,6 +127,20 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	}
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
+	}
+	// The order takes the client's launch place, if one is open, at the price
+	// the client was shown; if the last place went in between, the client
+	// sees the new price before ordering again.
+	place, err := lockLaunchPlace(ctx, tx, client, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor)
+	if err != nil {
+		return projectOrder{}, err
+	}
+	if (place != nil) != launch {
+		return projectOrder{}, errLaunchChanged
+	}
+	oneTime := current.Proposal.OneTimeMinor
+	if place != nil {
+		oneTime -= place.DiscountMinor
 	}
 	// One timestamp dates the order and its first billed month.
 	placed := time.Now()
@@ -137,14 +152,19 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	}
 	orderID := secret()
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		orderID, id, client, current.ID, p.issuer, p.subject, collection, current.Proposal.OneTimeMinor, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed, early); err != nil {
+		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, current.Proposal.MonthlyMinor, firstOfNextMonth(placed), placed, early); err != nil {
 		return projectOrder{}, errTriageStorage
+	}
+	if place != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO portal_launch_places(place,client_id,order_id,percent,list_minor,discount_minor) VALUES($1,$2,$3,$4,$5,$6)`, place.Place, client, orderID, place.Percent, place.ListMinor, place.DiscountMinor); err != nil {
+			return projectOrder{}, errTriageStorage
+		}
 	}
 	// The order's confirmation on a durable medium (section 13), queued with it.
 	when := projectOrder{Placed: placed}
 	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
-		OneTimeDKK: current.Proposal.OneTimeMinor / 100, MonthlyDKK: current.Proposal.MonthlyMinor / 100, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
+		OneTimeDKK: oneTime / 100, Launch: place, MonthlyDKK: current.Proposal.MonthlyMinor / 100, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
 		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {
 		return projectOrder{}, err
 	}
@@ -159,8 +179,14 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 // request-locked transaction. It grants no authority itself.
 func readOrderTx(ctx context.Context, tx pgx.Tx, id, client string) (projectOrder, error) {
 	var o projectOrder
-	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,o.early_start_at,(SELECT x.completed_at FROM portal_order_completions x WHERE x.order_id=o.id) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
-		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.EarlyStart, &o.Completed)
+	var place *int
+	var l launchPlace
+	err := tx.QueryRow(ctx, `SELECT o.id,o.acceptance_id,o.collection,a.proposal_version,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,o.early_start_at,(SELECT x.completed_at FROM portal_order_completions x WHERE x.order_id=o.id),l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0) FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.request_id=$1 AND o.client_id=$2`, id, client).
+		Scan(&o.ID, &o.Acceptance, &o.Collection, &o.Version, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &o.EarlyStart, &o.Completed, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor)
+	if place != nil {
+		l.Place = *place
+		o.Launch = &l
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return projectOrder{}, err
 	}
@@ -244,28 +270,28 @@ func readOrderFor(ctx context.Context, tx pgx.Tx, id, client string, commit func
 }
 
 // parseOrderForm admits only the acceptance, the chosen path and form plumbing.
-func parseOrderForm(r *http.Request) (string, string, bool, bool) {
+func parseOrderForm(r *http.Request) (acceptance, collection string, earlyStart, launch, valid bool) {
 	if err := r.ParseForm(); err != nil {
-		return "", "", false, false
+		return "", "", false, false, false
 	}
 	for name, values := range r.PostForm {
 		if len(values) != 1 {
-			return "", "", false, false
+			return "", "", false, false, false
 		}
 		switch name {
 		case "csrf_token", "lang", "acceptance", "collection":
-		case "early_start":
+		case "early_start", "launch":
 			// The optional request, never ticked in advance, to start within the
-			// withdrawal period.
+			// withdrawal period, and the launch discount the client was shown.
 			if values[0] != "yes" {
-				return "", "", false, false
+				return "", "", false, false, false
 			}
 		default:
-			return "", "", false, false
+			return "", "", false, false, false
 		}
 	}
-	acceptance, collection := r.PostForm.Get("acceptance"), r.PostForm.Get("collection")
-	return acceptance, collection, r.PostForm.Has("early_start"), opaqueRequestID.MatchString(acceptance) && collection != ""
+	acceptance, collection = r.PostForm.Get("acceptance"), r.PostForm.Get("collection")
+	return acceptance, collection, r.PostForm.Has("early_start"), r.PostForm.Has("launch"), opaqueRequestID.MatchString(acceptance) && collection != ""
 }
 
 // submitOrder places the client's order and returns to the receipt.
@@ -274,12 +300,12 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	acceptance, collection, earlyStart, valid := parseOrderForm(r)
+	acceptance, collection, earlyStart, launch, valid := parseOrderForm(r)
 	if !valid {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, mailContext{Lang: language(r), Portal: b.origin + b.base()})
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, launch, mailContext{Lang: language(r), Portal: b.origin + b.base()})
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
 		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin+b.base(), language(r)); checkoutErr != nil {
@@ -292,6 +318,9 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 // clientOrderResult answers a client's order form and returns to the receipt.
 func (b *browser) clientOrderResult(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, errLaunchChanged):
+		// The receipt shows the order form again at the new price.
+		http.Redirect(w, r, "/portal/requests/"+r.PathValue("id")+"?lang="+language(r)+"&launch=ended", http.StatusSeeOther)
 	case errors.Is(err, errProposalConflict):
 		b.render(w, r, 409, "error", "", "")
 	case errors.Is(err, pgx.ErrNoRows):

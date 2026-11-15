@@ -56,6 +56,8 @@ var purgeRecords = []string{
 	`DELETE FROM portal_card_cancellations WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_order_ends WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_card_checkouts WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
+	// A taken launch place is never reused; it keeps its number and amounts.
+	`UPDATE portal_launch_places SET client_id=NULL,order_id=NULL WHERE client_id=$1`,
 	`DELETE FROM portal_order_charges WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_orders WHERE client_id=$1`,
 	`DELETE FROM portal_numina_contacts WHERE client_id=$1`,
@@ -75,7 +77,7 @@ var purgeRecords = []string{
 // tables hang off portal_orders.
 var clientTables = []string{"portal_memberships", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 	"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers",
-	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current"}
+	"portal_credit_revisions", "portal_numina_contacts", "portal_orders", "portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_launch_places"}
 
 // membershipLineages pairs every membership event with the first event of
 // its membership. An insert or baseline starts the chain, and each update or

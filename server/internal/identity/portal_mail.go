@@ -44,6 +44,7 @@ type orderMail struct {
 	MonthlyStart, WithdrawUntil, WorkStartsFrom                          string
 	Placed, Withdrawn                                                    string
 	EarlyStart                                                           bool
+	Launch                                                               *launchPlace
 	Portal, Terms                                                        string
 }
 
@@ -59,7 +60,7 @@ Omfang:
 Leverancer:
 {{.Deliverables}}
 
-{{if .OneTimeDKK}}Engangspris: {{.OneTimeDKK}} DKK{{with .OneTimeTerms}} ({{.}}){{end}}
+{{if .OneTimeDKK}}Engangspris: {{.OneTimeDKK}} DKK{{with .Launch}} (normalpris {{.ListDKK}} DKK, lanceringsrabat {{.Percent}} % −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
 {{end}}{{if .MonthlyDKK}}Månedspris: {{.MonthlyDKK}} DKK forud den 1. i hver måned fra {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
 {{end}}Betaling: {{if eq .Collection "card"}}kort eller MobilePay via Stripe{{else}}faktura{{end}}
 
@@ -81,7 +82,7 @@ Scope:
 Deliverables:
 {{.Deliverables}}
 
-{{if .OneTimeDKK}}One-time price: {{.OneTimeDKK}} DKK{{with .OneTimeTerms}} ({{.}}){{end}}
+{{if .OneTimeDKK}}One-time price: {{.OneTimeDKK}} DKK{{with .Launch}} (list price {{.ListDKK}} DKK, {{.Percent}}% launch discount −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
 {{end}}{{if .MonthlyDKK}}Monthly price: {{.MonthlyDKK}} DKK in advance on the 1st of each month from {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
 {{end}}Payment: {{if eq .Collection "card"}}card or MobilePay through Stripe{{else}}invoice{{end}}
 

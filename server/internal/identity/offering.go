@@ -43,7 +43,7 @@ type offeringCatalogue struct {
 	Offerings      []publishedOffering `json:"offerings"`
 	Hosting        map[string]string   `json:"hosting"`
 	VAT            map[string]string   `json:"vat"`
-	LaunchDiscount launchOffer         `json:"launchDiscount"`
+	LaunchDiscount *launchOffer        `json:"launchDiscount"`
 	Consultation   map[string]string   `json:"consultation"`
 }
 
@@ -55,6 +55,11 @@ func mustOfferings(raw []byte) offeringCatalogue {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&c); err != nil {
 		panic("identity: invalid embedded offerings: " + err.Error())
+	}
+	// The portal implements only this rule; a catalogue that says otherwise
+	// must not change what orders cost without a code change.
+	if d := c.LaunchDiscount; d != nil && (d.Percent < 1 || d.Percent > 99 || d.Limit < 1 || d.AppliesTo != "setup" || !d.RequiresHosting || d.Text["en"] == "" || d.Text["da"] == "") {
+		panic("identity: unsupported launch discount in embedded offerings")
 	}
 	return c
 }

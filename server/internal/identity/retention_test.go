@@ -55,6 +55,11 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 			t.Errorf("%s kept %d of the former client's order records: %v", table, left, err)
 		}
 	}
+	// The launch place stays taken, without who took it.
+	var places int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_launch_places WHERE client_id IS NULL AND order_id IS NULL`).Scan(&places); err != nil || places != 1 {
+		t.Errorf("the former client's launch place was not kept anonymously: %d %v", places, err)
+	}
 	var others, operators, events int
 	if err := migrator.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_memberships WHERE client_id='reset-contact-client' AND NOT revoked)+(SELECT count(*) FROM portal_contacts WHERE client_id='reset-contact-client'),
  (SELECT count(*) FROM portal_memberships WHERE role='operator'),(SELECT count(*) FROM portal_stripe_events)`).Scan(&others, &operators, &events); err != nil || others != 2 || operators == 0 || events != 1 {

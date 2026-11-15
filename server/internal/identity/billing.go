@@ -50,7 +50,8 @@ type billingOrder struct {
 	ID, Client, Scope          string
 	OneTimeMinor, MonthlyMinor int64
 	MonthlyFrom, Placed        time.Time
-	LastMonth                  *time.Time // the last billed month, once ended (#591)
+	LastMonth                  *time.Time   // the last billed month, once ended (#591)
+	Launch                     *launchPlace // the launch discount the one-time price includes
 }
 
 type billingCharge struct {
@@ -211,7 +212,7 @@ func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) 
 }
 
 func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent,EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id) FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent,EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id),l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0) FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -220,8 +221,14 @@ func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
 	for rows.Next() {
 		var c billingCharge
 		o := &c.Order
-		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent, &c.Withdrawn); err != nil {
+		var place *int
+		var l launchPlace
+		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent, &c.Withdrawn, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor); err != nil {
 			return nil, errTriageStorage
+		}
+		if place != nil {
+			l.Place = *place
+			o.Launch = &l
 		}
 		result = append(result, c)
 	}
@@ -376,6 +383,9 @@ func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now 
 	description := invoiceLine(c.Order.Scope)
 	if c.Period != "acceptance" {
 		description += " — " + c.Period
+	} else {
+		// The unit price already includes the discount; the line names it.
+		description = launchLine(description, "da", c.Order.Launch)
 	}
 	created, err := cfg.Numina.CreateInvoice(ctx, c.Identity, numina.NewInvoice{
 		ContactID:          contactID,
