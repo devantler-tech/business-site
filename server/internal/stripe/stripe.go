@@ -170,7 +170,43 @@ func (c *Client) CreateCheckout(ctx context.Context, key string, checkout Checko
 var (
 	paymentIntentID = regexp.MustCompile(`^pi_[A-Za-z0-9_]{1,250}$`)
 	subscriptionID  = regexp.MustCompile(`^sub_[A-Za-z0-9_]{1,250}$`)
+	invoiceID       = regexp.MustCompile(`^in_[A-Za-z0-9_]{1,250}$`)
 )
+
+// GetInvoice reads one invoice, for example to learn whose subscription a
+// refunded payment belonged to.
+func (c *Client) GetInvoice(ctx context.Context, id string) (Invoice, error) {
+	if !invoiceID.MatchString(id) {
+		return Invoice{}, errors.New("stripe: invalid invoice")
+	}
+	var i Invoice
+	if err := c.call(ctx, http.MethodGet, "/v1/invoices/"+id, url.Values{}, "", &i); err != nil {
+		return Invoice{}, err
+	}
+	if i.ID != id {
+		return Invoice{}, errors.New("stripe: response malformed")
+	}
+	return i, nil
+}
+
+// CancelSubscriptionNow ends a subscription immediately, without proration,
+// and returns when Stripe ended it.
+func (c *Client) CancelSubscriptionNow(ctx context.Context, subscription string) (time.Time, error) {
+	if !subscriptionID.MatchString(subscription) {
+		return time.Time{}, errors.New("stripe: invalid subscription")
+	}
+	var s struct {
+		ID         string `json:"id"`
+		CanceledAt *int64 `json:"canceled_at"`
+	}
+	if err := c.call(ctx, http.MethodDelete, "/v1/subscriptions/"+subscription, url.Values{}, "", &s); err != nil {
+		return time.Time{}, err
+	}
+	if s.ID != subscription || s.CanceledAt == nil {
+		return time.Time{}, errors.New("stripe: response malformed")
+	}
+	return time.Unix(*s.CanceledAt, 0), nil
+}
 
 // PaymentReferences returns the Checkout Sessions and invoices a PaymentIntent
 // paid for, so a refund or dispute can be matched to the portal's own records.
@@ -229,7 +265,7 @@ func (c *Client) CancelSubscriptionAt(ctx context.Context, subscription string, 
 // with the idempotency key, if any. Errors carry only status and Stripe's code.
 func (c *Client) call(ctx context.Context, method, path string, form url.Values, key string, out any) error {
 	target, body := c.baseURL+path, ""
-	if method == http.MethodGet {
+	if method == http.MethodGet || method == http.MethodDelete {
 		target += "?" + form.Encode()
 	} else {
 		body = form.Encode()
@@ -240,7 +276,7 @@ func (c *Client) call(ctx context.Context, method, path string, form url.Values,
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Stripe-Version", APIVersion)
-	if method != http.MethodGet {
+	if body != "" {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	if key != "" {
@@ -380,6 +416,7 @@ type Dispute struct {
 
 // Subscription is the subset of an ended subscription the portal reads.
 type Subscription struct {
-	ID      string `json:"id"`
-	EndedAt int64  `json:"ended_at"`
+	ID       string            `json:"id"`
+	EndedAt  int64             `json:"ended_at"`
+	Metadata map[string]string `json:"metadata"`
 }

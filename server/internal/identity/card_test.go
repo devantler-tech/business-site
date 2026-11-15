@@ -26,11 +26,12 @@ type fakeStripe struct {
 	mu         sync.Mutex
 	requests   []url.Values
 	keys       map[string]string
-	bodies     map[string]string // a key's request, so a changed reuse is refused like Stripe does
-	loseReply  bool              // create the session but answer 500, cached under its key like Stripe
-	intents    map[string]string // PaymentIntent → the Checkout Session or invoice it paid
-	cancels    []url.Values      // subscription end requests, with "subscription" added
-	failCancel bool              // answer the next subscription end with 500
+	bodies     map[string]string         // a key's request, so a changed reuse is refused like Stripe does
+	loseReply  bool                      // create the session but answer 500, cached under its key like Stripe
+	intents    map[string]string         // PaymentIntent → the Checkout Session or invoice it paid
+	invoices   map[string]map[string]any // invoices by ID, for GET /v1/invoices/{id}
+	cancels    []url.Values              // subscription end requests, with "subscription" added
+	failCancel bool                      // answer the next subscription end with 500
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +41,7 @@ func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	if r.Method == "GET" || strings.HasPrefix(r.URL.Path, "/v1/subscriptions/") {
+	if r.Method == "GET" || r.Method == "DELETE" || strings.HasPrefix(r.URL.Path, "/v1/subscriptions/") {
 		f.serveLookup(w, r)
 		return
 	}
@@ -92,6 +93,17 @@ func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
 			data = append(data, map[string]string{"invoice": ref})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/v1/invoices/"):
+		invoice, ok := f.invoices[strings.TrimPrefix(r.URL.Path, "/v1/invoices/")]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(invoice)
+	case r.Method == "DELETE":
+		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
+		f.cancels = append(f.cancels, url.Values{"subscription": {subscription}, "immediately": {"true"}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "canceled_at": time.Now().Unix()})
 	case r.Method == "POST":
 		_ = r.ParseForm()
 		form := r.PostForm
@@ -137,7 +149,7 @@ func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *f
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','',1)`); err != nil {
 		t.Fatal(err)
 	}
-	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}, intents: map[string]string{}}
+	fake := &fakeStripe{keys: map[string]string{}, bodies: map[string]string{}, intents: map[string]string{}, invoices: map[string]map[string]any{}}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
 	api, err := stripe.New(server.URL, "rk_test_fixture", server.Client().Transport)

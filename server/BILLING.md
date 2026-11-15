@@ -123,13 +123,17 @@ card order, so nothing is booked twice.
   - On the card path, the portal asks Stripe to end the subscription at 00:00 UTC on the 1st
     after that month, exactly when it would renew, without proration. Stripe's confirmed date
     is recorded (`portal_card_cancellations`) and shown. Until Stripe confirms, the page
-    offers to ask again. A subscription that completes after the order ended is asked to end
-    as soon as it is recorded.
+    offers to ask again, even after that month. Once the renewal has passed unconfirmed, the
+    portal ends the subscription at once; a month it charged never funds the order and is
+    refunded by hand. A subscription that completes after the order ended is asked to end as
+    soon as it is recorded.
   - A renewal paid after the last billed month never funds a month, and an ended order offers
     no new subscription Checkout.
 - **Stripe ending a subscription on its own.** `customer.subscription.deleted`, for example
   after failed renewals, records the order's end, unless an operator already ended it. The last
-  billed month is the one the subscription had paid in advance when it ended.
+  billed month is the one the subscription had paid in advance when it ended. An end that
+  arrives before the subscription's Checkout completion answers `500` when it carries the
+  portal's order marker, so Stripe retries it.
 - **Refunds and disputes.** `charge.refunded` (any refunded amount) and
   `charge.dispute.created` record a reversal against the funded charge
   (`portal_charge_reversals`). The charge keeps its settlement, but no longer funds the order,
@@ -137,8 +141,9 @@ card order, so nothing is booked twice.
   - A charge names only its PaymentIntent, so the portal asks Stripe which Checkout Session or
     invoice that PaymentIntent paid, and only references the portal stored count. Anything
     else belongs to another integration and is ignored.
-  - A refund for one of the portal's own sessions that is not funded yet answers `500`, so
-    Stripe retries it after the payment event.
+  - A refund or dispute of one of the portal's own payments that is not funded yet answers
+    `500`, so Stripe retries it after the payment event: a one-time Checkout Session the portal
+    stored, or an invoice of one of its subscriptions, known or carrying its order marker.
   - A won dispute is not restored automatically; the operator decides.
 - **Numina credit notes stay manual.** The operator issues a credit note in Numina by hand.
 

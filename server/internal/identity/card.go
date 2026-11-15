@@ -20,6 +20,8 @@ type StripeAPI interface {
 	CreateCheckout(ctx context.Context, key string, checkout stripe.Checkout) (stripe.Session, error)
 	PaymentReferences(ctx context.Context, paymentIntent string) ([]string, error)
 	CancelSubscriptionAt(ctx context.Context, subscription string, at time.Time) (time.Time, error)
+	CancelSubscriptionNow(ctx context.Context, subscription string) (time.Time, error)
+	GetInvoice(ctx context.Context, id string) (stripe.Invoice, error)
 }
 
 // CardBilling configures the card and MobilePay path (ADR 0030, #553).

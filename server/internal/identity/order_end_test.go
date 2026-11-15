@@ -45,8 +45,11 @@ func TestInvoiceBillingStopsAfterTheLastBilledMonth(t *testing.T) {
 	}
 	f, _ := operatorEndForm(t, b, "end-operator")
 	now := currentMonth(time.Now())
+	if status, _, _ := b.request("POST", orderEndPath, endForm(f, now.AddDate(0, -1, 0)), b.site.URL); status != 409 {
+		t.Fatalf("a new end in a past month admitted: %d", status)
+	}
 	for name, bad := range map[string]url.Values{
-		"past month":     endForm(f, now.AddDate(0, -1, 0)),
+		"distant month":  endForm(f, now.AddDate(11, 0, 0)),
 		"no month":       f,
 		"extra field":    func() url.Values { g := endForm(f, now); g.Set("amount", "1"); return g }(),
 		"repeated month": func() url.Values { g := endForm(f, now); g.Add("last_month", now.Format("2006-01")); return g }(),
@@ -148,8 +151,17 @@ func TestPrivateCardRefundsAndDisputesStopFunding(t *testing.T) {
 		t.Fatal("one-time payment refused")
 	}
 	anchor := firstAnchor(firstOfNextMonth(time.Now()), time.Now())
-	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 ||
-		sendEvent(t, b, "evt_month", "invoice.paid", map[string]any{"id": "in_1", "billing_reason": "subscription_cycle", "amount_paid": 12500, "currency": "dkk", "created": anchor.Add(time.Hour).Unix(), "parent": map[string]any{"subscription_details": map[string]any{"subscription": "sub_1", "metadata": map[string]string{"portal_order": order}}}}, webhookSecret) != 200 {
+	monthly := map[string]any{"id": "in_1", "billing_reason": "subscription_cycle", "amount_paid": 12500, "currency": "dkk", "created": anchor.Add(time.Hour).Unix(), "parent": map[string]any{"subscription_details": map[string]any{"subscription": "sub_1", "metadata": map[string]string{"portal_order": order}}}}
+	fake.mu.Lock()
+	fake.invoices["in_1"] = monthly
+	fake.mu.Unlock()
+	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
+		t.Fatal("subscription completion refused")
+	}
+	if sendEvent(t, b, "evt_dispute", "charge.dispute.created", map[string]any{"id": "du_1", "payment_intent": "pi_month"}, webhookSecret) != 500 {
+		t.Fatal("a dispute of the portal's own unfunded month was not deferred")
+	}
+	if sendEvent(t, b, "evt_month", "invoice.paid", monthly, webhookSecret) != 200 {
 		t.Fatal("subscription funding refused")
 	}
 	for _, e := range []struct {
@@ -192,11 +204,15 @@ func TestPrivateCardRefundsAndDisputesStopFunding(t *testing.T) {
 func TestPrivateCardSubscriptionEndedByStripe(t *testing.T) {
 	b, _ := cardOrderFixture(t, 0, 12500)
 	placeCardOrder(t, b)
+	ended := time.Date(2027, 3, 14, 9, 0, 0, 0, time.UTC)
+	gone := map[string]any{"id": "sub_1", "ended_at": ended.Unix(), "metadata": map[string]string{"portal_order": orderID(t, b)}}
+	if sendEvent(t, b, "evt_gone", "customer.subscription.deleted", gone, webhookSecret) != 500 {
+		t.Fatal("an end before the subscription's completion was not deferred")
+	}
 	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
 		t.Fatal("subscription completion refused")
 	}
-	ended := time.Date(2027, 3, 14, 9, 0, 0, 0, time.UTC)
-	if sendEvent(t, b, "evt_gone", "customer.subscription.deleted", map[string]any{"id": "sub_1", "ended_at": ended.Unix()}, webhookSecret) != 200 ||
+	if sendEvent(t, b, "evt_gone", "customer.subscription.deleted", gone, webhookSecret) != 200 ||
 		sendEvent(t, b, "evt_other", "customer.subscription.deleted", map[string]any{"id": "sub_other", "ended_at": ended.Unix()}, webhookSecret) != 200 {
 		t.Fatal("subscription end refused")
 	}
@@ -207,5 +223,40 @@ func TestPrivateCardSubscriptionEndedByStripe(t *testing.T) {
 	_, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
 	if !strings.Contains(body, "Monthly billing ends after 2027-03 · Stripe ended the subscription") || strings.Contains(body, "End monthly billing") || strings.Contains(body, "Ask Stripe again") {
 		t.Fatal("operator page does not show Stripe's end")
+	}
+}
+
+// TestPrivateCardRetriesAnEndAfterItsMonthPassed covers an operator end that
+// Stripe never confirmed before its renewal: asking again ends the
+// subscription at once.
+func TestPrivateCardRetriesAnEndAfterItsMonthPassed(t *testing.T) {
+	b, fake := cardOrderFixture(t, 0, 12500)
+	placeCardOrder(t, b)
+	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
+		t.Fatal("subscription completion refused")
+	}
+	past := currentMonth(time.Now()).AddDate(0, -1, 0)
+	if _, err := migrationDB(t).Exec(t.Context(), `INSERT INTO portal_order_ends(order_id,last_month,source,operator_issuer,operator_subject) VALUES($1,$2,'operator','https://fixture.invalid','earlier-operator')`, orderID(t, b), past); err != nil {
+		t.Fatal(err)
+	}
+	triageSignIn(t, b, "late-end-operator", "operator-workspace", "operator")
+	_, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
+	csrf := csrfInput.FindStringSubmatch(body)
+	if len(csrf) != 2 || !strings.Contains(body, "Ask Stripe again") {
+		t.Fatal("an unconfirmed past end is not offered again")
+	}
+	retry := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "order": {orderID(t, b)}, "last_month": {past.Format("2006-01")}}
+	if status, _, _ := b.request("POST", orderEndPath, retry, b.site.URL); status != 303 {
+		t.Fatalf("retry of a past end refused: %d", status)
+	}
+	fake.mu.Lock()
+	cancels := append([]url.Values(nil), fake.cancels...)
+	fake.mu.Unlock()
+	if len(cancels) != 1 || cancels[0].Get("subscription") != "sub_1" || cancels[0].Get("immediately") != "true" {
+		t.Fatalf("a passed renewal was not ended at once: %v", cancels)
+	}
+	_, body, _ = b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
+	if !strings.Contains(body, "Stripe ends the subscription on "+time.Now().UTC().Format("2006-01-02")) || strings.Contains(body, "Ask Stripe again") {
+		t.Fatal("the immediate end is not shown")
 	}
 }

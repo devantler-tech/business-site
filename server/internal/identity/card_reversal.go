@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/stripe"
@@ -51,9 +52,9 @@ func (s *Foundation) resolveReversal(ctx context.Context, event stripe.Event) (*
 	err = s.pool.QueryRow(ctx, `SELECT c.order_id,c.period FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id
  WHERE o.collection='card' AND c.state='settled' AND c.provider_ref=ANY($1) ORDER BY c.period LIMIT 1`, refs).Scan(&r.Order, &r.Period)
 	if errors.Is(err, pgx.ErrNoRows) {
-		var ours bool
-		if err = s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_card_checkouts WHERE session_id=ANY($1) AND purpose='one-time')`, refs).Scan(&ours); err != nil {
-			return nil, errTriageStorage
+		ours, err := s.ownsUnfundedPayment(ctx, refs)
+		if err != nil {
+			return nil, err
 		}
 		if ours {
 			return nil, errors.New("card billing: reversed payment not funded yet")
@@ -64,6 +65,34 @@ func (s *Foundation) resolveReversal(ctx context.Context, event stripe.Event) (*
 		return nil, errTriageStorage
 	}
 	return &r, nil
+}
+
+// ownsUnfundedPayment reports whether references with no settled charge yet
+// are still the portal's own: one of its one-time Checkout Sessions, or an
+// invoice of one of its subscriptions, known or carrying the portal's order
+// marker. Their funding event has not arrived yet, so the reversal waits.
+func (s *Foundation) ownsUnfundedPayment(ctx context.Context, refs []string) (bool, error) {
+	var ours bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_card_checkouts WHERE session_id=ANY($1) AND purpose='one-time')`, refs).Scan(&ours); err != nil {
+		return false, errTriageStorage
+	}
+	for _, ref := range refs {
+		if ours || !strings.HasPrefix(ref, "in_") {
+			continue
+		}
+		invoice, err := s.cards.Load().Stripe.GetInvoice(ctx, ref)
+		if err != nil {
+			return false, err
+		}
+		if invoice.Parent.SubscriptionDetails.Metadata["portal_order"] != "" {
+			ours = true
+			continue
+		}
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_card_checkouts WHERE subscription_id=$1)`, invoice.SubscriptionID()).Scan(&ours); err != nil {
+			return false, errTriageStorage
+		}
+	}
+	return ours, nil
 }
 
 // applyReversal records that a funded charge no longer funds its order. The
@@ -88,6 +117,11 @@ func applySubscriptionDeleted(ctx context.Context, tx pgx.Tx, raw json.RawMessag
 	}
 	o, _, err := cardCheckoutBy(ctx, tx, "subscription_id", sub.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// A portal subscription whose Checkout completion has not arrived yet
+		// fails, so Stripe retries this event; anything else is not ours.
+		if sub.Metadata["portal_order"] != "" {
+			return errors.New("card billing: ended subscription not yet known")
+		}
 		return nil
 	}
 	if err != nil {

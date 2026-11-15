@@ -32,7 +32,8 @@ func currentMonth(now time.Time) time.Time {
 func (o projectOrder) EndFrom() string { return currentMonth(time.Now()).Format("2006-01") }
 
 // parseOrderEndForm admits exactly the operator's end form: the order and a
-// last billed month from the current one to ten years ahead.
+// last billed month within ten years either way. endMonthlyBilling requires a
+// new end to start from the current month; a recorded one can always be retried.
 func parseOrderEndForm(r *http.Request, now time.Time) (string, time.Time, bool) {
 	if err := r.ParseForm(); err != nil {
 		return "", time.Time{}, false
@@ -50,7 +51,7 @@ func parseOrderEndForm(r *http.Request, now time.Time) (string, time.Time, bool)
 	order := r.PostForm.Get("order")
 	last, err := time.Parse("2006-01", r.PostForm.Get("last_month"))
 	from := currentMonth(now)
-	if err != nil || !opaqueRequestID.MatchString(order) || last.Before(from) || last.After(from.AddDate(10, 0, 0)) {
+	if err != nil || !opaqueRequestID.MatchString(order) || last.Before(from.AddDate(-10, 0, 0)) || last.After(from.AddDate(10, 0, 0)) {
 		return "", time.Time{}, false
 	}
 	return order, last, true
@@ -89,6 +90,10 @@ func (s *Foundation) endMonthlyBilling(ctx context.Context, p Principal, id, ord
 		return errProposalConflict
 	}
 	ready := s.pathReady(o.Collection)
+	if o.End == nil && last.Before(currentMonth(time.Now())) {
+		// Earlier months may already be invoiced or charged.
+		return errProposalConflict
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_order_ends(order_id,last_month,source,operator_issuer,operator_subject) VALUES($1,$2,'operator',$3,$4) ON CONFLICT(order_id) DO NOTHING`, o.ID, last, p.issuer, p.subject); err != nil {
 		return errTriageStorage
 	}
@@ -126,7 +131,15 @@ func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	if err != nil {
 		return errTriageStorage
 	}
-	confirmed, err := s.cards.Load().Stripe.CancelSubscriptionAt(ctx, subscription, last.AddDate(0, 1, 0))
+	api, at := s.cards.Load().Stripe, last.AddDate(0, 1, 0)
+	var confirmed time.Time
+	if at.After(time.Now()) {
+		confirmed, err = api.CancelSubscriptionAt(ctx, subscription, at)
+	} else {
+		// The renewal after the last month has passed unconfirmed: end now.
+		// A month it charged never funds the order and is refunded by hand.
+		confirmed, err = api.CancelSubscriptionNow(ctx, subscription)
+	}
 	if err != nil {
 		// The operator page keeps offering to ask again.
 		log.Print("portal: card subscription end not confirmed")
