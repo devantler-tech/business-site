@@ -43,10 +43,11 @@ test("the billing keys synchronize through the same namespaced store without bei
   assert.deepEqual(secret("business-site-stripe").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
   assert.deepEqual(secret("business-site-numina").spec.data.map((d) => d.secretKey), ["api-key"]);
   assert.deepEqual(secret("business-site-stripe").spec.data.map((d) => d.secretKey), ["api-key", "webhook-secret"]);
-  // The platform WebApp mounts one Secret, never optionally, so a missing billing
-  // entry must not be able to stop the public pages from starting.
-  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-disclosure"]);
-  assert.ok(!app.spec.args.some((arg) => arg.includes("portal-settings")));
+  // The platform WebApp mounts one Secret, never optionally: the platform's
+  // business-site-runtime. The billing keys are not in it, so a missing billing
+  // entry cannot stop the public pages from starting.
+  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-runtime"]);
+  assert.ok(!app.spec.secretProjections.some((p) => /numina|stripe/.test(p.secretName)));
 });
 
 test("the rendered package projects the platform's runtime Secret with portal settings", () => {
