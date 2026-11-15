@@ -20,17 +20,6 @@ type creditRevision struct {
 	Recorded                            time.Time
 }
 
-func (d creditRevision) AmountDKK(lang string) string {
-	return (projectInvoice{AmountMinor: d.AmountMinor}).AmountDKK(lang)
-}
-
-func (d creditRevision) StateLabel(lang string) string {
-	if lang == "da" {
-		return map[string]string{"confirmed": "Bekræftet", "unverified": "Ubekræftet", "disputed": "Bestridt", "invalidated": "Ugyldiggjort"}[d.State]
-	}
-	return map[string]string{"confirmed": "Confirmed", "unverified": "Unverified", "disputed": "Disputed", "invalidated": "Invalidated"}[d.State]
-}
-
 type creditTransfer struct {
 	Latest  creditRevision
 	History []creditRevision
@@ -41,30 +30,6 @@ type creditHistory struct {
 	Transfers []creditTransfer
 	Total     int64
 	Unsettled bool
-}
-
-func (h creditHistory) TotalDKK(lang string) string {
-	return (projectInvoice{AmountMinor: h.Total}).AmountDKK(lang)
-}
-
-// Status reports recorded evidence, never permission to start work. Unknown or
-// disputed evidence prevents a fully-credited result even when other funds match.
-func (h creditHistory) Status(lang string) string {
-	state := "none"
-	switch {
-	case h.Unsettled:
-		state = "unsettled"
-	case h.Total > h.Invoice.AmountMinor:
-		state = "excess"
-	case h.Total == h.Invoice.AmountMinor:
-		state = "full"
-	case h.Total > 0:
-		state = "partial"
-	}
-	if lang == "da" {
-		return map[string]string{"none": "Ingen bekræftede krediteringer", "unsettled": "Uafklaret dokumentation", "excess": "Overskydende kreditering", "full": "Fuldt krediteret", "partial": "Delvist krediteret"}[state]
-	}
-	return map[string]string{"none": "No confirmed credits", "unsettled": "Unresolved evidence", "excess": "Excess credit", "full": "Fully credited", "partial": "Partially credited"}[state]
 }
 
 const creditColumns = `source,reference,submission_key,state,note,revision,expected_revision,amount_minor,recorded_at`

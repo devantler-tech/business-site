@@ -101,6 +101,10 @@ func applyReversal(ctx context.Context, tx pgx.Tx, r *cardReversal) error {
 	if r == nil {
 		return nil
 	}
+	// The charge lock serializes this with a work approval's funding check.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM portal_order_charges WHERE order_id=$1 AND period=$2 FOR UPDATE`, r.Order, r.Period); err != nil {
+		return errTriageStorage
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO portal_charge_reversals(order_id,period,reason,reference) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, r.Order, r.Period, r.Reason, r.Reference); err != nil {
 		return errTriageStorage
 	}

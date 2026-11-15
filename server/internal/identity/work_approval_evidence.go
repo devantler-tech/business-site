@@ -102,10 +102,20 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 	if want == 0 {
 		f.Period, want = monthPeriod(o.MonthlyFrom), o.MonthlyMinor
 	}
+	// Lock the charge first and read it in a new statement: a settlement change
+	// or a reversal (applyReversal locks the charge for update) committed while
+	// this waited is then seen, and none can commit until this decision does.
+	var locked bool
+	err = tx.QueryRow(ctx, `SELECT true FROM portal_order_charges WHERE order_id=$1 AND period=$2 FOR SHARE`, o.ID, f.Period).Scan(&locked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return workOrder{}, workFunding{}, errProposalConflict
+	}
+	if err != nil {
+		return workOrder{}, workFunding{}, errTriageStorage
+	}
 	var settled *time.Time
 	err = tx.QueryRow(ctx, `SELECT c.gross_minor,c.net_minor,c.vat_minor,coalesce(c.provider_ref,''),c.settled_at FROM portal_order_charges c
- WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)
- FOR SHARE OF c`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
+ WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return workOrder{}, workFunding{}, errProposalConflict
 	}

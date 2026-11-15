@@ -26,7 +26,7 @@ func TestWorkApprovalSchema(t *testing.T) {
 
 // Funding that is no longer settled, or was refunded or disputed, pauses a
 // recorded approval and admits no fresh one.
-func TestWorkApprovalRequiresSettledUnreversedFunding(t *testing.T) {
+func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
 	for _, change := range []string{"unsettled", "refunded", "disputed"} {
 		t.Run(change, func(t *testing.T) {
 			b, op := approvalFixture(t)

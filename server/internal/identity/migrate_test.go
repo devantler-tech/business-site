@@ -75,7 +75,7 @@ func rewindWorkFundingFixture(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(t.Context(), `DELETE FROM portal_work_current WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
  DELETE FROM portal_work_revocations WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
  DELETE FROM portal_work_approvals WHERE order_id IS NOT NULL;
- ALTER TABLE portal_work_approvals DROP CONSTRAINT portal_work_approval_charge, DROP CONSTRAINT portal_work_approval_order,
+ ALTER TABLE portal_work_approvals DROP CONSTRAINT portal_work_approval_charge, DROP CONSTRAINT portal_work_approval_order, DROP CONSTRAINT portal_work_approval_agreement,
   DROP CONSTRAINT portal_work_approval_one_binding, DROP COLUMN order_id, DROP COLUMN charge_period, ALTER COLUMN invoice_sequence SET NOT NULL;
  ALTER TABLE portal_order_charges DROP CONSTRAINT portal_charge_work_binding;
  ALTER TABLE portal_orders DROP CONSTRAINT portal_order_work_binding;

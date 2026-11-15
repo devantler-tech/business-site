@@ -3,7 +3,6 @@ package identity
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,30 +21,6 @@ type projectInvoice struct {
 	NetMinor, VATMinor                        pgtype.Int8
 	Recorded                                  time.Time
 	Current                                   bool
-}
-
-// AmountDKK displays exact minor units with the locale's decimal separator and no grouping.
-func (d projectInvoice) AmountDKK(lang string) string {
-	separator := "."
-	if lang == "da" {
-		separator = ","
-	}
-	return fmt.Sprintf("%d%s%02d", d.AmountMinor/100, separator, d.AmountMinor%100)
-}
-
-type invoiceTaxView struct {
-	Lang, Net, VAT string
-	Recorded       bool
-}
-
-// TaxBreakdown formats recorded facts only; unknown historical tax stays unknown.
-func (d projectInvoice) TaxBreakdown(lang string) invoiceTaxView {
-	view := invoiceTaxView{Lang: lang, Recorded: d.NetMinor.Valid && d.VATMinor.Valid}
-	if view.Recorded {
-		view.Net = (projectInvoice{AmountMinor: d.NetMinor.Int64}).AmountDKK(lang)
-		view.VAT = (projectInvoice{AmountMinor: d.VATMinor.Int64}).AmountDKK(lang)
-	}
-	return view
 }
 
 const invoiceColumns = `i.sequence,i.expected_sequence,i.submission_key,i.acceptance_id,i.proposal_version,i.visibility_event,i.content_hash,i.reference,i.purpose,i.amount_minor,i.recorded_at,i.net_minor,i.vat_minor`

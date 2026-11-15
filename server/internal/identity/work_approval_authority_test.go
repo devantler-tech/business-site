@@ -353,8 +353,9 @@ func TestWorkApprovalFundingWatermarkAndRevocation(t *testing.T) {
 	}
 }
 
-// The approval binds the order's exact funding charge: the database refuses a
-// receipt for different amounts or with both the order and a retired invoice.
+// The approval binds the order's exact funding charge and accepted agreement:
+// the database refuses a receipt for different amounts, another agreement, or
+// with both the order and a retired invoice.
 func TestWorkApprovalBindsTheOrdersFundingCharge(t *testing.T) {
 	b, op := approvalFixture(t)
 	d := savedApproval(t, b, op)
@@ -365,15 +366,47 @@ func TestWorkApprovalBindsTheOrdersFundingCharge(t *testing.T) {
 	if d.Order != order || d.Period != "acceptance" || d.Invoice != nil || d.Amount != 299500 || d.Net != 239600 || d.VAT != 59900 {
 		t.Fatalf("approval binding differs: %+v", d)
 	}
-	for name, change := range map[string]string{
-		"different amount": `amount_minor=299400,net_minor=239520,vat_minor=59880`,
-		"both bindings":    `invoice_sequence=1`,
+	for name, tc := range map[string]struct{ change, constraint string }{
+		"different amount":    {`amount_minor=299400,net_minor=239520,vat_minor=59880`, "portal_work_approval_charge"},
+		"different agreement": {`content_hash=repeat('b',64)`, "portal_work_approval_agreement"},
+		"both bindings":       {`invoice_sequence=1`, "portal_work_approval_one_binding"},
 	} {
 		var databaseError *pgconn.PgError
-		_, err := migrationDB(t).Exec(t.Context(), `WITH a AS (SELECT * FROM portal_work_approvals LIMIT 1) UPDATE portal_work_approvals w SET `+change+` FROM a WHERE w.id=a.id`)
-		if !errors.As(err, &databaseError) || (databaseError.Code != "23503" && databaseError.Code != "23514") {
+		_, err := migrationDB(t).Exec(t.Context(), `WITH a AS (SELECT * FROM portal_work_approvals LIMIT 1) UPDATE portal_work_approvals w SET `+tc.change+` FROM a WHERE w.id=a.id`)
+		if !errors.As(err, &databaseError) || databaseError.ConstraintName != tc.constraint {
 			t.Fatalf("%s was not refused by the binding: %v", name, err)
 		}
+	}
+}
+
+// A reversal in flight when an approval checks its funding is serialized
+// through the charge lock: the approval waits for it, then sees it.
+func TestWorkApprovalWaitsForAConcurrentReversal(t *testing.T) {
+	b, op := approvalFixture(t)
+	input := preparedApproval(t, b, op)
+	ctx, _ := approvalWaitContext(t)
+	tx, err := migrationDB(t).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rollbackProposalWrite(ctx, tx)
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM portal_order_charges FOR UPDATE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO portal_charge_reversals(order_id,period,reason,reference) SELECT order_id,period,'refunded','ch_race' FROM portal_order_charges`); err != nil {
+		t.Fatal(err)
+	}
+	result := pendingApproval(ctx, b, op, input)
+	select {
+	case err := <-result:
+		t.Fatal("approval did not wait for the charge lock", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !errors.Is(err, errProposalConflict) {
+		t.Fatal("approval counted funding reversed while it waited", err)
 	}
 }
 
