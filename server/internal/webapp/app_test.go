@@ -15,6 +15,7 @@ func publicFixture() fstest.MapFS {
 		"index.html":                        {Data: []byte("<h1>English public site</h1>")},
 		"da/index.html":                     {Data: []byte("<h1>Dansk public site</h1>")},
 		"projects/index.html":               {Data: []byte("<h1>Projects</h1>")},
+		"404.html":                          {Data: []byte("<h1>Page not found</h1>")},
 		"assets/site.css":                   {Data: []byte("body { color: navy; }")},
 		".well-known/site-publication.json": {Data: []byte(`{"repository":"devantler-tech/business-site"}`)},
 	}
@@ -40,10 +41,10 @@ func TestPublicRoutesAndClosedPortal(t *testing.T) {
 		contains     string
 	}{
 		{"GET", "/", 200, "English"}, {"GET", "/da/", 200, "Dansk"},
-		{"GET", "/projects", 200, "Projects"}, {"HEAD", "/projects/", 200, ""},
+		{"GET", "/projects", 301, ""}, {"GET", "/projects/", 200, "Projects"}, {"HEAD", "/projects/", 200, ""},
 		{"GET", "/assets/site.css", 200, "navy"},
 		{"GET", "/.well-known/site-publication.json", 200, "business-site"},
-		{"GET", "/missing", 404, ""}, {"GET", "/assets/", 404, ""},
+		{"GET", "/missing", 404, "Page not found"}, {"HEAD", "/missing", 404, ""}, {"GET", "/assets/", 404, "Page not found"},
 		{"POST", "/", 405, ""}, {"GET", "/portal", 404, ""},
 		{"GET", "/portal/sign-in", 404, ""}, {"GET", "/portal/operator", 404, ""},
 		{"GET", "/portal.js", 404, ""}, {"GET", "/healthz", 200, "ok"},
@@ -59,6 +60,16 @@ func TestPublicRoutesAndClosedPortal(t *testing.T) {
 			}
 			if strings.HasPrefix(tc.path, "/portal") && w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("private miss is cacheable")
+			}
+			private := tc.path == "/portal" || strings.HasPrefix(tc.path, "/portal/")
+			if private && strings.Contains(w.Body.String(), "Page not found") {
+				t.Fatal("private miss shows the public 404 page")
+			}
+			if tc.status == 301 && w.Header().Get("Location") != tc.path+"/" {
+				t.Fatalf("folder redirect location=%q; want %q", w.Header().Get("Location"), tc.path+"/")
+			}
+			if tc.status == 404 && !private && (w.Header().Get("Content-Type") != "text/html; charset=utf-8" || w.Header().Get("Cache-Control") != "no-store") {
+				t.Fatalf("public miss headers=%v; want an uncached HTML page", w.Header())
 			}
 		})
 	}
@@ -205,10 +216,11 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 		{"GET", "devantler.tech", "/portal", 302, "https://portal.devantler.tech/portal", ""},
 		{"GET", "devantler.tech", "/portal/sign-in?lang=da", 302, "https://portal.devantler.tech/portal/sign-in?lang=da", ""},
 		{"POST", "devantler.tech", "/portal/sign-in", 405, "", ""},
-		{"GET", "devantler.tech", "/missing", 404, "", ""},
+		{"GET", "devantler.tech", "/missing", 404, "", "Page not found"},
+		{"GET", "devantler.tech", "/projects?lang=da", 301, "/projects/?lang=da", ""},
 		// www has one canonical name.
-		{"GET", "www.devantler.tech", "/projects", 302, "https://devantler.tech/projects", ""},
-		{"GET", "www.devantler.tech", "/portal/", 302, "https://devantler.tech/portal/", ""},
+		{"GET", "www.devantler.tech", "/projects", 301, "https://devantler.tech/projects", ""},
+		{"GET", "www.devantler.tech", "/portal/", 301, "https://devantler.tech/portal/", ""},
 		// A staging name or a probe's address behaves like the public host.
 		{"GET", "business-site.platform.devantler.tech", "/", 200, "", "English"},
 		{"GET", "10.0.0.7:8080", "/healthz", 200, "", "ok"},
@@ -222,7 +234,7 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 			if w.Code != tc.status || w.Header().Get("Location") != tc.location || !strings.Contains(w.Body.String(), tc.contains) {
 				t.Fatalf("status=%d location=%q body=%q; want %d %q containing %q", w.Code, w.Header().Get("Location"), w.Body, tc.status, tc.location, tc.contains)
 			}
-			if tc.status == 302 && w.Header().Get("Cache-Control") != "no-store" {
+			if (tc.status == 301 || tc.status == 302) && w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("host redirect is cacheable")
 			}
 			if tc.method == "HEAD" && w.Body.Len() != 0 {
