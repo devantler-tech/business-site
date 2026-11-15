@@ -109,19 +109,10 @@ acceptance records an audited
 version/content-bound receipt after explicit review; it never approves payments or
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
-Private [external invoice records](INVOICES.md) let the operator associate an
-explicit net, VAT, payable total and purpose with exact current client acceptance.
-Historical records without a breakdown remain unknown; no tax rate or eligibility
-is inferred. Credit reconciliation continues to use the unchanged payable total.
-They do not generate invoices, confirm funds or authorize work, and remain
-independently default-off with no environment activation mapping.
-
-Separately default-off [bank-credit evidence](CREDITS.md) records operator
-observations and append-only corrections against those invoices. Exact confirmed
-totals distinguish partial/full/excess credit; disputes and unverified evidence
-prevent a fully-credited result. A globally reserved transfer identity cannot
-belong to two invoices or clients. This is manual evidence, not payment processing
-or work-start authority; no bank connection or activation mapping is added.
+Private external invoice records and bank-credit evidence are retired (ADR 0030,
+#117, #120): [portal billing](BILLING.md) issues Numina invoices and collects
+cards through Stripe instead. Their historical tables remain, unwritten, as work
+approval evidence until #268 binds approvals to an order's funding record.
 
 The separately default-off [work-approval review](WORK-APPROVALS.md) persists
 an operator decision against exact agreement, invoice, funding and membership

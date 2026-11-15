@@ -64,7 +64,7 @@ func TestCreditTransactionReaderRetainsOwnership(t *testing.T) {
 			if err := other.QueryRow(ctx, query, proposalRequestID).Scan(&acquired); err != nil || acquired {
 				t.Fatal("reader released its caller's request lock", err)
 			}
-			if err := commitProposalWrite(ctx, op, tx, b.svc.creditsReady); err != nil {
+			if err := commitProposalWrite(ctx, op, tx, b.svc.acceptanceReady); err != nil {
 				t.Fatal("reader consumed its caller's transaction or final authority check", err)
 			}
 			if err := other.QueryRow(ctx, query, proposalRequestID).Scan(&acquired); err != nil || !acquired {
