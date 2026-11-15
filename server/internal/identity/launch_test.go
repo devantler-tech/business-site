@@ -131,15 +131,7 @@ func TestLaunchDiscountOrder(t *testing.T) {
 	if _, receipt, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang=en", nil, ""); !strings.Contains(receipt, "including the 25% launch discount: −749 DKK off 2995 DKK") {
 		t.Fatal("the order receipt does not name the launch discount")
 	}
-	// The first run creates the contact; the operator then confirms Denmark.
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
-		t.Fatal(err)
-	}
-	fake.confirmDenmark()
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 1 {
-		t.Fatal("acceptance invoice not created", err)
-	}
-	for _, inv := range fake.invoices {
+	for _, inv := range acceptanceInvoice(t, b, fake, cfg) {
 		if len(inv.Items) != 1 || inv.Items[0].UnitPrice != "1796.80" || !strings.HasSuffix(inv.Items[0].Description, " — normalpris 2995 DKK, lanceringsrabat 25 % −749 DKK") {
 			t.Fatalf("the invoice line does not carry the discounted price and name the discount: %+v", inv.Items)
 		}
@@ -274,4 +266,19 @@ func TestLaunchDiscountCardPayment(t *testing.T) {
 			}
 		}
 	}
+}
+
+// acceptanceInvoice runs the invoice sync until it has created the order's
+// first invoice: the first run creates the contact, the operator then
+// confirms Denmark.
+func acceptanceInvoice(t *testing.T, b *browserFixture, fake *fakeNumina, cfg InvoiceBilling) map[string]*fakeInvoice {
+	t.Helper()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	fake.confirmDenmark()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || fake.count() != 1 {
+		t.Fatal("acceptance invoice not created", err)
+	}
+	return fake.invoices
 }
