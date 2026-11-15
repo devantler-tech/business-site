@@ -18,6 +18,8 @@ const load = path => { assert.ok(existsSync(path), "required bilingual page is m
 const links = node => walk(node).filter(item => item.tagName === "a").map(item => [text(item), attr(item,"href")]);
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
+/** The portal's privacy section is released separately from the rest of the notice. */
+const portalPrivacy = process.env.FEATURE_PORTAL_PRIVACY === "true";
 
 /** Validate inline text exactly as the rendered paragraph joins its text nodes.
  * @param {string} candidate @param {string} locale
@@ -84,15 +86,19 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       for (const fact of ["46830385","ned@devantler.tech"]) assert.ok(text(main).includes(fact),`${kind} page names the registered business`);
       assert.ok(links(main).some(([,href]) => href === `/${prefix}company/`),`${kind} page links to the postal address instead of copying it`);
       const required = kind === "privacy"
-        ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies","accounts.devantler.tech","30 dage"] : ["Datatilsynet","six months","five years","cookies","accounts.devantler.tech","30 days"])
+        ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
         : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
       for (const phrase of required) assert.ok(text(main).includes(phrase),`${kind} page is missing: ${phrase}`);
       // List items carry the withdrawal form and the recipients; headings alone must not satisfy them.
       const items = walk(main).filter(node => node.tagName === "li").map(text);
       const listed = kind === "privacy"
-        ? ["Numina","Stripe","Cloudflare","GitHub"]
+        ? ["Numina","Stripe","Cloudflare"]
         : (locale === "da" ? ["Forbrugerens underskrift","Bestilt den (*)/modtaget den (*)"] : ["Signature of consumer(s)","Ordered on (*)/received on (*)"]);
       for (const phrase of listed) assert.ok(items.some(item => item.includes(phrase)),`${kind} list is missing: ${phrase}`);
+      // The portal's privacy text is unreleased content behind its own default-off flag.
+      if (kind === "privacy") for (const phrase of ["accounts.devantler.tech", locale === "da" ? "30 dage" : "30 days", "GitHub"]) {
+        assert.equal(text(main).includes(phrase), portalPrivacy, `portal privacy text follows FEATURE_PORTAL_PRIVACY: ${phrase}`);
+      }
     }
     const path = join(candidate,`${prefix}company/index.html`);
     if (!identity) { assert.equal(existsSync(path),false,"disabled company route must be absent, not merely empty"); continue; }
