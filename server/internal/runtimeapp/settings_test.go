@@ -156,11 +156,13 @@ func TestPortalSettingsProjectionFeedsExistingConfiguration(t *testing.T) {
 		settings := maps.Clone(dependencies)
 		settings["PORTAL_NUMINA_TOKEN_FILE"] = "/run/webapp-inputs/numina-api-key"
 		settings["PORTAL_NUMINA_SALES_ACCOUNT"] = "1010"
+		settings["PORTAL_STRIPE_KEY_FILE"] = "/run/webapp-inputs/stripe-api-key"
+		settings["PORTAL_STRIPE_WEBHOOK_SECRET_FILE"] = "/run/webapp-inputs/stripe-webhook-secret"
 		if err := ApplyPortalSettingsProjection(projectedIdentityFixture(t, []byte(settingsText(settings)), 0440)); err != nil {
 			t.Fatal("projected billing settings were refused")
 		}
 		cfg, err := ReadConfig(os.Getenv)
-		if err != nil || cfg.billing.tokenFile != "/run/webapp-inputs/numina-api-key" || cfg.billing.salesAccount != 1010 || cfg.billing.vatCode != "U25" {
+		if err != nil || cfg.billing.tokenFile != "/run/webapp-inputs/numina-api-key" || cfg.billing.salesAccount != 1010 || cfg.billing.vatCode != "U25" || cfg.cards.keyFile != "/run/webapp-inputs/stripe-api-key" || cfg.cards.baseURL != "https://api.stripe.com" {
 			t.Fatalf("projected billing settings were not read: %+v %v", cfg.billing, err)
 		}
 	})

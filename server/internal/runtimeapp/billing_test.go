@@ -53,3 +53,37 @@ func TestBillingStartsOnlyWithAReadableKey(t *testing.T) {
 		t.Fatal("missing key file started billing")
 	}
 }
+
+func TestCardConfigIsOptionalAndStrict(t *testing.T) {
+	env := func(values map[string]string) func(string) string {
+		return func(name string) string { return values[name] }
+	}
+	if c, err := readCardConfig(env(nil)); err != nil || c != (cardConfig{}) {
+		t.Fatal("absent card configuration was not empty", err)
+	}
+	c, err := readCardConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/run/stripe/key", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/run/stripe/webhook"}))
+	if err != nil || c.baseURL != "https://api.stripe.com" {
+		t.Fatalf("defaults differ: %+v %v", c, err)
+	}
+	for name, values := range map[string]map[string]string{
+		"key without webhook secret": {"PORTAL_STRIPE_KEY_FILE": "/k"},
+		"webhook secret without key": {"PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w"},
+		"relative files":             {"PORTAL_STRIPE_KEY_FILE": "k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "w"},
+		"URL without files":          {"PORTAL_STRIPE_API_URL": "https://api.stripe.com"},
+		"plain HTTP":                 {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_API_URL": "http://api.stripe.com"},
+		"URL with a path":            {"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w", "PORTAL_STRIPE_API_URL": "https://api.stripe.com/v1"},
+	} {
+		if _, err := readCardConfig(env(values)); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	if _, err := ReadConfig(env(map[string]string{"PORTAL_STRIPE_KEY_FILE": "/k", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE": "/w"})); err == nil {
+		t.Fatal("card billing configured without a portal")
+	}
+	if err := enableCardBilling(nil, cardConfig{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := enableCardBilling(nil, cardConfig{keyFile: filepath.Join(t.TempDir(), "absent"), webhookSecretFile: "/absent", baseURL: "https://api.stripe.com"}); err == nil {
+		t.Fatal("missing key file enabled card billing")
+	}
+}

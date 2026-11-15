@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -105,12 +106,13 @@ type Foundation struct {
 	pool   *pgxpool.Pool
 	broker *Broker
 	flags  *openfeature.Client
+	cards  atomic.Pointer[CardBilling]
 }
 
 // New accepts the application's OpenFeature client; every operation defaults off.
 // It does not discover, migrate, start a server, or enable any public endpoint.
 func New(pool *pgxpool.Pool, broker *Broker, flags *openfeature.Client) *Foundation {
-	return &Foundation{pool, broker, flags}
+	return &Foundation{pool: pool, broker: broker, flags: flags}
 }
 
 func (s *Foundation) ready(ctx context.Context) bool {
