@@ -272,9 +272,10 @@ more than `identity.RetentionYears` (3) years back; a member's move to another c
 change. Each client goes in one transaction that locks invitations and memberships and checks the
 client again, so a redemption during the purge keeps the client. It deletes billing, email, work,
 proposals, requests, contacts, invitations and memberships, and the whole membership history of
-each of the client's identities whose last change is also 3 years old, who holds no other
-client's membership and whom no remaining work approval cites. It prints only how many former
-clients lost records.
+each of the client's identities whose last change is also 3 years old. That history stays while
+it names another client that still has records (so that client can still be found), while a
+remaining work approval cites it, or while another identity's history continues from it. It
+prints only how many former clients lost records.
 Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
 out after 30 days. A daily CronJob in the package (`deploy/`) is to run it beside the portal
 migration Job, on the same image and migration credential, with `concurrencyPolicy: Forbid`.
