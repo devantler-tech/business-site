@@ -1,5 +1,6 @@
 <script lang="ts">
   import Shell from "#lib/Shell.svelte";
+  import { telHref } from "../../../../../src/components/business/company-copy";
   import type { load } from "./+page.server";
   let { data }: { data: ReturnType<typeof load> } = $props();
   let t = $derived(data.copy);
@@ -18,6 +19,7 @@
       <div><dt>{t.owner}</dt><dd>{data.company.owner}</dd></div>
       <div><dt>{t.address}</dt><dd><address data-company-address data-pagefind-ignore>{#each lines as line}<span>{line}</span>{/each}</address></dd></div>
       <div><dt>{t.email}</dt><dd><a href={`mailto:${data.company.email}`}>{data.company.email}</a></dd></div>
+      {#if data.company.phone}<div><dt>{t.phone}</dt><dd><a href={telHref(data.company.phone)} data-company-phone>{data.company.phone}</a></dd></div>{/if}
     </dl>
     <p class="contact">{t.contact}</p>
   </main>

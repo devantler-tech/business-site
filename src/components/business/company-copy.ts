@@ -7,17 +7,19 @@ export const companyCopy = {
     title: 'Virksomhed og kontakt', description: 'Registrering og kontaktoplysninger for Devantler Tech.',
     intro: 'Devantler Tech er en enkeltmandsvirksomhed drevet af Nikolai Emil Damm.',
     name: 'Virksomhed', registration: 'Virksomhedsform', type: 'Enkeltmandsvirksomhed',
-    owner: 'Indehaver', address: 'Registreret virksomhedsadresse', email: 'E-mail',
+    owner: 'Indehaver', address: 'Registreret virksomhedsadresse', email: 'E-mail', phone: 'Telefon',
     contact: 'Har du et projekt i tankerne? Skriv til mig, så finder vi sammen det næste skridt.',
   },
   en: {
     title: 'Company information', description: 'Registration and contact information for Devantler Tech.',
     intro: 'Devantler Tech is a sole proprietorship run by Nikolai Emil Damm.',
     name: 'Business', registration: 'Business type', type: 'Sole proprietorship',
-    owner: 'Owner', address: 'Registered business address', email: 'Email',
+    owner: 'Owner', address: 'Registered business address', email: 'Email', phone: 'Phone',
     contact: 'Have a project in mind? Email me and we can work out the next step together.',
   },
 } satisfies Record<Locale, Record<string, string>>;
 
 export const companyCopyFor = () => companyCopy;
 export const companyFacts = () => company;
+/** A dialable tel: link: keeps a leading plus and the digits, drops spacing and punctuation. */
+export const telHref = (phone: string) => `tel:${phone.replace(/[^+\d]/g, '')}`;
