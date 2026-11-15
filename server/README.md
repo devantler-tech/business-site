@@ -260,6 +260,29 @@ See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
 permissions and failure handling. No migration enables a portal operation or
 establishes a production deployment.
 
+### Retention purge job
+
+The privacy notice keeps a former client's portal records for 3 years after their last
+portal membership ended (#614). The same executable's exclusive one-shot
+`--retention-purge --migration-database-file <file>` mode deletes them; a Kubernetes job
+passes `--migration-database-projection <file>` instead, as for the migration (MIGRATIONS.md).
+It runs as the migration role, because the web runtime can delete none of this history, and checks first
+that the role owns the complete schema. A client is due when all their memberships were client
+memberships, none is still active, no invitation is pending, and the last membership change lies
+more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
+change. No order may still bill: monthly billing must have ended or been withdrawn, and a card
+subscription needs Stripe's confirmed end, so the purge never strands a subscription the portal
+could no longer stop. Each client goes in one transaction that locks invitations and memberships and checks the
+client again, so a redemption during the purge keeps the client. It deletes billing, email, work,
+proposals, requests, contacts, invitations and memberships, and the whole history of each of
+the client's memberships, one chain of events from its creation across renames and moves, whose
+last change is also 3 years old. A chain stays while it names another client that still has
+records (so that client can still be found) or while a remaining work approval cites it. It
+prints only how many former clients lost records.
+Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
+out after 30 days. A daily CronJob in the package (`deploy/`) is to run it beside the portal
+migration Job, on the same image and migration credential, with `concurrencyPolicy: Forbid`.
+
 ### Separate native identity preparation job
 
 The verified application executable accepts the exclusive `--identity-materialize`

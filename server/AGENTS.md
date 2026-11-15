@@ -302,7 +302,9 @@ client's optional request to start early, dated with the order; without it no wo
 within the withdrawal period. After a withdrawal that followed an early start, the operator
 records the amount owed once, and a completion record ends the right of withdrawal. v23 queues
 the order confirmation and withdrawal receipt with what causes them and sends them through the
-site's SES sender (`BILLING.md`, *Emails*), SELECT/INSERT only.
+site's SES sender (`BILLING.md`, *Emails*), SELECT/INSERT only. The exclusive
+`--retention-purge` job deletes a former client's records 3 years after their last membership
+ended (`identity.RetentionYears`), as the migration role; never give the runtime DELETE for it.
 
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real

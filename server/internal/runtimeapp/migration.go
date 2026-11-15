@@ -29,26 +29,8 @@ func MigrateDatabase(ctx context.Context, filename, runtimeRole string, projecte
 	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
-	read := migrationConnection
-	if projected {
-		read = migrationProjectedConnection
-	}
-	connection, err := read(filename)
-	if err != nil {
-		return ErrMigration
-	}
-	cfg, err := migrationConfig(connection)
-	if err != nil || runtimeRole == cfg.ConnConfig.User {
-		return ErrMigration
-	}
-	cfg.MaxConns = 1
-	cfg.MinConns = 0
-	cfg.MinIdleConns = 0
-	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
-	// Do not inherit service/PGOPTIONS startup parameters from the operator host.
-	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": "business-site-migration"}
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
+	pool, user, err := openMigrationPool(ctx, filename, projected, "business-site-migration")
+	if err != nil || runtimeRole == user {
 		return ErrMigration
 	}
 	defer pool.Close()
@@ -62,6 +44,64 @@ func MigrateDatabase(ctx context.Context, filename, runtimeRole string, projecte
 		return ErrMigration
 	}
 	return nil
+}
+
+// openMigrationPool opens one bounded connection as the migration role from its
+// confined connection file, or with projected its Kubernetes Secret projection,
+// and returns the role's name.
+func openMigrationPool(ctx context.Context, filename string, projected bool, application string) (*pgxpool.Pool, string, error) {
+	read := migrationConnection
+	if projected {
+		read = migrationProjectedConnection
+	}
+	connection, err := read(filename)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := migrationConfig(connection)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg.MaxConns = 1
+	cfg.MinConns = 0
+	cfg.MinIdleConns = 0
+	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	// Do not inherit service/PGOPTIONS startup parameters from the operator host.
+	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": application}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, "", err
+	}
+	return pool, cfg.ConnConfig.User, nil
+}
+
+// ErrRetention is the entire public diagnostic of the retention purge.
+var ErrRetention = errors.New("portal retention purge failed")
+
+// PurgeRetention deletes the portal records of every former client whose
+// memberships all ended more than identity.RetentionYears ago. It runs as the
+// migration role, which owns the complete schema, and reports only how many
+// clients lost records. With projected, the connection file is a Kubernetes
+// Secret projection for this job's group, as for MigrateDatabase.
+func PurgeRetention(ctx context.Context, filename string, projected bool) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+		return 0, ErrRetention
+	}
+	pool, _, err := openMigrationPool(ctx, filename, projected, "business-site-retention")
+	if err != nil {
+		return 0, ErrRetention
+	}
+	defer pool.Close()
+	if !migrationRoleAllowed(ctx, pool, true) {
+		return 0, ErrRetention
+	}
+	purged, err := identity.PurgeExpiredClients(ctx, pool, time.Now())
+	if err != nil {
+		return purged, ErrRetention
+	}
+	return purged, nil
 }
 
 // migrationRoleAllowed checks authority before DDL and a complete owned schema
