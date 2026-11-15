@@ -1,7 +1,7 @@
 # Svelte public frontend
 
 SvelteKit and Svelte render the complete public site. The backend remains Go under
-[server/](../server/README.md); Pages publication serves only static public output.
+[server/](../server/README.md); the runtime serves this static public output.
 Every local build and runtime package uses Svelte. The frontend release gate and Astro
 application/compiler are retired by [ADR 0027](../docs/adr/0027-svelte-only-public-build.md).
 
@@ -45,8 +45,8 @@ The retained `/_astro/` image namespace preserves public URLs without an Astro d
 
 The adapter owns canonical sitemap membership and excludes redirects/noindex pages. The promoter
 checks the independent complete route inventory, resource closure, visitor privacy, private-output
-refusals and this build's nonce/full file hashes before replacing `dist/`. Only it adds CNAME;
-publication receipts remain publisher-owned. A failed build removes publishable-looking output.
+refusals and this build's nonce/full file hashes before replacing `dist/`. It adds no CNAME and
+refuses a CNAME or copied publication receipt. A failed build removes publishable-looking output.
 
 ## Independent business settings
 
@@ -76,10 +76,10 @@ invalid settings and private-diagnostic/address confinement. The history test us
 actual workflow checkout depths and shallow/incomplete-history refusals. Native Markdown tests
 cover complete tables/bookmarks/copying/diagrams and rejection of executable content.
 
-The source-owned publisher admits only exact main sources, explicit modes, the enabled publication
-switch and protected deployment environment. Manual dispatch defaults to an artifact-only preview.
-It has one public frontend. Frozen artifacts and immutable Git revisions remain recovery evidence.
-A merge/build is not live proof: verify the successful deployment, public source receipt and journeys.
+The runtime release admits only an original successful main CI build behind the enabled
+`RUNTIME_PUBLICATION_ENABLED` switch; GitHub Pages publication is retired. There is one public
+frontend. Signed immutable images and Git revisions remain recovery evidence. A merge/build is
+not live proof: verify the runtime release, its publication receipt and the visitor journeys.
 
 With Go 1.27.4, `bash scripts/package-runtime.sh --release` creates `runtime-dist/`;
 `--production-template` creates `runtime-production-dist/`. Both use Svelte and ignore ambient

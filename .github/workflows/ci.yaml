@@ -122,6 +122,7 @@ jobs:
           node --test scripts/public-build.test.mjs scripts/public-build-contract.test.mjs scripts/package-profile-contract.test.mjs
           node --test scripts/theme.test.mjs scripts/visitor-privacy.test.mjs scripts/journal-navigation.test.mjs
           node --test scripts/customer-scope-rollout.test.mjs scripts/vat-prices-retirement.test.mjs
+          node --test scripts/vat-activation.test.mjs scripts/fresh-publication.test.mjs
           node --test scripts/public-tools.test.mjs scripts/public-products.test.mjs
           bash scripts/journal-history.test.sh
       - name: Build
@@ -153,7 +154,7 @@ jobs:
         run: bash scripts/check-portal-artifacts.sh dist
       - name: Upload reviewable production preview
         # Only static public output is eligible; server code and identity fixtures
-        # must not enter the preview or Pages artifact.
+        # must not enter the preview artifact.
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: business-site-preview
@@ -264,7 +265,6 @@ jobs:
       - name: Verify source-owned publishing and editorial contracts
         run: |
           bash scripts/publishing-contract.test.sh
-          bash scripts/site-publication.test.sh
           bash scripts/editorial-contract.test.sh
       - name: Verify Go source scanner compiler selection
         run: bash scripts/scan-go-source.test.sh

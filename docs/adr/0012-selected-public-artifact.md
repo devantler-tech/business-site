@@ -52,3 +52,9 @@ activate private routes or change legal/company/payment facts, prices, DNS or ho
 - [Astro CLI and build output](https://docs.astro.build/en/reference/cli-reference/)
 - [Vite environment loading](https://vite.dev/guide/env-and-mode.html)
 - [GitHub manual workflow inputs](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs)
+
+## Amendment — no CNAME, 15 November 2026
+
+GitHub Pages is retired ([ADR 0003](0003-source-owned-publication.md), amended the same day).
+Selection no longer carries a CNAME from the reference; it refuses a CNAME in the candidate,
+as it still refuses a copied `publication-source.json` receipt.
