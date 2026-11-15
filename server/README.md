@@ -380,7 +380,7 @@ their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 |----------------------|-----------------------------------------------------------|-----------------------------|
 | portal host          | served at the root; `/portal…` redirects 301 without it   | redirect to the public host |
 | `www.` + public host | redirect to the public host                               | redirect to the public host |
-| any other host       | `/portal…` redirects to the portal host, without `/portal` | served                      |
+| any other host       | `/portal…` redirects to the portal host without `/portal` | served                      |
 
 On the portal host a path the public site serves (other than `/`) goes to the public host and
 everything else goes to the portal, so a public page must never take a portal path such as

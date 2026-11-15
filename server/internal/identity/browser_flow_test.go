@@ -278,7 +278,14 @@ func (b *browserFixture) start(inv string) string {
 	if status != http.StatusOK {
 		b.t.Fatalf("login start status=%d want200: %s", status, body)
 	}
-	req, err := http.NewRequestWithContext(b.t.Context(), "GET", brokerHandoffAddress(b.t, body), nil)
+	return b.authorize(brokerHandoffAddress(b.t, body))
+}
+
+// authorize follows the synthetic broker's authorization redirect and returns the
+// portal address it sends the browser back to.
+func (b *browserFixture) authorize(address string) string {
+	b.t.Helper()
+	req, err := http.NewRequestWithContext(b.t.Context(), "GET", address, nil)
 	if err != nil {
 		b.t.Fatal(err)
 	}

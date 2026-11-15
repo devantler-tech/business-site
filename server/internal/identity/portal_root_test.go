@@ -1,14 +1,12 @@
 package identity
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"github.com/devantler-tech/business-site/server/internal/webapp"
 )
@@ -24,7 +22,7 @@ var freshKey = regexp.MustCompile(`(name="[a-z_]*key" value=")[^"]*"`)
 // two must be identical, so every root address names exactly the internal route
 // the shared-host link contract already validates, and none keeps the prefix.
 func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
-	unprefix := strings.NewReplacer(`="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
+	stripPrefix := strings.NewReplacer(`="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
 	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
 			shared, err := renderedLinkPagesFor(name, pages(internalRoot), &browser{})
@@ -43,7 +41,7 @@ func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
 					t.Fatalf("%s keeps the internal prefix: %s", root[i].uri, m)
 				}
 				got := freshKey.ReplaceAllString(root[i].markup, `${1}"`)
-				if want := freshKey.ReplaceAllString(unprefix.Replace(shared[i].markup), `${1}"`); got != want {
+				if want := freshKey.ReplaceAllString(stripPrefix.Replace(shared[i].markup), `${1}"`); got != want {
 					at := 0
 					for at < len(want) && at < len(got) && want[at] == got[at] {
 						at++
@@ -62,22 +60,7 @@ func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
 // itself is never reachable a second time.
 func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	b := newBrowserFixture(t)
-	site, err := url.Parse(b.site.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.callbackPath = "/callback"
-	h, err := b.svc.Browser(b.callbackURL(), "synthetic-client-secret")
-	if err != nil {
-		t.Fatal(err)
-	}
-	public, err := webapp.Load(fstest.MapFS{"index.html": {Data: []byte("English public site")}, "da/index.html": {Data: []byte("Dansk public site")}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.mu.Lock()
-	b.handler = public.HostHandler(h, webapp.Hosts{Public: "public.example.invalid", Portal: site.Hostname()})
-	b.mu.Unlock()
+	h := b.atRoot()
 
 	status, body, _ := b.request("GET", "/sign-in?lang=da", nil, "")
 	if status != 200 || !strings.Contains(body, `action="/sign-in"`) || prefixedLink.MatchString(body) {
@@ -112,7 +95,6 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	// The router never hands an old address to the portal, and the portal itself
 	// maps any address it is given onto its root, so "/portal/…" is never served twice.
 	r, _ := http.NewRequest("GET", b.site.URL+"/portal/sign-in", nil)
-	r.Host = site.Host
 	if w := recordedStatus(h, r); w != http.StatusNotFound {
 		t.Fatalf("portal served its internal mount directly: %d", w)
 	}
@@ -121,32 +103,6 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	if status != http.StatusSeeOther || header.Get("Location") != "/sign-in?lang=da" {
 		t.Fatalf("logout status=%d location=%q; want 303 /sign-in?lang=da", status, header.Get("Location"))
 	}
-}
-
-// authorize follows the synthetic broker's authorization redirect, as start does,
-// and returns the portal address it sends the browser back to.
-func (b *browserFixture) authorize(address string) string {
-	b.t.Helper()
-	req, err := http.NewRequestWithContext(b.t.Context(), "GET", address, nil)
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	client := b.broker.Client()
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	res, err := client.Do(req)
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusSeeOther {
-		body, _ := io.ReadAll(res.Body)
-		b.t.Fatalf("broker rejected the authorization request: %d %s", res.StatusCode, body)
-	}
-	u, err := url.Parse(res.Header.Get("Location"))
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	return u.RequestURI()
 }
 
 func recordedStatus(h http.Handler, r *http.Request) int {
@@ -161,22 +117,7 @@ func recordedStatus(h http.Handler, r *http.Request) int {
 func TestStripeWebhookAtTheRoot(t *testing.T) {
 	b, _ := cardOrderFixture(t, 299500, 0)
 	cardFlags(t, b, true)
-	site, err := url.Parse(b.site.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.callbackPath = "/callback"
-	h, err := b.svc.Browser(b.callbackURL(), "synthetic-client-secret")
-	if err != nil {
-		t.Fatal(err)
-	}
-	public, err := webapp.Load(fstest.MapFS{"index.html": {Data: []byte("English public site")}, "da/index.html": {Data: []byte("Dansk public site")}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.mu.Lock()
-	b.handler = public.HostHandler(h, webapp.Hosts{Public: "public.example.invalid", Portal: site.Hostname()})
-	b.mu.Unlock()
+	b.atRoot()
 	event := map[string]any{"id": "cs_unknown", "mode": "payment", "payment_status": "paid", "amount_total": 299500, "currency": "dkk"}
 	for _, path := range []string{"/stripe/webhook"} {
 		if status := sendEventTo(t, b, path, "evt_forged", "checkout.session.completed", event, "whsec_other"); status != http.StatusBadRequest {
@@ -189,4 +130,20 @@ func TestStripeWebhookAtTheRoot(t *testing.T) {
 	if status := sendEventTo(t, b, "/portal/stripe/webhook", "evt_old", "checkout.session.completed", event, webhookSecret); status != http.StatusMethodNotAllowed {
 		t.Fatalf("old webhook address status=%d; want 405", status)
 	}
+}
+
+// atRoot moves the fixture's portal to the root of its own host, behind the real
+// two-host router, and returns the portal handler itself.
+func (b *browserFixture) atRoot() http.Handler {
+	b.t.Helper()
+	site, err := url.Parse(b.site.URL)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	b.callbackPath = "/callback"
+	h := portalHandler(b.t, b.svc, b.callbackURL())
+	b.mu.Lock()
+	b.handler = fixturePublic(b.t).HostHandler(h, webapp.Hosts{Public: "public.example.invalid", Portal: site.Hostname()})
+	b.mu.Unlock()
+	return h
 }

@@ -44,12 +44,8 @@ func workRenderFixture(view string) (workReviewData, bool) {
 	return d, selected
 }
 
-// renderedWorkLinkPages exercises both languages of each explicit work state
+// renderedWorkLinkPagesFor exercises both languages of each explicit work state
 // through the actual template set for method-aware route and asset validation.
-func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
-	return renderedWorkLinkPagesFor(templates, &browser{})
-}
-
 func renderedWorkLinkPagesFor(templates *template.Template, b *browser) ([]linkPage, error) {
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {
