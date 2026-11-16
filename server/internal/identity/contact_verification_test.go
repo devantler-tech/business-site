@@ -240,7 +240,7 @@ func TestContactVerificationPurposeConsumersAreIndependent(t *testing.T) {
 func TestContactVerificationOrdinaryLoginNeverConfirmsAddress(t *testing.T) {
 	b := savedVerificationContact(t)
 	b.configure(map[string]any{"email": "a@example.invalid", "email_verified": true}, false)
-	b.finish(b.start(""))
+	b.finish(b.start())
 	assertContactUnconfirmed(t, b)
 }
 
@@ -479,7 +479,7 @@ func savedVerificationContact(t *testing.T) *browserFixture {
 	t.Helper()
 	b := newBrowserFixture(t)
 	b.client.Timeout = 10 * time.Second
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	contactVerificationFlags(t, b, true)
 	status, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Fictional Client", "a@example.invalid", ""), b.site.URL)
 	if status != http.StatusSeeOther {

@@ -68,8 +68,8 @@ func completeJourneyReport(runs []journeyRun, expected int) (journeyReport, erro
 }
 
 type journeyActor struct {
-	id, lang, name, email, invitation string
-	client                            *http.Client
+	id, lang, name, email string
+	client                *http.Client
 }
 
 // journeyActors gives each fictional identity its own invitation and cookie jar
@@ -87,7 +87,7 @@ func journeyActors(f *browserFixture) []journeyActor {
 		if a.id == "operator" {
 			role = "operator"
 		}
-		a.invitation = f.invite(a.id, a.id, role)
+		f.invite(a.id, a.id, role)
 	}
 	return actors
 }
@@ -122,9 +122,8 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 		f.subject = a.id
 		f.mu.Unlock()
 		started := time.Now()
-		f.finish(f.start(a.invitation))
+		f.finish(f.start())
 		run.SignInNS = append(run.SignInNS, time.Since(started).Nanoseconds())
-		a.invitation = "" // Existing membership signs in without re-enrollment.
 		request := func(phase, method, path string, form url.Values, want int) (string, http.Header) {
 			f.t.Helper()
 			origin := ""
@@ -202,8 +201,7 @@ func assertIndependentJourneyActors(f *browserFixture, actors []journeyActor) {
 		f.mu.Lock()
 		f.subject = a.id
 		f.mu.Unlock()
-		f.finish(f.start(a.invitation))
-		a.invitation = ""
+		f.finish(f.start())
 	}
 	workspace := func(a journeyActor) string {
 		t.Helper()

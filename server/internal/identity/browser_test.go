@@ -136,10 +136,14 @@ func TestBrowserSignInPage(t *testing.T) {
 		if res.StatusCode != http.StatusOK {
 			t.Fatalf("sign-in page status=%d want 200; body=%s", res.StatusCode, body)
 		}
-		for _, want := range []string{`lang="` + language + `"`, `name="csrf_token"`, `method="post"`, `name="invitation"`} {
+		for _, want := range []string{`lang="` + language + `"`, `name="csrf_token"`, `method="post"`} {
 			if !strings.Contains(string(body), want) {
 				t.Errorf("sign-in page missing %s", want)
 			}
+		}
+		// The invitation is bound to the identity; there is no code to type.
+		if strings.Contains(string(body), `name="invitation"`) {
+			t.Error("sign-in page still asks for an invitation code")
 		}
 		if res.Header.Get("Cache-Control") != "no-store" {
 			t.Error("identity page may be cached")

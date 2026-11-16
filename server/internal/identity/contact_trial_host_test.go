@@ -298,7 +298,7 @@ func contactTrialHostProcess(t *testing.T) {
 	f.mu.Lock()
 	f.subject = "client-a"
 	f.mu.Unlock()
-	f.finish(f.start(""))
+	f.finish(f.start())
 	_, before, _ := f.request("GET", "/portal/contact", nil, "")
 	_, revision := journeyForm(f, before)
 	stop()

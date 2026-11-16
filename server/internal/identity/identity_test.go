@@ -250,25 +250,24 @@ func setFlag(t testing.TB, api *openfeature.EvaluationAPI, value any) {
 
 func enroll(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Principal {
 	t.Helper()
-	inv, a := invitedAttempt(t, svc, f, subject, client, role)
-	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil), inv)
+	a := invitedAttempt(t, svc, f, subject, client, role)
+	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
 }
 
-func invitedAttempt(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) (string, Attempt) {
+func invitedAttempt(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Attempt {
 	t.Helper()
-	inv, err := svc.Invite(f.ctx, Invitation{f.issuer, subject, client, role, time.Now().Add(time.Hour)})
-	if err != nil {
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, subject, client, role, time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	a, err := svc.Begin(f.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return inv, a
+	return a
 }
 
 func TestDurableInvitationAndAuthorization(t *testing.T) {
@@ -335,11 +334,11 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
-	inv, a := invitedAttempt(t, svc, f, "atomic", "client-atomic", "client")
+	a := invitedAttempt(t, svc, f, "atomic", "client-atomic", "client")
 	if a.State == a.BrowserBinding || a.State == a.Nonce || a.PKCEVerifier == "" {
 		t.Fatal("attempt secrets are missing or reused")
 	}
-	if _, err := svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, nil), inv); err == nil {
+	if _, err := svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, nil)); err == nil {
 		t.Fatal("wrong browser accepted")
 	}
 	var successes atomic.Int32
@@ -347,7 +346,7 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 	atomicRaw := f.token(t, "atomic", a.Nonce, nil)
 	for range 12 {
 		wg.Go(func() {
-			if _, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, atomicRaw, inv); err == nil {
+			if _, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, atomicRaw); err == nil {
 				successes.Add(1)
 			} else if !errors.Is(err, ErrDenied) {
 				t.Errorf("unexpected concurrent error: %v", err)
@@ -358,9 +357,10 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 	if successes.Load() != 1 {
 		t.Fatalf("callback successful consumers=%d want 1", successes.Load())
 	}
-	// Independent valid login attempts race for the same invitation.
-	inv, err := svc.Invite(f.ctx, Invitation{f.issuer, "invite-race", "client-race", "client", time.Now().Add(time.Hour)})
-	if err != nil {
+	// Independent valid sign-ins of the invited identity race for its invitation:
+	// it is consumed once and creates exactly one membership. Later sign-ins of
+	// that member then succeed as ordinary members.
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "invite-race", "client-race", "client", time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	successes.Store(0)
@@ -371,7 +371,7 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 		}
 		raw := f.token(t, "invite-race", attempt.Nonce, nil)
 		wg.Go(func() {
-			if _, err := svc.Complete(f.ctx, attempt.State, attempt.BrowserBinding, raw, inv); err == nil {
+			if _, err := svc.Complete(f.ctx, attempt.State, attempt.BrowserBinding, raw); err == nil {
 				successes.Add(1)
 			} else if !errors.Is(err, ErrDenied) {
 				t.Errorf("unexpected invitation error: %v", err)
@@ -379,8 +379,12 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if successes.Load() != 1 {
-		t.Fatalf("invitation successful consumers=%d want 1", successes.Load())
+	var memberships, pending int
+	if err := pool.QueryRow(f.ctx, "SELECT (SELECT count(*) FROM portal_memberships WHERE subject='invite-race'), (SELECT count(*) FROM portal_invitations WHERE subject='invite-race')").Scan(&memberships, &pending); err != nil {
+		t.Fatal(err)
+	}
+	if successes.Load() < 1 || memberships != 1 || pending != 0 {
+		t.Fatalf("invitation race: successes=%d memberships=%d pending=%d, want >=1, 1, 0", successes.Load(), memberships, pending)
 	}
 }
 
@@ -388,12 +392,22 @@ func TestRejectedAttemptsAndInvitationBindings(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
-	for _, kind := range []string{"wrong subject", "expired invitation", "revoked invitation", "expired attempt", "wrong nonce", "used attempt", "existing identity"} {
+	for _, kind := range []string{"wrong subject", "expired invitation", "revoked invitation", "expired attempt", "wrong nonce", "used attempt", "revoked member"} {
 		t.Run(kind, func(t *testing.T) {
 			sub := "subject-" + kind
 			expires := time.Now().Add(time.Hour)
-			inv, err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-a", "client", expires})
-			if err != nil {
+			if kind == "revoked member" {
+				// A revoked identity cannot be re-invited, and even a leftover
+				// invitation cannot revive its membership.
+				_ = enroll(t, svc, f, sub, "client-b", "client")
+				if err := svc.Revoke(f.ctx, f.issuer, sub); err != nil {
+					t.Fatal(err)
+				}
+				if err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-a", "client", expires}); !errors.Is(err, ErrDenied) {
+					t.Fatalf("a revoked member was re-invited: %v", err)
+				}
+				leftoverInvitation(t, pool, f, sub, "client-a")
+			} else if err := svc.Invite(f.ctx, Invitation{f.issuer, sub, "client-a", "client", expires}); err != nil {
 				t.Fatal(err)
 			}
 			a, err := svc.Begin(f.ctx)
@@ -420,19 +434,129 @@ func TestRejectedAttemptsAndInvitationBindings(t *testing.T) {
 			if kind == "wrong subject" {
 				tokenSub = "attacker"
 			}
-			if kind == "existing identity" {
-				_ = enroll(t, svc, f, sub, "client-b", "client")
-			}
 			raw := f.token(t, tokenSub, nonce, nil)
 			if kind == "used attempt" {
-				if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, raw, inv); err != nil {
+				if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, raw); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, raw, inv); !errors.Is(err, ErrDenied) {
+			if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, raw); !errors.Is(err, ErrDenied) {
 				t.Fatalf("%s not denied: %v", kind, err)
 			}
+			// A refused sign-in never consumes the invitation for another identity.
+			if kind == "wrong subject" || kind == "wrong nonce" || kind == "expired attempt" || kind == "revoked member" {
+				var pending int
+				if err = pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_invitations WHERE subject=$1", sub).Scan(&pending); err != nil || pending != 1 {
+					t.Fatalf("%s consumed the invitation (pending=%d, %v)", kind, pending, err)
+				}
+			}
 		})
+	}
+}
+
+// leftoverInvitation writes a pending invitation directly, as one created before
+// Invite refused members or a second invitation would be, to test sign-in alone.
+func leftoverInvitation(t *testing.T, pool *pgxpool.Pool, f brokerFixture, subject, client string) {
+	t.Helper()
+	if _, err := pool.Exec(f.ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at) VALUES($1,$2,$3,$4,'client',now()+interval '1 hour')`, digest(secret()), f.issuer, subject, client); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Inviting an existing member is refused. A current member signs straight in,
+// even with a leftover pending invitation, and gains nothing from it: the
+// invitation stays unused and its client is not added.
+func TestExistingMemberIgnoresAnotherInvitation(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	_ = enroll(t, svc, f, "member", "client-b", "client")
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "member", "client-a", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("an existing member was invited again: %v", err)
+	}
+	leftoverInvitation(t, pool, f, "member", "client-a")
+	a, err := svc.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, "member", a.Nonce, nil))
+	if err != nil {
+		t.Fatalf("existing member could not sign in: %v", err)
+	}
+	if err = svc.Authorize(f.ctx, p, "client-b", false); err != nil {
+		t.Fatal("existing member lost its own client")
+	}
+	if err = svc.Authorize(f.ctx, p, "client-a", false); !errors.Is(err, ErrDenied) {
+		t.Fatal("existing member gained the invited client")
+	}
+	var pending int
+	if err = pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_invitations WHERE subject='member'").Scan(&pending); err != nil || pending != 1 {
+		t.Fatalf("member sign-in consumed another invitation (pending=%d)", pending)
+	}
+}
+
+// One identity gets one pending invitation; sign-in never chooses between two.
+func TestOnePendingInvitationPerIdentity(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	expires := time.Now().Add(time.Hour)
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-a", "client", expires}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-b", "client", expires}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("a second pending invitation was created: %v", err)
+	}
+	// Concurrent invitations of one identity serialize: exactly one is created.
+	var created atomic.Int32
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			if err := svc.Invite(f.ctx, Invitation{f.issuer, "concurrent", "client-a", "client", expires}); err == nil {
+				created.Add(1)
+			} else if !errors.Is(err, ErrDenied) {
+				t.Errorf("unexpected invitation error: %v", err)
+			}
+		})
+	}
+	wg.Wait()
+	var concurrent int
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_invitations WHERE subject='concurrent'").Scan(&concurrent); err != nil || created.Load() != 1 || concurrent != 1 {
+		t.Fatalf("concurrent invitations: created=%d stored=%d, want 1 and 1", created.Load(), concurrent)
+	}
+	// A second pending invitation that exists anyway is refused, not chosen.
+	leftoverInvitation(t, pool, f, "twice", "client-b")
+	if _, err := signIn(t, svc, f, "twice"); !errors.Is(err, ErrDenied) {
+		t.Fatalf("sign-in chose between two pending invitations: %v", err)
+	}
+	var pending, memberships int
+	if err := pool.QueryRow(f.ctx, "SELECT (SELECT count(*) FROM portal_invitations WHERE subject='twice'), (SELECT count(*) FROM portal_memberships WHERE subject='twice')").Scan(&pending, &memberships); err != nil || pending != 2 || memberships != 0 {
+		t.Fatalf("refused sign-in changed invitations or memberships: pending=%d memberships=%d", pending, memberships)
+	}
+	// After an invitation expires, the identity can be invited again.
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(f.ctx, "UPDATE portal_invitations SET expires_at=now()-interval '1 minute' WHERE subject='expired-once'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
+		t.Fatalf("an expired invitation blocked a new one: %v", err)
+	}
+}
+
+// An identity with neither membership nor invitation is refused after a valid
+// authentication: the portal is invitation-only.
+func TestUninvitedIdentityIsRefused(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	if _, err := signIn(t, svc, f, "stranger"); !errors.Is(err, ErrDenied) {
+		t.Fatalf("uninvited identity was not refused: %v", err)
+	}
+	var memberships int
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='stranger'").Scan(&memberships); err != nil || memberships != 0 {
+		t.Fatal("uninvited identity gained a membership")
 	}
 }
 
@@ -441,10 +565,10 @@ func TestDisabledAndIncompleteConfiguration(t *testing.T) {
 		if _, err := svc.Begin(context.Background()); !errors.Is(err, ErrDenied) {
 			t.Fatal("disabled begin accepted")
 		}
-		if _, err := svc.Invite(context.Background(), Invitation{}); !errors.Is(err, ErrDenied) {
+		if err := svc.Invite(context.Background(), Invitation{}); !errors.Is(err, ErrDenied) {
 			t.Fatal("disabled invite accepted")
 		}
-		if _, err := svc.Complete(context.Background(), "", "", "", ""); !errors.Is(err, ErrDenied) {
+		if _, err := svc.Complete(context.Background(), "", "", ""); !errors.Is(err, ErrDenied) {
 			t.Fatal("disabled completion accepted")
 		}
 		if err := svc.Authorize(context.Background(), Principal{}, "client", false); !errors.Is(err, ErrDenied) {
@@ -465,10 +589,10 @@ func TestOpenFeatureGateDefaultsOffAndIsReevaluated(t *testing.T) {
 			if _, err := svc.Begin(f.ctx); !errors.Is(err, ErrDenied) {
 				t.Fatal("closed flag allowed begin")
 			}
-			if _, err := svc.Invite(f.ctx, Invitation{f.issuer, "account-b", "client-b", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
+			if err := svc.Invite(f.ctx, Invitation{f.issuer, "account-b", "client-b", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
 				t.Fatal("closed flag allowed invitation")
 			}
-			if _, err := svc.Complete(f.ctx, "state", "browser", "token", ""); !errors.Is(err, ErrDenied) {
+			if _, err := svc.Complete(f.ctx, "state", "browser", "token"); !errors.Is(err, ErrDenied) {
 				t.Fatal("closed flag allowed completion")
 			}
 			if err := svc.Authorize(f.ctx, p, "client-a", false); !errors.Is(err, ErrDenied) {
@@ -487,4 +611,14 @@ func TestOpenFeatureGateDefaultsOffAndIsReevaluated(t *testing.T) {
 	if _, err := svc.Begin(f.ctx); !errors.Is(err, ErrDenied) {
 		t.Fatal("missing client allowed begin")
 	}
+}
+
+// signIn runs one complete sign-in attempt for subject through the real store.
+func signIn(t *testing.T, svc *Foundation, f brokerFixture, subject string) (Principal, error) {
+	t.Helper()
+	a, err := svc.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil))
 }

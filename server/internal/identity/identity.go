@@ -159,28 +159,65 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 // Invite is a CONTROL-PLANE provisioning operation, not a client-facing handler.
 // Its caller must be a trusted provisioning process. A future network invitation
 // API requires independent operator authentication, authorization and CSRF checks.
-func (s *Foundation) Invite(ctx context.Context, i Invitation) (string, error) {
+// The invitation is bound to one exact issuer/subject; that identity accepts it
+// by signing in before it expires. Nothing secret is handed to the customer: the
+// row key is a random digest that is never shown.
+func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
-		return "", ErrDenied
+		return ErrDenied
 	}
-	token := secret()
-	_, err := s.pool.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at) VALUES($1,$2,$3,$4,$5,$6)`, digest(token), i.Issuer, i.Subject, i.ClientID, i.Role, i.Expires)
+	// One identity has at most one pending invitation and none once it has any
+	// membership, current or revoked, so sign-in never has to choose between them.
+	// The identity's lock serializes concurrent invitations and first sign-ins.
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return "", fmt.Errorf("persist invitation: %w", err)
+		return fmt.Errorf("begin invitation: %w", err)
 	}
-	return token, nil
+	defer func() {
+		// Commit decides success; a committed transaction is already closed.
+		_ = tx.Rollback(ctx)
+	}()
+	if err = lockIdentity(ctx, tx, i.Issuer, i.Subject); err != nil {
+		return err
+	}
+	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
+ SELECT $1,$2,$3,$4,$5,$6
+ WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now())
+ AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$2 AND subject=$3)`, digest(secret()), i.Issuer, i.Subject, i.ClientID, i.Role, i.Expires)
+	if err != nil {
+		return fmt.Errorf("persist invitation: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit invitation: %w", err)
+	}
+	return nil
+}
+
+// identityLock namespaces the per-identity invitation lock among the portal locks.
+const identityLock = 1869820524
+
+// lockIdentity takes this transaction's lock on one issuer/subject. Neither
+// contains a space, so the joined key is unambiguous.
+func lockIdentity(ctx context.Context, tx pgx.Tx, issuer, subject string) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int,hashtext($2 || ' ' || $3))`, identityLock, issuer, subject); err != nil {
+		return fmt.Errorf("lock identity: %w", err)
+	}
+	return nil
 }
 
 // Complete is a server-side identity boundary, NOT a browser callback endpoint.
 // raw must come from the future handler's verified code exchange, never directly
 // from an untrusted request. That handler still owes PKCE, redirect and CSRF proof.
 // Consumption happens in PostgreSQL, so another process cannot replay the attempt.
-func (s *Foundation) Complete(ctx context.Context, state, browser, raw, invitation string) (Principal, error) {
+func (s *Foundation) Complete(ctx context.Context, state, browser, raw string) (Principal, error) {
 	nonce, _, err := s.consumeAttempt(ctx, state, browser)
 	if err != nil {
 		return Principal{}, err
 	}
-	return s.completeProof(ctx, nonce, raw, invitation)
+	return s.completeProof(ctx, nonce, raw)
 }
 
 // consumeAttempt is the sole atomic consumer, before any browser code exchange.
@@ -200,7 +237,7 @@ func (s *Foundation) consumeAttempt(ctx context.Context, state, browser string) 
 	return nonce, verifier, nil
 }
 
-func (s *Foundation) completeProof(ctx context.Context, nonce, raw, invitation string) (Principal, error) {
+func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Principal, error) {
 	if !s.ready(ctx) {
 		return Principal{}, ErrDenied
 	}
@@ -208,18 +245,26 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw, invitation s
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	if invitation != "" {
-		if err = s.redeem(ctx, p, invitation); err != nil {
+	// A current member signs straight in. An identity without membership accepts
+	// its own pending invitation, which was bound to this exact issuer/subject
+	// when it was created; anyone else has nothing to accept and is refused.
+	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
+		if err = s.redeem(ctx, p); err != nil {
 			return Principal{}, err
 		}
+		_, _, err = s.membership(ctx, p)
 	}
-	if _, _, err = s.membership(ctx, p); err != nil {
+	if err != nil {
 		return Principal{}, err
 	}
 	return p, nil
 }
 
-func (s *Foundation) redeem(ctx context.Context, p Principal, token string) error {
+// redeem consumes the one pending invitation bound to this exact identity and
+// creates its membership in the same transaction. None, or more than one (which
+// Invite prevents), is refused rather than chosen between; a refusal rolls back.
+// Concurrent first sign-ins serialize on the deleted rows, so only one redeems.
+func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin invitation: %w", err)
@@ -229,13 +274,28 @@ func (s *Foundation) redeem(ctx context.Context, p Principal, token string) erro
 		// pgx discards a failed rollback's connection and returns it to the pool.
 		_ = tx.Rollback(ctx)
 	}()
-	var client, role string
-	err = tx.QueryRow(ctx, `DELETE FROM portal_invitations WHERE token_digest=$1 AND issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, digest(token), p.issuer, p.subject).Scan(&client, &role)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrDenied
+	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
+		return err
 	}
+	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, p.issuer, p.subject)
 	if err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
+	}
+	var client, role string
+	pending := 0
+	for rows.Next() {
+		if err = rows.Scan(&client, &role); err != nil {
+			rows.Close()
+			return fmt.Errorf("consume invitation: %w", err)
+		}
+		pending++
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("consume invitation: %w", err)
+	}
+	if pending != 1 {
+		return ErrDenied
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.
 	// No email matching, implicit account linking or entitlement transfer occurs.

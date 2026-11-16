@@ -314,7 +314,7 @@ func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 // begin rotates any prior session and binds one durable PKCE/nonce/state attempt
 // before redirecting to the sole configured broker.
 func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil || len(r.PostForm["invitation"]) > 1 || len(r.PostForm.Get("invitation")) > 256 {
+	if err := r.ParseForm(); err != nil {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
@@ -333,7 +333,6 @@ func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.sessions.Put(r.Context(), "browser", a.BrowserBinding)
-	b.sessions.Put(r.Context(), "invitation", r.PostForm.Get("invitation"))
 	lang := "en"
 	if r.PostForm.Get("lang") == "da" {
 		lang = "da"
@@ -409,7 +408,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	if contactFlow {
 		p, err = b.foundation.confirmContact(ctx, b.principal(r.Context()), binding, raw, nonce)
 	} else {
-		p, err = b.foundation.completeProof(ctx, nonce, raw, b.sessions.GetString(r.Context(), "invitation"))
+		p, err = b.foundation.completeProof(ctx, nonce, raw)
 	}
 	if err != nil {
 		if contactFlow {
@@ -495,11 +494,11 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type pageData struct {
-	BrokerURL                                                                                                                                              string
-	LanguageURL                                                                                                                                            string
-	Lang, Kind, Client, CSRF, Title, Intro, Invitation, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
-	RequestsEnabled                                                                                                                                        bool
-	TriageEnabled                                                                                                                                          bool
+	BrokerURL                                                                                                                                  string
+	LanguageURL                                                                                                                                string
+	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
+	RequestsEnabled                                                                                                                            bool
+	TriageEnabled                                                                                                                              bool
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
@@ -512,7 +511,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
-	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Invitation: "Invitation code (first sign-in only)", Action: "Continue to sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. Try again, or contact Devantler Tech if you need an invitation.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
 	other, path := "da", r.URL.Path
 	if d.Lang == "da" {
 		other = "en"
@@ -533,11 +532,10 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if d.Lang == "da" {
 		d.Title = "Din kundeportal"
 		d.Intro = "Et privat sted for dit samarbejde med Devantler Tech."
-		d.Invitation = "Invitationskode (kun ved første login)"
-		d.Action = "Fortsæt til login"
+		d.Action = "Log ind"
 		d.SignedIn = "Du er logget ind"
 		d.Logout = "Log ud"
-		d.Error = "Login kunne ikke gennemføres. Prøv igen, eller kontakt Devantler Tech, hvis du mangler en invitation."
+		d.Error = "Login kunne ikke gennemføres. Portalen kræver en invitation: prøv igen med kontoen fra din invitation, eller kontakt Devantler Tech."
 		d.Unavailable = "Portalen er ikke tilgængelig. Prøv igen senere."
 		d.Back = "Tilbage til hjemmesiden"
 		d.Theme = "Udseende"

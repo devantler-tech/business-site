@@ -21,20 +21,21 @@ var ErrInviteActivation = errors.New("portal invitation requires enabled product
 // run inside the web pod with the web process's own configuration and
 // restricted login. It requires complete dependencies and the enabled
 // production identity profile, binds the invitation to the configured broker
-// issuer and returns only the one-time code. It serves and logs nothing.
-func Invite(ctx context.Context, subject, client, role string, lifetime time.Duration) (string, error) {
+// issuer and subject, and hands out no code: that identity accepts it by signing in.
+// It serves and logs nothing.
+func Invite(ctx context.Context, subject, client, role string, lifetime time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	cfg, err := ReadConfig(os.Getenv)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if cfg == (Config{}) || os.Getenv("PORTAL_IDENTITY_PROFILE") != "production" {
-		return "", ErrInviteActivation
+		return ErrInviteActivation
 	}
 	provider, err := IdentityProvider(ctx, cfg)
 	if err != nil {
-		return "", err
+		return err
 	}
 	api := isolated.NewAPI()
 	defer func() {
@@ -42,24 +43,23 @@ func Invite(ctx context.Context, subject, client, role string, lifetime time.Dur
 		_ = api.Shutdown(context.Background())
 	}()
 	if err := api.SetProviderAndWait(ctx, provider); err != nil {
-		return "", ErrInviteActivation
+		return ErrInviteActivation
 	}
 	flags := api.NewClient()
 	// Foundation.Invite rechecks this gate; checking first avoids connecting
 	// to the store or broker while sign-in is switched off.
 	if enabled, err := flags.BooleanValue(ctx, "portal-identity", false, openfeature.NewEvaluationContext("", nil)); err != nil || !enabled {
-		return "", ErrInviteActivation
+		return ErrInviteActivation
 	}
 	pool, broker, err := connectPortal(ctx, cfg)
 	if err != nil {
-		return "", ErrConfig
+		return ErrConfig
 	}
 	defer pool.Close()
-	token, err := identity.New(pool, broker, flags).Invite(ctx, identity.Invitation{
+	if err := identity.New(pool, broker, flags).Invite(ctx, identity.Invitation{
 		Issuer: cfg.issuer, Subject: subject, ClientID: client, Role: role, Expires: time.Now().Add(lifetime),
-	})
-	if err != nil {
-		return "", ErrInvite
+	}); err != nil {
+		return ErrInvite
 	}
-	return token, nil
+	return nil
 }

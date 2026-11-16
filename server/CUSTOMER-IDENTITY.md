@@ -300,11 +300,16 @@ profile and an enabled flag (see [the settings file](../deploy/README.md#portal-
    `--invite-role` is `client` or `operator` and `--invite-days` is 1–7. The
    command computes the customer Dex subject for that user through the
    `customer-zitadel` connector, binds the invitation to the configured Dex
-   issuer and prints only `portal invitation code: <code>`. Missing settings,
-   sign-in switched off or any mixed option is refused with a fixed message.
-3. Send the code to the customer through an approved private channel. On first
-   sign-in at `https://portal.devantler.tech` they enter it once; it is
-   consumed with their first successful sign-in and grants no other identity.
+   issuer and prints only `portal invitation created: that user accepts it by
+   signing in`. There is no code to pass on. Missing settings, sign-in switched
+   off or any mixed option is refused with a fixed message.
+3. Tell the customer to finish ZITADEL's invitation email (it sets their
+   password and MFA) and sign in at `https://portal.devantler.tech` within the
+   invitation's lifetime. Their first successful sign-in as that exact Dex
+   issuer/subject accepts it and creates the membership. Any other identity has
+   nothing to accept and is refused: the portal is invitation-only. A current
+   member signs straight in and never gains another invitation's workspace, and
+   a revoked member cannot be revived by a new invitation.
 
 ## Validation and remaining proof
 

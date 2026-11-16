@@ -21,7 +21,7 @@ func contactForm(token, revision, name, email, company string) url.Values {
 // and verifies that a saved, unverified address never grants operator access.
 func TestContactProfilePersistsWithoutGrantingAuthority(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token := b.csrf("/portal/contact?lang=en")
 	s, _, h := b.request("POST", "/portal/contact", contactForm(token, "0", "A Client", "a@example.invalid", ""), b.site.URL)
 	if s != 303 || h.Get("Location") != "/portal/contact?lang=en" {
@@ -57,7 +57,7 @@ func independentContactClient(t *testing.T, b *browserFixture, subject string) h
 	b.mu.Lock()
 	b.subject = subject
 	b.mu.Unlock()
-	b.finish(b.start(b.invite(subject, subject, "client")))
+	b.finish(b.startInvited(subject, subject, "client"))
 	return client
 }
 
@@ -65,7 +65,7 @@ func independentContactClient(t *testing.T, b *browserFixture, subject string) h
 // and rejects browser-selected record IDs and roles without changing either record.
 func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	a := b.client
 	token := b.csrf("/portal/contact")
 	s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Alice Fictional", "a@example.invalid", ""), b.site.URL)
@@ -106,7 +106,7 @@ func TestContactTwoClientsCannotSelectAnotherRecord(t *testing.T) {
 // cross-origin forms through the actual secured handler without storing a row.
 func TestContactInvalidFormsNeverSave(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, kind := range []string{"empty name", "long name", "control name", "invalid email", "display-name email", "control email", "long company", "duplicate name", "unknown field", "negative revision", "malformed revision", "oversized body", "missing csrf", "wrong csrf", "cross origin", "absent metadata"} {
 		t.Run(kind, func(t *testing.T) {
 			token := b.csrf("/portal/contact")
@@ -176,7 +176,7 @@ func TestContactInvalidEditRecovers(t *testing.T) {
 	for _, kind := range []string{"invalid email", "long name", "control name", "long company", "duplicate name", "unknown field", "invalid revision"} {
 		t.Run(kind, func(t *testing.T) {
 			b := newBrowserFixture(t)
-			b.finish(b.start(b.invite("client-a", "client-a", "client")))
+			b.finish(b.startInvited("client-a", "client-a", "client"))
 			token := b.csrf("/portal/contact")
 			s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Stored", "stored@example.invalid", "Stored Company"), b.site.URL)
 			if s != 303 {
@@ -230,7 +230,7 @@ func TestContactInvalidEditRecovers(t *testing.T) {
 // blessing stale draft text with a newer revision and overwriting another edit.
 func TestContactInvalidStaleEditDoesNotRebase(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token := b.csrf("/portal/contact")
 	s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Original", "original@example.invalid", ""), b.site.URL)
 	if s != 303 {
@@ -261,7 +261,7 @@ func TestContactInvalidStaleEditDoesNotRebase(t *testing.T) {
 // actual form layout while keeping client-only navigation out of operator pages.
 func TestContactWorkspaceNavigation(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, lang := range []string{"en", "da"} {
 		s, body, _ := b.request("GET", "/portal/?lang="+lang, nil, "")
 		if s != 200 || !strings.Contains(body, `href="/portal/contact?lang=`+lang+`"`) {
@@ -275,7 +275,7 @@ func TestContactWorkspaceNavigation(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("operator", "operator-client", "operator")))
+	b.finish(b.startInvited("operator", "operator-client", "operator"))
 	_, body, _ := b.request("GET", "/portal/", nil, "")
 	if strings.Contains(body, `href="/portal/contact`) {
 		t.Fatal("operator workspace offers a client-only profile")
@@ -293,7 +293,7 @@ func TestContactAnonymousAndExpiredSessionsDeny(t *testing.T) {
 			t.Fatalf("anonymous %s=%d", method, s)
 		}
 	}
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token = b.csrf("/portal/contact")
 	if _, err := b.pool.Exec(b.f.ctx, "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"); err != nil {
 		t.Fatal(err)
@@ -314,7 +314,7 @@ func TestContactAnonymousAndExpiredSessionsDeny(t *testing.T) {
 // one expected database revision and requires exactly one accepted update.
 func TestContactRevisionPreventsConcurrentLostUpdate(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token := b.csrf("/portal/contact")
 	s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", "Original", "a@example.invalid", ""), b.site.URL)
 	if s != 303 {
@@ -370,7 +370,7 @@ func TestContactRevisionPreventsConcurrentLostUpdate(t *testing.T) {
 // client-only access and false/error/type-mismatched feature-flag boundaries.
 func TestContactRevocationOperatorAndClosedFlagsDeny(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token := b.csrf("/portal/contact")
 	if err := b.svc.Revoke(b.f.ctx, b.f.issuer, "client-a"); err != nil {
 		t.Fatal(err)
@@ -382,7 +382,7 @@ func TestContactRevocationOperatorAndClosedFlagsDeny(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("operator", "operator-client", "operator")))
+	b.finish(b.startInvited("operator", "operator-client", "operator"))
 	s, _, _ = b.request("GET", "/portal/contact", nil, "")
 	if s != 403 {
 		t.Fatalf("operator used client profile=%d", s)
@@ -402,7 +402,7 @@ func TestContactRevocationOperatorAndClosedFlagsDeny(t *testing.T) {
 // escaped data and keeps the unverified-email disclosure in both languages.
 func TestContactEscapesPrivateDisplayDataAndLocalizes(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	token := b.csrf("/portal/contact")
 	s, _, _ := b.request("POST", "/portal/contact", contactForm(token, "0", `<script>alert("x")</script>`, "a@example.invalid", `<img src=x onerror=alert(1)>`), b.site.URL)
 	if s != 303 {

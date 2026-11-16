@@ -24,7 +24,7 @@ func TestStagingProviderBrowserSessionAndRevocation(t *testing.T) {
 	if err := b.flags.SetProviderAndWait(lifetime, provider); err != nil {
 		t.Fatal("staging provider initialization failed")
 	}
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	if status, _, _ := b.request(http.MethodGet, "/portal/", nil, ""); status != http.StatusOK {
 		t.Fatal("staging provider did not admit the actual invited browser session")
 	}
@@ -64,7 +64,7 @@ func TestProductionProviderBrowserSessionAndRevocation(t *testing.T) {
 	if err = b.flags.SetProviderAndWait(lifetime, provider); err != nil {
 		t.Fatal(err)
 	}
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	if status, _, _ := b.request(http.MethodGet, "/portal/", nil, ""); status != http.StatusOK {
 		t.Fatal("production gate did not admit its actual invited fixture session")
 	}

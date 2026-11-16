@@ -22,7 +22,7 @@ func TestContactConfirmationRetainsRealExpiry(t *testing.T) {
 			client := fmt.Sprintf("expiry-confirmation-%s-%t", checkpoint, delayed)
 			b := newBrowserFixtureOnPool(t, pool)
 			b.client.Timeout = 10 * time.Second
-			b.finish(b.start(b.invite("client-a", client, "client")))
+			b.finish(b.startInvited("client-a", client, "client"))
 			contactVerificationFlags(t, b, true)
 			status, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Fictional Client", "a@example.invalid", ""), b.site.URL)
 			if status != http.StatusSeeOther {
