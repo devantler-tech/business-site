@@ -205,14 +205,18 @@ func (s *Foundation) scheduleCardEnd(ctx context.Context, order string) error {
 	if err != nil {
 		return errTriageStorage
 	}
-	api, at := s.cards.Load().Stripe, last.AddDate(0, 1, 0)
+	// The renewal is on Stripe's clock, 00:00 UTC, an hour or two after
+	// Copenhagen's month begins. An end whose last month has just ended in
+	// Copenhagen still ends at that renewal, which then charges nothing.
+	cfg := s.cards.Load()
+	at := last.AddDate(0, 1, 0)
 	var confirmed time.Time
-	if at.After(time.Now()) {
-		confirmed, err = api.CancelSubscriptionAt(ctx, subscription, at)
+	if at.After(cfg.Now()) {
+		confirmed, err = cfg.Stripe.CancelSubscriptionAt(ctx, subscription, at)
 	} else {
 		// The renewal after the last month has passed unconfirmed: end now.
 		// A month it charged never funds the order and is refunded by hand.
-		confirmed, err = api.CancelSubscriptionNow(ctx, subscription)
+		confirmed, err = cfg.Stripe.CancelSubscriptionNow(ctx, subscription)
 	}
 	if err != nil {
 		// The operator page keeps offering to ask again.
