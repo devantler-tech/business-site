@@ -74,9 +74,9 @@ func (s *Foundation) beginWorkRequest(ctx context.Context, p Principal, id strin
 	if err := lockProposalRequest(ctx, tx, id); err != nil {
 		return nil, "", workMember{}, err
 	}
-	viewer := workMember{Issuer: p.issuer, Subject: p.subject, Role: "operator"}
+	viewer := workMember{Issuer: p.issuer, Subject: p.subject, Role: "operator", Incarnation: p.membershipIncarnation}
 	var client string
-	err = tx.QueryRow(ctx, `SELECT r.client_id,m.client_id FROM portal_requests r JOIN portal_memberships m ON m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked WHERE r.id=$1`, id, p.issuer, p.subject).Scan(&client, &viewer.Client)
+	err = tx.QueryRow(ctx, `SELECT r.client_id,m.client_id FROM portal_requests r JOIN portal_memberships m ON m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4) WHERE r.id=$1`, id, p.issuer, p.subject, p.membershipIncarnation).Scan(&client, &viewer.Client)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, "", workMember{}, ErrDenied

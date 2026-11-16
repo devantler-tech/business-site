@@ -94,7 +94,7 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 		_ = tx.Rollback(ctx)
 	}()
 	var client string
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		return projectRequest{}, ErrDenied
 	}
 	// Fair use: a client with hosting has one request in progress at a time.
@@ -137,7 +137,7 @@ func (s *Foundation) readRequests(ctx context.Context, p Principal, id string) (
 	if id != "" && !opaqueRequestID.MatchString(id) {
 		return nil, pgx.ErrNoRows
 	}
-	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,q.brief,q.submitted_at FROM portal_requests q JOIN portal_memberships m ON m.client_id=q.client_id WHERE q.client_id=$1 AND m.issuer=$2 AND m.subject=$3 AND m.role='client' AND NOT m.revoked AND ($4='' OR q.id=$4) ORDER BY q.submitted_at DESC,q.id LIMIT 50`, client, p.issuer, p.subject, id)
+	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,q.brief,q.submitted_at FROM portal_requests q JOIN portal_memberships m ON m.client_id=q.client_id WHERE q.client_id=$1 AND m.issuer=$2 AND m.subject=$3 AND m.role='client' AND NOT m.revoked AND ($4='' OR q.id=$4) AND ($5='' OR m.incarnation::text=$5) ORDER BY q.submitted_at DESC,q.id LIMIT 50`, client, p.issuer, p.subject, id, p.membershipIncarnation)
 	if err != nil {
 		return nil, ErrDenied
 	}

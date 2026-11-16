@@ -307,6 +307,12 @@ func TestWorkApprovalMembershipRestorationRequiresNewDecision(t *testing.T) {
 			if _, valid, err := b.svc.currentWorkApproval(t.Context(), viewer, proposalRequestID); err != nil || valid {
 				t.Fatal("restoration revived old approval", err)
 			}
+			if actor == op.subject {
+				if _, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID); !errors.Is(err, ErrDenied) {
+					t.Fatal("restoration revived the old operator sign-in", err)
+				}
+				op = authenticateExistingMember(t, b, op.subject)
+			}
 			input, err := b.svc.prepareWorkApproval(t.Context(), op, proposalRequestID)
 			if err != nil || input.Expected != 1 {
 				t.Fatal("restored exact principal cannot receive new review", err)
