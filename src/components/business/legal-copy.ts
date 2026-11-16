@@ -11,7 +11,7 @@ export type LegalBlock = string | { list: readonly string[] } | { links: readonl
 export type LegalSection = { title: string; blocks: readonly LegalBlock[] };
 export type LegalPage = { title: string; description: string; intro: string; updated: string; sections: readonly LegalSection[] };
 
-const updated = { en: 'Last updated 15 November 2026.', da: 'Senest opdateret 15. november 2026.' } as const;
+const updated = { en: 'Last updated 16 November 2026.', da: 'Senest opdateret 16. november 2026.' } as const;
 const companyPath = { en: '/company/', da: '/da/company/' } as const;
 
 /** The trader line of the terms; the phone number appears once company.json has one. */
