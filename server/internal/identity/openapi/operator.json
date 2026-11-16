@@ -13,7 +13,7 @@
         "operationId": "invitations.create",
         "summary": "Invite a customer and send account setup for a new customer",
         "parameters": [{"name":"X-CSRF-Token","in":"header","description":"Required for browser sessions; machine bearer calls never carry browser cookies.","schema":{"type":"string"}}],
-        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}},"application/x-www-form-urlencoded":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}}}},
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}},"application/x-www-form-urlencoded":{"schema":{"$ref":"#/components/schemas/CustomerInvitationForm"}}}},
         "responses": {
           "200":{"description":"Single-use invitation recorded, valid for seven days","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Invitation"}}}},
           "303":{"description":"Native HTML form returns to the customer overview"},
@@ -232,7 +232,8 @@
           "subject": { "type": "string", "minLength": 1, "maxLength": 512 }
         }
       },
-      "CustomerInvitationInput": {"type":"object","additionalProperties":false,"required":["name","email","workspace"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200,"description":"First and last name"},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100},"csrf_token":{"type":"string","description":"Native browser form CSRF token; JSON clients use the header."}}},
+      "CustomerInvitationInput": {"type":"object","additionalProperties":false,"required":["name","email","workspace"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200,"description":"First and last name, up to 200 UTF-8 bytes"},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100,"description":"Workspace ID, up to 100 UTF-8 bytes"}}},
+      "CustomerInvitationForm": {"type":"object","additionalProperties":false,"required":["name","email","workspace","csrf_token"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100},"csrf_token":{"type":"string","maxLength":256,"description":"Native browser form CSRF token; JSON clients use the header."}}},
       "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
       "Invitation": {
         "type": "object",
