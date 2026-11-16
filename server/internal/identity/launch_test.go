@@ -25,7 +25,7 @@ func withLaunch(t *testing.T, limit int) {
 }
 
 // fillLaunchPlaces records places taken by earlier, already purged customers.
-func fillLaunchPlaces(t *testing.T, b *browserFixture, from, to int) {
+func fillLaunchPlaces(t *testing.T, from, to int) {
 	t.Helper()
 	if _, err := migrationDB(t).Exec(t.Context(), `INSERT INTO portal_launch_places(place,percent,list_minor,discount_minor) SELECT n,25,600000,150000 FROM generate_series($1::int,$2::int) n`, from, to); err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestLaunchDiscountArithmetic(t *testing.T) {
 		t.Fatal("a line without a discount changed")
 	}
 	for _, bad := range []string{`"appliesTo": "monthly"`, `"requiresHosting": false`, `"percent": 100`, `"limit": 0`} {
-		key := bad[:strings.Index(bad, ":")]
+		key, _, _ := strings.Cut(bad, ":")
 		raw := regexp.MustCompile(key+`: [^,\n]+`).ReplaceAllString(string(offeringsJSON), bad)
 		func() {
 			defer func() {
@@ -90,7 +90,7 @@ func TestLaunchDiscountArithmetic(t *testing.T) {
 func TestLaunchDiscountOrder(t *testing.T) {
 	b := billingFixture(t)
 	withLaunch(t, 50)
-	fillLaunchPlaces(t, b, 1, 49)
+	fillLaunchPlaces(t, 1, 49)
 	fake, cfg := newFakeNumina(t)
 	f, body := launchOrderForm(t, b, "da", "invoice")
 	_, summary, _ := strings.Cut(body, `id="order-boundary"`)
@@ -150,7 +150,7 @@ func TestLaunchDiscountOrder(t *testing.T) {
 func TestLaunchDiscountEndsAtTheLimit(t *testing.T) {
 	b := billingFixture(t)
 	withLaunch(t, 50)
-	fillLaunchPlaces(t, b, 1, 50)
+	fillLaunchPlaces(t, 1, 50)
 	f, body := launchOrderForm(t, b, "en", "invoice")
 	if f.Has("launch") || strings.Contains(body, "Launch discount") {
 		t.Fatal("the 51st customer was offered the launch discount")
@@ -170,9 +170,9 @@ func TestLaunchDiscountEndsAtTheLimit(t *testing.T) {
 func TestLaunchDiscountGoneBeforeTheOrder(t *testing.T) {
 	b := billingFixture(t)
 	withLaunch(t, 50)
-	fillLaunchPlaces(t, b, 1, 49)
+	fillLaunchPlaces(t, 1, 49)
 	f, _ := launchOrderForm(t, b, "en", "invoice")
-	fillLaunchPlaces(t, b, 50, 50)
+	fillLaunchPlaces(t, 50, 50)
 	path := "/portal/requests/" + proposalRequestID + "/orders"
 	if status, _, h := b.request("POST", path, f, b.site.URL); status != 303 || h.Get("Location") != "/portal/requests/"+proposalRequestID+"?lang=en&launch=ended" {
 		t.Fatalf("an order with a discount that ended was not sent back: %d %s", status, h.Get("Location"))
@@ -200,7 +200,7 @@ func TestLaunchDiscountGoneBeforeTheOrder(t *testing.T) {
 func TestLaunchPlacesAreTakenOneAtATime(t *testing.T) {
 	b := billingFixture(t)
 	withLaunch(t, 50)
-	fillLaunchPlaces(t, b, 1, 49)
+	fillLaunchPlaces(t, 1, 49)
 	ctx := b.f.ctx
 	first, err := b.pool.Begin(ctx)
 	if err != nil {
