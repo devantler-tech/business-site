@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
@@ -22,13 +21,7 @@ import (
 // review, approval and revocation operation while its transaction is held.
 func TestWorkReviewSingleConnection(t *testing.T) {
 	b := workBrowserFixture(t)
-	config := b.pool.Config()
-	config.MaxConns = 1
-	pool, err := pgxpool.NewWithConfig(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := singleConnectionFixturePool(t, b)
 	b.mu.Lock()
 	b.handler = browserHandler(t, New(pool, b.f.broker, b.flags.NewClient()), b.site.URL+"/portal/callback")
 	b.mu.Unlock()

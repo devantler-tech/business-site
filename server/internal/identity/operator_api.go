@@ -43,6 +43,7 @@ var operatorRoutes = append([]operatorRoute{
 	{"GET", "/invitations", "invitations.list", operatorRead((*browser).pendingInvitations)},
 	{"POST", "/invitations", "invitations.create", (*browser).createCustomerInvitation},
 	{"GET", "/workspaces", "workspaces.list", operatorRead((*browser).workspaces)},
+	{"GET", "/work-eligibility", "work.eligibility.list", (*browser).workEligibility},
 	{"GET", "/audit", "audit.list", operatorRead((*browser).auditLog)},
 	{"GET", "/openapi.json", "openapi.read", func(*browser, context.Context, *http.Request) (any, error) {
 		return json.RawMessage(operatorOpenAPI), nil

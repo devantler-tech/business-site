@@ -158,6 +158,32 @@
         }
       }
     },
+    "/operator/api/work-eligibility": {
+      "get": {
+        "operationId": "work.eligibility.list",
+        "summary": "Observe current work eligibility without granting execution",
+        "description": "Human operators only; no administrative machine grant. Requires the independent default-off portal-work-eligibility decision. Observations use original submission time and request-ID byte order. Each observation has its own database time; this is not an atomic queue snapshot or execution lease. Missing prerequisites remain ineligible. Unreadable evidence fails the whole page.",
+        "security": [{ "portalSession": [] }],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation position from the prior page; conveys no authority",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "At most twenty timestamped observations, never execution rights",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkEligibilityPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
     "/operator/api/audit": {
       "get": {
         "operationId": "audit.list",
@@ -281,6 +307,40 @@
       }
     },
     "schemas": {
+      "WorkEligibilityPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/WorkObservation" } },
+          "nextCursor": { "type": "string", "minLength": 1, "maxLength": 160 }
+        }
+      },
+      "WorkObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requestId", "approvalGeneration", "submittedAt", "observedAt", "state"],
+        "properties": {
+          "requestId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
+          "approvalId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
+          "approvalGeneration": { "type": "integer", "format": "int64", "minimum": 0 },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Original server-owned submission instant"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database observation instant; later calls must revalidate"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["approval-required", "approval-paused", "confirmation-pending", "closed", "eligible"],
+            "description": "Eligible requires certified original confirmation acceptance by the sender; this does not prove inbox delivery or grant execution"
+          }
+        }
+      },
       "NewWorkspace": {
         "type": "object",
         "additionalProperties": false,
