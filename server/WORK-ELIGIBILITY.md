@@ -11,7 +11,7 @@ Administrative machine identities cannot call it or gain it through configuratio
 The in-transaction `inspectWorkEligibility` policy reuses
 `inspectWorkCurrent` and its exact [work-approval evidence](WORK-APPROVALS.md).
 It does not reproduce funding decisions in a route, query label or adapter.
-Paid service prerequisites include the current accepted scope, its selected
+An eligible work observation requires the current accepted scope, its selected
 operator approval, current bound membership incarnations, the exact order and
 settled funding, no reversal or withdrawal, permitted early start and the
 exclusive database approval deadline. Funding follows ADR 0030 and
@@ -75,8 +75,10 @@ operator API in [#665](https://github.com/devantler-tech/business-site/pull/665)
 It adds no migration of its own. Included-maintenance authorization remains
 [#259](https://github.com/devantler-tech/business-site/issues/259); covered work
 must not acquire an additional feature invoice through this policy.
-Appointments consume common service-start evidence through their own booking
-flow and remain outside software delivery claims. A later software queue needs
+Appointments consume `collectWorkEvidence` and `readOriginalConfirmation` in
+their own authorized booking transaction, without selecting `work_current` or
+acquiring a software lease. They remain outside software delivery claims.
+A later software queue needs
 an explicit server-owned delivery kind bound to the approved agreement;
 `other` and free-text briefs cannot establish that classification.
 

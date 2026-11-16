@@ -306,6 +306,68 @@ func TestWorkEligibilityLegacySenderReceiptIsInsufficient(t *testing.T) {
 	}
 }
 
+// The positive path uses the native order producer, the real immutable format-1
+// proof, the fictional Numina HTTP fixture and the ordinary sender receipt.
+// No external customer, provider or money connection is involved.
+func TestWorkEligibilityCertifiedOriginalConfirmation(t *testing.T) {
+	b := billingFixture(t)
+	form := orderForm(t, b, "en")
+	form.Set("early_start", "yes")
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", form, b.site.URL); status != 303 {
+		t.Fatal("native certified order fixture was refused", status)
+	}
+	fake, cfg := newFakeNumina(t)
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	fake.confirmDenmark()
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	fake.pay("paid", "0")
+	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "settled" {
+		t.Fatal("fictional Numina fixture did not settle its exact order", err)
+	}
+	setEligibilityFlags(t, b, eligibilityFlags())
+	op := enroll(t, b.svc, b.f, "certified-approval-operator", "operator-workspace", "operator")
+	savedApproval(t, b, op)
+	assertState := func(want workEligibilityState) {
+		t.Helper()
+		page, err := b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
+		if err != nil || len(page.Items) != 1 || page.Items[0].State != want {
+			t.Fatalf("certified confirmation start policy failed: want=%s page=%+v err=%v", want, page, err)
+		}
+	}
+	assertState(eligibilityConfirmationPending)
+	m := mailFixture(t, b)
+	m.fail = true
+	if err := b.svc.SendQueuedMail(t.Context()); err == nil || len(m.messages()) != 0 {
+		t.Fatal("failed sender control did not refuse", err)
+	}
+	assertState(eligibilityConfirmationPending)
+	m.fail = false
+	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 1 {
+		t.Fatal("original confirmation was not accepted by the sender", err)
+	}
+	assertState(eligibilityEligible)
+	owner := migrationDB(t)
+	if _, err := owner.Exec(t.Context(), `REVOKE SELECT ON portal_mail_outbox FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() {
+		if _, err := owner.Exec(context.Background(), `GRANT SELECT ON portal_mail_outbox TO portal_runtime`); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(restore)
+	page, err := b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
+	if !errors.Is(err, errTriageStorage) || len(page.Items) != 0 {
+		t.Fatalf("unreadable confirmation became missing or eligible: %+v %v", page, err)
+	}
+	restore()
+	assertState(eligibilityEligible)
+}
+
 func setEligibilityFlags(t *testing.T, b *browserFixture, flags map[string]memprovider.InMemoryFlag) {
 	t.Helper()
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {

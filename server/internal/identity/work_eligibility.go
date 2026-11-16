@@ -15,6 +15,7 @@ const (
 	eligibilityApprovalPaused      workEligibilityState = "approval-paused"
 	eligibilityConfirmationPending workEligibilityState = "confirmation-pending"
 	eligibilityClosed              workEligibilityState = "closed"
+	eligibilityEligible            workEligibilityState = "eligible"
 )
 
 // A workEligibilityItem is one timestamped observation. It grants no lease and
@@ -142,6 +143,13 @@ func inspectWorkEligibility(ctx context.Context, tx pgx.Tx, id, client string, v
 	}
 	if valid {
 		item.State, deadline = eligibilityConfirmationPending, current.Expires
+		confirmation, err := readOriginalConfirmation(ctx, tx, id, client, current.Acceptance, current.Order)
+		if err != nil {
+			return workEligibilityItem{}, time.Time{}, err
+		}
+		if confirmation.State == confirmationSenderAccepted {
+			item.State = eligibilityEligible
+		}
 	}
 	var closed bool
 	if err := tx.QueryRow(ctx, `SELECT clock_timestamp(),
