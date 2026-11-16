@@ -295,6 +295,10 @@ func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) 
 		}
 		err = applyCheckoutEvent(ctx, tx, event.Type, session)
 		subscription = session.Subscription
+		if err == nil && subscription != "" {
+			// Before the event counts as processed, so Stripe retries it.
+			err = s.removeEndedAddons(ctx, tx, subscription)
+		}
 	case "invoice.paid":
 		err = applySubscriptionInvoicePaid(ctx, tx, event.Data.Object)
 	case "customer.subscription.deleted":
@@ -448,4 +452,31 @@ func checkoutLines(name string, total int64, addons []orderAddon, lang string, m
 		lines = append([]stripe.Line{{Name: name, AmountMinor: total, Monthly: monthly}}, lines...)
 	}
 	return lines
+}
+
+// removeEndedAddons removes, from a newly completed subscription, the items of
+// add-ons the client ended while its Checkout was still open: that session
+// was created with them.
+func (s *Foundation) removeEndedAddons(ctx context.Context, tx pgx.Tx, subscription string) error {
+	var order string
+	err := tx.QueryRow(ctx, `SELECT order_id FROM portal_card_checkouts WHERE subscription_id=$1`, subscription).Scan(&order)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return errTriageStorage
+	}
+	addons, err := readOrderAddons(ctx, tx, order)
+	if err != nil {
+		return err
+	}
+	for _, a := range addons {
+		if a.Monthly() && a.LastMonth != nil {
+			cfg := s.cards.Load()
+			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, subscription, a.ID) != nil {
+				return errors.New("card billing: an ended add-on was not removed from the new subscription")
+			}
+		}
+	}
+	return nil
 }
