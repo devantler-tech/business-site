@@ -32,7 +32,7 @@ func expressClient(t *testing.T) *browserFixture {
 	t.Helper()
 	b := billingFixture(t)
 	f := orderForm(t, b, "en")
-	f["addon"] = []string{"express:1"}
+	f["addon"] = []string{"express:1:1000"}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("order with Express=%d", status)
 	}
@@ -77,7 +77,7 @@ func TestFairUseOneRequestInProgress(t *testing.T) {
 func TestFeatureLevels(t *testing.T) {
 	b := billingFixture(t)
 	f := orderForm(t, b, "en")
-	f["addon"] = []string{"priority:1"}
+	f["addon"] = []string{"priority:1:400"}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("order with Priority=%d", status)
 	}
