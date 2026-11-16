@@ -341,16 +341,16 @@ The selected provider inherits process cancellation and SDK shutdown instead of
 borrowing a staging timer. Identity alone enables no other capability. Each optional
 production setting below uses the same maintained-provider JSON as the identity flag:
 
-| OpenFeature capability | Production setting |
-| --- | --- |
+| OpenFeature capability        | Production setting                 |
+|-------------------------------|------------------------------------|
 | `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
-| `portal-requests` | `PORTAL_REQUESTS_FLAG` |
-| `portal-triage` | `PORTAL_TRIAGE_FLAG` |
-| `portal-proposals` | `PORTAL_PROPOSALS_FLAG` |
-| `portal-proposal-sharing` | `PORTAL_PROPOSAL_SHARING_FLAG` |
-| `portal-proposal-acceptance` | `PORTAL_PROPOSAL_ACCEPTANCE_FLAG` |
-| `portal-invoice-billing` | `PORTAL_INVOICE_BILLING_FLAG` |
-| `portal-card-billing` | `PORTAL_CARD_BILLING_FLAG` |
+| `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
+| `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
+| `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |
+| `portal-proposal-sharing`     | `PORTAL_PROPOSAL_SHARING_FLAG`     |
+| `portal-proposal-acceptance`  | `PORTAL_PROPOSAL_ACCEPTANCE_FLAG`  |
+| `portal-invoice-billing`      | `PORTAL_INVOICE_BILLING_FLAG`      |
+| `portal-card-billing`         | `PORTAL_CARD_BILLING_FLAG`         |
 
 An absent or typed false setting keeps its capability off, even when another is on.
 A supplied malformed, wrong-type or oversized setting refuses production startup.
@@ -376,7 +376,7 @@ disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitati
 cookie-session, membership-revocation and cancellation checks. These are source
 acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
 Source checks do not establish deployed acceptance: #305 retains runtime delivery,
-#302 owns live identity acceptance and #21 owns later intake/payment activation.
+# 302 owns live identity acceptance and #21 owns later intake/payment activation.
 
 ### Production public-content template
 
