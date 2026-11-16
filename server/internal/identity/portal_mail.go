@@ -44,6 +44,8 @@ type orderMail struct {
 	MonthlyStart, WithdrawUntil, WorkStartsFrom                          string
 	Placed, Withdrawn                                                    string
 	EarlyStart                                                           bool
+	BaseOneTimeDKK, BaseMonthlyDKK                                       int64
+	Addons                                                               []orderAddon
 	Launch                                                               *launchPlace
 	Portal, Terms                                                        string
 }
@@ -60,8 +62,10 @@ Omfang:
 Leverancer:
 {{.Deliverables}}
 
-{{if .OneTimeDKK}}Engangspris: {{.OneTimeDKK}} DKK{{with .Launch}} (normalpris {{.ListDKK}} DKK, lanceringsrabat {{.Percent}} % −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
-{{end}}{{if .MonthlyDKK}}Månedspris: {{.MonthlyDKK}} DKK forud den 1. i hver måned fra {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
+{{if .BaseOneTimeDKK}}Engangspris: {{.BaseOneTimeDKK}} DKK{{with .Launch}} (normalpris {{.ListDKK}} DKK, lanceringsrabat {{.Percent}} % −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
+{{end}}{{if .BaseMonthlyDKK}}Månedspris: {{.BaseMonthlyDKK}} DKK forud den 1. i hver måned fra {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
+{{end}}{{range .Addons}}Tilvalg: {{.Title "da"}}: {{.TotalDKK}} DKK{{if .Monthly}} om måneden{{else}} engang{{end}}
+{{end}}{{if .Addons}}I alt: {{.OneTimeDKK}} DKK engang og {{.MonthlyDKK}} DKK om måneden
 {{end}}Betaling: {{if eq .Collection "card"}}kort eller MobilePay via Stripe{{else}}faktura{{end}}
 
 {{if .EarlyStart}}Du bad om, at arbejdet begynder inden for fortrydelsesfristen på 14 dage. Du er klar over, at du betaler for det udførte arbejde, hvis du fortryder, og at du mister fortrydelsesretten, når arbejdet er helt udført.{{else}}Arbejdet begynder tidligst {{.WorkStartsFrom}}, når fortrydelsesfristen er udløbet.{{end}}
@@ -82,8 +86,10 @@ Scope:
 Deliverables:
 {{.Deliverables}}
 
-{{if .OneTimeDKK}}One-time price: {{.OneTimeDKK}} DKK{{with .Launch}} (list price {{.ListDKK}} DKK, {{.Percent}}% launch discount −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
-{{end}}{{if .MonthlyDKK}}Monthly price: {{.MonthlyDKK}} DKK in advance on the 1st of each month from {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
+{{if .BaseOneTimeDKK}}One-time price: {{.BaseOneTimeDKK}} DKK{{with .Launch}} (list price {{.ListDKK}} DKK, {{.Percent}}% launch discount −{{.DiscountDKK}} DKK){{end}}{{with .OneTimeTerms}} ({{.}}){{end}}
+{{end}}{{if .BaseMonthlyDKK}}Monthly price: {{.BaseMonthlyDKK}} DKK in advance on the 1st of each month from {{.MonthlyStart}}{{with .MonthlyTerms}} ({{.}}){{end}}
+{{end}}{{range .Addons}}Add-on: {{.Title "en"}}: {{.TotalDKK}} DKK{{if .Monthly}} a month{{else}} once{{end}}
+{{end}}{{if .Addons}}Total: {{.OneTimeDKK}} DKK once and {{.MonthlyDKK}} DKK a month
 {{end}}Payment: {{if eq .Collection "card"}}card or MobilePay through Stripe{{else}}invoice{{end}}
 
 {{if .EarlyStart}}You asked for work to begin within the 14-day withdrawal period. You understand that if you withdraw, you pay for the work done until then, and that you lose the right of withdrawal once the work is completely finished.{{else}}Work begins on {{.WorkStartsFrom}} at the earliest, after the withdrawal period.{{end}}

@@ -143,7 +143,7 @@ export function validateTenantPackage(input) {
             image: spec.image,
             args: ["--migrate", "--migration-database-projection", "/run/portal-migration/database-url", "--runtime-role", "portal_web"],
             resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { cpu: "500m", memory: "128Mi" } },
-            securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
+            securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
             volumeMounts: [
               { name: "migration", mountPath: "/run/portal-migration", readOnly: true },
               { name: "tmp", mountPath: "/tmp" },

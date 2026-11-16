@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -219,6 +220,11 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 				return
 			}
 			page.LaunchEnded = r.URL.Query().Get("launch") == "ended"
+			if proposal := cmp.Or(page.OrderProposal, page.SharedProposal); page.Order == nil && proposal != nil {
+				var valid bool
+				page.AddonChoices, page.OrderAddons, valid = selectedAddons(r.URL.Query(), page.Request.Product, proposal.MonthlyMinor > 0)
+				page.AddonsInvalid = !valid
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -276,8 +282,32 @@ type requestPageData struct {
 	OrderProposal     *projectProposal
 	Checkouts         []orderCheckout
 	CheckoutRestart   bool
-	Launch            *launchPlace // the launch discount an order would get now
-	LaunchEnded       bool         // the last launch place went before the client's order
+	Launch            *launchPlace  // the launch discount an order would get now
+	LaunchEnded       bool          // the last launch place went before the client's order
+	AddonChoices      []addonChoice // the add-ons the client can choose, with the current choice
+	OrderAddons       []orderAddon  // the chosen add-ons the order form carries
+	AddonsInvalid     bool          // the client's add-on choice is not possible; no order form
+}
+
+// OrderOneTimeDKK and OrderMonthlyDKK are what the order form's order costs:
+// the proposal less any launch discount, plus the chosen add-ons.
+func (p requestPageData) OrderOneTimeDKK() int64 {
+	one, _ := addonTotals(p.OrderAddons)
+	if p.OrderProposal != nil {
+		one += p.OrderProposal.OneTimeMinor
+	}
+	if p.Launch != nil {
+		one -= p.Launch.DiscountMinor
+	}
+	return one / 100
+}
+
+func (p requestPageData) OrderMonthlyDKK() int64 {
+	_, monthly := addonTotals(p.OrderAddons)
+	if p.OrderProposal != nil {
+		monthly += p.OrderProposal.MonthlyMinor
+	}
+	return monthly / 100
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {

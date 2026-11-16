@@ -49,10 +49,9 @@ spec:
                 limits:
                   cpu: 500m
                   memory: 128Mi
-              # The cluster admits a container only when it says runAsNonRoot itself.
               securityContext:
-                runAsNonRoot: true
                 allowPrivilegeEscalation: false
+                runAsNonRoot: true
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop:
