@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -103,5 +105,44 @@ func TestOperatorProviderFailureLeavesPortalClosed(t *testing.T) {
 		if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked {
 			t.Fatal("provider failure left portal access enabled", action, revoked, err)
 		}
+	}
+}
+
+// TestOperatorRetriesDeactivationWithoutRestoringAccess catches a phone flow
+// that offers only reactivation after provider failure and cannot finish closing
+// provider access while the portal membership stays disabled.
+func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	var calls, reactivations atomic.Int32
+	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(_ context.Context, _ string, active bool) error {
+		if active {
+			reactivations.Add(1)
+		}
+		if calls.Add(1) == 1 {
+			return errors.New("fictional provider unavailable")
+		}
+		return nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"workspace": {"client-a"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL); status != http.StatusServiceUnavailable {
+		t.Fatal("the failed provider did not retain its failure", status)
+	}
+	status, body, _ := b.request("GET", "/portal/operator/customers?lang=en", nil, "")
+	if status != http.StatusOK || !strings.Contains(body, "Retry deactivation") {
+		t.Fatal("disabled member has no deactivation retry in the inventory", status)
+	}
+	form = workNativeForm(t, body, `members/deactivate\?lang=en`)
+	status, headers := managementNativeRequest(b, operatorAPIRoot+"/members/deactivate?lang=en", form)
+	if status != http.StatusSeeOther || headers.Get("Location") != "/portal/operator/customers?lang=en" {
+		t.Fatal("native deactivation retry did not complete", status)
+	}
+	var revoked bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || calls.Load() != 2 || reactivations.Load() != 0 {
+		t.Fatal("retry restored access or skipped the provider", revoked, calls.Load(), reactivations.Load(), err)
 	}
 }
