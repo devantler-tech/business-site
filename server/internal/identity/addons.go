@@ -19,6 +19,7 @@ type orderAddon struct {
 	Quantity  int
 	UnitMinor int64
 	LastMonth *time.Time // the last billed month, once the client ended a monthly add-on
+	Removed   *time.Time // when Stripe confirmed a card subscription no longer charges it
 }
 
 func (a orderAddon) TotalMinor() int64 { return a.UnitMinor * int64(a.Quantity) }
@@ -194,7 +195,8 @@ func addonTotals(addons []orderAddon) (oneTime, monthly int64) {
 func readOrderAddons(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, order string) ([]orderAddon, error) {
-	rows, err := q.Query(ctx, `SELECT a.addon_id,a.kind,a.quantity,a.unit_minor,e.last_month FROM portal_order_addons a LEFT JOIN portal_addon_ends e ON e.order_id=a.order_id AND e.addon_id=a.addon_id WHERE a.order_id=$1`, order)
+	rows, err := q.Query(ctx, `SELECT a.addon_id,a.kind,a.quantity,a.unit_minor,e.last_month,r.removed_at FROM portal_order_addons a LEFT JOIN portal_addon_ends e ON e.order_id=a.order_id AND e.addon_id=a.addon_id
+ LEFT JOIN portal_addon_removals r ON r.order_id=a.order_id AND r.addon_id=a.addon_id WHERE a.order_id=$1`, order)
 	if err != nil {
 		return nil, errTriageStorage
 	}

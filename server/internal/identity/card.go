@@ -471,10 +471,13 @@ func (s *Foundation) removeEndedAddons(ctx context.Context, tx pgx.Tx, subscript
 		return err
 	}
 	for _, a := range addons {
-		if a.Monthly() && a.LastMonth != nil {
+		if a.Monthly() && a.LastMonth != nil && a.Removed == nil {
 			cfg := s.cards.Load()
 			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, subscription, a.ID) != nil {
 				return errors.New("card billing: an ended add-on was not removed from the new subscription")
+			}
+			if _, err = tx.Exec(ctx, `INSERT INTO portal_addon_removals(order_id,addon_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, order, a.ID); err != nil {
+				return errTriageStorage
 			}
 		}
 	}

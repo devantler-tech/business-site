@@ -71,7 +71,7 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // rewindAddonEndsFixture removes only the disposable v27 add-on ends.
 func rewindAddonEndsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_ends;
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_removals,portal_addon_ends;
  DELETE FROM portal_schema_version WHERE version=27`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-add-on-end schema", err)
 	}
