@@ -243,6 +243,8 @@ for (const [name, mutate] of [
   ["no migration deadline", (d) => { delete d[9].spec.activeDeadlineSeconds; }],
   ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
   ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
+  ["a migration container that does not itself refuse root", (d) => { delete d[9].spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
+  ["a retention container that does not itself refuse root", (d) => { delete d[10].spec.jobTemplate.spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
   ["a missing retention CronJob", (d) => { d.splice(10, 1); }],
   ["a retention CronJob on another image", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
   ["a retention CronJob that migrates", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args = structuredClone(d[9].spec.template.spec.containers[0].args); }],
@@ -278,6 +280,29 @@ for (const [name, mutate] of [
     assert.match(result.stderr, /^tenant package: rejected /);
   });
 }
+
+test("every package pod passes the cluster's pod-security admission rule", () => {
+  // Mirrors the platform's Kyverno validate-pod-security policy, which refused
+  // v3.9.0's Job for setting runAsNonRoot only at pod level: each container must
+  // itself refuse root and privilege escalation and drop ALL capabilities, and
+  // the pod must use the RuntimeDefault or Localhost seccomp profile.
+  const docs = yaml.loadAll(render());
+  const pods = [
+    ...docs.filter((d) => d?.kind === "Job").map((d) => d.spec.template.spec),
+    ...docs.filter((d) => d?.kind === "CronJob").map((d) => d.spec.jobTemplate.spec.template.spec),
+  ];
+  assert.equal(pods.length, 2, "the migration Job and the retention CronJob");
+  for (const pod of pods) {
+    assert.ok(["RuntimeDefault", "Localhost"].includes(pod.securityContext?.seccompProfile?.type));
+    for (const c of [...(pod.initContainers ?? []), ...pod.containers]) {
+      const s = c.securityContext ?? {};
+      assert.equal(s.allowPrivilegeEscalation, false, `${c.name} allowPrivilegeEscalation`);
+      assert.notEqual(s.privileged, true, `${c.name} privileged`);
+      assert.equal(s.runAsNonRoot, true, `${c.name} runAsNonRoot`);
+      assert.deepEqual(s.capabilities?.drop, ["ALL"], `${c.name} capabilities`);
+    }
+  }
+});
 
 test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
   // The shared publisher rewrites only webapp.yaml's WebApp image; the package
