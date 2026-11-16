@@ -198,10 +198,10 @@ const terms = {
         'When hosting ends, I hand over your content and code as described in your proposal.',
       ] },
       { title: 'Feature requests and add-ons', blocks: [
-        'While your project is hosted, you can ask for new features. Requests are picked up in a monthly round, at no extra cost. A large wish, such as a whole new module or a new integration, gets a fixed-price quote first. There are no hourly rates.',
-        'Two monthly add-ons speed this up. With Priority, requests are picked up about once a week. With Express, work on a request starts within 1 business day, and you get replies within 1 business day. Business days are Monday to Friday, except Danish public holidays.',
+        'While your project is hosted, you can send feature requests at any time. Small, clearly bounded requests are included in the monthly price and are picked up in a monthly round. A large wish, such as a whole new module or a new integration, gets a fixed-price quote before any work starts. There are no hourly rates.',
+        'Two monthly add-ons speed this up. With Priority, the target is to pick up your requests about once a week. With Express, the target is to start work on a request within 1 business day and to reply within 1 business day. Business days are Monday to Friday, except Danish public holidays. These are targets, not guarantees: during holidays or illness they can take longer, and I tell you as early as I can.',
         'Fair use applies to every level: one request is in progress per customer at a time. The next request is picked up when the current one is finished.',
-        'Other add-ons, such as an extra language or visitor statistics, are part of your order at the prices it states. A monthly add-on is billed with your hosting. You can end it by email with one month’s notice to the end of a month, and it ends with your hosting.',
+        'Other add-ons, such as an extra language or visitor statistics, are part of your order at the prices it states. A monthly add-on is billed with your hosting. You can end it in the portal or by email from the next month, and it ends with your hosting.',
       ] },
       { title: 'Faults and complaints', blocks: [
         `If something delivered does not match what we agreed, write to ${company.email} within a reasonable time after you notice it. Then we will find a solution. If you are a private customer, the rules on defects in the Danish Sale of Goods Act (købeloven) may apply.`,
@@ -269,10 +269,10 @@ const terms = {
         'Når hostingen ophører, overdrager jeg dit indhold og din kode som beskrevet i dit tilbud.',
       ] },
       { title: 'Ønsker og tilvalg', blocks: [
-        'Mens dit projekt er hostet, kan du ønske nye funktioner. Ønsker tages op i en månedlig runde uden ekstra betaling. Et stort ønske, fx et helt nyt modul eller en ny integration, får først et tilbud til fast pris. Der er ingen timepriser.',
-        'To månedlige tilvalg gør det hurtigere. Med Prioritet tages ønsker op cirka en gang om ugen. Med Ekspres begynder arbejdet på et ønske inden for 1 arbejdsdag, og du får svar inden for 1 arbejdsdag. Arbejdsdage er mandag til fredag undtagen danske helligdage.',
+        'Mens dit projekt er hostet, kan du til enhver tid sende ønsker til nye funktioner. Små, klart afgrænsede ønsker er med i månedsprisen og tages op i en månedlig runde. Et stort ønske, fx et helt nyt modul eller en ny integration, får et tilbud til fast pris, før arbejdet begynder. Der er ingen timepriser.',
+        'To månedlige tilvalg gør det hurtigere. Med Prioritet er målet at tage dine ønsker op cirka en gang om ugen. Med Ekspres er målet at begynde arbejdet på et ønske inden for 1 arbejdsdag og at svare inden for 1 arbejdsdag. Arbejdsdage er mandag til fredag undtagen danske helligdage. Det er mål, ikke garantier: Under ferie eller sygdom kan det tage længere tid, og jeg giver besked så tidligt, jeg kan.',
         'Rimelig brug gælder på alle niveauer: én opgave er under arbejde pr. kunde ad gangen. Det næste ønske tages op, når det aktuelle er færdigt.',
-        'Andre tilvalg, fx et ekstra sprog eller besøgsstatistik, indgår i din ordre til de priser, den angiver. Et månedligt tilvalg betales sammen med hostingen. Du kan opsige det på e-mail med en måneds varsel til udgangen af en måned, og det ophører sammen med hostingen.',
+        'Andre tilvalg, fx et ekstra sprog eller besøgsstatistik, indgår i din ordre til de priser, den angiver. Et månedligt tilvalg betales sammen med hostingen. Du kan opsige det i portalen eller på e-mail fra næste måned, og det ophører sammen med hostingen.',
       ] },
       { title: 'Fejl og klager', blocks: [
         `Hvis det leverede ikke svarer til det aftalte, så skriv til ${company.email} inden rimelig tid efter, at du har opdaget det. Så finder vi en løsning. Er du privatkunde, kan købelovens mangelsregler finde anvendelse.`,
