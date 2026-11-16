@@ -183,6 +183,7 @@ func runWithListen(ctx context.Context, args []string, output io.Writer, listenT
 	if *portalHost != "" {
 		cfg = cfg.WithPublicHost(*publicHost)
 	}
+	cfg = cfg.WithOrderTerms(artifact)
 	provider, err := runtimeapp.IdentityProvider(ctx, cfg)
 	if err != nil {
 		return err

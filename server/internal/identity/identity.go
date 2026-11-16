@@ -112,6 +112,8 @@ type Foundation struct {
 	vatRate atomic.Pointer[string]
 	// mail is the site's mail sender for the portal's own emails.
 	mail atomic.Pointer[mailer]
+	// orderTerms is the immutable serving snapshot used by binding orders.
+	orderTerms atomic.Pointer[agreementTerms]
 	// site is the public website's origin, linked from a portal at the root of
 	// its own host. A portal sharing the public host links to "/" instead.
 	site string
