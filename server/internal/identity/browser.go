@@ -95,7 +95,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if atRoot && s.site == "" {
 		return nil, ErrDenied
 	}
-	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: signInScopes}}
+	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
 	b.atRoot = atRoot
 	site := ""
 	if atRoot {
@@ -183,10 +183,6 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 }
 
 const oidcScope = "openid"
-
-// signInScopes adds groups, through which the broker can name the one workspace
-// an administrator set for a first sign-in. Contact proof asks for email instead.
-var signInScopes = []string{oidcScope, "groups"}
 
 // internal maps a root-mounted request onto the internal route it names, so every
 // registration and gate below sees one path space. "/sign-in" becomes

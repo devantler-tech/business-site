@@ -80,7 +80,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && (r.URL.Path == "/portal/sign-in" || r.URL.Path == "/portal/contact/verify") {
 			b.mu.Lock()
-			b.expectedScope = "openid groups"
+			b.expectedScope = "openid"
 			if r.URL.Path == "/portal/contact/verify" {
 				b.expectedScope = "openid email"
 			}

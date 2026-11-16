@@ -70,7 +70,7 @@ func fixtureBroker(t *testing.T) brokerFixture {
 // adversarial tests without contacting a real identity provider.
 func (f brokerFixture) token(t testing.TB, subject, nonce string, changes map[string]any) string {
 	t.Helper()
-	claims := map[string]any{"iss": f.issuer, "sub": subject, "aud": "portal-fixture", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": nonce, "email": "same@example.invalid"}
+	claims := map[string]any{"iss": f.issuer, "sub": subject, "aud": "portal-fixture", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": nonce, "email": "same@example.invalid", "groups": []string{"operator"}}
 	for k, v := range changes {
 		claims[k] = v
 	}
@@ -251,20 +251,11 @@ func setFlag(t testing.TB, api *openfeature.EvaluationAPI, value any) {
 func enroll(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Principal {
 	t.Helper()
 	a := invitedAttempt(t, svc, f, subject, client, role)
-	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, workspaceClaims(client, role)))
+	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
-}
-
-// workspaceClaims names a client's workspace in groups, as the administrator's
-// attribute does for every client; operators carry none.
-func workspaceClaims(client, role string) map[string]any {
-	if role != "client" {
-		return nil
-	}
-	return map[string]any{"groups": []string{client}}
 }
 
 func invitedAttempt(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Attempt {
@@ -347,12 +338,12 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 	if a.State == a.BrowserBinding || a.State == a.Nonce || a.PKCEVerifier == "" {
 		t.Fatal("attempt secrets are missing or reused")
 	}
-	if _, err := svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, workspaceClaims("client-atomic", "client"))); err == nil {
+	if _, err := svc.Complete(f.ctx, a.State, "wrong-browser", f.token(t, "atomic", a.Nonce, nil)); err == nil {
 		t.Fatal("wrong browser accepted")
 	}
 	var successes atomic.Int32
 	var wg sync.WaitGroup
-	atomicRaw := f.token(t, "atomic", a.Nonce, workspaceClaims("client-atomic", "client"))
+	atomicRaw := f.token(t, "atomic", a.Nonce, nil)
 	for range 12 {
 		wg.Go(func() {
 			if _, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, atomicRaw); err == nil {
@@ -378,7 +369,7 @@ func TestAttemptsAndInvitationsAreAtomic(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw := f.token(t, "invite-race", attempt.Nonce, workspaceClaims("client-race", "client"))
+		raw := f.token(t, "invite-race", attempt.Nonce, nil)
 		wg.Go(func() {
 			if _, err := svc.Complete(f.ctx, attempt.State, attempt.BrowserBinding, raw); err == nil {
 				successes.Add(1)
@@ -443,12 +434,7 @@ func TestRejectedAttemptsAndInvitationBindings(t *testing.T) {
 			if kind == "wrong subject" {
 				tokenSub = "attacker"
 			}
-			// Only the used attempt first succeeds, so only it names its workspace.
-			var claims map[string]any
-			if kind == "used attempt" {
-				claims = workspaceClaims("client-a", "client")
-			}
-			raw := f.token(t, tokenSub, nonce, claims)
+			raw := f.token(t, tokenSub, nonce, nil)
 			if kind == "used attempt" {
 				if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, raw); err != nil {
 					t.Fatal(err)
@@ -493,7 +479,7 @@ func TestExistingMemberIgnoresAnotherInvitation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, "member", a.Nonce, workspaceClaims("client-b", "client")))
+	p, err := svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, "member", a.Nonce, nil))
 	if err != nil {
 		t.Fatalf("existing member could not sign in: %v", err)
 	}
@@ -661,112 +647,5 @@ func TestBeginRemovesExpiredAttempts(t *testing.T) {
 	}
 	if expired != 10 || current != 1 {
 		t.Fatalf("expired=%d current=%d, want 10 expired left after one bounded batch and 1 current", expired, current)
-	}
-}
-
-// An administrator-set workspace, delivered as exactly one groups value in the
-// verified token, admits a first sign-in as that workspace's client, and every
-// later client sign-in needs it to still name that workspace. It never grants
-// operator, never moves or revives a membership, and a pending invitation wins.
-func TestGroupsAdmitFirstSignInAsClient(t *testing.T) {
-	f := fixtureBroker(t)
-	pool := fixtureDB(t)
-	svc := enabled(t, pool, f)
-	withGroups := func(subject string, groups any) (Principal, error) {
-		t.Helper()
-		return signIn(t, svc, f, subject, map[string]any{"groups": groups})
-	}
-	role := func(subject string) string {
-		var r string
-		if err := pool.QueryRow(f.ctx, "SELECT role FROM portal_memberships WHERE subject=$1", subject).Scan(&r); err != nil {
-			return ""
-		}
-		return r
-	}
-	p, err := withGroups("admitted", []string{"acme"})
-	if err != nil || svc.Authorize(f.ctx, p, "acme", false) != nil || role("admitted") != "client" {
-		t.Fatalf("a named workspace did not admit a first sign-in as its client: %v", err)
-	}
-	if svc.Authorize(f.ctx, p, "acme", true) == nil {
-		t.Fatal("a groups value granted operator")
-	}
-	// Every sign-in of a client needs its current workspace: a changed, removed
-	// or malformed one refuses it, and neither moves nor removes the membership.
-	for name, groups := range map[string]any{"changed": []string{"other"}, "removed": nil, "malformed": []string{"Acme"}} {
-		if _, err = withGroups("admitted", groups); !errors.Is(err, ErrDenied) {
-			t.Fatalf("a %s workspace still signed an existing client in: %v", name, err)
-		}
-	}
-	if p, err = withGroups("admitted", []string{"acme"}); err != nil || svc.Authorize(f.ctx, p, "acme", false) != nil || role("admitted") != "client" {
-		t.Fatalf("the restored workspace did not sign its client in: %v", err)
-	}
-	// A client invitation is consumed only by a sign-in naming its workspace.
-	if err = svc.Invite(f.ctx, Invitation{f.issuer, "invited-client", "beta", "client", time.Now().Add(time.Hour)}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = withGroups("invited-client", nil); !errors.Is(err, ErrDenied) || role("invited-client") != "" {
-		t.Fatalf("a client invitation admitted a sign-in without its workspace: %v", err)
-	}
-	var pending int
-	if err = pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_invitations WHERE subject='invited-client'").Scan(&pending); err != nil || pending != 1 {
-		t.Fatalf("a refused sign-in consumed the client invitation: pending=%d", pending)
-	}
-	if _, err = withGroups("invited-client", []string{"beta"}); err != nil || role("invited-client") != "client" {
-		t.Fatalf("the client invitation did not admit its workspace: %v", err)
-	}
-	for name, groups := range map[string]any{"none": nil, "two values": []string{"acme", "beta"}, "empty value": []string{""}, "uppercase": []string{"Acme"}, "not a list": "acme", "too long": []string{strings.Repeat("a", 65)}, "path-like": []string{"../acme"}} {
-		subject := "shape-" + strings.ReplaceAll(name, " ", "-")
-		if _, err = withGroups(subject, groups); !errors.Is(err, ErrDenied) || role(subject) != "" {
-			t.Fatalf("groups %s admitted a sign-in: %v", name, err)
-		}
-	}
-	// A revoked member stays refused whatever the workspace says.
-	if err = svc.Revoke(f.ctx, f.issuer, "admitted"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = withGroups("admitted", []string{"acme"}); !errors.Is(err, ErrDenied) {
-		t.Fatalf("a revoked member was readmitted: %v", err)
-	}
-	// A pending invitation wins over the workspace, including its role.
-	if err = svc.Invite(f.ctx, Invitation{f.issuer, "both", "operations", "operator", time.Now().Add(time.Hour)}); err != nil {
-		t.Fatal(err)
-	}
-	var bothClient string
-	if p, err = withGroups("both", []string{"acme"}); err != nil || svc.Authorize(f.ctx, p, "operations", true) != nil || role("both") != "operator" ||
-		pool.QueryRow(f.ctx, "SELECT client_id FROM portal_memberships WHERE subject='both'").Scan(&bothClient) != nil || bothClient != "operations" {
-		t.Fatalf("the workspace overrode a pending invitation: %v", err)
-	}
-	// Concurrent first sign-ins of one identity create one membership, and each
-	// succeeds once it exists.
-	var wg sync.WaitGroup
-	var failed atomic.Int32
-	for range 8 {
-		wg.Go(func() {
-			if _, err := withGroups("racer", []string{"acme"}); err != nil {
-				failed.Add(1)
-			}
-		})
-	}
-	wg.Wait()
-	var memberships int
-	if err = pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='racer'").Scan(&memberships); err != nil || memberships != 1 || failed.Load() != 0 {
-		t.Fatalf("concurrent first sign-ins: memberships=%d failed=%d, want 1 and 0", memberships, failed.Load())
-	}
-}
-
-// An invitation that becomes pending before admission takes the identity's
-// lock still wins: admission refuses rather than overriding it.
-func TestAdmissionYieldsToPendingInvitation(t *testing.T) {
-	f := fixtureBroker(t)
-	pool := fixtureDB(t)
-	svc := enabled(t, pool, f)
-	leftoverInvitation(t, pool, f, "late-invite", "beta")
-	p := Principal{issuer: f.issuer, subject: "late-invite", audience: "portal-fixture", workspace: "acme", expires: time.Now().Add(time.Hour)}
-	if err := svc.admit(f.ctx, p); !errors.Is(err, ErrDenied) {
-		t.Fatalf("admission overrode a pending invitation: %v", err)
-	}
-	var memberships int
-	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='late-invite'").Scan(&memberships); err != nil || memberships != 0 {
-		t.Fatal("admission created a membership despite a pending invitation")
 	}
 }

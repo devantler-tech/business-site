@@ -254,8 +254,8 @@ policy. The selected ZITADEL Login V1 requires address verification before compl
 authentication, including after an email change. Keep that native lifecycle in
 acceptance tests; do not pre-verify an invited user's address administratively.
 
-Ordinary portal sign-in requests `openid groups` and authorizes current issuer/subject
-membership, never email. It neither collects nor confirms the
+Ordinary portal sign-in requests only `openid` and authorizes current, explicitly
+invited issuer/subject membership, not email. It neither collects nor confirms the
 saved contact address. The separate purpose-bound contact-confirmation flow requires
 the signed boolean `email_verified=true` and the exact saved address/revision. A
 missing, malformed or false claim is refused there. UserInfo can reflect an email
@@ -267,19 +267,10 @@ Dex sends S256 to ZITADEL; the confidential upstream client
 has no documented setting that guarantees rejecting an omitted challenge. Do not
 claim that rejection without proof. The downstream Dex policy requires S256.
 
-An upstream account grants a portal membership only in two ways, never from email:
-a pending `--portal-invite` invitation bound to its exact Dex issuer/subject, or,
-without one, the ZITADEL user attribute `portal_workspace`, which only an administrator
-can set. ZITADEL puts it in UserInfo and customer Dex maps it to `groups`; the portal
-reads `groups` from Dex's verified ID token only. Exactly one value in the workspace
-format admits the first sign-in as that workspace's client, and every later client
-sign-in needs it to name that same workspace: a removed, changed or invalid value, or a
-deactivated user, refuses the next sign-in, and the 30-minute absolute session lifetime
-bounds an open one. It never grants operator, never moves a membership to another
-workspace and never revives a revoked one; anything else names no workspace. A client
-invitation from the command is consumed only by a sign-in naming its workspace. Never
-use the upstream ZITADEL subject directly. Preserve the adopted Dex issuer and
-`customer-zitadel` connector ID. Changing federation
+An upstream account grants no portal membership. Trusted portal provisioning must
+invite the actual verified Dex issuer/subject into its intended workspace, never
+derive identity from email or use the upstream ZITADEL subject directly. Preserve
+the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
 Opening the portal without a session goes straight to the login; there is no portal page
@@ -295,24 +286,8 @@ Google, Microsoft, Apple and GitHub remain unconfigured.
 
 ## Invite a customer
 
-From any browser, as an administrator of the Customers organization in the ZITADEL
-console at `https://accounts.devantler.tech`:
-
-1. Create the customer as a human user with their email address, unverified, and
-   let ZITADEL send its invitation mail, where they set their password and MFA.
-2. On the user, add the metadata `portal_workspace` with their workspace ID
-   (lowercase letters, digits and hyphens, for example `acme`).
-
-Their first sign-in at `https://portal.devantler.tech` then creates their client
-membership. Removing or changing the attribute, removing the workspace or deactivating
-the user refuses their next sign-in; an open session ends within 30 minutes.
-
-### Invite an operator or bind an exact identity
-
-The one-shot command below binds an invitation, including an operator one, to an
-exact Dex identity, and wins over `portal_workspace`. Invitations need the web
-pod's portal settings with the production identity profile and an enabled flag
-(see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
+Invitations need the web pod's portal settings with the production identity
+profile and an enabled flag (see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
 
 1. In the ZITADEL console at `https://accounts.devantler.tech`, create the
    customer as a human user with their email address, unverified, and let

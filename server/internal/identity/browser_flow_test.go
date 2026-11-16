@@ -25,20 +25,17 @@ import (
 )
 
 type browserFixture struct {
-	t            testing.TB
-	f            brokerFixture
-	svc          *Foundation
-	pool         *pgxpool.Pool
-	flags        *openfeature.EvaluationAPI
-	site, broker *httptest.Server
-	client       *http.Client
-	mu           sync.RWMutex
-	handler      http.Handler
-	subject      string
-	claims       map[string]any
-	// workspaces holds each invited client's workspace, which its tokens name in
-	// groups like the administrator's attribute does, unless claims set groups.
-	workspaces       map[string]string
+	t                testing.TB
+	f                brokerFixture
+	svc              *Foundation
+	pool             *pgxpool.Pool
+	flags            *openfeature.EvaluationAPI
+	site, broker     *httptest.Server
+	client           *http.Client
+	mu               sync.RWMutex
+	handler          http.Handler
+	subject          string
+	claims           map[string]any
 	expectedScope    string
 	codes            map[string]url.Values
 	exchanges        atomic.Int32
@@ -113,7 +110,7 @@ func newBrowserFixtureOnPool(t testing.TB, pool *pgxpool.Pool) *browserFixture {
 			scope := b.expectedScope
 			b.mu.RUnlock()
 			if scope == "" {
-				scope = "openid groups"
+				scope = "openid"
 			}
 			if q.Get("client_id") != "portal-fixture" || q.Get("response_type") != "code" || q.Get("scope") != scope || q.Get("nonce") == "" || q.Get("state") == "" || q.Get("code_challenge_method") != "S256" || len(q.Get("code_challenge")) != 43 || q.Get("redirect_uri") != b.callbackURL() {
 				http.Error(w, "invalid synthetic authorization", 400)
@@ -139,13 +136,6 @@ func newBrowserFixtureOnPool(t testing.TB, pool *pgxpool.Pool) *browserFixture {
 			q, ok := b.codes[r.Form.Get("code")]
 			delete(b.codes, r.Form.Get("code"))
 			sub, changes := b.subject, b.claims
-			if _, set := changes["groups"]; !set && b.workspaces[sub] != "" {
-				merged := map[string]any{"groups": []string{b.workspaces[sub]}}
-				for k, v := range changes {
-					merged[k] = v
-				}
-				changes = merged
-			}
 			b.mu.Unlock()
 			challenge := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
 			if !ok || id != "portal-fixture" || pass != "synthetic-client-secret" || r.Form.Get("grant_type") != "authorization_code" || r.Form.Get("redirect_uri") != q.Get("redirect_uri") || base64.RawURLEncoding.EncodeToString(challenge[:]) != q.Get("code_challenge") {
@@ -232,14 +222,6 @@ func (b *browserFixture) csrf(path string) string {
 // invite provisions one fictional subject through the trusted control plane.
 func (b *browserFixture) invite(subject, client, role string) {
 	b.t.Helper()
-	if role == "client" {
-		b.mu.Lock()
-		if b.workspaces == nil {
-			b.workspaces = map[string]string{}
-		}
-		b.workspaces[subject] = client
-		b.mu.Unlock()
-	}
 	if err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)}); err != nil {
 		b.t.Fatal(err)
 	}

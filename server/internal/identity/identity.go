@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -36,17 +35,11 @@ type Broker struct {
 }
 
 // Principal cannot be populated by callers. Only a verified broker proof creates
-// it. Email never supplies membership, and nothing in a token supplies operator
-// authority. workspace is set only from a verified token whose groups claim
-// names exactly one workspace; it can admit a first sign-in as that workspace's
-// client and is never kept in a session.
+// it; neither email nor token groups supplies membership or operator authority.
 type Principal struct {
-	issuer, subject, audience, workspace string
-	expires                              time.Time
+	issuer, subject, audience string
+	expires                   time.Time
 }
-
-// workspaceID is the workspace format the invite command also accepts.
-var workspaceID = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$`)
 
 // NewBroker discovers the configured HTTPS issuer through maintained OIDC code.
 // The caller supplies a bounded context and an HTTP client with timeouts.
@@ -86,16 +79,7 @@ func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, erro
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// The broker maps an administrator-only upstream attribute to groups. Only a
-	// single well-formed value names a workspace; anything else names none.
-	var claims struct {
-		Groups []string `json:"groups"`
-	}
-	workspace := ""
-	if token.Claims(&claims) == nil && len(claims.Groups) == 1 && workspaceID.MatchString(claims.Groups[0]) {
-		workspace = claims.Groups[0]
-	}
-	return Principal{issuer: b.issuer, subject: token.Subject, audience: b.clientID, workspace: workspace, expires: token.Expiry}, nil
+	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
 }
 
 // verifiedToken retains the validated token for a purpose-specific claim consumer.
@@ -235,43 +219,6 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	return nil
 }
 
-// admit creates a client membership for an identity whose verified token names
-// exactly one workspace. That claim comes from an upstream attribute only an
-// administrator can set. It never grants operator, never changes an existing or
-// revoked membership, and concurrent first sign-ins create one membership.
-func (s *Foundation) admit(ctx context.Context, p Principal) error {
-	if p.workspace == "" || !workspaceID.MatchString(p.workspace) {
-		return ErrDenied
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin admission: %w", err)
-	}
-	defer func() {
-		// Commit decides success; a committed transaction is already closed.
-		_ = tx.Rollback(ctx)
-	}()
-	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
-		return err
-	}
-	// Under the identity's lock, an invitation pending now still wins: the next
-	// sign-in redeems it rather than being overridden by the workspace.
-	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
- SELECT $1,$2,$3,'client'
- WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now())
- ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, p.workspace)
-	if err != nil {
-		return fmt.Errorf("create membership: %w", err)
-	}
-	if result.RowsAffected() != 1 {
-		return ErrDenied
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit admission: %w", err)
-	}
-	return nil
-}
-
 // identityLock namespaces the per-identity invitation lock among the portal locks.
 const identityLock = 1869820524
 
@@ -321,30 +268,19 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// An identity without membership accepts its own pending invitation, which
-	// was bound to this exact issuer/subject when it was created. Without one, a
-	// token naming exactly one workspace admits it as that workspace's client.
-	client, role, err := s.membership(ctx, p)
-	if errors.Is(err, ErrDenied) {
-		if err = s.redeem(ctx, p); errors.Is(err, ErrDenied) && p.workspace != "" {
-			err = s.admit(ctx, p)
-		}
-		if err != nil && !errors.Is(err, ErrDenied) {
+	// A current member signs straight in. An identity without membership accepts
+	// its own pending invitation, which was bound to this exact issuer/subject
+	// when it was created; anyone else has nothing to accept and is refused.
+	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
+		if err = s.redeem(ctx, p); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
 		// Current membership decides, including one a concurrent first sign-in of
 		// the same identity has just created; a revoked membership still refuses.
-		client, role, err = s.membership(ctx, p)
+		_, _, err = s.membership(ctx, p)
 	}
 	if err != nil {
 		return Principal{}, err
-	}
-	// A client's access follows the administrator's current workspace on every
-	// sign-in: removing, changing or invalidating it refuses the next one, and
-	// the session's absolute lifetime bounds any open one. Operators come only
-	// from trusted invitations, and groups neither grant nor touch them.
-	if role == "client" && p.workspace != client {
-		return Principal{}, ErrDenied
 	}
 	return p, nil
 }
@@ -383,9 +319,7 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
-	// A client invitation is consumed only by a sign-in already naming its
-	// workspace, so a refused sign-in leaves it pending for a later one.
-	if pending != 1 || role == "client" && p.workspace != client {
+	if pending != 1 {
 		return ErrDenied
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.
