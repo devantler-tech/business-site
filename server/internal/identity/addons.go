@@ -139,17 +139,29 @@ func selectedAddons(query url.Values, product string, hosting bool) ([]addonChoi
 	if !valid {
 		chosen = nil
 	}
+	// An invalid choice stays ticked, so the client can correct it.
 	var choices []addonChoice
 	for _, a := range availableAddons(product, hosting) {
-		c := addonChoice{addonOffer: a, Quantity: 1}
-		for _, o := range chosen {
-			if o.ID == a.ID {
-				c.Selected, c.Quantity = true, o.Quantity
-			}
+		c := addonChoice{addonOffer: a, Quantity: 1, Selected: slices.Contains(query["addon"], a.ID)}
+		if n, err := strconv.Atoi(query.Get("units-" + a.ID)); err == nil && n >= 1 && n <= a.units() {
+			c.Quantity = n
 		}
 		choices = append(choices, c)
 	}
 	return choices, chosen, valid
+}
+
+// sameAddons reports whether the form's "id:units" values name exactly an
+// order's stored add-ons.
+func sameAddons(stored []orderAddon, values []string) bool {
+	named := make([]string, len(stored))
+	for i, a := range stored {
+		named[i] = a.Value()
+	}
+	sorted := slices.Clone(values)
+	slices.Sort(named)
+	slices.Sort(sorted)
+	return slices.Equal(named, sorted)
 }
 
 // addonTotals sums an order's one-time and monthly add-ons.
