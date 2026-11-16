@@ -36,7 +36,9 @@ type featureState struct {
 func featureLevel(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, client string) (string, error) {
-	rows, err := q.Query(ctx, `SELECT a.addon_id FROM portal_order_addons a JOIN portal_orders o ON o.id=a.order_id WHERE a.kind='monthly' AND `+billsMonthly, client)
+	rows, err := q.Query(ctx, `SELECT a.addon_id FROM portal_order_addons a JOIN portal_orders o ON o.id=a.order_id WHERE a.kind='monthly'
+ AND NOT EXISTS (SELECT 1 FROM portal_addon_ends x WHERE x.order_id=a.order_id AND x.addon_id=a.addon_id AND x.last_month<date_trunc('month',now() AT TIME ZONE 'Europe/Copenhagen')::date)
+ AND `+billsMonthly, client)
 	if err != nil {
 		return "", errTriageStorage
 	}
@@ -105,15 +107,9 @@ func (s *Foundation) closeRequest(ctx context.Context, p Principal, id string) e
 
 // finishRequest is the operator's form to mark a request finished.
 func (b *browser) finishRequest(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	if !onlyFields(r) {
 		b.render(w, r, 400, "error", "", "")
 		return
-	}
-	for name, values := range r.PostForm {
-		if len(values) != 1 || name != "csrf_token" && name != "lang" {
-			b.render(w, r, 400, "error", "", "")
-			return
-		}
 	}
 	b.proposalMutationResult(w, r, b.foundation.closeRequest(r.Context(), b.principal(r.Context()), r.PathValue("id")), "error")
 }

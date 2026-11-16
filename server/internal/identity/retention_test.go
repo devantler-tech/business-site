@@ -49,7 +49,7 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 		}
 	}
 	for _, table := range []string{"portal_order_charges", "portal_card_checkouts", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals",
-		"portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_order_addons"} {
+		"portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_order_addons", "portal_addon_ends"} {
 		var left int
 		if err := migrator.QueryRow(ctx, "SELECT count(*) FROM public."+table).Scan(&left); err != nil || left != 0 {
 			t.Errorf("%s kept %d of the former client's order records: %v", table, left, err)
