@@ -36,8 +36,11 @@ func (a orderAddon) Title(lang string) string {
 	return title
 }
 
-// Value is the order form's encoding of the add-on.
-func (a orderAddon) Value() string { return a.ID + ":" + strconv.Itoa(a.Quantity) }
+// Value is the order form's encoding of the add-on: its id, units and the
+// unit price in kroner the client was shown.
+func (a orderAddon) Value() string {
+	return a.ID + ":" + strconv.Itoa(a.Quantity) + ":" + strconv.FormatInt(a.UnitMinor/100, 10)
+}
 
 func (a addonOffer) text(lang string) addonText {
 	if lang == "da" {
@@ -89,18 +92,23 @@ func availableAddons(product string, hosting bool) []addonOffer {
 	return result
 }
 
-// parseAddons reads the order form's "id:units" values, in catalogue order.
-// It refuses an unknown, unavailable or repeated add-on, units outside the
-// add-on's limit and a second priority tier.
+// parseAddons reads the order form's "id:units:price" values, in catalogue
+// order. It refuses an unknown, unavailable or repeated add-on, units outside
+// the add-on's limit, a second priority tier and a price the catalogue no
+// longer has, so an order never costs more than the client was shown.
 func parseAddons(values []string, product string, hosting bool) ([]orderAddon, bool) {
-	chosen := map[string]int{}
+	chosen, shown := map[string]int{}, map[string]int64{}
 	for _, value := range values {
-		id, units, found := strings.Cut(value, ":")
-		n, err := strconv.Atoi(units)
-		if !found || err != nil || chosen[id] != 0 {
+		parts := strings.Split(value, ":")
+		if len(parts) != 3 {
 			return nil, false
 		}
-		chosen[id] = n
+		n, err := strconv.Atoi(parts[1])
+		price, priceErr := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil || priceErr != nil || chosen[parts[0]] != 0 {
+			return nil, false
+		}
+		chosen[parts[0]], shown[parts[0]] = n, price
 	}
 	var result []orderAddon
 	tiers := 0
@@ -110,7 +118,7 @@ func parseAddons(values []string, product string, hosting bool) ([]orderAddon, b
 			continue
 		}
 		delete(chosen, a.ID)
-		if n < 1 || n > a.units() {
+		if n < 1 || n > a.units() || shown[a.ID] != a.Price {
 			return nil, false
 		}
 		if a.Tier != "" {
@@ -133,7 +141,11 @@ func selectedAddons(query url.Values, product string, hosting bool) ([]addonChoi
 		if units == "" {
 			units = "1"
 		}
-		values = append(values, id+":"+units)
+		price := "0"
+		if a, ok := findAddon(id); ok {
+			price = strconv.FormatInt(a.Price, 10)
+		}
+		values = append(values, id+":"+units+":"+price)
 	}
 	chosen, valid := parseAddons(values, product, hosting)
 	if !valid {
@@ -151,8 +163,8 @@ func selectedAddons(query url.Values, product string, hosting bool) ([]addonChoi
 	return choices, chosen, valid
 }
 
-// sameAddons reports whether the form's "id:units" values name exactly an
-// order's stored add-ons.
+// sameAddons reports whether the form's values name exactly an order's stored
+// add-ons, at their stored prices.
 func sameAddons(stored []orderAddon, values []string) bool {
 	named := make([]string, len(stored))
 	for i, a := range stored {
