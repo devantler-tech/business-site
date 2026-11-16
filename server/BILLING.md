@@ -3,7 +3,8 @@
 [ADR 0030](../docs/adr/0030-numina-first-billing.md) decides how the portal collects money:
 Numina, the registered bookkeeping system, issues invoices and matches bank payments, and
 Stripe only collects cards. This page describes what the source does today. Nothing here runs
-in production: the gate below is false by default and has no environment mapping.
+in production: the gates below remain false by default and require their own
+explicit production settings and the separate reviewed activation under #21.
 
 ## Orders: one collection path
 
@@ -328,7 +329,10 @@ verified addresses.
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance
-gates plus the false-default `portal-invoice-billing` OpenFeature flag. Missing, wrong-type or
+gates plus the false-default `portal-invoice-billing` OpenFeature flag. Its explicit
+production setting is `PORTAL_INVOICE_BILLING_FLAG`, using the maintained-provider
+JSON documented in [README.md](README.md#explicit-production-identity-profile).
+Missing, wrong-type or
 error evaluations deny. Turning the flag off stops order placement, hides the order and stops
 the sync between calls.
 
@@ -356,8 +360,8 @@ read-only projection for that entry, the platform role's read permission on it, 
 allow rule to `api.numina.app` (the package denies egress by default), and the runtime grants
 below. None of these is added here.
 
-The card path has its own false-default `portal-card-billing` flag, also without an environment
-mapping. It is enabled only when `PORTAL_STRIPE_KEY_FILE` and
+The card path has its own false-default `portal-card-billing` flag and independent
+`PORTAL_CARD_BILLING_FLAG` production setting. It is enabled only when `PORTAL_STRIPE_KEY_FILE` and
 `PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files and `PORTAL_STRIPE_TAX_RATE` names the
 VAT tax rate (`txr_…`); `PORTAL_STRIPE_API_URL` is optional, HTTPS only. In production all of
 them come from the portal settings projection, and the two files are separate projected
