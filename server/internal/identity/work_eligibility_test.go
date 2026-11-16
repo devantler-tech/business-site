@@ -127,6 +127,45 @@ func TestWorkEligibilityNeverRestartsClosedWork(t *testing.T) {
 	}
 }
 
+func TestWorkEligibilityCompletedOrderWithoutSelectedApproval(t *testing.T) {
+	for _, selection := range []string{"never-selected", "revoked"} {
+		t.Run(selection, func(t *testing.T) {
+			b, op := approvalFixture(t)
+			flags := eligibilityFlags()
+			flags["portal-invoice-billing"] = memprovider.InMemoryFlag{State: memprovider.Enabled, DefaultVariant: "on", Variants: map[string]any{"on": true}}
+			setEligibilityFlags(t, b, flags)
+			var saved workApprovalReceipt
+			if selection == "revoked" {
+				saved = savedApproval(t, b, op)
+			}
+			order := orderID(t, b)
+			if err := b.svc.completeOrderWork(t.Context(), op, proposalRequestID, order); err != nil {
+				t.Fatal("ordinary completion path failed", err)
+			}
+			var generation int64
+			if saved.ID != "" {
+				if err := b.svc.revokeWorkApproval(t.Context(), op, proposalRequestID, workRevocationInput{Key: secret(), Approval: saved.ID, Expected: 1}); err != nil {
+					t.Fatal("ordinary approval revocation failed", err)
+				}
+				generation = 2
+			}
+			var completed, requestClosed bool
+			if err := b.pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_order_completions WHERE order_id=$1),EXISTS(SELECT 1 FROM portal_request_closures WHERE request_id=$2)`, order, proposalRequestID).Scan(&completed, &requestClosed); err != nil || !completed || requestClosed {
+				t.Fatal("completion control requires a completed order and open request", err)
+			}
+			const unrelated = "BBBBBBBBBBBBBBBBBBBBBBBBBB"
+			seedTriageRequest(t, b, unrelated, "Unrelated unfinished inquiry", time.Now().UTC())
+			page, err := b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
+			if err != nil || len(page.Items) != 2 || page.Items[0].Request != proposalRequestID || page.Items[0].State != eligibilityClosed || page.Items[0].Approval != "" || page.Items[0].Generation != generation {
+				t.Fatalf("completed work lost its terminal state without a selected approval: %+v %v", page, err)
+			}
+			if page.Items[1].Request != unrelated || page.Items[1].State != eligibilityApprovalRequired {
+				t.Fatalf("completion escaped its request binding: %+v", page.Items[1])
+			}
+		})
+	}
+}
+
 func TestWorkEligibilityChangedAgreementAndMembershipPause(t *testing.T) {
 	for _, change := range []string{"scope", "acceptor-revoked", "expired"} {
 		t.Run(change, func(t *testing.T) {
