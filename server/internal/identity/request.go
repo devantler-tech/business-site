@@ -221,7 +221,9 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			}
 			page.LaunchEnded = r.URL.Query().Get("launch") == "ended"
 			if proposal := cmp.Or(page.OrderProposal, page.SharedProposal); page.Order == nil && proposal != nil {
-				page.AddonChoices, page.OrderAddons, _ = selectedAddons(r.URL.Query(), page.Request.Product, proposal.MonthlyMinor > 0)
+				var valid bool
+				page.AddonChoices, page.OrderAddons, valid = selectedAddons(r.URL.Query(), page.Request.Product, proposal.MonthlyMinor > 0)
+				page.AddonsInvalid = !valid
 			}
 		}
 	}
@@ -284,6 +286,7 @@ type requestPageData struct {
 	LaunchEnded       bool          // the last launch place went before the client's order
 	AddonChoices      []addonChoice // the add-ons the client can choose, with the current choice
 	OrderAddons       []orderAddon  // the chosen add-ons the order form carries
+	AddonsInvalid     bool          // the client's add-on choice is not possible; no order form
 }
 
 // OrderOneTimeDKK and OrderMonthlyDKK are what the order form's order costs:
