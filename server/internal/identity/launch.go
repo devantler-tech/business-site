@@ -108,9 +108,10 @@ func launchLine(line, lang string, l *launchPlace) string {
 
 // readLaunchOffer returns the launch discount the client's order would get
 // now, for the proposal the client can order, or before acceptance the
-// shared one. A request with an order has none to offer.
+// shared one. A request with an order has none to offer. The caller evaluates
+// the order gate before its private reads; this evaluates no flag.
 func (s *Foundation) readLaunchOffer(ctx context.Context, p Principal, order *projectOrder, proposals ...*projectProposal) (*launchPlace, error) {
-	if order != nil || !s.orderReady(ctx) {
+	if order != nil {
 		return nil, nil
 	}
 	for _, proposal := range proposals {
