@@ -48,7 +48,7 @@ func (s *Foundation) readWorkEligibility(ctx context.Context, p Principal, curso
 }
 
 func (s *Foundation) eligibilityOperator(ctx context.Context, p Principal) error {
-	if !s.workEligibilityReady(ctx) || !time.Now().Before(p.expires) || ctx.Err() != nil {
+	if p.membershipIncarnation == "" || !s.workEligibilityReady(ctx) || !time.Now().Before(p.expires) || ctx.Err() != nil {
 		return ErrDenied
 	}
 	return s.triageOperator(ctx, p)
@@ -64,9 +64,9 @@ func (s *Foundation) readWorkEligibilityChecked(ctx context.Context, p Principal
 		return workEligibilityPage{}, err
 	}
 	rows, err := s.pool.Query(ctx, `SELECT r.id,r.submitted_at FROM portal_requests r
- WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked)
+ WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked AND m.incarnation::text=$5)
  AND ($3='' OR (r.submitted_at,r.id COLLATE "C") > ($4::timestamptz,$3 COLLATE "C"))
- ORDER BY r.submitted_at,r.id COLLATE "C" LIMIT 21`, p.issuer, p.subject, cursor.ID, cursor.Submitted)
+ ORDER BY r.submitted_at,r.id COLLATE "C" LIMIT 21`, p.issuer, p.subject, cursor.ID, cursor.Submitted, p.membershipIncarnation)
 	if err != nil {
 		return workEligibilityPage{}, errTriageStorage
 	}

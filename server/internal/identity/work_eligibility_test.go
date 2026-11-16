@@ -407,3 +407,34 @@ func TestWorkEligibilityGateAndOperatorBoundary(t *testing.T) {
 		t.Fatalf("operator observation missing or overstated: %+v %v", page, err)
 	}
 }
+
+func TestWorkEligibilityRequiresOriginalMembershipEpoch(t *testing.T) {
+	b, op := approvalFixture(t)
+	setEligibilityFlags(t, b, eligibilityFlags())
+	if op.membershipIncarnation == "" {
+		t.Fatal("fixture operator has no server-issued membership epoch")
+	}
+	unbound := op
+	unbound.membershipIncarnation = ""
+	page, err := b.svc.readWorkEligibility(t.Context(), unbound, triageCursor{})
+	if !errors.Is(err, ErrDenied) || len(page.Items) != 0 {
+		t.Fatalf("unbound operator received eligibility observations: %+v %v", page, err)
+	}
+	for range 2 {
+		if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=NOT revoked WHERE issuer=$1 AND subject=$2`, op.issuer, op.subject); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err = b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
+	if !errors.Is(err, ErrDenied) || len(page.Items) != 0 {
+		t.Fatalf("reactivation restored an old operator epoch: %+v %v", page, err)
+	}
+	fresh := authenticateExistingMember(t, b, op.subject)
+	if fresh.membershipIncarnation == "" || fresh.membershipIncarnation == op.membershipIncarnation {
+		t.Fatal("fresh Begin/Complete did not issue the current membership epoch")
+	}
+	page, err = b.svc.readWorkEligibility(t.Context(), fresh, triageCursor{})
+	if err != nil || len(page.Items) != 1 || page.Items[0].State != eligibilityApprovalRequired {
+		t.Fatalf("freshly authenticated operator lost eligibility access: %+v %v", page, err)
+	}
+}

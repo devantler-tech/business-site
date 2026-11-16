@@ -52,7 +52,9 @@ cross-request membership-lock sets or asserting an atomic queue snapshot.
 The complete JSON frame is buffered and the shared operator dispatcher checks
 the original durable session again after all waits and audit recording.
 The held transaction handles its own session check, including with a pool of
-one connection.
+one connection. Every actor and viewer check binds the original server-issued
+membership incarnation. Revocation and reactivation cannot restore an old
+principal or session; a genuinely new sign-in must bind the current incarnation.
 
 A genuine empty page is `{"items":[]}`. Storage or scan uncertainty fails the
 whole page with a generic unavailable response; no partial observations escape.

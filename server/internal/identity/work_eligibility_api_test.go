@@ -150,7 +150,7 @@ func TestWorkEligibilityAPIOriginalCursorAndSingleConnection(t *testing.T) {
 }
 
 func TestWorkEligibilityAPIRechecksOriginalDurableSession(t *testing.T) {
-	for _, change := range []string{"unchanged", "deleted", "expired"} {
+	for _, change := range []string{"unchanged", "deleted", "expired", "membership-restored"} {
 		t.Run(change, func(t *testing.T) {
 			b := newOperatorBrowserFixture(t)
 			setEligibilityFlags(t, b, eligibilityFlags())
@@ -186,6 +186,12 @@ func TestWorkEligibilityAPIRechecksOriginalDurableSession(t *testing.T) {
 				query = "DELETE FROM portal_sessions"
 			case "expired":
 				query = "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"
+			case "membership-restored":
+				for range 2 {
+					if _, err := b.pool.Exec(t.Context(), `UPDATE portal_memberships SET revoked=NOT revoked WHERE issuer=$1 AND subject=$2`, b.f.issuer, operatorSubject); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 			if query != "" {
 				if _, err := b.pool.Exec(t.Context(), query); err != nil {
@@ -209,6 +215,12 @@ func TestWorkEligibilityAPIRechecksOriginalDurableSession(t *testing.T) {
 				var count int
 				if err := b.pool.QueryRow(context.Background(), `SELECT count(*) FROM portal_sessions`).Scan(&count); err != nil || count != 0 {
 					t.Fatal("refused read recreated deleted authority", err)
+				}
+			}
+			if change == "membership-restored" {
+				b.finish(b.startAt(operatorLink))
+				if status, body, _ := b.request("GET", eligibilityAPIPath, nil, ""); status != http.StatusOK || !strings.Contains(body, proposalRequestID) {
+					t.Fatal("fresh operator sign-in did not use its current membership epoch", status)
 				}
 			}
 		})
