@@ -7,6 +7,7 @@ import "testing"
 func TestWorkspaceMigrationPreservesExistingCustomers(t *testing.T) {
 	pool := fixtureDB(t)
 	migrator := migrationDB(t)
+	rewindOriginalConfirmationFixture(t, migrator)
 	if _, err := migrator.Exec(t.Context(), `DROP TABLE portal_workspaces;
  DELETE FROM portal_schema_version WHERE version=29;
  INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES('https://fixture.example.invalid','existing-customer','existing-workspace','client');
