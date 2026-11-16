@@ -11,8 +11,11 @@ Following [ADR 0030](../docs/adr/0030-numina-first-billing.md), the operator doe
 quote for a published offering. A request for a website, web app or web service shows a
 **generated draft** on the operator's request page: its scope names the offering and the
 request title, its deliverables and terms are the published offer copy, and its prices are the
-published VAT-inclusive guide prices in minor units (website 3,750 + 125/month, web app
-10,000 + 375/month, web service 6,250 + 250/month). The operator reviews it and chooses
+published VAT-inclusive fixed prices in minor units (website 6,000 + 300/month, web app
+15,000 + 800/month, web service 9,500 + 500/month). Its one-time terms also say the first
+consultation is free. The `launchDiscount` block (25% off the one-time price for the first 50
+customers who order with hosting) is decoded but not yet applied by quotes, orders or invoices.
+The operator reviews it and chooses
 **Save generated draft as a new version**, then shares that version as usual. The draft uses
 the page language, so open the page in Danish for a Danish quote.
 

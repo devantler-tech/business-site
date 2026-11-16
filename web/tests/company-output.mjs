@@ -74,7 +74,10 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         /** @param {MarkupNode[]} nodes */
         const offers = nodes => nodes.filter(node => attr(node,"data-offer") !== undefined).map(node => [attr(node,"data-offer"),attr(node,"data-setup"),attr(node,"data-monthly"),text(node)]);
 
-        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"],["other",undefined,undefined]]);
+        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","6000","300"],["app","15000","800"],["service","9500","500"],["other",undefined,undefined]]);
+        assert.deepEqual(actual.filter(node => attr(node,"data-launch-setup") !== undefined).map(node => attr(node,"data-launch-setup")),["4500","11250","7125"],"each offer shows its launch price");
+        const launchOffer = find(actual,"data-launch-offer");
+        assert.ok(launchOffer && text(launchOffer).includes(locale === "da" ? "De første 50 kunder" : "the first 50 customers"),"the launch offer states its limit");
       }
     }
     for (const kind of ["privacy","terms"]) {

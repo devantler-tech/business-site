@@ -109,7 +109,7 @@ for (const locale of ['en', 'da']) {
     if (section !== 'about') await workExample(nodes, locale);
     if (section) continue;
     for (const id of ['services','work','products','process','contact']) assert.ok(nodes.some(node => attr(node, 'id') === id), `Missing visitor section: ${id}`);
-    for (const [service, setup, monthly] of [['website','3750','125'],['app','10000','375'],['service','6250','250']]) {
+    for (const [service, setup, monthly] of [['website','6000','300'],['app','15000','800'],['service','9500','500']]) {
       const offer = nodes.find(node => attr(node, 'data-offer') === service);
       assert.ok(offer && attr(offer, 'data-setup') === setup && attr(offer, 'data-monthly') === monthly);
     }
@@ -124,7 +124,7 @@ for (const locale of ['en', 'da']) {
     assert.ok(text(other).includes(locale === 'da' ? 'Jeg vurderer hver opgave individuelt' : 'I assess each request individually'));
     assert.ok(text(other).includes(locale === 'da' ? 'omfang, tidsplan og pris' : 'scope, timing and price'));
     const markers = nodes.filter(node => hasClass(node, 'vat-marker'));
-    assert.equal(markers.length, 6);
+    assert.equal(markers.length, 9, "every one-time, launch and monthly price carries its VAT marker");
     assert.ok(markers.every(node => text(node).includes(locale === 'da' ? 'inkl. moms' : 'incl. VAT')));
     assert.ok(readerText(html).includes(locale === 'da' ? 'Priserne er inkl. 25 % moms.' : 'Prices include 25% Danish VAT.'));
     const contact = nodes.find(node => attr(node, 'id') === 'contact');

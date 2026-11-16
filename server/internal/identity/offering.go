@@ -28,10 +28,23 @@ type publishedOffering struct {
 	Text       map[string]offeringText `json:"text"`
 }
 
+// launchOffer is the published launch discount: `Percent` off the one-time price for
+// the first `Limit` customers whose order includes hosting. Hosting stays at full
+// price. Applying it and counting customers belong to quotes, orders and invoices.
+type launchOffer struct {
+	Percent         int64             `json:"percent"`
+	Limit           int64             `json:"limit"`
+	AppliesTo       string            `json:"appliesTo"`
+	RequiresHosting bool              `json:"requiresHosting"`
+	Text            map[string]string `json:"text"`
+}
+
 type offeringCatalogue struct {
-	Offerings []publishedOffering `json:"offerings"`
-	Hosting   map[string]string   `json:"hosting"`
-	VAT       map[string]string   `json:"vat"`
+	Offerings      []publishedOffering `json:"offerings"`
+	Hosting        map[string]string   `json:"hosting"`
+	VAT            map[string]string   `json:"vat"`
+	LaunchDiscount launchOffer         `json:"launchDiscount"`
+	Consultation   map[string]string   `json:"consultation"`
 }
 
 var offerings = mustOfferings(offeringsJSON)
@@ -66,7 +79,7 @@ func generatedProposal(product, title, lang string) (projectProposal, bool) {
 			Currency:     "DKK",
 			OneTimeMinor: o.SetupDKK * 100,
 			MonthlyMinor: o.MonthlyDKK * 100,
-			OneTimeTerms: t.Boundary + " " + vat,
+			OneTimeTerms: t.Boundary + " " + offerings.Consultation[lang] + " " + vat,
 			MonthlyTerms: offerings.Hosting[lang] + " " + vat,
 		}, true
 	}

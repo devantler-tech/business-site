@@ -15,7 +15,7 @@ import (
 // yields a version the ordinary proposal form accepts unchanged, at the exact
 // VAT-inclusive guide prices, and that other requests are never priced.
 func TestProposalGenerationUsesPublishedPrices(t *testing.T) {
-	want := map[string][2]int64{"website": {375000, 12500}, "app": {1000000, 37500}, "service": {625000, 25000}}
+	want := map[string][2]int64{"website": {600000, 30000}, "app": {1500000, 80000}, "service": {950000, 50000}}
 	for product, prices := range want {
 		for _, lang := range []string{"en", "da"} {
 			d, ok := generatedProposal(product, "  Fictional bakery  ", lang)
@@ -41,6 +41,15 @@ func TestProposalGenerationUsesPublishedPrices(t *testing.T) {
 	}
 	if en, _ := generatedProposal("website", "x", "fr"); !strings.Contains(en.OneTimeTerms, "25% Danish VAT") {
 		t.Fatal("unknown language did not fall back to English")
+	}
+	if da, _ := generatedProposal("website", "x", "da"); !strings.Contains(da.OneTimeTerms, "Den første samtale er gratis.") {
+		t.Fatal("Danish version lacks the free first consultation")
+	}
+	if en, _ := generatedProposal("website", "x", "en"); !strings.Contains(en.OneTimeTerms, "The first consultation is free.") {
+		t.Fatal("English version lacks the free first consultation")
+	}
+	if offerings.LaunchDiscount.Percent != 25 || offerings.LaunchDiscount.Limit != 50 || offerings.LaunchDiscount.AppliesTo != "setup" || !offerings.LaunchDiscount.RequiresHosting {
+		t.Fatalf("launch discount drifted: %+v", offerings.LaunchDiscount)
 	}
 	for _, product := range []string{"other", "", "Website"} {
 		if _, ok := generatedProposal(product, "x", "en"); ok {

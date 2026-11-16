@@ -2,8 +2,8 @@
   "offerings": [
     {
       "id": "website",
-      "setup": 3750,
-      "monthly": 125,
+      "setup": 6000,
+      "monthly": 300,
       "text": {
         "en": {
           "title": "A professional website",
@@ -31,8 +31,8 @@
     },
     {
       "id": "app",
-      "setup": 10000,
-      "monthly": 375,
+      "setup": 15000,
+      "monthly": 800,
       "text": {
         "en": {
           "title": "A web app",
@@ -43,7 +43,7 @@
             "Agreed data inputs and outputs",
             "Testing and a practical handover"
           ],
-          "boundary": "The starting price covers an agreed first version. Further development is scoped and quoted separately. Complex permissions, payments, sensitive data and integrations need a separate scope."
+          "boundary": "The fixed price covers an agreed first version. Further development gets its own fixed-price quote. Complex permissions, payments, sensitive data and integrations need a separate scope."
         },
         "da": {
           "title": "En webapp",
@@ -54,14 +54,14 @@
             "Aftalte data ind og ud",
             "Test og en praktisk overdragelse"
           ],
-          "boundary": "Startprisen dækker en aftalt første version. Videreudvikling aftales og prissættes særskilt. Komplekse adgangsrettigheder, betaling, følsomme data og integrationer kræver en særskilt aftale."
+          "boundary": "Den faste pris dækker en aftalt første version. Videreudvikling får sit eget fastpristilbud. Komplekse adgangsrettigheder, betaling, følsomme data og integrationer kræver en særskilt aftale."
         }
       }
     },
     {
       "id": "service",
-      "setup": 6250,
-      "monthly": 250,
+      "setup": 9500,
+      "monthly": 500,
       "text": {
         "en": {
           "title": "A web service",
@@ -72,7 +72,7 @@
             "Basic operating documentation",
             "Testing against the agreed use case"
           ],
-          "boundary": "External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price."
+          "boundary": "External subscriptions, API charges, extra integrations and high-volume processing are not included in the fixed price."
         },
         "da": {
           "title": "En webservice",
@@ -83,17 +83,31 @@
             "Grundlæggende driftsdokumentation",
             "Test af den aftalte anvendelse"
           ],
-          "boundary": "Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen."
+          "boundary": "Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i den faste pris."
         }
       }
     }
   ],
   "hosting": {
-    "en": "Your project can run on the Devantler Tech platform when its needs fit. Traffic, storage and any external services determine the final monthly price. If a new feature increases those costs, you receive a revised quote before it is added.",
-    "da": "Dit projekt kan køre på Devantler Tech-platformen, når behovet passer. Trafik, lagerplads og eventuelle eksterne tjenester afgør den endelige månedspris. Hvis en ny funktion øger udgifterne, får du et revideret tilbud, før den tilføjes."
+    "en": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Larger changes and new features get a fixed-price quote before any work starts.",
+    "da": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Større ændringer og nye funktioner får et fastpristilbud, før arbejdet begynder."
   },
   "vat": {
     "en": "Prices include 25% Danish VAT.",
     "da": "Priserne er inkl. 25 % moms."
+  },
+  "launchDiscount": {
+    "percent": 25,
+    "limit": 50,
+    "appliesTo": "setup",
+    "requiresHosting": true,
+    "text": {
+      "en": "Launch offer: the first 50 customers who order a project together with hosting get 25% off its one-time price. Hosting is charged at the normal monthly price.",
+      "da": "Introduktionstilbud: De første 50 kunder, der bestiller et projekt sammen med hosting, får 25 % rabat på projektets engangspris. Hosting koster den normale månedspris."
+    }
+  },
+  "consultation": {
+    "en": "The first consultation is free.",
+    "da": "Den første samtale er gratis."
   }
 }

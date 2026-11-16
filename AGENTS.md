@@ -159,11 +159,13 @@ the activation flips its `false` pin in `scripts/package-runtime.sh` and
 `scripts/vat-activation.test.mjs`. They link to the address rather
 than repeat it. Change them with any change to hosting, providers, retention, prices or terms
 (#19); never call the business compliant.
-Publish the approved VAT-inclusive introductory guides at DKK 3,750 plus optional hosting
-125/month for a website, 10,000 plus 375/month for a focused first app version, and 6,250
-plus 250/month for a service. Each total includes 25% Danish VAT and preserves the previous
-net-price floor; never add VAT again.
-These starting prices do not cap application size: larger builds use agreed, priced iterations.
+Publish the maintainer's fixed VAT-inclusive prices (15 November 2026): DKK 6,000 plus optional
+hosting 300/month for a website, 15,000 plus 800/month for a focused first app version, and
+9,500 plus 500/month for a service. Each total includes 25% Danish VAT; never add VAT again.
+No hourly rates: work beyond the agreed scope gets its own fixed-price quote, and the first
+consultation is free. The launch offer (`launchDiscount` in `business-copy.ts` and
+`server/internal/identity/offerings.json`) gives the first 50 customers who order with hosting
+25% off the one-time price only; remove it from the site when the 50 places are taken.
 VAT-inclusive prices and current company facts are permanent in the frontend and every package
 profile. The production-template packager enables company identity and
 the reviewed private/business customer invitation for Denmark and the EU; revised-offer copy stays
