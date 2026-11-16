@@ -211,6 +211,7 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 				return
 			}
 			page.BillingEnabled, page.InvoiceOption, page.CardOption = true, invoiceOption, cardOption
+			page.OrderTerms, page.OrderTermsHash = b.foundation.termsFor(language(r))
 			if page.Order != nil && page.Order.Collection == "card" && cardOption {
 				if page.Checkouts, err = b.foundation.readCheckouts(r.Context(), *page.Order); err != nil {
 					b.triageError(w, r, err)
@@ -297,6 +298,8 @@ type requestPageData struct {
 	Order             *projectOrder
 	OrderAcceptance   string
 	OrderProposal     *projectProposal
+	OrderTerms        string
+	OrderTermsHash    string
 	Checkouts         []orderCheckout
 	CheckoutRestart   bool
 	Launch            *launchPlace  // the launch discount an order would get now
