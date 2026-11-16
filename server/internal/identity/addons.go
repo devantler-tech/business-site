@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -17,6 +18,7 @@ type orderAddon struct {
 	ID, Kind  string
 	Quantity  int
 	UnitMinor int64
+	LastMonth *time.Time // the last billed month, once the client ended a monthly add-on
 }
 
 func (a orderAddon) TotalMinor() int64 { return a.UnitMinor * int64(a.Quantity) }
@@ -180,7 +182,7 @@ func addonTotals(addons []orderAddon) (oneTime, monthly int64) {
 func readOrderAddons(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, order string) ([]orderAddon, error) {
-	rows, err := q.Query(ctx, `SELECT addon_id,kind,quantity,unit_minor FROM portal_order_addons WHERE order_id=$1`, order)
+	rows, err := q.Query(ctx, `SELECT a.addon_id,a.kind,a.quantity,a.unit_minor,e.last_month FROM portal_order_addons a LEFT JOIN portal_addon_ends e ON e.order_id=a.order_id AND e.addon_id=a.addon_id WHERE a.order_id=$1`, order)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -202,15 +204,37 @@ func addonRank(id string) int {
 }
 
 // periodAddons are the add-ons a billing period charges: the one-time ones
-// with the order's first charge, the monthly ones every month.
+// with the order's first charge, the monthly ones every month until the client
+// ends them. A period that names no month (a new subscription) charges no
+// ended add-on.
 func periodAddons(addons []orderAddon, period string) []orderAddon {
 	var result []orderAddon
 	for _, a := range addons {
-		if a.Monthly() == (period != "acceptance") {
+		if a.Monthly() == (period != "acceptance") && !endedBefore(a, period) {
 			result = append(result, a)
 		}
 	}
 	return result
+}
+
+// endedBefore reports whether a monthly add-on ended before the period.
+func endedBefore(a orderAddon, period string) bool {
+	if !a.Monthly() || a.LastMonth == nil {
+		return false
+	}
+	month, err := time.Parse("2006-01", period)
+	return err != nil || a.LastMonth.Before(month)
+}
+
+// periodMonthly is what a monthly period charges: the order's monthly price
+// less the add-ons the client ended before it.
+func periodMonthly(monthly int64, addons []orderAddon, period string) int64 {
+	for _, a := range addons {
+		if endedBefore(a, period) {
+			monthly -= a.TotalMinor()
+		}
+	}
+	return monthly
 }
 
 // addonLine names an add-on on an invoice or payment line.

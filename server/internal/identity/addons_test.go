@@ -10,7 +10,7 @@ import (
 
 func TestAddonChoicesAreValidated(t *testing.T) {
 	got, ok := parseAddons([]string{"statistics:1", "language:2", "contact-form:1"}, "app", true)
-	want := []orderAddon{{"statistics", "monthly", 1, 7500}, {"language", "one-time", 2, 150000}, {"contact-form", "one-time", 1, 150000}}
+	want := []orderAddon{{"statistics", "monthly", 1, 7500, nil}, {"language", "one-time", 2, 150000, nil}, {"contact-form", "one-time", 1, 150000, nil}}
 	if !ok || !slices.Equal(got, want) {
 		t.Fatalf("valid add-ons were not read in catalogue order: %v %v", got, ok)
 	}
