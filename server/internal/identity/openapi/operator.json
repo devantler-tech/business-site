@@ -5,7 +5,7 @@
     "version": "1",
     "description": "Every operator action, as the operator pages use it. Only a current operator may call it. Every call by a signed-in identity is recorded in the audit log before it is answered, refusals included; a call that cannot be recorded fails."
   },
-  "servers": [{ "url": "https://portal.devantler.tech" }],
+  "servers": [{ "url": "/" }],
   "security": [{ "portalSession": [] }],
   "paths": {
     "/operator/api/invitations": {
@@ -13,7 +13,7 @@
         "operationId": "invitations.list",
         "summary": "Invitations that can still be accepted",
         "responses": {
-          "200": { "description": "Pending invitations, soonest expiry first", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Invitation" } } } } },
+          "200": { "description": "All pending invitations, soonest expiry first; more than 1000 returns 503", "content": { "application/json": { "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Invitation" } } } } },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -25,7 +25,7 @@
         "operationId": "workspaces.list",
         "summary": "Every workspace and its members, revoked ones included",
         "responses": {
-          "200": { "description": "Workspaces by ID", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Workspace" } } } } },
+          "200": { "description": "All workspaces by ID; more than 1000 memberships across them returns 503", "content": { "application/json": { "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Workspace" } } } } },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -37,7 +37,7 @@
         "operationId": "audit.list",
         "summary": "The newest 100 audit entries",
         "responses": {
-          "200": { "description": "Audit entries, newest first", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AuditEntry" } } } } },
+          "200": { "description": "Audit entries, newest first", "content": { "application/json": { "schema": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/AuditEntry" } } } } },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -83,7 +83,7 @@
         "required": ["id", "members"],
         "properties": {
           "id": { "type": "string" },
-          "members": { "type": "array", "items": { "$ref": "#/components/schemas/Member" } }
+          "members": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
         }
       },
       "Member": {

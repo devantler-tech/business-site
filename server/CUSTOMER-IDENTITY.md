@@ -309,7 +309,11 @@ call that cannot be recorded fails. A browser without a session gets 401 and is 
 The rows hold IDs, never request bodies or customer details, and the retention purge removes
 them after the retention period. The operator page links to the newest 100 entries at
 `/operator/audit`. The API only reads for now: pending invitations, workspaces with their
-members, and the audit log (business-site#638).
+members, and the audit log (business-site#638). Inventory responses allow at most 1000
+pending invitations or 1000 memberships across all workspaces; larger inventories return 503
+instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
+the original durable session and current operator membership after all rendering and SDK waits.
+Each displayed audit entry includes the actor's subject as well as their kind.
 
 ## Invite a customer
 

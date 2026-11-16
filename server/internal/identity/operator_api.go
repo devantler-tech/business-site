@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -24,6 +25,10 @@ var operatorOpenAPI []byte
 
 // auditLimit bounds one read of the audit log.
 const auditLimit = 100
+
+// operatorListLimit bounds inventory reads. Oversized results fail rather than
+// silently hiding pending invitations or workspace members.
+const operatorListLimit = 1000
 
 // operatorRoute is one operator API action. Its action name is what the audit
 // log records and what later per-action grants refer to.
@@ -81,60 +86,88 @@ func (s *Foundation) audit(ctx context.Context, p Principal, kind, action, targe
 // operator membership runs it. Every call by a signed-in identity writes one
 // audit row before it is answered, refusals included, and a call that cannot be
 // recorded fails. A browser without a session has no one to record and gets 401.
-// It returns the HTTP status, the action's result and the operator's workspace.
-func (b *browser) operatorCall(r *http.Request, action string, run func(context.Context) (any, error)) (int, any, string) {
+// The action buffers its complete response before the final authority checks.
+func (b *browser) operatorCall(r *http.Request, action string, run func(context.Context, string) ([]byte, error)) (int, []byte) {
 	ctx := r.Context()
-	p := b.principal(ctx)
+	original := b.contactAuthority(ctx, "")
+	p := original.principal
 	if p.subject == "" {
-		return http.StatusUnauthorized, nil, ""
+		return http.StatusUnauthorized, nil
+	}
+	snapshot, current := b.captureDurableResponse(ctx, original)
+	if !current {
+		return http.StatusServiceUnavailable, nil
 	}
 	client, role, err := b.foundation.membership(ctx, p)
 	if err != nil && !errors.Is(err, ErrDenied) {
-		return http.StatusServiceUnavailable, nil, ""
+		return http.StatusServiceUnavailable, nil
 	}
 	kind, status, outcome := "other", http.StatusForbidden, "refused"
-	var result any
+	var result []byte
 	if err == nil && role == "operator" {
 		kind, status, outcome = "operator", http.StatusOK, "allowed"
-		if result, err = run(ctx); err != nil {
+		if result, err = run(ctx, client); err != nil || !b.foundation.ready(ctx) || !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
 			result, status, outcome = nil, http.StatusServiceUnavailable, "failed"
 		}
 	}
 	if b.foundation.audit(ctx, p, kind, action, "", outcome) != nil {
-		return http.StatusServiceUnavailable, nil, ""
+		return http.StatusServiceUnavailable, nil
 	}
-	return status, result, client
+	// Recording can wait too. Bind the original session bytes and workspace once
+	// more after it, with no further SDK calls or response rendering afterward.
+	if status == http.StatusOK && !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
+		return http.StatusServiceUnavailable, nil
+	}
+	return status, result
 }
 
 // operatorAPI answers one route as JSON.
 func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		status, result, _ := b.operatorCall(r, route.action, func(ctx context.Context) (any, error) { return route.run(b, ctx) })
+		status, result := b.operatorCall(r, route.action, func(ctx context.Context, _ string) ([]byte, error) {
+			data, err := route.run(b, ctx)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(data)
+		})
+		problem := ""
 		switch status {
 		case http.StatusOK:
 		case http.StatusUnauthorized:
-			result = operatorError{"sign in as an operator"}
+			problem = "sign in as an operator"
 		case http.StatusForbidden:
-			result = operatorError{"operators only"}
+			problem = "operators only"
 		default:
-			result = operatorError{"unavailable"}
+			problem = "unavailable"
+		}
+		if problem != "" {
+			result, _ = json.Marshal(operatorError{problem})
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(result)
+		_, _ = w.Write(result)
 	}
 }
 
 // operatorAuditPage shows the newest audit entries on the operator page.
 func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
-	status, result, client := b.operatorCall(r, "audit.view", func(ctx context.Context) (any, error) { return b.auditLog(ctx) })
+	status, result := b.operatorCall(r, "audit.view", func(ctx context.Context, client string) ([]byte, error) {
+		entries, err := b.auditLog(ctx)
+		if err != nil {
+			return nil, err
+		}
+		d := b.data(r, "operator-audit", client, "")
+		d.Audit, _ = entries.([]auditEntry)
+		var buffer bytes.Buffer
+		err = b.templates().ExecuteTemplate(&buffer, "portal.html", d)
+		return buffer.Bytes(), err
+	})
 	switch status {
 	case http.StatusOK:
-		d := b.data(r, "operator-audit", client, "")
-		d.Audit, _ = result.([]auditEntry)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+		_, _ = w.Write(result)
 	case http.StatusServiceUnavailable:
 		b.render(w, r, status, "unavailable", "", "")
 	default:
@@ -144,7 +177,7 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 
 // pendingInvitations lists invitations that can still be accepted.
 func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE NOT revoked AND expires_at>now() ORDER BY expires_at,client_id`)
+	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE NOT revoked AND expires_at>now() ORDER BY expires_at,client_id LIMIT $1`, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
 	}
@@ -152,19 +185,27 @@ func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
 		var i pendingInvitation
 		return i, row.Scan(&i.Subject, &i.Workspace, &i.Role, &i.Expires)
 	})
+	if len(list) > operatorListLimit {
+		return nil, errors.New("invitation inventory exceeds response limit")
+	}
 	return nonNil(list), err
 }
 
 // workspaces lists every workspace with its members, revoked ones included.
 func (b *browser) workspaces(ctx context.Context) (any, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT client_id,subject,role,revoked FROM portal_memberships ORDER BY client_id,role,subject`)
+	rows, err := b.foundation.pool.Query(ctx, `SELECT client_id,subject,role,revoked FROM portal_memberships ORDER BY client_id,role,subject LIMIT $1`, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list workspaces: %w", err)
 	}
 	views := []workspaceView{}
 	var id string
 	var m workspaceMember
+	count := 0
 	_, err = pgx.ForEachRow(rows, []any{&id, &m.Subject, &m.Role, &m.Revoked}, func() error {
+		count++
+		if count > operatorListLimit {
+			return errors.New("membership inventory exceeds response limit")
+		}
 		if len(views) == 0 || views[len(views)-1].ID != id {
 			views = append(views, workspaceView{ID: id})
 		}

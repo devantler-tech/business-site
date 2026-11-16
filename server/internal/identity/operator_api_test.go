@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // auditRows returns the recorded actions as "kind action outcome", oldest first.
@@ -114,11 +115,95 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 		t.Fatal("the API does not serve its own OpenAPI file")
 	}
 	s, body, _ := b.request("GET", "/portal/operator/audit?lang=da", nil, "")
-	if s != http.StatusOK || !strings.Contains(body, "Revisionslog") || !strings.Contains(body, "operator · openapi.read · allowed") {
+	if s != http.StatusOK || !strings.Contains(body, "Revisionslog") || !strings.Contains(body, "operator · "+operatorSubject+" · openapi.read · allowed") {
 		t.Fatalf("the audit page does not list the calls: %d", s)
 	}
 	if got := b.auditRows(); got[len(got)-1] != "operator audit.view allowed" {
 		t.Fatalf("viewing the audit page was not recorded: %q", got)
+	}
+}
+
+// TestOperatorResponseRequiresDurableAuthority invalidates the actual session
+// while the membership SDK evaluation or private database read is paused.
+func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
+	for _, path := range []string{"/api/invitations", "/api/workspaces", "/api/audit", "/api/openapi.json", "/audit"} {
+		for _, checkpoint := range []string{"membership", "data"} {
+			if checkpoint == "data" && path == "/api/openapi.json" {
+				continue
+			}
+			for _, change := range []string{"unchanged", "deleted", "expired"} {
+				t.Run(path+"/"+checkpoint+"/"+change, func(t *testing.T) {
+					b := newBrowserFixture(t)
+					if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
+						t.Fatal(err)
+					}
+					b.invite("pending-customer", "client-b", "client")
+					b.as(operatorSubject)
+					b.finish(b.startAt(operatorLink))
+					if status, _, _ := b.request("GET", operatorAPIRoot+"/openapi.json", nil, ""); status != http.StatusOK {
+						t.Fatal("seed audit call failed", status)
+					}
+					var blocked, release chan struct{}
+					if checkpoint == "membership" {
+						pause := installReadProvider(t, b, "portal-identity", 2)
+						blocked, release = pause.blocked, pause.release
+					} else {
+						query := "FROM portal_operator_audit ORDER BY"
+						if path == "/api/invitations" {
+							query = "FROM portal_invitations WHERE"
+						} else if path == "/api/workspaces" {
+							query = "FROM portal_memberships ORDER BY"
+						}
+						pause := installCompletedRead(t, b, query)
+						blocked, release = pause.blocked, pause.release
+						b.mu.Lock()
+						b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
+						b.mu.Unlock()
+					}
+					resume := onceRelease(release)
+					result := make(chan contactResponse, 1)
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
+						status, body, _ := b.request("GET", "/portal/operator"+path, nil, "")
+						result <- contactResponse{status, body}
+					}()
+					t.Cleanup(func() {
+						resume()
+						select {
+						case <-done:
+						case <-time.After(5 * time.Second):
+							t.Error("operator reader did not finish")
+						}
+					})
+					select {
+					case <-blocked:
+					case <-time.After(5 * time.Second):
+						t.Fatal("operator read missed its authority checkpoint")
+					}
+					query := ""
+					if change == "deleted" {
+						query = "DELETE FROM portal_sessions"
+					} else if change == "expired" {
+						query = "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"
+					}
+					if query != "" {
+						if _, err := b.pool.Exec(t.Context(), query); err != nil {
+							t.Fatal(err)
+						}
+					}
+					resume()
+					got := <-result
+					if change == "unchanged" {
+						if got.status != http.StatusOK {
+							t.Fatal("current operator lost access", got.status)
+						}
+					} else if got.status != http.StatusServiceUnavailable || strings.Contains(got.body, "pending-customer") || strings.Contains(got.body, operatorSubject) || strings.Contains(got.body, "openapi.read") {
+						t.Fatalf("%s session released private operator output: status=%d", change, got.status)
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -141,5 +226,31 @@ func TestOperatorAPIFailsWithoutAudit(t *testing.T) {
 	}
 	if s != http.StatusServiceUnavailable || strings.Contains(body, "client-b") {
 		t.Fatalf("an unrecorded call was answered: %d %s", s, body)
+	}
+}
+
+// TestOperatorListsRefuseOversizedResults prevents a bounded response from
+// silently presenting an incomplete invitation or membership inventory.
+func TestOperatorListsRefuseOversizedResults(t *testing.T) {
+	for _, kind := range []string{"invitations", "workspaces"} {
+		t.Run(kind, func(t *testing.T) {
+			b := newBrowserFixture(t)
+			if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
+				t.Fatal(err)
+			}
+			b.as(operatorSubject)
+			b.finish(b.startAt(operatorLink))
+			query := `INSERT INTO portal_memberships(issuer,subject,client_id,role) SELECT $1,'large-'||n,'private-large-workspace','client' FROM generate_series(1,1001) n`
+			if kind == "invitations" {
+				query = `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at) SELECT decode(md5(n::text)||md5(n::text),'hex'),$1,'large-'||n,'private-large-workspace','client',now()+interval '1 day' FROM generate_series(1,1001) n`
+			}
+			if _, err := b.pool.Exec(t.Context(), query, b.f.issuer); err != nil {
+				t.Fatal(err)
+			}
+			status, body, _ := b.request("GET", operatorAPIRoot+"/"+kind, nil, "")
+			if status != http.StatusServiceUnavailable || strings.Contains(body, "private-large-workspace") {
+				t.Fatalf("oversized %s inventory was returned: %d", kind, status)
+			}
+		})
 	}
 }
