@@ -116,10 +116,10 @@ func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
 		t.Fatal(err)
 	}
-	var calls, reactivations atomic.Int32
+	var calls, enableCalls atomic.Int32
 	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(_ context.Context, _ string, active bool) error {
 		if active {
-			reactivations.Add(1)
+			enableCalls.Add(1)
 		}
 		if calls.Add(1) == 1 {
 			return errors.New("fictional provider unavailable")
@@ -142,7 +142,7 @@ func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
 		t.Fatal("native deactivation retry did not complete", status)
 	}
 	var revoked bool
-	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || calls.Load() != 2 || reactivations.Load() != 0 {
-		t.Fatal("retry restored access or skipped the provider", revoked, calls.Load(), reactivations.Load(), err)
+	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || calls.Load() != 2 || enableCalls.Load() != 0 {
+		t.Fatal("retry restored access or skipped the provider", revoked, calls.Load(), enableCalls.Load(), err)
 	}
 }
