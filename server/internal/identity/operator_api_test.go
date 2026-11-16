@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+func newOperatorBrowserFixture(t *testing.T) *browserFixture {
+	t.Helper()
+	b := newBrowserFixture(t)
+	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
+		t.Fatal(err)
+	}
+	b.as(operatorSubject)
+	b.finish(b.startAt(operatorLink))
+	return b
+}
+
 // auditRows returns the recorded actions as "kind action outcome", oldest first.
 func (b *browserFixture) auditRows() []string {
 	b.t.Helper()
@@ -133,13 +144,8 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 			}
 			for _, change := range []string{"unchanged", "deleted", "expired"} {
 				t.Run(path+"/"+checkpoint+"/"+change, func(t *testing.T) {
-					b := newBrowserFixture(t)
-					if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
-						t.Fatal(err)
-					}
+					b := newOperatorBrowserFixture(t)
 					b.invite("pending-customer", "client-b", "client")
-					b.as(operatorSubject)
-					b.finish(b.startAt(operatorLink))
 					if status, _, _ := b.request("GET", operatorAPIRoot+"/openapi.json", nil, ""); status != http.StatusOK {
 						t.Fatal("seed audit call failed", status)
 					}
@@ -211,13 +217,8 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 
 // TestOperatorAPIFailsWithoutAudit: a call that cannot be recorded is not answered.
 func TestOperatorAPIFailsWithoutAudit(t *testing.T) {
-	b := newBrowserFixture(t)
-	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
-		t.Fatal(err)
-	}
+	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-b", "client")
-	b.as(operatorSubject)
-	b.finish(b.startAt(operatorLink))
 	migrator := migrationDB(t)
 	if _, err := migrator.Exec(b.f.ctx, "REVOKE INSERT ON portal_operator_audit FROM portal_runtime"); err != nil {
 		t.Fatal(err)
@@ -236,12 +237,7 @@ func TestOperatorAPIFailsWithoutAudit(t *testing.T) {
 func TestOperatorListsRefuseOversizedResults(t *testing.T) {
 	for _, kind := range []string{"invitations", "workspaces"} {
 		t.Run(kind, func(t *testing.T) {
-			b := newBrowserFixture(t)
-			if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
-				t.Fatal(err)
-			}
-			b.as(operatorSubject)
-			b.finish(b.startAt(operatorLink))
+			b := newOperatorBrowserFixture(t)
 			query := `INSERT INTO portal_memberships(issuer,subject,client_id,role) SELECT $1,'large-'||n,'private-large-workspace','client' FROM generate_series(1,1001) n`
 			if kind == "invitations" {
 				query = `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at) SELECT decode(md5(n::text)||md5(n::text),'hex'),$1,'large-'||n,'private-large-workspace','client',now()+interval '1 day' FROM generate_series(1,1001) n`
