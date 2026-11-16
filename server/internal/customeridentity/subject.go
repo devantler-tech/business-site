@@ -27,3 +27,33 @@ func DexSubject(userID, connectorID string) string {
 	}
 	return base64.RawURLEncoding.EncodeToString(message)
 }
+
+// PlatformConnectorID is customer Dex's connector to platform SSO, where the
+// maintainer signs in with GitHub. Only configured operators use it.
+const PlatformConnectorID = "platform"
+
+// DexConnector returns the connector customer Dex issued subject through, or ""
+// unless subject is exactly DexSubject's encoding of a non-empty user ID and
+// connector. Re-encoding refuses any other form of the same fields.
+func DexConnector(subject string) string {
+	raw, err := base64.RawURLEncoding.Strict().DecodeString(subject)
+	if err != nil {
+		return ""
+	}
+	var values [2]string
+	for field := range values {
+		if len(raw) == 0 || raw[0] != byte(field+1)<<3|2 {
+			return ""
+		}
+		length, read := binary.Uvarint(raw[1:])
+		if read <= 0 || length == 0 || length > uint64(len(raw)-1-read) {
+			return ""
+		}
+		values[field] = string(raw[1+read : 1+read+int(length)])
+		raw = raw[1+read+int(length):]
+	}
+	if len(raw) != 0 || DexSubject(values[0], values[1]) != subject {
+		return ""
+	}
+	return values[1]
+}

@@ -50,10 +50,10 @@ func completeJourneyReport(runs []journeyRun, expected int) (journeyReport, erro
 		n := 0
 		for _, actor := range []string{"client-a", "client-b", "operator"} {
 			phases := []string{"workspace", "contact", "save", "reload", "stale-edit", "recover", "logout", "signed-out"}
-			statuses := []int{200, 200, 303, 200, 409, 200, 303, 401}
+			statuses := []int{200, 200, 303, 200, 409, 200, 200, 401}
 			if actor == "operator" {
 				phases = []string{"workspace", "operator", "contact-denied", "logout", "signed-out"}
-				statuses = []int{200, 200, 403, 303, 403}
+				statuses = []int{200, 200, 403, 200, 403}
 			}
 			for i, phase := range phases {
 				sample := run.Responses[n]
@@ -150,7 +150,7 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 			if len(token) != 2 {
 				f.t.Fatal("journey operator logout token missing")
 			}
-			request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, 303)
+			request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, 200)
 			request("signed-out", "GET", "/portal/operator", nil, 403)
 			continue
 		}
@@ -184,7 +184,7 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 		if recoveredRevision != savedRevision || !strings.Contains(body, `value="`+a.name+`"`) || !strings.Contains(body, `value="`+a.email+`"`) || strings.Contains(body, "Rejected stale edit") {
 			f.t.Fatal("journey stale edit changed the saved record")
 		}
-		request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {token}, "lang": {a.lang}}, 303)
+		request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {token}, "lang": {a.lang}}, 200)
 		request("signed-out", "GET", "/portal/contact?lang="+a.lang, nil, 401)
 	}
 	return run
@@ -220,7 +220,7 @@ func assertIndependentJourneyActors(f *browserFixture, actors []journeyActor) {
 			t.Fatal("independent actor logout token missing")
 		}
 		status, _, _ := f.request("POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, f.site.URL)
-		if status != 303 {
+		if status != http.StatusOK {
 			t.Fatal("independent actor logout failed")
 		}
 	}

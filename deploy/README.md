@@ -111,12 +111,18 @@ broker connection and sign-in off. The accepted keys keep their existing meaning
 | `PORTAL_CLIENT_SECRET_PROJECTION_FILE` | `/run/webapp-inputs/portal-client-secret`               |
 | `PORTAL_IDENTITY_PROFILE`              | `production`, only when sign-in is switched on          |
 | `PORTAL_IDENTITY_FLAG`                 | provider JSON for `portal-identity`, with the profile   |
+| `PORTAL_UPSTREAM_END_SESSION_URL`      | optional: ZITADEL's `end_session` endpoint              |
+| `PORTAL_UPSTREAM_CLIENT_ID`            | optional: customer Dex's client ID in ZITADEL           |
+| `PORTAL_OPERATOR_SUBJECTS`             | optional: comma-separated operator subjects (below)     |
 
 The database URI names host `business-site-portal-db-rw.business-site.svc`,
 port 5432, database `portal` and login `portal_web` with its password, and the query
 `sslmode=verify-full&sslrootcert=/run/webapp-inputs/portal-database-ca`.
 
-The five dependency keys come all together or not at all. With them but no
+The two upstream logout keys come together and only with the five dependency keys. With
+them, sign-out and a refused sign-in also end the ZITADEL session; the ZITADEL client must
+list `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout
+addresses. `PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
 Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
 whitespace and CR line endings are refused. The staging lease and the owner-only

@@ -29,6 +29,10 @@ type Config struct {
 	billing                                        billingConfig
 	cards                                          cardConfig
 	mail                                           mailConfig
+	// endSession and endSessionClient are the optional upstream logout; both or neither.
+	endSession, endSessionClient string
+	// operators are the optional operator subjects, signing in through platform SSO.
+	operators string
 	// publicSite is the public website a portal on its own host links back to.
 	publicSite string
 }
@@ -145,6 +149,14 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	if err != nil || (count == 0 && mailing != (mailConfig{})) {
 		return Config{}, ErrConfig
 	}
+	endSession, endSessionClient := getenv("PORTAL_UPSTREAM_END_SESSION_URL"), getenv("PORTAL_UPSTREAM_CLIENT_ID")
+	if (endSession == "") != (endSessionClient == "") || (count == 0 && endSession != "") {
+		return Config{}, ErrConfig
+	}
+	operators := getenv("PORTAL_OPERATOR_SUBJECTS")
+	if count == 0 && operators != "" {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
@@ -152,6 +164,8 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	c.billing, c.cards, c.mail = billing, cards, mailing
+	c.endSession, c.endSessionClient = endSession, endSessionClient
+	c.operators = operators
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -209,6 +223,18 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	foundation := identity.New(pool, broker, flags)
 	if c.publicSite != "" {
 		if err := foundation.LinkPublicSite(c.publicSite); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if c.endSession != "" {
+		if err := foundation.LinkUpstreamLogout(c.endSession, c.endSessionClient); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if c.operators != "" {
+		if err := foundation.LinkOperators(strings.Split(c.operators, ",")); err != nil {
 			pool.Close()
 			return nil, closed, ErrConfig
 		}

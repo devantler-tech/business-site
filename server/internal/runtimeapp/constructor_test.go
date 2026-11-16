@@ -109,6 +109,20 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 			t.Fatal("complete dependencies activated the closed portal")
 		}
 	}
+	// A customer (ZITADEL) subject in the operator list stops startup.
+	customerOperator := map[string]string{"PORTAL_OPERATOR_SUBJECTS": "ChIzNDU2Nzg5MDEyMzQ1Njc4OTASEGN1c3RvbWVyLXppdGFkZWw"}
+	for key, value := range values {
+		customerOperator[key] = value
+	}
+	listed, err := ReadConfig(func(key string) string { return customerOperator[key] })
+	if err != nil {
+		t.Fatal("an operator list was refused before startup could check it")
+	}
+	refused, closeRefused, err := Portal(ctx, listed, api.NewClient())
+	closeRefused()
+	if !errors.Is(err, ErrConfig) || refused != nil {
+		t.Fatal("startup accepted a customer as an operator")
+	}
 	for _, tc := range []struct {
 		name, parameter, value string
 	}{

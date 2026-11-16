@@ -12,7 +12,7 @@ export const publishedOffer = {
       "servicesIntro": "Fixed prices for clearly defined projects, with optional hosting at a fixed monthly price. The first consultation is free, and we agree the deliverables, schedule and total before work begins.",
       "offerCopy": [
         {
-          "title": "A professional website",
+          "title": "A website",
           "description": "Make your business easy to find, understand and contact.",
           "includes": [
             "Up to 5 straightforward pages",
@@ -76,7 +76,7 @@ export const publishedOffer = {
       "servicesIntro": "Faste priser for klart afgrænsede projekter med valgfri hosting til fast månedspris. Den første samtale er gratis, og vi aftaler leverancer, tidsplan og samlet pris, før arbejdet begynder.",
       "offerCopy": [
         {
-          "title": "En professionel hjemmeside",
+          "title": "En hjemmeside",
           "description": "Gør det nemt at finde, forstå og kontakte din virksomhed.",
           "includes": [
             "Op til 5 enkle sider",

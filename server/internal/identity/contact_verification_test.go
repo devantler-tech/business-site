@@ -214,7 +214,7 @@ func TestContactVerificationConcurrentCallbackOnlyConfirmsOnce(t *testing.T) {
 
 func TestContactVerificationPurposeConsumersAreIndependent(t *testing.T) {
 	b := savedVerificationContact(t)
-	p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+	p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 	a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
 	if err != nil {
 		t.Fatal("valid confirmation attempt failed", err)
@@ -269,7 +269,7 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 	for _, change := range []string{"unchanged", "identity flag", "verification flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
 			ctx, cancel, done := startContactConfirmation(t, b, p, d, raw, nonce)
@@ -321,7 +321,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 	for _, change := range []string{"identity flag"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Minute)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Minute)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
 			ctx, _, done := startContactConfirmation(t, b, p, d, raw, nonce)

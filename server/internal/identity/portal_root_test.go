@@ -66,29 +66,21 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	b := newBrowserFixture(t)
 	h := b.atRoot()
 
-	status, body, _ := b.request("GET", "/sign-in?lang=da", nil, "")
-	if status != 200 || !strings.Contains(body, `action="/sign-in"`) || prefixedLink.MatchString(body) {
-		t.Fatalf("root sign-in page: status=%d prefixed=%v", status, prefixedLink.MatchString(body))
-	}
 	b.invite("client-a", "client-a", "client")
-	token := b.csrf("/sign-in?lang=da")
-	status, body, _ = b.request("POST", "/sign-in", url.Values{"csrf_token": {token}, "lang": {"da"}}, b.site.URL)
-	if status != 200 {
-		t.Fatalf("root sign-in start status=%d", status)
-	}
-	handoff, err := url.Parse(brokerHandoffAddress(t, body))
-	if err != nil || handoff.Query().Get("redirect_uri") != b.site.URL+"/callback" {
-		t.Fatalf("broker handoff does not name the root callback: %v", err)
+	status, _, header := b.request("GET", "/sign-in?lang=da", nil, "")
+	handoff, err := url.Parse(header.Get("Location"))
+	if status != http.StatusSeeOther || err != nil || handoff.Query().Get("redirect_uri") != b.site.URL+"/callback" {
+		t.Fatalf("root sign-in did not go straight to the broker with the root callback: status=%d %v", status, err)
 	}
 	callback := b.authorize(handoff.String())
 	if !strings.HasPrefix(callback, "/callback?") {
 		t.Fatalf("broker returned to %q, not the root callback", callback)
 	}
-	status, _, header := b.request("GET", callback, nil, "")
+	status, _, header = b.request("GET", callback, nil, "")
 	if status != http.StatusSeeOther || header.Get("Location") != "/?lang=da" {
 		t.Fatalf("callback status=%d location=%q; want 303 /?lang=da", status, header.Get("Location"))
 	}
-	status, body, _ = b.request("GET", "/?lang=da", nil, "")
+	status, body, _ := b.request("GET", "/?lang=da", nil, "")
 	if status != 200 || !strings.Contains(body, `action="/logout?lang=da"`) || !strings.Contains(body, `class="back" href="`+fixtureSite+`/"`) || prefixedLink.MatchString(body) {
 		t.Fatalf("root home: status=%d prefixed=%v", status, prefixedLink.MatchString(body))
 	}
@@ -103,10 +95,11 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	if w := recordedStatus(h, r); w != http.StatusNotFound {
 		t.Fatalf("portal served its internal mount directly: %d", w)
 	}
-	token = b.csrf("/?lang=da")
-	status, _, header = b.request("POST", "/logout", url.Values{"csrf_token": {token}, "lang": {"da"}}, b.site.URL)
-	if status != http.StatusSeeOther || header.Get("Location") != "/sign-in?lang=da" {
-		t.Fatalf("logout status=%d location=%q; want 303 /sign-in?lang=da", status, header.Get("Location"))
+	token := b.csrf("/?lang=da")
+	// Without an upstream logout, sign-out lands on the public site.
+	status, body, _ = b.request("POST", "/logout", url.Values{"csrf_token": {token}, "lang": {"da"}}, b.site.URL)
+	if status != http.StatusOK || brokerHandoffRefreshAddress(t, body) != fixtureSite+"/" {
+		t.Fatalf("logout status=%d did not land on the public site", status)
 	}
 }
 

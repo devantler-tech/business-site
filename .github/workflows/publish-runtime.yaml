@@ -74,7 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: publish-runtime-${{ github.repository }}
+      group: publish-verified-${{ github.repository }}
+      queue: max
       cancel-in-progress: false
     permissions:
       contents: read

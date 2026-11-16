@@ -273,9 +273,28 @@ derive identity from email or use the upstream ZITADEL subject directly. Preserv
 the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
-Portal logout destroys its local session, not all upstream SSO sessions. Upstream
+Opening the portal without a session goes straight to the login; there is no portal page
+first. A sign-in that authenticates without an invitation or membership is refused
+without an error page: the portal session and, with the upstream logout configured, the
+ZITADEL session end, and the browser returns to a fresh login. Every refusal looks the
+same. After three refusals within ten minutes the browser sees one static invitation-only
+page instead, so a lasting upstream session cannot cause a redirect loop. Sign-out ends
+the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
+
+Operators sign in differently: with GitHub, through platform SSO. Customer Dex has a second
+connector, `platform`, and every login names its connector with Dex's `connector_id`, so
+nobody sees a chooser. The customer sign-in names `customer-zitadel`; the operator link,
+`/operator/sign-in`, names `platform` and exists only while `PORTAL_OPERATOR_SUBJECTS`
+lists operators. That setting, not the token, decides who is an operator: the portal
+decodes each returned subject's connector, and the role must match it. A GitHub identity
+is a listed operator or nobody: on first sign-in it gets the operator membership in the
+`devantler-tech` workspace, it can never be invited or hold a client role, and removing it
+from the list ends its access at the next request. A customer through ZITADEL can never
+hold the operator role. The operator's subject is
+`DexSubject(<platform Dex subject>, "platform")`, computed with the same function as an
+invitation's.
 Google, Microsoft, Apple and GitHub remain unconfigured.
 
 ## Invite a customer
@@ -297,7 +316,8 @@ profile and an enabled flag (see [the settings file](../deploy/README.md#portal-
    ```
 
    `--invite-client` is the new membership's lowercase workspace ID,
-   `--invite-role` is `client` or `operator` and `--invite-days` is 1–7. The
+   `--invite-role` is `client` (operators come only from `PORTAL_OPERATOR_SUBJECTS`)
+   and `--invite-days` is 1–7. The
    command computes the customer Dex subject for that user through the
    `customer-zitadel` connector, binds the invitation to the configured Dex
    issuer and prints only `portal invitation created: that user accepts it by

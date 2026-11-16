@@ -242,10 +242,10 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
+			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
 				switch kind {
-				case "sign-in", "unavailable":
+				case "no-access", "unavailable":
 					uri = "/portal/sign-in"
 				case "operator", "operator-links":
 					uri = "/portal/operator"

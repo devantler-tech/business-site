@@ -337,6 +337,8 @@
     "NOSYSTEM",
     "textconv",
     "fsmonitor",
+    "wordmark",
+    "wordmarks",
     "worktree",
     "promisor",
     "gitlink",
@@ -836,7 +838,11 @@
     "stort",
     "valgfri",
     "kontoen",
-    "invitationsmail"
+    "invitationsmail",
+    "konto",
+    "loggede",
+    "havde",
+    "ventet"
   ],
   "overrides": [
     {
