@@ -47,9 +47,20 @@ func bookedDanishOrder(t *testing.T) (*browserFixture, *fakeNumina, InvoiceBilli
 // amount whose subscription sub_1 has completed, with the client signed in.
 func subscribedCardOrder(t *testing.T) (*browserFixture, *fakeStripe) {
 	t.Helper()
-	b, fake := cardOrderFixture(t, 375000, 12500)
+	return subscribedCardOrderWith(t, 375000)
+}
+
+// subscribedCardOrderWith is subscribedCardOrder with the order's one-time
+// amount, zero for none. The monthly Checkout follows the one-time one.
+func subscribedCardOrderWith(t *testing.T, oneTime int64) (*browserFixture, *fakeStripe) {
+	t.Helper()
+	b, fake := cardOrderFixture(t, oneTime, 12500)
 	placeCardOrder(t, b)
-	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
+	session := "cs_test_1"
+	if oneTime > 0 {
+		session = "cs_test_2"
+	}
+	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": session, "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
 		t.Fatal("subscription completion refused")
 	}
 	return b, fake
@@ -242,11 +253,7 @@ func TestPrivateCardSubscriptionEndedByStripe(t *testing.T) {
 // Stripe never confirmed before its renewal: asking again ends the
 // subscription at once.
 func TestPrivateCardRetriesAnEndAfterItsMonthPassed(t *testing.T) {
-	b, fake := cardOrderFixture(t, 0, 12500)
-	placeCardOrder(t, b)
-	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
-		t.Fatal("subscription completion refused")
-	}
+	b, fake := subscribedCardOrderWith(t, 0)
 	// The month before the current UTC month: its renewal, at 00:00 UTC on
 	// this month's 1st, has passed. Copenhagen's month begins an hour or two
 	// earlier, so its previous month may not have renewed yet
@@ -283,11 +290,7 @@ func TestPrivateCardRetriesAnEndAfterItsMonthPassed(t *testing.T) {
 // Stripe's renewal at 00:00 UTC is still ahead: it ends at that renewal, which
 // then charges nothing, instead of at once.
 func TestPrivateCardEndWaitsForARenewalStillAhead(t *testing.T) {
-	b, fake := cardOrderFixture(t, 0, 12500)
-	placeCardOrder(t, b)
-	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_1", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
-		t.Fatal("subscription completion refused")
-	}
+	b, fake := subscribedCardOrderWith(t, 0)
 	late := time.Date(2026, 10, 31, 23, 30, 0, 0, time.UTC) // 00:30 on 1 November in Copenhagen
 	cfg := *b.svc.cards.Load()
 	cfg.Now = func() time.Time { return late }
