@@ -3,13 +3,11 @@ package runtimeapp
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/pem"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -110,16 +108,14 @@ func TestOperatorPortalInviteUsesProjectedSettings(t *testing.T) {
 		})
 	}
 	stdout, stderr, err := runInviteCommand(t, binary, enabled, user, environment...)
-	code := regexp.MustCompile(`^portal invitation code: ([A-Z2-7]{26})\n$`).FindStringSubmatch(stdout)
-	if err != nil || stderr != "" || code == nil {
-		t.Fatal("enabled production settings did not print exactly one invitation code")
+	if err != nil || stderr != "" || stdout != "portal invitation created: that user accepts it by signing in\n" {
+		t.Fatal("enabled production settings did not confirm exactly one invitation")
 	}
-	digest := sha256.Sum256([]byte(code[1]))
 	var stored bool
 	if err := migrator.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM portal_invitations)=1 AND EXISTS (SELECT 1 FROM portal_invitations
- WHERE token_digest=$1 AND issuer=$2 AND subject=$3 AND client_id='client-a' AND role='client' AND NOT revoked
+ WHERE issuer=$1 AND subject=$2 AND client_id='client-a' AND role='client' AND NOT revoked
  AND expires_at > now()+interval '7 days'-interval '1 minute' AND expires_at <= now()+interval '7 days')`,
-		digest[:], issuer, customeridentity.DexSubject(user, customeridentity.ZitadelConnectorID)).Scan(&stored); err != nil || !stored {
+		issuer, customeridentity.DexSubject(user, customeridentity.ZitadelConnectorID)).Scan(&stored); err != nil || !stored {
 		t.Fatal("invitation was not bound to the broker issuer, Dex subject, client, role and lifetime")
 	}
 	if strings.Contains(stdout+stderr, user) || strings.Contains(stdout+stderr, issuer) {
@@ -130,7 +126,7 @@ func TestOperatorPortalInviteUsesProjectedSettings(t *testing.T) {
 // Invite itself refuses an empty configuration before any provider or store work.
 func TestOperatorInviteRequiresConfiguredProduction(t *testing.T) {
 	unsetPortalEnvironment(t)
-	if _, err := Invite(context.Background(), "subject", "client-a", "client", time.Hour); err != ErrInviteActivation {
+	if err := Invite(context.Background(), "subject", "client-a", "client", time.Hour); err != ErrInviteActivation {
 		t.Fatal("an unconfigured invitation was not refused")
 	}
 }

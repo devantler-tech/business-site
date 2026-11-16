@@ -30,14 +30,14 @@ func clientRequestForm(t *testing.T) (*browserFixture, url.Values) {
 	t.Helper()
 	b := newBrowserFixture(t)
 	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	return b, requestForm(t, b)
 }
 
 func TestProjectRequestInvalidFormsNeverPersist(t *testing.T) {
 	b := newBrowserFixture(t)
 	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, kind := range []string{"empty", "long title", "long brief", "control", "product", "key", "duplicate", "owner", "timestamp", "origin", "csrf", "oversized"} {
 		t.Run(kind, func(t *testing.T) {
 			f := requestForm(t, b)
@@ -124,7 +124,7 @@ func TestProjectRequestFlagAndCurrentMembership(t *testing.T) {
 func TestProjectRequestClientIsolationAndEscaping(t *testing.T) {
 	b := newBrowserFixture(t)
 	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	a := b.client
 	f := requestForm(t, b)
 	f.Set("title", `<script>private-a</script>`)
@@ -147,7 +147,7 @@ func TestProjectRequestClientIsolationAndEscaping(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "client-b"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-b", "client-b", "client")))
+	b.finish(b.startInvited("client-b", "client-b", "client"))
 	s, body, _ = b.request("GET", location+"&client_id=client-a", nil, "")
 	if s != 404 || strings.Contains(body, "private-a") {
 		t.Fatal("second client obtained another receipt")
@@ -173,7 +173,7 @@ func TestProjectRequestClientIsolationAndEscaping(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.client = &operator
-	b.finish(b.start(b.invite("operator", "client-a", "operator")))
+	b.finish(b.startInvited("operator", "client-a", "operator"))
 	s, _, _ = b.request("GET", location, nil, "")
 	if s != 403 {
 		t.Fatal("operator impersonates a client")
@@ -228,7 +228,7 @@ func requestForm(t *testing.T, b *browserFixture) url.Values {
 func TestProjectRequestDurableReceiptAndRetry(t *testing.T) {
 	b := newBrowserFixture(t)
 	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	form := requestForm(t, b)
 	s, _, h := b.request("POST", "/portal/requests", form, b.site.URL)
 	location := h.Get("Location")
@@ -320,7 +320,7 @@ func TestProjectRequestCountsRawCharactersBeforeNormalization(t *testing.T) {
 func TestProjectRequestNativeLineBreakCountingAndRetry(t *testing.T) {
 	b := newBrowserFixture(t)
 	requestFlag(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	f := requestForm(t, b)
 	// Textarea values expose LF; a native form encodes their breaks as CRLF.
 	f.Set("brief", strings.Repeat("a\r\n", 600))

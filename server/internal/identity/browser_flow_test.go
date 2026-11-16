@@ -71,7 +71,7 @@ func (b *browserFixture) reconnect(ctx context.Context) *pgxpool.Pool {
 func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values) {
 	t.Helper()
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	u, err := url.Parse(callback)
 	if err != nil {
 		t.Fatal(err)
@@ -219,13 +219,18 @@ func (b *browserFixture) csrf(path string) string {
 }
 
 // invite provisions one fictional subject through the trusted control plane.
-func (b *browserFixture) invite(subject, client, role string) string {
+func (b *browserFixture) invite(subject, client, role string) {
 	b.t.Helper()
-	inv, err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)})
-	if err != nil {
+	if err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)}); err != nil {
 		b.t.Fatal(err)
 	}
-	return inv
+}
+
+// startInvited invites one fictional subject, then starts its sign-in.
+func (b *browserFixture) startInvited(subject, client, role string) string {
+	b.t.Helper()
+	b.invite(subject, client, role)
+	return b.start()
 }
 
 // TestBrowserBrokerHandoffDocument prevents form-action from following the
@@ -271,10 +276,10 @@ func brokerHandoffRefreshAddress(t testing.TB, body string) string {
 }
 
 // start follows the real CSRF-protected sign-in and synthetic broker redirect.
-func (b *browserFixture) start(inv string) string {
+func (b *browserFixture) start() string {
 	b.t.Helper()
 	token := b.csrf("/portal/sign-in?lang=da")
-	status, body, _ := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "invitation": {inv}, "lang": {"da"}, "return_to": {"https://attacker.example.invalid"}, "role": {"operator"}}, b.site.URL)
+	status, body, _ := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "lang": {"da"}, "return_to": {"https://attacker.example.invalid"}, "role": {"operator"}}, b.site.URL)
 	if status != http.StatusOK {
 		b.t.Fatalf("login start status=%d want200: %s", status, body)
 	}
@@ -335,7 +340,7 @@ func (b *browserFixture) cookie() *http.Cookie {
 
 func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	preauth := b.cookie().Value
 	b.finish(callback)
 	authenticated := b.cookie().Value
@@ -375,7 +380,7 @@ func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 
 func TestBrowserCallbackIsConsumedBeforeExchange(t *testing.T) {
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	u, _ := url.Parse(b.site.URL)
 	cookies := b.client.Jar.Cookies(u)
 	var successes atomic.Int32
@@ -444,9 +449,8 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 	for _, kind := range []string{"nonce", "issuer", "audience", "expired token", "uninvited"} {
 		t.Run(kind, func(t *testing.T) {
 			b := newBrowserFixture(t)
-			inv := b.invite("client-a", "client-a", "client")
-			if kind == "uninvited" {
-				inv = ""
+			if kind != "uninvited" {
+				b.invite("client-a", "client-a", "client")
 			}
 			switch kind {
 			case "nonce":
@@ -458,7 +462,7 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 			case "expired token":
 				b.configure(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}, false)
 			}
-			callback := b.start(inv)
+			callback := b.start()
 			s, _, _ := b.request("GET", callback, nil, "")
 			if s != 400 {
 				t.Fatalf("invalid identity accepted: %d", s)
@@ -473,7 +477,7 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 
 func TestBrowserCurrentRevocationExpiryAndIsolation(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, path := range []string{"/portal/?client_id=client-b&role=operator", "/portal/operator"} {
 		s, body, _ := b.request("GET", path, nil, "")
 		if path == "/portal/operator" && s != 403 {
@@ -494,7 +498,7 @@ func TestBrowserCurrentRevocationExpiryAndIsolation(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("operator", "operator-client", "operator")))
+	b.finish(b.startInvited("operator", "operator-client", "operator"))
 	s, body, _ := b.request("GET", "/portal/operator?lang=da", nil, "")
 	if s != 200 || !strings.Contains(body, "Operatør") {
 		t.Fatal("explicit operator denied")
@@ -553,7 +557,7 @@ func TestBrowserCSRFAndClosedFlags(t *testing.T) {
 func TestBrowserCodeExchangeDoesNotFollowRedirects(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.configure(nil, true)
-	s, _, _ := b.request("GET", b.start(b.invite("client-a", "client-a", "client")), nil, "")
+	s, _, _ := b.request("GET", b.startInvited("client-a", "client-a", "client"), nil, "")
 	if s != 400 || b.unexpectedExchanges.Load() != 0 {
 		t.Fatalf("code exchange followed a redirect: status=%d unexpected_requests=%d", s, b.unexpectedExchanges.Load())
 	}
@@ -625,7 +629,7 @@ func TestBrowserMissingOrInvalidConfigurationHasNoHandler(t *testing.T) {
 
 func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	clientA := b.client
 	clientB := *clientA
 	clientB.Jar, _ = cookiejar.New(nil)
@@ -633,7 +637,7 @@ func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "client-b"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-b", "client-b", "client")))
+	b.finish(b.startInvited("client-b", "client-b", "client"))
 	for _, tc := range []struct {
 		client     *http.Client
 		own, other string

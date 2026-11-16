@@ -349,7 +349,7 @@ func beginTriageSignIn(t *testing.T, b *browserFixture, subject, client, role st
 	b.mu.Lock()
 	b.subject = subject
 	b.mu.Unlock()
-	return b.start(b.invite(subject, client, role))
+	return b.startInvited(subject, client, role)
 }
 
 // A missing operator route, a client-scoped aggregate query or raw brief HTML

@@ -68,7 +68,6 @@ func TestBrowserVisualFixture(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	inv := "" // Both fixed actors already have durable membership.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -97,9 +96,6 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 			b.mu.Lock()
 			b.subject = subject
-			// Both fixed actors are already provisioned once the visual gateway
-			// starts. Subsequent sign-in uses current membership, not re-invitation.
-			inv = ""
 			b.mu.Unlock()
 			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
 			return
@@ -169,19 +165,6 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 			// Rewrite only this fictional gateway's native broker navigation.
 			_, _ = io.WriteString(w, strings.ReplaceAll(string(body), b.broker.URL+"/auth", origin+"/fixture/broker/auth"))
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
-			// Fictional, disposable gateway only: preload its synthetic invitation
-			// so UI evaluation does not expose any token in terminal diagnostics.
-			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
-			if readErr != nil || len(body) > 64*1024 {
-				return
-			}
-			b.mu.RLock()
-			invitation := inv
-			b.mu.RUnlock()
-			_, _ = io.WriteString(w, strings.Replace(string(body), `id="invitation"`, `id="invitation" value="`+html.EscapeString(invitation)+`"`, 1))
 			return
 		}
 		_, _ = io.Copy(w, res.Body)

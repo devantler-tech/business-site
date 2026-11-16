@@ -70,8 +70,9 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 	if status != 200 || !strings.Contains(body, `action="/sign-in"`) || prefixedLink.MatchString(body) {
 		t.Fatalf("root sign-in page: status=%d prefixed=%v", status, prefixedLink.MatchString(body))
 	}
+	b.invite("client-a", "client-a", "client")
 	token := b.csrf("/sign-in?lang=da")
-	status, body, _ = b.request("POST", "/sign-in", url.Values{"csrf_token": {token}, "invitation": {b.invite("client-a", "client-a", "client")}, "lang": {"da"}}, b.site.URL)
+	status, body, _ = b.request("POST", "/sign-in", url.Values{"csrf_token": {token}, "lang": {"da"}}, b.site.URL)
 	if status != 200 {
 		t.Fatalf("root sign-in start status=%d", status)
 	}
