@@ -48,9 +48,8 @@
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
         <div class="price"><span class="price-label">{t.starting}</span>
           <!-- Each label comes first, so a screen reader hears "normal price …, launch price …"; CSS shows the amount above it. -->
-          <div class="price-pair"><p class="normal-price"><span>{t.normalLabel}</span><del>{money(offer.setup)}</del></p>
-            <p class="launch-price" data-launch-setup={offer.launchSetup}><span>{t.launchLabel}</span><strong>{money(offer.launchSetup)}</strong></p></div>
-          {#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
+          <div class="price-pair"><p class="normal-price"><span>{t.normalLabel}{#if t.vatMarker}, <span class="vat-marker">{t.vatMarker}</span>{/if}</span><del>{money(offer.setup)}</del></p>
+            <p class="launch-price" data-launch-setup={offer.launchSetup}><span>{t.launchLabel}{#if t.vatMarker}, <span class="vat-marker">{t.vatMarker}</span>{/if}</span><strong>{money(offer.launchSetup)}</strong></p></div></div>
         <p class="hosting-price">{t.monthly} <b>{money(offer.monthly)}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}{t.hostingExcluded}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
@@ -140,8 +139,8 @@
   .price-pair del, .price-pair strong { font-size: clamp(1.3rem, 5.6vw, 2rem); font-weight: 600; letter-spacing: -.05em; line-height: 1.2; white-space: nowrap; }
   .price-pair del { color: var(--price-normal); text-decoration-thickness: 2px; }
   .price-pair strong { color: var(--accent); }
-  .price-pair span { font-size: .74rem; color: var(--muted); max-width: 14rem; }
-  .price > .vat-marker { margin-top: .5rem; }
+  .price-pair > p > span { font-size: .74rem; color: var(--muted); max-width: 14rem; }
+  .price-pair .vat-marker { font-size: inherit; }
   .hosting-price { margin-top: .9rem; font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
   .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
   .offer li { padding-left: .15rem; margin-block: .45rem; }
