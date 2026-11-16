@@ -153,6 +153,17 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
 	}
+	terms, termsHash := s.termsFor(mc.Lang)
+	if terms == "" || s.mail.Load() == nil {
+		return projectOrder{}, errOrderConfirmation
+	}
+	if mc.TermsHash != termsHash {
+		return projectOrder{}, errProposalConflict
+	}
+	proposalHash, err := proposalContentHash(current.Proposal)
+	if err != nil {
+		return projectOrder{}, err
+	}
 	// A new order's add-ons must exist for the request's offering; monthly ones
 	// need hosting.
 	var product string
@@ -206,6 +217,7 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	// The order's confirmation on a durable medium (section 13), queued with it.
 	when := projectOrder{Placed: placed, OneTimeMinor: oneTime, MonthlyMinor: monthly, Addons: addons}
 	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
+		Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
 		OneTimeDKK: oneTime / 100, BaseOneTimeDKK: when.BaseOneTimeDKK(), Launch: place, MonthlyDKK: monthly / 100, BaseMonthlyDKK: when.BaseMonthlyDKK(), Addons: addons, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
 		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {
@@ -334,7 +346,7 @@ func parseOrderForm(r *http.Request) (acceptance, collection string, earlyStart,
 			return "", "", false, false, false
 		}
 		switch name {
-		case "csrf_token", "lang", "acceptance", "collection", "addon":
+		case "csrf_token", "lang", "acceptance", "collection", "addon", "terms_hash":
 		case "early_start", "launch":
 			// The optional request, never ticked in advance, to start within the
 			// withdrawal period, and the launch discount the client was shown.
@@ -360,7 +372,7 @@ func (b *browser) submitOrder(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "error", "", "")
 		return
 	}
-	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, launch, r.PostForm["addon"], mailContext{Lang: language(r), Portal: b.origin + b.base()})
+	order, err := b.foundation.placeOrder(r.Context(), b.principal(r.Context()), r.PathValue("id"), acceptance, collection, earlyStart, launch, r.PostForm["addon"], mailContext{Lang: language(r), Portal: b.origin + b.base(), TermsHash: r.PostForm.Get("terms_hash")})
 	if err == nil && order.Collection == "card" {
 		// The receipt offers to start the payment again if this fails.
 		if checkoutErr := b.foundation.ensureCheckouts(r.Context(), order.ID, b.origin+b.base(), language(r)); checkoutErr != nil {

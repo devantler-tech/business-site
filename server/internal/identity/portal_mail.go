@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
 	"github.com/devantler-tech/business-site/server/internal/mail"
 	"github.com/jackc/pgx/v5"
@@ -34,7 +35,7 @@ func (s *Foundation) EnableMail(m Mailer) error {
 
 // mailContext is what an email needs from the request that causes it.
 type mailContext struct {
-	Lang, Portal string
+	Lang, Portal, TermsHash string
 }
 
 // orderMail is the data of an order confirmation or withdrawal receipt.
@@ -48,6 +49,8 @@ type orderMail struct {
 	Addons                                                               []orderAddon
 	Launch                                                               *launchPlace
 	Portal, Terms                                                        string
+	Acceptance, ProposalHash, TermsText, TermsHash                       string
+	ProposalVersion                                                      int
 }
 
 var mailTemplates = template.Must(template.New("mail").Parse(`
@@ -55,6 +58,10 @@ var mailTemplates = template.Must(template.New("mail").Parse(`
 
 Ordre: {{.OrderID}}
 Afgivet: {{.Placed}} (UTC)
+Accept: {{.Acceptance}}
+Tilbudsversion: {{.ProposalVersion}}
+Tilbuddets SHA256: {{.ProposalHash}}
+Betingelsernes SHA256: {{.TermsHash}}
 
 Omfang:
 {{.Scope}}
@@ -74,11 +81,17 @@ Du kan fortryde aftalen til og med {{.WithdrawUntil}} med "Fortryd aftale" i por
 
 Venlig hilsen
 Devantler Tech · CVR 46830385 · ned@devantler.tech
+
+{{.TermsText}}
 {{end}}
 {{define "order-confirmation-en"}}Thank you for your order. This confirms our agreement.
 
 Order: {{.OrderID}}
 Placed: {{.Placed}} (UTC)
+Acceptance: {{.Acceptance}}
+Proposal version: {{.ProposalVersion}}
+Proposal SHA256: {{.ProposalHash}}
+Agreement terms SHA256: {{.TermsHash}}
 
 Scope:
 {{.Scope}}
@@ -98,6 +111,8 @@ You can withdraw from the agreement until {{.WithdrawUntil}} inclusive with "Wit
 
 Kind regards
 Devantler Tech · CVR 46830385 · ned@devantler.tech
+
+{{.TermsText}}
 {{end}}
 {{define "withdrawal-receipt-da"}}Vi har modtaget din fortrydelse af ordre {{.OrderID}} den {{.Withdrawn}} (UTC).
 
@@ -122,8 +137,9 @@ var mailSubjects = map[string]string{
 }
 
 // queueOrderMail renders one email and queues it in tx for the client's
-// contact address, once per order and kind. A client without a contact
-// address gets none; the operator's page then shows that nothing was queued.
+// contact address, once per order and kind. A new order without a contact or
+// complete confirmation fails atomically. Withdrawal itself is never refused
+// merely because a contact address or sender is unavailable.
 func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind string, mc mailContext, data orderMail) error {
 	lang := "en"
 	if mc.Lang == "da" {
@@ -139,9 +155,18 @@ func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind
 	if err := mailTemplates.ExecuteTemplate(&body, kind+"-"+lang, data); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) SELECT $1,$2,$3,c.email,$4,$5 FROM portal_contacts c WHERE c.client_id=$6 ON CONFLICT(order_id,kind) DO NOTHING`,
-		secret(), data.OrderID, kind, mailSubjects[kind+"-"+lang], body.String(), client); err != nil {
+	if kind == "order-confirmation" && (s.mail.Load() == nil || data.TermsText == "" || utf8.RuneCountInString(body.String()) > 20000) {
+		return errOrderConfirmation
+	}
+	// A withdrawal can outlive the editable contact profile. Prefer the current
+	// contact, falling back to the order's original confirmation recipient.
+	result, err := tx.Exec(ctx, `WITH contact AS (SELECT email FROM portal_contacts WHERE client_id=$6 FOR SHARE), recipients AS (SELECT email AS recipient,0 AS priority FROM contact UNION ALL SELECT recipient,1 FROM portal_mail_outbox WHERE $3='withdrawal-receipt' AND order_id=$2 AND kind='order-confirmation') INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) SELECT $1,$2,$3,recipient,$4,$5 FROM recipients ORDER BY priority LIMIT 1 ON CONFLICT(order_id,kind) DO NOTHING`,
+		secret(), data.OrderID, kind, mailSubjects[kind+"-"+lang], body.String(), client)
+	if err != nil {
 		return errTriageStorage
+	}
+	if kind == "order-confirmation" && result.RowsAffected() != 1 {
+		return errOrderConfirmation
 	}
 	return nil
 }

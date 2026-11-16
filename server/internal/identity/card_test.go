@@ -167,6 +167,7 @@ func (f *fakeStripe) sessions() []url.Values {
 func cardOrderFixture(t *testing.T, oneTime, monthly int64) (*browserFixture, *fakeStripe) {
 	t.Helper()
 	b := newBrowserFixture(t)
+	confirmationFixture(t, b)
 	cardFlags(t, b, true)
 	seedTriageRequest(t, b, proposalRequestID, "Fictional card request", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
 	operator := enroll(t, b.svc, b.f, "card-operator", "operator-workspace", "operator")
@@ -205,13 +206,11 @@ func cardFlags(t *testing.T, b *browserFixture, card any) {
 // placeCardOrder submits the receipt's own order form with the card path.
 func placeCardOrder(t *testing.T, b *browserFixture) {
 	t.Helper()
-	status, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang=en", nil, "")
-	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
-	csrf := csrfInput.FindStringSubmatch(body)
-	if status != 200 || len(acceptance) != 2 || len(csrf) != 2 || !strings.Contains(body, `id="collection-card" type="radio" name="collection" value="card"`) {
-		t.Fatalf("receipt offers no card path: %d", status)
+	f, body := orderFormFields(t, b, "en")
+	if !strings.Contains(body, `id="collection-card" type="radio" name="collection" value="card"`) {
+		t.Fatal("receipt offers no card path")
 	}
-	f := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "acceptance": {acceptance[1]}, "collection": {"card"}}
+	f.Set("collection", "card")
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("card order refused: %d", status)
 	}

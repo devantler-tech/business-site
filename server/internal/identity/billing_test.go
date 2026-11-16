@@ -219,6 +219,7 @@ func billingFixture(t *testing.T) *browserFixture {
 		t.Fatalf("acceptance=%d", status)
 	}
 	billingFlags(t, b, true)
+	confirmationFixture(t, b)
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES('private-client-key','Fictional Client','client@example.invalid','Fictional Bakery ApS',1)`); err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +235,11 @@ func orderFormFields(t *testing.T, b *browserFixture, lang string) (url.Values, 
 	if status != 200 || len(acceptance) != 2 || len(csrf) != 2 {
 		t.Fatalf("receipt has no order form: %d", status)
 	}
-	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}}, body
+	terms := regexp.MustCompile(`name="terms_hash" value="([a-f0-9]{64})"`).FindStringSubmatch(body)
+	if len(terms) != 2 {
+		t.Fatal("order form has no agreement revision")
+	}
+	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}, "terms_hash": {terms[1]}}, body
 }
 
 // orderForm reads the receipt's own order form.

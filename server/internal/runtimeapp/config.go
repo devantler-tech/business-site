@@ -15,6 +15,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/activation"
 	"github.com/devantler-tech/business-site/server/internal/identity"
+	"github.com/devantler-tech/business-site/server/internal/webapp"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
 )
@@ -35,6 +36,7 @@ type Config struct {
 	operators string
 	// publicSite is the public website a portal on its own host links back to.
 	publicSite string
+	orderTerms [2]string
 }
 
 // billingConfig is the optional Numina invoice path (ADR 0030). Its own
@@ -221,6 +223,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		return nil, closed, ErrConfig
 	}
 	foundation := identity.New(pool, broker, flags)
+	if c.orderTerms != [2]string{} {
+		if err := foundation.LinkOrderTerms(c.orderTerms[0], c.orderTerms[1]); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
 	if c.publicSite != "" {
 		if err := foundation.LinkPublicSite(c.publicSite); err != nil {
 			pool.Close()
@@ -329,5 +337,18 @@ func (c Config) WithPublicHost(host string) Config {
 		return c
 	}
 	c.publicSite = "https://" + host
+	return c
+}
+
+// WithOrderTerms binds orders to the admitted serving artifact, after its private
+// company projection. Missing documents close ordering, independently of sign-in.
+func (c Config) WithOrderTerms(artifact *webapp.Artifact) Config {
+	if c == (Config{}) {
+		return c
+	}
+	c.orderTerms = [2]string{}
+	if terms, err := artifact.OrderTerms(); err == nil {
+		c.orderTerms = terms
+	}
 	return c
 }
