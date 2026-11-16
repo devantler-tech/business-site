@@ -43,10 +43,12 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
 - `docs/README.md` contains the editorial, localization, catalogue and feature-flag standards.
 - `server/` contains the default-off Go/PostgreSQL browser identity boundary. Read
   `server/AGENTS.md` before changing it. The platform runtime ships its handlers default-off;
-  production authentication, customer intake and payments remain disabled.
-  Customer identity source preparation uses dedicated customer Dex and self-hosted
+  production sign-in is switched on, invite-only, by the platform's `business-site-runtime`
+  portal settings (#302, devantler-tech/platform#6389), while customer intake and payments
+  remain disabled. Customer identity uses dedicated customer Dex and self-hosted
   ZITADEL; read `server/CUSTOMER-IDENTITY.md`. The explicit offline preparer has no
-  deployment, user-provisioning or portal-activation authority. Social logins are deferred.
+  deployment, user-provisioning or portal-activation authority. Customers sign in with a
+  ZITADEL password plus MFA or, optionally, GitHub through ZITADEL; other social logins are deferred.
 - ZITADEL is never built, patched or redistributed here. When the portal is activated, #305
   runs the official upstream image unmodified, pinned by digest and branded only through its
   native Label Policy. Upstream does not sign its images, so no signature is verified. Read ADR 0031.
@@ -154,11 +156,13 @@ production-template packager explicitly enables the footer, email route and requ
 whose address the runtime reads from its private projected file.
 The same release enables the EN/DA privacy notice and customer terms (`/privacy/`, `/terms/`),
 whose copy lives in `src/components/business/legal-copy.ts`. The privacy notice's portal
-section stays behind the default-off `FEATURE_PORTAL_PRIVACY`, and the standard add-ons list on the
-home page behind the default-off `FEATURE_ADDONS`, until the portal is activated;
-the activation flips their `false` pins in `scripts/package-runtime.sh` and
-`scripts/vat-activation.test.mjs`. They link to the address rather
-than repeat it. Change them with any change to hosting, providers, retention, prices or terms
+section is behind `FEATURE_PORTAL_PRIVACY`, off by default and on in the production-template
+packager. That release goes out together with the platform switching portal sign-in on,
+invite-only (#302, devantler-tech/platform#6389), so the notice and the processing it describes
+start together; `scripts/vat-activation.test.mjs` pins it there. The standard add-ons list on the
+home page stays behind the default-off `FEATURE_ADDONS` until portal ordering is activated, which
+flips its `false` pin in `scripts/package-runtime.sh` and `scripts/vat-activation.test.mjs`.
+They link to the address rather than repeat it. Change them with any change to hosting, providers, retention, prices or terms
 (#19); never call the business compliant.
 Publish the maintainer's fixed VAT-inclusive prices (15 November 2026): DKK 6,000 plus optional
 hosting 300/month for a website, 15,000 plus 800/month for a focused first app version, and
