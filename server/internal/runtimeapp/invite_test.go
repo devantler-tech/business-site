@@ -77,7 +77,7 @@ func TestOperatorPortalInviteUsesProjectedSettings(t *testing.T) {
 		name, settings string
 		discovers      bool
 		signIn         int
-	}{{"off", off, false, 404}, {"connected", connected, true, 404}, {"enabled", enabled, true, 200}} {
+	}{{"off", off, false, 404}, {"connected", connected, true, 404}, {"enabled", enabled, true, 303}} {
 		t.Run("serve "+tc.name, func(t *testing.T) {
 			before := discoveries.Load()
 			address, stop := startActualCommand(t, binary, public, environment, "--portal-settings-projection", tc.settings)

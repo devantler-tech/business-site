@@ -526,7 +526,7 @@ func TestOnePendingInvitationPerIdentity(t *testing.T) {
 	}
 	// A second pending invitation that exists anyway is refused, not chosen.
 	leftoverInvitation(t, pool, f, "twice", "client-b")
-	if _, err := signIn(t, svc, f, "twice"); !errors.Is(err, ErrDenied) {
+	if _, err := signIn(t, svc, f, "twice", nil); !errors.Is(err, ErrDenied) {
 		t.Fatalf("sign-in chose between two pending invitations: %v", err)
 	}
 	var pending, memberships int
@@ -551,7 +551,7 @@ func TestUninvitedIdentityIsRefused(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
-	if _, err := signIn(t, svc, f, "stranger"); !errors.Is(err, ErrDenied) {
+	if _, err := signIn(t, svc, f, "stranger", nil); !errors.Is(err, ErrDenied) {
 		t.Fatalf("uninvited identity was not refused: %v", err)
 	}
 	var memberships int
@@ -613,12 +613,39 @@ func TestOpenFeatureGateDefaultsOffAndIsReevaluated(t *testing.T) {
 	}
 }
 
-// signIn runs one complete sign-in attempt for subject through the real store.
-func signIn(t *testing.T, svc *Foundation, f brokerFixture, subject string) (Principal, error) {
+// signIn runs one complete sign-in attempt for subject through the real store,
+// with any extra token claims.
+func signIn(t *testing.T, svc *Foundation, f brokerFixture, subject string, claims map[string]any) (Principal, error) {
 	t.Helper()
 	a, err := svc.Begin(f.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil))
+	return svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, claims))
+}
+
+// Opening the portal starts an attempt, so Begin also removes a bounded batch
+// of expired attempts; abandoned ones cannot pile up.
+func TestBeginRemovesExpiredAttempts(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	for range 60 {
+		if _, err := svc.Begin(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(f.ctx, "UPDATE portal_login_attempts SET expires_at=now()-interval '1 minute'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Begin(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var expired, current int
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FILTER (WHERE expires_at<now()), count(*) FILTER (WHERE expires_at>now()) FROM portal_login_attempts").Scan(&expired, &current); err != nil {
+		t.Fatal(err)
+	}
+	if expired != 10 || current != 1 {
+		t.Fatalf("expired=%d current=%d, want 10 expired left after one bounded batch and 1 current", expired, current)
+	}
 }

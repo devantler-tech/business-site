@@ -286,24 +286,27 @@ func TestContactWorkspaceNavigation(t *testing.T) {
 // durable live authentication and verifies that neither can save contact data.
 func TestContactAnonymousAndExpiredSessionsDeny(t *testing.T) {
 	b := newBrowserFixture(t)
-	token := b.csrf("/portal/sign-in")
-	for _, method := range []string{"GET", "POST"} {
-		s, _, _ := b.request(method, "/portal/contact", contactForm(token, "0", "A", "a@example.invalid", ""), b.site.URL)
-		if s != 401 {
-			t.Fatalf("anonymous %s=%d", method, s)
+	// A valid form token from a signed-out browser isolates the session check.
+	b.finish(b.startInvited("client-a", "client-a", "client"))
+	token := b.csrf("/portal/?lang=da")
+	if s, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {token}}, b.site.URL); s != http.StatusOK {
+		t.Fatalf("sign-out status=%d", s)
+	}
+	denied := func(kind, token string) {
+		for _, method := range []string{"GET", "POST"} {
+			s, _, _ := b.request(method, "/portal/contact", contactForm(token, "0", "A", "a@example.invalid", ""), b.site.URL)
+			if s != 401 {
+				t.Fatalf("%s %s=%d", kind, method, s)
+			}
 		}
 	}
-	b.finish(b.startInvited("client-a", "client-a", "client"))
+	denied("anonymous", token)
+	b.finish(b.start())
 	token = b.csrf("/portal/contact")
 	if _, err := b.pool.Exec(b.f.ctx, "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"); err != nil {
 		t.Fatal(err)
 	}
-	for _, method := range []string{"GET", "POST"} {
-		s, _, _ := b.request(method, "/portal/contact", contactForm(token, "0", "A", "a@example.invalid", ""), b.site.URL)
-		if s != 401 {
-			t.Fatalf("expired %s=%d", method, s)
-		}
-	}
+	denied("expired", token)
 	var n int
 	if err := b.pool.QueryRow(b.f.ctx, "SELECT count(*) FROM portal_contacts").Scan(&n); err != nil || n != 0 {
 		t.Fatal("unauthenticated form saved a contact", err)

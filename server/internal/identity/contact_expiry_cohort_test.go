@@ -28,7 +28,7 @@ func TestContactConfirmationRetainsRealExpiry(t *testing.T) {
 			if status != http.StatusSeeOther {
 				t.Fatal("expiry contact preparation failed")
 			}
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, delayed)
 			var blocked <-chan struct{}
 			var release func()

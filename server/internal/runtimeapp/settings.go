@@ -24,6 +24,8 @@ var projectedPortalSettings = []string{
 	"PORTAL_STRIPE_KEY_FILE", "PORTAL_STRIPE_WEBHOOK_SECRET_FILE", "PORTAL_STRIPE_API_URL", "PORTAL_STRIPE_TAX_RATE",
 	// The optional sender of the portal's own emails; its credential stays in projected files.
 	"PORTAL_SMTP_USERNAME_FILE", "PORTAL_SMTP_PASSWORD_FILE", "PORTAL_SMTP_ADDR", "PORTAL_MAIL_FROM",
+	// The optional upstream logout, which ends the identity provider's session too.
+	"PORTAL_UPSTREAM_END_SESSION_URL", "PORTAL_UPSTREAM_CLIENT_ID",
 }
 
 // inheritedPortalSettings are every setting ReadConfig and the activation

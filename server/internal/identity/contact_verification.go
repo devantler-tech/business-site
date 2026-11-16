@@ -107,7 +107,7 @@ func (s *Foundation) confirmContact(ctx context.Context, original Principal, d c
 	if err = tx.Commit(ctx); err != nil {
 		return Principal{}, ErrDenied
 	}
-	return Principal{s.broker.issuer, token.Subject, s.broker.clientID, token.Expiry}, nil
+	return Principal{issuer: s.broker.issuer, subject: token.Subject, audience: s.broker.clientID, expires: token.Expiry}, nil
 }
 
 func (b *browser) beginContactVerification(w http.ResponseWriter, r *http.Request) {

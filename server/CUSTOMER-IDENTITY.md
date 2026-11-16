@@ -273,7 +273,13 @@ derive identity from email or use the upstream ZITADEL subject directly. Preserv
 the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
-Portal logout destroys its local session, not all upstream SSO sessions. Upstream
+Opening the portal without a session goes straight to the login; there is no portal page
+first. A sign-in that authenticates without an invitation or membership is refused
+without an error page: the portal session and, with the upstream logout configured, the
+ZITADEL session end, and the browser returns to a fresh login. Every refusal looks the
+same. After three refusals within ten minutes the browser sees one static invitation-only
+page instead, so a lasting upstream session cannot cause a redirect loop. Sign-out ends
+the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
 Google, Microsoft, Apple and GitHub remain unconfigured.

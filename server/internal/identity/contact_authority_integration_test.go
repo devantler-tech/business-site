@@ -80,7 +80,7 @@ func TestGoContactAuthority(t *testing.T) {
 				query := ""
 				switch change {
 				case "durable logout":
-					if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {logoutCSRF}}, b.site.URL); status != http.StatusSeeOther {
+					if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {logoutCSRF}}, b.site.URL); status != http.StatusOK {
 						t.Fatal("actual durable logout failed", status)
 					}
 				case "deleted session":

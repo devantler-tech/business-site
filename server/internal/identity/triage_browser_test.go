@@ -214,7 +214,7 @@ func TestOperatorInboxDeniesDowngradeAndExpiredSession(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "logout":
-				if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {b.csrf("/portal/operator")}}, b.site.URL); status != 303 {
+				if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {b.csrf("/portal/operator")}}, b.site.URL); status != http.StatusOK {
 					t.Fatal("logout failed")
 				}
 			}

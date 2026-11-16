@@ -114,6 +114,22 @@ type Foundation struct {
 	// site is the public website's origin, linked from a portal at the root of
 	// its own host. A portal sharing the public host links to "/" instead.
 	site string
+	// endSession and endSessionClient name the upstream identity provider's
+	// RP-initiated logout, which the broker cannot do itself. Both are public.
+	endSession, endSessionClient string
+}
+
+// LinkUpstreamLogout names the upstream provider's end_session endpoint and the
+// broker's client there, so sign-out and a refused sign-in also end the upstream
+// session. Without it, the portal only ends its own session.
+func (s *Foundation) LinkUpstreamLogout(endpoint, client string) error {
+	u, err := url.Parse(endpoint)
+	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
+		client == "" || len(client) > 256 || strings.ContainsAny(client, " \t\r\n") {
+		return ErrDenied
+	}
+	s.endSession, s.endSessionClient = endpoint, client
+	return nil
 }
 
 // New accepts the application's OpenFeature client; every operation defaults off.
@@ -149,7 +165,14 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 		return Attempt{}, ErrDenied
 	}
 	a := Attempt{secret(), secret(), secret(), secret() + secret()}
-	_, err := s.pool.Exec(ctx, `INSERT INTO portal_login_attempts(state_digest,browser_digest,nonce,pkce_verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes')`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier)
+	// Opening the portal starts an attempt, so each one also removes a bounded
+	// batch of expired attempts; abandoned ones cannot accumulate.
+	_, err := s.pool.Exec(ctx, `WITH expired AS (SELECT state_digest FROM portal_login_attempts WHERE expires_at<now() LIMIT 50)
+ DELETE FROM portal_login_attempts a USING expired WHERE a.state_digest=expired.state_digest`)
+	if err != nil {
+		return Attempt{}, fmt.Errorf("remove expired login attempts: %w", err)
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO portal_login_attempts(state_digest,browser_digest,nonce,pkce_verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes')`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier)
 	if err != nil {
 		return Attempt{}, fmt.Errorf("persist login attempt: %w", err)
 	}
@@ -249,9 +272,11 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	// its own pending invitation, which was bound to this exact issuer/subject
 	// when it was created; anyone else has nothing to accept and is refused.
 	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
-		if err = s.redeem(ctx, p); err != nil {
+		if err = s.redeem(ctx, p); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
+		// Current membership decides, including one a concurrent first sign-in of
+		// the same identity has just created; a revoked membership still refuses.
 		_, _, err = s.membership(ctx, p)
 	}
 	if err != nil {

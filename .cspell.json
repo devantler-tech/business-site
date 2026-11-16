@@ -836,7 +836,11 @@
     "stort",
     "valgfri",
     "kontoen",
-    "invitationsmail"
+    "invitationsmail",
+    "konto",
+    "loggede",
+    "havde",
+    "ventet"
   ],
   "overrides": [
     {
