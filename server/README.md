@@ -376,7 +376,8 @@ disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitati
 cookie-session, membership-revocation and cancellation checks. These are source
 acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
 Source checks do not establish deployed acceptance: #305 retains runtime delivery,
-# 302 owns live identity acceptance and #21 owns later intake/payment activation.
+[Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
+identity acceptance and #21 owns later intake/payment activation.
 
 ### Production public-content template
 
