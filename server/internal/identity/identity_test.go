@@ -507,6 +507,23 @@ func TestOnePendingInvitationPerIdentity(t *testing.T) {
 	if err := svc.Invite(f.ctx, Invitation{f.issuer, "twice", "client-b", "client", expires}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("a second pending invitation was created: %v", err)
 	}
+	// Concurrent invitations of one identity serialize: exactly one is created.
+	var created atomic.Int32
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			if err := svc.Invite(f.ctx, Invitation{f.issuer, "concurrent", "client-a", "client", expires}); err == nil {
+				created.Add(1)
+			} else if !errors.Is(err, ErrDenied) {
+				t.Errorf("unexpected invitation error: %v", err)
+			}
+		})
+	}
+	wg.Wait()
+	var concurrent int
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_invitations WHERE subject='concurrent'").Scan(&concurrent); err != nil || created.Load() != 1 || concurrent != 1 {
+		t.Fatalf("concurrent invitations: created=%d stored=%d, want 1 and 1", created.Load(), concurrent)
+	}
 	// A second pending invitation that exists anyway is refused, not chosen.
 	leftoverInvitation(t, pool, f, "twice", "client-b")
 	a, err := svc.Begin(f.ctx)

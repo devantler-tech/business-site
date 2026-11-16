@@ -168,7 +168,19 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	}
 	// One identity has at most one pending invitation and none once it has any
 	// membership, current or revoked, so sign-in never has to choose between them.
-	result, err := s.pool.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
+	// The identity's lock serializes concurrent invitations and first sign-ins.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin invitation: %w", err)
+	}
+	defer func() {
+		// Commit decides success; a committed transaction is already closed.
+		_ = tx.Rollback(ctx)
+	}()
+	if err = lockIdentity(ctx, tx, i.Issuer, i.Subject); err != nil {
+		return err
+	}
+	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
  SELECT $1,$2,$3,$4,$5,$6
  WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now())
  AND NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$2 AND subject=$3)`, digest(secret()), i.Issuer, i.Subject, i.ClientID, i.Role, i.Expires)
@@ -177,6 +189,21 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	}
 	if result.RowsAffected() != 1 {
 		return ErrDenied
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit invitation: %w", err)
+	}
+	return nil
+}
+
+// identityLock namespaces the per-identity invitation lock among the portal locks.
+const identityLock = 1869820524
+
+// lockIdentity takes this transaction's lock on one issuer/subject. Neither
+// contains a space, so the joined key is unambiguous.
+func lockIdentity(ctx context.Context, tx pgx.Tx, issuer, subject string) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int,hashtext($2 || ' ' || $3))`, identityLock, issuer, subject); err != nil {
+		return fmt.Errorf("lock identity: %w", err)
 	}
 	return nil
 }
@@ -247,6 +274,9 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 		// pgx discards a failed rollback's connection and returns it to the pool.
 		_ = tx.Rollback(ctx)
 	}()
+	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
+		return err
+	}
 	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, p.issuer, p.subject)
 	if err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
