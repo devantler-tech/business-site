@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,6 +210,57 @@ func TestMachineAPIExpiresDuringPrivateRead(t *testing.T) {
 		}
 	case <-time.After(4 * time.Second):
 		t.Fatal("expired machine request did not end at its token deadline")
+	}
+}
+
+// Audit storage must accept an immutable attempt before the callback can send
+// to a provider or mutate customer state. A 503 after an unrecorded effect is
+// not sufficient: the actual provider and PostgreSQL counters must stay zero.
+func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, []string{"invitations.create"})
+	var providerCalls atomic.Int32
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		providerCalls.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(provider.Close)
+	original := operatorRoutes
+	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, ctx context.Context) (any, error) {
+		r, err := http.NewRequestWithContext(ctx, "POST", provider.URL+"/users", nil)
+		if err != nil {
+			return nil, err
+		}
+		res, err := provider.Client().Do(r)
+		if err != nil {
+			return nil, err
+		}
+		if err := res.Body.Close(); err != nil {
+			return nil, err
+		}
+		_, err = b.pool.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,'audit-effect','private-workspace','client')`, b.f.issuer)
+		return map[string]bool{"accepted": true}, err
+	}})
+	t.Cleanup(func() { operatorRoutes = original })
+	b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+			t.Error("restore fixture audit grant", err)
+		}
+	})
+	status, _, _ := agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
+	var effects int
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusServiceUnavailable || providerCalls.Load() != 0 || effects != 0 {
+		t.Fatalf("unrecordable action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
 	}
 }
 
