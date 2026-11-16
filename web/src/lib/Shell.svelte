@@ -280,4 +280,14 @@
       gap: 0.6rem;
     }
   }
+  @media (max-width: 520px) {
+    nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.25rem 1rem;
+    }
+    .client-login {
+      justify-content: center;
+    }
+  }
 </style>
