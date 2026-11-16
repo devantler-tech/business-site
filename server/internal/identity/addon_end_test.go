@@ -89,12 +89,7 @@ func TestAddonEndOnTheInvoicePath(t *testing.T) {
 // TestAddonEndOnTheCardPath removes the add-on's subscription item before the
 // end is recorded, and records nothing while Stripe fails.
 func TestAddonEndOnTheCardPath(t *testing.T) {
-	b, fake := cardOrderFixture(t, 600000, 30000)
-	f, _ := launchOrderForm(t, b, "en", "card")
-	f["addon"] = []string{"email:1:100"}
-	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
-		t.Fatalf("card order=%d", status)
-	}
+	b, fake := emailCardOrder(t)
 	var marked bool
 	for _, s := range fake.sessions() {
 		if s.Get("mode") == "subscription" && s.Get("line_items[1][price_data][product_data][metadata][portal_addon]") == "email" {
@@ -109,10 +104,22 @@ func TestAddonEndOnTheCardPath(t *testing.T) {
 	}
 	fake.mu.Lock()
 	fake.items = map[string][]string{"sub_1": {"email"}}
-	fake.failRemove = true
 	fake.mu.Unlock()
 	end, _ := addonEndForm(t, b, "email")
 	path := "/portal/requests/" + proposalRequestID + "/addon-end"
+	// A closed card gate never changes the subscription.
+	setFixturePortalFlags(t, b, append(acceptanceFlagNames(), "portal-invoice-billing", "portal-card-billing"), []any{true, true, true, true, true, true, true, false})
+	status, _, _ := b.request("POST", path, end, b.site.URL)
+	fake.mu.Lock()
+	untouched := len(fake.removed) == 0
+	fake.mu.Unlock()
+	if status != 403 || !untouched {
+		t.Fatalf("an add-on was ended with the card gate closed: %d", status)
+	}
+	cardFlags(t, b, true)
+	fake.mu.Lock()
+	fake.failRemove = true
+	fake.mu.Unlock()
 	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 503 {
 		t.Fatalf("an end Stripe did not confirm=%d", status)
 	}
@@ -129,4 +136,45 @@ func TestAddonEndOnTheCardPath(t *testing.T) {
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_addon_ends`).Scan(&ends); err != nil || ends != 1 || len(removed) != 1 || removed[0] != "si_email" {
 		t.Fatalf("ends=%d removed=%v %v", ends, removed, err)
 	}
+}
+
+// TestAddonEndBeforeTheSubscription ends an add-on while the monthly Checkout
+// is still open: the subscription it then creates loses the add-on before the
+// event counts as processed, and Stripe's retry converges after a failure.
+func TestAddonEndBeforeTheSubscription(t *testing.T) {
+	b, fake := emailCardOrder(t)
+	end, _ := addonEndForm(t, b, "email")
+	path := "/portal/requests/" + proposalRequestID + "/addon-end"
+	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 303 {
+		t.Fatalf("add-on end before the subscription=%d", status)
+	}
+	fake.mu.Lock()
+	fake.items = map[string][]string{"sub_1": {"email"}}
+	fake.failRemove = true
+	fake.mu.Unlock()
+	completed := map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}
+	if status := sendEvent(t, b, "evt_sub", "checkout.session.completed", completed, webhookSecret); status == 200 {
+		t.Fatal("a completion whose ended add-on Stripe still charges was accepted")
+	}
+	if status := sendEvent(t, b, "evt_sub", "checkout.session.completed", completed, webhookSecret); status != 200 {
+		t.Fatalf("Stripe's retry of the completion=%d", status)
+	}
+	fake.mu.Lock()
+	removed, left := append([]string(nil), fake.removed...), len(fake.items["sub_1"])
+	fake.mu.Unlock()
+	if len(removed) != 1 || removed[0] != "si_email" || left != 0 {
+		t.Fatalf("the new subscription kept the ended add-on: removed=%v left=%d", removed, left)
+	}
+}
+
+// emailCardOrder places a card order with email sending as a monthly add-on.
+func emailCardOrder(t *testing.T) (*browserFixture, *fakeStripe) {
+	t.Helper()
+	b, fake := cardOrderFixture(t, 600000, 30000)
+	f, _ := launchOrderForm(t, b, "en", "card")
+	f["addon"] = []string{"email:1:100"}
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
+		t.Fatalf("card order=%d", status)
+	}
+	return b, fake
 }
