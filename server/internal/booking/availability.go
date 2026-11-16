@@ -117,8 +117,8 @@ func Available(p Policy, in Input) ([]Interval, error) {
 	return result, nil
 }
 
-func wholeMinutes(d time.Duration, max time.Duration) bool {
-	return d >= 0 && d <= max && d%time.Minute == 0
+func wholeMinutes(d time.Duration, limit time.Duration) bool {
+	return d >= 0 && d <= limit && d%time.Minute == 0
 }
 
 func validPolicy(p Policy) bool {

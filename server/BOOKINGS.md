@@ -60,7 +60,7 @@ The policy's enabled field alone grants neither of those authorities.
 | Child | Boundary | Required evidence |
 | --- | --- | --- |
 | [#656](https://github.com/devantler-tech/business-site/issues/656) | Internal policy and availability | Focused real policy tests, default-off/incomplete-state refusals and DST/buffer/capacity controls |
-| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority; booking migration v31 is reserved |
+| [#657](https://github.com/devantler-tech/business-site/issues/657) | Durable reservations and introductory entitlement | Real PostgreSQL overlap races, expiry/retry/restart, stable client IDs, one free entitlement, final conflict checks and current paid-service authority; booking migration v32 is reserved |
 | [#658](https://github.com/devantler-tech/business-site/issues/658) | Private CalDAV adapter and owned-event reconciliation | Actual library contract tests, recurring/all-day intervals, conditional writes, ambiguous failures and owned-only cancellation/rescheduling; later private iCloud acceptance |
 | [#659](https://github.com/devantler-tech/business-site/issues/659) | Native EN/DA customer/operator journeys | Session/CSRF/current-membership isolation, honest states, mobile/keyboard/appearance, two synthetic clients, deployment and recovery |
 
