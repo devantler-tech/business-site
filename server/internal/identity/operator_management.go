@@ -95,7 +95,7 @@ func managementFields(r *http.Request, fields ...string) (managementInput, error
 	return input, nil
 }
 
-func (b *browser) revokeCustomerInvitation(r *http.Request, ctx context.Context) (any, error) {
+func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request) (any, error) {
 	input, err := managementFields(r, "subject")
 	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !canInvite(input.Subject, "client") {
 		return nil, errOperatorInput
@@ -125,7 +125,7 @@ func (b *browser) revokeCustomerInvitation(r *http.Request, ctx context.Context)
 	return map[string]bool{"revoked": true}, nil
 }
 
-func (b *browser) createCustomerWorkspace(r *http.Request, ctx context.Context) (any, error) {
+func (b *browser) createCustomerWorkspace(ctx context.Context, r *http.Request) (any, error) {
 	input, err := managementFields(r, "workspace")
 	if err != nil || !validCustomerWorkspace(input.Workspace) {
 		return nil, errOperatorInput
@@ -152,7 +152,7 @@ func (b *browser) createCustomerWorkspace(r *http.Request, ctx context.Context) 
 	return workspaceView{ID: input.Workspace, Members: members}, err
 }
 
-func (b *browser) customerWorkspaceMembers(r *http.Request, ctx context.Context) (any, error) {
+func (b *browser) customerWorkspaceMembers(ctx context.Context, r *http.Request) (any, error) {
 	query, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil || len(query["workspace"]) != 1 || !validCustomerWorkspace(query.Get("workspace")) || len(query) > 2 || (len(query) == 2 && len(query["lang"]) != 1) {
 		return nil, errOperatorInput
@@ -176,15 +176,15 @@ func (b *browser) membersOfWorkspace(ctx context.Context, workspace string) ([]w
 	return nonNil(list), err
 }
 
-func (b *browser) deactivateCustomerMember(r *http.Request, ctx context.Context) (any, error) {
-	return b.changeCustomerMember(r, ctx, false)
+func (b *browser) deactivateCustomerMember(ctx context.Context, r *http.Request) (any, error) {
+	return b.changeCustomerMember(ctx, r, false)
 }
 
-func (b *browser) reactivateCustomerMember(r *http.Request, ctx context.Context) (any, error) {
-	return b.changeCustomerMember(r, ctx, true)
+func (b *browser) reactivateCustomerMember(ctx context.Context, r *http.Request) (any, error) {
+	return b.changeCustomerMember(ctx, r, true)
 }
 
-func (b *browser) changeCustomerMember(r *http.Request, ctx context.Context, active bool) (any, error) {
+func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, active bool) (any, error) {
 	input, err := managementFields(r, "workspace", "subject")
 	if err != nil || !validCustomerWorkspace(input.Workspace) {
 		return nil, errOperatorInput

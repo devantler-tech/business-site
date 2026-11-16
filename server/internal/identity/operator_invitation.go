@@ -65,7 +65,7 @@ func decodeOperatorInput(r *http.Request, value any, fields map[string]*string) 
 	return nil
 }
 
-func (b *browser) createCustomerInvitation(r *http.Request, ctx context.Context) (any, error) {
+func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request) (any, error) {
 	var input customerInvitationInput
 	if err := decodeOperatorInput(r, &input, map[string]*string{"name": &input.Name, "email": &input.Email, "workspace": &input.Workspace}); err != nil {
 		return nil, err

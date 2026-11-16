@@ -119,7 +119,7 @@ func TestMachineAPIWriteGrantsAreExactAndCannotMoveMoneyOrDelete(t *testing.T) {
 			calls := 0
 			actions := []string{"invitations.create", "invitations.revoke", "workspaces.create", "members.deactivate", "members.reactivate", "payments.refund", "customers.delete", "unknown.write"}
 			for _, action := range actions {
-				operatorRoutes = append(operatorRoutes, operatorRoute{"POST", "/test-" + action, action, func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+				operatorRoutes = append(operatorRoutes, operatorRoute{"POST", "/test-" + action, action, func(_ *browser, ctx context.Context, _ *http.Request) (any, error) {
 					calls++
 					setOperatorTarget(ctx, "synthetic-target")
 					return map[string]bool{"accepted": true}, nil
@@ -230,7 +230,7 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 	}))
 	t.Cleanup(provider.Close)
 	original := operatorRoutes
-	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, ctx context.Context, _ *http.Request) (any, error) {
 		r, err := http.NewRequestWithContext(ctx, "POST", provider.URL+"/users", nil)
 		if err != nil {
 			return nil, err

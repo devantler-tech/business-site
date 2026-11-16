@@ -12,7 +12,7 @@ import (
 
 func TestOperatorAuditBoundsLongRecordIdentifiers(t *testing.T) {
 	original := operatorRoutes
-	operatorRoutes = append(append([]operatorRoute{}, original...), operatorRoute{"GET", "/test-target", "audit.target", func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+	operatorRoutes = append(append([]operatorRoute{}, original...), operatorRoute{"GET", "/test-target", "audit.target", func(_ *browser, ctx context.Context, _ *http.Request) (any, error) {
 		setOperatorTarget(ctx, strings.Repeat("synthetic-record-", 32))
 		return true, nil
 	}})

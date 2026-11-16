@@ -35,7 +35,7 @@ const operatorListLimit = 1000
 // log records and what later per-action grants refer to.
 type operatorRoute struct {
 	method, path, action string
-	run                  func(*browser, *http.Request, context.Context) (any, error)
+	run                  func(*browser, context.Context, *http.Request) (any, error)
 }
 
 // operatorRoutes is the complete operator API.
@@ -44,7 +44,7 @@ var operatorRoutes = append([]operatorRoute{
 	{"POST", "/invitations", "invitations.create", (*browser).createCustomerInvitation},
 	{"GET", "/workspaces", "workspaces.list", operatorRead((*browser).workspaces)},
 	{"GET", "/audit", "audit.list", operatorRead((*browser).auditLog)},
-	{"GET", "/openapi.json", "openapi.read", func(*browser, *http.Request, context.Context) (any, error) {
+	{"GET", "/openapi.json", "openapi.read", func(*browser, context.Context, *http.Request) (any, error) {
 		return json.RawMessage(operatorOpenAPI), nil
 	}},
 }, managementRoutes...)
@@ -52,8 +52,8 @@ var operatorRoutes = append([]operatorRoute{
 var errOperatorInput = errors.New("invalid or conflicting operator input")
 
 // operatorRead keeps request input out of read-only inventory operations.
-func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, *http.Request, context.Context) (any, error) {
-	return func(b *browser, _ *http.Request, ctx context.Context) (any, error) { return run(b, ctx) }
+func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, context.Context, *http.Request) (any, error) {
+	return func(b *browser, ctx context.Context, _ *http.Request) (any, error) { return run(b, ctx) }
 }
 
 type (
@@ -182,7 +182,7 @@ func (b *browser) beginOperatorWrite(ctx context.Context, bound *operatorAuthori
 func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status, result := b.operatorCall(r, route.action, func(ctx context.Context, _ string) ([]byte, error) {
-			data, err := route.run(b, r, ctx)
+			data, err := route.run(b, ctx, r)
 			if err != nil {
 				return nil, err
 			}
