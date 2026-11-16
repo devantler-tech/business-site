@@ -2,10 +2,12 @@
   import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
   import { linkedInUrl } from "../../../../src/components/business/business-copy";
+  import { portalCopy } from "../../../../src/components/business/portal-copy";
   import coachingOriginal from "../../../../src/assets/ascoaching-homepage.jpg?url";
   import type { load } from "./+page.server";
   let { data }: { data: ReturnType<typeof load> } = $props();
   let t = $derived(data.home);
+  let portal = $derived(portalCopy[data.locale]);
   let home = $derived(data.locale === "da" ? "/da/" : "/");
   const format = (value: number) => new Intl.NumberFormat(data.locale === "da" ? "da-DK" : "en-GB").format(value);
   // "DKK 6,000" in English, "6.000 kr." in Danish.
@@ -84,7 +86,17 @@
       <ol>{#each t.steps as step}<li><h3>{step.title}</h3><p>{step.text}</p></li>{/each}</ol>
     </section>
     <section id="contact" class="contact-band" aria-labelledby="contact-title">
-      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={data.locale} heading="h3" /><div class="actions"><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>{#if data.companyEnabled}<a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a>{/if}</div><p class="contact-note">{t.contactNote}</p></div>
+      <div class="container">
+        <h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p>
+        <CustomerScope locale={data.locale} heading="h3" />
+        <p>{portal.contactFirst}</p>
+        <div class="actions"><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>{#if data.companyEnabled}<a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a>{/if}</div>
+        <p class="contact-note">{t.contactNote}</p>
+        <aside class="client-access" aria-labelledby="client-access-title">
+          <div><h3 id="client-access-title">{portal.heading}</h3><p>{portal.instructions}</p></div>
+          <a class="text-link" href={portal.href}>{portal.login}</a>
+        </aside>
+      </div>
     </section>
   </main>
 </Shell>
@@ -178,8 +190,10 @@
   .contact-band { background: var(--contact); border-top: 1px solid var(--line); padding-block: 4.5rem; }
   .contact-band h2 { max-width: 700px; }
   .contact-band p { max-width: 650px; margin-top: 1.3rem; }
-  .contact-band .button { margin-top: 1.6rem; }
   .contact-band .contact-note { font-size: .75rem; max-width: 700px; }
+  .client-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 2rem; max-width: 700px; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .client-access h3 { font-size: 1.1rem; }
+  .client-access p { margin-top: .4rem; font-size: .9rem; }
   @media (max-width: 1050px) { .hero { gap: 2rem; } .offers { gap: .75rem; } .offer { padding: 1.2rem; } }
   @media (max-width: 760px) {
     .hero { grid-template-columns: 1fr; gap: 2rem; padding-block: 2rem; }

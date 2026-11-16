@@ -7,6 +7,7 @@
   import logoDark from "../../../src/assets/brand/devantler-tech-logo-dark.svg?url";
   import logoLight from "../../../src/assets/brand/devantler-tech-logo-light.svg?url";
   import sharingImage from "virtual:business-sharing";
+  import { portalCopy } from "../../../src/components/business/portal-copy";
   let {
     locale,
     title,
@@ -51,6 +52,7 @@
     },
   };
   let t = $derived(words[locale]);
+  let portal = $derived(portalCopy[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
   let englishOnly = $derived(page === "journal" || page === "guide");
@@ -86,6 +88,7 @@
         href={locale === "da" ? "/da/about/" : "/about/"}
         aria-current={page === "about" ? "page" : undefined}>{t.about}</a
       ><a href="/blog/" aria-current={page === "journal" ? "page" : undefined}>{t.journal}</a><a href={`${home}#contact`}>{t.contact}</a>
+      <a class="client-login" href={portal.href}>{portal.login}</a>
     </nav>
     <div class="controls">
       <div id="theme-control" hidden>
@@ -109,7 +112,7 @@
     <p>{business.footer.identity}</p><p>{business.footer.note}</p>
     {#if business.identity}<p>CVR {business.identity.cvr} · {business.footer.registration}</p><a class="company-email" href={business.inquiryUrl}>{business.identity.email}</a>{/if}
   </div>
-  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a></div>
+  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a><a href={portal.href}>{portal.login}</a></div>
 </footer>
 
 <style>
@@ -170,6 +173,16 @@
     font-size: 0.875rem;
     text-decoration: none;
     color: var(--ink);
+    white-space: nowrap;
+  }
+  .client-login {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding-inline: 0.85rem;
+    font-weight: 600;
+  }
+  .client-login:hover {
+    border-color: var(--accent);
   }
   a:hover,
   a[aria-current] {
@@ -238,7 +251,7 @@
   }
   .company-email, .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .8rem; color: var(--ink); text-underline-offset: .2em; overflow-wrap: anywhere; }
   .footer-links { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-  @media (max-width: 1050px) {
+  @media (max-width: 1200px) {
     .business-header {
       gap: 0.5rem 1rem;
       flex-wrap: wrap;
@@ -265,6 +278,16 @@
     }
     .controls {
       gap: 0.6rem;
+    }
+  }
+  @media (max-width: 520px) {
+    nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.25rem 1rem;
+    }
+    .client-login {
+      justify-content: center;
     }
   }
 </style>
