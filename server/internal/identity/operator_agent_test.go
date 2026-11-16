@@ -181,6 +181,36 @@ func TestMachineAPIIsClosedWithoutPolicyOrActivation(t *testing.T) {
 	}
 }
 
+// Materialized output is not authority: a token that expires while PostgreSQL's
+// completion callback is waiting must not release the buffered private result.
+func TestMachineAPIExpiresDuringPrivateRead(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, nil)
+	b.invite("private-pending-customer", "private-workspace", "client")
+	pause := installCompletedRead(t, b, "FROM portal_invitations WHERE")
+	resume := onceRelease(pause.release)
+	t.Cleanup(resume)
+	raw := b.f.token(t, subject, "", map[string]any{"aud": fixtureAgentAudience, "exp": time.Now().Add(2 * time.Second).Unix()})
+	result := make(chan contactResponse, 1)
+	go func() {
+		status, body, _ := agentRequest(t, b, b.site.Client(), "GET", operatorAPIRoot+"/invitations", raw)
+		result <- contactResponse{status, body}
+	}()
+	select {
+	case <-pause.blocked:
+	case <-time.After(4 * time.Second):
+		t.Fatal("machine request did not reach its data checkpoint")
+	}
+	select {
+	case got := <-result:
+		if got.status != http.StatusServiceUnavailable || strings.Contains(got.body, "private-pending-customer") || strings.Contains(got.body, "private-workspace") {
+			t.Fatal("expired machine proof released private output", got.status)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("expired machine request did not end at its token deadline")
+	}
+}
+
 // VerifyMachine validates the actual signed JWT against the synthetic broker's
 // TLS JWKS. No token claims can select a human role or extend a five-minute lease.
 func TestMachineProofRequiresDistinctBoundedClaims(t *testing.T) {
