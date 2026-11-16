@@ -20,6 +20,17 @@ import (
 //go:embed web/*
 var browserFiles embed.FS
 
+// presentationAssets are the only files served from web/, never template
+// source: the stylesheet, the script, and the Devantler Tech tab icon and
+// wordmarks, each with its content type.
+var presentationAssets = map[string]string{
+	"portal.css":     "text/css; charset=utf-8",
+	"portal.js":      "text/javascript; charset=utf-8",
+	"icon.png":       "image/png",
+	"logo-dark.svg":  "image/svg+xml",
+	"logo-light.svg": "image/svg+xml",
+}
+
 // browserPage renders every private page with portal links under "/portal".
 var browserPage = pages(internalRoot, "")
 
@@ -62,7 +73,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return nil, ErrDenied
 	}
-	csp := "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
+	csp := "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var allowed bool
@@ -287,8 +298,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("POST /portal/requests/{id}/withdrawal", b.clientOrderAction(b.foundation.withdrawOrder))
 	mux.HandleFunc("POST /portal/requests", b.submitRequest)
 	mux.HandleFunc("POST /portal/logout", b.logout)
-	// Only the two public presentation assets are served, never template source.
-	for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
+	for name, contentType := range presentationAssets {
 		data, err := browserFiles.ReadFile("web/" + name)
 		if err != nil {
 			return nil, ErrDenied

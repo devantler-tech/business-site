@@ -14,7 +14,8 @@ bounded terminal history and closed funding gates with revocation retained. Its
 explicit form comparisons, exact displayed facts, active section associations and
 negative controls live in `work_review_render_test.go`. Shared frame, actual-route
 and quality checks cover this fifth template. The remaining original frozen
-references are unchanged; no new renderer output is used to regenerate them.
+body references are unchanged; no new renderer output is used to regenerate them.
+The frame references were re-recorded once, for the brand (see below).
 
 From `server/`, with the exact compiler in `go.mod`:
 
@@ -70,6 +71,21 @@ Its fixture is `portal_links_test.go` blob
 | triage.html   | fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9 |
 | credits.html  | dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3 |
 
+### Re-recorded frame references (Devantler Tech brand, 2026-11-16)
+
+The frame references were re-recorded once, on purpose, when the portal took the
+Devantler Tech brand. Every private page now links the tab icon
+(`/portal/assets/icon.png`) in its head. Its header brand link now shows the
+theme-matched wordmark images, named by `aria-label="Devantler Tech"`, instead of
+the text "Devantler Tech". That changes the head and header of all 98 documents and
+nothing inside `main`.
+
+Before recording, the rendered frames of every document were compared with the
+previous source's frames. Those two edits were the only differences. The new frame
+references were then recorded from the branding change's own rendered output, and
+the body references were not touched. This is the single exception to the rule
+below. Any later frame change needs its own reviewed record here.
+
 The original tables remain unchanged apart from removing the retired entries.
 The separate ordinary invoice table (recorded from signed snapshot
 `90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
@@ -85,7 +101,8 @@ form controls, text limits, privacy guidance and return links. The other 26
 unchanged bodies retain their original immutable references. No production
 renderer or reverse projection produces these expectations. Missing, truncated
 or malformed ordinary tables fail closed. Task mode always retains all
-original body and frame references, and rejects the newer ordinary forms.
+original body references and the current frame references, and rejects the
+newer ordinary forms.
 Mutation controls reject absent/incorrect options, selection, assessment text
 and its accessible association; the separate Other-request HTTP tests cover
 its receipt and operator views. This does not renew the retired comparison.
