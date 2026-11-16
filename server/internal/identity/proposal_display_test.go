@@ -74,7 +74,7 @@ func TestConsentReceiptRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.T) {
 	for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoice-billing"} {
 		for _, outcome := range []string{"false", "error"} {
-			for _, change := range []string{"unchanged", "revocation", "role", "rebind"} {
+			for _, change := range []string{"unchanged", "revocation", "role", "rebind", "incarnation"} {
 				t.Run(key+"/"+outcome+"/"+change, func(t *testing.T) {
 					b := newBrowserFixture(t)
 					proposalFlags(t, b, true, true, true, true)
@@ -115,12 +115,21 @@ func TestOperatorDetailRechecksAuthorityAfterClosedDisplayEvaluation(t *testing.
 					select {
 					case got := <-result:
 						visible := strings.Contains(got.body, "Fictional proposal request") || strings.Contains(got.body, "hostile-brief") || strings.Contains(got.body, "A fictional first iteration")
-						allowed := change == "unchanged" || change == "rebind"
+						allowed := change == "unchanged"
 						if (allowed && (got.status != 200 || !visible)) || (!allowed && (got.status == 200 || visible)) {
 							t.Fatal("closed operator display check bypassed current private-read authority")
 						}
 					case <-ctx.Done():
 						t.Fatal("operator detail did not finish after SDK release")
+					}
+					if change == "rebind" || change == "incarnation" {
+						// A membership change closes the old browser proof. A new
+						// verified callback can bind the current operator incarnation.
+						b.finish(b.start())
+						status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID, nil, "")
+						if status != 200 || !strings.Contains(body, "Fictional proposal request") {
+							t.Fatal("fresh operator sign-in did not restore the permitted detail read", status)
+						}
 					}
 				})
 			}

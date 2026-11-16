@@ -69,8 +69,10 @@ session-only. Visiting the public website does not sign out or extend the
 session. The portal's website links preserve English/Danish, and returning with
 a valid session opens the workspace directly. A new authorization can reuse the
 provider's SSO session subject to its existing authentication/MFA policy.
-Each private request rechecks current membership;
-only a stored operator role can access `/portal/operator`. Session and CSRF
+Each private request rechecks current membership and the incarnation bound by
+its verified sign-in. A membership change invalidates prior sessions, including
+late session writes; reactivation requires a fresh sign-in.
+Only a stored operator role can access `/portal/operator`. Session and CSRF
 cookies are Secure, HttpOnly, SameSite=Lax and `__Host-` scoped. Patched nosurf
 protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
@@ -85,9 +87,11 @@ Contact responses buffer the complete frame and revalidate the original durable 
 after waits. A replacement identity, client or extended deadline cannot authorize
 the original response, and a read never refreshes or resurrects a deleted session.
 
-`Invite` and `Revoke` remain **trusted control-plane operations**, not public
-HTTP endpoints. An operator workspace does not expose these operations. Likewise,
-`Complete` accepts only a server-obtained token, never a browser authentication claim.
+`Invite` and `Revoke` remain **trusted control-plane operations**. The authenticated
+[operator customer area](CUSTOMER-IDENTITY.md) exposes bounded, audited invitation,
+workspace and member actions, with a separate restricted machine identity policy.
+No anonymous endpoint grants membership. `Complete` accepts only a server-obtained
+token, never a browser authentication claim.
 
 Authenticated clients can edit their name, contact email and optional company at
 `/portal/contact`. The actual query uses current server-owned issuer/subject membership
@@ -111,7 +115,7 @@ retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,
-production customer intake, payment, queue, MCP or agent execution. No paid service is used.
+production customer intake, payment, queue, MCP or work execution. No paid service is used.
 
 The separately default-off [project-request intake](REQUESTS.md) lets a synthetic
 invited client submit a free brief and revisit a durable private receipt. It does
