@@ -111,9 +111,15 @@ func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(f.taxRate)
 	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/v1/subscriptions/") && q.Get("expand[]") == "items.data.price.product":
 		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
-		data := []map[string]any{}
+		// The order's own item, then one per add-on; "untagged" is an item
+		// created before lines were named.
+		data := []map[string]any{{"id": "si_order", "price": map[string]any{"product": map[string]any{"metadata": map[string]string{"portal_line": "order"}}}}}
 		for _, addon := range f.items[subscription] {
-			data = append(data, map[string]any{"id": "si_" + strings.ReplaceAll(addon, "-", "_"), "price": map[string]any{"product": map[string]any{"metadata": map[string]string{"portal_addon": addon}}}})
+			metadata := map[string]string{"portal_addon": addon}
+			if addon == "untagged" {
+				metadata = map[string]string{}
+			}
+			data = append(data, map[string]any{"id": "si_" + strings.ReplaceAll(addon, "-", "_"), "price": map[string]any{"product": map[string]any{"metadata": metadata}}})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "items": map[string]any{"data": data}})
 	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/v1/subscription_items/"):

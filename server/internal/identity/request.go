@@ -230,7 +230,9 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 				return
 			}
 			page.LaunchEnded = r.URL.Query().Get("launch") == "ended"
-			page.ThisMonth = currentMonth(time.Now()).Format("2006-01")
+			if page.Order != nil {
+				page.ThisMonth = addonLastMonth(page.Order.Collection, time.Now()).Format("2006-01")
+			}
 			if proposal := cmp.Or(page.OrderProposal, page.SharedProposal); page.Order == nil && proposal != nil {
 				var valid bool
 				page.AddonChoices, page.OrderAddons, valid = selectedAddons(r.URL.Query(), page.Request.Product, proposal.MonthlyMinor > 0)
@@ -302,7 +304,7 @@ type requestPageData struct {
 	AddonChoices      []addonChoice // the add-ons the client can choose, with the current choice
 	OrderAddons       []orderAddon  // the chosen add-ons the order form carries
 	AddonsInvalid     bool          // the client's add-on choice is not possible; no order form
-	ThisMonth         string        // the current Copenhagen month, YYYY-MM, after which an add-on ends
+	ThisMonth         string        // YYYY-MM: an add-on of the order ended now ends after this month (addonLastMonth)
 }
 
 // OrderOneTimeDKK and OrderMonthlyDKK are what the order form's order costs:

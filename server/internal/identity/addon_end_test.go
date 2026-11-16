@@ -75,13 +75,13 @@ func TestAddonEndOnTheInvoicePath(t *testing.T) {
 	if status, _, _ := b.request("POST", path, express, b.site.URL); status != 303 {
 		t.Fatalf("Express end=%d", status)
 	}
-	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key"); err != nil || level != "express" {
+	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key", time.Now()); err != nil || level != "express" {
 		t.Fatalf("Express ended before its last month: %q %v", level, err)
 	}
 	if _, err := migrationDB(t).Exec(b.f.ctx, `UPDATE portal_addon_ends SET last_month=last_month - interval '1 month'`); err != nil {
 		t.Fatal(err)
 	}
-	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key"); err != nil || level != "standard" {
+	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key", time.Now()); err != nil || level != "standard" {
 		t.Fatalf("the level after Express ended: %q %v", level, err)
 	}
 }
@@ -92,12 +92,12 @@ func TestAddonEndOnTheCardPath(t *testing.T) {
 	b, fake := emailCardOrder(t)
 	var marked bool
 	for _, s := range fake.sessions() {
-		if s.Get("mode") == "subscription" && s.Get("line_items[1][price_data][product_data][metadata][portal_addon]") == "email" {
+		if s.Get("mode") == "subscription" && s.Get("line_items[0][price_data][product_data][metadata][portal_line]") == "order" && s.Get("line_items[1][price_data][product_data][metadata][portal_addon]") == "email" {
 			marked = true
 		}
 	}
 	if !marked {
-		t.Fatal("the subscription's add-on line does not name its add-on")
+		t.Fatal("the subscription's lines do not name what they charge")
 	}
 	if sendEvent(t, b, "evt_sub", "checkout.session.completed", map[string]any{"id": "cs_test_2", "mode": "subscription", "payment_status": "no_payment_required", "amount_total": 0, "currency": "dkk", "subscription": "sub_1"}, webhookSecret) != 200 {
 		t.Fatal("subscription completion refused")
@@ -117,13 +117,23 @@ func TestAddonEndOnTheCardPath(t *testing.T) {
 		t.Fatalf("an add-on was ended with the card gate closed: %d", status)
 	}
 	cardFlags(t, b, true)
+	// An item that names nothing may be the add-on: nothing is removed, and
+	// nothing is confirmed. Then Stripe fails on the client's retry. The
+	// client's end still stands, and the operator's page offers to ask Stripe
+	// again until it confirms.
 	fake.mu.Lock()
-	fake.failRemove = true
+	fake.items = map[string][]string{"sub_1": {"email", "untagged"}}
 	fake.mu.Unlock()
-	// Stripe fails: the client's end still stands, and the operator's page
-	// offers to ask Stripe again until it confirms.
 	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 303 {
-		t.Fatalf("an end Stripe did not confirm=%d", status)
+		t.Fatalf("an end beside an untagged item=%d", status)
+	}
+	fake.mu.Lock()
+	fake.items = map[string][]string{"sub_1": {"email"}}
+	fake.failRemove = true
+	untouched = len(fake.removed) == 0
+	fake.mu.Unlock()
+	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 303 || !untouched {
+		t.Fatalf("an end Stripe did not confirm=%d, removed beside an untagged item: %v", status, !untouched)
 	}
 	var ends, removals int
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT (SELECT count(*) FROM portal_addon_ends),(SELECT count(*) FROM portal_addon_removals)`).Scan(&ends, &removals); err != nil || ends != 1 || removals != 0 {
@@ -178,6 +188,30 @@ func TestAddonEndBeforeTheSubscription(t *testing.T) {
 	fake.mu.Unlock()
 	if len(removed) != 1 || removed[0] != "si_email" || left != 0 {
 		t.Fatalf("the new subscription kept the ended add-on: removed=%v left=%d", removed, left)
+	}
+}
+
+// TestAddonEndUsesTheBilledMonth ends a card order's add-on after the UTC
+// month Stripe bills, which differs from Copenhagen's for an hour or two on
+// the 1st. The receipt offers that month, the end records it, and the
+// client's level counts the add-on through it.
+func TestAddonEndUsesTheBilledMonth(t *testing.T) {
+	late := time.Date(2026, 11, 30, 23, 30, 0, 0, time.UTC) // 00:30 on 1 December in Copenhagen
+	if card, invoice := addonLastMonth("card", late).Format("2006-01"), addonLastMonth("invoice", late).Format("2006-01"); card != "2026-11" || invoice != "2026-12" {
+		t.Fatalf("card=%s invoice=%s", card, invoice)
+	}
+	b, _ := emailCardOrder(t)
+	db := migrationDB(t)
+	if _, err := db.Exec(b.f.ctx, `INSERT INTO portal_order_addons(order_id,addon_id,kind,quantity,unit_minor) SELECT id,'express','monthly',1,100000 FROM portal_orders`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(b.f.ctx, `INSERT INTO portal_addon_ends(order_id,addon_id,last_month,client_issuer,client_subject) SELECT id,'express','2026-11-01',client_issuer,client_subject FROM portal_orders`); err != nil {
+		t.Fatal(err)
+	}
+	for now, want := range map[time.Time]string{late: "express", late.Add(time.Hour): "standard"} {
+		if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key", now); err != nil || level != want {
+			t.Fatalf("level at %s=%q %v, want %s", now.Format(time.RFC3339), level, err, want)
+		}
 	}
 }
 

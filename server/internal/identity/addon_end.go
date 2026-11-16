@@ -41,13 +41,7 @@ func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID
 		// Never change a subscription the card path's own gate holds closed.
 		return ErrDenied
 	}
-	// The last billed month: Copenhagen's for invoices; for a card order the
-	// UTC month, since Stripe renews at midnight UTC on the 1st.
-	last := currentMonth(time.Now())
-	if o.Collection == "card" {
-		now := time.Now().UTC()
-		last = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	}
+	last := addonLastMonth(o.Collection, time.Now())
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_addon_ends(order_id,addon_id,last_month,client_issuer,client_subject) VALUES($1,$2,$3,$4,$5)`, o.ID, addonID, last, p.issuer, p.subject); err != nil {
 		return errTriageStorage
 	}
@@ -63,6 +57,18 @@ func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID
 		return err
 	}
 	return s.scheduleAddonRemovals(ctx, o.ID)
+}
+
+// addonLastMonth is the last billed month of a monthly add-on ended at now:
+// Copenhagen's month for an invoice order; for a card order the UTC month,
+// since Stripe renews at midnight UTC on the 1st. The receipt offers, the end
+// records and the client's level ends with this same month.
+func addonLastMonth(collection string, now time.Time) time.Time {
+	if collection == "card" {
+		now = now.UTC()
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+	return currentMonth(now)
 }
 
 // scheduleAddonRemovals asks Stripe to remove every ended add-on of the order

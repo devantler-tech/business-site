@@ -135,8 +135,12 @@ func (c Checkout) form() (url.Values, error) {
 		f.Set(p+"[price_data][currency]", "dkk")
 		f.Set(p+"[price_data][unit_amount]", strconv.FormatInt(line.AmountMinor, 10))
 		f.Set(p+"[price_data][product_data][name]", line.Name)
+		// Every line names what it charges, so an add-on's subscription item
+		// is never mistaken for another: see RemoveSubscriptionAddon.
 		if line.Addon != "" {
 			f.Set(p+"[price_data][product_data][metadata][portal_addon]", line.Addon)
+		} else {
+			f.Set(p+"[price_data][product_data][metadata][portal_line]", "order")
 		}
 		f.Set(p+"[tax_rates][0]", c.TaxRate)
 		if line.Monthly {
@@ -468,7 +472,9 @@ type Subscription struct {
 // RemoveSubscriptionAddon removes the subscription item that charges one portal
 // add-on, without proration: the current month stays paid and the next invoice
 // no longer charges it. An add-on already removed is not an error, so a retry
-// converges.
+// converges. A subscription with an item that names neither an add-on nor the
+// order (one created before lines were named), or with more items than one
+// page shows, is refused: its add-on's removal cannot be confirmed.
 func (c *Client) RemoveSubscriptionAddon(ctx context.Context, subscription, addon string) error {
 	if !subscriptionID.MatchString(subscription) || addon == "" {
 		return errors.New("stripe: invalid subscription add-on")
@@ -476,7 +482,8 @@ func (c *Client) RemoveSubscriptionAddon(ctx context.Context, subscription, addo
 	var s struct {
 		ID    string `json:"id"`
 		Items struct {
-			Data []struct {
+			HasMore bool `json:"has_more"`
+			Data    []struct {
 				ID    string `json:"id"`
 				Price struct {
 					Product struct {
@@ -491,6 +498,14 @@ func (c *Client) RemoveSubscriptionAddon(ctx context.Context, subscription, addo
 	}
 	if s.ID != subscription {
 		return errors.New("stripe: response malformed")
+	}
+	if s.Items.HasMore {
+		return errors.New("stripe: subscription has more items than one page")
+	}
+	for _, item := range s.Items.Data {
+		if item.Price.Product.Metadata["portal_addon"] == "" && item.Price.Product.Metadata["portal_line"] == "" {
+			return errors.New("stripe: subscription item names no portal line")
+		}
 	}
 	for _, item := range s.Items.Data {
 		if item.Price.Product.Metadata["portal_addon"] != addon {
