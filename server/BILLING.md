@@ -184,9 +184,11 @@ refuses to start with an add-on it cannot sell.
 - **Ending one add-on** (Consumer Contracts Act, section 28 a): the receipt offers to end each monthly
   add-on after the current month (`POST /requests/{id}/addon-end`, `portal_addon_ends`, migration
   v27). It is billed through that month; later monthly charges, invoices and card renewals leave it
-  out. A card order's subscription first loses the add-on's item (its product carries
-  `portal_addon` metadata), without proration; the end is recorded only once Stripe confirms, and
-  a retry converges. Ending Priority or Express drops the client's level after that month.
+  out. A card order's subscription then loses the add-on's item (its product carries
+  `portal_addon` metadata), without proration. The end is recorded first, and Stripe's confirmation
+  on its own (`portal_addon_removals`): if Stripe fails or its answer is lost, the operator's page
+  offers to ask Stripe again until it confirms. An add-on ended while the monthly Checkout is still
+  open is removed when its subscription completes, before that event counts as processed. Ending Priority or Express drops the client's level after that month.
 
 ## Feature-request priority and fair use
 

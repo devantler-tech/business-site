@@ -120,22 +120,36 @@ func TestAddonEndOnTheCardPath(t *testing.T) {
 	fake.mu.Lock()
 	fake.failRemove = true
 	fake.mu.Unlock()
-	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 503 {
+	// Stripe fails: the client's end still stands, and the operator's page
+	// offers to ask Stripe again until it confirms.
+	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 303 {
 		t.Fatalf("an end Stripe did not confirm=%d", status)
 	}
-	var ends int
-	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_addon_ends`).Scan(&ends); err != nil || ends != 0 {
-		t.Fatal("an end was recorded while Stripe still charges the add-on", err)
+	var ends, removals int
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT (SELECT count(*) FROM portal_addon_ends),(SELECT count(*) FROM portal_addon_removals)`).Scan(&ends, &removals); err != nil || ends != 1 || removals != 0 {
+		t.Fatalf("ends=%d removals=%d %v", ends, removals, err)
 	}
-	if status, _, _ := b.request("POST", path, end, b.site.URL); status != 303 {
-		t.Fatalf("the retried end=%d", status)
+	client := b.client
+	triageSignIn(t, b, "addon-end-operator", "operator-workspace", "operator")
+	_, page, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, "")
+	csrf := csrfInput.FindStringSubmatch(page)
+	if len(csrf) != 2 || !strings.Contains(page, ">Ask Stripe again</button>") {
+		t.Fatal("the operator is not offered to ask Stripe again")
+	}
+	retry := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "order": end["order"]}
+	if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/addon-removals", retry, b.site.URL); status != 303 {
+		t.Fatalf("asking Stripe again=%d", status)
 	}
 	fake.mu.Lock()
 	removed := append([]string(nil), fake.removed...)
 	fake.mu.Unlock()
-	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_addon_ends`).Scan(&ends); err != nil || ends != 1 || len(removed) != 1 || removed[0] != "si_email" {
-		t.Fatalf("ends=%d removed=%v %v", ends, removed, err)
+	if err := b.pool.QueryRow(b.f.ctx, `SELECT count(*) FROM portal_addon_removals`).Scan(&removals); err != nil || removals != 1 || len(removed) != 1 || removed[0] != "si_email" {
+		t.Fatalf("removals=%d removed=%v %v", removals, removed, err)
 	}
+	if _, page, _ = b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang=en", nil, ""); strings.Contains(page, "Ask Stripe again") {
+		t.Fatal("a confirmed removal is still offered again")
+	}
+	b.client = client
 }
 
 // TestAddonEndBeforeTheSubscription ends an add-on while the monthly Checkout
