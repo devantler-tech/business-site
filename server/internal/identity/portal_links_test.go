@@ -61,7 +61,11 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 				if err != nil || count < 5 || strings.Contains(output, "{{") {
 					t.Fatalf("rendered link contract: targets=%d error=%v", count, err)
 				}
-				if !strings.Contains(output, `href="https://devantler.tech/"`) || !strings.Contains(output, "data-route-checked-") {
+				publicPath := "/"
+				if strings.Contains(page.uri, "lang=da") {
+					publicPath = "/da/"
+				}
+				if !strings.Contains(output, `href="https://devantler.tech`+publicPath+`"`) || !strings.Contains(output, "data-route-checked-") {
 					t.Fatal("public homepage or explicit method-aware coverage missing")
 				}
 			}

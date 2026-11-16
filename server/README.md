@@ -58,7 +58,13 @@ not allow arbitrary form destinations or maintain a social-provider origin list.
 
 Opaque SCS sessions are stored in PostgreSQL with hashed storage keys, rotated
 across sign-in, destroyed on logout, and bounded by both token expiry and a
-30-minute absolute lifetime. Each private request rechecks current membership;
+30-minute absolute lifetime. A completed login keeps its opaque cookie across
+browser restarts only until that same deadline; unfinished sign-ins remain
+session-only. Visiting the public website does not sign out or extend the
+session. The portal's website links preserve English/Danish, and returning with
+a valid session opens the workspace directly. A new authorization can reuse the
+provider's SSO session subject to its existing authentication/MFA policy.
+Each private request rechecks current membership;
 only a stored operator role can access `/portal/operator`. Session and CSRF
 cookies are Secure, HttpOnly, SameSite=Lax and `__Host-` scoped. Patched nosurf
 protects state-changing forms; fixed Host/Origin checks, no-store responses and
