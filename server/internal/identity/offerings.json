@@ -115,11 +115,7 @@
       "id": "priority",
       "kind": "monthly",
       "price": 400,
-      "offerings": [
-        "website",
-        "app",
-        "service"
-      ],
+      "offerings": ["website", "app", "service"],
       "tier": "priority",
       "text": {
         "en": {
@@ -136,11 +132,7 @@
       "id": "express",
       "kind": "monthly",
       "price": 1000,
-      "offerings": [
-        "website",
-        "app",
-        "service"
-      ],
+      "offerings": ["website", "app", "service"],
       "tier": "express",
       "text": {
         "en": {
@@ -157,10 +149,7 @@
       "id": "statistics",
       "kind": "monthly",
       "price": 75,
-      "offerings": [
-        "website",
-        "app"
-      ],
+      "offerings": ["website", "app"],
       "text": {
         "en": {
           "title": "Visitor statistics",
@@ -176,11 +165,7 @@
       "id": "email",
       "kind": "monthly",
       "price": 100,
-      "offerings": [
-        "website",
-        "app",
-        "service"
-      ],
+      "offerings": ["website", "app", "service"],
       "text": {
         "en": {
           "title": "Email sending",
@@ -196,10 +181,7 @@
       "id": "language",
       "kind": "one-time",
       "price": 1500,
-      "offerings": [
-        "website",
-        "app"
-      ],
+      "offerings": ["website", "app"],
       "max": 5,
       "text": {
         "en": {
@@ -216,10 +198,7 @@
       "id": "contact-form",
       "kind": "one-time",
       "price": 1500,
-      "offerings": [
-        "website",
-        "app"
-      ],
+      "offerings": ["website", "app"],
       "text": {
         "en": {
           "title": "Contact form",
@@ -235,10 +214,7 @@
       "id": "payments",
       "kind": "one-time",
       "price": 3000,
-      "offerings": [
-        "website",
-        "app"
-      ],
+      "offerings": ["website", "app"],
       "text": {
         "en": {
           "title": "Online payments",
@@ -254,9 +230,7 @@
       "id": "news",
       "kind": "one-time",
       "price": 2500,
-      "offerings": [
-        "website"
-      ],
+      "offerings": ["website"],
       "text": {
         "en": {
           "title": "News section",
@@ -272,9 +246,7 @@
       "id": "accounts",
       "kind": "one-time",
       "price": 4000,
-      "offerings": [
-        "app"
-      ],
+      "offerings": ["app"],
       "text": {
         "en": {
           "title": "User accounts and sign-in",
@@ -290,9 +262,7 @@
       "id": "migration",
       "kind": "one-time",
       "price": 1500,
-      "offerings": [
-        "website"
-      ],
+      "offerings": ["website"],
       "text": {
         "en": {
           "title": "Content move",
@@ -308,10 +278,7 @@
       "id": "seo",
       "kind": "one-time",
       "price": 1000,
-      "offerings": [
-        "website",
-        "app"
-      ],
+      "offerings": ["website", "app"],
       "text": {
         "en": {
           "title": "Search engine setup",
