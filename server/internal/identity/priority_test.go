@@ -82,3 +82,36 @@ func TestFeatureLevels(t *testing.T) {
 		t.Fatalf("a client without hosting was held to one request: %d", status)
 	}
 }
+
+// TestFairUseKeepsRetries returns a finished request's receipt to a retry of
+// its own submission while another request is in progress.
+func TestFairUseKeepsRetries(t *testing.T) {
+	b := billingFixture(t)
+	f := orderForm(t, b, "en")
+	f["addon"] = []string{"express:1"}
+	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
+		t.Fatalf("order with Express=%d", status)
+	}
+	if _, err := migrationDB(t).Exec(b.f.ctx, `INSERT INTO portal_request_closures(request_id,client_id,operator_issuer,operator_subject) VALUES($1,'private-client-key','https://fixture.invalid','fixture-operator')`, proposalRequestID); err != nil {
+		t.Fatal(err)
+	}
+	status, body, _ := b.request("GET", "/portal/requests/new?lang=en", nil, "")
+	csrf := csrfInput.FindStringSubmatch(body)
+	key := regexp.MustCompile(`name="submission_key" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
+	if status != 200 || len(csrf) != 2 || len(key) != 2 {
+		t.Fatal("no new-request form")
+	}
+	first := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "submission_key": {key[1]}, "product": {"app"}, "title": {"Fictional first request"}, "brief": {"A fictional feature request."}}
+	if status, _, _ := b.request("POST", "/portal/requests", first, b.site.URL); status != 303 {
+		t.Fatalf("first request=%d", status)
+	}
+	if _, err := migrationDB(t).Exec(b.f.ctx, `INSERT INTO portal_request_closures(request_id,client_id,operator_issuer,operator_subject) SELECT id,client_id,'https://fixture.invalid','fixture-operator' FROM portal_requests WHERE submission_key=$1`, key[1]); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := newRequest(t, b, "Fictional second request"); status != 303 {
+		t.Fatalf("second request=%d", status)
+	}
+	if status, _, _ := b.request("POST", "/portal/requests", first, b.site.URL); status != 303 {
+		t.Fatalf("the retry of a finished request's submission was held to fair use: %d", status)
+	}
+}
