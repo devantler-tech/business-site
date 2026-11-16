@@ -184,14 +184,18 @@ func TestAvailabilityRejectsInvalidSearch(t *testing.T) {
 		func(in *Input) { in.Duration = 0 },
 		func(in *Input) { in.Duration = time.Second },
 		func(in *Input) { in.Search.End = in.Search.Start },
-		func(in *Input) { in.Search.End = in.Search.Start.Add(32 * 24 * time.Hour) },
+		func(in *Input) {
+			in.Search.End = in.Search.Start.Add(32 * 24 * time.Hour)
+			in.Calendar.Coverage.End = in.Search.End.Add(24 * time.Hour)
+			in.CommitmentsCoverage.End = in.Search.End.AddDate(0, 0, 14)
+		},
 		func(in *Input) { in.Now = time.Time{} },
 	} {
 		candidate := in
 		edit(&candidate)
 		got, err := Available(p, candidate)
 		if !errors.Is(err, ErrUnavailable) || len(got) != 0 {
-			t.Fatalf("invalid input produced slots: %v %v", got, err)
+			t.Fatalf("invalid input produced %d slots, err=%v", len(got), err)
 		}
 	}
 }
