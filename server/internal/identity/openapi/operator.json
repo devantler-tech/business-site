@@ -28,6 +28,17 @@
       }
     },
     "/operator/api/workspaces": {
+      "post": {
+        "operationId": "workspaces.create",
+        "summary": "Create an empty customer workspace",
+        "responses": {
+          "200": { "description": "The workspace is recorded" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
       "get": {
         "operationId": "workspaces.list",
         "summary": "Every workspace and its members, revoked ones included",
@@ -40,6 +51,58 @@
               }
             }
           },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/invitations/revoke": {
+      "post": {
+        "operationId": "invitations.revoke",
+        "summary": "Revoke a pending customer invitation",
+        "responses": {
+          "200": { "description": "The invitation cannot be accepted" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces/members": {
+      "get": {
+        "operationId": "workspaces.members.list",
+        "summary": "List the members of one customer workspace",
+        "responses": {
+          "200": { "description": "The workspace members, including deactivated members" },
+          "400": { "description": "The workspace is missing or invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/members/deactivate": {
+      "post": {
+        "operationId": "members.deactivate",
+        "summary": "Deactivate a customer membership and its ZITADEL user",
+        "responses": {
+          "200": { "description": "Portal and identity-provider access are disabled" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/members/reactivate": {
+      "post": {
+        "operationId": "members.reactivate",
+        "summary": "Reactivate a customer after its ZITADEL user is active",
+        "responses": {
+          "200": { "description": "Portal and identity-provider access are enabled" },
+          "400": { "description": "The submitted fields are invalid" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }

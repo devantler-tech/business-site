@@ -37,15 +37,15 @@ type operatorRoute struct {
 	run                  func(*browser, *http.Request, context.Context) (any, error)
 }
 
-// operatorRoutes is the complete operator API. Every route only reads for now.
-var operatorRoutes = []operatorRoute{
+// operatorRoutes is the complete operator API.
+var operatorRoutes = append([]operatorRoute{
 	{"GET", "/invitations", "invitations.list", operatorRead((*browser).pendingInvitations)},
 	{"GET", "/workspaces", "workspaces.list", operatorRead((*browser).workspaces)},
 	{"GET", "/audit", "audit.list", operatorRead((*browser).auditLog)},
 	{"GET", "/openapi.json", "openapi.read", func(*browser, *http.Request, context.Context) (any, error) {
 		return json.RawMessage(operatorOpenAPI), nil
 	}},
-}
+}, managementRoutes...)
 
 // operatorRead keeps request input out of read-only inventory operations.
 func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, *http.Request, context.Context) (any, error) {
