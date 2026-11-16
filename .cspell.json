@@ -337,6 +337,8 @@
     "NOSYSTEM",
     "textconv",
     "fsmonitor",
+    "wordmark",
+    "wordmarks",
     "worktree",
     "promisor",
     "gitlink",
