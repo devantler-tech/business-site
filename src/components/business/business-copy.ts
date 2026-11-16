@@ -65,8 +65,13 @@ const previewCopy = {
     publicCode: 'My code on GitHub',
     servicesTitle: 'What I can help you with',
     servicesIntro: 'Fixed prices for a focused first version. Larger projects grow through agreed iterations, each with its own scope, schedule and fixed price. The first consultation is free.',
-    starting: 'Fixed price', monthly: 'Optional hosting', perMonth: '/ month', currency: 'DKK',
-    launchLabel: 'Launch price with hosting',
+    // The price pair on each offer card: the normal one-time price (struck through, as it
+    // applies only after the launch offer) beside the launch price, then hosting on its own
+    // line, which the one-time price never includes.
+    starting: 'One-time project price', monthly: 'Optional hosting:', perMonth: '/ month', currency: 'DKK',
+    normalLabel: `Normal price after the first ${launchDiscount.limit} customers`,
+    launchLabel: `Launch price: first ${launchDiscount.limit} customers who choose hosting`,
+    hostingExcluded: ', not included in the one-time price',
     launchNote: `Launch offer: the first ${launchDiscount.limit} customers who order a project together with hosting get ${launchDiscount.percent}% off its one-time price. Hosting is charged at the normal monthly price. The offer ends when the ${launchDiscount.limit}th customer has ordered, and the normal one-time prices apply after that. Your proposal confirms whether a launch place is still available.`,
     offerCopy: [
       { title: 'A professional website', description: 'Make your business easy to find, understand and contact.', includes: ['Up to 5 straightforward pages', 'Mobile-friendly design', 'Your content, services and contact details', 'Basic search and sharing metadata'], boundary: 'You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately.' },
@@ -145,8 +150,10 @@ const previewCopy = {
     publicCode: 'Min kode på GitHub',
     servicesTitle: 'Det kan jeg hjælpe dig med',
     servicesIntro: 'Faste priser for en afgrænset første version. Større projekter vokser gennem aftalte etaper, hver med sit eget omfang, sin tidsplan og sin faste pris. Den første samtale er gratis.',
-    starting: 'Fast pris', monthly: 'Valgfri hosting', perMonth: '/ måned', currency: 'kr.',
-    launchLabel: 'Introduktionspris med hosting',
+    starting: 'Engangspris for projektet', monthly: 'Valgfri hosting:', perMonth: '/ måned', currency: 'kr.',
+    normalLabel: `Normalpris efter de første ${launchDiscount.limit} kunder`,
+    launchLabel: `Introduktionspris: de første ${launchDiscount.limit} kunder, der vælger hosting`,
+    hostingExcluded: ', ikke inkluderet i engangsprisen',
     launchNote: `Introduktionstilbud: De første ${launchDiscount.limit} kunder, der bestiller et projekt sammen med hosting, får ${launchDiscount.percent} % rabat på projektets engangspris. Hosting koster den normale månedspris. Tilbuddet ophører, når den ${launchDiscount.limit}. kunde har bestilt, og derefter gælder de normale engangspriser. Dit skriftlige tilbud bekræfter, om der stadig er en plads til introduktionsprisen.`,
     offerCopy: [
       { title: 'En professionel hjemmeside', description: 'Gør det nemt at finde, forstå og kontakte din virksomhed.', includes: ['Op til 5 enkle sider', 'Mobilvenligt design', 'Dit indhold, dine ydelser og kontaktoplysninger', 'Grundlæggende metadata til søgning og deling'], boundary: 'Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt.' },

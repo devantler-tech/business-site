@@ -8,6 +8,8 @@
   let t = $derived(data.home);
   let home = $derived(data.locale === "da" ? "/da/" : "/");
   const format = (value: number) => new Intl.NumberFormat(data.locale === "da" ? "da-DK" : "en-GB").format(value);
+  // "DKK 6,000" in English, "6.000 kr." in Danish.
+  const money = (value: number) => data.locale === "en" ? `${t.currency} ${format(value)}` : `${format(value)} ${t.currency}`;
 </script>
 
 <Shell locale={data.locale} title={data.title} description={data.description} page="home">
@@ -44,9 +46,12 @@
       <div class="section-heading"><h2 id="services-title">{t.servicesTitle}</h2><p>{t.servicesIntro}</p></div>
       <div class="offers">{#each t.offers as offer}<article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
-        <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong>{#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
-        <p class="launch-price" data-launch-setup={offer.launchSetup}>{t.launchLabel} <b>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.launchSetup)}{data.locale === "da" ? ` ${t.currency}` : ""}</b>{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
-        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
+        <div class="price"><span class="price-label">{t.starting}</span>
+          <!-- Each label comes first, so a screen reader hears "normal price …, launch price …"; CSS shows the amount above it. -->
+          <div class="price-pair"><p class="normal-price"><span>{t.normalLabel}</span><del>{money(offer.setup)}</del></p>
+            <p class="launch-price" data-launch-setup={offer.launchSetup}><span>{t.launchLabel}</span><strong>{money(offer.launchSetup)}</strong></p></div>
+          {#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
+        <p class="hosting-price">{t.monthly} <b>{money(offer.monthly)}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}{t.hostingExcluded}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
       </article>{/each}
@@ -129,9 +134,15 @@
   .assessment { margin-top: 1.5rem; padding-bottom: 1.3rem; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 1.2rem; font-weight: 600; }
   .price { display: flex; flex-direction: column; margin-top: 1.5rem; }
   .price > span { font-size: .8rem; color: var(--muted); }
-  .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
-  .launch-price { font-size: .85rem; margin-top: .6rem; color: var(--accent); }
-  .hosting-price { font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
+  /* Normal and launch prices side by side at the same size; each label sits under its amount. */
+  .price-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1.25rem; max-width: 32rem; margin-top: .35rem; }
+  .normal-price, .launch-price { display: flex; flex-direction: column-reverse; justify-content: flex-end; margin: 0; }
+  .price-pair del, .price-pair strong { font-size: clamp(1.3rem, 5.6vw, 2rem); font-weight: 600; letter-spacing: -.05em; line-height: 1.2; white-space: nowrap; }
+  .price-pair del { color: var(--price-normal); text-decoration-thickness: 2px; }
+  .price-pair strong { color: var(--accent); }
+  .price-pair span { font-size: .74rem; color: var(--muted); max-width: 14rem; }
+  .price > .vat-marker { margin-top: .5rem; }
+  .hosting-price { margin-top: .9rem; font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
   .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
   .offer li { padding-left: .15rem; margin-block: .45rem; }
   .offer li::marker { color: var(--accent); }

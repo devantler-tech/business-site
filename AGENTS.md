@@ -14,7 +14,7 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   frontend release flag has no effect; Astro applications, compiler and recovery option are removed.
 - English/Danish Home, About and Projects, the complete English Journal, all technical guides,
   RSS, discovery assets and historical redirects are permanent. Preserve incoming heading
-  bookmarks, the Devantler Tech favicon (`public/favicon.png`, the lime "D" icon) and the
+  bookmarks, the Devantler Tech favicon (`public/favicon.png`, the green "D" icon) and the
   header wordmark (`src/assets/brand/`), which the maintainer approved on 2026-11-15. Never
   invent Danish article or guide routes.
 - `src/data/build-content.mjs` compiles the maintained Markdown with Satteri, YAML metadata,
