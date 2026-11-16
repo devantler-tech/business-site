@@ -80,7 +80,10 @@ delivery path; never copy them into test fixtures or acceptance notes.
    prices/add-ons, collection path, early-start choice, withdrawal deadline and
    full terms/model form with the trader disclosure filled in. Save the received
    copy, change the source/contact in the disposable environment and retry: no
-   replacement or duplicate confirmation may be created.
+   replacement or duplicate confirmation may be created. Verify that the exact
+   format-1 outbox record progresses from prepared to sender-accepted only
+   after successful submission. A legacy link-only receipt, wrong agreement or
+   changed body must remain unproven. Storage failure is a distinct refusal.
 6. **Invoice path.** Against Numina's sandbox, verify one contact/invoice,
    booking/retry behavior, exact currency/amount/period reconciliation and no
    funding for a mismatch. Numina's sandbox cannot send invoice mail; record that

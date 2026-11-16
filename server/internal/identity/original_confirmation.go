@@ -30,7 +30,7 @@ type originalConfirmation struct {
 // request-locked transaction. It grants no authority and makes no service-start
 // decision. Only the known complete-agreement producer format can supply proof;
 // a legacy link-only confirmation remains missing even after its sender accepts it.
-// Database failure returns no usable evidence and a sanitized, nonnil error.
+// Database failure returns no usable evidence and a sanitized error.
 func readOriginalConfirmation(ctx context.Context, heldQuery interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, requestID, clientID, acceptanceID, orderID string) (originalConfirmation, error) {
