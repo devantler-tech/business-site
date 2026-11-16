@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexedwards/scs/pgxstore"
 	"github.com/alexedwards/scs/v2"
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/justinas/nosurf"
 	"golang.org/x/oauth2"
 )
@@ -255,6 +256,7 @@ func (w rootRedirects) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func (b *browser) routes() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /portal/sign-in", b.signIn)
+	mux.HandleFunc("GET /portal/operator/sign-in", b.operatorSignIn)
 	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
@@ -325,9 +327,27 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 }
 
 // signIn goes straight to the broker: there is no portal page before the login.
-// A current member goes home instead, so a link here cannot sign anyone out.
-// A browser that keeps being refused gets one static page, never a loop.
+// Customers always sign in through ZITADEL, so customer Dex never shows a chooser.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
+	b.startSignIn(w, r, customeridentity.ZitadelConnectorID)
+}
+
+// operatorSignIn is the operators' own link: GitHub through platform SSO. It
+// exists only while the server configuration lists operators, and reaching it
+// grants nothing: the identity that returns must be listed.
+func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
+	if !b.foundation.OperatorsLinked() {
+		http.NotFound(w, r)
+		return
+	}
+	b.startSignIn(w, r, customeridentity.PlatformConnectorID)
+}
+
+// startSignIn sends the browser to one of the broker's connectors. The connector
+// choice is not bound to the attempt, so the callback decides by the returned
+// subject instead. A current member goes home, so a link here cannot sign anyone
+// out. A browser that keeps being refused gets one static page, never a loop.
+func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector string) {
 	switch _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); {
 	case err == nil:
 		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
@@ -363,7 +383,7 @@ func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 		b.sessions.Put(r.Context(), "refused_since", since)
 	}
 	b.sessions.SetDeadline(r.Context(), time.Now().Add(refusalWindow))
-	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce))
+	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce), oauth2.SetAuthURLParam("connector_id", connector))
 	// A GET navigation may redirect across origins; only a form POST is bound
 	// by form-action on every hop, which the handoff page exists for.
 	http.Redirect(w, r, address, http.StatusSeeOther)

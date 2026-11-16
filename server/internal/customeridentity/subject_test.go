@@ -32,3 +32,32 @@ func TestDexSubjectMatchesIssuedTokens(t *testing.T) {
 		t.Fatal("the adopted customer connector ID changed without an identity migration")
 	}
 }
+
+// DexConnector reads back exactly what DexSubject writes and nothing else.
+func TestDexConnectorReadsOnlyDexSubjects(t *testing.T) {
+	// The maintainer's GitHub account (user 26203420) through platform Dex, then customer Dex.
+	operator := DexSubject(DexSubject("26203420", "github"), PlatformConnectorID)
+	if operator != "ChhDZ2d5TmpJd016UXlNQklHWjJsMGFIVmkSCHBsYXRmb3Jt" {
+		t.Fatalf("the operator subject changed: %s", operator)
+	}
+	for subject, want := range map[string]string{
+		operator: PlatformConnectorID,
+		DexSubject("345678901234567890", ZitadelConnectorID):     ZitadelConnectorID,
+		DexSubject(strings.Repeat("u", 130), ZitadelConnectorID): ZitadelConnectorID,
+		"Cg0wLTM4NS0yODA4OS0wEgRtb2Nr":                           "mock",
+		"":                                                       "",
+		"operator-subject":                                       "",
+		DexSubject("", PlatformConnectorID):                      "",
+		DexSubject("user", ""):                                   "",
+		operator + "A":                                           "",
+		"Cg0wLTM4NS0yODA4OS0wEgRtb2Nr" + "GgA":                   "",
+		base64.RawURLEncoding.EncodeToString([]byte{0x12, 0x08, 'p', 'l', 'a', 't', 'f', 'o', 'r', 'm', 0x0a, 0x01, 'u'}):       "",
+		base64.RawURLEncoding.EncodeToString([]byte{0x0a, 0x81, 0x00, 'u', 0x12, 0x08, 'p', 'l', 'a', 't', 'f', 'o', 'r', 'm'}): "",
+		base64.RawURLEncoding.EncodeToString([]byte{0x0a, 0x05, 'u'}):                                                           "",
+		base64.StdEncoding.EncodeToString([]byte{0x0a, 0x01, 'u', 0x12, 0x08, 'p', 'l', 'a', 't', 'f', 'o', 'r', 'm'}):          "",
+	} {
+		if got := DexConnector(subject); got != want {
+			t.Errorf("DexConnector(%q) = %q, want %q", subject, got, want)
+		}
+	}
+}
