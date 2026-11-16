@@ -290,7 +290,12 @@ func brokerHandoffRefreshAddress(t testing.TB, body string) string {
 // A signed-in member goes home from sign-in, so it signs out first.
 func (b *browserFixture) start() string {
 	b.t.Helper()
-	path := "/portal/sign-in?lang=da&return_to=https://attacker.example.invalid&role=operator"
+	return b.startAt("/portal/sign-in?lang=da&return_to=https://attacker.example.invalid&role=operator")
+}
+
+// startAt starts a sign-in from one of the portal's sign-in links.
+func (b *browserFixture) startAt(path string) string {
+	b.t.Helper()
 	status, body, headers := b.request("GET", path, nil, "")
 	if status == http.StatusSeeOther && headers.Get("Location") == "/portal/?lang=da" {
 		b.signOut()

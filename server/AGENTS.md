@@ -154,7 +154,10 @@ resource lifecycle at the call.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
 consumption, current membership and concrete record client scopes. A token's
-email/groups or browser fields cannot assign a role. `Invite`/`Revoke` are trusted
+email/groups or browser fields cannot assign a role. Operators come only from the
+`PORTAL_OPERATOR_SUBJECTS` setting and sign in with GitHub through the `platform`
+connector; a role must match its subject's connector, which the callback decodes rather
+than trusting the requested `connector_id`. `Invite`/`Revoke` are trusted
 control-plane provisioning methods, not permission to expose unauthenticated APIs.
 Browser routes use maintained code exchange/PKCE, durable opaque sessions,
 token-based CSRF, current membership and accessible EN/DA forms. Keep the
