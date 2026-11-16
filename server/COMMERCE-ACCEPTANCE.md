@@ -43,14 +43,14 @@ The maintained provider's typed values are:
 {"defaultVariant":"off","variants":[{"name":"off","value":false}]}
 ```
 
-| Acceptance stage | Explicit settings to assess |
-| --- | --- |
-| Invited access | `PORTAL_IDENTITY_PROFILE=production`, `PORTAL_IDENTITY_FLAG`; no staging lease |
-| Contact confirmation | `PORTAL_CONTACT_VERIFICATION_FLAG` |
-| Request/operator proposal | `PORTAL_REQUESTS_FLAG`, `PORTAL_TRIAGE_FLAG`, `PORTAL_PROPOSALS_FLAG` |
-| Exact-version customer review | `PORTAL_PROPOSAL_SHARING_FLAG`, `PORTAL_PROPOSAL_ACCEPTANCE_FLAG` |
-| Default invoice order | `PORTAL_INVOICE_BILLING_FLAG`; validated Numina configuration, complete terms, contact and SMTP sender |
-| Card/MobilePay order | `PORTAL_CARD_BILLING_FLAG`; validated Stripe configuration, invoice tax rate and verified webhook |
+| Acceptance stage              | Explicit settings to assess                                                                            |
+|-------------------------------|--------------------------------------------------------------------------------------------------------|
+| Invited access                | `PORTAL_IDENTITY_PROFILE=production`, `PORTAL_IDENTITY_FLAG`; no staging lease                         |
+| Contact confirmation          | `PORTAL_CONTACT_VERIFICATION_FLAG`                                                                     |
+| Request/operator proposal     | `PORTAL_REQUESTS_FLAG`, `PORTAL_TRIAGE_FLAG`, `PORTAL_PROPOSALS_FLAG`                                  |
+| Exact-version customer review | `PORTAL_PROPOSAL_SHARING_FLAG`, `PORTAL_PROPOSAL_ACCEPTANCE_FLAG`                                      |
+| Default invoice order         | `PORTAL_INVOICE_BILLING_FLAG`; validated Numina configuration, complete terms, contact and SMTP sender |
+| Card/MobilePay order          | `PORTAL_CARD_BILLING_FLAG`; validated Stripe configuration, invoice tax rate and verified webhook      |
 
 These are preparation facts, not instructions to enable production. Preserve
 independent work approval and worker execution gates; #651 maps neither. Leave
