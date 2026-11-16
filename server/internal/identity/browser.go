@@ -564,6 +564,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "issuer", p.issuer)
 	b.sessions.Put(r.Context(), "subject", p.subject)
 	b.sessions.Put(r.Context(), "expires", p.expires.Unix())
+	b.sessions.Put(r.Context(), "membership_incarnation", p.membershipIncarnation)
 	b.sessions.Put(r.Context(), "lang", lang)
 	deadline := time.Now().Add(30 * time.Minute)
 	if p.expires.Before(deadline) {
@@ -585,7 +586,13 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 
 // principal reconstructs identity only from the server-owned durable session.
 func (b *browser) principal(ctx context.Context) Principal {
-	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0)}
+	incarnation := b.sessions.GetString(ctx, "membership_incarnation")
+	if incarnation == "" {
+		// Legacy authenticated payloads must sign in again; pre-authentication
+		// sessions remain anonymous and can complete their ordinary sign-in flow.
+		return Principal{}
+	}
+	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0), membershipIncarnation: incarnation}
 }
 
 // home rechecks current membership before rendering the client's workspace.

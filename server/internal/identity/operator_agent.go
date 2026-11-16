@@ -33,7 +33,7 @@ func (b *Broker) VerifyMachine(ctx context.Context, raw string) (Principal, erro
 	if token.Claims(&claims) != nil || (claims.AuthorizedParty != "" && claims.AuthorizedParty != b.clientID) || token.IssuedAt.IsZero() || token.IssuedAt.Unix() <= 0 || token.IssuedAt.After(now.Add(30*time.Second)) || !token.Expiry.After(token.IssuedAt) || token.Expiry.Sub(token.IssuedAt) > 5*time.Minute || !now.Before(token.Expiry) || claims.NotBefore > now.Unix() || ctx.Err() != nil {
 		return Principal{}, ErrDenied
 	}
-	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
+	return Principal{issuer: b.issuer, subject: token.Subject, audience: b.clientID, expires: token.Expiry}, nil
 }
 
 // agentActions is a closed catalogue, never a prefix or HTTP-method rule. Adding

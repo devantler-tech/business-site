@@ -61,7 +61,7 @@ func parseVisibility(r *http.Request) (visibilityDecision, bool) {
 func visibilityState(ctx context.Context, tx interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, id string, p Principal) (proposalVisibility, error) {
-	rows, err := tx.Query(ctx, `SELECT event,proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked) ORDER BY event LIMIT 100`, id, p.issuer, p.subject)
+	rows, err := tx.Query(ctx, `SELECT event,proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4)) ORDER BY event LIMIT 100`, id, p.issuer, p.subject, p.membershipIncarnation)
 	if err != nil {
 		return proposalVisibility{}, errTriageStorage
 	}
@@ -162,7 +162,7 @@ func (s *Foundation) readSharedProposal(ctx context.Context, p Principal, id str
 		return nil, ErrDenied
 	}
 	var d projectProposal
-	err = s.pool.QueryRow(ctx, `SELECT p.version,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,p.prepared_at FROM portal_proposals p JOIN (SELECT proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND client_id=$2 ORDER BY event DESC LIMIT 1) v ON p.version=v.proposal_version AND v.action='share' WHERE p.request_id=$1 AND p.client_id=$2 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$3 AND m.subject=$4 AND m.client_id=$2 AND m.role='client' AND NOT m.revoked)`, id, client, p.issuer, p.subject).Scan(&d.Version, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared)
+	err = s.pool.QueryRow(ctx, `SELECT p.version,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,p.prepared_at FROM portal_proposals p JOIN (SELECT proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND client_id=$2 ORDER BY event DESC LIMIT 1) v ON p.version=v.proposal_version AND v.action='share' WHERE p.request_id=$1 AND p.client_id=$2 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$3 AND m.subject=$4 AND m.client_id=$2 AND m.role='client' AND NOT m.revoked AND ($5='' OR m.incarnation::text=$5))`, id, client, p.issuer, p.subject, p.membershipIncarnation).Scan(&d.Version, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, errTriageStorage
 	}

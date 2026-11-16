@@ -83,10 +83,7 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 	form := operatorMembershipForm(b, customerSubject, "client-a")
 	restoreAudit := pauseOperatorAudit(t)
 	status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL)
-	var revoked bool
-	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil {
-		t.Fatal(err)
-	}
+	revoked := b.customerRevoked()
 	if status != http.StatusServiceUnavailable || revoked || calls.Load() != 0 {
 		t.Fatal("unrecorded deactivation changed customer access", status, revoked, calls.Load())
 	}

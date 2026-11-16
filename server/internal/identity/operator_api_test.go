@@ -30,7 +30,11 @@ func TestOperatorAuditBoundsLongRecordIdentifiers(t *testing.T) {
 
 func newOperatorBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
-	b := newBrowserFixture(t)
+	return configureOperatorBrowser(t, newBrowserFixture(t))
+}
+
+func configureOperatorBrowser(t *testing.T, b *browserFixture) *browserFixture {
+	t.Helper()
 	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +69,19 @@ func (b *browserFixture) invitationCount() int {
 		b.t.Fatal(err)
 	}
 	return count
+}
+
+// retainOperatorWorker joins a paused request before its fixture closes.
+func retainOperatorWorker(t *testing.T, resume func(), done <-chan struct{}) {
+	t.Helper()
+	t.Cleanup(func() {
+		resume()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("operator request did not finish after release")
+		}
+	})
 }
 
 // auditRows returns the recorded actions as "kind action outcome", oldest first.
@@ -221,14 +238,7 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						status, body, _ := b.request("GET", "/portal/operator"+path, nil, "")
 						result <- contactResponse{status, body}
 					}()
-					t.Cleanup(func() {
-						resume()
-						select {
-						case <-done:
-						case <-time.After(5 * time.Second):
-							t.Error("operator reader did not finish")
-						}
-					})
+					retainOperatorWorker(t, resume, done)
 					select {
 					case <-blocked:
 					case <-time.After(5 * time.Second):
