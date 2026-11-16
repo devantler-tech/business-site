@@ -15,7 +15,8 @@ explicit form comparisons, exact displayed facts, active section associations an
 negative controls live in `work_review_render_test.go`. Shared frame, actual-route
 and quality checks cover this fifth template. The remaining original frozen
 body references are unchanged; no new renderer output is used to regenerate them.
-The frame references were re-recorded once, for the brand (see below).
+The frame references have reviewed records for branding and localized public
+navigation (see below).
 
 From `server/`, with the exact compiler in `go.mod`:
 
@@ -83,15 +84,33 @@ nothing inside `main`.
 Before recording, the rendered frames of every document were compared with the
 previous source's frames. Those two edits were the only differences. The new frame
 references were then recorded from the branding change's own rendered output, and
-the body references were not touched. This is the single exception to the rule
-below. Any later frame change needs its own reviewed record here.
+the body references were not touched. This branding record and the separate
+navigation record below are the only exceptions to the original references.
+Any later frame change needs its own reviewed record here.
 
-The original tables remain unchanged apart from removing the retired entries.
-The four ordinary operator landing documents now use an independently authored
+### Localized public navigation (2026-11-16, #652)
+
+The ordinary references now record the Danish brand link to `/da/` in all
+49 Danish frames and the public return link to `/da/` in the twelve Danish
+portal bodies. English links and every other part of all 98 documents are
+unchanged. Before recording, both template sets were rendered from the same
+fixture inventory against source `93e4324dd9509b95898776c635897354b53f612e`.
+Every baseline document first passed its existing frame and body references.
+The complete before/after documents then had to match exactly after the two
+explicit Danish href substitutions, with only the already-validated random
+draft keys represented identically. Any other difference refused recording.
+This is a reviewed navigation change, not runtime regeneration of expectations.
+All complete counts and negative controls remain; the return journey additionally
+checks both literal public URLs, authenticated return, unchanged deadlines and
+post-logout refusal over the actual HTTP handlers.
+
+The original tables otherwise remain unchanged apart from removing retired entries.
+The four ordinary operator landing documents use an independently authored
 complete main-document expectation in `operator_reference_test.go`, including
-the invitation, customer-management and audit links and the optional request
-inbox. The other twenty portal bodies and all historical task references remain
-unchanged. Missing, incomplete or altered ordinary references fail closed.
+the invitation, customer-management and audit links, the optional request inbox
+and the current localized public return link. The other twenty portal bodies and
+all historical task references retain their reviewed values. Missing, incomplete
+or altered ordinary references fail closed.
 The separate ordinary invoice table (recorded from signed snapshot
 `90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
 retired invoice and credit bodies, so it was removed with them; triage now uses

@@ -34,15 +34,20 @@ var presentationAssets = map[string]string{
 // browserPage renders every private page with portal links under "/portal".
 var browserPage = pages(internalRoot, "")
 
-// templateFuncs binds the addresses every rendered link starts with: root is the
-// portal's visible mount, site the public website's origin ("" on a shared host).
+// templateFuncs binds the portal mount and language-preserving public navigation.
+// The public origin is empty when both surfaces share a host.
 func templateFuncs(root, site string) template.FuncMap {
-	return template.FuncMap{"root": func() string { return root }, "site": func() string { return site }}
+	return template.FuncMap{"root": func() string { return root }, "public": func(lang string) string {
+		if lang == "da" {
+			return site + "/da/"
+		}
+		return site + "/"
+	}}
 }
 
 // pages parses the private templates. They write portal links as {{root}}: "/portal"
 // when the portal shares a host with the public site, "" when it has its own host;
-// links to the public website start with {{site}}.
+// links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
 	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
@@ -565,6 +570,9 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		deadline = p.expires
 	}
 	b.sessions.SetDeadline(r.Context(), deadline)
+	// Keep only the opaque reference across browser restarts, bounded by the
+	// original server/token deadline. Incomplete sign-ins stay session-only.
+	b.sessions.RememberMe(r.Context(), true)
 	if lang != "da" {
 		lang = "en"
 	}
