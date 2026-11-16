@@ -12,15 +12,31 @@
       "post": {
         "operationId": "invitations.create",
         "summary": "Invite a customer and send account setup for a new customer",
-        "parameters": [{"name":"X-CSRF-Token","in":"header","description":"Required for browser sessions; machine bearer calls never carry browser cookies.","schema":{"type":"string"}}],
-        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}},"application/x-www-form-urlencoded":{"schema":{"$ref":"#/components/schemas/CustomerInvitationForm"}}}},
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for browser sessions; machine bearer calls never carry browser cookies.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CustomerInvitationInput" } },
+            "application/x-www-form-urlencoded": { "schema": { "$ref": "#/components/schemas/CustomerInvitationForm" } }
+          }
+        },
         "responses": {
-          "200":{"description":"Single-use invitation recorded, valid for seven days","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Invitation"}}}},
-          "303":{"description":"Native HTML form returns to the customer overview"},
-          "400":{"$ref":"#/components/responses/InvalidInput"},
-          "401":{"$ref":"#/components/responses/SignIn"},
-          "403":{"$ref":"#/components/responses/OperatorsOnly"},
-          "503":{"$ref":"#/components/responses/Unavailable"}
+          "200": {
+            "description": "Single-use invitation recorded, valid for seven days",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Invitation" } } }
+          },
+          "303": { "description": "Native HTML form returns to the customer overview" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
         }
       },
       "get": {
@@ -90,9 +106,23 @@
       "get": {
         "operationId": "workspaces.members.list",
         "summary": "List the members of one customer workspace",
-        "parameters": [{ "name": "workspace", "in": "query", "required": true, "schema": { "type": "string", "minLength": 1, "maxLength": 100 } }],
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 100 }
+          }
+        ],
         "responses": {
-          "200": { "description": "The workspace members, including deactivated members", "content": { "application/json": { "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } } } } },
+          "200": {
+            "description": "The workspace members, including deactivated members",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
+              }
+            }
+          },
           "400": { "description": "The workspace is missing or invalid" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
@@ -134,9 +164,19 @@
         "summary": "Observe current work eligibility without granting execution",
         "description": "Human operators only; no administrative machine grant. Requires the independent default-off portal-work-eligibility decision. Observations use original submission time and bytewise request-ID order. Each observation has its own database time; this is not an atomic queue snapshot or execution lease. Missing prerequisites remain ineligible. Unreadable evidence fails the whole page.",
         "security": [{ "portalSession": [] }],
-        "parameters": [{ "name": "cursor", "in": "query", "description": "Opaque continuation position from the prior page; conveys no authority", "schema": { "type": "string", "minLength": 1, "maxLength": 160 } }],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation position from the prior page; conveys no authority",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        ],
         "responses": {
-          "200": { "description": "At most twenty timestamped observations, never execution rights", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkEligibilityPage" } } } },
+          "200": {
+            "description": "At most twenty timestamped observations, never execution rights",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkEligibilityPage" } } }
+          },
           "400": { "$ref": "#/components/responses/InvalidInput" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
@@ -185,21 +225,52 @@
         "required": true,
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/NewWorkspace" } },
-          "application/x-www-form-urlencoded": { "schema": { "type": "object", "additionalProperties": false, "required": ["workspace"], "properties": { "workspace": { "type": "string", "minLength": 1, "maxLength": 100 }, "csrf_token": { "type": "string", "maxLength": 256 } } } }
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
         }
       },
       "RevokeInvitation": {
         "required": true,
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/RevokeInvitation" } },
-          "application/x-www-form-urlencoded": { "schema": { "type": "object", "additionalProperties": false, "required": ["subject"], "properties": { "subject": { "type": "string", "minLength": 1, "maxLength": 512 }, "csrf_token": { "type": "string", "maxLength": 256 } } } }
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["subject"],
+              "properties": {
+                "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
         }
       },
       "ChangeMember": {
         "required": true,
         "content": {
           "application/json": { "schema": { "$ref": "#/components/schemas/ChangeMember" } },
-          "application/x-www-form-urlencoded": { "schema": { "type": "object", "additionalProperties": false, "required": ["workspace", "subject"], "properties": { "workspace": { "type": "string", "minLength": 1, "maxLength": 100 }, "subject": { "type": "string", "minLength": 1, "maxLength": 512 }, "csrf_token": { "type": "string", "maxLength": 256 } } } }
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace", "subject"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
         }
       }
     },
@@ -218,7 +289,10 @@
       }
     },
     "responses": {
-      "InvalidInput": {"description":"Invalid or conflicting action; recorded as refused","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+      "InvalidInput": {
+        "description": "Invalid or conflicting action; recorded as refused",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
       "SignIn": {
         "description": "No session, invalid machine proof, or combined bearer and session",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
@@ -234,41 +308,95 @@
     },
     "schemas": {
       "WorkEligibilityPage": {
-        "type": "object", "additionalProperties": false, "required": ["items"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
         "properties": {
           "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/WorkObservation" } },
           "nextCursor": { "type": "string", "minLength": 1, "maxLength": 160 }
         }
       },
       "WorkObservation": {
-        "type": "object", "additionalProperties": false,
+        "type": "object",
+        "additionalProperties": false,
         "required": ["requestId", "approvalGeneration", "submittedAt", "observedAt", "state"],
         "properties": {
           "requestId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
           "approvalId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
           "approvalGeneration": { "type": "integer", "format": "int64", "minimum": 0 },
-          "submittedAt": { "type": "string", "format": "date-time", "description": "Original server-owned submission instant" },
-          "observedAt": { "type": "string", "format": "date-time", "description": "Database observation instant; later calls must revalidate" },
-          "state": { "type": "string", "enum": ["approval-required", "approval-paused", "confirmation-pending", "closed", "eligible"], "description": "Eligible requires certified original confirmation acceptance by the sender; this does not prove inbox delivery or grant execution" }
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Original server-owned submission instant"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database observation instant; later calls must revalidate"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["approval-required", "approval-paused", "confirmation-pending", "closed", "eligible"],
+            "description": "Eligible requires certified original confirmation acceptance by the sender; this does not prove inbox delivery or grant execution"
+          }
         }
       },
       "NewWorkspace": {
-        "type": "object", "additionalProperties": false, "required": ["workspace"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace"],
         "properties": { "workspace": { "type": "string", "minLength": 1, "maxLength": 100 } }
       },
       "RevokeInvitation": {
-        "type": "object", "additionalProperties": false, "required": ["subject"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject"],
         "properties": { "subject": { "type": "string", "minLength": 1, "maxLength": 512 } }
       },
       "ChangeMember": {
-        "type": "object", "additionalProperties": false, "required": ["workspace", "subject"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace", "subject"],
         "properties": {
           "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
           "subject": { "type": "string", "minLength": 1, "maxLength": 512 }
         }
       },
-      "CustomerInvitationInput": {"type":"object","additionalProperties":false,"required":["name","email","workspace"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200,"description":"First and last name, up to 200 UTF-8 bytes"},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100,"description":"Workspace ID, up to 100 UTF-8 bytes"}}},
-      "CustomerInvitationForm": {"type":"object","additionalProperties":false,"required":["name","email","workspace","csrf_token"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100},"csrf_token":{"type":"string","maxLength":256,"description":"Native browser form CSRF token; JSON clients use the header."}}},
+      "CustomerInvitationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "email", "workspace"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200,
+            "description": "First and last name, up to 200 UTF-8 bytes"
+          },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "workspace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Workspace ID, up to 100 UTF-8 bytes"
+          }
+        }
+      },
+      "CustomerInvitationForm": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "email", "workspace", "csrf_token"],
+        "properties": {
+          "name": { "type": "string", "minLength": 3, "maxLength": 200 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "csrf_token": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Native browser form CSRF token; JSON clients use the header."
+          }
+        }
+      },
       "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
       "Invitation": {
         "type": "object",

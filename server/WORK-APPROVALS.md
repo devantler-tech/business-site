@@ -5,7 +5,9 @@ current agreement and the order's settled funding from [portal billing](BILLING.
 (ADR 0030, decision 6; #268). It replaced the retired invoice-record and
 bank-credit evidence (#117, #120). Its default-off operator
 screen uses the retained Go frame and native forms; it has no client decision
-form, worker, queue, API or MCP adapter. It does not activate the portal,
+form, worker, queue or MCP adapter. The human-only
+[eligibility reader](WORK-ELIGIBILITY.md) observes service prerequisites without
+granting execution. This foundation does not activate the portal,
 start work, collect money or create a monthly entitlement. Operator review is
 tracked in [#267](https://github.com/devantler-tech/business-site/issues/267)
 under [#138](https://github.com/devantler-tech/business-site/issues/138);

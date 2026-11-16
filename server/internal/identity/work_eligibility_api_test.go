@@ -94,6 +94,28 @@ func TestWorkEligibilityAPIClosedGateAndInvalidInput(t *testing.T) {
 	restore()
 }
 
+func TestWorkEligibilityAPIEmptyAndUnavailableAreDistinct(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	setEligibilityFlags(t, b, eligibilityFlags())
+	status, body, _ := b.request("GET", eligibilityAPIPath, nil, "")
+	if status != http.StatusOK || strings.TrimSpace(body) != `{"items":[]}` {
+		t.Fatalf("genuine empty page was not explicit: %d %s", status, body)
+	}
+	owner := migrationDB(t)
+	if _, err := owner.Exec(t.Context(), `REVOKE SELECT ON portal_requests FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := owner.Exec(context.Background(), `GRANT SELECT ON portal_requests TO portal_runtime`); err != nil {
+			t.Error(err)
+		}
+	})
+	status, body, _ = b.request("GET", eligibilityAPIPath, nil, "")
+	if status != http.StatusServiceUnavailable || strings.TrimSpace(body) != `{"error":"unavailable"}` {
+		t.Fatalf("unreadable page became empty or leaked storage details: %d %s", status, body)
+	}
+}
+
 func TestWorkEligibilityAPIOriginalCursorAndSingleConnection(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	setEligibilityFlags(t, b, eligibilityFlags())

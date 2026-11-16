@@ -223,6 +223,48 @@ func TestWorkEligibilityRejectsUnhealthySDK(t *testing.T) {
 	}
 }
 
+func TestWorkEligibilityRechecksSelectedDatabaseDeadline(t *testing.T) {
+	b, op := approvalFixture(t)
+	savedApproval(t, b, op)
+	owner := migrationDB(t)
+	var expires time.Time
+	if err := owner.QueryRow(t.Context(), `WITH at AS MATERIALIZED(SELECT clock_timestamp()+interval '1 second' AS value) UPDATE portal_work_approvals SET decided_at=at.value-interval '168 hours',expires_at=at.value FROM at RETURNING expires_at`).Scan(&expires); err != nil {
+		t.Fatal(err)
+	}
+	provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(eligibilityFlags()), key: "portal-work-eligibility", blockAt: 3, blocked: make(chan struct{}), release: make(chan struct{})}
+	release := installAcceptanceWait(t, b, provider, provider.release)
+	ctx, cancel := approvalWaitContext(t)
+	defer cancel()
+	type result struct {
+		page workEligibilityPage
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		page, err := b.svc.readWorkEligibility(ctx, op, triageCursor{})
+		done <- result{page, err}
+	}()
+	select {
+	case <-provider.blocked:
+	case <-ctx.Done():
+		t.Fatal("selected approval did not reach its final SDK wait")
+	}
+	waitForFixtureExpiry(ctx, t, expires)
+	var expired bool
+	if err := owner.QueryRow(ctx, `SELECT clock_timestamp()>=$1::timestamptz`, expires).Scan(&expired); err != nil || !expired {
+		t.Fatal("database deadline control did not expire", err)
+	}
+	release()
+	select {
+	case got := <-done:
+		if !errors.Is(got.err, ErrDenied) || len(got.page.Items) != 0 {
+			t.Fatalf("expired selected approval released observations: %+v %v", got.page, got.err)
+		}
+	case <-ctx.Done():
+		t.Fatal("expired eligibility observation did not finish")
+	}
+}
+
 // Sender acceptance of a legacy, uncertified confirmation is insufficient.
 // The billing producer's exact frozen-agreement proof is a separate prerequisite.
 func TestWorkEligibilityLegacySenderReceiptIsInsufficient(t *testing.T) {
