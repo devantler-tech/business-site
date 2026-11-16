@@ -89,8 +89,8 @@
     }
   ],
   "hosting": {
-    "en": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Larger changes and new features get a fixed-price quote before any work starts.",
-    "da": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Større ændringer og nye funktioner får et fastpristilbud, før arbejdet begynder."
+    "en": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Small, clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets a fixed-price quote before any work starts.",
+    "da": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Små, klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får et fastpristilbud, før arbejdet begynder."
   },
   "vat": {
     "en": "Prices include 25% Danish VAT.",

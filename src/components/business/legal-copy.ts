@@ -192,7 +192,7 @@ const terms = {
         '(*) Delete as appropriate.',
       ] },
       { title: 'Hosting and ending it', blocks: [
-        'Hosting is optional. Its fixed monthly price covers hosting, monitoring, backups, security updates and minor fixes; larger changes and new features get their own fixed-price quote.',
+        'Hosting is optional. Its fixed monthly price covers hosting, monitoring, backups, security updates and minor fixes. Small, clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets its own fixed-price quote, which you accept before the work starts.',
         'Hosting is paid monthly and continues until it is ended. You can end it by email with one month’s notice to the end of a month, unless your proposal states a minimum period. Your proposal also states the notice I give if I end hosting.',
         'As a private customer you can in any case end hosting with one month’s notice to the end of a month once five months have passed since the agreement. If you have paid for a period after the end date, I refund that amount immediately.',
         'When hosting ends, I hand over your content and code as described in your proposal.',
@@ -257,7 +257,7 @@ const terms = {
         '(*) Det ikke relevante udstreges.',
       ] },
       { title: 'Hosting og opsigelse', blocks: [
-        'Hosting er valgfri. Den faste månedspris dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser; større ændringer og nye funktioner får deres eget fastpristilbud.',
+        'Hosting er valgfri. Den faste månedspris dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Små, klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får sit eget fastpristilbud, som du accepterer, før arbejdet begynder.',
         'Hosting betales månedligt og fortsætter, indtil den opsiges. Du kan opsige den på e-mail med en måneds varsel til udgangen af en måned, medmindre dit tilbud angiver en bindingsperiode. Dit tilbud oplyser også, med hvilket varsel jeg kan opsige hostingen.',
         'Som privatkunde kan du under alle omstændigheder opsige hostingen med en måneds varsel til udgangen af en måned, når der er gået fem måneder efter aftalens indgåelse. Har du betalt for en periode efter ophøret, tilbagebetaler jeg straks beløbet for den periode.',
         'Når hostingen ophører, overdrager jeg dit indhold og din kode som beskrevet i dit tilbud.',
