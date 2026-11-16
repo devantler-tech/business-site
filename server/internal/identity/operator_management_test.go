@@ -13,14 +13,7 @@ import (
 // TestOperatorManagementContract catches actions missing from the API or its
 // client-facing description; callers depend on both the method and action ID.
 func TestOperatorManagementContract(t *testing.T) {
-	var doc struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(operatorOpenAPI, &doc); err != nil {
-		t.Fatal(err)
-	}
+	paths := operatorDocumentActions(t)
 	mux, err := (&browser{foundation: &Foundation{}}).routes()
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +25,7 @@ func TestOperatorManagementContract(t *testing.T) {
 		{"POST", "/members/deactivate", "members.deactivate"},
 		{"POST", "/members/reactivate", "members.reactivate"},
 	} {
-		if got := doc.Paths["/operator/api"+action.path][strings.ToLower(action.method)].OperationID; got != action.id {
+		if got := paths["/operator/api"+action.path][strings.ToLower(action.method)].OperationID; got != action.id {
 			t.Errorf("%s %s describes action %q, want %q", action.method, action.path, got, action.id)
 		}
 		_, pattern := mux.Handler(httptest.NewRequest(action.method, operatorAPIRoot+action.path, nil))
@@ -40,6 +33,23 @@ func TestOperatorManagementContract(t *testing.T) {
 			t.Errorf("%s %s has no API handler", action.method, action.path)
 		}
 	}
+}
+
+type operatorDocumentAction struct {
+	OperationID string `json:"operationId"`
+}
+
+// operatorDocumentActions shares the parsed API inventory without replacing the
+// independent route/action expectations in the contract tests.
+func operatorDocumentActions(t *testing.T) map[string]map[string]operatorDocumentAction {
+	t.Helper()
+	var doc struct {
+		Paths map[string]map[string]operatorDocumentAction `json:"paths"`
+	}
+	if err := json.Unmarshal(operatorOpenAPI, &doc); err != nil {
+		t.Fatal(err)
+	}
+	return doc.Paths
 }
 
 // TestOperatorRevokesPendingInvitation catches a revocation that merely hides

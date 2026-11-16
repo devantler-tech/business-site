@@ -35,6 +35,25 @@ func (d *managementDirectory) ReactivateUser(ctx context.Context, user string, a
 	return d.change(ctx, user, true)
 }
 
+// managementMemberFixture creates a current customer and replaces only the
+// provider call; management requests still use the real authority boundary.
+func managementMemberFixture(t *testing.T, change func(context.Context, string, bool) error) *browserFixture {
+	t.Helper()
+	b := newOperatorBrowserFixture(t)
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: change}); err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func operatorMembershipForm(b *browserFixture, subject, workspace string) url.Values {
+	b.t.Helper()
+	return url.Values{"workspace": {workspace}, "subject": {subject}, "csrf_token": {b.csrf("/portal/")}}
+}
+
 // TestOperatorMemberAccessTransitions catches enabling portal membership before
 // provider reactivation, or retaining a customer's old authenticated session.
 func TestOperatorMemberAccessTransitions(t *testing.T) {
@@ -63,7 +82,7 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, action := range []string{"deactivate", "reactivate"} {
-		form := url.Values{"workspace": {"client-a"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
+		form := operatorMembershipForm(b, customerSubject, "client-a")
 		status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL)
 		if status != http.StatusOK {
 			t.Fatalf("%s status=%d", action, status)
@@ -86,17 +105,11 @@ func TestOperatorMemberAccessTransitions(t *testing.T) {
 // TestOperatorProviderFailureLeavesPortalClosed catches a network/API failure
 // that rolls local deactivation back or allows reactivation before confirmation.
 func TestOperatorProviderFailureLeavesPortalClosed(t *testing.T) {
-	b := newOperatorBrowserFixture(t)
-	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(context.Context, string, bool) error {
+	b := managementMemberFixture(t, func(context.Context, string, bool) error {
 		return errors.New("fictional provider unavailable")
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	for _, action := range []string{"deactivate", "reactivate"} {
-		form := url.Values{"workspace": {"client-a"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
+		form := operatorMembershipForm(b, customerSubject, "client-a")
 		status, _, _ := b.request("POST", operatorAPIRoot+"/members/"+action, form, b.site.URL)
 		if status != http.StatusServiceUnavailable {
 			t.Fatalf("failed provider %s status=%d", action, status)
@@ -112,12 +125,8 @@ func TestOperatorProviderFailureLeavesPortalClosed(t *testing.T) {
 // that offers only reactivation after provider failure and cannot finish closing
 // provider access while the portal membership stays disabled.
 func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
-	b := newOperatorBrowserFixture(t)
-	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
-		t.Fatal(err)
-	}
 	var calls, enableCalls atomic.Int32
-	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(_ context.Context, _ string, active bool) error {
+	b := managementMemberFixture(t, func(_ context.Context, _ string, active bool) error {
 		if active {
 			enableCalls.Add(1)
 		}
@@ -125,10 +134,8 @@ func TestOperatorRetriesDeactivationWithoutRestoringAccess(t *testing.T) {
 			return errors.New("fictional provider unavailable")
 		}
 		return nil
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	form := url.Values{"workspace": {"client-a"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
+	})
+	form := operatorMembershipForm(b, customerSubject, "client-a")
 	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL); status != http.StatusServiceUnavailable {
 		t.Fatal("the failed provider did not retain its failure", status)
 	}
