@@ -219,6 +219,9 @@ v25 adds `portal_order_addons`, the standard add-ons of an order (BILLING.md, *A
 add-on, its kind, units and unit price at the time of the order. Grant SELECT/INSERT only; the
 order's prices already include them.
 
+v26 adds `portal_request_closures`, the operator's record that a request is finished (BILLING.md,
+*Feature-request priority and fair use*). Grant SELECT/INSERT only.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

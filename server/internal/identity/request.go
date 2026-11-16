@@ -97,6 +97,16 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
 		return projectRequest{}, ErrDenied
 	}
+	// Fair use: a client with hosting has one request in progress at a time.
+	if s.orderReady(ctx) {
+		busy, err := requestBusy(ctx, tx, client, d.Key)
+		if err != nil {
+			return projectRequest{}, err
+		}
+		if busy {
+			return projectRequest{}, errRequestInProgress
+		}
+	}
 	d.ID = secret()
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(client_id,submission_key) DO NOTHING`, d.ID, client, d.Key, d.Product, d.Title, d.Brief); err != nil {
 		return projectRequest{}, ErrDenied
@@ -253,6 +263,10 @@ func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
 	saved, err := b.foundation.persistRequest(r.Context(), p, d)
 	if errors.Is(err, errRequestConflict) {
 		b.renderRequests(w, r, 409, "conflict", projectRequest{}, nil, "conflict")
+		return
+	}
+	if errors.Is(err, errRequestInProgress) {
+		b.renderRequests(w, r, 409, "new", d, nil, "in-progress")
 		return
 	}
 	if err != nil {

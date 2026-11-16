@@ -266,16 +266,25 @@ func (s *Foundation) readClientOrder(ctx context.Context, p Principal, id string
 	return readOrderFor(ctx, tx, id, client, func() error { return s.commitOrder(ctx, p, tx, s.orderReady) })
 }
 
-// readOperatorOrder returns a request's order for a current operator.
-func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id string) (*projectOrder, error) {
+// readOperatorOrder returns a request's order for a current operator, and the
+// client's feature-request level with whether this request is finished.
+func (s *Foundation) readOperatorOrder(ctx context.Context, p Principal, id string) (*projectOrder, *featureState, error) {
 	if !s.orderReady(ctx) || s.proposalOperator(ctx, p) != nil {
-		return nil, ErrDenied
+		return nil, nil, ErrDenied
 	}
 	tx, client, err := s.beginProposalWrite(ctx, p, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return readOrderFor(ctx, tx, id, client, func() error { return commitProposalWrite(ctx, p, tx, s.orderReady) })
+	var feature *featureState
+	o, err := readOrderFor(ctx, tx, id, client, func() error {
+		var err error
+		if feature, err = readFeature(ctx, tx, client, id); err != nil {
+			return err
+		}
+		return commitProposalWrite(ctx, p, tx, s.orderReady)
+	})
+	return o, feature, err
 }
 
 // commitOrder is the final checkpoint for order writes and reads: the billing
