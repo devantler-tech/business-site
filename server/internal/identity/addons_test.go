@@ -9,29 +9,30 @@ import (
 )
 
 func TestAddonChoicesAreValidated(t *testing.T) {
-	got, ok := parseAddons([]string{"statistics:1", "language:2", "contact-form:1"}, "app", true)
+	got, ok := parseAddons([]string{"statistics:1:75", "language:2:1500", "contact-form:1:1500"}, "app", true)
 	want := []orderAddon{{"statistics", "monthly", 1, 7500}, {"language", "one-time", 2, 150000}, {"contact-form", "one-time", 1, 150000}}
 	if !ok || !slices.Equal(got, want) {
 		t.Fatalf("valid add-ons were not read in catalogue order: %v %v", got, ok)
 	}
 	for name, values := range map[string][]string{
-		"an unknown add-on":                 {"logo-kit:1"},
-		"another offering's add-on":         {"news:1"},
-		"a repeated add-on":                 {"seo:1", "seo:1"},
-		"more units than the add-on allows": {"language:6"},
-		"units on a single add-on":          {"seo:2"},
-		"no units":                          {"seo:0"},
-		"a malformed value":                 {"seo"},
-		"two priority tiers":                {"priority:1", "express:1"},
-		"a monthly add-on without hosting":  {"statistics:1"},
-		"a priority tier without hosting":   {"express:1"},
+		"an unknown add-on":                 {"logo-kit:1:500"},
+		"another offering's add-on":         {"news:1:2500"},
+		"a repeated add-on":                 {"seo:1:1000", "seo:1:1000"},
+		"more units than the add-on allows": {"language:6:1500"},
+		"units on a single add-on":          {"seo:2:1000"},
+		"no units":                          {"seo:0:1000"},
+		"a malformed value":                 {"seo:1"},
+		"a price the client was not shown":  {"seo:1:900"},
+		"two priority tiers":                {"priority:1:400", "express:1:1000"},
+		"a monthly add-on without hosting":  {"statistics:1:75"},
+		"a priority tier without hosting":   {"express:1:1000"},
 	} {
 		hosting := name != "a monthly add-on without hosting" && name != "a priority tier without hosting"
 		if _, ok := parseAddons(values, "app", hosting); ok {
 			t.Errorf("%s was accepted", name)
 		}
 	}
-	if _, ok := parseAddons([]string{"news:1", "migration:1"}, "website", false); !ok {
+	if _, ok := parseAddons([]string{"news:1:2500", "migration:1:1500"}, "website", false); !ok {
 		t.Fatal("one-time website add-ons need no hosting")
 	}
 	for bad, replacement := range map[string]string{`"kind": "monthly"`: `"kind": "weekly"`, `"tier": "priority"`: `"tier": "gold"`} {
@@ -66,11 +67,11 @@ func TestAddonsOrderAndInvoice(t *testing.T) {
 	}
 	f, _ := orderFormFields(t, b, "en")
 	f.Set("collection", "invoice")
-	f["addon"] = regexp.MustCompile(`name="addon" value="([a-z-]+:[0-9]+)"`).FindAllString(summary, -1)
+	f["addon"] = regexp.MustCompile(`name="addon" value="([a-z-]+:[0-9]+:[0-9]+)"`).FindAllString(summary, -1)
 	for i, v := range f["addon"] {
 		f["addon"][i] = strings.TrimSuffix(strings.TrimPrefix(v, `name="addon" value="`), `"`)
 	}
-	if !slices.Equal(f["addon"], []string{"language:2", "contact-form:1", "statistics:1"}) && !slices.Equal(f["addon"], []string{"statistics:1", "language:2", "contact-form:1"}) {
+	if !slices.Equal(f["addon"], []string{"language:2:1500", "contact-form:1:1500", "statistics:1:75"}) && !slices.Equal(f["addon"], []string{"statistics:1:75", "language:2:1500", "contact-form:1:1500"}) {
 		t.Fatalf("the order form does not carry the chosen add-ons: %v", f["addon"])
 	}
 	path := "/portal/requests/" + proposalRequestID + "/orders"
@@ -78,7 +79,7 @@ func TestAddonsOrderAndInvoice(t *testing.T) {
 	for k, v := range f {
 		wrong[k] = slices.Clone(v)
 	}
-	wrong["addon"] = append(wrong["addon"], "news:1")
+	wrong["addon"] = append(wrong["addon"], "news:1:2500")
 	if status, _, _ := b.request("POST", path, wrong, b.site.URL); status != 409 {
 		t.Fatalf("an add-on outside the offering was ordered: %d", status)
 	}
@@ -91,7 +92,7 @@ func TestAddonsOrderAndInvoice(t *testing.T) {
 	for k, v := range f {
 		changed[k] = slices.Clone(v)
 	}
-	changed["addon"] = []string{"seo:1"}
+	changed["addon"] = []string{"seo:1:1000"}
 	if status, _, _ := b.request("POST", path, changed, b.site.URL); status != 409 {
 		t.Fatalf("a retry with other add-ons was admitted: %d", status)
 	}
@@ -149,7 +150,7 @@ func TestAddonsCardPaymentAndLaunchDiscount(t *testing.T) {
 	if f.Get("launch") != "yes" || !strings.Contains(body, `name="addon" value="seo"`) {
 		t.Fatal("the receipt offers no add-ons or no launch discount")
 	}
-	f["addon"] = []string{"seo:1", "email:1"}
+	f["addon"] = []string{"seo:1:1000", "email:1:100"}
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("card order=%d", status)
 	}
