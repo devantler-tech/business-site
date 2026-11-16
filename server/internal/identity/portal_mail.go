@@ -2,6 +2,8 @@ package identity
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log"
 	"strings"
@@ -158,10 +160,20 @@ func (s *Foundation) queueOrderMail(ctx context.Context, tx pgx.Tx, client, kind
 	if kind == "order-confirmation" && (s.mail.Load() == nil || data.TermsText == "" || utf8.RuneCountInString(body.String()) > 20000) {
 		return errOrderConfirmation
 	}
+	var format, acceptance, version, proposalHash, termsHash, bodyHash any
+	if kind == "order-confirmation" {
+		termsDigest := sha256.Sum256([]byte(data.TermsText))
+		if data.TermsHash != hex.EncodeToString(termsDigest[:]) {
+			return errOrderConfirmation
+		}
+		digest := sha256.Sum256([]byte(body.String()))
+		format, acceptance, version = 1, data.Acceptance, data.ProposalVersion
+		proposalHash, termsHash, bodyHash = data.ProposalHash, data.TermsHash, hex.EncodeToString(digest[:])
+	}
 	// A withdrawal can outlive the editable contact profile. Prefer the current
 	// contact, falling back to the order's original confirmation recipient.
-	result, err := tx.Exec(ctx, `WITH contact AS (SELECT email FROM portal_contacts WHERE client_id=$6 FOR SHARE), recipients AS (SELECT email AS recipient,0 AS priority FROM contact UNION ALL SELECT recipient,1 FROM portal_mail_outbox WHERE $3='withdrawal-receipt' AND order_id=$2 AND kind='order-confirmation') INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) SELECT $1,$2,$3,recipient,$4,$5 FROM recipients ORDER BY priority LIMIT 1 ON CONFLICT(order_id,kind) DO NOTHING`,
-		secret(), data.OrderID, kind, mailSubjects[kind+"-"+lang], body.String(), client)
+	result, err := tx.Exec(ctx, `WITH contact AS (SELECT email FROM portal_contacts WHERE client_id=$6 FOR SHARE), recipients AS (SELECT email AS recipient,0 AS priority FROM contact UNION ALL SELECT recipient,1 FROM portal_mail_outbox WHERE $3='withdrawal-receipt' AND order_id=$2 AND kind='order-confirmation') INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body,producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256) SELECT $1,$2,$3,recipient,$4,$5,$7,$8,$9,$10,$11,$12 FROM recipients ORDER BY priority LIMIT 1 ON CONFLICT(order_id,kind) DO NOTHING`,
+		secret(), data.OrderID, kind, mailSubjects[kind+"-"+lang], body.String(), client, format, acceptance, version, proposalHash, termsHash, bodyHash)
 	if err != nil {
 		return errTriageStorage
 	}

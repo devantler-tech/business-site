@@ -350,6 +350,7 @@
     "pids",
     "volname",
     "nonroot",
+    "nonnulls",
     "OpenPGP",
     "RootFS",
     "Typeflag",

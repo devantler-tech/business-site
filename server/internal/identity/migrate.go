@@ -101,8 +101,11 @@ var operatorAuditSchema string
 //go:embed workspaces.sql
 var workspacesSchema string
 
+//go:embed original-confirmation.sql
+var originalConfirmationSchema string
+
 // runtimeGrants is the web role's complete table privilege set after the
-// migrations above (v1–v29), as MIGRATIONS.md documents. A migration that adds
+// migrations above (v1–v30), as MIGRATIONS.md documents. A migration that adds
 // or changes runtime access updates this list in the same change; web startup's
 // CheckRuntimeRole independently refuses an incomplete or broader web role.
 var runtimeGrants = []string{
@@ -221,7 +224,7 @@ func migrate(ctx context.Context, pool *pgxpool.Pool, runtimeRole string) error 
 
 // orderedMigrations lists the embedded migrations; version N is element N-1.
 func orderedMigrations() []string {
-	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema}
+	return []string{schema, sessionsSchema, contactsSchema, requestsSchema, triageIndexSchema, proposalsSchema, proposalVisibilitySchema, contactVerificationSchema, proposalAcceptanceSchema, invoicesSchema, creditsSchema, invoiceTaxSchema, membershipHistorySchema, workApprovalsSchema, otherRequestsSchema, ordersSchema, cardsSchema, orderEndsSchema, workFundingSchema, clientOrderEndsSchema, orderWithdrawalsSchema, earlyStartSchema, mailSchema, launchPlacesSchema, orderAddonsSchema, requestClosuresSchema, addonEndsSchema, operatorAuditSchema, workspacesSchema, originalConfirmationSchema}
 }
 
 // migrationChecksum is the ledger's record of one migration's exact bytes.

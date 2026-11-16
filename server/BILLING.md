@@ -327,6 +327,16 @@ advisory lock) sends the queue every minute and records each delivery
 message whose delivery record was lost may arrive twice. The operator's page shows each email
 as queued or sent.
 
+New complete confirmations retain format-1 producer metadata in the immutable
+outbox (migration v30), bound to the exact order, acceptance and proposal. The
+terms and complete body have separate SHA256 references. The shared
+`readOriginalConfirmation` lookup runs inside a caller's already authorized,
+request-locked transaction and returns only missing, prepared or sender-accepted
+evidence with its opaque outbox reference, digests and timestamps. It returns no
+recipient or email body and grants no authorization or service execution power.
+Legacy or unknown formats remain unproven even with a sender receipt; storage
+failure returns a sanitized error rather than usable or missing evidence.
+
 Emails go through the site's send-only SES sender (platform#5400): SMTP submission on port 587
 with STARTTLS required before AUTH, From `no-reply@devantler.tech` only. The sender starts only
 when `PORTAL_SMTP_USERNAME_FILE` and `PORTAL_SMTP_PASSWORD_FILE` name the projected credential;
