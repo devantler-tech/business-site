@@ -33,7 +33,7 @@ type workEligibilityPage struct {
 	Next  triageCursor
 }
 
-// This permissioning/kill-switch gate remains default-off independently of the
+// This access and operations gate remains default-off independently of the
 // approval interface. It grants neither machine access nor execution rights.
 func (s *Foundation) workEligibilityReady(ctx context.Context) bool {
 	if !s.approvalsReady(ctx) {

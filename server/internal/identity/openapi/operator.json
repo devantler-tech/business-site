@@ -162,7 +162,7 @@
       "get": {
         "operationId": "work.eligibility.list",
         "summary": "Observe current work eligibility without granting execution",
-        "description": "Human operators only; no administrative machine grant. Requires the independent default-off portal-work-eligibility decision. Observations use original submission time and bytewise request-ID order. Each observation has its own database time; this is not an atomic queue snapshot or execution lease. Missing prerequisites remain ineligible. Unreadable evidence fails the whole page.",
+        "description": "Human operators only; no administrative machine grant. Requires the independent default-off portal-work-eligibility decision. Observations use original submission time and request-ID byte order. Each observation has its own database time; this is not an atomic queue snapshot or execution lease. Missing prerequisites remain ineligible. Unreadable evidence fails the whole page.",
         "security": [{ "portalSession": [] }],
         "parameters": [
           {

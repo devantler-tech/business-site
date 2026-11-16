@@ -23,7 +23,7 @@ func TestWorkEligibilityOriginalOrderAndBoundedCursor(t *testing.T) {
 	setEligibilityFlags(t, b, eligibilityFlags())
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	// Reverse insertion order and equal instants cannot replace the immutable
-	// original submission order and bytewise request-ID tie breaker.
+	// original submission order and request-ID tie breaker by byte order.
 	for i := 22; i > 0; i-- {
 		id := string(rune('A'+i)) + strings.Repeat("A", 25)
 		seedTriageRequest(t, b, id, "Inert fictional inquiry", at)
@@ -163,38 +163,21 @@ func TestWorkEligibilityFinalWaitRefusesStaleRead(t *testing.T) {
 		for _, change := range []string{"unchanged", "flag", "cancel", "expiry"} {
 			t.Run(string(rune('0'+at))+"/"+change, func(t *testing.T) {
 				b, op := approvalFixture(t)
-				provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(eligibilityFlags()), key: "portal-work-eligibility", blockAt: at, blocked: make(chan struct{}), release: make(chan struct{})}
-				release := installAcceptanceWait(t, b, provider, provider.release)
-				ctx, cancel := approvalWaitContext(t)
-				defer cancel()
 				if change == "expiry" {
 					op.expires = time.Now().Add(time.Second)
 				}
-				type result struct {
-					page workEligibilityPage
-					err  error
-				}
-				done := make(chan result, 1)
-				go func() {
-					page, err := b.svc.readWorkEligibility(ctx, op, triageCursor{})
-					done <- result{page, err}
-				}()
-				select {
-				case <-provider.blocked:
-				case <-ctx.Done():
-					t.Fatal("eligibility release checkpoint not reached")
-				}
+				checkpoint := newEligibilityCheckpoint(t, b, op, at)
 				switch change {
 				case "flag":
-					provider.denied.Store(true)
+					checkpoint.provider.denied.Store(true)
 				case "cancel":
-					cancel()
+					checkpoint.cancel()
 				case "expiry":
-					waitForFixtureExpiry(ctx, t, op.expires)
+					waitForFixtureExpiry(checkpoint.ctx, t, op.expires)
 				}
-				release()
+				checkpoint.release()
 				select {
-				case got := <-done:
+				case got := <-checkpoint.result:
 					if change == "unchanged" {
 						if got.err != nil || len(got.page.Items) != 1 {
 							t.Fatalf("unchanged authority positive control failed: %v", got.err)
@@ -231,36 +214,19 @@ func TestWorkEligibilityRechecksSelectedDatabaseDeadline(t *testing.T) {
 	if err := owner.QueryRow(t.Context(), `WITH at AS MATERIALIZED(SELECT clock_timestamp()+interval '1 second' AS value) UPDATE portal_work_approvals SET decided_at=at.value-interval '168 hours',expires_at=at.value FROM at RETURNING expires_at`).Scan(&expires); err != nil {
 		t.Fatal(err)
 	}
-	provider := &finalRequestProvider{FeatureProvider: memprovider.NewInMemoryProvider(eligibilityFlags()), key: "portal-work-eligibility", blockAt: 3, blocked: make(chan struct{}), release: make(chan struct{})}
-	release := installAcceptanceWait(t, b, provider, provider.release)
-	ctx, cancel := approvalWaitContext(t)
-	defer cancel()
-	type result struct {
-		page workEligibilityPage
-		err  error
-	}
-	done := make(chan result, 1)
-	go func() {
-		page, err := b.svc.readWorkEligibility(ctx, op, triageCursor{})
-		done <- result{page, err}
-	}()
-	select {
-	case <-provider.blocked:
-	case <-ctx.Done():
-		t.Fatal("selected approval did not reach its final SDK wait")
-	}
-	waitForFixtureExpiry(ctx, t, expires)
+	checkpoint := newEligibilityCheckpoint(t, b, op, 3)
+	waitForFixtureExpiry(checkpoint.ctx, t, expires)
 	var expired bool
-	if err := owner.QueryRow(ctx, `SELECT clock_timestamp()>=$1::timestamptz`, expires).Scan(&expired); err != nil || !expired {
+	if err := owner.QueryRow(checkpoint.ctx, `SELECT clock_timestamp()>=$1::timestamptz`, expires).Scan(&expired); err != nil || !expired {
 		t.Fatal("database deadline control did not expire", err)
 	}
-	release()
+	checkpoint.release()
 	select {
-	case got := <-done:
+	case got := <-checkpoint.result:
 		if !errors.Is(got.err, ErrDenied) || len(got.page.Items) != 0 {
 			t.Fatalf("expired selected approval released observations: %+v %v", got.page, got.err)
 		}
-	case <-ctx.Done():
+	case <-checkpoint.ctx.Done():
 		t.Fatal("expired eligibility observation did not finish")
 	}
 }
@@ -272,34 +238,18 @@ func TestWorkEligibilityLegacySenderReceiptIsInsufficient(t *testing.T) {
 	saved := savedApproval(t, b, op)
 	setEligibilityFlags(t, b, eligibilityFlags())
 	m := mailFixture(t, b)
-	assertState := func(want workEligibilityState) {
-		t.Helper()
-		page, err := b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
-		if err != nil || len(page.Items) != 1 || page.Items[0].State != want {
-			t.Fatalf("confirmation evidence overstated or omitted: want=%s page=%+v err=%v", want, page, err)
-		}
-	}
-	assertState(eligibilityConfirmationPending)
+	assertEligibilityState(t, b, op, eligibilityConfirmationPending)
 	wrong := secret()
 	if _, err := b.pool.Exec(t.Context(), `WITH queued AS (INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) VALUES($1,$2,'withdrawal-receipt','fictional@example.invalid','Fictional receipt','Inert fixture') RETURNING id) INSERT INTO portal_mail_deliveries(outbox_id) SELECT id FROM queued`, wrong, saved.Order); err != nil {
 		t.Fatal(err)
 	}
-	assertState(eligibilityConfirmationPending)
+	assertEligibilityState(t, b, op, eligibilityConfirmationPending)
 	original := secret()
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_mail_outbox(id,order_id,kind,recipient,subject,body) VALUES($1,$2,'order-confirmation','fictional@example.invalid','Fictional original confirmation','Inert frozen fixture')`, original, saved.Order); err != nil {
 		t.Fatal(err)
 	}
-	assertState(eligibilityConfirmationPending)
-	m.fail = true
-	if err := b.svc.SendQueuedMail(t.Context()); err == nil || len(m.messages()) != 0 {
-		t.Fatal("refused sender positive control failed", err)
-	}
-	assertState(eligibilityConfirmationPending)
-	m.fail = false
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 1 {
-		t.Fatal("accepted sender positive control failed", err)
-	}
-	assertState(eligibilityConfirmationPending)
+	assertEligibilityState(t, b, op, eligibilityConfirmationPending)
+	exerciseEligibilitySender(t, b, op, m, eligibilityConfirmationPending)
 	var deliveries int
 	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_mail_deliveries WHERE outbox_id=$1`, original).Scan(&deliveries); err != nil || deliveries != 1 {
 		t.Fatal("legacy sender receipt positive control failed", err)
@@ -317,13 +267,9 @@ func TestWorkEligibilityCertifiedOriginalConfirmation(t *testing.T) {
 		t.Fatal("native certified order fixture was refused", status)
 	}
 	fake, cfg := newFakeNumina(t)
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
-		t.Fatal(err)
-	}
+	syncEligibilityInvoice(t, b, cfg)
 	fake.confirmDenmark()
-	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil {
-		t.Fatal(err)
-	}
+	syncEligibilityInvoice(t, b, cfg)
 	fake.pay("paid", "0")
 	if err := b.svc.SyncInvoiceBilling(t.Context(), cfg); err != nil || chargeStates(t, b)["acceptance"] != "settled" {
 		t.Fatal("fictional Numina fixture did not settle its exact order", err)
@@ -331,25 +277,9 @@ func TestWorkEligibilityCertifiedOriginalConfirmation(t *testing.T) {
 	setEligibilityFlags(t, b, eligibilityFlags())
 	op := enroll(t, b.svc, b.f, "certified-approval-operator", "operator-workspace", "operator")
 	savedApproval(t, b, op)
-	assertState := func(want workEligibilityState) {
-		t.Helper()
-		page, err := b.svc.readWorkEligibility(t.Context(), op, triageCursor{})
-		if err != nil || len(page.Items) != 1 || page.Items[0].State != want {
-			t.Fatalf("certified confirmation start policy failed: want=%s page=%+v err=%v", want, page, err)
-		}
-	}
-	assertState(eligibilityConfirmationPending)
+	assertEligibilityState(t, b, op, eligibilityConfirmationPending)
 	m := mailFixture(t, b)
-	m.fail = true
-	if err := b.svc.SendQueuedMail(t.Context()); err == nil || len(m.messages()) != 0 {
-		t.Fatal("failed sender control did not refuse", err)
-	}
-	assertState(eligibilityConfirmationPending)
-	m.fail = false
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil || len(m.messages()) != 1 {
-		t.Fatal("original confirmation was not accepted by the sender", err)
-	}
-	assertState(eligibilityEligible)
+	exerciseEligibilitySender(t, b, op, m, eligibilityEligible)
 	owner := migrationDB(t)
 	if _, err := owner.Exec(t.Context(), `REVOKE SELECT ON portal_mail_outbox FROM portal_runtime`); err != nil {
 		t.Fatal(err)
@@ -365,7 +295,7 @@ func TestWorkEligibilityCertifiedOriginalConfirmation(t *testing.T) {
 		t.Fatalf("unreadable confirmation became missing or eligible: %+v %v", page, err)
 	}
 	restore()
-	assertState(eligibilityEligible)
+	assertEligibilityState(t, b, op, eligibilityEligible)
 }
 
 func setEligibilityFlags(t *testing.T, b *browserFixture, flags map[string]memprovider.InMemoryFlag) {

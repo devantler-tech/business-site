@@ -32,7 +32,7 @@ orders cannot become ready to start through a historical approval.
 ## Response and ordering
 
 The response contains at most twenty `items`, ordered by original server
-submission time and then bytewise request ID. Each contains `requestId`, the
+submission time and then request ID by byte order. Each contains `requestId`, the
 original `submittedAt`, `observedAt`, `approvalGeneration`, `state`, and an
 `approvalId` when there is a selected receipt. A `nextCursor` continues strictly
 after the last returned original position. The cursor conveys no authority.
@@ -63,7 +63,7 @@ refused, and a call that cannot be audited releases no observations.
 
 ## Gates and delivery boundaries
 
-`portal-work-eligibility` is a default-false OpenFeature permissioning and
+`portal-work-eligibility` is a default-false OpenFeature access and
 operations switch, separate from the existing identity, request, triage,
 proposal, sharing, acceptance and work-approval gates. It has no environment
 activation mapping. The long-lived switch can close this private inventory

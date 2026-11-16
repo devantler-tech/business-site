@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const eligibilityAPIPath = operatorAPIRoot + "/work-eligibility"
@@ -123,13 +121,7 @@ func TestWorkEligibilityAPIOriginalCursorAndSingleConnection(t *testing.T) {
 	for i := 20; i >= 0; i-- {
 		seedTriageRequest(t, b, string(rune('A'+i))+strings.Repeat("A", 25), "Fictional cursor inquiry", at)
 	}
-	config := b.pool.Config()
-	config.MaxConns = 1
-	pool, err := pgxpool.NewWithConfig(t.Context(), config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
+	pool := singleConnectionFixturePool(t, b)
 	svc := New(pool, b.f.broker, b.flags.NewClient())
 	if err := svc.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
