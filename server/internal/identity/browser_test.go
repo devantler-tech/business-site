@@ -78,20 +78,33 @@ func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 	}
 }
 
+// wantPresentationAssets is the exact public asset set and each file's type,
+// written out independently of presentationAssets.
+var wantPresentationAssets = []struct{ name, contentType string }{
+	{"icon.png", "image/png"},
+	{"logo-dark.svg", "image/svg+xml"},
+	{"logo-light.svg", "image/svg+xml"},
+	{"portal.css", "text/css; charset=utf-8"},
+	{"portal.js", "text/javascript; charset=utf-8"},
+}
+
 // TestBrowserPresentationAssets exercises the actual handlers, bytes and default-off
 // boundary. Template files and unknown assets are never a public file server.
 func TestBrowserPresentationAssets(t *testing.T) {
+	if len(presentationAssets) != len(wantPresentationAssets) {
+		t.Fatalf("served presentation assets = %d, want exactly %d", len(presentationAssets), len(wantPresentationAssets))
+	}
+	for _, asset := range wantPresentationAssets {
+		if presentationAssets[asset.name] != asset.contentType {
+			t.Fatalf("asset %s is served as %q, want %q", asset.name, presentationAssets[asset.name], asset.contentType)
+		}
+	}
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	for _, tc := range browserGateCases() {
 		h := browserHandler(t, New(pool, f.broker, flagAPI(t, tc.value).NewClient()), "https://app.example.invalid/portal/callback")
-		for name, contentType := range map[string]string{
-			"portal.css":     "text/css; charset=utf-8",
-			"portal.js":      "text/javascript; charset=utf-8",
-			"icon.png":       "image/png",
-			"logo-dark.svg":  "image/svg+xml",
-			"logo-light.svg": "image/svg+xml",
-		} {
+		for _, asset := range wantPresentationAssets {
+			name, contentType := asset.name, asset.contentType
 			data, err := browserFiles.ReadFile("web/" + name)
 			if err != nil || len(data) == 0 {
 				t.Fatal("actual presentation asset is missing")
