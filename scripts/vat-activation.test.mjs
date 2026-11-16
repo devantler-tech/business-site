@@ -9,7 +9,7 @@ import { load } from 'js-yaml';
 const ci = load(readFileSync('.github/workflows/ci.yaml', 'utf8'));
 // The served production image is CI's production-template package. Its packager,
 // not the workflow, selects the presentation, so CI passes none of these settings.
-const presentation = ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_PORTAL_PRIVACY', 'FEATURE_VAT_PRICES', 'FEATURE_CUSTOMER_SCOPE'];
+const presentation = ['FEATURE_COMPANY_IDENTITY', 'FEATURE_OFFER_COPY', 'FEATURE_PORTAL_PRIVACY', 'FEATURE_ADDONS', 'FEATURE_VAT_PRICES', 'FEATURE_CUSTOMER_SCOPE'];
 const runtimeJob = workflow => workflow.jobs?.['test-combined-runtime'];
 const productionPackages = workflow => runtimeJob(workflow)?.steps?.filter(step => step.run === 'bash scripts/package-runtime.sh --release --production-template') ?? [];
 const currentRuntimeCI = workflow => {
@@ -17,7 +17,7 @@ const currentRuntimeCI = workflow => {
   return packages.length === 1 && [workflow.env, runtimeJob(workflow)?.env, packages[0].env]
     .every(env => presentation.every(flag => !Object.hasOwn(env ?? {}, flag)));
 };
-const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' && state.FEATURE_PORTAL_PRIVACY === 'true' &&
+const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' && state.FEATURE_PORTAL_PRIVACY === 'true' && state.FEATURE_ADDONS === 'false' &&
   !Object.hasOwn(state, 'FEATURE_VAT_PRICES') && !Object.hasOwn(state, 'FEATURE_CUSTOMER_SCOPE');
 const packagerSource = readFileSync('scripts/package-runtime.sh', 'utf8');
 /** Run the actual (or a changed) packager; the build double records every FEATURE_ setting it receives. */
@@ -153,6 +153,8 @@ for (const [mode, from, to] of [
   ['portal privacy unpinned', ' "FEATURE_PORTAL_PRIVACY=true"', ''],
   ['portal privacy withdrawn', '"FEATURE_PORTAL_PRIVACY=true"', '"FEATURE_PORTAL_PRIVACY=false"'],
   ['ambiguous portal privacy', '"FEATURE_PORTAL_PRIVACY=true"', '"FEATURE_PORTAL_PRIVACY=ambiguous"'],
+  ['add-ons unpinned', ' "FEATURE_ADDONS=false"', ''],
+  ['add-ons released', '"FEATURE_ADDONS=false"', '"FEATURE_ADDONS=true"'],
   ['legacy VAT', production, `${production} "FEATURE_VAT_PRICES=false"`],
   ['stale audience', production, `${production} "FEATURE_CUSTOMER_SCOPE=false"`],
 ]) {
