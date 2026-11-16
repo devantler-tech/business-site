@@ -22,6 +22,9 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 	if _, err := migrator.Exec(ctx, `INSERT INTO portal_numina_contacts(client_id,contact_id) VALUES($1,'fixture-former-contact')`, client); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1)`, client); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET revoked=true WHERE client_id=$1`, client); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +42,10 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 	}
 	if n, err := PurgeExpiredClients(ctx, migrator, now); err != nil || n != 1 {
 		t.Fatalf("the former client was not purged once: %d %v", n, err)
+	}
+	var workspaces int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_workspaces WHERE id=$1`, client).Scan(&workspaces); err != nil || workspaces != 0 {
+		t.Fatal("the former client's workspace identifier was retained", workspaces, err)
 	}
 	for _, table := range []string{"portal_memberships", "portal_membership_transitions", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 		"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers", "portal_credit_revisions",

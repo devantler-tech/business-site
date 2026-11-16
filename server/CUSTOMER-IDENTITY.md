@@ -312,10 +312,14 @@ completion remains visible if later recording fails. Missing audit access preven
 A browser without a session gets 401 and is not recorded.
 The rows hold IDs, never request bodies or customer details, and the retention purge removes
 them after the retention period. The operator page links to the newest 100 entries at
-`/operator/audit`. The API lists pending invitations, workspaces with their
-members and the audit log, and provides the operator's customer actions (business-site#638).
-Inventory responses allow at most 1000
-pending invitations or 1000 memberships across all workspaces; larger inventories return 503
+`/operator/audit`. The API lists pending invitations, workspaces and members, reads the log
+and serves its OpenAPI file. `/operator/customers` provides native English/Danish forms
+for creating a workspace, revoking a pending invitation and changing a customer's access.
+The same authenticated API actions serve browser forms and JSON clients. Workspaces can
+be empty; member lists also include deactivated members. Operator memberships are managed
+only through server configuration and cannot be changed by these customer actions.
+Inventory responses allow at most 1000 pending invitations or 1000 workspace/member rows;
+larger inventories return 503
 instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
 the original durable session and current operator membership after all rendering and SDK waits.
 Each displayed audit entry includes the actor's subject as well as their kind.
@@ -372,6 +376,16 @@ log, including denied actions. Writes recheck their bound authority after extern
 before committing; responses recheck it after audit recording. Policy changes require a
 restart, and already issued tokens remain bounded by their five-minute expiry. Source tests
 do not prove that the platform has provisioned or activated a machine identity.
+
+Revocation takes the identity's invitation/sign-in lock, so a revoked invitation cannot
+be redeemed. Deactivation commits the portal membership's refusal and ends its current
+sessions before asking ZITADEL to deactivate the corresponding Customers user. If the
+provider is unavailable, portal access stays closed; retry the action to synchronize it.
+Reactivation confirms that the provider user is active before restoring portal membership.
+Both transitions recheck the original operator or exact agent grant before each provider
+effect and database commit. Customer data is retained. These controls are tested against
+real disposable storage and a fictional provider; deployed operator sign-in and the
+scoped production service account still require their own live verification.
 
 ## Invite a customer
 

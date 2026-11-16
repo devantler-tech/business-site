@@ -75,6 +75,7 @@ var purgeRecords = []string{
 	`DELETE FROM portal_requests WHERE client_id=$1`,
 	`DELETE FROM portal_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_invitations WHERE client_id=$1`,
+	`DELETE FROM portal_workspaces WHERE id=$1`,
 }
 
 // clientTables hold a client's records by client_id; the order and email
