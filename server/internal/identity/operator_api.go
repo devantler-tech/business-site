@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -40,12 +41,15 @@ type operatorRoute struct {
 // operatorRoutes is the complete operator API.
 var operatorRoutes = append([]operatorRoute{
 	{"GET", "/invitations", "invitations.list", operatorRead((*browser).pendingInvitations)},
+	{"POST", "/invitations", "invitations.create", (*browser).createCustomerInvitation},
 	{"GET", "/workspaces", "workspaces.list", operatorRead((*browser).workspaces)},
 	{"GET", "/audit", "audit.list", operatorRead((*browser).auditLog)},
 	{"GET", "/openapi.json", "openapi.read", func(*browser, *http.Request, context.Context) (any, error) {
 		return json.RawMessage(operatorOpenAPI), nil
 	}},
 }, managementRoutes...)
+
+var errOperatorInput = errors.New("invalid or conflicting operator input")
 
 // operatorRead keeps request input out of read-only inventory operations.
 func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, *http.Request, context.Context) (any, error) {
@@ -138,10 +142,18 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 		outcome = "allowed"
 		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
 			status, outcome = http.StatusServiceUnavailable, "failed"
-		} else if data, err := run(ctx, bound.client); err != nil || !b.operatorMutationAllowed(ctx, b.foundation.pool) {
-			status, outcome = http.StatusServiceUnavailable, "failed"
 		} else {
-			result = data
+			data, err := run(ctx, bound.client)
+			switch {
+			case !b.operatorMutationAllowed(ctx, b.foundation.pool):
+				status, outcome = http.StatusServiceUnavailable, "failed"
+			case errors.Is(err, errOperatorInput):
+				status, outcome = http.StatusBadRequest, "refused"
+			case err != nil:
+				status, outcome = http.StatusServiceUnavailable, "failed"
+			default:
+				result = data
+			}
 		}
 	}
 	if b.foundation.audit(ctx, bound.principal, bound.kind, bound.action, bound.target, outcome) != nil {
@@ -165,6 +177,16 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 			}
 			return json.Marshal(data)
 		})
+		// A native form uses the same action and audit record as JSON callers.
+		// The fixed return path cannot be supplied by the caller.
+		if r.Method == "POST" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+			if status == http.StatusOK {
+				http.Redirect(w, r, b.visible("/portal/operator/customers")+"?lang="+language(r), http.StatusSeeOther)
+			} else {
+				b.render(w, r, status, "operator-action-error", "", "")
+			}
+			return
+		}
 		problem := ""
 		switch status {
 		case http.StatusOK:
@@ -172,6 +194,8 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 			problem = "sign in as an operator"
 		case http.StatusForbidden:
 			problem = "operators only"
+		case http.StatusBadRequest:
+			problem = "invalid or conflicting action"
 		default:
 			problem = "unavailable"
 		}

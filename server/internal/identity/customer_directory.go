@@ -5,9 +5,9 @@ import "context"
 // CustomerDirectory is limited to the configured Customers organization. It
 // delegates account setup and mail to the provider and never deletes users.
 type CustomerDirectory interface {
-	EnsureUser(context.Context, string, string) (string, error)
-	DeactivateUser(context.Context, string) error
-	ReactivateUser(context.Context, string) error
+	EnsureUser(context.Context, string, string, func() bool) (string, error)
+	DeactivateUser(context.Context, string, func() bool) error
+	ReactivateUser(context.Context, string, func() bool) error
 }
 
 // LinkCustomerDirectory supplies the optional provider used by operator actions.

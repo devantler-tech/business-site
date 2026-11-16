@@ -266,6 +266,12 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 // row key is a random digest that is never shown.
 // Operators are never invited: they come from the server configuration.
 func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
+	return s.invite(ctx, i, nil)
+}
+
+// invite retains the control-plane rules and permits the operator API to bind
+// its final commit to the original caller after any provider or SDK wait.
+func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
 	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
@@ -291,6 +297,9 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
 	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if allowed != nil && !allowed(tx) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
