@@ -684,6 +684,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
+	if kind == "operator-action-error" {
+		path = "/portal/operator/customers"
+	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())
 	d.TriageEnabled = kind == "operator" && b.foundation.triageReady(r.Context())
