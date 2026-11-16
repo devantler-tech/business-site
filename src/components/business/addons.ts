@@ -17,15 +17,15 @@ export const standardAddons: readonly AddOn[] = [
   {
     id: 'priority', kind: 'monthly', price: 400, offerings: ['website', 'app', 'service'], tier: 'priority',
     text: {
-      en: { title: 'Priority feature requests', description: 'Your feature requests are picked up about once a week instead of in the monthly round.' },
-      da: { title: 'Prioriterede ønsker', description: 'Dine ønsker til nye funktioner tages op cirka en gang om ugen i stedet for i den månedlige runde.' },
+      en: { title: 'Priority feature requests', description: 'The target is to pick up your feature requests about once a week instead of in the monthly round.' },
+      da: { title: 'Prioriterede ønsker', description: 'Målet er at tage dine ønsker til nye funktioner op cirka en gang om ugen i stedet for i den månedlige runde.' },
     },
   },
   {
     id: 'express', kind: 'monthly', price: 1000, offerings: ['website', 'app', 'service'], tier: 'express',
     text: {
-      en: { title: 'Express feature requests', description: 'Work on your feature request starts within 1 business day, and you get replies within 1 business day.' },
-      da: { title: 'Ekspres-ønsker', description: 'Arbejdet på dit ønske begynder inden for 1 arbejdsdag, og du får svar inden for 1 arbejdsdag.' },
+      en: { title: 'Express feature requests', description: 'The target is to start work on your feature request within 1 business day, with replies within 1 business day.' },
+      da: { title: 'Ekspres-ønsker', description: 'Målet er, at arbejdet på dit ønske begynder inden for 1 arbejdsdag, og at du får svar inden for 1 arbejdsdag.' },
     },
   },
   {
