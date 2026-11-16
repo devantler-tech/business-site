@@ -108,6 +108,7 @@ func (s *Foundation) operatorAddonRemovals(ctx context.Context, p Principal, id,
 	if err != nil {
 		return err
 	}
+	defer rollbackProposalWrite(ctx, tx)
 	if err = commitProposalWrite(ctx, p, tx, s.orderReady); err != nil {
 		return err
 	}
