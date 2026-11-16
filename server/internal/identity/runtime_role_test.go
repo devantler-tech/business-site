@@ -44,6 +44,9 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	}
 	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"missing workspace INSERT", "REVOKE INSERT ON portal_workspaces FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"editable workspace", "GRANT UPDATE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
+		{"deletable workspace", "GRANT DELETE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
 		{"membership recorder disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_transition; SET ROLE portal_runtime", false},
 		{"membership incarnation disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_incarnation; SET ROLE portal_runtime", false},
 		{"membership recorder conditional", "DROP TRIGGER portal_membership_transition ON portal_memberships; CREATE TRIGGER portal_membership_transition AFTER INSERT OR UPDATE OR DELETE ON portal_memberships FOR EACH ROW WHEN (false) EXECUTE FUNCTION portal_record_membership_transition(); SET ROLE portal_runtime", false},

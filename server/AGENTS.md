@@ -82,7 +82,13 @@ never make these expensive real-process controls optional to fit the ordinary su
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers, separately default-off free project-request intake and default-off
-Numina invoice and Stripe card billing (`BILLING.md`); no agent endpoint exists. Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
+Numina invoice and Stripe card billing (`BILLING.md`). The separately configured operator
+API accepts short-lived machine proofs with exact per-action grants alongside authenticated
+human operators. Application configuration contains public machine policy, never a human
+session or machine credential. Read `CUSTOMER-IDENTITY.md` for its closed grant catalogue,
+audit-before-effects requirement and membership-incarnation-bound browser sessions.
+Legacy unbound sessions must sign in again; deactivation never scans unrelated sessions.
+Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
 no client decision route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`

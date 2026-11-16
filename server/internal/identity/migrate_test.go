@@ -71,6 +71,9 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // rewindOperatorAuditFixture removes only the disposable v28 operator audit log.
 func rewindOperatorAuditFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_workspaces; DELETE FROM portal_schema_version WHERE version=29`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-workspace schema", err)
+	}
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_operator_audit;
  DELETE FROM portal_schema_version WHERE version=28`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-audit schema", err)

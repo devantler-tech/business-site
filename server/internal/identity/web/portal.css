@@ -72,6 +72,10 @@
   margin-top: 1.5rem;
 }
 
+.request-receipt {
+  overflow-wrap: anywhere;
+}
+
 .request-receipt dd {
   margin: 0.5rem 0;
   overflow-wrap: anywhere;
