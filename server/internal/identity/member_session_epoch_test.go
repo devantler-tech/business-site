@@ -204,13 +204,13 @@ func TestOperatorSessionIncarnationIsRecheckedAfterWait(t *testing.T) {
 // an earlier membership check but waiting before its final row lock.
 func TestBoundMembershipCannotWriteAfterReactivation(t *testing.T) {
 	cases := []struct {
-		name, table string
-		write       func(*browserFixture, Principal) error
+		name, countSQL string
+		write          func(*browserFixture, Principal) error
 	}{
-		{"contact", "portal_contacts", func(b *browserFixture, p Principal) error {
+		{"contact", `SELECT count(*) FROM portal_contacts`, func(b *browserFixture, p Principal) error {
 			return b.svc.saveContact(t.Context(), p, contactData{Name: "Current customer", Email: "customer@example.test"})
 		}},
-		{"request", "portal_requests", func(b *browserFixture, p Principal) error {
+		{"request", `SELECT count(*) FROM portal_requests`, func(b *browserFixture, p Principal) error {
 			_, err := b.svc.persistRequest(t.Context(), p, projectRequest{Key: secret(), Product: "website", Title: "Current project", Brief: "Fictional request"})
 			return err
 		}},
@@ -251,7 +251,7 @@ func TestBoundMembershipCannotWriteAfterReactivation(t *testing.T) {
 				t.Fatal("a superseded membership committed private data", err)
 			}
 			var count int
-			if err := b.pool.QueryRow(t.Context(), "SELECT count(*) FROM "+tc.table).Scan(&count); err != nil || count != 0 {
+			if err := b.pool.QueryRow(t.Context(), tc.countSQL).Scan(&count); err != nil || count != 0 {
 				t.Fatal("stale writer left private records", count, err)
 			}
 			current := authenticateExistingMember(t, b, "epoch-writer")

@@ -1,6 +1,7 @@
 package runtimeapp
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -26,12 +27,12 @@ func TestAgentConfigurationRefusesUnsafeAuthority(t *testing.T) {
 		"duplicate field":  {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": `[{"issuer":"https://login.example.invalid","subject":"ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ","grants":["invitations.create"],"grants":[]}]`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := ReadConfig(settingsEnv(withPortal(extra))); err != ErrConfig {
+			if _, err := ReadConfig(settingsEnv(withPortal(extra))); !errors.Is(err, ErrConfig) {
 				t.Fatal("unsafe machine configuration was accepted or disclosed details")
 			}
 		})
 	}
-	if _, err := ReadConfig(settingsEnv(map[string]string{"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://broker.example.invalid", `[]`)})); err != ErrConfig {
+	if _, err := ReadConfig(settingsEnv(map[string]string{"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://broker.example.invalid", `[]`)})); !errors.Is(err, ErrConfig) {
 		t.Fatal("machine access without a portal was accepted")
 	}
 	for _, grants := range []string{`[]`, `["invitations.create"]`, `["members.deactivate","members.reactivate"]`} {
