@@ -3,15 +3,12 @@ package identity
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
@@ -66,45 +63,42 @@ type managementInput struct {
 
 func managementFields(r *http.Request, fields ...string) (managementInput, error) {
 	var input managementInput
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&input) != nil || decoder.Decode(new(any)) != io.EOF {
-			return input, ErrDenied
-		}
-	} else {
-		if r.ParseForm() != nil {
-			return input, ErrDenied
-		}
-		allowed := map[string]bool{"csrf_token": true, "lang": true}
-		for _, field := range fields {
-			allowed[field] = true
-		}
-		for name, values := range r.PostForm {
-			if !allowed[name] || len(values) != 1 {
-				return input, ErrDenied
+	if len(fields) == 1 {
+		if fields[0] == "workspace" {
+			var value struct {
+				Workspace string `json:"workspace"`
 			}
+			err := decodeOperatorInput(r, &value, map[string]*string{"workspace": &value.Workspace})
+			return managementInput{Workspace: value.Workspace}, err
 		}
-		input.Workspace, input.Subject = r.PostForm.Get("workspace"), r.PostForm.Get("subject")
+		var value struct {
+			Subject string `json:"subject"`
+		}
+		err := decodeOperatorInput(r, &value, map[string]*string{"subject": &value.Subject})
+		return managementInput{Subject: value.Subject}, err
 	}
-	allowed := map[string]bool{}
+	allowed := map[string]*string{}
 	for _, field := range fields {
-		allowed[field] = true
+		switch field {
+		case "workspace":
+			allowed[field] = &input.Workspace
+		case "subject":
+			allowed[field] = &input.Subject
+		}
 	}
-	if (input.Workspace != "" && !allowed["workspace"]) || (input.Subject != "" && !allowed["subject"]) {
-		return input, ErrDenied
+	if err := decodeOperatorInput(r, &input, allowed); err != nil {
+		return input, err
+	}
+	if (input.Workspace != "" && allowed["workspace"] == nil) || (input.Subject != "" && allowed["subject"] == nil) {
+		return input, errOperatorInput
 	}
 	return input, nil
-}
-
-func managementWorkspace(id string) bool {
-	return id != "" && id != operatorWorkspace && len(id) <= 100 && strings.TrimSpace(id) == id && utf8.ValidString(id) && !strings.ContainsFunc(id, unicode.IsControl)
 }
 
 func (b *browser) revokeCustomerInvitation(r *http.Request, ctx context.Context) (any, error) {
 	input, err := managementFields(r, "subject")
 	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !canInvite(input.Subject, "client") {
-		return nil, ErrDenied
+		return nil, errOperatorInput
 	}
 	tx, err := b.foundation.pool.Begin(ctx)
 	if err != nil {
@@ -133,8 +127,8 @@ func (b *browser) revokeCustomerInvitation(r *http.Request, ctx context.Context)
 
 func (b *browser) createCustomerWorkspace(r *http.Request, ctx context.Context) (any, error) {
 	input, err := managementFields(r, "workspace")
-	if err != nil || !managementWorkspace(input.Workspace) {
-		return nil, ErrDenied
+	if err != nil || !validCustomerWorkspace(input.Workspace) {
+		return nil, errOperatorInput
 	}
 	tx, err := b.foundation.pool.Begin(ctx)
 	if err != nil {
@@ -154,13 +148,14 @@ func (b *browser) createCustomerWorkspace(r *http.Request, ctx context.Context) 
 	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	return workspaceView{ID: input.Workspace, Members: []workspaceMember{}}, nil
+	members, err := b.membersOfWorkspace(ctx, input.Workspace)
+	return workspaceView{ID: input.Workspace, Members: members}, err
 }
 
 func (b *browser) customerWorkspaceMembers(r *http.Request, ctx context.Context) (any, error) {
 	query, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil || len(query["workspace"]) != 1 || !managementWorkspace(query.Get("workspace")) || len(query) > 2 || (len(query) == 2 && len(query["lang"]) != 1) {
-		return nil, ErrDenied
+	if err != nil || len(query["workspace"]) != 1 || !validCustomerWorkspace(query.Get("workspace")) || len(query) > 2 || (len(query) == 2 && len(query["lang"]) != 1) {
+		return nil, errOperatorInput
 	}
 	setOperatorTarget(ctx, query.Get("workspace"))
 	return b.membersOfWorkspace(ctx, query.Get("workspace"))
@@ -191,8 +186,8 @@ func (b *browser) reactivateCustomerMember(r *http.Request, ctx context.Context)
 
 func (b *browser) changeCustomerMember(r *http.Request, ctx context.Context, active bool) (any, error) {
 	input, err := managementFields(r, "workspace", "subject")
-	if err != nil || !managementWorkspace(input.Workspace) {
-		return nil, ErrDenied
+	if err != nil || !validCustomerWorkspace(input.Workspace) {
+		return nil, errOperatorInput
 	}
 	user := customeridentity.DexUser(input.Subject, customeridentity.ZitadelConnectorID)
 	if user == "" || b.foundation.customers == nil {
@@ -215,7 +210,7 @@ func (b *browser) changeCustomerMember(r *http.Request, ctx context.Context, act
 		return nil, ErrDenied
 	}
 	if active {
-		if err = b.foundation.customers.ReactivateUser(ctx, user); err != nil {
+		if err = b.foundation.customers.ReactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, tx) }); err != nil {
 			return nil, err
 		}
 	}
@@ -237,7 +232,7 @@ func (b *browser) changeCustomerMember(r *http.Request, ctx context.Context, act
 		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
 			return nil, ErrDenied
 		}
-		if err = b.foundation.customers.DeactivateUser(ctx, user); err != nil {
+		if err = b.foundation.customers.DeactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, b.foundation.pool) }); err != nil {
 			return nil, err
 		}
 	}

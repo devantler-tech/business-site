@@ -73,7 +73,7 @@ func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
 func TestOperatorAPIOnlyForOperators(t *testing.T) {
 	var routes []operatorRoute
 	for _, route := range operatorRoutes {
-		if route.method == "GET" {
+		if route.method == "GET" && route.path != "/workspaces/members" {
 			routes = append(routes, route)
 		}
 	}
@@ -120,7 +120,7 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 		t.Fatalf("pending invitations: %s", results["invitations.list"])
 	}
 	var workspaces []workspaceView
-	if err := json.Unmarshal([]byte(results["workspaces.list"]), &workspaces); err != nil || len(workspaces) != 2 || workspaces[0].ID != "client-a" || workspaces[1].ID != operatorWorkspace || workspaces[1].Members[0].Role != "operator" {
+	if err := json.Unmarshal([]byte(results["workspaces.list"]), &workspaces); err != nil || len(workspaces) != 3 || workspaces[0].ID != "client-a" || workspaces[1].ID != "client-b" || len(workspaces[1].Members) != 0 || workspaces[2].ID != operatorWorkspace || workspaces[2].Members[0].Role != "operator" {
 		t.Fatalf("workspaces: %s", results["workspaces.list"])
 	}
 	var audit []auditEntry
@@ -165,7 +165,7 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						case "/api/invitations":
 							query = "FROM portal_invitations WHERE"
 						case "/api/workspaces":
-							query = "FROM portal_memberships ORDER BY"
+							query = "FROM inventory i LEFT JOIN portal_memberships"
 						}
 						pause := installCompletedRead(t, b, query)
 						blocked, release = pause.blocked, pause.release

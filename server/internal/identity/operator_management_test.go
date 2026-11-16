@@ -164,6 +164,7 @@ func TestOperatorWorkspaceJSON(t *testing.T) {
 	}{
 		{`{"workspace":"client-json"}`, http.StatusOK},
 		{`{"workspace":"client-other","role":"operator"}`, http.StatusBadRequest},
+		{`{"workspace":"client-other","subject":""}`, http.StatusBadRequest},
 		{`{"workspace":"client-a"} {"workspace":"client-b"}`, http.StatusBadRequest},
 	} {
 		req, err := http.NewRequest("POST", b.site.URL+operatorAPIRoot+"/workspaces", strings.NewReader(tc.body))
@@ -183,5 +184,28 @@ func TestOperatorWorkspaceJSON(t *testing.T) {
 		if response.StatusCode != tc.want || readErr != nil || closeErr != nil {
 			t.Fatal("JSON management response", response.StatusCode, readErr, closeErr)
 		}
+	}
+}
+
+// TestOperatorWorkspaceMemberInventory catches a workspace query that returns
+// another workspace's members, or accepts a client as an operator.
+func TestOperatorWorkspaceMemberInventory(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,'member-a','client-a','client'),($1,'member-b','client-b','client')`, b.f.issuer); err != nil {
+		t.Fatal(err)
+	}
+	status, body, _ := b.request("GET", operatorAPIRoot+"/workspaces/members?workspace=client-a", nil, "")
+	var members []workspaceMember
+	if err := json.Unmarshal([]byte(body), &members); status != http.StatusOK || err != nil || len(members) != 1 || members[0].Subject != "member-a" {
+		t.Fatal("workspace query lost its scope", status, body, err)
+	}
+	b.signOut()
+	if status, _, _ := b.request("GET", operatorAPIRoot+"/workspaces/members?workspace=client-a", nil, ""); status != http.StatusUnauthorized {
+		t.Fatal("anonymous workspace-member access", status)
+	}
+	b.as("member-a")
+	b.finish(b.start())
+	if status, body, _ := b.request("GET", operatorAPIRoot+"/workspaces/members?workspace=client-b", nil, ""); status != http.StatusForbidden || strings.Contains(body, "member-b") {
+		t.Fatal("customer reached another workspace's members", status)
 	}
 }

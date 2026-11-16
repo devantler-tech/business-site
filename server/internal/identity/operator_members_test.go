@@ -15,15 +15,21 @@ type managementDirectory struct {
 	change func(context.Context, string, bool) error
 }
 
-func (*managementDirectory) EnsureUser(context.Context, string, string) (string, error) {
+func (*managementDirectory) EnsureUser(context.Context, string, string, func() bool) (string, error) {
 	return "", ErrDenied
 }
 
-func (d *managementDirectory) DeactivateUser(ctx context.Context, user string) error {
+func (d *managementDirectory) DeactivateUser(ctx context.Context, user string, allowed func() bool) error {
+	if allowed == nil || !allowed() {
+		return ErrDenied
+	}
 	return d.change(ctx, user, false)
 }
 
-func (d *managementDirectory) ReactivateUser(ctx context.Context, user string) error {
+func (d *managementDirectory) ReactivateUser(ctx context.Context, user string, allowed func() bool) error {
+	if allowed == nil || !allowed() {
+		return ErrDenied
+	}
 	return d.change(ctx, user, true)
 }
 
