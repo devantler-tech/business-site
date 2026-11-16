@@ -111,8 +111,8 @@ delivery path; never copy them into test fixtures or acceptance notes.
   sections 8, 12 and 13 cover pre-contract information, the payment-obligation
   order and durable confirmation; the service's withdrawal and cancellation
   rules must be assessed separately.
-- **Authority guidance:** the [Danish e-commerce guide](https://erhvervsstyrelsen.dk/sites/default/files/2020-01/Virksomhedsguide-til-regler-for-e-handel.pdf)
-  explains why a link to mutable website terms ordinarily is not a durable copy.
+- **Authority practice:** [the Consumer Ombudsman's published position](https://forbrugerombudsmanden.dk/find-sager/sager/markedsfoeringsloven/sager-efter-markedsfoeringsloven/ehandel/kopi-af-samtykke-paa-et-varigt-medium)
+  discusses why a link to website information is not itself a durable copy.
 - **Provider capability:** [Stripe MobilePay](https://docs.stripe.com/payments/mobilepay)
   is single-use and does not support recurring payments. Verify the actual
   account's capability and existing approvals before any human-controlled live use.

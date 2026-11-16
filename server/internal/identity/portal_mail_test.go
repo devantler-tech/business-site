@@ -54,6 +54,17 @@ func confirmationFixture(t *testing.T, b *browserFixture) {
 	mailFixture(t, b)
 }
 
+func deliverFixtureMail(t *testing.T, b *browserFixture, m *fakeMailer) []mail.Message {
+	t.Helper()
+	if err := b.svc.EnableMail(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.SendQueuedMail(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	return m.messages()
+}
+
 // TestOrderAndWithdrawalAreConfirmedByEmail queues the order's confirmation
 // (Consumer Contracts Act, section 13) and the withdrawal's receipt (section
 // 20 a) with what causes them, in the client's language, and sends each once.
@@ -170,13 +181,7 @@ func TestOrderConfirmationRetainsOriginalAgreementOnRetry(t *testing.T) {
 	if status, _, _ := b.request("POST", path, f, b.site.URL); status != 303 {
 		t.Fatalf("original order retry rebound to new prerequisites: %d", status)
 	}
-	if err := b.svc.EnableMail(m); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	sent := m.messages()
+	sent := deliverFixtureMail(t, b, m)
 	if len(sent) != 1 || sent[0].Body != original || sent[0].To != "client@example.invalid" {
 		t.Fatal("retry replaced, duplicated or redirected the original confirmation")
 	}
@@ -242,13 +247,7 @@ func TestWithdrawalRetainsReceiptWithoutCurrentContact(t *testing.T) {
 	if status, _, _ := b.request("POST", withdrawalPath, withdrawalForm(t, b, "en"), b.site.URL); status != 303 {
 		t.Fatalf("withdrawal depended on new-order prerequisites: %d", status)
 	}
-	if err := b.svc.EnableMail(m); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.svc.SendQueuedMail(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	sent := m.messages()
+	sent := deliverFixtureMail(t, b, m)
 	if len(sent) != 2 || sent[1].Subject != "Receipt for your withdrawal" || sent[1].To != "client@example.invalid" {
 		t.Fatal("withdrawal lost its receipt after the contact changed")
 	}

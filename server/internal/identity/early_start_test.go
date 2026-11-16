@@ -4,7 +4,6 @@ import (
 	"html"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -237,13 +236,9 @@ func TestWithdrawalWithoutEarlyStartOwesNothing(t *testing.T) {
 // start early.
 func TestPrivateCardRestartKeepsTheEarlyStartRequest(t *testing.T) {
 	b, fake := cardOrderFixture(t, 299500, 0)
-	body := receipt(t, b, "en")
-	csrf := csrfInput.FindStringSubmatch(body)
-	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
-	if len(csrf) != 2 || len(acceptance) != 2 {
-		t.Fatal("receipt has no order form")
-	}
-	order := url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {"en"}, "acceptance": {acceptance[1]}, "collection": {"card"}, "early_start": {"yes"}}
+	order, _ := orderFormFields(t, b, "en")
+	order.Set("collection", "card")
+	order.Set("early_start", "yes")
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", order, b.site.URL); status != 303 {
 		t.Fatalf("early-start card order refused: %d", status)
 	}
