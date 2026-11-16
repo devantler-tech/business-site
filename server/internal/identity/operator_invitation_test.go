@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -8,10 +9,46 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/zitadel"
 )
+
+func TestOperatorWritesStopBeforeUnrecordedProviderEffects(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	creates := inviteDirectory(t, b, false, false, nil)
+	form := invitationForm(b)
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+			t.Error("restore fixture audit grant failed")
+		}
+	})
+	status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
+	var count int
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if status != 503 || creates.Load() != 0 || count != 0 {
+		t.Fatalf("unrecorded write had effects: status=%d providerCreates=%d invitations=%d", status, creates.Load(), count)
+	}
+	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	status, _, _ = b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || creates.Load() != 1 || count != 1 {
+		t.Fatalf("recorded write positive control failed: status=%d providerCreates=%d invitations=%d", status, creates.Load(), count)
+	}
+}
 
 func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait func()) *atomic.Int32 {
 	t.Helper()

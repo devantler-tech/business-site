@@ -105,6 +105,7 @@ func (b *browser) operatorCall(r *http.Request, action string, run func(context.
 		if bound == nil {
 			return status, nil
 		}
+		bound.mutating = r.Method != "GET" && r.Method != "HEAD"
 		return b.authorizedOperatorCall(ctx, bound, status, run)
 	}
 	original := b.contactAuthority(ctx, "")
@@ -120,7 +121,7 @@ func (b *browser) operatorCall(r *http.Request, action string, run func(context.
 	if err != nil && !errors.Is(err, ErrDenied) {
 		return http.StatusServiceUnavailable, nil
 	}
-	bound := &operatorAuthority{principal: p, kind: "other", action: action, client: client}
+	bound := &operatorAuthority{principal: p, kind: "other", action: action, client: client, mutating: r.Method != "GET" && r.Method != "HEAD"}
 	status := http.StatusForbidden
 	if err == nil && role == "operator" {
 		bound.kind, status = "operator", http.StatusOK
@@ -141,6 +142,8 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 	if status == http.StatusOK {
 		outcome = "allowed"
 		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
+			status, outcome = http.StatusServiceUnavailable, "failed"
+		} else if bound.mutating && !b.beginOperatorWrite(ctx, bound) {
 			status, outcome = http.StatusServiceUnavailable, "failed"
 		} else {
 			data, err := run(ctx, bound.client)
@@ -165,6 +168,13 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 		return http.StatusServiceUnavailable, nil
 	}
 	return status, result
+}
+
+// beginOperatorWrite persists an immutable authorization attempt before any
+// provider or database effect. A separate normal action row records completion;
+// an attempt without completion remains visible when later recording fails.
+func (b *browser) beginOperatorWrite(ctx context.Context, bound *operatorAuthority) bool {
+	return b.foundation.audit(ctx, bound.principal, bound.kind, bound.action+".attempt", "", "allowed") == nil && b.operatorMutationAllowed(ctx, b.foundation.pool)
 }
 
 // operatorAPI answers one route as JSON.

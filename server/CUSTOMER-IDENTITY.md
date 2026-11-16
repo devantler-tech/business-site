@@ -303,17 +303,41 @@ Every operator action is a small JSON API under `/operator/api`, described by
 [`internal/identity/openapi/operator.json`](internal/identity/openapi/operator.json), which the
 API also serves at `/operator/api/openapi.json`; a test keeps the file and the routes identical.
 The operator pages use the same authorization and records. Human callers need a current operator.
-Every call by a signed-in identity writes one row to `portal_operator_audit` (who, what, when
-and the outcome: allowed, refused or failed) before it is answered, refusals included, and a
-call that cannot be recorded fails. A browser without a session gets 401 and is not recorded.
+Every authenticated call writes to `portal_operator_audit` (who, what, when and the
+outcome: allowed, refused or failed), refusals included. Reads write one completion row.
+Before a write can have any effect, its authorized attempt is durably appended as
+`<action>.attempt` with outcome `allowed`; that means permission to try, not success.
+A separate row under the ordinary action records the result. An attempt without a
+completion remains visible if later recording fails. Missing audit access prevents writes.
+A browser without a session gets 401 and is not recorded.
 The rows hold IDs, never request bodies or customer details, and the retention purge removes
 them after the retention period. The operator page links to the newest 100 entries at
-`/operator/audit`. The API only reads for now: pending invitations, workspaces with their
-members, and the audit log (business-site#638). Inventory responses allow at most 1000
+`/operator/audit`. The API lists pending invitations, workspaces with their
+members and the audit log, and provides the operator's customer actions (business-site#638).
+Inventory responses allow at most 1000
 pending invitations or 1000 memberships across all workspaces; larger inventories return 503
 instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
 the original durable session and current operator membership after all rendering and SDK waits.
 Each displayed audit entry includes the actor's subject as well as their kind.
+
+The native invitation form at `/operator/invitations/new` posts to the same
+`invitations.create` API action. It accepts a first and last name, email and workspace;
+unknown or repeated form fields are refused. A new user is created only in the configured
+Customers organization, with no supplied password and an unverified email, so ZITADEL
+sends its own account-setup message. An exact organization-and-email lookup reuses an
+existing human account. The seven-day invitation binds only that user's customer Dex
+subject; first sign-in consumes it atomically. Concurrent invitations for that identity
+cannot leave two pending invitations, and provider errors leave none. No delete is called.
+
+The directory is optional and requires all three settings together:
+`PORTAL_ZITADEL_URL` (an HTTPS origin), `PORTAL_ZITADEL_ORG_ID` and the absolute
+`PORTAL_ZITADEL_TOKEN_PROJECTION_FILE`. The platform supplies the organization-scoped
+service credential privately. Every call reads its current confined projection and sends
+the explicit organization header; lookup responses must name that same owner. Redirects
+are refused and replies are bounded. Every external write rechecks the original operator
+session or exact machine grant after provider and credential waits. Portal writes recheck
+again in their held transaction before commit. Source fixtures do not prove email delivery,
+native provider setup or live portal access.
 
 ### Machine callers
 

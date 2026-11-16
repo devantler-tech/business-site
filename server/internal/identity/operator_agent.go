@@ -129,6 +129,7 @@ type operatorAuthority struct {
 	principal                    Principal
 	kind, action, client, target string
 	current                      func(context.Context, privateResponseQuery) bool
+	mutating                     bool
 }
 
 // operatorMutationAllowed re-evaluates the SDK before checking the exact original
