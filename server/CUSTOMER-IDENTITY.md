@@ -282,6 +282,7 @@ page instead, so a lasting upstream session cannot cause a redirect loop. Sign-o
 the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
+Google, Microsoft, Apple and GitHub remain unconfigured.
 
 Operators sign in differently: with GitHub, through platform SSO. Customer Dex has a second
 connector, `platform`, and every login names its connector with Dex's `connector_id`, so
@@ -295,7 +296,24 @@ from the list ends its access at the next request. A customer through ZITADEL ca
 hold the operator role. The operator's subject is
 `DexSubject(<platform Dex subject>, "platform")`, computed with the same function as an
 invitation's.
-Google, Microsoft, Apple and GitHub remain unconfigured.
+
+### Operator API
+
+Every operator action is a small JSON API under `/operator/api`, described by
+[`internal/identity/openapi/operator.json`](internal/identity/openapi/operator.json), which the
+API also serves at `/operator/api/openapi.json`; a test keeps the file and the routes identical.
+The operator pages use the same authorization and records. Only a current operator may call it.
+Every call by a signed-in identity writes one row to `portal_operator_audit` (who, what, when
+and the outcome: allowed, refused or failed) before it is answered, refusals included, and a
+call that cannot be recorded fails. A browser without a session gets 401 and is not recorded.
+The rows hold IDs, never request bodies or customer details, and the retention purge removes
+them after the retention period. The operator page links to the newest 100 entries at
+`/operator/audit`. The API only reads for now: pending invitations, workspaces with their
+members, and the audit log (business-site#638). Inventory responses allow at most 1000
+pending invitations or 1000 memberships across all workspaces; larger inventories return 503
+instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
+the original durable session and current operator membership after all rendering and SDK waits.
+Each displayed audit entry includes the actor's subject as well as their kind.
 
 ## Invite a customer
 

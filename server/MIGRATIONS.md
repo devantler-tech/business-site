@@ -226,6 +226,10 @@ v27 adds `portal_addon_ends`, a client's end of one monthly add-on, and `portal_
 Stripe's confirmation that a card subscription no longer charges it (BILLING.md, *Add-ons*). Grant
 SELECT/INSERT only on both.
 
+v28 adds `portal_operator_audit`, one row per operator API call: who, what, when and how it
+ended (CUSTOMER-IDENTITY.md, *Operator API*). Grant SELECT/INSERT only; the retention purge
+deletes rows older than the retention period.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

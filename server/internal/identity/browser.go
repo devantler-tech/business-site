@@ -272,6 +272,10 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
+	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
+	for _, route := range operatorRoutes {
+		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
+	}
 	mux.HandleFunc("GET /portal/operator/requests", b.triageList)
 	mux.HandleFunc("GET /portal/operator/requests/{id}", b.triageDetail)
 	mux.HandleFunc("POST /portal/operator/requests/{id}/proposals", b.submitProposal)
@@ -628,6 +632,7 @@ type pageData struct {
 	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                            bool
 	TriageEnabled                                                                                                                              bool
+	Audit                                                                                                                                      []auditEntry
 }
 
 // render escapes all page data and exposes no broker tokens or raw store errors.
