@@ -77,7 +77,7 @@ func NewBroker(ctx context.Context, issuer, clientID string) (*Broker, error) {
 // explicitly; a valid token for a different relying party grants no access.
 func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, error) {
 	token, err := b.verifiedToken(ctx, raw, nonce)
-	if err != nil {
+	if err != nil || machineSubject(token.Subject) {
 		return Principal{}, ErrDenied
 	}
 	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
@@ -123,6 +123,10 @@ type Foundation struct {
 	// operators are the customer Dex subjects, all issued through the platform
 	// connector, that hold the operator role. Nothing else can sign in that way.
 	operators map[string]bool
+	// customers is the optional organization-scoped provider for operator actions.
+	customers CustomerDirectory
+	// agents is immutable policy and a distinct verifier, installed at startup.
+	agents *agentAccess
 }
 
 // LinkUpstreamLogout names the upstream provider's end_session endpoint and the
@@ -257,13 +261,19 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 }
 
 // Invite is a CONTROL-PLANE provisioning operation, not a client-facing handler.
-// Its caller must be a trusted provisioning process. A future network invitation
-// API requires independent operator authentication, authorization and CSRF checks.
+// Its caller must be a trusted provisioning process. The operator API uses the
+// caller-bound private variant after its authentication, authorization and CSRF checks.
 // The invitation is bound to one exact issuer/subject; that identity accepts it
 // by signing in before it expires. Nothing secret is handed to the customer: the
 // row key is a random digest that is never shown.
 // Operators are never invited: they come from the server configuration.
 func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
+	return s.invite(ctx, i, nil)
+}
+
+// invite retains the control-plane rules and permits the operator API to bind
+// its final commit to the original caller after any provider or SDK wait.
+func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
 	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
@@ -289,6 +299,9 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 		return fmt.Errorf("persist invitation: %w", err)
 	}
 	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if allowed != nil && !allowed(tx) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
