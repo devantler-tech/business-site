@@ -82,7 +82,10 @@ never make these expensive real-process controls optional to fit the ordinary su
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
 profile handlers, separately default-off free project-request intake and default-off
-Numina invoice and Stripe card billing (`BILLING.md`); no agent endpoint exists. Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
+Numina invoice and Stripe card billing (`BILLING.md`). The separately configured operator
+API accepts short-lived machine proofs with exact per-action grants, never a human
+session or a credential in application configuration. Read `CUSTOMER-IDENTITY.md` for its
+closed grant catalogue and audit-before-effects requirement. Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
 no client decision route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
@@ -182,8 +185,11 @@ the exact saved revision/address for the same broker identity and current client
 never use email to link identities, grant roles or authorize work. Ordinary sign-in
 does not confirm contacts. SDK waits precede private-read authorization and final
 write expiry/cancellation checks. Edits clear confirmation/provenance; recovered
-draft values cannot inherit a saved address's confirmation. The environment provider
-remains identity-only, with no new activation mapping. Preserve unchanged v1–v7;
+draft values cannot inherit a saved address's confirmation. Bounded staging remains
+identity-only. The explicit production capability settings in README.md are
+independently false by default and preserve every operation's prerequisite gates;
+configuration alone grants no membership, agreement, funding or work authority.
+Preserve unchanged v1–v7;
 v8 adds bound purposes and confirmation provenance without broadening table authority.
 Free project requests additionally require false-default `portal-requests` on every
 operation. A receipt never authorizes a quote, agreement, payment or worker execution.
@@ -232,7 +238,7 @@ authorization checkpoints.
 Original actor-bound retries return historical receipts, not consent to later scope.
 New unshared drafts remain
 readable only through the old shared snapshot and are never acceptable or exposed.
-No environment activation mapping, credited funds or worker eligibility is added.
+Production capability configuration grants neither credited funds nor worker eligibility.
 
 The external invoice-record and bank-credit evidence modules (#117, #120) are
 retired by ADR 0030: Numina is the record for invoices and bank payments. Their
@@ -282,12 +288,14 @@ existing independent false-default identity/request gates remain mandatory.
 v16 appends orders, per-period charges and the Numina contact map after unchanged
 v1–v15. Read `BILLING.md`. Orders and the contact map are SELECT/INSERT; charges
 add UPDATE for their state. Every step requires the acceptance gates plus false-default
-`portal-invoice-billing`, which has no environment mapping. Record a charge's identity
+`portal-invoice-billing`, explicitly configured in production by
+`PORTAL_INVOICE_BILLING_FLAG`. Record a charge's identity
 before any Numina call, find a lost creation by its memo before retrying, settle only on
 `paid` with nothing outstanding, and hold what the path must not decide (no contact
 profile, a customer outside Denmark). The Numina key never reaches logs or diagnostics.
 v17 appends the card path's Checkout Sessions and applied Stripe events. The false-default
-`portal-card-billing` gate has no environment mapping. Fund a card order only from a
+`portal-card-billing` gate has the independent production setting
+`PORTAL_CARD_BILLING_FLAG`. Fund a card order only from a
 signature-verified webhook for its exact Checkout Session or subscription invoice and amount,
 apply each event once, never from a browser return, and never also invoice it in Numina. The
 webhook alone bypasses sessions and CSRF; keep its body bound and signature check first.

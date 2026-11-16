@@ -3,7 +3,13 @@ package identity
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +25,256 @@ func TestBrokerRefusesMachineIdentityForBrowser(t *testing.T) {
 	}
 	if _, err := f.broker.Verify(f.ctx, f.token(t, customeridentity.DexSubject("human-fixture", customeridentity.ZitadelConnectorID), "nonce", nil), "nonce"); err != nil {
 		t.Fatal("a customer browser proof was refused")
+	}
+}
+
+const fixtureAgentAudience = "machine-fixture"
+
+func linkFixtureAgent(t *testing.T, b *browserFixture, grants []string) string {
+	t.Helper()
+	subject := customeridentity.DexSubject(fixtureAgentAudience, "")
+	raw, err := json.Marshal([]agentSubject{{Issuer: b.f.issuer, Subject: subject, Grants: grants}})
+	if err != nil || b.svc.LinkAgents(b.f.ctx, fixtureAgentAudience, string(raw)) != nil {
+		t.Fatal("configure synthetic machine")
+	}
+	return subject
+}
+
+func fixtureAgentToken(t *testing.T, b *browserFixture, subject string) string {
+	t.Helper()
+	return b.f.token(t, subject, "", map[string]any{"aud": fixtureAgentAudience, "exp": time.Now().Add(4 * time.Minute).Unix()})
+}
+
+func agentRequest(t *testing.T, b *browserFixture, client *http.Client, method, path, token string) (int, string, http.Header) {
+	t.Helper()
+	r, err := http.NewRequestWithContext(t.Context(), method, b.site.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Header.Set("Authorization", "Bearer "+token)
+	res, err := client.Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(res.Body)
+	if closeErr := res.Body.Close(); closeErr != nil {
+		t.Error(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res.StatusCode, string(body), res.Header
+}
+
+// Machine reads use the real HTTP/JWKS/database/audit path without enrolling any
+// operator membership or creating a browser session. Refusals are audited too.
+func TestMachineAPIReadsAndAuditWithoutHumanAuthority(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, nil)
+	raw := fixtureAgentToken(t, b, subject)
+	for _, path := range []string{"/invitations", "/workspaces", "/audit", "/openapi.json"} {
+		status, _, headers := agentRequest(t, b, b.site.Client(), "GET", operatorAPIRoot+path, raw)
+		if status != http.StatusOK || headers.Get("Cache-Control") != "no-store" || headers.Get("Set-Cookie") != "" {
+			t.Fatalf("machine read %s did not retain its own authority: %d", path, status)
+		}
+	}
+	if got := b.auditRows(); len(got) != 4 || got[0] != "agent invitations.list allowed" || got[3] != "agent openapi.read allowed" {
+		t.Fatalf("machine calls lost audit attribution: %q", got)
+	}
+	var memberships int
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships`).Scan(&memberships); err != nil || memberships != 0 {
+		t.Fatal("machine access enrolled a browser membership")
+	}
+	stranger := fixtureAgentToken(t, b, customeridentity.DexSubject("other-machine", ""))
+	if status, _, _ := agentRequest(t, b, b.site.Client(), "GET", operatorAPIRoot+"/invitations", stranger); status != http.StatusForbidden {
+		t.Fatal("unlisted machine was admitted", status)
+	}
+	if got := b.auditRows(); got[len(got)-1] != "agent invitations.list refused" {
+		t.Fatal("unlisted verified machine refusal was not recorded")
+	}
+	if status, _, _ := agentRequest(t, b, b.site.Client(), "GET", "/portal/operator/audit", raw); status != http.StatusForbidden {
+		t.Fatal("machine reached a human page", status)
+	}
+}
+
+// Each grantable write is refused before its callback without its exact grant.
+// Synthetic dispatch routes exercise the shared authority boundary while the
+// action-specific provider/database behavior is covered by its own slice.
+func TestMachineAPIWriteGrantsAreExactAndCannotMoveMoneyOrDelete(t *testing.T) {
+	for _, granted := range []string{"", "invitations.create", "members.deactivate"} {
+		t.Run(granted, func(t *testing.T) {
+			b := newBrowserFixture(t)
+			var grants []string
+			if granted != "" {
+				grants = []string{granted}
+			}
+			subject := linkFixtureAgent(t, b, grants)
+			// Even an in-memory policy defect cannot turn these names into powers.
+			// The startup loader separately refuses them in real configuration.
+			b.svc.agents.subjects[subject]["payments.refund"] = true
+			b.svc.agents.subjects[subject]["customers.delete"] = true
+			original := operatorRoutes
+			operatorRoutes = slices.Clone(original)
+			t.Cleanup(func() { operatorRoutes = original })
+			calls := 0
+			actions := []string{"invitations.create", "invitations.revoke", "workspaces.create", "members.deactivate", "members.reactivate", "payments.refund", "customers.delete", "unknown.write"}
+			for _, action := range actions {
+				operatorRoutes = append(operatorRoutes, operatorRoute{"POST", "/test-" + action, action, func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+					calls++
+					setOperatorTarget(ctx, "synthetic-target")
+					return map[string]bool{"accepted": true}, nil
+				}})
+			}
+			b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
+			for _, action := range actions {
+				before := calls
+				status, _, _ := agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-"+action, fixtureAgentToken(t, b, subject))
+				want := http.StatusForbidden
+				if action == granted {
+					want = http.StatusOK
+				}
+				if status != want || (calls != before) != (status == http.StatusOK) {
+					t.Fatalf("grant=%s action=%s status=%d callbacks=%d", granted, action, status, calls-before)
+				}
+			}
+			rows := b.auditRows()
+			wantRows := len(actions)
+			if granted != "" {
+				wantRows++
+			}
+			if len(rows) != wantRows || rows[len(rows)-1] != "agent unknown.write refused" {
+				t.Fatal("write refusals were not audited", rows)
+			}
+		})
+	}
+}
+
+// A bearer cannot borrow a human cookie after validation fails, and accepting a
+// machine token never silently switches a browser request to a different actor.
+func TestMachineAPIRefusesBearerAndSessionAmbiguity(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, nil)
+	for _, raw := range []string{"invalid", fixtureAgentToken(t, b, subject)} {
+		if status, _, _ := agentRequest(t, b, b.client, "GET", operatorAPIRoot+"/invitations", raw); status != http.StatusUnauthorized {
+			t.Fatal("bearer request borrowed a human session", status)
+		}
+	}
+	if status, _, _ := b.request("GET", operatorAPIRoot+"/invitations", nil, ""); status != http.StatusOK {
+		t.Fatal("ordinary operator session stopped working", status)
+	}
+}
+
+// No machine access exists without both server policy and the independent
+// identity gate. A public runtime never opens an API because a JWT is presented.
+func TestMachineAPIIsClosedWithoutPolicyOrActivation(t *testing.T) {
+	for _, policy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "no-policy", true: "identity-off"}[policy], func(t *testing.T) {
+			b := newBrowserFixture(t)
+			subject := customeridentity.DexSubject(fixtureAgentAudience, "")
+			want := http.StatusUnauthorized
+			if policy {
+				subject = linkFixtureAgent(t, b, nil)
+				b.svc.flags = flagAPI(t, false).NewClient()
+				want = http.StatusNotFound
+			}
+			if status, _, _ := agentRequest(t, b, b.site.Client(), "GET", operatorAPIRoot+"/invitations", fixtureAgentToken(t, b, subject)); status != want {
+				t.Fatal("closed machine boundary admitted a request", status)
+			}
+			if len(b.auditRows()) != 0 {
+				t.Fatal("closed boundary treated an unauthenticated token as an actor")
+			}
+		})
+	}
+}
+
+// Materialized output is not authority: a token that expires while PostgreSQL's
+// completion callback is waiting must not release the buffered private result.
+func TestMachineAPIExpiresDuringPrivateRead(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, nil)
+	b.invite("private-pending-customer", "private-workspace", "client")
+	pause := installCompletedRead(t, b, "FROM portal_invitations WHERE")
+	resume := onceRelease(pause.release)
+	t.Cleanup(resume)
+	raw := b.f.token(t, subject, "", map[string]any{"aud": fixtureAgentAudience, "exp": time.Now().Add(2 * time.Second).Unix()})
+	result := make(chan contactResponse, 1)
+	go func() {
+		status, body, _ := agentRequest(t, b, b.site.Client(), "GET", operatorAPIRoot+"/invitations", raw)
+		result <- contactResponse{status, body}
+	}()
+	select {
+	case <-pause.blocked:
+	case <-time.After(4 * time.Second):
+		t.Fatal("machine request did not reach its data checkpoint")
+	}
+	select {
+	case got := <-result:
+		if got.status != http.StatusServiceUnavailable || strings.Contains(got.body, "private-pending-customer") || strings.Contains(got.body, "private-workspace") {
+			t.Fatal("expired machine proof released private output", got.status)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("expired machine request did not end at its token deadline")
+	}
+}
+
+// Audit storage must accept an immutable attempt before the callback can send
+// to a provider or mutate customer state. A 503 after an unrecorded effect is
+// not sufficient: the actual provider and PostgreSQL counters must stay zero.
+func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
+	b := newBrowserFixture(t)
+	subject := linkFixtureAgent(t, b, []string{"invitations.create"})
+	var providerCalls atomic.Int32
+	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		providerCalls.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(provider.Close)
+	original := operatorRoutes
+	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+		r, err := http.NewRequestWithContext(ctx, "POST", provider.URL+"/users", nil)
+		if err != nil {
+			return nil, err
+		}
+		res, err := provider.Client().Do(r)
+		if err != nil {
+			return nil, err
+		}
+		if err := res.Body.Close(); err != nil {
+			return nil, err
+		}
+		_, err = b.pool.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,'audit-effect','private-workspace','client')`, b.f.issuer)
+		return map[string]bool{"accepted": true}, err
+	}})
+	t.Cleanup(func() { operatorRoutes = original })
+	b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+			t.Error("restore fixture audit grant", err)
+		}
+	})
+	status, _, _ := agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
+	var effects int
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusServiceUnavailable || providerCalls.Load() != 0 || effects != 0 {
+		t.Fatalf("unrecordable action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
+	}
+	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	status, _, _ = agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusOK || providerCalls.Load() != 1 || effects != 1 || len(b.auditRows()) != 2 {
+		t.Fatalf("audited write positive control failed: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
 	}
 }
 

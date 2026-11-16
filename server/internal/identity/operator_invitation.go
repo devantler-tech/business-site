@@ -83,7 +83,7 @@ func (b *browser) createCustomerInvitation(r *http.Request, ctx context.Context)
 	}
 	subject := customeridentity.DexSubject(userID, customeridentity.ZitadelConnectorID)
 	invitation := Invitation{b.foundation.broker.issuer, subject, input.Workspace, "client", time.Now().Add(7 * 24 * time.Hour)}
-	setOperatorTarget(ctx, input.Workspace+"/"+subject)
+	setOperatorTarget(ctx, input.Workspace)
 	err = b.foundation.invite(ctx, invitation, func(tx pgx.Tx) bool { return b.operatorMutationAllowed(ctx, tx) })
 	if err != nil {
 		return nil, err

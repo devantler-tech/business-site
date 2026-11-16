@@ -18,6 +18,9 @@ var ErrPortalSettings = errors.New("portal settings projection is unavailable")
 var projectedPortalSettings = []string{
 	"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL",
 	"PORTAL_CLIENT_SECRET_PROJECTION_FILE", "PORTAL_IDENTITY_PROFILE", "PORTAL_IDENTITY_FLAG",
+	// Independently default-off production capabilities; never staging or work approval.
+	"PORTAL_CONTACT_VERIFICATION_FLAG", "PORTAL_REQUESTS_FLAG", "PORTAL_TRIAGE_FLAG", "PORTAL_PROPOSALS_FLAG",
+	"PORTAL_PROPOSAL_SHARING_FLAG", "PORTAL_PROPOSAL_ACCEPTANCE_FLAG", "PORTAL_INVOICE_BILLING_FLAG", "PORTAL_CARD_BILLING_FLAG",
 	// The optional Numina invoice path (BILLING.md); the key itself stays in its projected file.
 	"PORTAL_NUMINA_TOKEN_FILE", "PORTAL_NUMINA_API_URL", "PORTAL_NUMINA_SALES_ACCOUNT", "PORTAL_NUMINA_VAT_CODE",
 	// The optional Stripe card path; its key and webhook secret stay in projected files.

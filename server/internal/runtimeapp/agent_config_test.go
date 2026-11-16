@@ -17,11 +17,13 @@ func TestAgentConfigurationRefusesUnsafeAuthority(t *testing.T) {
 		"subjects only":    {"PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `[]`)},
 		"browser audience": {"PORTAL_AGENT_AUDIENCE": "business-portal", "PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `[]`)},
 		"other issuer":     {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://other.example.invalid", `[]`)},
-		"unknown grant":    {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://broker.example.invalid", `["anything.write"]`)},
-		"money grant":      {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://broker.example.invalid", `["payments.refund"]`)},
-		"deletion grant":   {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://broker.example.invalid", `["customers.delete"]`)},
+		"unknown grant":    {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `["anything.write"]`)},
+		"money grant":      {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `["payments.refund"]`)},
+		"deletion grant":   {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `["customers.delete"]`)},
 		"empty list":       {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": `[]`},
-		"extra property":   {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": `[{"issuer":"https://broker.example.invalid","subject":"machine","operator":true}]`},
+		"extra property":   {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": `[{"issuer":"https://login.example.invalid","subject":"ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ","operator":true}]`},
+		"duplicate grant":  {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": policy("https://login.example.invalid", `["invitations.create","invitations.create"]`)},
+		"duplicate field":  {"PORTAL_AGENT_AUDIENCE": "business-portal-agent", "PORTAL_AGENT_SUBJECTS": `[{"issuer":"https://login.example.invalid","subject":"ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ","grants":["invitations.create"],"grants":[]}]`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := ReadConfig(settingsEnv(withPortal(extra))); err != ErrConfig {
