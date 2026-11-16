@@ -302,7 +302,7 @@ invitation's.
 Every operator action is a small JSON API under `/operator/api`, described by
 [`internal/identity/openapi/operator.json`](internal/identity/openapi/operator.json), which the
 API also serves at `/operator/api/openapi.json`; a test keeps the file and the routes identical.
-The operator pages use the same authorization and records. Only a current operator may call it.
+The operator pages use the same authorization and records. Human callers need a current operator.
 Every call by a signed-in identity writes one row to `portal_operator_audit` (who, what, when
 and the outcome: allowed, refused or failed) before it is answered, refusals included, and a
 call that cannot be recorded fails. A browser without a session gets 401 and is not recorded.
@@ -314,6 +314,40 @@ pending invitations or 1000 memberships across all workspaces; larger inventorie
 instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
 the original durable session and current operator membership after all rendering and SDK waits.
 Each displayed audit entry includes the actor's subject as well as their kind.
+
+### Machine callers
+
+Machine callers use the API with `Authorization: Bearer <JWT>`, never the maintainer's
+login. Platform administration provisions the credential in OpenBao and issues short-lived
+tokens; the portal reads only public identity policy, not that credential. Both optional
+settings must be present together, alongside the complete portal dependencies:
+
+- `PORTAL_AGENT_AUDIENCE`: a dedicated audience, different from `PORTAL_OIDC_CLIENT_ID`.
+- `PORTAL_AGENT_SUBJECTS`: a JSON array of objects with `issuer`, `subject` and optional
+  `grants`. For example, `[{"issuer":"https://login.example.invalid","subject":"ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ","grants":[]}]`.
+
+The issuer must equal the configured portal broker. Subjects must be canonical Dex machine
+subjects without a connector; customer and operator subjects are refused. At most ten
+identities are allowed. Unknown or duplicate properties, identities and grants stop startup.
+The runtime validates the signature through discovered JWKS, exact issuer, a single exact
+audience, authorized party, expiry, issued-at and not-before. Tokens last at most five minutes
+and carry no browser nonce. Browser sign-in separately refuses machine subjects.
+
+An empty grant list permits only `invitations.list`, `workspaces.list`,
+`workspaces.members.list`, `audit.list` and `openapi.read`. The closed write catalogue is
+`invitations.create`, `invitations.revoke`, `workspaces.create`, `members.deactivate` and
+`members.reactivate`. Each needs its own grant; `invitations.create` explicitly permits the
+customer-facing account-setup email. A grant does not create an unimplemented route.
+There is no wildcard, operator role, payment, refund or deletion grant. Unknown actions and
+money/deletion grants are refused at startup and at dispatch, even if policy is malformed.
+
+Machine calls do not create memberships or browser sessions and cannot open human pages.
+A bearer combined with the portal session cookie is refused, and an invalid bearer never
+falls back to human authority. Verified machine calls use `actorKind: agent` in the audit
+log, including denied actions. Writes recheck their bound authority after external waits
+before committing; responses recheck it after audit recording. Policy changes require a
+restart, and already issued tokens remain bounded by their five-minute expiry. Source tests
+do not prove that the platform has provisioned or activated a machine identity.
 
 ## Invite a customer
 
