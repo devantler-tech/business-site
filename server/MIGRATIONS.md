@@ -215,6 +215,10 @@ row per taken place, with the client, the order, the percent, the full one-time 
 discount. Grant SELECT/INSERT only; the retention purge, as the migration role, clears the client
 and order of a purged customer's place and keeps the place itself.
 
+v25 adds `portal_order_addons`, the standard add-ons of an order (BILLING.md, *Add-ons*): the
+add-on, its kind, units and unit price at the time of the order. Grant SELECT/INSERT only; the
+order's prices already include them.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

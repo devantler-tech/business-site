@@ -59,6 +59,7 @@ var purgeRecords = []string{
 	// A taken launch place is never reused; it keeps its number and amounts.
 	`UPDATE portal_launch_places SET client_id=NULL,order_id=NULL WHERE client_id=$1`,
 	`DELETE FROM portal_order_charges WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
+	`DELETE FROM portal_order_addons WHERE order_id IN (SELECT id FROM portal_orders WHERE client_id=$1)`,
 	`DELETE FROM portal_orders WHERE client_id=$1`,
 	`DELETE FROM portal_numina_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_credit_revisions WHERE client_id=$1`,
