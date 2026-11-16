@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createBusinessCopy, launchDiscount, vatInclusiveOffers } from '../src/components/business/business-copy.ts';
+import { standardAddons } from '../src/components/business/addons.ts';
 
 // The portal generates proposals from server/internal/identity/offerings.json
 // (ADR 0030, #552). It must say exactly what the published site says, at the
@@ -39,4 +40,14 @@ test('generated proposals carry the published launch offer and the free first co
     assert.ok(published[lang].launchNote.startsWith(text[lang]), `${lang} proposal launch text matches the site`);
     assert.ok(published[lang].servicesIntro.includes(catalogue.consultation[lang].replace(/\.$/, '')), `${lang} site and proposals both offer a free first consultation`);
   }
+});
+
+test('the portal sells exactly the published add-ons at the published prices', () => {
+  assert.deepEqual(catalogue.addons, JSON.parse(JSON.stringify(standardAddons)));
+});
+
+test('the add-on drift check notices a changed add-on price', () => {
+  const changed = structuredClone(catalogue);
+  changed.addons[0].price += 1;
+  assert.notDeepEqual(changed.addons, JSON.parse(JSON.stringify(standardAddons)));
 });
