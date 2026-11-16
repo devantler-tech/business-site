@@ -141,11 +141,12 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 	var result []byte
 	if status == http.StatusOK {
 		outcome = "allowed"
-		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
+		switch {
+		case !b.operatorMutationAllowed(ctx, b.foundation.pool):
 			status, outcome = http.StatusServiceUnavailable, "failed"
-		} else if bound.mutating && !b.beginOperatorWrite(ctx, bound) {
+		case bound.mutating && !b.beginOperatorWrite(ctx, bound):
 			status, outcome = http.StatusServiceUnavailable, "failed"
-		} else {
+		default:
 			data, err := run(ctx, bound.client)
 			switch {
 			case !b.operatorMutationAllowed(ctx, b.foundation.pool):

@@ -38,7 +38,7 @@ func TestDirectoryRechecksAuthorityAfterProviderRead(t *testing.T) {
 				writes++
 				_, _ = fmt.Fprint(w, `{"userId":"user-42","details":{"resourceOwner":"customers"}}`)
 			})
-			permit := func() bool { return allowed.Load() }
+			permit := allowed.Load
 			var err error
 			switch action {
 			case "create":
