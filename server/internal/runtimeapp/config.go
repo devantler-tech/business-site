@@ -34,6 +34,8 @@ type Config struct {
 	// operators are the optional operator subjects, signing in through platform SSO.
 	operators string
 	customers customerDirectoryConfig
+	// Machine policy contains public identities and action grants, never credentials.
+	agentAudience, agentSubjects string
 	// publicSite is the public website a portal on its own host links back to.
 	publicSite string
 }
@@ -162,6 +164,10 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	if err != nil || (count == 0 && customers != (customerDirectoryConfig{})) {
 		return Config{}, ErrConfig
 	}
+	agentAudience, agentSubjects := getenv("PORTAL_AGENT_AUDIENCE"), getenv("PORTAL_AGENT_SUBJECTS")
+	if identity.ValidateAgents(c.issuer, c.client, agentAudience, agentSubjects) != nil {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
@@ -172,6 +178,7 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	c.endSession, c.endSessionClient = endSession, endSessionClient
 	c.operators = operators
 	c.customers = customers
+	c.agentAudience, c.agentSubjects = agentAudience, agentSubjects
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -248,6 +255,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err := linkCustomerDirectory(foundation, c.customers); err != nil {
 		pool.Close()
 		return nil, closed, ErrConfig
+	}
+	if c.agentAudience != "" {
+		if err := foundation.LinkAgents(startup, c.agentAudience, c.agentSubjects); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
 	}
 	if err := enableCardBilling(foundation, c.cards); err != nil {
 		pool.Close()

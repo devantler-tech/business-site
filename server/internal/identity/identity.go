@@ -77,7 +77,7 @@ func NewBroker(ctx context.Context, issuer, clientID string) (*Broker, error) {
 // explicitly; a valid token for a different relying party grants no access.
 func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, error) {
 	token, err := b.verifiedToken(ctx, raw, nonce)
-	if err != nil {
+	if err != nil || machineSubject(token.Subject) {
 		return Principal{}, ErrDenied
 	}
 	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
@@ -123,6 +123,8 @@ type Foundation struct {
 	operators map[string]bool
 	// customers is the optional organization-scoped provider for operator actions.
 	customers CustomerDirectory
+	// agents is immutable policy and a distinct verifier, installed at startup.
+	agents *agentAccess
 }
 
 // LinkUpstreamLogout names the upstream provider's end_session endpoint and the
