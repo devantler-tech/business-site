@@ -53,15 +53,17 @@ func featureLevel(ctx context.Context, q interface {
 	return level, nil
 }
 
-// requestBusy reports, under the client's fair-use lock, whether a client with
-// hosting already has a request in progress: one the operator has not marked
-// finished, other than the retry of this submission.
+// requestBusy reports, under the client's fair-use lock, whether a new
+// submission from a client with hosting must wait: another request of theirs
+// is in progress, not marked finished by the operator. A submission that
+// already exists is a retry, never a second request, so it keeps its receipt.
 func requestBusy(ctx context.Context, tx pgx.Tx, client, key string) (bool, error) {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::int,hashtext($2))`, fairUseLock, client); err != nil {
 		return false, errTriageStorage
 	}
 	var busy bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_orders o WHERE `+billsMonthly+`)
+	err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM portal_requests r WHERE r.client_id=$1 AND r.submission_key=$2)
+ AND EXISTS (SELECT 1 FROM portal_orders o WHERE `+billsMonthly+`)
  AND EXISTS (SELECT 1 FROM portal_requests q WHERE q.client_id=$1 AND q.submission_key<>$2
    AND NOT EXISTS (SELECT 1 FROM portal_request_closures c WHERE c.request_id=q.id))`, client, key).Scan(&busy)
 	if err != nil {
