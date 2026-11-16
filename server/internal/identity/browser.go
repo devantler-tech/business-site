@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"embed"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -94,7 +95,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	if atRoot && s.site == "" {
 		return nil, ErrDenied
 	}
-	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: []string{oidcScope}}}
+	b := &browser{foundation: s, sessions: sm, origin: "https://" + u.Host, oauth: oauth2.Config{ClientID: s.broker.clientID, ClientSecret: clientSecret, Endpoint: s.broker.endpoint, RedirectURL: callbackURL, Scopes: signInScopes}}
 	b.atRoot = atRoot
 	site := ""
 	if atRoot {
@@ -183,6 +184,10 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 
 const oidcScope = "openid"
 
+// signInScopes adds groups, through which the broker can name the one workspace
+// an administrator set for a first sign-in. Contact proof asks for email instead.
+var signInScopes = []string{oidcScope, "groups"}
+
 // internal maps a root-mounted request onto the internal route it names, so every
 // registration and gate below sees one path space. "/sign-in" becomes
 // "/portal/sign-in"; a visitor path that already starts with "/portal" maps to
@@ -254,7 +259,7 @@ func (w rootRedirects) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func (b *browser) routes() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /portal/sign-in", b.signIn)
-	mux.HandleFunc("POST /portal/sign-in", b.begin)
+	mux.HandleFunc("GET /portal/signed-out", b.signedOut)
 	mux.HandleFunc("GET /portal/callback", b.callback)
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
@@ -306,16 +311,34 @@ func language(r *http.Request) string {
 	return "en"
 }
 
-// signIn renders a localized form with a fresh token-based CSRF challenge.
-func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
-	b.render(w, r, 200, "sign-in", "", nosurf.Token(r))
+// refusalLimit and refusalWindow bound the refused round trips one browser can
+// make: the third refusal within ten minutes shows one static page instead.
+const (
+	refusalLimit  = 3
+	refusalWindow = 10 * time.Minute
+)
+
+// refusals returns this browser's current refusal count and when it started,
+// starting afresh once the window has passed.
+func (b *browser) refusals(ctx context.Context) (int, int64) {
+	count, since := b.sessions.GetInt(ctx, "refused"), b.sessions.GetInt64(ctx, "refused_since")
+	if since == 0 || time.Since(time.Unix(since, 0)) > refusalWindow {
+		return 0, 0
+	}
+	return count, since
 }
 
-// begin rotates any prior session and binds one durable PKCE/nonce/state attempt
-// before redirecting to the sole configured broker.
-func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		b.render(w, r, 400, "error", "", "")
+// signIn goes straight to the broker: there is no portal page before the login.
+// A current member goes home instead, so a link here cannot sign anyone out.
+// A browser that keeps being refused gets one static page, never a loop.
+func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
+	if _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); err == nil {
+		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
+		return
+	}
+	refused, since := b.refusals(r.Context())
+	if refused >= refusalLimit {
+		b.render(w, r, 403, "no-access", "", "")
 		return
 	}
 	a, err := b.foundation.Begin(r.Context())
@@ -333,14 +356,78 @@ func (b *browser) begin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.sessions.Put(r.Context(), "browser", a.BrowserBinding)
-	lang := "en"
-	if r.PostForm.Get("lang") == "da" {
-		lang = "da"
+	b.sessions.Put(r.Context(), "lang", language(r))
+	if refused > 0 {
+		b.sessions.Put(r.Context(), "refused", refused)
+		b.sessions.Put(r.Context(), "refused_since", since)
 	}
-	b.sessions.Put(r.Context(), "lang", lang)
-	b.sessions.SetDeadline(r.Context(), time.Now().Add(10*time.Minute))
+	b.sessions.SetDeadline(r.Context(), time.Now().Add(refusalWindow))
 	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce))
-	b.brokerHandoff(w, r, address)
+	// A GET navigation may redirect across origins; only a form POST is bound
+	// by form-action on every hop, which the handoff page exists for.
+	http.Redirect(w, r, address, http.StatusSeeOther)
+}
+
+// refuse ends a sign-in that authenticated but has no membership. It shows no
+// error page and keeps no identity: the portal and upstream sessions end and the
+// browser returns to a fresh login. The reason is never revealed, so every
+// refusal looks the same. The refusal count survives to stop a loop.
+func (b *browser) refuse(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	refused, since := b.refusals(ctx)
+	if refused == 0 {
+		since = time.Now().Unix()
+	}
+	refused++
+	lang := b.sessions.GetString(ctx, "lang")
+	if err := b.sessions.RenewToken(ctx); err != nil {
+		b.render(w, r, 503, "unavailable", "", "")
+		return
+	}
+	if err := b.sessions.Clear(ctx); err != nil {
+		b.render(w, r, 503, "unavailable", "", "")
+		return
+	}
+	b.sessions.Put(ctx, "refused", refused)
+	b.sessions.Put(ctx, "refused_since", since)
+	b.sessions.Put(ctx, "lang", lang)
+	b.sessions.SetDeadline(ctx, time.Unix(since, 0).Add(refusalWindow))
+	if refused >= refusalLimit {
+		b.render(w, r, 403, "no-access", "", "")
+		return
+	}
+	http.Redirect(w, r, b.endSessionAddress(b.origin+b.visible("/portal/signed-out")), http.StatusSeeOther)
+}
+
+// endSessionAddress ends the upstream session, then returns to target, which the
+// upstream client must list as a post-logout address. Without upstream logout it
+// is target itself.
+func (b *browser) endSessionAddress(target string) string {
+	if b.foundation.endSession == "" {
+		return target
+	}
+	q := url.Values{"client_id": {b.foundation.endSessionClient}, "post_logout_redirect_uri": {target}}
+	return b.foundation.endSession + "?" + q.Encode()
+}
+
+// signedOut is where the upstream logout returns after a refusal: a fresh
+// sign-in, still counting refusals.
+func (b *browser) signedOut(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("lang") == "" && b.sessions.GetString(r.Context(), "lang") == "da" {
+		r = withLanguage(r, "da")
+	}
+	b.signIn(w, r)
+}
+
+// withLanguage returns a copy of r presenting lang, without granting anything.
+func withLanguage(r *http.Request, lang string) *http.Request {
+	urlCopy := *r.URL
+	q := urlCopy.Query()
+	q.Set("lang", lang)
+	urlCopy.RawQuery = q.Encode()
+	r = r.Clone(r.Context())
+	r.URL = &urlCopy
+	return r
 }
 
 // brokerHandoff starts native navigation for an internally constructed broker URL.
@@ -363,12 +450,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	// Recover presentation language from the durable attempt, never authority or
 	// a redirect destination. Errors retain the language the client chose.
 	if r.URL.Query().Get("lang") == "" && b.sessions.GetString(r.Context(), "lang") == "da" {
-		urlCopy := *r.URL
-		q := urlCopy.Query()
-		q.Set("lang", "da")
-		urlCopy.RawQuery = q.Encode()
-		r = r.Clone(r.Context())
-		r.URL = &urlCopy
+		r = withLanguage(r, "da")
 	}
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil || len(q["state"]) != 1 || len(q["code"]) != 1 || len(q["error"]) != 0 || q.Get("state") == "" || q.Get("code") == "" || len(q.Get("code")) > 4096 || len(q.Get("state")) > 128 {
@@ -411,10 +493,13 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 		p, err = b.foundation.completeProof(ctx, nonce, raw)
 	}
 	if err != nil {
-		if contactFlow {
+		switch {
+		case contactFlow:
 			b.contactVerificationFailure(w, r)
-		} else {
-			b.render(w, r, 400, "error", "", "")
+		case errors.Is(err, ErrDenied):
+			b.refuse(w, r)
+		default:
+			b.render(w, r, 503, "unavailable", "", "")
 		}
 		return
 	}
@@ -453,8 +538,10 @@ func (b *browser) principal(ctx context.Context) Principal {
 
 // home rechecks current membership before rendering the client's workspace.
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
-	client, role, allowed := b.browserMember(w, r)
-	if !allowed {
+	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
+	if err != nil {
+		// Opening the portal without a membership goes straight to the login.
+		b.signIn(w, r)
 		return
 	}
 	kind := "home"
@@ -484,13 +571,23 @@ func (b *browser) browserMember(w http.ResponseWriter, r *http.Request) (string,
 	return client, role, true
 }
 
-// logout durably destroys the session before redirecting to the local sign-in.
+// logout durably destroys the portal session.
+// It then ends the upstream session and lands on the public website. That is a
+// cross-origin step after a form POST, so a handoff page navigates instead.
 func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 	if err := b.sessions.Destroy(r.Context()); err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
-	http.Redirect(w, r, "/portal/sign-in?lang="+language(r), http.StatusSeeOther)
+	site := b.foundation.site
+	if site == "" {
+		site = b.origin
+	}
+	d := b.data(r, "sign-out-handoff", "", "")
+	d.BrokerURL = b.endSessionAddress(site + "/")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = b.templates().ExecuteTemplate(w, "portal.html", d)
 }
 
 type pageData struct {

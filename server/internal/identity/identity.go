@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -35,11 +36,17 @@ type Broker struct {
 }
 
 // Principal cannot be populated by callers. Only a verified broker proof creates
-// it; neither email nor token groups supplies membership or operator authority.
+// it. Email never supplies membership, and nothing in a token supplies operator
+// authority. workspace is set only from a verified token whose groups claim
+// names exactly one workspace; it can admit a first sign-in as that workspace's
+// client and is never kept in a session.
 type Principal struct {
-	issuer, subject, audience string
-	expires                   time.Time
+	issuer, subject, audience, workspace string
+	expires                              time.Time
 }
+
+// workspaceID is the workspace format the invite command also accepts.
+var workspaceID = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$`)
 
 // NewBroker discovers the configured HTTPS issuer through maintained OIDC code.
 // The caller supplies a bounded context and an HTTP client with timeouts.
@@ -79,7 +86,16 @@ func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, erro
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
+	// The broker maps an administrator-only upstream attribute to groups. Only a
+	// single well-formed value names a workspace; anything else names none.
+	var claims struct {
+		Groups []string `json:"groups"`
+	}
+	workspace := ""
+	if token.Claims(&claims) == nil && len(claims.Groups) == 1 && workspaceID.MatchString(claims.Groups[0]) {
+		workspace = claims.Groups[0]
+	}
+	return Principal{issuer: b.issuer, subject: token.Subject, audience: b.clientID, workspace: workspace, expires: token.Expiry}, nil
 }
 
 // verifiedToken retains the validated token for a purpose-specific claim consumer.
@@ -114,6 +130,22 @@ type Foundation struct {
 	// site is the public website's origin, linked from a portal at the root of
 	// its own host. A portal sharing the public host links to "/" instead.
 	site string
+	// endSession and endSessionClient name the upstream identity provider's
+	// RP-initiated logout, which the broker cannot do itself. Both are public.
+	endSession, endSessionClient string
+}
+
+// LinkUpstreamLogout names the upstream provider's end_session endpoint and the
+// broker's client there, so sign-out and a refused sign-in also end the upstream
+// session. Without it, the portal only ends its own session.
+func (s *Foundation) LinkUpstreamLogout(endpoint, client string) error {
+	u, err := url.Parse(endpoint)
+	if s == nil || err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.String() != endpoint ||
+		client == "" || len(client) > 256 || strings.ContainsAny(client, " \t\r\n") {
+		return ErrDenied
+	}
+	s.endSession, s.endSessionClient = endpoint, client
+	return nil
 }
 
 // New accepts the application's OpenFeature client; every operation defaults off.
@@ -149,7 +181,14 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 		return Attempt{}, ErrDenied
 	}
 	a := Attempt{secret(), secret(), secret(), secret() + secret()}
-	_, err := s.pool.Exec(ctx, `INSERT INTO portal_login_attempts(state_digest,browser_digest,nonce,pkce_verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes')`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier)
+	// Opening the portal starts an attempt, so each one also removes a bounded
+	// batch of expired attempts; abandoned ones cannot accumulate.
+	_, err := s.pool.Exec(ctx, `WITH expired AS (SELECT state_digest FROM portal_login_attempts WHERE expires_at<now() LIMIT 50)
+ DELETE FROM portal_login_attempts a USING expired WHERE a.state_digest=expired.state_digest`)
+	if err != nil {
+		return Attempt{}, fmt.Errorf("remove expired login attempts: %w", err)
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO portal_login_attempts(state_digest,browser_digest,nonce,pkce_verifier,expires_at) VALUES($1,$2,$3,$4,now()+interval '10 minutes')`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier)
 	if err != nil {
 		return Attempt{}, fmt.Errorf("persist login attempt: %w", err)
 	}
@@ -192,6 +231,38 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit invitation: %w", err)
+	}
+	return nil
+}
+
+// admit creates a client membership for an identity whose verified token names
+// exactly one workspace. That claim comes from an upstream attribute only an
+// administrator can set. It never grants operator, never changes an existing or
+// revoked membership, and concurrent first sign-ins create one membership.
+func (s *Foundation) admit(ctx context.Context, p Principal) error {
+	if p.workspace == "" || !workspaceID.MatchString(p.workspace) {
+		return ErrDenied
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin admission: %w", err)
+	}
+	defer func() {
+		// Commit decides success; a committed transaction is already closed.
+		_ = tx.Rollback(ctx)
+	}()
+	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
+		return err
+	}
+	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,'client') ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, p.workspace)
+	if err != nil {
+		return fmt.Errorf("create membership: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit admission: %w", err)
 	}
 	return nil
 }
@@ -247,11 +318,17 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	}
 	// A current member signs straight in. An identity without membership accepts
 	// its own pending invitation, which was bound to this exact issuer/subject
-	// when it was created; anyone else has nothing to accept and is refused.
+	// when it was created. Without one, a token naming exactly one workspace
+	// admits it as that workspace's client. Anyone else is refused.
 	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
-		if err = s.redeem(ctx, p); err != nil {
+		if err = s.redeem(ctx, p); errors.Is(err, ErrDenied) && p.workspace != "" {
+			err = s.admit(ctx, p)
+		}
+		if err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
+		// Current membership decides, including one a concurrent first sign-in of
+		// the same identity has just created; a revoked membership still refuses.
 		_, _, err = s.membership(ctx, p)
 	}
 	if err != nil {

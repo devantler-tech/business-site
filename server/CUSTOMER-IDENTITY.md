@@ -254,8 +254,8 @@ policy. The selected ZITADEL Login V1 requires address verification before compl
 authentication, including after an email change. Keep that native lifecycle in
 acceptance tests; do not pre-verify an invited user's address administratively.
 
-Ordinary portal sign-in requests only `openid` and authorizes current, explicitly
-invited issuer/subject membership, not email. It neither collects nor confirms the
+Ordinary portal sign-in requests `openid groups` and authorizes current issuer/subject
+membership, never email. It neither collects nor confirms the
 saved contact address. The separate purpose-bound contact-confirmation flow requires
 the signed boolean `email_verified=true` and the exact saved address/revision. A
 missing, malformed or false claim is refused there. UserInfo can reflect an email
@@ -267,21 +267,48 @@ Dex sends S256 to ZITADEL; the confidential upstream client
 has no documented setting that guarantees rejecting an omitted challenge. Do not
 claim that rejection without proof. The downstream Dex policy requires S256.
 
-An upstream account grants no portal membership. Trusted portal provisioning must
-invite the actual verified Dex issuer/subject into its intended workspace, never
-derive identity from email or use the upstream ZITADEL subject directly. Preserve
+An upstream account grants a portal membership only in two ways, never from email:
+a pending `--portal-invite` invitation bound to its exact Dex issuer/subject, or,
+without one, the ZITADEL user attribute `portal_workspace`, which only an administrator
+can set. ZITADEL puts it in UserInfo and customer Dex maps it to `groups`; the portal
+reads `groups` from Dex's verified ID token only. Exactly one value in the workspace
+format admits the first sign-in as that workspace's client. It never grants operator,
+never changes an existing membership and never revives a revoked one; anything else
+names no workspace. Never use the upstream ZITADEL subject directly. Preserve
 the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
-Portal logout destroys its local session, not all upstream SSO sessions. Upstream
+Opening the portal without a session goes straight to the login; there is no portal page
+first. A sign-in that authenticates without an invitation or membership is refused
+without an error page: the portal session and, with the upstream logout configured, the
+ZITADEL session end, and the browser returns to a fresh login. Every refusal looks the
+same. After three refusals within ten minutes the browser sees one static invitation-only
+page instead, so a lasting upstream session cannot cause a redirect loop. Sign-out ends
+the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
 Google, Microsoft, Apple and GitHub remain unconfigured.
 
 ## Invite a customer
 
-Invitations need the web pod's portal settings with the production identity
-profile and an enabled flag (see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
+From any browser, as an administrator of the Customers organization in the ZITADEL
+console at `https://accounts.devantler.tech`:
+
+1. Create the customer as a human user with their email address, unverified, and
+   let ZITADEL send its invitation mail, where they set their password and MFA.
+2. On the user, add the metadata `portal_workspace` with their workspace ID
+   (lowercase letters, digits and hyphens, for example `acme`).
+
+Their first sign-in at `https://portal.devantler.tech` then creates their client
+membership. Changing or removing the attribute later changes nothing for an
+existing member; revoke the membership to remove access.
+
+### Invite an operator or bind an exact identity
+
+The one-shot command below binds an invitation, including an operator one, to an
+exact Dex identity, and wins over `portal_workspace`. Invitations need the web
+pod's portal settings with the production identity profile and an enabled flag
+(see [the settings file](../deploy/README.md#portal-settings-and-invitations)).
 
 1. In the ZITADEL console at `https://accounts.devantler.tech`, create the
    customer as a human user with their email address, unverified, and let

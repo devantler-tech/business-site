@@ -61,8 +61,12 @@ func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid"+route, nil))
 			want := 200
-			if strings.HasPrefix(route, "/portal") && tc.state != "true" {
-				want = 404
+			if strings.HasPrefix(route, "/portal") {
+				// Enabled sign-in redirects straight to the broker.
+				want = http.StatusSeeOther
+				if tc.state != "true" {
+					want = 404
+				}
 			}
 			if w.Code != want {
 				t.Fatalf("state=%s route=%s status=%d want=%d", tc.state, route, w.Code, want)
@@ -112,8 +116,8 @@ func TestBrowserPresentationAssets(t *testing.T) {
 	}
 }
 
-// TestBrowserSignInPage checks rendered native forms and their security headers
-// in both supported languages, without bypassing TLS or CSRF handling.
+// TestBrowserSignInPage checks that sign-in redirects straight to the broker in
+// both supported languages, with the portal's security headers, over real TLS.
 func TestBrowserSignInPage(t *testing.T) {
 	f := fixtureBroker(t)
 	svc := enabled(t, fixtureDB(t), f)
@@ -121,8 +125,10 @@ func TestBrowserSignInPage(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	defer srv.Close()
 	handler = browserHandler(t, svc, srv.URL+"/portal/callback")
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	for _, language := range []string{"en", "da"} {
-		res, err := srv.Client().Get(srv.URL + "/portal/sign-in?lang=" + language)
+		res, err := client.Get(srv.URL + "/portal/sign-in?lang=" + language)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -133,17 +139,12 @@ func TestBrowserSignInPage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("sign-in page status=%d want 200; body=%s", res.StatusCode, body)
+		if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), f.broker.endpoint.AuthURL+"?") {
+			t.Fatalf("sign-in did not redirect straight to the broker: status=%d location=%s", res.StatusCode, res.Header.Get("Location"))
 		}
-		for _, want := range []string{`lang="` + language + `"`, `name="csrf_token"`, `method="post"`} {
-			if !strings.Contains(string(body), want) {
-				t.Errorf("sign-in page missing %s", want)
-			}
-		}
-		// The invitation is bound to the identity; there is no code to type.
-		if strings.Contains(string(body), `name="invitation"`) {
-			t.Error("sign-in page still asks for an invitation code")
+		// There is no portal page before the login, so no form and no invitation code.
+		if strings.Contains(string(body), "<form") || strings.Contains(string(body), `name="invitation"`) {
+			t.Error("sign-in still renders a portal form")
 		}
 		if res.Header.Get("Cache-Control") != "no-store" {
 			t.Error("identity page may be cached")

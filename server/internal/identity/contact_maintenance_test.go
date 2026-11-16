@@ -275,7 +275,7 @@ func maintenanceBodyReferences(name string, task bool) []string {
 // are different states, not duplicate evidence. Contact has explicit assertions.
 var maintenanceCases = map[string][]string{
 	"contact.html":  maintenanceContactViews[:],
-	"portal.html":   {"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"},
+	"portal.html":   {"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"},
 	"requests.html": {"website-new", "website-invalid", "website-receipt", "website-shared", "app-new", "app-invalid", "app-receipt", "app-shared", "service-new", "service-invalid", "service-receipt", "service-shared", "empty-list", "populated-list", "conflict", "review", "acceptance-conflict", "accepted-current", "accepted-historical"},
 	"triage.html":   {"empty-inbox", "populated-inbox", "paginated-inbox", "website-detail", "app-detail", "service-detail", "empty-drafts", "history", "full", "hostile", "sharing", "withdrawal"},
 }
@@ -641,7 +641,7 @@ func maintenanceMainDigest(markup string, draftKey bool) (string, error) {
 // maintenance task under test. See CONTACT-MAINTENANCE.md for its provenance.
 var maintenanceReferenceDigests = map[string][]string{
 	"portal.html": {
-		"8acc681fda2700113e240b862a0d40cec3f4e8ec52fc1f51919ffa1399520d42",
+		"dbff2e643aa16b9d87f0bd49f17922e778b143af094d6495c48b26aebc313eae",
 		"37bee4a39a255dec1eae234ecb6dd440a06c29825c104fb10da6f7687e972019",
 		"3df2a16aa47778d274dc3a73ddc32a699f711f5378ec14134997ce1ca7e082ce",
 		"2f161d4da9df4f25e45f0367fe5914a94cfde60eb2b49158cd74491e06bc13d3",
@@ -653,7 +653,7 @@ var maintenanceReferenceDigests = map[string][]string{
 		"5d19e77d7c5399566bf5afad843ef5fe357cdfa1bec32a4f7e1c51dc799973ca",
 		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
 		"3163a4456c9995b01518313d80843cc3609e1ade45b637196e898caa7136ad1b",
-		"dd26326cd3b0b92c2c2b7085e7a5f6d62f0e5361f7d5d53cf35a25d799ab9b22",
+		"779ec71c239dfb3bff6cfcf7a6dd2e265c7b4fbc5ed69968a8cd066930a0a640",
 		"717acfefd67649d54421e4180e227277389a5c2cc1bf43fb392f2537422b49b0",
 		"49ed961f44a9e595bcee42da5dab29fb20fe60efedfd29abbdc4380eedcbd626",
 		"d9800ef8bd6df7044ae622a1725d3e4fcd971770795b4fc47a73be549f54fcf4",

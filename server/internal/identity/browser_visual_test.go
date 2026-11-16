@@ -4,7 +4,6 @@ package identity
 
 import (
 	"fmt"
-	"html"
 	"io"
 	"net"
 	"net/http"
@@ -81,7 +80,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && (r.URL.Path == "/portal/sign-in" || r.URL.Path == "/portal/contact/verify") {
 			b.mu.Lock()
-			b.expectedScope = "openid"
+			b.expectedScope = "openid groups"
 			if r.URL.Path == "/portal/contact/verify" {
 				b.expectedScope = "openid email"
 			}
@@ -172,7 +171,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 	t.Cleanup(func() { _ = server.Close() })
 	go func() { _ = server.Serve(listener) }()
 	if !t.Run("ConcurrentPageLoads", func(t *testing.T) {
-		client := &http.Client{Timeout: 5 * time.Second}
+		client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		for i := range 8 {
 			t.Run(fmt.Sprint(i), func(t *testing.T) {
 				t.Parallel()
@@ -184,8 +183,8 @@ func TestBrowserVisualFixture(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if res.StatusCode != http.StatusOK {
-					t.Errorf("synthetic sign-in status = %d; want 200", res.StatusCode)
+				if res.StatusCode != http.StatusSeeOther {
+					t.Errorf("synthetic sign-in status = %d; want 303 to the broker", res.StatusCode)
 				}
 				if _, err := io.Copy(io.Discard, res.Body); err != nil {
 					t.Error(err)
@@ -199,7 +198,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		return
 	}
 	if !t.Run("PreparedOperatorSignIn", func(t *testing.T) {
-		b.finish(b.start(""))
+		b.finish(b.start())
 		status, body, _ := b.request("GET", "/portal/?lang=en", nil, "")
 		if status != http.StatusOK || !strings.Contains(body, "fictional-operator") {
 			t.Fatal("prepared operator cannot sign in to its own workspace")
