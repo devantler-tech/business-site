@@ -17,7 +17,7 @@ const currentRuntimeCI = workflow => {
   return packages.length === 1 && [workflow.env, runtimeJob(workflow)?.env, packages[0].env]
     .every(env => presentation.every(flag => !Object.hasOwn(env ?? {}, flag)));
 };
-const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' && state.FEATURE_PORTAL_PRIVACY === 'false' &&
+const current = state => state.FEATURE_COMPANY_IDENTITY === 'true' && state.FEATURE_OFFER_COPY === 'false' && state.FEATURE_PORTAL_PRIVACY === 'true' &&
   !Object.hasOwn(state, 'FEATURE_VAT_PRICES') && !Object.hasOwn(state, 'FEATURE_CUSTOMER_SCOPE');
 const packagerSource = readFileSync('scripts/package-runtime.sh', 'utf8');
 /** Run the actual (or a changed) packager; the build double records every FEATURE_ setting it receives. */
@@ -150,8 +150,9 @@ for (const [mode, from, to] of [
   ['offer removed', ' "FEATURE_OFFER_COPY=false"', ''],
   ['revised offer', '"FEATURE_OFFER_COPY=false"', '"FEATURE_OFFER_COPY=true"'],
   ['ambiguous offer', '"FEATURE_OFFER_COPY=false"', '"FEATURE_OFFER_COPY=ambiguous"'],
-  ['portal privacy unpinned', ' "FEATURE_PORTAL_PRIVACY=false"', ''],
-  ['portal privacy released', '"FEATURE_PORTAL_PRIVACY=false"', '"FEATURE_PORTAL_PRIVACY=true"'],
+  ['portal privacy unpinned', ' "FEATURE_PORTAL_PRIVACY=true"', ''],
+  ['portal privacy withdrawn', '"FEATURE_PORTAL_PRIVACY=true"', '"FEATURE_PORTAL_PRIVACY=false"'],
+  ['ambiguous portal privacy', '"FEATURE_PORTAL_PRIVACY=true"', '"FEATURE_PORTAL_PRIVACY=ambiguous"'],
   ['legacy VAT', production, `${production} "FEATURE_VAT_PRICES=false"`],
   ['stale audience', production, `${production} "FEATURE_CUSTOMER_SCOPE=false"`],
 ]) {
