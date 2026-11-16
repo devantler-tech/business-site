@@ -13,7 +13,7 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 10, "resource count");
+  assert.equal(docs.length, 11, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
@@ -160,6 +160,39 @@ export function validateTenantPackage(input) {
             },
             { name: "tmp", emptyDir: { medium: "Memory", sizeLimit: "1Mi" } },
           ],
+        },
+      },
+    },
+  });
+  // The one retention CronJob runs this release's image once a day with only
+  // the purge and the migration Job's Secret, label and pod hardening.
+  const job = docs.find((d) => d?.kind === "Job");
+  assert.deepEqual(docs.find((d) => d?.kind === "CronJob"), {
+    apiVersion: "batch/v1",
+    kind: "CronJob",
+    metadata: { name: "business-site-portal-retention", namespace: "business-site" },
+    spec: {
+      schedule: "17 3 * * *",
+      timeZone: "Europe/Copenhagen",
+      concurrencyPolicy: "Forbid",
+      startingDeadlineSeconds: 3600,
+      successfulJobsHistoryLimit: 1,
+      failedJobsHistoryLimit: 3,
+      jobTemplate: {
+        spec: {
+          backoffLimit: 0,
+          activeDeadlineSeconds: 300,
+          template: {
+            metadata: { labels: { "app.kubernetes.io/name": "business-site-portal-migration", "app.kubernetes.io/component": "retention-purge" } },
+            spec: {
+              ...job.spec.template.spec,
+              containers: [{
+                ...job.spec.template.spec.containers[0],
+                name: "purge",
+                args: ["--retention-purge", "--migration-database-projection", "/run/portal-migration/database-url"],
+              }],
+            },
+          },
         },
       },
     },

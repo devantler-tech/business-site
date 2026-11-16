@@ -4,13 +4,15 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { request } from "node:http";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import * as yaml from "js-yaml";
 import { validateTenantPackage } from "./check-tenant-package.mjs";
 import { containerGroupDisclosureFixture, runtimeSecretFixture } from "./runtime-disclosure-fixture.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const spec = validateTenantPackage(execFileSync("kubectl", ["kustomize", `${root}/deploy`], {
+const rendered = execFileSync("kubectl", ["kustomize", `${root}/deploy`], {
   encoding: "utf8", timeout: 15000,
-}));
+});
+const spec = validateTenantPackage(rendered);
 // CI substitutes its newly built production image, just as the later verified
 // publisher pins a new digest. With no argument, exercise the committed digest.
 const image = process.argv[2] ?? spec.image;
@@ -55,6 +57,21 @@ test("rendered package arguments fail closed without the required disclosure", (
     assert.equal(result.status, 1);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "company disclosure projection is unavailable\n");
+  }
+});
+
+// The migration Job and the retention CronJob run this same image. With no Secret
+// mounted, each must fail on its missing connection, not on its arguments: the
+// image accepts exactly the arguments the package gives it.
+test("the image accepts the migration Job's and retention CronJob's arguments", () => {
+  const docs = yaml.loadAll(rendered);
+  const job = docs.find((d) => d?.kind === "Job").spec.template.spec.containers[0].args;
+  const cron = docs.find((d) => d?.kind === "CronJob").spec.jobTemplate.spec.template.spec.containers[0].args;
+  for (const [args, failure] of [[job, "portal schema migration failed\n"], [cron, "portal retention purge failed\n"]]) {
+    const result = spawnSync("docker", ["run", "--rm", "--network=none", ...restrictions, image, ...args], { encoding: "utf8", timeout: 30000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout + result.stderr, failure, args.join(" "));
   }
 });
 
