@@ -190,7 +190,6 @@
   .contact-band { background: var(--contact); border-top: 1px solid var(--line); padding-block: 4.5rem; }
   .contact-band h2 { max-width: 700px; }
   .contact-band p { max-width: 650px; margin-top: 1.3rem; }
-  .contact-band .button { margin-top: 1.6rem; }
   .contact-band .contact-note { font-size: .75rem; max-width: 700px; }
   .client-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 2rem; max-width: 700px; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
   .client-access h3 { font-size: 1.1rem; }
