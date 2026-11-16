@@ -280,6 +280,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
+	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
 	}

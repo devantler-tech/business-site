@@ -227,7 +227,13 @@ func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
 
 // workspaces lists every workspace with its members, revoked ones included.
 func (b *browser) workspaces(ctx context.Context) (any, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT client_id,subject,role,revoked FROM portal_memberships ORDER BY client_id,role,subject LIMIT $1`, operatorListLimit+1)
+	rows, err := b.foundation.pool.Query(ctx, `WITH inventory AS (
+ SELECT id FROM portal_workspaces
+ UNION SELECT client_id FROM portal_memberships WHERE issuer=$1
+ UNION SELECT client_id FROM portal_invitations WHERE issuer=$1)
+ SELECT i.id,COALESCE(m.subject,''),COALESCE(m.role,''),COALESCE(m.revoked,false)
+ FROM inventory i LEFT JOIN portal_memberships m ON m.client_id=i.id AND m.issuer=$1
+ ORDER BY i.id,m.role,m.subject LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list workspaces: %w", err)
 	}
@@ -241,9 +247,11 @@ func (b *browser) workspaces(ctx context.Context) (any, error) {
 			return errors.New("membership inventory exceeds response limit")
 		}
 		if len(views) == 0 || views[len(views)-1].ID != id {
-			views = append(views, workspaceView{ID: id})
+			views = append(views, workspaceView{ID: id, Members: []workspaceMember{}})
 		}
-		views[len(views)-1].Members = append(views[len(views)-1].Members, m)
+		if m.Subject != "" {
+			views[len(views)-1].Members = append(views[len(views)-1].Members, m)
+		}
 		return nil
 	})
 	if err != nil {

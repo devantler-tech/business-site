@@ -61,3 +61,20 @@ func TestDexConnectorReadsOnlyDexSubjects(t *testing.T) {
 		}
 	}
 }
+
+// TestDexUserBindsProviderIdentity catches a provider action sent to the wrong
+// upstream user or to a subject from another connector.
+func TestDexUserBindsProviderIdentity(t *testing.T) {
+	for _, tc := range []struct{ subject, connector, want string }{
+		{"ChIzNDU2Nzg5MDEyMzQ1Njc4OTASEGN1c3RvbWVyLXppdGFkZWw", ZitadelConnectorID, "345678901234567890"},
+		{"ChIzNDU2Nzg5MDEyMzQ1Njc4OTASEGN1c3RvbWVyLXppdGFkZWw", PlatformConnectorID, ""},
+		{DexSubject("user", PlatformConnectorID), ZitadelConnectorID, ""},
+		{DexSubject("user", ZitadelConnectorID) + "A", ZitadelConnectorID, ""},
+		{"operator-subject", ZitadelConnectorID, ""},
+		{DexSubject("", ZitadelConnectorID), ZitadelConnectorID, ""},
+	} {
+		if got := DexUser(tc.subject, tc.connector); got != tc.want {
+			t.Errorf("DexUser(%q,%q)=%q want %q", tc.subject, tc.connector, got, tc.want)
+		}
+	}
+}

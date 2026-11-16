@@ -14,7 +14,7 @@ func TestWorkspaceMigrationPreservesExistingCustomers(t *testing.T) {
  VALUES(repeat('a',32)::bytea,'https://fixture.example.invalid','invited-customer','invited-workspace','client',now()+interval '1 day')`); err != nil {
 		t.Fatal("prepare previous schema", err)
 	}
-	if err := Migrate(t.Context(), migrator); err != nil {
+	if err := MigrateWithRuntimeRole(t.Context(), migrator, "portal_runtime"); err != nil {
 		t.Fatal("upgrade workspaces", err)
 	}
 	var count int

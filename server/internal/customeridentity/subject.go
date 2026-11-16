@@ -57,3 +57,13 @@ func DexConnector(subject string) string {
 	}
 	return values[1]
 }
+
+// DexUser returns the upstream user only for the expected, canonical connector.
+func DexUser(subject, connector string) string {
+	if connector == "" || DexConnector(subject) != connector {
+		return ""
+	}
+	raw, _ := base64.RawURLEncoding.Strict().DecodeString(subject)
+	length, read := binary.Uvarint(raw[1:])
+	return string(raw[1+read : 1+read+int(length)])
+}
