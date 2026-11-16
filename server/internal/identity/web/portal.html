@@ -32,9 +32,7 @@
 
 {{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech</footer>
 <script src="{{root}}/assets/portal.js" defer></script>
-</body></html>{{end}}
-
-{{define "operator-management"}}
+</body></html>{{end}}{{define "operator-management"}}
 <h2>{{if eq .Lang `da`}}Kunder og arbejdsområder{{else}}Customers and workspaces{{end}}</h2>
 <p><a href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{if eq .Lang `da`}}Inviter en kunde{{else}}Invite a customer{{end}}</a></p>
 <h3>{{if eq .Lang `da`}}Afventende invitationer{{else}}Pending invitations{{end}}</h3>

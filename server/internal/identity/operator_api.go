@@ -93,10 +93,10 @@ func (s *Foundation) audit(ctx context.Context, p Principal, kind, action, targe
 	return nil
 }
 
-// operatorCall authorizes, runs and records one operator action. Only a current
-// operator membership runs it. Every call by a signed-in identity writes one
-// audit row before it is answered, refusals included, and a call that cannot be
-// recorded fails. A browser without a session has no one to record and gets 401.
+// operatorCall authorizes, runs and records one operator action. A current human
+// operator or an explicitly permitted machine identity runs it. Refusals are
+// recorded, and writes require an immutable audit attempt before any effects.
+// A browser without a session has no one to record and gets 401.
 // The action buffers its complete response before the final authority checks.
 func (b *browser) operatorCall(r *http.Request, action string, run func(context.Context, string) ([]byte, error)) (int, []byte) {
 	ctx := r.Context()

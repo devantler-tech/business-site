@@ -2,12 +2,31 @@ package identity
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestOperatorAuditBoundsLongRecordIdentifiers(t *testing.T) {
+	original := operatorRoutes
+	operatorRoutes = append(append([]operatorRoute{}, original...), operatorRoute{"GET", "/test-target", "audit.target", func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
+		setOperatorTarget(ctx, strings.Repeat("synthetic-record-", 32))
+		return true, nil
+	}})
+	t.Cleanup(func() { operatorRoutes = original })
+	b := newOperatorBrowserFixture(t)
+	status, _, _ := b.request("GET", operatorAPIRoot+"/test-target", nil, "")
+	var target string
+	if err := b.pool.QueryRow(t.Context(), `SELECT target FROM portal_operator_audit WHERE action='audit.target'`).Scan(&target); err != nil {
+		t.Fatal("bounded audit target was not persisted", status)
+	}
+	if status != http.StatusOK || len(target) > 200 || !strings.HasPrefix(target, "sha256:") {
+		t.Fatalf("long validated target prevented audit completion: status=%d bytes=%d", status, len(target))
+	}
+}
 
 func newOperatorBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()

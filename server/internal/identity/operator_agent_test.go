@@ -264,7 +264,7 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status != http.StatusServiceUnavailable || providerCalls.Load() != 0 || effects != 0 {
-		t.Fatalf("unrecordable action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
+		t.Fatalf("unrecorded action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
 	}
 	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
 		t.Fatal(err)

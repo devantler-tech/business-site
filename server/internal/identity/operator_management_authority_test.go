@@ -104,7 +104,7 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status != http.StatusServiceUnavailable || revoked || calls.Load() != 0 {
-		t.Fatal("unrecordable deactivation changed customer access", status, revoked, calls.Load())
+		t.Fatal("unrecorded deactivation changed customer access", status, revoked, calls.Load())
 	}
 	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
 		t.Fatal(err)

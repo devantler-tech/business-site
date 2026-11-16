@@ -259,8 +259,8 @@ func (s *Foundation) Begin(ctx context.Context) (Attempt, error) {
 }
 
 // Invite is a CONTROL-PLANE provisioning operation, not a client-facing handler.
-// Its caller must be a trusted provisioning process. A future network invitation
-// API requires independent operator authentication, authorization and CSRF checks.
+// Its caller must be a trusted provisioning process. The operator API uses the
+// caller-bound private variant after its authentication, authorization and CSRF checks.
 // The invitation is bound to one exact issuer/subject; that identity accepts it
 // by signing in before it expires. Nothing secret is handed to the customer: the
 // row key is a random digest that is never shown.

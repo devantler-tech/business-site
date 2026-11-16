@@ -87,6 +87,11 @@ the body references were not touched. This is the single exception to the rule
 below. Any later frame change needs its own reviewed record here.
 
 The original tables remain unchanged apart from removing the retired entries.
+The four ordinary operator landing documents now use an independently authored
+complete main-document expectation in `operator_reference_test.go`, including
+the invitation, customer-management and audit links and the optional request
+inbox. The other twenty portal bodies and all historical task references remain
+unchanged. Missing, incomplete or altered ordinary references fail closed.
 The separate ordinary invoice table (recorded from signed snapshot
 `90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
 retired invoice and credit bodies, so it was removed with them; triage now uses

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -144,6 +145,11 @@ func (b *browser) operatorMutationAllowed(ctx context.Context, query privateResp
 // single audit row. Request fields can never set the actor, kind or action grant.
 func setOperatorTarget(ctx context.Context, target string) {
 	if bound, ok := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority); ok {
+		// Provider subjects can exceed the audit column's 200-character bound.
+		// Preserve an exact fingerprint rather than truncate or fail after effects.
+		if len(target) > 200 {
+			target = "sha256:" + hex.EncodeToString(digest(target))
+		}
 		bound.target = target
 	}
 }
