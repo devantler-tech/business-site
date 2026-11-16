@@ -154,8 +154,9 @@ production-template packager explicitly enables the footer, email route and requ
 whose address the runtime reads from its private projected file.
 The same release enables the EN/DA privacy notice and customer terms (`/privacy/`, `/terms/`),
 whose copy lives in `src/components/business/legal-copy.ts`. The privacy notice's portal
-section stays behind the default-off `FEATURE_PORTAL_PRIVACY` until the portal is activated;
-the activation flips its `false` pin in `scripts/package-runtime.sh` and
+section stays behind the default-off `FEATURE_PORTAL_PRIVACY`, and the standard add-ons list on the
+home page behind the default-off `FEATURE_ADDONS`, until the portal is activated;
+the activation flips their `false` pins in `scripts/package-runtime.sh` and
 `scripts/vat-activation.test.mjs`. They link to the address rather
 than repeat it. Change them with any change to hosting, providers, retention, prices or terms
 (#19); never call the business compliant.
