@@ -95,6 +95,21 @@ func TestAddonsOrderAndInvoice(t *testing.T) {
 	if status, _, _ := b.request("POST", path, changed, b.site.URL); status != 409 {
 		t.Fatalf("a retry with other add-ons was admitted: %d", status)
 	}
+	// A later catalogue price leaves the order and its retry as they were.
+	saved := offerings.Addons
+	t.Cleanup(func() { offerings.Addons = saved })
+	offered := slices.Clone(saved)
+	for i := range offered {
+		if offered[i].ID == "contact-form" {
+			offered[i].Price = 2000
+		}
+	}
+	offered = slices.DeleteFunc(offered, func(a addonOffer) bool { return a.ID == "statistics" })
+	offerings.Addons = offered
+	if status, _, _ := b.request("POST", path, f, b.site.URL); status != 303 {
+		t.Fatalf("a retry after a catalogue change was refused: %d", status)
+	}
+	offerings.Addons = saved
 	var oneTime, monthly int64
 	var addons int
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT o.one_time_minor,o.monthly_minor,(SELECT count(*) FROM portal_order_addons a WHERE a.order_id=o.id) FROM portal_orders o`).Scan(&oneTime, &monthly, &addons); err != nil || oneTime != 749500 || monthly != 17400 || addons != 3 {
@@ -153,6 +168,22 @@ func TestAddonsCardPaymentAndLaunchDiscount(t *testing.T) {
 			if s.Get("line_items[0][price_data][unit_amount]") != "30000" || s.Get("line_items[1][price_data][unit_amount]") != "10000" || s.Get("line_items[1][price_data][product_data][name]") != "Email sending (monthly)" {
 				t.Fatalf("monthly lines: %v", s)
 			}
+		}
+	}
+}
+
+// TestAddonInvalidChoiceIsKept keeps an impossible add-on choice ticked with
+// its reason and offers no order until the client corrects it.
+func TestAddonInvalidChoiceIsKept(t *testing.T) {
+	b := billingFixture(t)
+	query := url.Values{"lang": {"en"}, "addon": {"priority", "express", "seo"}}
+	status, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?"+query.Encode(), nil, "")
+	if status != 200 || !strings.Contains(body, "That combination of add-ons is not possible.") || strings.Contains(body, ">Order with obligation to pay</button>") {
+		t.Fatal("an impossible add-on choice was not explained, or still offered an order")
+	}
+	for _, id := range []string{"priority", "express", "seo"} {
+		if !strings.Contains(body, `value="`+id+`" checked`) {
+			t.Errorf("the choice of %s was cleared", id)
 		}
 	}
 }
