@@ -42,18 +42,23 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 	}
 	for _, table := range []string{"portal_memberships", "portal_membership_transitions", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 		"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
-		"portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_orders", "portal_numina_contacts"} {
+		"portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_orders", "portal_numina_contacts", "portal_request_closures"} {
 		var left int
 		if err := migrator.QueryRow(ctx, "SELECT count(*) FROM public."+table+" WHERE client_id=$1", client).Scan(&left); err != nil || left != 0 {
 			t.Errorf("%s kept %d of the former client's records: %v", table, left, err)
 		}
 	}
 	for _, table := range []string{"portal_order_charges", "portal_card_checkouts", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals",
-		"portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries"} {
+		"portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_order_addons", "portal_addon_ends", "portal_addon_removals"} {
 		var left int
 		if err := migrator.QueryRow(ctx, "SELECT count(*) FROM public."+table).Scan(&left); err != nil || left != 0 {
 			t.Errorf("%s kept %d of the former client's order records: %v", table, left, err)
 		}
+	}
+	// The launch place stays taken, without who took it.
+	var places int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FROM portal_launch_places WHERE client_id IS NULL AND order_id IS NULL`).Scan(&places); err != nil || places != 1 {
+		t.Errorf("the former client's launch place was not kept anonymously: %d %v", places, err)
 	}
 	var others, operators, events int
 	if err := migrator.QueryRow(ctx, `SELECT (SELECT count(*) FROM portal_memberships WHERE client_id='reset-contact-client' AND NOT revoked)+(SELECT count(*) FROM portal_contacts WHERE client_id='reset-contact-client'),

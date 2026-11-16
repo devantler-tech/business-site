@@ -225,14 +225,24 @@ func billingFixture(t *testing.T) *browserFixture {
 	return b
 }
 
-// orderForm reads the receipt's own order form.
-func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
+// orderFormFields reads the receipt and its order form's acceptance and CSRF token.
+func orderFormFields(t *testing.T, b *browserFixture, lang string) (url.Values, string) {
 	t.Helper()
 	status, body, _ := b.request("GET", "/portal/requests/"+proposalRequestID+"?lang="+lang, nil, "")
 	acceptance := regexp.MustCompile(`name="acceptance" value="([A-Z2-7]{26})"`).FindStringSubmatch(body)
 	csrf := csrfInput.FindStringSubmatch(body)
-	if status != 200 || len(acceptance) != 2 || len(csrf) != 2 || !strings.Contains(body, `value="invoice" checked`) {
+	if status != 200 || len(acceptance) != 2 || len(csrf) != 2 {
 		t.Fatalf("receipt has no order form: %d", status)
+	}
+	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}}, body
+}
+
+// orderForm reads the receipt's own order form.
+func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
+	t.Helper()
+	f, body := orderFormFields(t, b, lang)
+	if !strings.Contains(body, `value="invoice" checked`) {
+		t.Fatal("receipt has no invoice path")
 	}
 	// The Consumer Contracts Act, section 12: the price comes just before a
 	// button that says the order obliges the client to pay.
@@ -241,7 +251,8 @@ func orderForm(t *testing.T, b *browserFixture, lang string) url.Values {
 	if summary, label := strings.Index(form, "2995 DKK"), strings.Index(form, ">"+button+"</button>"); !found || summary < 0 || label < summary || !strings.Contains(form[summary:label], "99 DKK") {
 		t.Fatalf("%s order form lacks its price summary before the %q button", lang, button)
 	}
-	return url.Values{"csrf_token": {html.UnescapeString(csrf[1])}, "lang": {lang}, "acceptance": {acceptance[1]}, "collection": {"invoice"}}
+	f.Set("collection", "invoice")
+	return f
 }
 
 // placeInvoiceOrder submits the receipt's own order form for the invoice path.

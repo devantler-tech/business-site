@@ -57,8 +57,8 @@ HTML documents; shared data, scripts and unrelated routes must never carry it. L
 fictional addresses. `PUBLIC_CONTENT_PROFILE=production-template` retains the existing Go runtime's
 escaped address placeholders. Invalid profiles fail. Revised-offer copy remains separately gated.
 
-`FEATURE_ADDON_TERMS` is an independent server-only, default-off build setting for the
-English/Danish add-on terms. Ordinary and production-template runtime packages pin it off,
+`FEATURE_ADDONS` is the server-only, default-off build setting shared by the add-on
+listing and its English/Danish terms. Ordinary and production-template runtime packages pin it off,
 including when the invoking environment enables it. Preview builds may set it to `true`.
 Coordinated add-on activation and live bilingual verification precede its retirement in
 [#632](https://github.com/devantler-tech/business-site/issues/632).

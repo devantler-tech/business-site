@@ -20,7 +20,7 @@ const links = node => walk(node).filter(item => item.tagName === "a").map(item =
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
 const portalPrivacy = process.env.FEATURE_PORTAL_PRIVACY === "true";
-const addonTerms = process.env.FEATURE_ADDON_TERMS === "true";
+const addonTerms = process.env.FEATURE_ADDONS === "true";
 /** The published phone number, or "" until the business adds one to company.json. */
 const companyPhone = JSON.parse(readFileSync(new URL("../../src/data/company.json", import.meta.url), "utf8")).phone?.trim() ?? "";
 
@@ -108,7 +108,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       }
       if (kind === "terms") {
         for (const phrase of locale === "da" ? ["Ønsker og tilvalg", "mål, ikke garantier"] : ["Feature requests and add-ons", "targets, not guarantees"]) {
-          assert.equal(text(main).includes(phrase), addonTerms, `add-on terms follow FEATURE_ADDON_TERMS: ${phrase}`);
+          assert.equal(text(main).includes(phrase), addonTerms, `add-on terms follow FEATURE_ADDONS: ${phrase}`);
         }
       }
     }

@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -95,6 +96,16 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 	var client string
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
 		return projectRequest{}, ErrDenied
+	}
+	// Fair use: a client with hosting has one request in progress at a time.
+	if s.orderReady(ctx) {
+		busy, err := requestBusy(ctx, tx, client, d.Key)
+		if err != nil {
+			return projectRequest{}, err
+		}
+		if busy {
+			return projectRequest{}, errRequestInProgress
+		}
 	}
 	d.ID = secret()
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(client_id,submission_key) DO NOTHING`, d.ID, client, d.Key, d.Product, d.Title, d.Brief); err != nil {
@@ -214,6 +225,19 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 					page.OrderAcceptance, page.OrderProposal = a.ID, &a.Proposal
 				}
 			}
+			if page.Launch, err = b.foundation.readLaunchOffer(r.Context(), b.principal(r.Context()), page.Order, page.OrderProposal, page.SharedProposal); err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+			page.LaunchEnded = r.URL.Query().Get("launch") == "ended"
+			if page.Order != nil {
+				page.ThisMonth = addonLastMonth(page.Order.Collection, time.Now()).Format("2006-01")
+			}
+			if proposal := cmp.Or(page.OrderProposal, page.SharedProposal); page.Order == nil && proposal != nil {
+				var valid bool
+				page.AddonChoices, page.OrderAddons, valid = selectedAddons(r.URL.Query(), page.Request.Product, proposal.MonthlyMinor > 0)
+				page.AddonsInvalid = !valid
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -246,6 +270,10 @@ func (b *browser) submitRequest(w http.ResponseWriter, r *http.Request) {
 		b.renderRequests(w, r, 409, "conflict", projectRequest{}, nil, "conflict")
 		return
 	}
+	if errors.Is(err, errRequestInProgress) {
+		b.renderRequests(w, r, 409, "new", d, nil, "in-progress")
+		return
+	}
 	if err != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
@@ -271,6 +299,33 @@ type requestPageData struct {
 	OrderProposal     *projectProposal
 	Checkouts         []orderCheckout
 	CheckoutRestart   bool
+	Launch            *launchPlace  // the launch discount an order would get now
+	LaunchEnded       bool          // the last launch place went before the client's order
+	AddonChoices      []addonChoice // the add-ons the client can choose, with the current choice
+	OrderAddons       []orderAddon  // the chosen add-ons the order form carries
+	AddonsInvalid     bool          // the client's add-on choice is not possible; no order form
+	ThisMonth         string        // YYYY-MM: an add-on of the order ended now ends after this month (addonLastMonth)
+}
+
+// OrderOneTimeDKK and OrderMonthlyDKK are what the order form's order costs:
+// the proposal less any launch discount, plus the chosen add-ons.
+func (p requestPageData) OrderOneTimeDKK() int64 {
+	one, _ := addonTotals(p.OrderAddons)
+	if p.OrderProposal != nil {
+		one += p.OrderProposal.OneTimeMinor
+	}
+	if p.Launch != nil {
+		one -= p.Launch.DiscountMinor
+	}
+	return one / 100
+}
+
+func (p requestPageData) OrderMonthlyDKK() int64 {
+	_, monthly := addonTotals(p.OrderAddons)
+	if p.OrderProposal != nil {
+		monthly += p.OrderProposal.MonthlyMinor
+	}
+	return monthly / 100
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {

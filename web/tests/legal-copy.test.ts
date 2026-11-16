@@ -21,7 +21,7 @@ test("the terms do not depend on the portal flag", () => {
   for (const locale of ["en", "da"] as const) assert.deepEqual(legalPage("terms", locale, true), legalPage("terms", locale, false));
 });
 
-test("add-on terms remain absent until their independent release is enabled", () => {
+test("add-on terms follow the coordinated add-on release", () => {
   for (const locale of ["en", "da"] as const) {
     const heading = locale === "da" ? "Ønsker og tilvalg" : "Feature requests and add-ons";
     const published = legalPage("terms", locale, false);

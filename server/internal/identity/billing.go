@@ -50,7 +50,8 @@ type billingOrder struct {
 	ID, Client, Scope          string
 	OneTimeMinor, MonthlyMinor int64
 	MonthlyFrom, Placed        time.Time
-	LastMonth                  *time.Time // the last billed month, once ended (#591)
+	LastMonth                  *time.Time   // the last billed month, once ended (#591)
+	Launch                     *launchPlace // the launch discount the one-time price includes
 }
 
 type billingCharge struct {
@@ -158,13 +159,17 @@ func (s *Foundation) recordDueCharges(ctx context.Context, now time.Time) error 
 	local := now.In(copenhagen)
 	current := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, time.UTC)
 	for _, o := range orders {
+		addons, err := readOrderAddons(ctx, s.pool, o.ID)
+		if err != nil {
+			return err
+		}
 		periods := map[string]int64{}
 		if o.OneTimeMinor > 0 {
 			periods["acceptance"] = o.OneTimeMinor
 		}
 		if o.MonthlyMinor > 0 {
 			for m := o.MonthlyFrom; !m.After(current) && (o.LastMonth == nil || !m.After(*o.LastMonth)); m = m.AddDate(0, 1, 0) {
-				periods[monthPeriod(m)] = o.MonthlyMinor
+				periods[monthPeriod(m)] = periodMonthly(o.MonthlyMinor, addons, monthPeriod(m))
 			}
 		}
 		for period, gross := range periods {
@@ -211,7 +216,7 @@ func (s *Foundation) invoiceOrders(ctx context.Context) ([]billingOrder, error) 
 }
 
 func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
-	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent,EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id) FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
+	rows, err := s.pool.Query(ctx, `SELECT o.id,o.client_id,p.scope,o.one_time_minor,o.monthly_minor,o.monthly_from,o.placed_at,c.period,c.identity,c.state,coalesce(c.provider_ref,''),c.gross_minor,c.net_minor,c.sent,EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id),l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0) FROM portal_order_charges c JOIN portal_orders o ON o.id=c.order_id JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.collection='invoice' AND c.state<>'settled' ORDER BY c.state='held',o.placed_at,o.id,c.period`)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -220,8 +225,14 @@ func (s *Foundation) openCharges(ctx context.Context) ([]billingCharge, error) {
 	for rows.Next() {
 		var c billingCharge
 		o := &c.Order
-		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent, &c.Withdrawn); err != nil {
+		var place *int
+		var l launchPlace
+		if err = rows.Scan(&o.ID, &o.Client, &o.Scope, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.Placed, &c.Period, &c.Identity, &c.State, &c.Reference, &c.GrossMinor, &c.NetMinor, &c.Sent, &c.Withdrawn, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor); err != nil {
 			return nil, errTriageStorage
+		}
+		if place != nil {
+			l.Place = *place
+			o.Launch = &l
 		}
 		result = append(result, c)
 	}
@@ -373,9 +384,9 @@ func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now 
 	if !s.invoiceBillingReady(ctx) {
 		return errBillingPaused
 	}
-	description := invoiceLine(c.Order.Scope)
-	if c.Period != "acceptance" {
-		description += " — " + c.Period
+	items, err := s.invoiceItems(ctx, cfg, *c)
+	if err != nil {
+		return err
 	}
 	created, err := cfg.Numina.CreateInvoice(ctx, c.Identity, numina.NewInvoice{
 		ContactID:          contactID,
@@ -384,7 +395,7 @@ func (s *Foundation) attachInvoice(ctx context.Context, cfg InvoiceBilling, now 
 		Currency:           "DKK",
 		SalesAccountNumber: cfg.SalesAccount,
 		VATCode:            cfg.VATCode,
-		Items:              []numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(c.NetMinor), VATCode: cfg.VATCode}},
+		Items:              items,
 		Memo:               "Portal reference: " + c.Identity,
 	})
 	if err != nil {
@@ -504,4 +515,42 @@ func (s *Foundation) numinaContact(ctx context.Context, api NuminaAPI, client st
 		return "", errTriageStorage
 	}
 	return contactID, nil
+}
+
+// invoiceItems are a charge's invoice lines: the order's own price, then one
+// line per add-on the period charges. Every price is in whole kroner, so each
+// line's net amount is exact and the lines add up to the charge.
+func (s *Foundation) invoiceItems(ctx context.Context, cfg InvoiceBilling, c billingCharge) ([]numina.Line, error) {
+	addons, err := readOrderAddons(ctx, s.pool, c.Order.ID)
+	if err != nil {
+		return nil, err
+	}
+	description := invoiceLine(c.Order.Scope)
+	if c.Period != "acceptance" {
+		description += " — " + c.Period
+	} else {
+		// The unit price already includes the discount; the line names it.
+		description = launchLine(description, "da", c.Order.Launch)
+	}
+	base := c.GrossMinor
+	var lines []numina.Line
+	for _, a := range periodAddons(addons, c.Period) {
+		net, _, ok := splitVAT(a.UnitMinor)
+		if !ok {
+			return nil, errors.New("portal: an add-on price has no exact VAT split")
+		}
+		base -= a.TotalMinor()
+		lines = append(lines, numina.Line{Description: addonLine(a, "da"), Quantity: a.Quantity, UnitPrice: numina.Amount(net), VATCode: cfg.VATCode})
+	}
+	if base < 0 {
+		return nil, errors.New("portal: add-ons exceed the charge")
+	}
+	if base > 0 {
+		net, _, ok := splitVAT(base)
+		if !ok {
+			return nil, errors.New("portal: the order price has no exact VAT split")
+		}
+		lines = append([]numina.Line{{Description: description, Quantity: 1, UnitPrice: numina.Amount(net), VATCode: cfg.VATCode}}, lines...)
+	}
+	return lines, nil
 }

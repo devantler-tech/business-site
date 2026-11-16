@@ -24,6 +24,7 @@ type StripeAPI interface {
 	CancelSubscriptionNow(ctx context.Context, subscription string) (time.Time, error)
 	GetInvoice(ctx context.Context, id string) (stripe.Invoice, error)
 	GetTaxRate(ctx context.Context, id string) (stripe.TaxRate, error)
+	RemoveSubscriptionAddon(ctx context.Context, subscription, addon string) error
 }
 
 // CardBilling configures the card and MobilePay path (ADR 0030, #553).
@@ -161,10 +162,17 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 	var o projectOrder
 	var requestID, scope, email string
 	var ended, withdrawn bool
-	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id),EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id)
+	var place *int
+	var l launchPlace
+	err := s.pool.QueryRow(ctx, `SELECT o.id,o.request_id,o.one_time_minor,o.monthly_minor,o.monthly_from,p.scope,coalesce(c.email,''),EXISTS (SELECT 1 FROM portal_order_ends e WHERE e.order_id=o.id),EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=o.id),
+ l.place,coalesce(l.percent,0),coalesce(l.list_minor,0),coalesce(l.discount_minor,0)
  FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id JOIN portal_proposals p ON p.request_id=a.request_id AND p.version=a.proposal_version
- LEFT JOIN portal_contacts c ON c.client_id=o.client_id WHERE o.id=$1 AND o.collection='card'`, order).
-		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &ended, &withdrawn)
+ LEFT JOIN portal_contacts c ON c.client_id=o.client_id LEFT JOIN portal_launch_places l ON l.order_id=o.id WHERE o.id=$1 AND o.collection='card'`, order).
+		Scan(&o.ID, &requestID, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &scope, &email, &ended, &withdrawn, &place, &l.Percent, &l.ListMinor, &l.DiscountMinor)
+	if place != nil {
+		l.Place = *place
+		o.Launch = &l
+	}
 	if err != nil {
 		return errTriageStorage
 	}
@@ -180,6 +188,10 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 		lang = "en"
 	}
 	back := portal + "/requests/" + requestID + "?lang=" + lang
+	addons, err := readOrderAddons(ctx, s.pool, o.ID)
+	if err != nil {
+		return err
+	}
 	name := invoiceLine(scope)
 	cfg := s.cards.Load()
 	for _, purpose := range cardPurposes(o.OneTimeMinor, o.MonthlyMinor) {
@@ -194,13 +206,13 @@ func (s *Foundation) ensureCheckouts(ctx context.Context, order, portal, lang st
 			return err
 		}
 		checkout := stripe.Checkout{Mode: "payment", TaxRate: cfg.TaxRate, ClientReference: o.ID, CustomerEmail: email, Locale: lang, SuccessURL: back, CancelURL: back,
-			Metadata: map[string]string{"portal_order": o.ID}, Lines: []stripe.Line{{Name: name, AmountMinor: o.OneTimeMinor}}}
+			Metadata: map[string]string{"portal_order": o.ID}, Lines: checkoutLines(launchLine(name, lang, o.Launch), o.OneTimeMinor, periodAddons(addons, "acceptance"), lang, false)}
 		if purpose == "monthly" {
 			// Card only by Stripe's own rules: MobilePay has no recurring use.
 			// Nothing is charged before the anchor; it then charges each month.
 			checkout.Mode = "subscription"
 			checkout.BillingCycleAnchor = firstAnchor(o.MonthlyFrom, cfg.Now())
-			checkout.Lines = []stripe.Line{{Name: name, AmountMinor: o.MonthlyMinor, Monthly: true}}
+			checkout.Lines = checkoutLines(name, periodMonthly(o.MonthlyMinor, addons, "monthly"), periodAddons(addons, "monthly"), lang, true)
 		}
 		attempt++
 		// Each try has its own key: Stripe caches a failed reply, even a 500,
@@ -283,6 +295,10 @@ func (s *Foundation) handleStripeEvent(ctx context.Context, event stripe.Event) 
 		}
 		err = applyCheckoutEvent(ctx, tx, event.Type, session)
 		subscription = session.Subscription
+		if err == nil && subscription != "" {
+			// Before the event counts as processed, so Stripe retries it.
+			err = s.removeEndedAddons(ctx, tx, subscription)
+		}
 	case "invoice.paid":
 		err = applySubscriptionInvoicePaid(ctx, tx, event.Data.Object)
 	case "customer.subscription.deleted":
@@ -416,5 +432,54 @@ func applySubscriptionInvoicePaid(ctx context.Context, tx pgx.Tx, raw json.RawMe
 		log.Printf("portal: card renewal after the order's end or withdrawal")
 		return nil
 	}
-	return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, o.MonthlyMinor, invoice.Currency)
+	// A month after the client ended an add-on charges less.
+	addons, err := readOrderAddons(ctx, tx, o.ID)
+	if err != nil {
+		return err
+	}
+	return settleCardCharge(ctx, tx, o.ID, period, invoice.ID, invoice.AmountPaid, periodMonthly(o.MonthlyMinor, addons, period), invoice.Currency)
+}
+
+// checkoutLines are a Checkout's lines: the order's own price, then one line
+// per add-on, adding up to total.
+func checkoutLines(name string, total int64, addons []orderAddon, lang string, monthly bool) []stripe.Line {
+	var lines []stripe.Line
+	for _, a := range addons {
+		total -= a.TotalMinor()
+		lines = append(lines, stripe.Line{Name: addonLine(a, lang), AmountMinor: a.TotalMinor(), Monthly: monthly, Addon: a.ID})
+	}
+	if total > 0 {
+		lines = append([]stripe.Line{{Name: name, AmountMinor: total, Monthly: monthly}}, lines...)
+	}
+	return lines
+}
+
+// removeEndedAddons removes, from a newly completed subscription, the items of
+// add-ons the client ended while its Checkout was still open: that session
+// was created with them.
+func (s *Foundation) removeEndedAddons(ctx context.Context, tx pgx.Tx, subscription string) error {
+	var order string
+	err := tx.QueryRow(ctx, `SELECT order_id FROM portal_card_checkouts WHERE subscription_id=$1`, subscription).Scan(&order)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return errTriageStorage
+	}
+	addons, err := readOrderAddons(ctx, tx, order)
+	if err != nil {
+		return err
+	}
+	for _, a := range addons {
+		if a.Monthly() && a.LastMonth != nil && a.Removed == nil {
+			cfg := s.cards.Load()
+			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, subscription, a.ID) != nil {
+				return errors.New("card billing: an ended add-on was not removed from the new subscription")
+			}
+			if _, err = tx.Exec(ctx, `INSERT INTO portal_addon_removals(order_id,addon_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, order, a.ID); err != nil {
+				return errTriageStorage
+			}
+		}
+	}
+	return nil
 }

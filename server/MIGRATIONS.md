@@ -210,6 +210,22 @@ v23 adds the portal's own emails (#21): `portal_mail_outbox`, an order confirmat
 receipt queued with its order or withdrawal, and `portal_mail_deliveries`, one record per sent
 email. Grant SELECT/INSERT only on both.
 
+v24 adds `portal_launch_places`, the launch offer's places (BILLING.md, *Launch discount*): one
+row per taken place, with the client, the order, the percent, the full one-time price and the
+discount. Grant SELECT/INSERT only; the retention purge, as the migration role, clears the client
+and order of a purged customer's place and keeps the place itself.
+
+v25 adds `portal_order_addons`, the standard add-ons of an order (BILLING.md, *Add-ons*): the
+add-on, its kind, units and unit price at the time of the order. Grant SELECT/INSERT only; the
+order's prices already include them.
+
+v26 adds `portal_request_closures`, the operator's record that a request is finished (BILLING.md,
+*Feature-request priority and fair use*). Grant SELECT/INSERT only.
+
+v27 adds `portal_addon_ends`, a client's end of one monthly add-on, and `portal_addon_removals`,
+Stripe's confirmation that a card subscription no longer charges it (BILLING.md, *Add-ons*). Grant
+SELECT/INSERT only on both.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

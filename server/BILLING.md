@@ -133,6 +133,82 @@ Stripe invoice is the sale's document, and Numina books the money once.
   - The paid amount and currency must equal the order's amount for that period exactly.
     A browser return to the receipt is never proof of payment.
 
+## Launch discount
+
+The published launch offer (`launchDiscount` in `internal/identity/offerings.json`, which
+mirrors the public site) takes 25% off the one-time price for the first 50 customers who order
+with hosting. The portal applies exactly that rule and refuses to start with any other
+`appliesTo` or `requiresHosting`:
+
+- An order qualifies when it has both a one-time and a monthly (hosting) price. The discount is
+  `percent` of the one-time price, rounded to whole kroner. Hosting always keeps its full price.
+- Places count customers, not orders. A client takes at most one place, with their first
+  qualifying order, and only that order is discounted. A place is never reused: a withdrawn or
+  ended order keeps it, and the retention purge removes only who held it.
+- The order takes its place in the same transaction that inserts it, under a transaction-scoped
+  advisory lock, so two orders never take the same place and the 51st order finds none
+  (`portal_launch_places`, migration v24, with a unique place number as a second guard).
+- The order stores the discounted one-time price, so invoices, card payments, work funding,
+  withdrawals and settlements use it unchanged.
+- The shared proposal, the order summary before the button and the order receipt show the
+  discount as its own line, with the offer's sentence. The order form carries whether it
+  showed the discount. If the last place went in between, the order is refused and the receipt
+  shows the full price with the reason, so nobody is charged a price they did not see.
+- The Numina invoice line and the Stripe Checkout line carry the discounted unit price, and
+  their description names the full price and the discount, for example
+  `… — normalpris 6000 DKK, lanceringsrabat 25 % −1500 DKK`. A unit price that already includes
+  the discount is valid on a Danish invoice. No Stripe coupon or negative Numina line is needed.
+- The order confirmation email names the discount, and the operator's page shows the place.
+
+## Add-ons
+
+The standard add-ons (`addons` in `internal/identity/offerings.json`, which mirrors the public
+site) are the only extras with fixed prices. Anything else is a fixed quote. Each has an id, a
+kind (`one-time` or `monthly`), a VAT-inclusive price in whole kroner, the offerings it fits,
+an optional unit limit (`max`, for example per extra language) and EN/DA text. The portal
+refuses to start with an add-on it cannot sell.
+
+- The receipt lists the add-ons that fit the request's offering, monthly ones only when the
+  proposal includes hosting. The client ticks them and shows the price again: the summary
+  before the order button then lists each add-on and the total. The order form carries the
+  choice, and a retry with another choice is a conflict.
+- At most one feature-request priority tier (`tier`: priority or express) per order.
+- The order stores each add-on with its unit price at the time (`portal_order_addons`,
+  migration v25), and its one-time and monthly prices include them. Invoices, card payments,
+  funding and withdrawals therefore use the totals unchanged.
+- The launch discount takes off the proposal's own one-time price only, never an add-on.
+- The Numina invoice has the order's own line, then one line per add-on the period charges:
+  one-time add-ons on the first invoice, monthly ones on every monthly invoice. Stripe Checkout
+  has the same lines, one-time ones on the payment and monthly ones on the subscription.
+- The confirmation email, the receipt and the operator's page list the add-ons.
+- **Ending one add-on** (Consumer Contracts Act, section 28 a): the receipt offers to end each monthly
+  add-on after the current month (`POST /requests/{id}/addon-end`, `portal_addon_ends`, migration
+  v27). It is billed through that month; later monthly charges, invoices and card renewals leave it
+  out. A card order's subscription then loses the add-on's item (its product carries
+  `portal_addon` metadata), without proration. The end is recorded first, and Stripe's confirmation
+  on its own (`portal_addon_removals`): if Stripe fails or its answer is lost, the operator's page
+  offers to ask Stripe again until it confirms. An add-on ended while the monthly Checkout is still
+  open is removed when its subscription completes, before that event counts as processed. Ending Priority or Express drops the client's level after that month.
+
+## Feature-request priority and fair use
+
+Hosted projects' feature requests are picked up in a monthly round (Standard). The monthly
+add-ons Priority and Express (`tier` in the catalogue) raise that level; the terms describe
+what each means.
+
+- **Level.** A client's level is the highest tier among the monthly add-ons of their orders
+  that still bill: no withdrawal and no end before this month. It is derived, not stored, so it
+  follows orders, ends and withdrawals without a separate record. The operator's request page
+  shows it.
+- **Fair use.** A client with hosting has one request in progress at a time. A new request is
+  refused (409, with the reason) while another of theirs is not marked finished. The check
+  runs in the request's own transaction under a per-client advisory lock, so two at once
+  cannot both pass. A retry of the same submission is not a second request.
+- **Finished.** The operator marks a request finished, or not going ahead, on its page
+  (`POST /operator/requests/{id}/finished`, `portal_request_closures`, migration v26). The client
+  can then send the next request. Without hosting there is no limit; such requests are quoted.
+- Both need the order gates. With them off there are no orders and no limit.
+
 ## Ending and reversing orders
 
 - **Ending monthly billing.** On the request page, an operator chooses an order's last billed

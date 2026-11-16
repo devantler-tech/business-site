@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,9 @@ type fakeStripe struct {
 	failCancel bool                      // answer the next subscription end with 500
 	taxRate    map[string]any            // the configured tax rate, for GET /v1/tax_rates/{id}
 	taxReads   int
+	items      map[string][]string // a subscription's portal add-ons, one item each
+	removed    []string            // subscription items removed
+	failRemove bool                // answer the next item removal with 500
 }
 
 func (f *fakeStripe) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +109,31 @@ func (f *fakeStripe) serveLookup(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET" && r.URL.Path == "/v1/tax_rates/txr_moms25":
 		f.taxReads++
 		_ = json.NewEncoder(w).Encode(f.taxRate)
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/v1/subscriptions/") && q.Get("expand[]") == "items.data.price.product":
+		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
+		// The order's own item, then one per add-on; "untagged" is an item
+		// created before lines were named.
+		data := []map[string]any{{"id": "si_order", "price": map[string]any{"product": map[string]any{"metadata": map[string]string{"portal_line": "order"}}}}}
+		for _, addon := range f.items[subscription] {
+			metadata := map[string]string{"portal_addon": addon}
+			if addon == "untagged" {
+				metadata = map[string]string{}
+			}
+			data = append(data, map[string]any{"id": "si_" + strings.ReplaceAll(addon, "-", "_"), "price": map[string]any{"product": map[string]any{"metadata": metadata}}})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": subscription, "items": map[string]any{"data": data}})
+	case r.Method == "DELETE" && strings.HasPrefix(r.URL.Path, "/v1/subscription_items/"):
+		if f.failRemove || q.Get("proration_behavior") != "none" {
+			f.failRemove = false
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		item := strings.TrimPrefix(r.URL.Path, "/v1/subscription_items/")
+		f.removed = append(f.removed, item)
+		for sub, addons := range f.items {
+			f.items[sub] = slices.DeleteFunc(addons, func(a string) bool { return "si_"+strings.ReplaceAll(a, "-", "_") == item })
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": item, "deleted": true})
 	case r.Method == "DELETE":
 		subscription := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
 		f.cancels = append(f.cancels, url.Values{"subscription": {subscription}, "immediately": {"true"}})

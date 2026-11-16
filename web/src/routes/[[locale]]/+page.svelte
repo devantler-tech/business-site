@@ -58,6 +58,7 @@
       </article></div>
       <p class="launch-note" data-launch-offer>{t.launchNote}</p>
       <p class="price-note">{t.priceNote}</p>
+      {#if t.addons}<div class="addons" data-addons><h3>{t.addons.title}</h3><p>{t.addons.intro}</p><ul>{#each t.addons.items as addon}<li data-addon={addon.id} data-price={addon.price}><b>{addon.title}</b>: {data.locale === "en" ? `${t.currency} ` : ""}{format(addon.price)}{data.locale === "da" ? ` ${t.currency}` : ""}{addon.monthly ? ` ${t.addons.perMonth}` : ""}{addon.each ? ` ${t.addons.each}` : ""}<br><span>{addon.description}</span></li>{/each}</ul></div>{/if}
       <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p><p class="hosting-location" data-hosting-location>{t.hostingLocation}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
     </section>
     <section id="work" class="work-band" aria-labelledby="work-title">
@@ -138,6 +139,12 @@
   .offer .text-link { margin-top: auto; }
   .launch-note { font-size: .9rem; margin-top: 1.5rem; max-width: 1000px; padding: 1rem 1.25rem; border: 1px solid var(--accent); border-radius: 8px; }
   .price-note { font-size: .8rem; margin-top: 1.3rem; max-width: 1000px; }
+  .addons { margin-top: 2.5rem; }
+  .addons h3 { font-size: 1.2rem; }
+  .addons > p { font-size: .9rem; margin-top: .6rem; max-width: 1000px; }
+  .addons ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 2.5rem; margin-top: 1.2rem; padding: 0; list-style: none; }
+  .addons li { font-size: .9rem; }
+  .addons li span { font-size: .85rem; }
   .scope-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 3rem; padding-top: 3rem; border-top: 1px solid var(--line); }
   .scope-notes h3 { font-size: 1.2rem; }
   .scope-notes p { font-size: .9rem; margin-top: .9rem; }
@@ -173,7 +180,7 @@
     h1 { font-size: clamp(2.2rem, 8vw, 3.4rem); }
     .promise ul { flex-direction: column; gap: .5rem; }
     .section { padding-block: 3rem; }
-    .offers, .scope-notes, .quality-columns, .process ol { grid-template-columns: 1fr; gap: 1.5rem; }
+    .offers, .scope-notes, .quality-columns, .process ol, .addons ul { grid-template-columns: 1fr; gap: 1.5rem; }
     .portfolio-bridge { flex-direction: column; align-items: flex-start; gap: .5rem; }
     .quality { padding-block: 2.5rem; }
     .offer { padding: 1.5rem; }

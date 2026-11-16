@@ -68,9 +68,49 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindAddonEndsFixture removes only the disposable v27 add-on ends.
+func rewindAddonEndsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_removals,portal_addon_ends;
+ DELETE FROM portal_schema_version WHERE version=27`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-add-on-end schema", err)
+	}
+}
+
+// rewindRequestClosuresFixture removes only the disposable v26 request closures.
+func rewindRequestClosuresFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindAddonEndsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_request_closures;
+ DELETE FROM portal_schema_version WHERE version=26`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-closure schema", err)
+	}
+}
+
+// rewindOrderAddonsFixture removes only the disposable v25 order add-ons.
+func rewindOrderAddonsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindRequestClosuresFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_order_addons;
+ DELETE FROM portal_schema_version WHERE version=25`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-add-on schema", err)
+	}
+}
+
+// rewindLaunchPlacesFixture removes only the disposable v24 launch places.
+func rewindLaunchPlacesFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOrderAddonsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_launch_places;
+ DELETE FROM portal_schema_version WHERE version=24`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-launch schema", err)
+	}
+}
+
 // rewindMailFixture removes only the disposable v23 mail outbox and deliveries.
 func rewindMailFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindLaunchPlacesFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_mail_deliveries,portal_mail_outbox;
  DELETE FROM portal_schema_version WHERE version=23`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-mail schema", err)
