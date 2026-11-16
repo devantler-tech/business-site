@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"slices"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // endOrderAddon ends one monthly add-on of the client's order after the
@@ -33,21 +31,34 @@ func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID
 		return errProposalConflict
 	case addon.LastMonth != nil:
 		return s.commitOrder(ctx, p, tx, s.pathReady(o.Collection))
+	case o.Collection == "card" && !s.cardBillingReady(ctx):
+		// Never change a subscription the card path's own gate holds closed.
+		return ErrDenied
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_addon_ends(order_id,addon_id,last_month,client_issuer,client_subject) VALUES($1,$2,$3,$4,$5)`, o.ID, addonID, currentMonth(time.Now()), p.issuer, p.subject); err != nil {
+	// The last billed month: Copenhagen's for invoices; for a card order the
+	// UTC month, since Stripe renews at midnight UTC on the 1st.
+	last := currentMonth(time.Now())
+	if o.Collection == "card" {
+		now := time.Now().UTC()
+		last = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_addon_ends(order_id,addon_id,last_month,client_issuer,client_subject) VALUES($1,$2,$3,$4,$5)`, o.ID, addonID, last, p.issuer, p.subject); err != nil {
 		return errTriageStorage
 	}
 	if o.Collection == "card" {
-		var subscription string
-		err = tx.QueryRow(ctx, `SELECT subscription_id FROM portal_card_checkouts WHERE order_id=$1 AND purpose='monthly' AND subscription_id IS NOT NULL`, o.ID).Scan(&subscription)
+		// Locking the order's monthly Checkouts orders this against a Checkout
+		// completing: either the subscription is seen here, or its completion
+		// sees this end and removes the add-on itself.
+		var subscription *string
+		err = tx.QueryRow(ctx, `SELECT max(subscription_id) FROM (SELECT subscription_id FROM portal_card_checkouts WHERE order_id=$1 AND purpose='monthly' FOR UPDATE) c`, o.ID).Scan(&subscription)
 		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			// No subscription yet: its checkout leaves the ended add-on out.
 		case err != nil:
 			return errTriageStorage
+		case subscription == nil:
+			// No subscription yet: its completion removes the ended add-on.
 		default:
 			cfg := s.cards.Load()
-			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, subscription, addonID) != nil {
+			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, *subscription, addonID) != nil {
 				return errors.New("card billing: the add-on was not removed from the subscription")
 			}
 		}
