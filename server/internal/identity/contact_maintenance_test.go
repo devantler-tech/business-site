@@ -268,6 +268,9 @@ func maintenanceBodyReferences(name string, task bool) []string {
 	if !task && name == "requests.html" {
 		return maintenanceOrdinaryRequestDigests
 	}
+	if !task && name == "portal.html" {
+		return maintenanceOrdinaryPortalDigests
+	}
 	return maintenanceReferenceDigests[name]
 }
 
