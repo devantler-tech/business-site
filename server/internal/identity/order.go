@@ -41,6 +41,17 @@ type projectOrder struct {
 	Addons                     []orderAddon // the standard add-ons the prices include
 }
 
+// AddonRemovalPending reports an ended add-on that a card order's
+// subscription may still charge: Stripe has not confirmed its removal.
+func (o projectOrder) AddonRemovalPending() bool {
+	for _, a := range o.Addons {
+		if o.Collection == "card" && a.LastMonth != nil && a.Removed == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // BaseOneTimeDKK and BaseMonthlyDKK are the order's prices without its add-ons.
 func (o projectOrder) BaseOneTimeDKK() int64 {
 	one, _ := addonTotals(o.Addons)

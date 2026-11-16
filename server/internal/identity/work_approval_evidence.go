@@ -107,7 +107,13 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 	f := workFunding{Period: "acceptance"}
 	want := o.OneTimeMinor
 	if want == 0 {
-		f.Period, want = monthPeriod(o.MonthlyFrom), o.MonthlyMinor
+		// The first month charges less once the client ended an add-on before it.
+		addons, err := readOrderAddons(ctx, tx, o.ID)
+		if err != nil {
+			return workOrder{}, workFunding{}, err
+		}
+		f.Period = monthPeriod(o.MonthlyFrom)
+		want = periodMonthly(o.MonthlyMinor, addons, f.Period)
 	}
 	// Lock the charge first and read it in a new statement: a settlement change
 	// or a reversal (applyReversal locks the charge for update) committed while

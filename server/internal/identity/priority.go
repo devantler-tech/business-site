@@ -31,12 +31,16 @@ type featureState struct {
 	Closed  *time.Time
 }
 
-// featureLevel is the client's feature-request priority: the highest tier
-// among the monthly add-ons of their orders that still bill, else standard.
+// featureLevel is the client's feature-request priority at now: the highest
+// tier among the monthly add-ons of their orders that still bill, else
+// standard. An ended add-on counts through its last billed month, a UTC month
+// for a card order (addonLastMonth).
 func featureLevel(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
-}, client string) (string, error) {
-	rows, err := q.Query(ctx, `SELECT a.addon_id FROM portal_order_addons a JOIN portal_orders o ON o.id=a.order_id WHERE a.kind='monthly' AND `+billsMonthly, client)
+}, client string, now time.Time) (string, error) {
+	rows, err := q.Query(ctx, `SELECT a.addon_id FROM portal_order_addons a JOIN portal_orders o ON o.id=a.order_id WHERE a.kind='monthly'
+ AND NOT EXISTS (SELECT 1 FROM portal_addon_ends x WHERE x.order_id=a.order_id AND x.addon_id=a.addon_id AND x.last_month<CASE WHEN o.collection='card' THEN $2::date ELSE $3::date END)
+ AND `+billsMonthly, client, addonLastMonth("card", now), addonLastMonth("invoice", now))
 	if err != nil {
 		return "", errTriageStorage
 	}
@@ -77,7 +81,7 @@ func requestBusy(ctx context.Context, tx pgx.Tx, client, key string) (bool, erro
 func readFeature(ctx context.Context, tx pgx.Tx, client, id string) (*featureState, error) {
 	f := &featureState{}
 	var err error
-	if f.Level, err = featureLevel(ctx, tx, client); err != nil {
+	if f.Level, err = featureLevel(ctx, tx, client, time.Now()); err != nil {
 		return nil, err
 	}
 	if err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_orders o WHERE `+billsMonthly+`),(SELECT closed_at FROM portal_request_closures WHERE request_id=$2)`, client, id).Scan(&f.Hosting, &f.Closed); err != nil {
@@ -105,15 +109,9 @@ func (s *Foundation) closeRequest(ctx context.Context, p Principal, id string) e
 
 // finishRequest is the operator's form to mark a request finished.
 func (b *browser) finishRequest(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	if !onlyFields(r) {
 		b.render(w, r, 400, "error", "", "")
 		return
-	}
-	for name, values := range r.PostForm {
-		if len(values) != 1 || name != "csrf_token" && name != "lang" {
-			b.render(w, r, 400, "error", "", "")
-			return
-		}
 	}
 	b.proposalMutationResult(w, r, b.foundation.closeRequest(r.Context(), b.principal(r.Context()), r.PathValue("id")), "error")
 }

@@ -564,11 +564,11 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-clear the thirty-four fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal/mail/launch/add-on/closure tables between tests. The migrator deletes rows in dependency order within the
+clear the thirty-six fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal/mail/launch/add-on/closure/add-on-end tables between tests. The migrator deletes rows in dependency order within the
 same transaction as the grant reset, retaining real constraints and membership
 recording without rebuilding table files on every fixture. Database fixtures stay
 serial; this is not concurrent reset isolation. The reset control populates every
-relation first and requires all thirty-four to be empty afterward. Domain-only work
+relation first and requires all thirty-six to be empty afterward. Domain-only work
 approval controls own their real database, TLS broker and feature provider but do
 not start an unused application server or session manager; browser journeys retain
 their separate complete HTTP fixtures. Never reuse a database
