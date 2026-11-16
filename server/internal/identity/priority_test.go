@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newRequestForm reads the client's new-request form, filled in.
@@ -81,13 +82,13 @@ func TestFeatureLevels(t *testing.T) {
 	if status, _, _ := b.request("POST", "/portal/requests/"+proposalRequestID+"/orders", f, b.site.URL); status != 303 {
 		t.Fatalf("order with Priority=%d", status)
 	}
-	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key"); err != nil || level != "priority" {
+	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key", time.Now()); err != nil || level != "priority" {
 		t.Fatalf("level=%q %v", level, err)
 	}
 	if _, err := migrationDB(t).Exec(b.f.ctx, `INSERT INTO portal_order_withdrawals(order_id,client_issuer,client_subject) SELECT id,client_issuer,client_subject FROM portal_orders`); err != nil {
 		t.Fatal(err)
 	}
-	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key"); err != nil || level != "standard" {
+	if level, err := featureLevel(b.f.ctx, b.pool, "private-client-key", time.Now()); err != nil || level != "standard" {
 		t.Fatalf("a withdrawn order kept its tier: %q %v", level, err)
 	}
 	if status, _ := newRequest(t, b, "Fictional request without hosting"); status != 303 {
