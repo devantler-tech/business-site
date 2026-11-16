@@ -85,7 +85,13 @@ func TestBrowserPresentationAssets(t *testing.T) {
 	pool := fixtureDB(t)
 	for _, tc := range browserGateCases() {
 		h := browserHandler(t, New(pool, f.broker, flagAPI(t, tc.value).NewClient()), "https://app.example.invalid/portal/callback")
-		for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
+		for name, contentType := range map[string]string{
+			"portal.css":     "text/css; charset=utf-8",
+			"portal.js":      "text/javascript; charset=utf-8",
+			"icon.png":       "image/png",
+			"logo-dark.svg":  "image/svg+xml",
+			"logo-light.svg": "image/svg+xml",
+		} {
 			data, err := browserFiles.ReadFile("web/" + name)
 			if err != nil || len(data) == 0 {
 				t.Fatal("actual presentation asset is missing")
@@ -156,7 +162,7 @@ func TestBrowserSignInPage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
+		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 		if got := res.Header.Get("Content-Security-Policy"); got != wantCSP {
 			t.Errorf("security policy=%q want %q", got, wantCSP)
 		}

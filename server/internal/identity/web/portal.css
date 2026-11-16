@@ -147,10 +147,39 @@ header {
 }
 
 .brand {
+  display: inline-flex;
   color: var(--ink);
-  font-size: 1.2rem;
-  font-weight: 700;
   text-decoration: none;
+}
+
+/* The Devantler Tech wordmark that matches the theme: light letters on the
+   dark theme, dark letters on the light one. */
+.brand-logo {
+  display: block;
+  width: auto;
+  height: 2.25rem;
+}
+
+.brand-on-light {
+  display: none;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .brand-on-dark {
+    display: none;
+  }
+
+  :root:not([data-theme="dark"]) .brand-on-light {
+    display: block;
+  }
+}
+
+:root[data-theme="light"] .brand-on-dark {
+  display: none;
+}
+
+:root[data-theme="light"] .brand-on-light {
+  display: block;
 }
 
 nav {
