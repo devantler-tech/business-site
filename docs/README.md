@@ -67,11 +67,13 @@ their published English/Danish alternatives until reviewed activation. CI builds
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
 
-The VAT-inclusive guide prices decided in #154 are permanent: DKK 3,750 plus 125/month for
-a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web service.
-Each price is marked "incl. VAT" / "inkl. moms" and the note states the included 25% Danish VAT.
-The totals live in `vatInclusiveOffers` in `business-copy.ts`; `scripts/vat-prices.test.mjs`
-guards the exact approved totals, net floors and no double VAT. Current ordinary company facts
+The VAT-inclusive fixed prices the maintainer approved on 15 November 2026 are DKK 6,000 plus
+300/month for a website, 15,000 plus 800/month for a web app and 9,500 plus 500/month for a
+web service, with no hourly rates. Each price is marked "incl. VAT" / "inkl. moms" and the note
+states the included 25% Danish VAT. The launch offer takes 25% off the one-time price for the first
+50 customers who order with hosting. The totals live in `vatInclusiveOffers` and `launchDiscount`
+in `business-copy.ts`; `scripts/vat-prices.test.mjs` guards the exact approved totals, launch
+prices and net floors. Current ordinary company facts
 are shared by the public frontend and every package profile. The temporary VAT gate and historical
 comparison inputs are removed in source. Reviewed publication and fresh bilingual live verification
 remain tracked in #346 until their completion is recorded.

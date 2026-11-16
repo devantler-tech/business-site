@@ -1,4 +1,4 @@
-import type { Locale } from './business-copy';
+import { launchDiscount, type Locale } from './business-copy.ts';
 import company from '../../data/company.json' with { type: 'json' };
 
 // Privacy notice and customer terms (#19). Plain statements of what the business
@@ -11,7 +11,7 @@ export type LegalBlock = string | { list: readonly string[] } | { links: readonl
 export type LegalSection = { title: string; blocks: readonly LegalBlock[] };
 export type LegalPage = { title: string; description: string; intro: string; updated: string; sections: readonly LegalSection[] };
 
-const updated = { en: 'Last updated 15 November 2026.', da: 'Senest opdateret 15. november 2026.' } as const;
+const updated = { en: 'Last updated 16 November 2026.', da: 'Senest opdateret 16. november 2026.' } as const;
 const companyPath = { en: '/company/', da: '/da/company/' } as const;
 
 /** The trader line of the terms; the phone number appears once company.json has one. */
@@ -154,12 +154,18 @@ const terms = {
         { links: [{ href: companyPath.en, label: 'Company information and postal address' }] },
       ] },
       { title: 'Proposal and agreement', blocks: [
+        'The first consultation is free and does not commit you to anything.',
         'You receive a written proposal by email. It describes what will be built or hosted, the total price, any monthly price, the schedule and the payment terms. These terms and the withdrawal form, with my postal address filled in, come with the proposal.',
         'The agreement is made when you accept the proposal in writing. I then confirm the agreement by email, with these terms attached.',
       ] },
       { title: 'Prices', blocks: [
-        'Prices are in Danish kroner. For private customers and Danish businesses they include 25% Danish VAT. The prices on this website are starting prices; your proposal states the total price for your project, any monthly price and the VAT that applies to you.',
-        'Domains, external services and usage-based charges are not part of the starting prices. Your proposal states any such costs, or how they are calculated, before you accept.',
+        'Prices are in Danish kroner. For private customers and Danish businesses they include 25% Danish VAT. The prices on this website are fixed prices for the scope each offer describes; your proposal states the fixed price for your project, any monthly hosting price and the VAT that applies to you.',
+        'I do not charge by the hour. Work beyond the agreed scope gets its own fixed-price quote, which you accept before the work starts.',
+        'Domains, external services and usage-based charges are not part of the fixed prices. Your proposal states any such costs, or how they are calculated, before you accept.',
+      ] },
+      { title: 'Launch offer', blocks: [
+        `The first ${launchDiscount.limit} customers who order a project together with hosting get ${launchDiscount.percent}% off the project’s one-time price. Hosting is charged at the normal monthly price.`,
+        `The offer ends when the ${launchDiscount.limit}th customer has ordered; after that, the normal one-time prices apply. Your proposal states whether the launch price applies to you.`,
       ] },
       { title: 'Payment and delivery', blocks: [
         'Your proposal states when to pay. You pay by invoice, or by card or MobilePay where the proposal offers it. Invoices are issued through Numina; card and MobilePay payments go through Stripe.',
@@ -186,6 +192,7 @@ const terms = {
         '(*) Delete as appropriate.',
       ] },
       { title: 'Hosting and ending it', blocks: [
+        'Hosting is optional. Its fixed monthly price covers hosting, monitoring, backups, security updates and minor fixes. Clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets its own fixed-price quote, which you accept before the work starts.',
         'Hosting is paid monthly and continues until it is ended. You can end it by email with one month’s notice to the end of a month, unless your proposal states a minimum period. Your proposal also states the notice I give if I end hosting.',
         'As a private customer you can in any case end hosting with one month’s notice to the end of a month once five months have passed since the agreement. If you have paid for a period after the end date, I refund that amount immediately.',
         'When hosting ends, I hand over your content and code as described in your proposal.',
@@ -212,12 +219,18 @@ const terms = {
         { links: [{ href: companyPath.da, label: 'Virksomhedsoplysninger og postadresse' }] },
       ] },
       { title: 'Tilbud og aftale', blocks: [
+        'Den første samtale er gratis og uforpligtende.',
         'Du får et skriftligt tilbud på e-mail. Det beskriver, hvad der skal bygges eller hostes, den samlede pris, en eventuel månedspris, tidsplanen og betalingsbetingelserne. Disse betingelser og fortrydelsesformularen, med min postadresse udfyldt, følger med tilbuddet.',
         'Aftalen er indgået, når du skriftligt accepterer tilbuddet. Derefter bekræfter jeg aftalen på e-mail med disse betingelser vedhæftet.',
       ] },
       { title: 'Priser', blocks: [
-        'Priserne er i danske kroner. For privatkunder og danske virksomheder er de inkl. 25 % moms. Priserne på hjemmesiden er startpriser; dit tilbud oplyser den samlede pris for dit projekt, en eventuel månedspris og den moms, der gælder for dig.',
-        'Domæner, eksterne tjenester og forbrugsafhængige gebyrer indgår ikke i startpriserne. Dit tilbud oplyser sådanne udgifter, eller hvordan de beregnes, før du accepterer.',
+        'Priserne er i danske kroner. For privatkunder og danske virksomheder er de inkl. 25 % moms. Priserne på hjemmesiden er faste priser for det omfang, hver ydelse beskriver; dit tilbud oplyser den faste pris for dit projekt, en eventuel månedspris for hosting og den moms, der gælder for dig.',
+        'Jeg tager ikke betaling pr. time. Arbejde ud over det aftalte omfang får sit eget fastpristilbud, som du accepterer, før arbejdet begynder.',
+        'Domæner, eksterne tjenester og forbrugsafhængige gebyrer indgår ikke i de faste priser. Dit tilbud oplyser sådanne udgifter, eller hvordan de beregnes, før du accepterer.',
+      ] },
+      { title: 'Introduktionstilbud', blocks: [
+        `De første ${launchDiscount.limit} kunder, der bestiller et projekt sammen med hosting, får ${launchDiscount.percent} % rabat på projektets engangspris. Hosting koster den normale månedspris.`,
+        `Tilbuddet ophører, når den ${launchDiscount.limit}. kunde har bestilt; derefter gælder de normale engangspriser. Dit tilbud oplyser, om introduktionsprisen gælder for dig.`,
       ] },
       { title: 'Betaling og levering', blocks: [
         'Dit tilbud oplyser, hvornår du skal betale. Du betaler via faktura eller med kort eller MobilePay, hvis tilbuddet giver mulighed for det. Fakturaer udstedes gennem Numina; betaling med kort og MobilePay sker gennem Stripe.',
@@ -244,6 +257,7 @@ const terms = {
         '(*) Det ikke relevante udstreges.',
       ] },
       { title: 'Hosting og opsigelse', blocks: [
+        'Hosting er valgfri. Den faste månedspris dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får sit eget fastpristilbud, som du accepterer, før arbejdet begynder.',
         'Hosting betales månedligt og fortsætter, indtil den opsiges. Du kan opsige den på e-mail med en måneds varsel til udgangen af en måned, medmindre dit tilbud angiver en bindingsperiode. Dit tilbud oplyser også, med hvilket varsel jeg kan opsige hostingen.',
         'Som privatkunde kan du under alle omstændigheder opsige hostingen med en måneds varsel til udgangen af en måned, når der er gået fem måneder efter aftalens indgåelse. Har du betalt for en periode efter ophøret, tilbagebetaler jeg straks beløbet for den periode.',
         'Når hostingen ophører, overdrager jeg dit indhold og din kode som beskrevet i dit tilbud.',

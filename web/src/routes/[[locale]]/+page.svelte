@@ -45,6 +45,7 @@
       <div class="offers">{#each t.offers as offer}<article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
         <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong>{#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
+        <p class="launch-price" data-launch-setup={offer.launchSetup}>{t.launchLabel} <b>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.launchSetup)}{data.locale === "da" ? ` ${t.currency}` : ""}</b>{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
         <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
@@ -55,6 +56,7 @@
         <ul>{#each t.otherRequest.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{t.otherRequest.boundary}</p><a class="text-link" href="#contact">{t.otherRequest.action}<span aria-hidden="true">↗</span></a>
       </article></div>
+      <p class="launch-note" data-launch-offer>{t.launchNote}</p>
       <p class="price-note">{t.priceNote}</p>
       <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p><p class="hosting-location" data-hosting-location>{t.hostingLocation}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
     </section>
@@ -127,12 +129,14 @@
   .price { display: flex; flex-direction: column; margin-top: 1.5rem; }
   .price > span { font-size: .8rem; color: var(--muted); }
   .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
+  .launch-price { font-size: .85rem; margin-top: .6rem; color: var(--accent); }
   .hosting-price { font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
   .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
   .offer li { padding-left: .15rem; margin-block: .45rem; }
   .offer li::marker { color: var(--accent); }
   .boundary { font-size: .79rem; margin-bottom: 1rem; }
   .offer .text-link { margin-top: auto; }
+  .launch-note { font-size: .9rem; margin-top: 1.5rem; max-width: 1000px; padding: 1rem 1.25rem; border: 1px solid var(--accent); border-radius: 8px; }
   .price-note { font-size: .8rem; margin-top: 1.3rem; max-width: 1000px; }
   .scope-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 3rem; padding-top: 3rem; border-top: 1px solid var(--line); }
   .scope-notes h3 { font-size: 1.2rem; }

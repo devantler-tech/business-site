@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { createBusinessCopy, vatInclusiveOffers } from '../src/components/business/business-copy.ts';
+import { createBusinessCopy, launchDiscount, vatInclusiveOffers } from '../src/components/business/business-copy.ts';
 
 // The portal generates proposals from server/internal/identity/offerings.json
 // (ADR 0030, #552). It must say exactly what the published site says, at the
@@ -28,4 +28,15 @@ test('the drift check notices a changed price', () => {
   changed.offerings[0].setup += 1;
   assert.notDeepEqual(changed.offerings.map(({ id, setup, monthly }) => ({ id, setup, monthly })),
     vatInclusiveOffers.map(({ id, setup, monthly }) => ({ id, setup, monthly })));
+});
+
+test('generated proposals carry the published launch offer and the free first consultation', () => {
+  const { percent, limit, appliesTo, requiresHosting, text } = catalogue.launchDiscount;
+  assert.deepEqual({ percent, limit }, launchDiscount, 'same discount and customer limit as the site');
+  assert.equal(appliesTo, 'setup', 'the discount applies to the one-time price only');
+  assert.equal(requiresHosting, true, 'only orders with hosting qualify');
+  for (const lang of ['en', 'da']) {
+    assert.ok(published[lang].launchNote.startsWith(text[lang]), `${lang} proposal launch text matches the site`);
+    assert.ok(published[lang].servicesIntro.includes(catalogue.consultation[lang].replace(/\.$/, '')), `${lang} site and proposals both offer a free first consultation`);
+  }
 });

@@ -756,7 +756,26 @@
     "tmpfs",
     "kubelet",
     "automount",
-    "seccomp"
+    "seccomp",
+    "afgrænsede",
+    "faste",
+    "fastpristilbud",
+    "gangen",
+    "introduktionstilbud",
+    "koster",
+    "kunder",
+    "kører",
+    "mindre",
+    "modul",
+    "overvågning",
+    "runde",
+    "sammen",
+    "samtale",
+    "sikkerhedsopdateringer",
+    "stort",
+    "tages",
+    "valgfri",
+    "ønske"
   ],
   "overrides": [
     {

@@ -15,7 +15,7 @@ import (
 // yields a version the ordinary proposal form accepts unchanged, at the exact
 // VAT-inclusive guide prices, and that other requests are never priced.
 func TestProposalGenerationUsesPublishedPrices(t *testing.T) {
-	want := map[string][2]int64{"website": {375000, 12500}, "app": {1000000, 37500}, "service": {625000, 25000}}
+	want := map[string][2]int64{"website": {600000, 30000}, "app": {1500000, 80000}, "service": {950000, 50000}}
 	for product, prices := range want {
 		for _, lang := range []string{"en", "da"} {
 			d, ok := generatedProposal(product, "  Fictional bakery  ", lang)
@@ -42,6 +42,15 @@ func TestProposalGenerationUsesPublishedPrices(t *testing.T) {
 	if en, _ := generatedProposal("website", "x", "fr"); !strings.Contains(en.OneTimeTerms, "25% Danish VAT") {
 		t.Fatal("unknown language did not fall back to English")
 	}
+	if da, _ := generatedProposal("website", "x", "da"); !strings.Contains(da.OneTimeTerms, "Den første samtale er gratis.") {
+		t.Fatal("Danish version lacks the free first consultation")
+	}
+	if en, _ := generatedProposal("website", "x", "en"); !strings.Contains(en.OneTimeTerms, "The first consultation is free.") {
+		t.Fatal("English version lacks the free first consultation")
+	}
+	if offerings.LaunchDiscount.Percent != 25 || offerings.LaunchDiscount.Limit != 50 || offerings.LaunchDiscount.AppliesTo != "setup" || !offerings.LaunchDiscount.RequiresHosting {
+		t.Fatalf("launch discount drifted: %+v", offerings.LaunchDiscount)
+	}
 	for _, product := range []string{"other", "", "Website"} {
 		if _, ok := generatedProposal(product, "x", "en"); ok {
 			t.Fatalf("%q was priced without a published offering", product)
@@ -59,14 +68,14 @@ func TestProposalGeneratedVersionSavesWithoutTyping(t *testing.T) {
 	for _, lang := range []string{"en", "da"} {
 		status, body, _ := b.request("GET", "/portal/operator/requests/"+proposalRequestID+"?lang="+lang, nil, "")
 		block := section.FindString(body)
-		if status != 200 || block == "" || !strings.Contains(block, "10000 DKK") || !strings.Contains(block, "375 DKK") {
+		if status != 200 || block == "" || !strings.Contains(block, "15000 DKK") || !strings.Contains(block, "800 DKK") {
 			t.Fatalf("%s detail did not show the generated draft: %d", lang, status)
 		}
 		f := url.Values{}
 		for _, m := range hidden.FindAllStringSubmatch(block, -1) {
 			f.Add(m[1], html.UnescapeString(m[2]))
 		}
-		if len(f) != 11 || f.Get("scope") == "" || f.Get("one_time_dkk") != "10000" || f.Get("monthly_dkk") != "375" {
+		if len(f) != 11 || f.Get("scope") == "" || f.Get("one_time_dkk") != "15000" || f.Get("monthly_dkk") != "800" {
 			t.Fatalf("%s generated form is incomplete: %v", lang, len(f))
 		}
 		if status, _, _ := b.request("POST", "/portal/operator/requests/"+proposalRequestID+"/proposals", f, b.site.URL); status != http.StatusSeeOther {
@@ -78,7 +87,7 @@ func TestProposalGeneratedVersionSavesWithoutTyping(t *testing.T) {
 	if err := b.pool.QueryRow(b.f.ctx, `SELECT scope,deliverables,one_time_terms,one_time_minor,monthly_minor FROM portal_proposals WHERE request_id=$1 AND version=2`, proposalRequestID).Scan(&scope, &deliverables, &terms, &setup, &monthly); err != nil {
 		t.Fatal(err)
 	}
-	if scope != "En webapp: Fictional proposal request\n\nErstat en tilbagevendende manuel opgave med et værktøj til din måde at arbejde på." || !strings.Contains(deliverables, "\n- ") || setup != 1000000 || monthly != 37500 || !strings.HasSuffix(terms, "Priserne er inkl. 25 % moms.") {
+	if scope != "En webapp: Fictional proposal request\n\nErstat en tilbagevendende manuel opgave med et værktøj til din måde at arbejde på." || !strings.Contains(deliverables, "\n- ") || setup != 1500000 || monthly != 80000 || !strings.HasSuffix(terms, "Priserne er inkl. 25 % moms.") {
 		t.Fatalf("saved generated version differs: %q %d %d", scope, setup, monthly)
 	}
 	if _, err := b.pool.Exec(b.f.ctx, `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief) VALUES('BBBBBBBBBBBBBBBBBBBBBBBBBB','private-client-key','BBBBBBBBBBBBBBBBBBBBBBBBBB','other','Fictional other request','Something else')`); err != nil {

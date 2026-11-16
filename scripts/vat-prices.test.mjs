@@ -2,19 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { companyCopyFor, companyFacts } from '../src/components/business/company-copy.ts';
 import {
-  createBusinessCopy, guideOffers, netOf, vatInclusiveOffers, vatPriceMarker, vatRatePercent,
+  createBusinessCopy, guideOffers, launchDiscount, launchSetupOf, netOf, vatInclusiveOffers, vatPriceMarker, vatRatePercent,
 } from '../src/components/business/business-copy.ts';
 
 // Historical net floors are regression expectations, never a visitor price state.
 const offers = [{id:'website',setup:2995,monthly:99},{id:'app',setup:7995,monthly:299},{id:'service',setup:4995,monthly:199}];
 
-// The maintainer's #154 decision: rounded VAT-inclusive totals whose net amount
-// never falls below the earlier price, which now acts as a floor.
+// The maintainer's decision of 15 November 2026: fixed VAT-inclusive one-time
+// prices plus optional monthly hosting, all above the earlier net floors.
 const decided = {
-  website: { setup: 3750, monthly: 125 },
-  app: { setup: 10000, monthly: 375 },
-  service: { setup: 6250, monthly: 250 },
+  website: { setup: 6000, monthly: 300 },
+  app: { setup: 15000, monthly: 800 },
+  service: { setup: 9500, monthly: 500 },
 };
+// Launch offer: 25% off the one-time price only, for the first 50 customers with hosting.
+const launch = { website: 4500, app: 11250, service: 7125 };
 
 test('current identity has the confirmed effective date and no serialized PMV facts', () => {
   assert.equal(companyFacts().businessType, 'Enkeltmandsvirksomhed');
@@ -38,21 +40,19 @@ test('no VAT-inclusive total lowers the net amount below the earlier price', () 
   }
 });
 
-test('VAT is never added to an already VAT-inclusive total', () => {
-  // A net amount as large as the earlier price plus VAT would mean VAT had
-  // already been added once before this total added it again.
-  for (const [i, offer] of vatInclusiveOffers.entries()) {
-    for (const field of ['setup', 'monthly']) {
-      const ceiling = offers[i][field] * (100 + vatRatePercent) / 100;
-      assert.ok(netOf(offer[field]) < ceiling, `${offer.id} ${field}: net ${netOf(offer[field])} must stay below ${ceiling}`);
-    }
+test('the launch offer takes 25% off the one-time price only, for the first 50 customers', () => {
+  assert.deepEqual(launchDiscount, { percent: 25, limit: 50 });
+  for (const offer of vatInclusiveOffers) {
+    assert.equal(launchSetupOf(offer.setup), launch[offer.id], `${offer.id} launch price`);
+    assert.doesNotThrow(() => netOf(launchSetupOf(offer.setup)), `${offer.id} launch price has a whole-krone net amount`);
   }
+  assert.throws(() => launchSetupOf(9501), /not whole kroner/);
 });
 
 test('all six gross totals contain the exact approved net amount and VAT', () => {
-  const expected = [[375000, 300000, 75000], [12500, 10000, 2500],
-    [1000000, 800000, 200000], [37500, 30000, 7500],
-    [625000, 500000, 125000], [25000, 20000, 5000]];
+  const expected = [[600000, 480000, 120000], [30000, 24000, 6000],
+    [1500000, 1200000, 300000], [80000, 64000, 16000],
+    [950000, 760000, 190000], [50000, 40000, 10000]];
   const actual = vatInclusiveOffers.flatMap(offer => ['setup', 'monthly'].map(field => {
     const gross = offer[field] * 100, net = netOf(offer[field]) * 100;
     return [gross, net, gross - net];

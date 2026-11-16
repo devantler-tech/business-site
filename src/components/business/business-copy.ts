@@ -3,19 +3,29 @@ import { customerScopeCopy } from './customer-scope.ts';
 import { companyCopy } from './company-copy.ts';
 export type Locale = 'en' | 'da';
 
-// Introductory guide prices, not a checkout catalogue. Scope and running costs
-// are confirmed in a written quote before a project starts.
+// Fixed VAT-inclusive prices for the scope each offer describes, not a checkout
+// catalogue. Work beyond that scope gets its own fixed-price quote; no hourly rates.
 /** Danish VAT rate, in percent, included in the VAT-inclusive guide prices. */
 export const vatRatePercent = 25;
 
-// VAT-inclusive guide totals decided for an ordinarily VAT-registered business
-// (#154). Each total's net amount stays at or above the historical net floor
-// recorded in the pricing tests, so adding VAT never lowers what the business keeps.
+// VAT-inclusive fixed prices the maintainer approved on 15 November 2026: a one-time
+// project price plus an optional monthly hosting price. Each has a whole-krone net amount.
 export const vatInclusiveOffers = [
-  { id: 'website', setup: 3750, monthly: 125 },
-  { id: 'app', setup: 10000, monthly: 375 },
-  { id: 'service', setup: 6250, monthly: 250 },
+  { id: 'website', setup: 6000, monthly: 300 },
+  { id: 'app', setup: 15000, monthly: 800 },
+  { id: 'service', setup: 9500, monthly: 500 },
 ] as const;
+
+/** Launch offer: the first `limit` customers who order a project with hosting get
+ * `percent` off its one-time price. Hosting stays at the normal monthly price. */
+export const launchDiscount = { percent: 25, limit: 50 } as const;
+
+/** The one-time launch price; throws when it is not whole kroner. */
+export function launchSetupOf(setup: number): number {
+  const price = (setup * (100 - launchDiscount.percent)) / 100;
+  if (!Number.isInteger(price)) throw new Error(`Launch price of ${setup} is not whole kroner`);
+  return price;
+}
 
 /** The whole-krone net amount inside a VAT-inclusive total; throws when it is not exact. */
 export function netOf(total: number): number {
@@ -54,12 +64,14 @@ const previewCopy = {
     developerNote: 'You’ll work directly with me, from our first conversation to the handover.',
     publicCode: 'My code on GitHub',
     servicesTitle: 'What I can help you with',
-    servicesIntro: 'Introductory starting prices for a focused first version. Larger projects can grow through agreed iterations, each with its own scope, schedule and price.',
-    starting: 'Build from', monthly: 'Optional hosting from', perMonth: '/ month', currency: 'DKK',
+    servicesIntro: 'Fixed prices for a focused first version. Larger projects grow through agreed iterations, each with its own scope, schedule and fixed price. The first consultation is free.',
+    starting: 'Fixed price', monthly: 'Optional hosting', perMonth: '/ month', currency: 'DKK',
+    launchLabel: 'Launch price with hosting',
+    launchNote: `Launch offer: the first ${launchDiscount.limit} customers who order a project together with hosting get ${launchDiscount.percent}% off its one-time price. Hosting is charged at the normal monthly price. The offer ends when the ${launchDiscount.limit}th customer has ordered, and the normal one-time prices apply after that. Your proposal confirms whether a launch place is still available.`,
     offerCopy: [
       { title: 'A professional website', description: 'Make your business easy to find, understand and contact.', includes: ['Up to 5 straightforward pages', 'Mobile-friendly design', 'Your content, services and contact details', 'Basic search and sharing metadata'], boundary: 'You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately.' },
-      { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The starting price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
-      { title: 'A web service', description: 'Connect a process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the starting price.' },
+      { title: 'A web app', description: 'Build a tool around the way you work, from a focused first version to a larger application.', includes: ['A clearly defined first workflow', 'A focused browser-based interface', 'Agreed data inputs and outputs', 'Testing and a practical handover'], boundary: 'The fixed price covers a focused first version. Further workflows, permissions, payments, sensitive data and integrations are scoped and priced in agreed iterations.' },
+      { title: 'A web service', description: 'Connect a process or let two systems exchange useful information.', includes: ['One bounded automation or connection', 'Agreed inputs, outputs and limits', 'Basic operating documentation', 'Testing against the agreed use case'], boundary: 'External subscriptions, API charges, extra integrations and high-volume processing are not included in the fixed price.' },
     ],
     otherRequest: {
       title: 'Other requests',
@@ -132,12 +144,14 @@ const previewCopy = {
     developerNote: 'Du samarbejder direkte med mig, fra vores første samtale til overdragelsen.',
     publicCode: 'Min kode på GitHub',
     servicesTitle: 'Det kan jeg hjælpe dig med',
-    servicesIntro: 'Vejledende introduktionspriser for en afgrænset første version. Større projekter kan vokse gennem aftalte etaper, hver med sit eget omfang, sin tidsplan og sin pris.',
-    starting: 'Udvikling fra', monthly: 'Valgfri hosting fra', perMonth: '/ måned', currency: 'kr.',
+    servicesIntro: 'Faste priser for en afgrænset første version. Større projekter vokser gennem aftalte etaper, hver med sit eget omfang, sin tidsplan og sin faste pris. Den første samtale er gratis.',
+    starting: 'Fast pris', monthly: 'Valgfri hosting', perMonth: '/ måned', currency: 'kr.',
+    launchLabel: 'Introduktionspris med hosting',
+    launchNote: `Introduktionstilbud: De første ${launchDiscount.limit} kunder, der bestiller et projekt sammen med hosting, får ${launchDiscount.percent} % rabat på projektets engangspris. Hosting koster den normale månedspris. Tilbuddet ophører, når den ${launchDiscount.limit}. kunde har bestilt, og derefter gælder de normale engangspriser. Dit skriftlige tilbud bekræfter, om der stadig er en plads til introduktionsprisen.`,
     offerCopy: [
       { title: 'En professionel hjemmeside', description: 'Gør det nemt at finde, forstå og kontakte din virksomhed.', includes: ['Op til 5 enkle sider', 'Mobilvenligt design', 'Dit indhold, dine ydelser og kontaktoplysninger', 'Grundlæggende metadata til søgning og deling'], boundary: 'Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt.' },
-      { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Startprisen dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
-      { title: 'En webservice', description: 'Forbind en proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i startprisen.' },
+      { title: 'En webapp', description: 'Byg et værktøj til din måde at arbejde på, fra en afgrænset første version til en større applikation.', includes: ['En klart afgrænset første arbejdsgang', 'En fokuseret brugerflade i browseren', 'Aftalte data ind og ud', 'Test og en praktisk overdragelse'], boundary: 'Den faste pris dækker en afgrænset første version. Flere arbejdsgange, adgangsrettigheder, betaling, følsomme data og integrationer aftales og prissættes i etaper.' },
+      { title: 'En webservice', description: 'Forbind en proces, eller lad to systemer udveksle nyttig information.', includes: ['Én afgrænset automatisering eller forbindelse', 'Aftalte input, output og begrænsninger', 'Grundlæggende driftsdokumentation', 'Test af den aftalte anvendelse'], boundary: 'Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i den faste pris.' },
     ],
     otherRequest: {
       title: 'Andre opgaver',
