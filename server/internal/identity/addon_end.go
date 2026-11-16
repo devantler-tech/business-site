@@ -2,18 +2,21 @@ package identity
 
 import (
 	"context"
-	"errors"
+	"log"
 	"net/http"
 	"slices"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // endOrderAddon ends one monthly add-on of the client's order after the
 // current month, where they ordered it (Consumer Contracts Act, section 28 a).
 // The add-on is billed through that month and no longer after. A card order's
-// subscription first loses the add-on's item, without proration, so the
-// end is recorded only once Stripe no longer charges it; a retry converges.
-// The same add-on again is a retry.
+// subscription then loses the add-on's item, without proration: the end is
+// recorded first, so a lost Stripe answer leaves it to be asked again, and
+// Stripe's confirmation is recorded on its own. The same add-on again is a
+// retry, and asks Stripe again too.
 func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID, addonID string) error {
 	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginClientProposalWrite, true)
 	if err != nil {
@@ -30,7 +33,10 @@ func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID
 	case addon == nil || o.End != nil:
 		return errProposalConflict
 	case addon.LastMonth != nil:
-		return s.commitOrder(ctx, p, tx, s.pathReady(o.Collection))
+		if err = s.commitOrder(ctx, p, tx, s.pathReady(o.Collection)); err != nil || o.Collection != "card" {
+			return err
+		}
+		return s.scheduleAddonRemovals(ctx, o.ID)
 	case o.Collection == "card" && !s.cardBillingReady(ctx):
 		// Never change a subscription the card path's own gate holds closed.
 		return ErrDenied
@@ -47,23 +53,65 @@ func (s *Foundation) endOrderAddon(ctx context.Context, p Principal, id, orderID
 	}
 	if o.Collection == "card" {
 		// Locking the order's monthly Checkouts orders this against a Checkout
-		// completing: either the subscription is seen here, or its completion
-		// sees this end and removes the add-on itself.
-		var subscription *string
-		err = tx.QueryRow(ctx, `SELECT max(subscription_id) FROM (SELECT subscription_id FROM portal_card_checkouts WHERE order_id=$1 AND purpose='monthly' FOR UPDATE) c`, o.ID).Scan(&subscription)
-		switch {
-		case err != nil:
+		// completing: either its subscription is visible once this commits, or
+		// its completion sees this end and removes the add-on itself.
+		if _, err = tx.Exec(ctx, `SELECT 1 FROM portal_card_checkouts WHERE order_id=$1 AND purpose='monthly' FOR UPDATE`, o.ID); err != nil {
 			return errTriageStorage
-		case subscription == nil:
-			// No subscription yet: its completion removes the ended add-on.
-		default:
-			cfg := s.cards.Load()
-			if cfg == nil || cfg.Stripe.RemoveSubscriptionAddon(ctx, *subscription, addonID) != nil {
-				return errors.New("card billing: the add-on was not removed from the subscription")
-			}
 		}
 	}
-	return s.commitOrder(ctx, p, tx, s.pathReady(o.Collection))
+	if err = s.commitOrder(ctx, p, tx, s.pathReady(o.Collection)); err != nil || o.Collection != "card" {
+		return err
+	}
+	return s.scheduleAddonRemovals(ctx, o.ID)
+}
+
+// scheduleAddonRemovals asks Stripe to remove every ended add-on of the order
+// that its subscription may still charge, and records each confirmation. A
+// failure leaves the end recorded: the operator's page offers to ask again.
+func (s *Foundation) scheduleAddonRemovals(ctx context.Context, order string) error {
+	if !s.cardBillingReady(ctx) {
+		return ErrDenied
+	}
+	rows, err := s.pool.Query(ctx, `SELECT c.subscription_id,e.addon_id FROM portal_addon_ends e JOIN portal_card_checkouts c ON c.order_id=e.order_id AND c.purpose='monthly' AND c.subscription_id IS NOT NULL
+ WHERE e.order_id=$1 AND NOT EXISTS (SELECT 1 FROM portal_addon_removals r WHERE r.order_id=e.order_id AND r.addon_id=e.addon_id)`, order)
+	if err != nil {
+		return errTriageStorage
+	}
+	pending, err := pgx.CollectRows(rows, pgx.RowToStructByPos[struct{ Subscription, Addon string }])
+	if err != nil {
+		return errTriageStorage
+	}
+	for _, p := range pending {
+		if s.cards.Load().Stripe.RemoveSubscriptionAddon(ctx, p.Subscription, p.Addon) != nil {
+			log.Print("portal: card add-on removal not confirmed")
+			continue
+		}
+		if _, err = s.pool.Exec(ctx, `INSERT INTO portal_addon_removals(order_id,addon_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, order, p.Addon); err != nil {
+			return errTriageStorage
+		}
+	}
+	return nil
+}
+
+// retryAddonRemovals is the operator's form that asks Stripe again.
+func (b *browser) retryAddonRemovals(w http.ResponseWriter, r *http.Request) {
+	if !onlyFields(r, "order") || !opaqueRequestID.MatchString(r.PostForm.Get("order")) {
+		b.render(w, r, 400, "error", "", "")
+		return
+	}
+	b.proposalMutationResult(w, r, b.foundation.operatorAddonRemovals(r.Context(), b.principal(r.Context()), r.PathValue("id"), r.PostForm.Get("order")), "error")
+}
+
+// operatorAddonRemovals asks Stripe again for a current operator.
+func (s *Foundation) operatorAddonRemovals(ctx context.Context, p Principal, id, orderID string) error {
+	tx, o, err := s.orderWrite(ctx, p, id, orderID, s.beginOperatorWrite, false)
+	if err != nil {
+		return err
+	}
+	if err = commitProposalWrite(ctx, p, tx, s.orderReady); err != nil {
+		return err
+	}
+	return s.scheduleAddonRemovals(ctx, o.ID)
 }
 
 // endAddon serves the receipt's form that ends one monthly add-on.

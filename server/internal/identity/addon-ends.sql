@@ -12,3 +12,13 @@ CREATE TABLE portal_addon_ends (
   PRIMARY KEY(order_id, addon_id),
   FOREIGN KEY(order_id, addon_id) REFERENCES portal_order_addons(order_id, addon_id)
 );
+
+-- Stripe's confirmation that a card subscription no longer charges an ended
+-- add-on. An end without one is asked again until Stripe confirms.
+CREATE TABLE portal_addon_removals (
+  order_id text NOT NULL,
+  addon_id text NOT NULL,
+  removed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY(order_id, addon_id),
+  FOREIGN KEY(order_id, addon_id) REFERENCES portal_addon_ends(order_id, addon_id)
+);
