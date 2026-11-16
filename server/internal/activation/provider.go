@@ -1,5 +1,5 @@
 // Package activation owns operator-only staging and explicitly selected
-// production identity gates. Ordinary application startup remains disabled.
+// production capability gates. Ordinary application startup remains disabled.
 package activation
 
 import (
@@ -14,6 +14,20 @@ import (
 
 // ErrInvalid omits private configuration values from every startup diagnostic.
 var ErrInvalid = errors.New("portal activation is invalid")
+
+// productionFlags names independent release gates, never work or actor authority.
+// Missing capability settings stay off; staging continues to map identity only.
+var productionFlags = map[string]string{
+	"portal-identity":             "PORTAL_IDENTITY_FLAG",
+	"portal-contact-verification": "PORTAL_CONTACT_VERIFICATION_FLAG",
+	"portal-requests":             "PORTAL_REQUESTS_FLAG",
+	"portal-triage":               "PORTAL_TRIAGE_FLAG",
+	"portal-proposals":            "PORTAL_PROPOSALS_FLAG",
+	"portal-proposal-sharing":     "PORTAL_PROPOSAL_SHARING_FLAG",
+	"portal-proposal-acceptance":  "PORTAL_PROPOSAL_ACCEPTANCE_FLAG",
+	"portal-invoice-billing":      "PORTAL_INVOICE_BILLING_FLAG",
+	"portal-card-billing":         "PORTAL_CARD_BILLING_FLAG",
+}
 
 type provider struct {
 	openfeature.FeatureProvider
@@ -52,13 +66,16 @@ func identityEnvironment() openfeature.FeatureProvider {
 }
 
 // NewProduction requires an explicit operator profile and valid typed flag data.
-// It inherits process cancellation, has no staging timer, and enables no other key.
+// It inherits process cancellation and has no staging timer. Optional release
+// gates require their own settings; identity alone enables none of them.
 func NewProduction(ctx context.Context) (openfeature.FeatureProvider, error) {
 	if ctx == nil || ctx.Err() != nil || os.Getenv("PORTAL_IDENTITY_PROFILE") != "production" || os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") != "" || len(os.Getenv("PORTAL_IDENTITY_FLAG")) == 0 || len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 16384 {
 		return nil, ErrInvalid
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	p := &provider{FeatureProvider: identityEnvironment(), lifetime: lifetime, cancel: cancel, production: true}
+	p := &provider{FeatureProvider: environment.NewProvider(environment.WithFlagToEnvMapper(func(key string) string {
+		return productionFlags[key]
+	})), lifetime: lifetime, cancel: cancel, production: true}
 	if err := p.Init(openfeature.NewEvaluationContext("", nil)); err != nil {
 		cancel()
 		return nil, ErrInvalid
@@ -73,9 +90,14 @@ func (p *provider) Init(openfeature.EvaluationContext) error {
 		return ErrInvalid
 	}
 	if p.production {
-		result := p.FeatureProvider.BooleanEvaluation(p.lifetime, "portal-identity", false, openfeature.FlattenedContext{})
-		if result.ResolutionDetail().ErrorCode != "" || !p.valid(p.lifetime) {
-			return ErrInvalid
+		for key, setting := range productionFlags {
+			if os.Getenv(setting) == "" {
+				continue
+			}
+			result := p.FeatureProvider.BooleanEvaluation(p.lifetime, key, false, openfeature.FlattenedContext{})
+			if result.ResolutionDetail().ErrorCode != "" || !p.valid(p.lifetime) {
+				return ErrInvalid
+			}
 		}
 	}
 	return nil
@@ -91,6 +113,11 @@ func (p *provider) valid(ctx context.Context) bool {
 		return false
 	}
 	if p.production {
+		for _, setting := range productionFlags {
+			if len(os.Getenv(setting)) > 16384 {
+				return false
+			}
+		}
 		return os.Getenv("PORTAL_IDENTITY_PROFILE") == "production" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" && len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 0
 	}
 	return os.Getenv("PORTAL_IDENTITY_PROFILE") == "" && time.Now().Before(p.until) && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == p.lease
@@ -102,13 +129,16 @@ func (p *provider) BooleanEvaluation(ctx context.Context, key string, fallback b
 	// A successful explicit false keeps unrelated capabilities closed even if
 	// a future caller supplies true as its SDK fallback. Evaluation errors are
 	// still denied by the application's false-default/no-error gate.
-	if p.production && key != "portal-identity" {
-		return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{Reason: openfeature.DisabledReason}}
+	if p.production {
+		setting, supported := productionFlags[key]
+		if !supported || (key != "portal-identity" && os.Getenv(setting) == "") {
+			return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{Reason: openfeature.DisabledReason}}
+		}
 	}
 	denied := openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 		Reason: openfeature.ErrorReason, ResolutionError: openfeature.NewGeneralResolutionError("portal activation is unavailable"),
 	}}
-	if key != "portal-identity" || !p.valid(ctx) {
+	if (!p.production && key != "portal-identity") || !p.valid(ctx) {
 		return denied
 	}
 	result := p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, data)

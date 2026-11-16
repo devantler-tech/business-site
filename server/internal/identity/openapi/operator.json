@@ -1,0 +1,150 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Devantler Tech portal operator API",
+    "version": "1",
+    "description": "Every operator action, as the operator pages use it. Only a current operator may call it. Every call by a signed-in identity is recorded in the audit log before it is answered, refusals included; a call that cannot be recorded fails."
+  },
+  "servers": [{ "url": "/" }],
+  "security": [{ "portalSession": [] }],
+  "paths": {
+    "/operator/api/invitations": {
+      "get": {
+        "operationId": "invitations.list",
+        "summary": "Invitations that can still be accepted",
+        "responses": {
+          "200": {
+            "description": "All pending invitations, soonest expiry first; more than 1000 returns 503",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Invitation" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces": {
+      "get": {
+        "operationId": "workspaces.list",
+        "summary": "Every workspace and its members, revoked ones included",
+        "responses": {
+          "200": {
+            "description": "All workspaces by ID; more than 1000 memberships across them returns 503",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Workspace" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/audit": {
+      "get": {
+        "operationId": "audit.list",
+        "summary": "The newest 100 audit entries",
+        "responses": {
+          "200": {
+            "description": "Audit entries, newest first",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/AuditEntry" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/openapi.json": {
+      "get": {
+        "operationId": "openapi.read",
+        "summary": "This description",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "portalSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-portal_session",
+        "description": "The operator's portal session, from signing in at /operator/sign-in."
+      }
+    },
+    "responses": {
+      "SignIn": {
+        "description": "No session",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "OperatorsOnly": {
+        "description": "The caller is not a current operator; recorded as refused",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unavailable": {
+        "description": "The action failed or could not be recorded",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
+      "Invitation": {
+        "type": "object",
+        "required": ["subject", "workspace", "role", "expires"],
+        "properties": {
+          "subject": { "type": "string", "description": "The invited customer Dex subject" },
+          "workspace": { "type": "string" },
+          "role": { "type": "string", "enum": ["client", "operator"] },
+          "expires": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "required": ["id", "members"],
+        "properties": {
+          "id": { "type": "string" },
+          "members": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": ["subject", "role", "revoked"],
+        "properties": {
+          "subject": { "type": "string" },
+          "role": { "type": "string", "enum": ["client", "operator"] },
+          "revoked": { "type": "boolean" }
+        }
+      },
+      "AuditEntry": {
+        "type": "object",
+        "required": ["at", "actorKind", "actorSubject", "action", "target", "outcome"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "actorKind": { "type": "string", "enum": ["operator", "agent", "other"] },
+          "actorSubject": { "type": "string" },
+          "action": { "type": "string" },
+          "target": { "type": "string" },
+          "outcome": { "type": "string", "enum": ["allowed", "refused", "failed"] }
+        }
+      }
+    }
+  }
+}

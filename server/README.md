@@ -58,7 +58,13 @@ not allow arbitrary form destinations or maintain a social-provider origin list.
 
 Opaque SCS sessions are stored in PostgreSQL with hashed storage keys, rotated
 across sign-in, destroyed on logout, and bounded by both token expiry and a
-30-minute absolute lifetime. Each private request rechecks current membership;
+30-minute absolute lifetime. A completed login keeps its opaque cookie across
+browser restarts only until that same deadline; unfinished sign-ins remain
+session-only. Visiting the public website does not sign out or extend the
+session. The portal's website links preserve English/Danish, and returning with
+a valid session opens the workspace directly. A new authorization can reuse the
+provider's SSO session subject to its existing authentication/MFA policy.
+Each private request rechecks current membership;
 only a stored operator role can access `/portal/operator`. Session and CSRF
 cookies are Secure, HttpOnly, SameSite=Lax and `__Host-` scoped. Patched nosurf
 protects state-changing forms; fixed Host/Origin checks, no-store responses and
@@ -338,11 +344,32 @@ Leaving the profile and activation values absent retains ordinary disabled start
 The staging selection remains unchanged and cannot exceed ten minutes.
 
 The selected provider inherits process cancellation and SDK shutdown instead of
-borrowing a staging timer. Only the identity capability can be enabled. Current
-issuer/subject invitations and membership still authorize every private session;
-the profile grants no role and enables no request, payment or work capability.
+borrowing a staging timer. Identity alone enables no other capability. Each optional
+production setting below uses the same maintained-provider JSON as the identity flag:
+
+| OpenFeature capability        | Production setting                 |
+|-------------------------------|------------------------------------|
+| `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
+| `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
+| `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
+| `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |
+| `portal-proposal-sharing`     | `PORTAL_PROPOSAL_SHARING_FLAG`     |
+| `portal-proposal-acceptance`  | `PORTAL_PROPOSAL_ACCEPTANCE_FLAG`  |
+| `portal-invoice-billing`      | `PORTAL_INVOICE_BILLING_FLAG`      |
+| `portal-card-billing`         | `PORTAL_CARD_BILLING_FLAG`         |
+
+An absent or typed false setting keeps its capability off, even when another is on.
+A supplied malformed, wrong-type or oversized setting refuses production startup.
+The existing confined settings projection accepts these same named inputs and
+refuses mixing them with inherited values. Staging still maps identity only.
+Work approvals, worker execution and unrecognized flags have no production mapping.
+Current issuer/subject invitations and membership still authorize every private session;
+the profile grants no role, agreement, payment evidence or work authority.
 Before listening, the real command still verifies its restricted database login
 and configured TLS broker. Complete dependency configuration alone enables nothing.
+Every operation retains its existing prerequisite gates. Actual customer intake and
+payment activation remain a separate reviewed deployment after the applicable #21
+legal, provider and deployed-user-path checks; this configuration adds none of them.
 
 Configuration belongs to the operator's private process environment. Changing an
 external environment file does not change a running process. Disable the flag
@@ -354,8 +381,9 @@ The required suite exercises the compiled command's ordinary, staging, enabled,
 disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitation,
 cookie-session, membership-revocation and cancellation checks. These are source
 acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
-The shipped deployment stays disabled: #305 retains runtime delivery and #302
-retains deployed acceptance and the separately reviewed activation change.
+Source checks do not establish deployed acceptance: #305 retains runtime delivery,
+[Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
+identity acceptance and #21 owns later intake/payment activation.
 
 ### Production public-content template
 

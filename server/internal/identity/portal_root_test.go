@@ -26,7 +26,7 @@ var freshKey = regexp.MustCompile(`(name="[a-z_]*key" value=")[^"]*"`)
 // the shared-host link contract already validates, and none keeps the prefix.
 func TestRootPortalPagesMatchTheirSharedHostPages(t *testing.T) {
 	// A shared host links the public site as "/"; a root portal names its origin.
-	stripPrefix := strings.NewReplacer(`href="/"`, `href="`+fixtureSite+`/"`, `="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
+	stripPrefix := strings.NewReplacer(`href="/"`, `href="`+fixtureSite+`/"`, `href="/da/"`, `href="`+fixtureSite+`/da/"`, `="/portal/`, `="/`, `="/portal?`, `="/?`, `="/portal"`, `="/"`)
 	for _, name := range []string{"portal.html", "contact.html", "requests.html", "triage.html", "work-review.html"} {
 		t.Run(name, func(t *testing.T) {
 			shared, err := renderedLinkPagesFor(name, pages(internalRoot, ""), &browser{})
@@ -81,7 +81,7 @@ func TestPortalSignsInAtTheRootOfItsHost(t *testing.T) {
 		t.Fatalf("callback status=%d location=%q; want 303 /?lang=da", status, header.Get("Location"))
 	}
 	status, body, _ := b.request("GET", "/?lang=da", nil, "")
-	if status != 200 || !strings.Contains(body, `action="/logout?lang=da"`) || !strings.Contains(body, `class="back" href="`+fixtureSite+`/"`) || prefixedLink.MatchString(body) {
+	if status != 200 || !strings.Contains(body, `action="/logout?lang=da"`) || !strings.Contains(body, `class="back" href="`+fixtureSite+`/da/"`) || prefixedLink.MatchString(body) {
 		t.Fatalf("root home: status=%d prefixed=%v", status, prefixedLink.MatchString(body))
 	}
 	for path, want := range map[string]string{"/portal/": "/", "/portal/sign-in?lang=da": "/sign-in?lang=da", "/portal/requests": "/requests"} {
