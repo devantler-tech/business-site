@@ -3,10 +3,10 @@
   "info": {
     "title": "Devantler Tech portal operator API",
     "version": "1",
-    "description": "Every operator action, as the operator pages use it. Only a current operator may call it. Every call by a signed-in identity is recorded in the audit log before it is answered, refusals included; a call that cannot be recorded fails."
+    "description": "Every operator action, as the operator pages use it. Human callers need a current operator session. Configured machine identities use a distinct JWT audience and are read-only unless granted an exact action. Agents cannot move money or delete customer data. Every verified caller is recorded in the audit log before answering, refusals included; a call that cannot be recorded fails."
   },
   "servers": [{ "url": "/" }],
-  "security": [{ "portalSession": [] }],
+  "security": [{ "portalSession": [] }, { "agentBearer": [] }],
   "paths": {
     "/operator/api/invitations": {
       "get": {
@@ -87,16 +87,22 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-portal_session",
-        "description": "The operator's portal session, from signing in at /operator/sign-in."
+        "description": "The operator's portal session, from signing in at /operator/sign-in. Never combine it with a bearer token."
+      },
+      "agentBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Platform-issued machine JWT: configured issuer and subject, exact separate audience, signed and valid for at most five minutes. No browser session or human page access."
       }
     },
     "responses": {
       "SignIn": {
-        "description": "No session",
+        "description": "No session, invalid machine proof, or combined bearer and session",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       },
       "OperatorsOnly": {
-        "description": "The caller is not a current operator; recorded as refused",
+        "description": "The verified caller is not a current operator or lacks this machine action; recorded as refused",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       },
       "Unavailable": {

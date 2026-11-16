@@ -51,6 +51,43 @@ type agentSubject struct {
 	Grants  []string `json:"grants"`
 }
 
+// UnmarshalJSON refuses duplicate properties as well as unknown ones: a policy
+// must have one meaning before it is installed, regardless of JSON consumer.
+func (a *agentSubject) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return ErrDenied
+	}
+	seen := map[string]bool{}
+	for decoder.More() {
+		key, err := decoder.Token()
+		name, ok := key.(string)
+		if err != nil || !ok || seen[name] {
+			return ErrDenied
+		}
+		seen[name] = true
+		switch name {
+		case "issuer":
+			err = decoder.Decode(&a.Issuer)
+		case "subject":
+			err = decoder.Decode(&a.Subject)
+		case "grants":
+			err = decoder.Decode(&a.Grants)
+		default:
+			return ErrDenied
+		}
+		if err != nil {
+			return ErrDenied
+		}
+	}
+	end, err := decoder.Token()
+	if err != nil || end != json.Delim('}') || decoder.Decode(new(any)) != io.EOF {
+		return ErrDenied
+	}
+	return nil
+}
+
 type agentAccess struct {
 	broker   *Broker
 	subjects map[string]map[string]bool
