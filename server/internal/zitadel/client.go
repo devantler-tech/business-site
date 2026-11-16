@@ -57,13 +57,16 @@ type user struct {
 
 // call never follows redirects or returns a provider's diagnostic body. The
 // projected credential is read for each call so rotation needs no process restart.
-func (c *Client) call(ctx context.Context, method, path string, body, result any) (int, error) {
+func (c *Client) call(ctx context.Context, method, path string, body, result any, allowed func() bool) (int, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return 0, ErrUnavailable
 	}
 	token, err := c.token()
 	if err != nil || token == "" || len(token) > 16384 || strings.ContainsAny(token, " \t\r\n") {
+		return 0, ErrUnavailable
+	}
+	if ctx.Err() != nil || (allowed != nil && !allowed()) {
 		return 0, ErrUnavailable
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, bytes.NewReader(encoded))
@@ -99,7 +102,7 @@ func (c *Client) find(ctx context.Context, email string) (string, error) {
 	var found struct {
 		Result []user `json:"result"`
 	}
-	if _, err := c.call(ctx, "POST", "/v2/users", query, &found); err != nil {
+	if _, err := c.call(ctx, "POST", "/v2/users", query, &found, nil); err != nil {
 		return "", err
 	}
 	if len(found.Result) == 0 {
@@ -116,10 +119,10 @@ func (c *Client) find(ctx context.Context, email string) (string, error) {
 }
 
 // EnsureUser creates or reuses one human in the configured organization.
-func (c *Client) EnsureUser(ctx context.Context, name, email string) (string, error) {
+func (c *Client) EnsureUser(ctx context.Context, name, email string, allowed func() bool) (string, error) {
 	address, err := mail.ParseAddress(email)
 	parts := strings.Fields(name)
-	if err != nil || address.Address != email || address.Name != "" || len(email) > 254 || len(parts) < 2 || len(name) > 200 || strings.ContainsAny(name, "\r\n\x00") {
+	if allowed == nil || err != nil || address.Address != email || address.Name != "" || len(email) > 254 || len(parts) < 2 || len(name) > 200 || strings.ContainsAny(name, "\r\n\x00") {
 		return "", ErrUnavailable
 	}
 	id, err := c.find(ctx, email)
@@ -133,7 +136,7 @@ func (c *Client) EnsureUser(ctx context.Context, name, email string) (string, er
 			Owner string `json:"resourceOwner"`
 		} `json:"details"`
 	}
-	status, err := c.call(ctx, "POST", "/management/v1/users/human", body, &created)
+	status, err := c.call(ctx, "POST", "/management/v1/users/human", body, &created, allowed)
 	if status == http.StatusConflict {
 		return c.findExisting(ctx, email)
 	}
@@ -151,14 +154,14 @@ func (c *Client) findExisting(ctx context.Context, email string) (string, error)
 	return id, nil
 }
 
-func (c *Client) state(ctx context.Context, id, action string) error {
-	if !identifier.MatchString(id) {
+func (c *Client) state(ctx context.Context, id, action string, allowed func() bool) error {
+	if allowed == nil || !identifier.MatchString(id) {
 		return ErrUnavailable
 	}
 	var existing struct {
 		User user `json:"user"`
 	}
-	if _, err := c.call(ctx, "GET", "/v2/users/"+id, nil, &existing); err != nil || existing.User.ID != id || existing.User.Details.Owner != c.org || existing.User.Human == nil {
+	if _, err := c.call(ctx, "GET", "/v2/users/"+id, nil, &existing, nil); err != nil || existing.User.ID != id || existing.User.Details.Owner != c.org || existing.User.Human == nil {
 		return ErrUnavailable
 	}
 	state := existing.User.State
@@ -169,16 +172,16 @@ func (c *Client) state(ctx context.Context, id, action string) error {
 		return nil
 	}
 	var changed map[string]json.RawMessage
-	_, err := c.call(ctx, "POST", "/management/v1/users/"+id+"/_"+action, struct{}{}, &changed)
+	_, err := c.call(ctx, "POST", "/management/v1/users/"+id+"/_"+action, struct{}{}, &changed, allowed)
 	return err
 }
 
 // DeactivateUser disables a customer without deleting any data.
-func (c *Client) DeactivateUser(ctx context.Context, id string) error {
-	return c.state(ctx, id, "deactivate")
+func (c *Client) DeactivateUser(ctx context.Context, id string, allowed func() bool) error {
+	return c.state(ctx, id, "deactivate", allowed)
 }
 
 // ReactivateUser re-enables a previously disabled customer.
-func (c *Client) ReactivateUser(ctx context.Context, id string) error {
-	return c.state(ctx, id, "reactivate")
+func (c *Client) ReactivateUser(ctx context.Context, id string, allowed func() bool) error {
+	return c.state(ctx, id, "reactivate", allowed)
 }

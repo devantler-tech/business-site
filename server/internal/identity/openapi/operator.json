@@ -9,6 +9,20 @@
   "security": [{ "portalSession": [] }],
   "paths": {
     "/operator/api/invitations": {
+      "post": {
+        "operationId": "invitations.create",
+        "summary": "Invite a customer and send account setup for a new customer",
+        "parameters": [{"name":"X-CSRF-Token","in":"header","description":"Required for browser sessions; machine bearer calls never carry browser cookies.","schema":{"type":"string"}}],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}},"application/x-www-form-urlencoded":{"schema":{"$ref":"#/components/schemas/CustomerInvitationInput"}}}},
+        "responses": {
+          "200":{"description":"Single-use invitation recorded, valid for seven days","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Invitation"}}}},
+          "303":{"description":"Native HTML form returns to the customer overview"},
+          "400":{"$ref":"#/components/responses/InvalidInput"},
+          "401":{"$ref":"#/components/responses/SignIn"},
+          "403":{"$ref":"#/components/responses/OperatorsOnly"},
+          "503":{"$ref":"#/components/responses/Unavailable"}
+        }
+      },
       "get": {
         "operationId": "invitations.list",
         "summary": "Invitations that can still be accepted",
@@ -91,6 +105,7 @@
       }
     },
     "responses": {
+      "InvalidInput": {"description":"Invalid or conflicting action; recorded as refused","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
       "SignIn": {
         "description": "No session",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
@@ -105,6 +120,7 @@
       }
     },
     "schemas": {
+      "CustomerInvitationInput": {"type":"object","additionalProperties":false,"required":["name","email","workspace"],"properties":{"name":{"type":"string","minLength":3,"maxLength":200,"description":"First and last name"},"email":{"type":"string","format":"email","maxLength":254},"workspace":{"type":"string","minLength":1,"maxLength":100},"csrf_token":{"type":"string","description":"Native browser form CSRF token; JSON clients use the header."}}},
       "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
       "Invitation": {
         "type": "object",
