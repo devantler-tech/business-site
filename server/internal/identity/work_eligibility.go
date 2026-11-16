@@ -39,7 +39,7 @@ func (s *Foundation) workEligibilityReady(ctx context.Context) bool {
 		return false
 	}
 	enabled, err := s.flags.BooleanValue(ctx, "portal-work-eligibility", false, openfeature.NewEvaluationContext("", nil))
-	return err == nil && enabled && ctx.Err() == nil
+	return err == nil && enabled && s.ready(ctx) && ctx.Err() == nil
 }
 
 func (s *Foundation) readWorkEligibility(ctx context.Context, p Principal, cursor triageCursor) (workEligibilityPage, error) {

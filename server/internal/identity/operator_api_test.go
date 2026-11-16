@@ -113,7 +113,9 @@ func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
 func TestOperatorAPIOnlyForOperators(t *testing.T) {
 	var routes []operatorRoute
 	for _, route := range operatorRoutes {
-		if route.method == "GET" && route.path != "/workspaces/members" {
+		// Parameterized and independently gated reads have their own complete
+		// boundary tests, rather than this identity-only inventory fixture.
+		if route.method == "GET" && route.path != "/workspaces/members" && route.path != "/work-eligibility" {
 			routes = append(routes, route)
 		}
 	}
