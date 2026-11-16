@@ -117,7 +117,7 @@ func TestMachineAPIWriteGrantsAreExactAndCannotMoveMoneyOrDelete(t *testing.T) {
 			calls := 0
 			actions := []string{"invitations.create", "invitations.revoke", "workspaces.create", "members.deactivate", "members.reactivate", "payments.refund", "customers.delete", "unknown.write"}
 			for _, action := range actions {
-				operatorRoutes = append(operatorRoutes, operatorRoute{"POST", "/test-" + action, action, func(_ *browser, ctx context.Context) (any, error) {
+				operatorRoutes = append(operatorRoutes, operatorRoute{"POST", "/test-" + action, action, func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
 					calls++
 					setOperatorTarget(ctx, "synthetic-target")
 					return map[string]bool{"accepted": true}, nil
