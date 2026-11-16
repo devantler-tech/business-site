@@ -48,8 +48,8 @@ func TestProposalGenerationUsesPublishedPrices(t *testing.T) {
 	if en, _ := generatedProposal("website", "x", "en"); !strings.Contains(en.OneTimeTerms, "The first consultation is free.") {
 		t.Fatal("English version lacks the free first consultation")
 	}
-	if offerings.LaunchDiscount.Percent != 25 || offerings.LaunchDiscount.Limit != 50 || offerings.LaunchDiscount.AppliesTo != "setup" || !offerings.LaunchDiscount.RequiresHosting {
-		t.Fatalf("launch discount drifted: %+v", offerings.LaunchDiscount)
+	if publishedLaunch.Percent != 25 || publishedLaunch.Limit != 50 || publishedLaunch.AppliesTo != "setup" || !publishedLaunch.RequiresHosting {
+		t.Fatalf("launch discount drifted: %+v", publishedLaunch)
 	}
 	for _, product := range []string{"other", "", "Website"} {
 		if _, ok := generatedProposal(product, "x", "en"); ok {

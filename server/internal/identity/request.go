@@ -214,6 +214,11 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 					page.OrderAcceptance, page.OrderProposal = a.ID, &a.Proposal
 				}
 			}
+			if page.Launch, err = b.foundation.readLaunchOffer(r.Context(), b.principal(r.Context()), page.Order, page.OrderProposal, page.SharedProposal); err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+			page.LaunchEnded = r.URL.Query().Get("launch") == "ended"
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -271,6 +276,8 @@ type requestPageData struct {
 	OrderProposal     *projectProposal
 	Checkouts         []orderCheckout
 	CheckoutRestart   bool
+	Launch            *launchPlace // the launch discount an order would get now
+	LaunchEnded       bool         // the last launch place went before the client's order
 }
 
 func (b *browser) renderRequests(w http.ResponseWriter, r *http.Request, status int, view string, d projectRequest, rows []projectRequest, problem string) {
