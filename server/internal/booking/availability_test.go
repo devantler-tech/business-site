@@ -25,7 +25,7 @@ func TestAvailabilityRequiresExplicitPolicy(t *testing.T) {
 		{"negative lead time", func(p *Policy) { p.LeadTime = duration(-time.Minute) }},
 		{"negative buffer", func(p *Policy) { p.BufferAfter = duration(-time.Minute) }},
 		{"zero slot step", func(p *Policy) { p.SlotStep = 0 }},
-		{"subminute slot step", func(p *Policy) { p.SlotStep = time.Second }},
+		{"fractional minute slot step", func(p *Policy) { p.SlotStep = time.Second }},
 		{"invalid opening", func(p *Policy) {
 			p.Openings = []Opening{{Date: "2026-02-30", Start: 9 * time.Hour, End: 17 * time.Hour}}
 		}},

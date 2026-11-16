@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
-	_ "time/tzdata" // The restricted runtime image does not supply zoneinfo files.
+	_ "time/tzdata" // The restricted runtime image does not supply timezone files.
 )
 
 // ErrUnavailable covers closed policy and unknown availability without exposing
