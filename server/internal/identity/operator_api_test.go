@@ -149,9 +149,10 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						blocked, release = pause.blocked, pause.release
 					} else {
 						query := "FROM portal_operator_audit ORDER BY"
-						if path == "/api/invitations" {
+						switch path {
+						case "/api/invitations":
 							query = "FROM portal_invitations WHERE"
-						} else if path == "/api/workspaces" {
+						case "/api/workspaces":
 							query = "FROM portal_memberships ORDER BY"
 						}
 						pause := installCompletedRead(t, b, query)
@@ -182,9 +183,10 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						t.Fatal("operator read missed its authority checkpoint")
 					}
 					query := ""
-					if change == "deleted" {
+					switch change {
+					case "deleted":
 						query = "DELETE FROM portal_sessions"
-					} else if change == "expired" {
+					case "expired":
 						query = "UPDATE portal_sessions SET expiry=now()-interval '1 minute'"
 					}
 					if query != "" {
