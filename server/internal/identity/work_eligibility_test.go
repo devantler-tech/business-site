@@ -200,7 +200,7 @@ func TestWorkEligibilityChangedAgreementAndMembershipPause(t *testing.T) {
 func TestWorkEligibilityFinalWaitRefusesStaleRead(t *testing.T) {
 	for _, at := range []int32{3, 4} {
 		for _, change := range []string{"unchanged", "flag", "cancel", "expiry"} {
-			t.Run(string(rune('0'+at))+"/"+change, func(t *testing.T) {
+			t.Run(string('0'+at)+"/"+change, func(t *testing.T) {
 				b, op := approvalFixture(t)
 				if change == "expiry" {
 					op.expires = time.Now().Add(time.Second)
