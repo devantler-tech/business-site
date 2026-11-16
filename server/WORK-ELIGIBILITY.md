@@ -77,9 +77,13 @@ operator API in [#665](https://github.com/devantler-tech/business-site/pull/665)
 It adds no migration of its own. Included-maintenance authorization remains
 [#259](https://github.com/devantler-tech/business-site/issues/259); covered work
 must not acquire an additional feature invoice through this policy.
-Appointments consume `collectWorkEvidence` and `readOriginalConfirmation` in
-their own authorized booking transaction, without selecting `work_current` or
-acquiring a software lease. They remain outside software delivery claims.
+Future appointments require the shared locked payment and confirmation facts,
+with appointment authority and timing bound to the exact persisted reservation
+start and revision in the same booking transaction. The current
+`collectWorkEvidence` policy evaluates software work at the current database time;
+the appointment seam remains separate implementation work. Appointment
+reservations stay outside `work_current`, software leases and software delivery
+claims.
 A later software queue needs
 an explicit server-owned delivery kind bound to the approved agreement;
 `other` and free-text briefs cannot establish that classification.
