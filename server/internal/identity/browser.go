@@ -332,8 +332,13 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 // A current member goes home instead, so a link here cannot sign anyone out.
 // A browser that keeps being refused gets one static page, never a loop.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
-	if _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); err == nil {
+	switch _, _, err := b.foundation.membership(r.Context(), b.principal(r.Context())); {
+	case err == nil:
 		http.Redirect(w, r, "/portal/?lang="+language(r), http.StatusSeeOther)
+		return
+	case !errors.Is(err, ErrDenied):
+		// A failed lookup is not a missing membership: keep the session intact.
+		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}
 	refused, since := b.refusals(r.Context())
@@ -540,7 +545,8 @@ func (b *browser) principal(ctx context.Context) Principal {
 func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 	client, role, err := b.foundation.membership(r.Context(), b.principal(r.Context()))
 	if err != nil {
-		// Opening the portal without a membership goes straight to the login.
+		// Opening the portal without a membership goes straight to the login;
+		// signIn shows the unavailable page instead if the lookup itself failed.
 		b.signIn(w, r)
 		return
 	}

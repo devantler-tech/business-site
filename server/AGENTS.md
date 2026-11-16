@@ -154,7 +154,11 @@ resource lifecycle at the call.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
 consumption, current membership and concrete record client scopes. A token's
-email/groups or browser fields cannot assign a role. `Invite`/`Revoke` are trusted
+email/groups or browser fields cannot assign a role, with one exception: a single
+`groups` value in Dex's verified ID token, from the administrator-only ZITADEL
+attribute `portal_workspace`, may admit and continue a client membership of that
+workspace, never an operator
+([ADR 0032](../docs/adr/0032-customer-access-from-zitadel-attribute.md)). `Invite`/`Revoke` are trusted
 control-plane provisioning methods, not permission to expose unauthenticated APIs.
 Browser routes use maintained code exchange/PKCE, durable opaque sessions,
 token-based CSRF, current membership and accessible EN/DA forms. Keep the

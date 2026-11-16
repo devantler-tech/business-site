@@ -783,3 +783,25 @@ func (b *browserFixture) callbackURL() string {
 	}
 	return b.site.URL + b.callbackPath
 }
+
+// TestBrowserSignInKeepsSessionWhenLookupFails: a failed membership lookup is
+// not a missing membership, so opening sign-in shows the unavailable page and
+// keeps the member's session instead of starting a new login.
+func TestBrowserSignInKeepsSessionWhenLookupFails(t *testing.T) {
+	b := newBrowserFixture(t)
+	b.finish(b.startInvited("client-a", "client-a", "client"))
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(b.f.ctx, "REVOKE SELECT ON portal_memberships FROM portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	status, _, headers := b.request("GET", "/portal/sign-in?lang=da", nil, "")
+	if _, err := migrator.Exec(b.f.ctx, "GRANT SELECT ON portal_memberships TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusServiceUnavailable || headers.Get("Location") != "" {
+		t.Fatalf("a failed lookup started a new login: %d %s", status, headers.Get("Location"))
+	}
+	if status, _, _ = b.request("GET", "/portal/?lang=da", nil, ""); status != http.StatusOK {
+		t.Fatalf("a failed lookup cleared the member's session: %d", status)
+	}
+}

@@ -254,7 +254,12 @@ func (s *Foundation) admit(ctx context.Context, p Principal) error {
 	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
 		return err
 	}
-	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,$3,'client') ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, p.workspace)
+	// Under the identity's lock, an invitation pending now still wins: the next
+	// sign-in redeems it rather than being overridden by the workspace.
+	result, err := tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
+ SELECT $1,$2,$3,'client'
+ WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now())
+ ON CONFLICT(issuer,subject) DO NOTHING`, p.issuer, p.subject, p.workspace)
 	if err != nil {
 		return fmt.Errorf("create membership: %w", err)
 	}

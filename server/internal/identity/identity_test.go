@@ -753,3 +753,20 @@ func TestGroupsAdmitFirstSignInAsClient(t *testing.T) {
 		t.Fatalf("concurrent first sign-ins: memberships=%d failed=%d, want 1 and 0", memberships, failed.Load())
 	}
 }
+
+// An invitation that becomes pending before admission takes the identity's
+// lock still wins: admission refuses rather than overriding it.
+func TestAdmissionYieldsToPendingInvitation(t *testing.T) {
+	f := fixtureBroker(t)
+	pool := fixtureDB(t)
+	svc := enabled(t, pool, f)
+	leftoverInvitation(t, pool, f, "late-invite", "beta")
+	p := Principal{issuer: f.issuer, subject: "late-invite", audience: "portal-fixture", workspace: "acme", expires: time.Now().Add(time.Hour)}
+	if err := svc.admit(f.ctx, p); !errors.Is(err, ErrDenied) {
+		t.Fatalf("admission overrode a pending invitation: %v", err)
+	}
+	var memberships int
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='late-invite'").Scan(&memberships); err != nil || memberships != 0 {
+		t.Fatal("admission created a membership despite a pending invitation")
+	}
+}
