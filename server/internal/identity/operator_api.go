@@ -89,6 +89,13 @@ func (s *Foundation) audit(ctx context.Context, p Principal, kind, action, targe
 // The action buffers its complete response before the final authority checks.
 func (b *browser) operatorCall(r *http.Request, action string, run func(context.Context, string) ([]byte, error)) (int, []byte) {
 	ctx := r.Context()
+	if len(r.Header.Values("Authorization")) > 0 {
+		bound, status := b.agentAuthorization(r, action)
+		if bound == nil {
+			return status, nil
+		}
+		return b.authorizedOperatorCall(ctx, bound, status, run)
+	}
 	original := b.contactAuthority(ctx, "")
 	p := original.principal
 	if p.subject == "" {
@@ -102,20 +109,40 @@ func (b *browser) operatorCall(r *http.Request, action string, run func(context.
 	if err != nil && !errors.Is(err, ErrDenied) {
 		return http.StatusServiceUnavailable, nil
 	}
-	kind, status, outcome := "other", http.StatusForbidden, "refused"
-	var result []byte
+	bound := &operatorAuthority{principal: p, kind: "other", action: action, client: client}
+	status := http.StatusForbidden
 	if err == nil && role == "operator" {
-		kind, status, outcome = "operator", http.StatusOK, "allowed"
-		if result, err = run(ctx, client); err != nil || !b.foundation.ready(ctx) || !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
-			result, status, outcome = nil, http.StatusServiceUnavailable, "failed"
+		bound.kind, status = "operator", http.StatusOK
+		bound.current = func(ctx context.Context, query privateResponseQuery) bool {
+			return b.durableSnapshotAllowed(ctx, snapshot, client, "operator", query)
 		}
 	}
-	if b.foundation.audit(ctx, p, kind, action, "", outcome) != nil {
+	return b.authorizedOperatorCall(ctx, bound, status, run)
+}
+
+// authorizedOperatorCall is shared by human and machine calls. Every wait is
+// followed by the original authority check, including before a callback can write.
+func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAuthority, status int, run func(context.Context, string) ([]byte, error)) (int, []byte) {
+	ctx, cancel := context.WithDeadline(context.WithValue(ctx, operatorAuthorityKey{}, bound), bound.principal.expires)
+	defer cancel()
+	outcome := "refused"
+	var result []byte
+	if status == http.StatusOK {
+		outcome = "allowed"
+		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
+			status, outcome = http.StatusServiceUnavailable, "failed"
+		} else if data, err := run(ctx, bound.client); err != nil || !b.operatorMutationAllowed(ctx, b.foundation.pool) {
+			status, outcome = http.StatusServiceUnavailable, "failed"
+		} else {
+			result = data
+		}
+	}
+	if b.foundation.audit(ctx, bound.principal, bound.kind, bound.action, bound.target, outcome) != nil {
 		return http.StatusServiceUnavailable, nil
 	}
 	// Recording can wait too. Bind the original session bytes and workspace once
 	// more after it, with no further SDK calls or response rendering afterward.
-	if status == http.StatusOK && !b.durableSnapshotAllowed(ctx, snapshot, client, "operator", b.foundation.pool) {
+	if status == http.StatusOK && !bound.current(ctx, b.foundation.pool) {
 		return http.StatusServiceUnavailable, nil
 	}
 	return status, result
