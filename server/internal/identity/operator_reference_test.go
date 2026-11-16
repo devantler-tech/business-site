@@ -17,20 +17,22 @@ const ordinaryOperatorMainExpectation = `<main id="main"><div class="intro"><h1>
 
 
 @TRIAGE@
-</section><a class="back" href="/">@BACK@</a></main>`
+</section><a class="back" href="@PUBLIC_HOME@">@BACK@</a></main>`
 
 func ordinaryOperatorExpectation(lang string, triage bool) string {
 	words := []string{"@LANG@", "en", "@TITLE@", "Your client portal", "@INTRO@", "A private space for your work with Devantler Tech.", "@OPERATOR@", "Operator", "@WORKSPACE@", "Your workspace", "@INVITE@", "Invite a customer", "@CUSTOMERS@", "Customers and workspaces", "@AUDIT@", "Audit log", "@BOUNDARY@", "Ordering and payments are not available yet.", "@LOGOUT@", "Sign out", "@BACK@", "Back to the website"}
 	triageLabel := "Review project requests"
+	publicHome := "/"
 	if lang == "da" {
 		words = []string{"@LANG@", "da", "@TITLE@", "Din kundeportal", "@INTRO@", "Et privat sted for dit samarbejde med Devantler Tech.", "@OPERATOR@", "Operatør", "@WORKSPACE@", "Dit arbejdsområde", "@INVITE@", "Inviter en kunde", "@CUSTOMERS@", "Kunder og arbejdsområder", "@AUDIT@", "Revisionslog", "@BOUNDARY@", "Bestilling og betaling er endnu ikke tilgængelig.", "@LOGOUT@", "Log ud", "@BACK@", "Tilbage til hjemmesiden"}
 		triageLabel = "Læs projektforespørgsler"
+		publicHome = "/da/"
 	}
 	link := ""
 	if triage {
 		link = `<p><a href="/portal/operator/requests?lang=` + lang + `">` + triageLabel + `</a></p>`
 	}
-	return strings.NewReplacer(append(words, "@TRIAGE@", link)...).Replace(ordinaryOperatorMainExpectation)
+	return strings.NewReplacer(append(words, "@TRIAGE@", link, "@PUBLIC_HOME@", publicHome)...).Replace(ordinaryOperatorMainExpectation)
 }
 
 var maintenanceOrdinaryPortalDigests = ordinaryPortalReferences()
