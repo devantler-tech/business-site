@@ -1,0 +1,199 @@
+package identity
+
+import (
+	"context"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// operatorAPIRoot is where the operator API lives. The operator pages read the
+// same data through the same authorization and audit path.
+const operatorAPIRoot = "/portal/operator/api"
+
+// operatorOpenAPI describes every operator API route. A test keeps it and
+// operatorRoutes identical.
+//
+//go:embed openapi/operator.json
+var operatorOpenAPI []byte
+
+// auditLimit bounds one read of the audit log.
+const auditLimit = 100
+
+// operatorRoute is one operator API action. Its action name is what the audit
+// log records and what later per-action grants refer to.
+type operatorRoute struct {
+	method, path, action string
+	run                  func(*browser, context.Context) (any, error)
+}
+
+// operatorRoutes is the complete operator API. Every route only reads for now.
+var operatorRoutes = []operatorRoute{
+	{"GET", "/invitations", "invitations.list", (*browser).pendingInvitations},
+	{"GET", "/workspaces", "workspaces.list", (*browser).workspaces},
+	{"GET", "/audit", "audit.list", (*browser).auditLog},
+	{"GET", "/openapi.json", "openapi.read", func(*browser, context.Context) (any, error) { return json.RawMessage(operatorOpenAPI), nil }},
+}
+
+type (
+	pendingInvitation struct {
+		Subject   string    `json:"subject"`
+		Workspace string    `json:"workspace"`
+		Role      string    `json:"role"`
+		Expires   time.Time `json:"expires"`
+	}
+	workspaceMember struct {
+		Subject string `json:"subject"`
+		Role    string `json:"role"`
+		Revoked bool   `json:"revoked"`
+	}
+	workspaceView struct {
+		ID      string            `json:"id"`
+		Members []workspaceMember `json:"members"`
+	}
+	auditEntry struct {
+		At      time.Time `json:"at"`
+		Kind    string    `json:"actorKind"`
+		Subject string    `json:"actorSubject"`
+		Action  string    `json:"action"`
+		Target  string    `json:"target"`
+		Outcome string    `json:"outcome"`
+	}
+	operatorError struct {
+		Error string `json:"error"`
+	}
+)
+
+// audit records one operator action. A call that cannot be recorded is not answered.
+func (s *Foundation) audit(ctx context.Context, p Principal, kind, action, target, outcome string) error {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO portal_operator_audit(actor_issuer,actor_subject,actor_kind,action,target,outcome) VALUES($1,$2,$3,$4,$5,$6)`, p.issuer, p.subject, kind, action, target, outcome); err != nil {
+		return fmt.Errorf("record operator action: %w", err)
+	}
+	return nil
+}
+
+// operatorCall authorizes, runs and records one operator action. Only a current
+// operator membership runs it. Every call by a signed-in identity writes one
+// audit row before it is answered, refusals included, and a call that cannot be
+// recorded fails. A browser without a session has no one to record and gets 401.
+// It returns the HTTP status, the action's result and the operator's workspace.
+func (b *browser) operatorCall(r *http.Request, action string, run func(context.Context) (any, error)) (int, any, string) {
+	ctx := r.Context()
+	p := b.principal(ctx)
+	if p.subject == "" {
+		return http.StatusUnauthorized, nil, ""
+	}
+	client, role, err := b.foundation.membership(ctx, p)
+	if err != nil && !errors.Is(err, ErrDenied) {
+		return http.StatusServiceUnavailable, nil, ""
+	}
+	kind, status, outcome := "other", http.StatusForbidden, "refused"
+	var result any
+	if err == nil && role == "operator" {
+		kind, status, outcome = "operator", http.StatusOK, "allowed"
+		if result, err = run(ctx); err != nil {
+			result, status, outcome = nil, http.StatusServiceUnavailable, "failed"
+		}
+	}
+	if b.foundation.audit(ctx, p, kind, action, "", outcome) != nil {
+		return http.StatusServiceUnavailable, nil, ""
+	}
+	return status, result, client
+}
+
+// operatorAPI answers one route as JSON.
+func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, result, _ := b.operatorCall(r, route.action, func(ctx context.Context) (any, error) { return route.run(b, ctx) })
+		switch status {
+		case http.StatusOK:
+		case http.StatusUnauthorized:
+			result = operatorError{"sign in as an operator"}
+		case http.StatusForbidden:
+			result = operatorError{"operators only"}
+		default:
+			result = operatorError{"unavailable"}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(result)
+	}
+}
+
+// operatorAuditPage shows the newest audit entries on the operator page.
+func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
+	status, result, client := b.operatorCall(r, "audit.view", func(ctx context.Context) (any, error) { return b.auditLog(ctx) })
+	switch status {
+	case http.StatusOK:
+		d := b.data(r, "operator-audit", client, "")
+		d.Audit, _ = result.([]auditEntry)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = b.templates().ExecuteTemplate(w, "portal.html", d)
+	case http.StatusServiceUnavailable:
+		b.render(w, r, status, "unavailable", "", "")
+	default:
+		b.render(w, r, http.StatusForbidden, "error", "", "")
+	}
+}
+
+// pendingInvitations lists invitations that can still be accepted.
+func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
+	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE NOT revoked AND expires_at>now() ORDER BY expires_at,client_id`)
+	if err != nil {
+		return nil, fmt.Errorf("list invitations: %w", err)
+	}
+	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (pendingInvitation, error) {
+		var i pendingInvitation
+		return i, row.Scan(&i.Subject, &i.Workspace, &i.Role, &i.Expires)
+	})
+	return nonNil(list), err
+}
+
+// workspaces lists every workspace with its members, revoked ones included.
+func (b *browser) workspaces(ctx context.Context) (any, error) {
+	rows, err := b.foundation.pool.Query(ctx, `SELECT client_id,subject,role,revoked FROM portal_memberships ORDER BY client_id,role,subject`)
+	if err != nil {
+		return nil, fmt.Errorf("list workspaces: %w", err)
+	}
+	views := []workspaceView{}
+	var id string
+	var m workspaceMember
+	_, err = pgx.ForEachRow(rows, []any{&id, &m.Subject, &m.Role, &m.Revoked}, func() error {
+		if len(views) == 0 || views[len(views)-1].ID != id {
+			views = append(views, workspaceView{ID: id})
+		}
+		views[len(views)-1].Members = append(views[len(views)-1].Members, m)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list workspaces: %w", err)
+	}
+	return views, nil
+}
+
+// auditLog returns the newest audit entries.
+func (b *browser) auditLog(ctx context.Context) (any, error) {
+	rows, err := b.foundation.pool.Query(ctx, `SELECT at,actor_kind,actor_subject,action,target,outcome FROM portal_operator_audit ORDER BY at DESC,id LIMIT $1`, auditLimit)
+	if err != nil {
+		return nil, fmt.Errorf("read audit log: %w", err)
+	}
+	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (auditEntry, error) {
+		var e auditEntry
+		return e, row.Scan(&e.At, &e.Kind, &e.Subject, &e.Action, &e.Target, &e.Outcome)
+	})
+	return nonNil(list), err
+}
+
+// nonNil keeps an empty list a JSON array rather than null.
+func nonNil[T any](list []T) []T {
+	if list == nil {
+		return []T{}
+	}
+	return list
+}

@@ -68,9 +68,19 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindOperatorAuditFixture removes only the disposable v28 operator audit log.
+func rewindOperatorAuditFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_operator_audit;
+ DELETE FROM portal_schema_version WHERE version=28`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-audit schema", err)
+	}
+}
+
 // rewindAddonEndsFixture removes only the disposable v27 add-on ends.
 func rewindAddonEndsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindOperatorAuditFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_removals,portal_addon_ends;
  DELETE FROM portal_schema_version WHERE version=27`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-add-on-end schema", err)
