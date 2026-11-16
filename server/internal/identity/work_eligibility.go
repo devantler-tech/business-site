@@ -154,7 +154,8 @@ func inspectWorkEligibility(ctx context.Context, tx pgx.Tx, id, client string, v
 	var closed bool
 	if err := tx.QueryRow(ctx, `SELECT clock_timestamp(),
  EXISTS(SELECT 1 FROM portal_request_closures WHERE request_id=$1 AND client_id=$2)
- OR EXISTS(SELECT 1 FROM portal_order_completions WHERE order_id=$3)`, id, client, current.Order).Scan(&item.ObservedAt, &closed); err != nil {
+ OR EXISTS(SELECT 1 FROM portal_orders o JOIN portal_order_completions c ON c.order_id=o.id
+ WHERE o.request_id=$1 AND o.client_id=$2)`, id, client).Scan(&item.ObservedAt, &closed); err != nil {
 		return workEligibilityItem{}, time.Time{}, errTriageStorage
 	}
 	if closed {
