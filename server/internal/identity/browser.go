@@ -195,6 +195,13 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 				return
 			}
 		}
+		// Bearer API calls authenticate independently of browser cookies. Only
+		// this API namespace bypasses session/CSRF middleware; operatorCall still
+		// verifies the machine proof and exact action before running anything.
+		if strings.HasPrefix(r.URL.Path, operatorAPIRoot+"/") && len(r.Header.Values("Authorization")) > 0 {
+			mux.ServeHTTP(w, r)
+			return
+		}
 		secured.ServeHTTP(w, r)
 	}), nil
 }
@@ -278,6 +285,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
+	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
 	}
