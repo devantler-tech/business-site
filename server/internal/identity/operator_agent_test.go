@@ -138,7 +138,11 @@ func TestMachineAPIWriteGrantsAreExactAndCannotMoveMoneyOrDelete(t *testing.T) {
 				}
 			}
 			rows := b.auditRows()
-			if len(rows) != len(actions) || rows[len(rows)-1] != "agent unknown.write refused" {
+			wantRows := len(actions)
+			if granted != "" {
+				wantRows++
+			}
+			if len(rows) != wantRows || rows[len(rows)-1] != "agent unknown.write refused" {
 				t.Fatal("write refusals were not audited", rows)
 			}
 		})
@@ -226,7 +230,7 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 	}))
 	t.Cleanup(provider.Close)
 	original := operatorRoutes
-	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, ctx context.Context) (any, error) {
+	operatorRoutes = append(slices.Clone(original), operatorRoute{"POST", "/test-audited-write", "invitations.create", func(_ *browser, _ *http.Request, ctx context.Context) (any, error) {
 		r, err := http.NewRequestWithContext(ctx, "POST", provider.URL+"/users", nil)
 		if err != nil {
 			return nil, err
@@ -261,6 +265,16 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 	}
 	if status != http.StatusServiceUnavailable || providerCalls.Load() != 0 || effects != 0 {
 		t.Fatalf("unrecordable action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
+	}
+	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	status, _, _ = agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
+	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusOK || providerCalls.Load() != 1 || effects != 1 || len(b.auditRows()) != 2 {
+		t.Fatalf("audited write positive control failed: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
 	}
 }
 
