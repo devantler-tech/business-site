@@ -120,25 +120,36 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 func TestOperatorManagementNativeReturnJourney(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	form := url.Values{"workspace": {"native-workspace"}, "csrf_token": {b.csrf("/portal/")}}
-	req, err := http.NewRequest("POST", b.site.URL+operatorAPIRoot+"/workspaces?lang=da", strings.NewReader(form.Encode()))
+	status, headers := managementNativeRequest(b, operatorAPIRoot+"/workspaces?lang=da", form)
+	location := headers.Get("Location")
+	if status != http.StatusSeeOther || location != "/portal/operator/customers?lang=da" {
+		t.Fatal("native form did not return to the customer inventory", status, location)
+	}
+	status, body, _ := b.request("GET", location, nil, "")
+	if status != http.StatusOK || !strings.Contains(body, "native-workspace") || !strings.Contains(body, "Kunder og arbejdsområder") {
+		t.Fatal("native return lost its persisted workspace or language", status)
+	}
+}
+
+// managementNativeRequest submits the actual browser form with its HTML accept
+// header, retaining the fixture's cookies and refusal of automatic redirects.
+func managementNativeRequest(b *browserFixture, path string, form url.Values) (int, http.Header) {
+	b.t.Helper()
+	req, err := http.NewRequest("POST", b.site.URL+path, strings.NewReader(form.Encode()))
 	if err != nil {
-		t.Fatal(err)
+		b.t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("Origin", b.site.URL)
 	res, err := b.client.Do(req)
 	if err != nil {
-		t.Fatal(err)
+		b.t.Fatal(err)
 	}
 	_, readErr := io.Copy(io.Discard, res.Body)
 	closeErr := res.Body.Close()
-	location := res.Header.Get("Location")
-	if readErr != nil || closeErr != nil || res.StatusCode != http.StatusSeeOther || location != "/portal/operator/customers?lang=da" {
-		t.Fatal("native form did not return to the customer inventory", res.StatusCode, location, readErr, closeErr)
+	if readErr != nil || closeErr != nil {
+		b.t.Fatal("native form response could not be read", readErr, closeErr)
 	}
-	status, body, _ := b.request("GET", location, nil, "")
-	if status != http.StatusOK || !strings.Contains(body, "native-workspace") || !strings.Contains(body, "Kunder og arbejdsområder") {
-		t.Fatal("native return lost its persisted workspace or language", status)
-	}
+	return res.StatusCode, res.Header
 }
