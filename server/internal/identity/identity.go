@@ -316,11 +316,11 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// A current member signs straight in. An identity without membership accepts
-	// its own pending invitation, which was bound to this exact issuer/subject
-	// when it was created. Without one, a token naming exactly one workspace
-	// admits it as that workspace's client. Anyone else is refused.
-	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
+	// An identity without membership accepts its own pending invitation, which
+	// was bound to this exact issuer/subject when it was created. Without one, a
+	// token naming exactly one workspace admits it as that workspace's client.
+	client, role, err := s.membership(ctx, p)
+	if errors.Is(err, ErrDenied) {
 		if err = s.redeem(ctx, p); errors.Is(err, ErrDenied) && p.workspace != "" {
 			err = s.admit(ctx, p)
 		}
@@ -329,10 +329,17 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 		}
 		// Current membership decides, including one a concurrent first sign-in of
 		// the same identity has just created; a revoked membership still refuses.
-		_, _, err = s.membership(ctx, p)
+		client, role, err = s.membership(ctx, p)
 	}
 	if err != nil {
 		return Principal{}, err
+	}
+	// A client's access follows the administrator's current workspace on every
+	// sign-in: removing, changing or invalidating it refuses the next one, and
+	// the session's absolute lifetime bounds any open one. Operators come only
+	// from trusted invitations, and groups neither grant nor touch them.
+	if role == "client" && p.workspace != client {
+		return Principal{}, ErrDenied
 	}
 	return p, nil
 }
@@ -371,7 +378,9 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
-	if pending != 1 {
+	// A client invitation is consumed only by a sign-in already naming its
+	// workspace, so a refused sign-in leaves it pending for a later one.
+	if pending != 1 || role == "client" && p.workspace != client {
 		return ErrDenied
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.

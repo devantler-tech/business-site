@@ -272,10 +272,14 @@ a pending `--portal-invite` invitation bound to its exact Dex issuer/subject, or
 without one, the ZITADEL user attribute `portal_workspace`, which only an administrator
 can set. ZITADEL puts it in UserInfo and customer Dex maps it to `groups`; the portal
 reads `groups` from Dex's verified ID token only. Exactly one value in the workspace
-format admits the first sign-in as that workspace's client. It never grants operator,
-never changes an existing membership and never revives a revoked one; anything else
-names no workspace. Never use the upstream ZITADEL subject directly. Preserve
-the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
+format admits the first sign-in as that workspace's client, and every later client
+sign-in needs it to name that same workspace: a removed, changed or invalid value, or a
+deactivated user, refuses the next sign-in, and the 30-minute absolute session lifetime
+bounds an open one. It never grants operator, never moves a membership to another
+workspace and never revives a revoked one; anything else names no workspace. A client
+invitation from the command is consumed only by a sign-in naming its workspace. Never
+use the upstream ZITADEL subject directly. Preserve the adopted Dex issuer and
+`customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
 Opening the portal without a session goes straight to the login; there is no portal page
@@ -300,8 +304,8 @@ console at `https://accounts.devantler.tech`:
    (lowercase letters, digits and hyphens, for example `acme`).
 
 Their first sign-in at `https://portal.devantler.tech` then creates their client
-membership. Changing or removing the attribute later changes nothing for an
-existing member; revoke the membership to remove access.
+membership. Removing or changing the attribute, removing the workspace or deactivating
+the user refuses their next sign-in; an open session ends within 30 minutes.
 
 ### Invite an operator or bind an exact identity
 
