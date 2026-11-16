@@ -526,25 +526,21 @@ func TestOnePendingInvitationPerIdentity(t *testing.T) {
 	}
 	// A second pending invitation that exists anyway is refused, not chosen.
 	leftoverInvitation(t, pool, f, "twice", "client-b")
-	a, err := svc.Begin(f.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, "twice", a.Nonce, nil)); !errors.Is(err, ErrDenied) {
+	if _, err := signIn(t, svc, f, "twice"); !errors.Is(err, ErrDenied) {
 		t.Fatalf("sign-in chose between two pending invitations: %v", err)
 	}
 	var pending, memberships int
-	if err = pool.QueryRow(f.ctx, "SELECT (SELECT count(*) FROM portal_invitations WHERE subject='twice'), (SELECT count(*) FROM portal_memberships WHERE subject='twice')").Scan(&pending, &memberships); err != nil || pending != 2 || memberships != 0 {
+	if err := pool.QueryRow(f.ctx, "SELECT (SELECT count(*) FROM portal_invitations WHERE subject='twice'), (SELECT count(*) FROM portal_memberships WHERE subject='twice')").Scan(&pending, &memberships); err != nil || pending != 2 || memberships != 0 {
 		t.Fatalf("refused sign-in changed invitations or memberships: pending=%d memberships=%d", pending, memberships)
 	}
 	// After an invitation expires, the identity can be invited again.
-	if err = svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(f.ctx, "UPDATE portal_invitations SET expires_at=now()-interval '1 minute' WHERE subject='expired-once'"); err != nil {
+	if _, err := pool.Exec(f.ctx, "UPDATE portal_invitations SET expires_at=now()-interval '1 minute' WHERE subject='expired-once'"); err != nil {
 		t.Fatal(err)
 	}
-	if err = svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
+	if err := svc.Invite(f.ctx, Invitation{f.issuer, "expired-once", "client-a", "client", expires}); err != nil {
 		t.Fatalf("an expired invitation blocked a new one: %v", err)
 	}
 }
@@ -555,15 +551,11 @@ func TestUninvitedIdentityIsRefused(t *testing.T) {
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	svc := enabled(t, pool, f)
-	a, err := svc.Begin(f.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, "stranger", a.Nonce, nil)); !errors.Is(err, ErrDenied) {
+	if _, err := signIn(t, svc, f, "stranger"); !errors.Is(err, ErrDenied) {
 		t.Fatalf("uninvited identity was not refused: %v", err)
 	}
 	var memberships int
-	if err = pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='stranger'").Scan(&memberships); err != nil || memberships != 0 {
+	if err := pool.QueryRow(f.ctx, "SELECT count(*) FROM portal_memberships WHERE subject='stranger'").Scan(&memberships); err != nil || memberships != 0 {
 		t.Fatal("uninvited identity gained a membership")
 	}
 }
@@ -619,4 +611,14 @@ func TestOpenFeatureGateDefaultsOffAndIsReevaluated(t *testing.T) {
 	if _, err := svc.Begin(f.ctx); !errors.Is(err, ErrDenied) {
 		t.Fatal("missing client allowed begin")
 	}
+}
+
+// signIn runs one complete sign-in attempt for subject through the real store.
+func signIn(t *testing.T, svc *Foundation, f brokerFixture, subject string) (Principal, error) {
+	t.Helper()
+	a, err := svc.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc.Complete(f.ctx, a.State, a.BrowserBinding, f.token(t, subject, a.Nonce, nil))
 }
