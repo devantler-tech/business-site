@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,10 @@ func TestOperatorWritesStopBeforeUnrecordedProviderEffects(t *testing.T) {
 func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait func()) *atomic.Int32 {
 	t.Helper()
 	creates := new(atomic.Int32)
+	matches := []map[string]any{}
+	if existing {
+		matches = append(matches, map[string]any{"userId": "customer-42", "details": map[string]string{"resourceOwner": "customers"}, "human": map[string]any{"email": map[string]string{"email": "ada@example.test"}}})
+	}
 	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-zitadel-orgid") != "customers" {
 			t.Error("provider organization missing")
@@ -49,10 +54,8 @@ func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait 
 		}
 		switch r.URL.Path {
 		case "/v2/users":
-			if existing {
-				_, _ = fmt.Fprint(w, `{"result":[{"userId":"customer-42","details":{"resourceOwner":"customers"},"human":{"email":{"email":"ada@example.test"}}}]}`)
-			} else {
-				_, _ = fmt.Fprint(w, `{"result":[]}`)
+			if err := json.NewEncoder(w).Encode(map[string]any{"result": matches}); err != nil {
+				t.Error(err)
 			}
 		case "/management/v1/users/human":
 			creates.Add(1)

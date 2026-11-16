@@ -89,16 +89,9 @@ func (b *browserFixture) auditRows() []string {
 // TestOperatorOpenAPIDescribesEveryRoute: the OpenAPI file and the registered
 // operator routes name the same paths, methods and actions.
 func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
-	var doc struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(operatorOpenAPI, &doc); err != nil {
-		t.Fatal(err)
-	}
+	paths := operatorDocumentActions(t)
 	described := 0
-	for _, methods := range doc.Paths {
+	for _, methods := range paths {
 		described += len(methods)
 	}
 	if described != len(operatorRoutes) {
@@ -106,7 +99,7 @@ func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
 	}
 	actions := map[string]bool{}
 	for _, route := range operatorRoutes {
-		op, ok := doc.Paths["/operator/api"+route.path][strings.ToLower(route.method)]
+		op, ok := paths["/operator/api"+route.path][strings.ToLower(route.method)]
 		if !ok || op.OperationID != route.action || actions[route.action] {
 			t.Errorf("%s %s (%s) is missing from the OpenAPI file or not unique", route.method, route.path, route.action)
 		}
