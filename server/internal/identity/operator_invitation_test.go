@@ -1,7 +1,6 @@
 package identity
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/zitadel"
@@ -19,32 +17,15 @@ func TestOperatorWritesStopBeforeUnrecordedProviderEffects(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	creates := inviteDirectory(t, b, false, false, nil)
 	form := invitationForm(b)
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-			t.Error("restore fixture audit grant failed")
-		}
-	})
+	restoreAudit := pauseOperatorAudit(t)
 	status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
-	var count int
-	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
+	count := b.invitationCount()
 	if status != 503 || creates.Load() != 0 || count != 0 {
 		t.Fatalf("unrecorded write had effects: status=%d providerCreates=%d invitations=%d", status, creates.Load(), count)
 	}
-	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit()
 	status, _, _ = b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
-	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
+	count = b.invitationCount()
 	if status != 200 || creates.Load() != 1 || count != 1 {
 		t.Fatalf("recorded write positive control failed: status=%d providerCreates=%d invitations=%d", status, creates.Load(), count)
 	}
@@ -83,8 +64,11 @@ func inviteDirectory(t *testing.T, b *browserFixture, existing, fail bool, wait 
 	}))
 	t.Cleanup(s.Close)
 	c, err := zitadel.New(s.URL, "customers", func() (string, error) { return "fixture-token", nil }, s.Client())
-	if err != nil || b.svc.LinkCustomerDirectory(c) != nil {
-		t.Fatal("customer directory fixture failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.LinkCustomerDirectory(c); err != nil {
+		t.Fatal(err)
 	}
 	return creates
 }
@@ -123,10 +107,7 @@ func TestOperatorInviteProviderErrorsRecordNoInvitation(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	inviteDirectory(t, b, false, true, nil)
 	status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", invitationForm(b), b.site.URL)
-	var count int
-	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
+	count := b.invitationCount()
 	if status != 503 || count != 0 {
 		t.Fatalf("provider error persisted an invitation: status=%d rows=%d", status, count)
 	}
@@ -141,10 +122,7 @@ func TestConcurrentOperatorInvitesHaveOnePendingInvitation(t *testing.T) {
 		go func() { s, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL); statuses <- s }()
 	}
 	a, c := <-statuses, <-statuses
-	var count int
-	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations WHERE NOT revoked`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
+	count := b.invitationCount()
 	if count != 1 || (a != 200 && c != 200) || (a == 200 && c == 200) {
 		t.Fatalf("concurrent invitation was not single-use: statuses=%d,%d rows=%d", a, c, count)
 	}
@@ -161,10 +139,7 @@ func TestOperatorInviteRequiresCurrentAuthorityAfterProviderWait(t *testing.T) {
 		}
 	})
 	status, _, _ := b.request("POST", operatorAPIRoot+"/invitations", invitationForm(b), b.site.URL)
-	var count int
-	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
+	count := b.invitationCount()
 	if status != 503 || count != 0 {
 		t.Fatalf("expired operator persisted an invitation: status=%d rows=%d", status, count)
 	}

@@ -247,17 +247,7 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 	}})
 	t.Cleanup(func() { operatorRoutes = original })
 	b.handler = browserHandler(t, b.svc, b.site.URL+"/portal/callback")
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-			t.Error("restore fixture audit grant", err)
-		}
-	})
+	restoreAudit := pauseOperatorAudit(t)
 	status, _, _ := agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
 	var effects int
 	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
@@ -266,9 +256,7 @@ func TestMachineWriteRequiresDurableAuditBeforeEffects(t *testing.T) {
 	if status != http.StatusServiceUnavailable || providerCalls.Load() != 0 || effects != 0 {
 		t.Fatalf("unrecorded action produced effects: status=%d provider=%d rows=%d", status, providerCalls.Load(), effects)
 	}
-	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit()
 	status, _, _ = agentRequest(t, b, b.site.Client(), "POST", operatorAPIRoot+"/test-audited-write", fixtureAgentToken(t, b, subject))
 	if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_memberships WHERE subject='audit-effect'`).Scan(&effects); err != nil {
 		t.Fatal(err)

@@ -39,6 +39,34 @@ func newOperatorBrowserFixture(t *testing.T) *browserFixture {
 	return b
 }
 
+// pauseOperatorAudit retains the actual privilege boundary and always restores
+// this disposable fixture, including when an assertion ends the test early.
+func pauseOperatorAudit(t *testing.T) func() {
+	t.Helper()
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+			t.Error("restore fixture audit grant failed")
+		}
+	}
+	t.Cleanup(restore)
+	return restore
+}
+
+func (b *browserFixture) invitationCount() int {
+	b.t.Helper()
+	var count int
+	if err := b.pool.QueryRow(b.t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
+		b.t.Fatal(err)
+	}
+	return count
+}
+
 // auditRows returns the recorded actions as "kind action outcome", oldest first.
 func (b *browserFixture) auditRows() []string {
 	b.t.Helper()
@@ -244,14 +272,9 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 func TestOperatorAPIFailsWithoutAudit(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-b", "client")
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(b.f.ctx, "REVOKE INSERT ON portal_operator_audit FROM portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit := pauseOperatorAudit(t)
 	s, body, _ := b.request("GET", operatorAPIRoot+"/invitations", nil, "")
-	if _, err := migrator.Exec(b.f.ctx, "GRANT INSERT ON portal_operator_audit TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit()
 	if s != http.StatusServiceUnavailable || strings.Contains(body, "client-b") {
 		t.Fatalf("an unrecorded call was answered: %d %s", s, body)
 	}
