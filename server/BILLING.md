@@ -181,6 +181,12 @@ refuses to start with an add-on it cannot sell.
   one-time add-ons on the first invoice, monthly ones on every monthly invoice. Stripe Checkout
   has the same lines, one-time ones on the payment and monthly ones on the subscription.
 - The confirmation email, the receipt and the operator's page list the add-ons.
+- **Ending one add-on** (Consumer Contracts Act, section 28 a): the receipt offers to end each monthly
+  add-on after the current month (`POST /requests/{id}/addon-end`, `portal_addon_ends`, migration
+  v27). It is billed through that month; later monthly charges, invoices and card renewals leave it
+  out. A card order's subscription first loses the add-on's item (its product carries
+  `portal_addon` metadata), without proration; the end is recorded only once Stripe confirms, and
+  a retry converges. Ending Priority or Express drops the client's level after that month.
 
 ## Feature-request priority and fair use
 
