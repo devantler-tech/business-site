@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -128,19 +127,12 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		}
 	}
 	// Add-ons must exist for the request's offering; monthly ones need hosting.
-	var product string
-	if err = tx.QueryRow(ctx, `SELECT product FROM portal_requests WHERE id=$1 AND client_id=$2`, id, client).Scan(&product); err != nil {
-		return projectOrder{}, errTriageStorage
-	}
 	existing, err := readOrderTx(ctx, tx, id, client)
-	hosting := current != nil && current.Proposal.MonthlyMinor > 0 || err == nil && existing.BaseMonthlyDKK() > 0
-	addons, valid := parseAddons(addonValues, product, hosting)
-	if !valid {
-		return projectOrder{}, errProposalConflict
-	}
 	switch {
 	case err == nil:
-		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart || (existing.Launch != nil) != launch || !slices.Equal(existing.Addons, addons) {
+		// A retry names the order's own add-ons; it keeps their stored prices,
+		// whatever the catalogue says now.
+		if existing.Acceptance != acceptance || existing.Collection != collection || (existing.EarlyStart != nil) != earlyStart || (existing.Launch != nil) != launch || !sameAddons(existing.Addons, addonValues) {
 			return projectOrder{}, errProposalConflict
 		}
 		return existing, s.commitOrder(ctx, p, tx, s.pathReady(collection))
@@ -148,6 +140,16 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		return projectOrder{}, err
 	}
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
+		return projectOrder{}, errProposalConflict
+	}
+	// A new order's add-ons must exist for the request's offering; monthly ones
+	// need hosting.
+	var product string
+	if err = tx.QueryRow(ctx, `SELECT product FROM portal_requests WHERE id=$1 AND client_id=$2`, id, client).Scan(&product); err != nil {
+		return projectOrder{}, errTriageStorage
+	}
+	addons, valid := parseAddons(addonValues, product, current.Proposal.MonthlyMinor > 0)
+	if !valid {
 		return projectOrder{}, errProposalConflict
 	}
 	// The order takes the client's launch place, if one is open, at the price
