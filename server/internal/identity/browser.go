@@ -190,6 +190,13 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 				return
 			}
 		}
+		// Bearer API calls authenticate independently of browser cookies. Only
+		// this API namespace bypasses session/CSRF middleware; operatorCall still
+		// verifies the machine proof and exact action before running anything.
+		if strings.HasPrefix(r.URL.Path, operatorAPIRoot+"/") && len(r.Header.Values("Authorization")) > 0 {
+			mux.ServeHTTP(w, r)
+			return
+		}
 		secured.ServeHTTP(w, r)
 	}), nil
 }
