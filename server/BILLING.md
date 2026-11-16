@@ -182,6 +182,25 @@ refuses to start with an add-on it cannot sell.
   has the same lines, one-time ones on the payment and monthly ones on the subscription.
 - The confirmation email, the receipt and the operator's page list the add-ons.
 
+## Feature-request priority and fair use
+
+Hosted projects' feature requests are picked up in a monthly round (Standard). The monthly
+add-ons Priority and Express (`tier` in the catalogue) raise that level; the terms describe
+what each means.
+
+- **Level.** A client's level is the highest tier among the monthly add-ons of their orders
+  that still bill: no withdrawal and no end before this month. It is derived, not stored, so it
+  follows orders, ends and withdrawals without a separate record. The operator's request page
+  shows it.
+- **Fair use.** A client with hosting has one request in progress at a time. A new request is
+  refused (409, with the reason) while another of theirs is not marked finished. The check
+  runs in the request's own transaction under a per-client advisory lock, so two at once
+  cannot both pass. A retry of the same submission is not a second request.
+- **Finished.** The operator marks a request finished, or not going ahead, on its page
+  (`POST /operator/requests/{id}/finished`, `portal_request_closures`, migration v26). The client
+  can then send the next request. Without hosting there is no limit; such requests are quoted.
+- Both need the order gates. With them off there are no orders and no limit.
+
 ## Ending and reversing orders
 
 - **Ending monthly billing.** On the request page, an operator chooses an order's last billed
