@@ -1,14 +1,17 @@
 package identity
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/zitadel"
@@ -120,10 +123,34 @@ func TestConcurrentOperatorInvitesHaveOnePendingInvitation(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	inviteDirectory(t, b, true, false, nil)
 	form := invitationForm(b)
-	statuses := make(chan int, 2)
-	for range 2 {
-		go func() { s, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL); statuses <- s }()
+	migrator := migrationDB(t)
+	holder := beginFixtureTransaction(t.Context(), t, migrator)
+	subject := customeridentity.DexSubject("customer-42", customeridentity.ZitadelConnectorID)
+	if err := lockIdentity(t.Context(), holder, b.f.issuer, subject); err != nil {
+		t.Fatal(err)
 	}
+	resume := sync.OnceFunc(func() {
+		fresh, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = holder.Rollback(fresh)
+	})
+	statuses := make(chan int, 2)
+	done := make(chan struct{})
+	var workers sync.WaitGroup
+	workers.Add(2)
+	for range 2 {
+		go func() {
+			defer workers.Done()
+			s, _, _ := b.request("POST", operatorAPIRoot+"/invitations", form, b.site.URL)
+			statuses <- s
+		}()
+	}
+	go func() { workers.Wait(); close(done) }()
+	retainOperatorWorker(t, resume, done)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	waitForFixtureDatabaseLock(ctx, t, migrator, `SELECT count(*)=2 FROM pg_locks WHERE locktype='advisory' AND database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND classid=$1::oid AND objid=hashtext($2 || ' ' || $3)::oid AND objsubid=2 AND NOT granted`, identityLock, b.f.issuer, subject)
+	resume()
 	a, c := <-statuses, <-statuses
 	count := b.invitationCount()
 	if count != 1 || (a != 200 && c != 200) || (a == 200 && c == 200) {

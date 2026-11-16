@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // TestOperatorWorkspaceCommitRechecksAuthority catches a write that commits
@@ -83,10 +85,7 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 	form := operatorMembershipForm(b, customerSubject, "client-a")
 	restoreAudit := pauseOperatorAudit(t)
 	status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL)
-	var revoked bool
-	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil {
-		t.Fatal(err)
-	}
+	revoked := b.customerRevoked()
 	if status != http.StatusServiceUnavailable || revoked || calls.Load() != 0 {
 		t.Fatal("unrecorded deactivation changed customer access", status, revoked, calls.Load())
 	}
@@ -116,6 +115,11 @@ func TestOperatorManagementNativeReturnJourney(t *testing.T) {
 // managementNativeRequest submits the actual browser form with its HTML accept
 // header, retaining the fixture's cookies and refusal of automatic redirects.
 func managementNativeRequest(b *browserFixture, path string, form url.Values) (int, http.Header) {
+	status, _, headers := managementNativeResponse(b, path, form)
+	return status, headers
+}
+
+func managementNativeResponse(b *browserFixture, path string, form url.Values) (int, string, http.Header) {
 	b.t.Helper()
 	req, err := http.NewRequest("POST", b.site.URL+path, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -128,10 +132,54 @@ func managementNativeRequest(b *browserFixture, path string, form url.Values) (i
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	_, readErr := io.Copy(io.Discard, res.Body)
+	body, readErr := io.ReadAll(res.Body)
 	closeErr := res.Body.Close()
 	if readErr != nil || closeErr != nil {
 		b.t.Fatal("native form response could not be read", readErr, closeErr)
 	}
-	return res.StatusCode, res.Header
+	return res.StatusCode, string(body), res.Header
+}
+
+// Error recovery must switch language through a real GET page, never by
+// navigating back to the POST-only endpoint that produced the error.
+func TestOperatorNativeErrorLanguageNavigation(t *testing.T) {
+	for _, lang := range []string{"en", "da"} {
+		for _, failure := range []string{"input", "provider"} {
+			t.Run(lang+"/"+failure, func(t *testing.T) {
+				b := newOperatorBrowserFixture(t)
+				path, wantStatus := operatorAPIRoot+"/workspaces", http.StatusBadRequest
+				form := url.Values{"workspace": {operatorWorkspace}, "csrf_token": {b.csrf("/portal/")}}
+				if failure == "provider" {
+					linkManagedMember(t, b, func(context.Context, string, bool) error { return ErrDenied })
+					path, wantStatus = operatorAPIRoot+"/members/deactivate", http.StatusServiceUnavailable
+					form = operatorMembershipForm(b, customerSubject, "client-a")
+				}
+				status, body, _ := managementNativeResponse(b, path+"?lang="+lang, form)
+				if status != wantStatus {
+					t.Fatal("native error journey did not reach the intended refusal", status)
+				}
+				doc, err := html.Parse(strings.NewReader(body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				other := "da"
+				if lang == "da" {
+					other = "en"
+				}
+				target := ""
+				for node := range doc.Descendants() {
+					if node.Type == html.ElementNode && node.Data == "a" && linkAttribute(node, "lang") == other {
+						target = linkAttribute(node, "href")
+					}
+				}
+				if target == "" {
+					t.Fatal("native error page has no language navigation")
+				}
+				status, translated, _ := b.request("GET", target, nil, "")
+				if target != "/portal/operator/customers?lang="+other || status != http.StatusOK || !strings.Contains(translated, `<html lang="`+other+`"`) {
+					t.Fatal("native error language link did not open the localized customer overview", target, status)
+				}
+			})
+		}
+	}
 }

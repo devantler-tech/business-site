@@ -40,6 +40,11 @@ func (d *managementDirectory) ReactivateUser(ctx context.Context, user string, a
 func managementMemberFixture(t *testing.T, change func(context.Context, string, bool) error) *browserFixture {
 	t.Helper()
 	b := newOperatorBrowserFixture(t)
+	return linkManagedMember(t, b, change)
+}
+
+func linkManagedMember(t *testing.T, b *browserFixture, change func(context.Context, string, bool) error) *browserFixture {
+	t.Helper()
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +57,15 @@ func managementMemberFixture(t *testing.T, change func(context.Context, string, 
 func operatorMembershipForm(b *browserFixture, subject, workspace string) url.Values {
 	b.t.Helper()
 	return url.Values{"workspace": {workspace}, "subject": {subject}, "csrf_token": {b.csrf("/portal/")}}
+}
+
+func (b *browserFixture) customerRevoked() bool {
+	b.t.Helper()
+	var revoked bool
+	if err := b.pool.QueryRow(b.t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil {
+		b.t.Fatal(err)
+	}
+	return revoked
 }
 
 // TestOperatorMemberAccessTransitions catches enabling portal membership before

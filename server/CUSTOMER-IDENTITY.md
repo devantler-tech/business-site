@@ -378,10 +378,19 @@ restart, and already issued tokens remain bounded by their five-minute expiry. S
 do not prove that the platform has provisioned or activated a machine identity.
 
 Revocation takes the identity's invitation/sign-in lock, so a revoked invitation cannot
-be redeemed. Deactivation commits the portal membership's refusal and ends its current
-sessions before asking ZITADEL to deactivate the corresponding Customers user. If the
+be redeemed. Deactivation commits the portal membership's refusal and changes its
+incarnation before asking ZITADEL to deactivate the corresponding Customers user. A
+reserved database connection retains the identity lock across the local commit and
+provider update, serializing transitions across replicas. Unconfirmed lock cleanup
+destroys the connection instead of returning it to the pool. If the
 provider is unavailable, portal access stays closed; retry the action to synchronize it.
 Reactivation confirms that the provider user is active before restoring portal membership.
+An already-active retry does not rewrite the membership or invalidate its work approvals.
+Authenticated sessions retain the incarnation authorized at sign-in, including through
+contact verification. Private entry, data queries and final response checks require that
+exact incarnation. Old sessions, including delayed session-store writes, stay invalid after
+reactivation. Unbound sessions must sign in again. Deactivation never scans unrelated or
+anonymous sessions; old physical rows follow the maintained expiry and retention policy.
 Both transitions recheck the original operator or exact agent grant before each provider
 effect and database commit. Customer data is retained. These controls are tested against
 real disposable storage and a fictional provider; deployed operator sign-in and the

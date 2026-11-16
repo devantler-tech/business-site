@@ -88,7 +88,7 @@ func (s *Foundation) readContactScoped(ctx context.Context, p Principal) (contac
 	var d contactData
 	err = s.pool.QueryRow(ctx, `SELECT coalesce(c.name,''),coalesce(c.email,''),coalesce(c.company,''),coalesce(c.revision,0),coalesce(c.email_verified,false)
  FROM portal_memberships m LEFT JOIN portal_contacts c ON c.client_id=m.client_id
- WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked`, p.issuer, p.subject, client).Scan(&d.Name, &d.Email, &d.Company, &d.Revision, &d.EmailVerified)
+ WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4)`, p.issuer, p.subject, client, p.membershipIncarnation).Scan(&d.Name, &d.Email, &d.Company, &d.Revision, &d.EmailVerified)
 	if err != nil {
 		return contactData{}, "", ErrDenied
 	}
@@ -115,7 +115,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 		_ = tx.Rollback(ctx)
 	}()
 	var client string
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		return ErrDenied
 	}
 	var revision int64

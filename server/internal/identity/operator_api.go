@@ -52,7 +52,7 @@ var operatorRoutes = append([]operatorRoute{
 var errOperatorInput = errors.New("invalid or conflicting operator input")
 
 // operatorRead keeps request input out of read-only inventory operations.
-func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, context.Context, *http.Request) (any, error) {
+func operatorRead[T any](run func(*browser, context.Context) (T, error)) func(*browser, context.Context, *http.Request) (any, error) {
 	return func(b *browser, ctx context.Context, _ *http.Request) (any, error) { return run(b, ctx) }
 }
 
@@ -245,7 +245,7 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // pendingInvitations lists invitations that can still be accepted.
-func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
+func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, error) {
 	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE NOT revoked AND expires_at>now() ORDER BY expires_at,client_id LIMIT $1`, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
@@ -261,7 +261,7 @@ func (b *browser) pendingInvitations(ctx context.Context) (any, error) {
 }
 
 // workspaces lists every workspace with its members, revoked ones included.
-func (b *browser) workspaces(ctx context.Context) (any, error) {
+func (b *browser) workspaces(ctx context.Context) ([]workspaceView, error) {
 	rows, err := b.foundation.pool.Query(ctx, `WITH inventory AS (
  SELECT id FROM portal_workspaces
  UNION SELECT client_id FROM portal_memberships WHERE issuer=$1

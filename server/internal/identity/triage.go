@@ -84,7 +84,7 @@ func (s *Foundation) readTriage(ctx context.Context, p Principal, id string, cur
 	if id != "" {
 		limit = 1
 	}
-	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,CASE WHEN $3='' THEN '' ELSE q.brief END,q.submitted_at FROM portal_requests q WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked) AND ($3='' OR q.id=$3) AND ($4='' OR (q.submitted_at,q.id COLLATE "C") > ($5::timestamptz,$4 COLLATE "C")) ORDER BY q.submitted_at,q.id COLLATE "C" LIMIT $6`, p.issuer, p.subject, id, cursor.ID, cursor.Submitted, limit)
+	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,CASE WHEN $3='' THEN '' ELSE q.brief END,q.submitted_at FROM portal_requests q WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked AND ($7='' OR m.incarnation::text=$7)) AND ($3='' OR q.id=$3) AND ($4='' OR (q.submitted_at,q.id COLLATE "C") > ($5::timestamptz,$4 COLLATE "C")) ORDER BY q.submitted_at,q.id COLLATE "C" LIMIT $6`, p.issuer, p.subject, id, cursor.ID, cursor.Submitted, limit, p.membershipIncarnation)
 	if err != nil {
 		return nil, errTriageStorage
 	}

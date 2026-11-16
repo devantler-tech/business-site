@@ -122,7 +122,7 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 	case <-time.After(time.Second):
 		t.Fatal("private reader did not return a bounded result")
 	}
-	if change == "unchanged" || (operator && change == "rebind") {
+	if change == "unchanged" {
 		if got.err != nil || got.data != wantData {
 			t.Fatal("valid authority lost its expected private result", got.err)
 		}
@@ -141,7 +141,7 @@ func checkChangedRead(t *testing.T, b *browserFixture, p Principal, provider *fi
 // plus the operator's deliberately cross-client visibility history.
 func TestSharingReadFinalGateRechecksAuthority(t *testing.T) {
 	for _, selector := range []string{"shared", "empty", "visibility"} {
-		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "flag", "cancel", "storage"} {
+		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "incarnation", "flag", "cancel", "storage"} {
 			t.Run(selector+"/"+change, func(t *testing.T) {
 				b := sharingFixture(t)
 				if selector != "empty" {
@@ -171,7 +171,7 @@ func TestSharingReadFinalGateRechecksAuthority(t *testing.T) {
 // never returns stale display fields when client access closes during the read.
 func TestContactReadRechecksMaterializedAuthority(t *testing.T) {
 	for _, saved := range []bool{false, true} {
-		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "flag", "cancel", "storage"} {
+		for _, change := range []string{"unchanged", "revocation", "role", "rebind", "incarnation", "flag", "cancel", "storage"} {
 			name := "empty/" + change
 			if saved {
 				name = "saved/" + change
@@ -204,7 +204,7 @@ func TestMembershipCompletionRechecksExpiry(t *testing.T) {
 			b := newBrowserFixture(t)
 			p := enroll(t, b.svc, b.f, "checkpoint-membership", "checkpoint-owner", "client")
 			provider := installReadProvider(t, b, "portal-identity", 0)
-			tracer := installCompletedRead(t, b, "SELECT client_id,role FROM portal_memberships")
+			tracer := installCompletedRead(t, b, "SELECT client_id,role,incarnation::text FROM portal_memberships")
 			read := func(ctx context.Context, principal Principal) (bool, error) {
 				client, role, err := b.svc.membership(ctx, principal)
 				return client != "" || role != "", err
@@ -220,7 +220,7 @@ func TestPrivateReadExpiryAllowsCheckpointSetup(t *testing.T) {
 	b := newBrowserFixture(t)
 	p := enroll(t, b.svc, b.f, "delayed-checkpoint", "checkpoint-owner", "client")
 	provider := installReadProvider(t, b, "portal-identity", 0)
-	tracer := installCompletedRead(t, b, "SELECT client_id,role FROM portal_memberships")
+	tracer := installCompletedRead(t, b, "SELECT client_id,role,incarnation::text FROM portal_memberships")
 	read := func(ctx context.Context, principal Principal) (bool, error) {
 		timer := time.NewTimer(750 * time.Millisecond)
 		defer timer.Stop()

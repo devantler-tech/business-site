@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,7 +38,7 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		data := managementPage{pageData: b.data(r, "operator-customers", client, nosurf.Token(r)), Workspaces: spaces.([]workspaceView), Invitations: invitations.([]pendingInvitation)}
+		data := managementPage{pageData: b.data(r, "operator-customers", client, nosurf.Token(r)), Workspaces: spaces, Invitations: invitations}
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "portal.html", data)
 		return buffer.Bytes(), err
@@ -104,7 +103,10 @@ func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer func() {
+		// Commit closes a successful transaction; rollback releases a failed one.
+		_ = tx.Rollback(ctx)
+	}()
 	setOperatorTarget(ctx, input.Subject)
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
@@ -204,11 +206,19 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 	if user == "" || b.foundation.customers == nil {
 		return nil, ErrDenied
 	}
-	tx, err := b.customerIdentityTransaction(ctx, input.Subject)
+	connection, release, err := b.customerIdentityConnection(ctx, input.Subject)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer release()
+	tx, err := connection.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		// Commit closes a successful transaction; rollback releases a failed one.
+		_ = tx.Rollback(ctx)
+	}()
 	var current bool
 	if err = tx.QueryRow(ctx, `SELECT revoked FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' FOR UPDATE`, b.foundation.broker.issuer, input.Subject, input.Workspace).Scan(&current); err != nil {
 		return nil, ErrDenied
@@ -222,13 +232,8 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 			return nil, err
 		}
 	}
-	if _, err = tx.Exec(ctx, `UPDATE portal_memberships SET revoked=$4 WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client'`, b.foundation.broker.issuer, input.Subject, input.Workspace, !active); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE portal_memberships SET revoked=$4 WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' AND revoked IS DISTINCT FROM $4`, b.foundation.broker.issuer, input.Subject, input.Workspace, !active); err != nil {
 		return nil, err
-	}
-	if !active {
-		if err = b.endMemberSessions(ctx, tx, input.Subject); err != nil {
-			return nil, err
-		}
 	}
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
@@ -237,44 +242,12 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 		return nil, err
 	}
 	if !active {
-		if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
+		if !b.operatorMutationAllowed(ctx, connection) {
 			return nil, ErrDenied
 		}
-		if err = b.foundation.customers.DeactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, b.foundation.pool) }); err != nil {
+		if err = b.foundation.customers.DeactivateUser(ctx, user, func() bool { return b.operatorMutationAllowed(ctx, connection) }); err != nil {
 			return nil, err
 		}
 	}
 	return map[string]bool{"active": active}, nil
-}
-
-// endMemberSessions uses the maintained codec, retaining all other identities'
-// sessions. The bounded scan fails rather than silently leaving sessions behind.
-func (b *browser) endMemberSessions(ctx context.Context, tx pgx.Tx, subject string) error {
-	rows, err := tx.Query(ctx, `SELECT token,data FROM portal_sessions WHERE expiry>now() ORDER BY token LIMIT $1`, operatorListLimit+1)
-	if err != nil {
-		return err
-	}
-	type session struct {
-		token string
-		data  []byte
-	}
-	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (session, error) {
-		var value session
-		return value, row.Scan(&value.token, &value.data)
-	})
-	if err != nil || len(list) > operatorListLimit {
-		return errors.New("session inventory unavailable")
-	}
-	for _, value := range list {
-		_, data, err := b.sessions.Codec.Decode(value.data)
-		if err != nil {
-			return errors.New("session inventory unavailable")
-		}
-		if data["issuer"] == b.foundation.broker.issuer && data["subject"] == subject {
-			if _, err = tx.Exec(ctx, `DELETE FROM portal_sessions WHERE token=$1 AND data=$2`, value.token, value.data); err != nil {
-				return fmt.Errorf("end member session: %w", err)
-			}
-		}
-	}
-	return nil
 }

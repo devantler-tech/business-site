@@ -91,27 +91,31 @@ func TestWorkApprovalRevocationRechecksAfterLock(t *testing.T) {
 					t.Fatal(err)
 				}
 			})
-			// A workspace rebind remains an authorized operator but changes the review
-			// context. Revocation derives current membership after the wait, so it may
-			// safely close authority. Role revocation and expiry must deny.
+			// Revocation, expiry and a replacement membership all invalidate the
+			// original sign-in. A rebound operator must authenticate again.
 			if err := lock.Commit(ctx); err != nil {
 				t.Fatal(err)
 			}
 			select {
 			case err := <-result:
-				if change == "rebind" {
-					if err != nil {
-						t.Fatal("current rebound operator could not revoke", err)
-					}
-				} else if !errors.Is(err, ErrDenied) {
+				if !errors.Is(err, ErrDenied) {
 					t.Fatal("stale operator revoked after waiting", err)
 				}
 			case <-ctx.Done():
 				t.Fatal("delayed revocation did not finish")
 			}
 			var count int
-			if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_work_revocations`).Scan(&count); err != nil || (change != "rebind" && count != 0) || (change == "rebind" && count != 1) {
+			if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_work_revocations`).Scan(&count); err != nil || count != 0 {
 				t.Fatal("delayed revocation changed unexpected history", err)
+			}
+			if change == "rebind" {
+				current := authenticateExistingMember(t, b, op.subject)
+				if err := b.svc.revokeWorkApproval(t.Context(), current, proposalRequestID, workRevocationInput{Key: secret(), Approval: d.ID, Expected: 1}); err != nil {
+					t.Fatal("newly authenticated rebound operator could not revoke", err)
+				}
+				if err := b.pool.QueryRow(t.Context(), `SELECT count(*) FROM portal_work_revocations`).Scan(&count); err != nil || count != 1 {
+					t.Fatal("new explicit revocation was not recorded", count, err)
+				}
 			}
 		})
 	}

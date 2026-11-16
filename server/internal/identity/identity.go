@@ -40,6 +40,9 @@ type Broker struct {
 type Principal struct {
 	issuer, subject, audience string
 	expires                   time.Time
+	// Browser sessions retain the exact server-owned membership that admitted
+	// sign-in. Unbound broker/domain proofs have not become browser sessions.
+	membershipIncarnation string
 }
 
 // NewBroker discovers the configured HTTPS issuer through maintained OIDC code.
@@ -80,7 +83,7 @@ func (b *Broker) Verify(ctx context.Context, raw, nonce string) (Principal, erro
 	if err != nil || machineSubject(token.Subject) {
 		return Principal{}, ErrDenied
 	}
-	return Principal{b.issuer, token.Subject, b.clientID, token.Expiry}, nil
+	return Principal{issuer: b.issuer, subject: token.Subject, audience: b.clientID, expires: token.Expiry}, nil
 }
 
 // verifiedToken retains the validated token for a purpose-specific claim consumer.
@@ -365,7 +368,7 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 		if err = s.enrollOperator(ctx, p); err != nil {
 			return Principal{}, err
 		}
-		if _, _, err = s.membership(ctx, p); err != nil {
+		if _, _, p.membershipIncarnation, err = s.membershipState(ctx, p); err != nil {
 			return Principal{}, err
 		}
 		return p, nil
@@ -373,13 +376,13 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	// A current member signs straight in. An identity without membership accepts
 	// its own pending invitation, which was bound to this exact issuer/subject
 	// when it was created; anyone else has nothing to accept and is refused.
-	if _, _, err = s.membership(ctx, p); errors.Is(err, ErrDenied) {
+	if _, _, p.membershipIncarnation, err = s.membershipState(ctx, p); errors.Is(err, ErrDenied) {
 		if err = s.redeem(ctx, p); err != nil && !errors.Is(err, ErrDenied) {
 			return Principal{}, err
 		}
 		// Current membership decides, including one a concurrent first sign-in of
 		// the same identity has just created; a revoked membership still refuses.
-		_, _, err = s.membership(ctx, p)
+		_, _, p.membershipIncarnation, err = s.membershipState(ctx, p)
 	}
 	if err != nil {
 		return Principal{}, err
@@ -460,33 +463,40 @@ func (s *Foundation) Authorize(ctx context.Context, p Principal, client string, 
 }
 
 func (s *Foundation) membership(ctx context.Context, p Principal) (string, string, error) {
+	client, role, _, err := s.membershipState(ctx, p)
+	return client, role, err
+}
+
+// membershipState is the single membership policy for trusted proofs and bound
+// browser principals. A bound principal never adopts a replacement membership.
+func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, string, string, error) {
 	if !s.ready(ctx) || p.subject == "" || p.issuer != s.broker.issuer || p.audience != s.broker.clientID || !time.Now().Before(p.expires) {
-		return "", "", ErrDenied
+		return "", "", "", ErrDenied
 	}
 	// A GitHub identity is a listed operator or nobody, so removing it from the
 	// server configuration ends its access at once. A customer is never an operator.
 	connector := customeridentity.DexConnector(p.subject)
 	if connector == customeridentity.PlatformConnectorID && !s.operators[p.subject] {
-		return "", "", ErrDenied
+		return "", "", "", ErrDenied
 	}
-	var own, role string
-	err := s.pool.QueryRow(ctx, `SELECT client_id,role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked`, p.issuer, p.subject).Scan(&own, &role)
+	var own, role, incarnation string
+	err := s.pool.QueryRow(ctx, `SELECT client_id,role,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND NOT revoked AND ($3='' OR incarnation::text=$3)`, p.issuer, p.subject, p.membershipIncarnation).Scan(&own, &role, &incarnation)
 	// SQL completion is not authority to release expired or cancelled reads.
 	if ctx.Err() != nil || !time.Now().Before(p.expires) {
-		return "", "", ErrDenied
+		return "", "", "", ErrDenied
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", ErrDenied
+		return "", "", "", ErrDenied
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("read membership: %w", err)
+		return "", "", "", fmt.Errorf("read membership: %w", err)
 	}
 	// The role must match the connector: GitHub through platform SSO is the only
 	// way in for an operator, and it admits nothing else.
 	if connector != "" && (connector == customeridentity.PlatformConnectorID) != (role == "operator") {
-		return "", "", ErrDenied
+		return "", "", "", ErrDenied
 	}
-	return own, role, nil
+	return own, role, incarnation, nil
 }
 
 // Revoke is a trusted control-plane operation, subject to the same caller
