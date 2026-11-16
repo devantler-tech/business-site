@@ -262,6 +262,21 @@ func enroll(t *testing.T, svc *Foundation, f brokerFixture, subject, client, rol
 	return p
 }
 
+// authenticateExistingMember obtains a fresh verified sign-in after a membership
+// transition. It never edits the incarnation carried by an older principal.
+func authenticateExistingMember(t *testing.T, b *browserFixture, subject string) Principal {
+	t.Helper()
+	attempt, err := b.svc.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := b.svc.Complete(t.Context(), attempt.State, attempt.BrowserBinding, b.f.token(t, subject, attempt.Nonce, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func invitedAttempt(t *testing.T, svc *Foundation, f brokerFixture, subject, client, role string) Attempt {
 	t.Helper()
 	if err := svc.Invite(f.ctx, Invitation{f.issuer, subject, client, role, time.Now().Add(time.Hour)}); err != nil {

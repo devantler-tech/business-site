@@ -254,14 +254,7 @@ func TestBoundMembershipCannotWriteAfterReactivation(t *testing.T) {
 			if err := b.pool.QueryRow(t.Context(), "SELECT count(*) FROM "+tc.table).Scan(&count); err != nil || count != 0 {
 				t.Fatal("stale writer left private records", count, err)
 			}
-			attempt, err := b.svc.Begin(t.Context())
-			if err != nil {
-				t.Fatal(err)
-			}
-			current, err := b.svc.Complete(t.Context(), attempt.State, attempt.BrowserBinding, b.f.token(t, "epoch-writer", attempt.Nonce, nil))
-			if err != nil {
-				t.Fatal(err)
-			}
+			current := authenticateExistingMember(t, b, "epoch-writer")
 			if err := tc.write(b, current); err != nil {
 				t.Fatal("a newly authenticated membership lost its write", err)
 			}
