@@ -28,6 +28,8 @@ var projectedPortalSettings = []string{
 	"PORTAL_UPSTREAM_END_SESSION_URL", "PORTAL_UPSTREAM_CLIENT_ID",
 	// The optional operators: customer Dex subjects issued through platform SSO.
 	"PORTAL_OPERATOR_SUBJECTS",
+	// The customer directory's token stays in its separate rotating projection.
+	"PORTAL_ZITADEL_URL", "PORTAL_ZITADEL_ORG_ID", "PORTAL_ZITADEL_TOKEN_PROJECTION_FILE",
 }
 
 // inheritedPortalSettings are every setting ReadConfig and the activation

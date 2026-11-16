@@ -33,6 +33,7 @@ type Config struct {
 	endSession, endSessionClient string
 	// operators are the optional operator subjects, signing in through platform SSO.
 	operators string
+	customers customerDirectoryConfig
 	// publicSite is the public website a portal on its own host links back to.
 	publicSite string
 }
@@ -157,6 +158,10 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	if count == 0 && operators != "" {
 		return Config{}, ErrConfig
 	}
+	customers, err := readCustomerDirectoryConfig(getenv)
+	if err != nil || (count == 0 && customers != (customerDirectoryConfig{})) {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
@@ -166,6 +171,7 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	c.billing, c.cards, c.mail = billing, cards, mailing
 	c.endSession, c.endSessionClient = endSession, endSessionClient
 	c.operators = operators
+	c.customers = customers
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
@@ -238,6 +244,10 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 			pool.Close()
 			return nil, closed, ErrConfig
 		}
+	}
+	if err := linkCustomerDirectory(foundation, c.customers); err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
 	}
 	if err := enableCardBilling(foundation, c.cards); err != nil {
 		pool.Close()

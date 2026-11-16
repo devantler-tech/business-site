@@ -34,15 +34,22 @@ const operatorListLimit = 1000
 // log records and what later per-action grants refer to.
 type operatorRoute struct {
 	method, path, action string
-	run                  func(*browser, context.Context) (any, error)
+	run                  func(*browser, *http.Request, context.Context) (any, error)
 }
 
 // operatorRoutes is the complete operator API. Every route only reads for now.
 var operatorRoutes = []operatorRoute{
-	{"GET", "/invitations", "invitations.list", (*browser).pendingInvitations},
-	{"GET", "/workspaces", "workspaces.list", (*browser).workspaces},
-	{"GET", "/audit", "audit.list", (*browser).auditLog},
-	{"GET", "/openapi.json", "openapi.read", func(*browser, context.Context) (any, error) { return json.RawMessage(operatorOpenAPI), nil }},
+	{"GET", "/invitations", "invitations.list", operatorRead((*browser).pendingInvitations)},
+	{"GET", "/workspaces", "workspaces.list", operatorRead((*browser).workspaces)},
+	{"GET", "/audit", "audit.list", operatorRead((*browser).auditLog)},
+	{"GET", "/openapi.json", "openapi.read", func(*browser, *http.Request, context.Context) (any, error) {
+		return json.RawMessage(operatorOpenAPI), nil
+	}},
+}
+
+// operatorRead keeps request input out of read-only inventory operations.
+func operatorRead(run func(*browser, context.Context) (any, error)) func(*browser, *http.Request, context.Context) (any, error) {
+	return func(b *browser, _ *http.Request, ctx context.Context) (any, error) { return run(b, ctx) }
 }
 
 type (
@@ -125,7 +132,7 @@ func (b *browser) operatorCall(r *http.Request, action string, run func(context.
 func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status, result := b.operatorCall(r, route.action, func(ctx context.Context, _ string) ([]byte, error) {
-			data, err := route.run(b, ctx)
+			data, err := route.run(b, r, ctx)
 			if err != nil {
 				return nil, err
 			}

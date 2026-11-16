@@ -121,6 +121,8 @@ type Foundation struct {
 	// operators are the customer Dex subjects, all issued through the platform
 	// connector, that hold the operator role. Nothing else can sign in that way.
 	operators map[string]bool
+	// customers is the optional organization-scoped provider for operator actions.
+	customers CustomerDirectory
 }
 
 // LinkUpstreamLogout names the upstream provider's end_session endpoint and the
