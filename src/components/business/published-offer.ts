@@ -46,10 +46,10 @@ export const publishedOffer = {
         }
       ],
       "priceNote": "Prices are fixed prices in DKK for the scope each offer describes. There are no hourly rates: work beyond the agreed scope gets its own fixed-price quote before it starts. Domains, external tools and usage-based charges are additional unless included in your quote. Prices include 25% Danish VAT.",
-      "hostingText": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Small, clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets a fixed-price quote before any work starts.",
+      "hostingText": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets a fixed-price quote before any work starts.",
       "fitText": "This is an independent business, not an on-call agency. Changes are planned; feature requests are not delivered at a moment’s notice. Emergency response, 24/7 support and large infrastructure projects are not offered.",
       "qualityTitle": "Clear scope. Serious engineering.",
-      "qualityScope": "Checks fit the project. Hosting includes monitoring, backups, security updates, minor fixes and small feature requests; a large wish gets a fixed-price quote.",
+      "qualityScope": "Checks fit the project. Hosting includes monitoring, backups, security updates, minor fixes and clearly bounded feature requests; a large wish gets a fixed-price quote.",
       "steps": [
         {
           "title": "Describe the need",
@@ -110,10 +110,10 @@ export const publishedOffer = {
         }
       ],
       "priceNote": "Priserne er faste priser i danske kroner for det omfang, hver ydelse beskriver. Der er ingen timepriser: Arbejde ud over det aftalte omfang får sit eget fastpristilbud, før det begynder. Domæner, eksterne værktøjer og forbrugsafhængige gebyrer kommer oveni, medmindre de er med i tilbuddet. Priserne er inkl. 25 % moms.",
-      "hostingText": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Små, klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får et fastpristilbud, før arbejdet begynder.",
+      "hostingText": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får et fastpristilbud, før arbejdet begynder.",
       "fitText": "Dette er en uafhængig virksomhed, ikke et bureau på tilkaldevagt. Ændringer planlægges; nye funktioner leveres ikke med et øjebliks varsel. Akut beredskab, support døgnet rundt og store infrastrukturprojekter tilbydes ikke.",
       "qualityTitle": "Klart omfang. Solidt håndværk.",
-      "qualityScope": "Kontrollen tilpasses projektet. Hosting omfatter overvågning, backup, sikkerhedsopdateringer, mindre rettelser og små ønsker om nye funktioner; et stort ønske får et fastpristilbud.",
+      "qualityScope": "Kontrollen tilpasses projektet. Hosting omfatter overvågning, backup, sikkerhedsopdateringer, mindre rettelser og klart afgrænsede ønsker om nye funktioner; et stort ønske får et fastpristilbud.",
       "steps": [
         {
           "title": "Beskriv dit behov",
@@ -132,12 +132,12 @@ export const publishedOffer = {
   },
   "clientCopy": {
     "en": {
-      "qualityScope": "Checks are chosen for each project; they are not a certification or a promise of flawless software. Hosting includes monitoring, backups, security updates, minor fixes and small feature requests; a large wish gets a fixed-price quote.",
+      "qualityScope": "Checks are chosen for each project; they are not a certification or a promise of flawless software. Hosting includes monitoring, backups, security updates, minor fixes and clearly bounded feature requests; a large wish gets a fixed-price quote.",
       "portfolioBridge": "Websites, web apps and practical tools. Explore selected work by Devantler Tech.",
       "catalogueIntro": "Alongside websites and web apps, I build tools for developing, checking and running software. Here is the complete public collection, including work still in development."
     },
     "da": {
-      "qualityScope": "Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Hosting omfatter overvågning, backup, sikkerhedsopdateringer, mindre rettelser og små ønsker om nye funktioner; et stort ønske får et fastpristilbud.",
+      "qualityScope": "Kontrollen vælges til hvert projekt; den er ikke en certificering eller et løfte om fejlfri software. Hosting omfatter overvågning, backup, sikkerhedsopdateringer, mindre rettelser og klart afgrænsede ønsker om nye funktioner; et stort ønske får et fastpristilbud.",
       "portfolioBridge": "Hjemmesider, webapps og nyttige værktøjer. Se udvalgte projekter fra Devantler Tech.",
       "catalogueIntro": "Ud over hjemmesider og webapps bygger jeg værktøjer til at udvikle, kontrollere og drive software. Her er hele den offentlige samling, også projekter under udvikling."
     }

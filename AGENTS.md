@@ -163,7 +163,7 @@ Publish the maintainer's fixed VAT-inclusive prices (15 November 2026): DKK 6,00
 hosting 300/month for a website, 15,000 plus 800/month for a focused first app version, and
 9,500 plus 500/month for a service. Each total includes 25% Danish VAT; never add VAT again.
 No hourly rates: work beyond the agreed scope gets its own fixed-price quote, and the first
-consultation is free. Hosting includes small, clearly bounded feature requests, picked up in a
+consultation is free. Hosting includes clearly bounded feature requests, picked up in a
 monthly round one at a time; a large wish, such as a new module or integration, gets a
 fixed-price quote. The launch offer (`launchDiscount` in `business-copy.ts` and
 `server/internal/identity/offerings.json`) gives the first 50 customers who order with hosting
