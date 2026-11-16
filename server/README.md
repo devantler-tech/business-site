@@ -8,6 +8,11 @@ and current client/operator membership. Accounts use issuer + subject, not email
 Synthetic tests use a local TLS broker with generated keys; they are not proof of
 live Dex, Google or Microsoft federation.
 
+The separate [private booking boundary](BOOKINGS.md) computes candidate intervals only.
+It has no registered route or runtime configuration; missing operator policy and unknown
+availability deny slots. Durable reservations, calendar effects and customer activation remain
+sequential delivery gates.
+
 For the credential-free public-site first run and contribution workflow, start with the
 [repository README](../README.md) and [contribution guide](../CONTRIBUTING.md). This reference
 covers the optional combined runtime and its separate disposable database tests. Implementation
