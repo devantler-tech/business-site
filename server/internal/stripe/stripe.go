@@ -65,6 +65,7 @@ type Line struct {
 	Name        string
 	AmountMinor int64
 	Monthly     bool
+	Addon       string // the portal add-on the line charges, kept on its product
 }
 
 // Checkout describes one Checkout Session. Mode is "payment" for one-off lines
@@ -134,6 +135,9 @@ func (c Checkout) form() (url.Values, error) {
 		f.Set(p+"[price_data][currency]", "dkk")
 		f.Set(p+"[price_data][unit_amount]", strconv.FormatInt(line.AmountMinor, 10))
 		f.Set(p+"[price_data][product_data][name]", line.Name)
+		if line.Addon != "" {
+			f.Set(p+"[price_data][product_data][metadata][portal_addon]", line.Addon)
+		}
 		f.Set(p+"[tax_rates][0]", c.TaxRate)
 		if line.Monthly {
 			monthly = true
@@ -459,4 +463,49 @@ type Subscription struct {
 	ID       string            `json:"id"`
 	EndedAt  int64             `json:"ended_at"`
 	Metadata map[string]string `json:"metadata"`
+}
+
+// RemoveSubscriptionAddon removes the subscription item that charges one portal
+// add-on, without proration: the current month stays paid and the next invoice
+// no longer charges it. An add-on already removed is not an error, so a retry
+// converges.
+func (c *Client) RemoveSubscriptionAddon(ctx context.Context, subscription, addon string) error {
+	if !subscriptionID.MatchString(subscription) || addon == "" {
+		return errors.New("stripe: invalid subscription add-on")
+	}
+	var s struct {
+		ID    string `json:"id"`
+		Items struct {
+			Data []struct {
+				ID    string `json:"id"`
+				Price struct {
+					Product struct {
+						Metadata map[string]string `json:"metadata"`
+					} `json:"product"`
+				} `json:"price"`
+			} `json:"data"`
+		} `json:"items"`
+	}
+	if err := c.call(ctx, http.MethodGet, "/v1/subscriptions/"+subscription, url.Values{"expand[]": {"items.data.price.product"}}, "", &s); err != nil {
+		return err
+	}
+	if s.ID != subscription {
+		return errors.New("stripe: response malformed")
+	}
+	for _, item := range s.Items.Data {
+		if item.Price.Product.Metadata["portal_addon"] != addon {
+			continue
+		}
+		var removed struct {
+			ID      string `json:"id"`
+			Deleted bool   `json:"deleted"`
+		}
+		if err := c.call(ctx, http.MethodDelete, "/v1/subscription_items/"+item.ID, url.Values{"proration_behavior": {"none"}}, "", &removed); err != nil {
+			return err
+		}
+		if removed.ID != item.ID || !removed.Deleted {
+			return errors.New("stripe: response malformed")
+		}
+	}
+	return nil
 }

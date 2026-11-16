@@ -159,13 +159,17 @@ func (s *Foundation) recordDueCharges(ctx context.Context, now time.Time) error 
 	local := now.In(copenhagen)
 	current := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, time.UTC)
 	for _, o := range orders {
+		addons, err := readOrderAddons(ctx, s.pool, o.ID)
+		if err != nil {
+			return err
+		}
 		periods := map[string]int64{}
 		if o.OneTimeMinor > 0 {
 			periods["acceptance"] = o.OneTimeMinor
 		}
 		if o.MonthlyMinor > 0 {
 			for m := o.MonthlyFrom; !m.After(current) && (o.LastMonth == nil || !m.After(*o.LastMonth)); m = m.AddDate(0, 1, 0) {
-				periods[monthPeriod(m)] = o.MonthlyMinor
+				periods[monthPeriod(m)] = periodMonthly(o.MonthlyMinor, addons, monthPeriod(m))
 			}
 		}
 		for period, gross := range periods {
