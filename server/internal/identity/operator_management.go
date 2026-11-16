@@ -100,14 +100,11 @@ func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request)
 	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !canInvite(input.Subject, "client") {
 		return nil, errOperatorInput
 	}
-	tx, err := b.foundation.pool.Begin(ctx)
+	tx, err := b.customerIdentityTransaction(ctx, input.Subject)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err = lockIdentity(ctx, tx, b.foundation.broker.issuer, input.Subject); err != nil {
-		return nil, err
-	}
 	setOperatorTarget(ctx, input.Subject)
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
@@ -184,6 +181,20 @@ func (b *browser) reactivateCustomerMember(ctx context.Context, r *http.Request)
 	return b.changeCustomerMember(ctx, r, true)
 }
 
+// customerIdentityTransaction serializes invitation and membership transitions
+// for the same broker identity, and releases a transaction whose lock fails.
+func (b *browser) customerIdentityTransaction(ctx context.Context, subject string) (pgx.Tx, error) {
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = lockIdentity(ctx, tx, b.foundation.broker.issuer, subject); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	return tx, nil
+}
+
 func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, active bool) (any, error) {
 	input, err := managementFields(r, "workspace", "subject")
 	if err != nil || !validCustomerWorkspace(input.Workspace) {
@@ -193,14 +204,11 @@ func (b *browser) changeCustomerMember(ctx context.Context, r *http.Request, act
 	if user == "" || b.foundation.customers == nil {
 		return nil, ErrDenied
 	}
-	tx, err := b.foundation.pool.Begin(ctx)
+	tx, err := b.customerIdentityTransaction(ctx, input.Subject)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err = lockIdentity(ctx, tx, b.foundation.broker.issuer, input.Subject); err != nil {
-		return nil, err
-	}
 	var current bool
 	if err = tx.QueryRow(ctx, `SELECT revoked FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND client_id=$3 AND role='client' FOR UPDATE`, b.foundation.broker.issuer, input.Subject, input.Workspace).Scan(&current); err != nil {
 		return nil, ErrDenied

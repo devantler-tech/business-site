@@ -75,29 +75,13 @@ func TestOperatorWorkspaceCommitRechecksAuthority(t *testing.T) {
 // TestOperatorDeactivationRequiresAudit catches a real member mutation or
 // provider effect taking place despite unavailable audit storage.
 func TestOperatorDeactivationRequiresAudit(t *testing.T) {
-	b := newOperatorBrowserFixture(t)
-	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, customerSubject); err != nil {
-		t.Fatal(err)
-	}
 	var calls atomic.Int32
-	if err := b.svc.LinkCustomerDirectory(&managementDirectory{change: func(context.Context, string, bool) error {
+	b := managementMemberFixture(t, func(context.Context, string, bool) error {
 		calls.Add(1)
 		return nil
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	form := url.Values{"workspace": {"client-a"}, "subject": {customerSubject}, "csrf_token": {b.csrf("/portal/")}}
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-			t.Error(err)
-		}
 	})
+	form := operatorMembershipForm(b, customerSubject, "client-a")
+	restoreAudit := pauseOperatorAudit(t)
 	status, _, _ := b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL)
 	var revoked bool
 	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil {
@@ -106,9 +90,7 @@ func TestOperatorDeactivationRequiresAudit(t *testing.T) {
 	if status != http.StatusServiceUnavailable || revoked || calls.Load() != 0 {
 		t.Fatal("unrecorded deactivation changed customer access", status, revoked, calls.Load())
 	}
-	if _, err := migrator.Exec(t.Context(), `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit()
 	status, _, _ = b.request("POST", operatorAPIRoot+"/members/deactivate", form, b.site.URL)
 	if err := b.pool.QueryRow(t.Context(), `SELECT revoked FROM portal_memberships WHERE subject=$1`, customerSubject).Scan(&revoked); err != nil || !revoked || status != http.StatusOK || calls.Load() != 1 {
 		t.Fatal("audited deactivation positive control failed", status, revoked, calls.Load(), err)
