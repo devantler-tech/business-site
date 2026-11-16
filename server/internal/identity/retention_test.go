@@ -42,7 +42,7 @@ func TestRetentionPurgesFormerClientsAfterThreeYears(t *testing.T) {
 	}
 	for _, table := range []string{"portal_memberships", "portal_membership_transitions", "portal_invitations", "portal_contacts", "portal_requests", "portal_proposals",
 		"portal_proposal_visibility", "portal_proposal_reviews", "portal_proposal_acceptances", "portal_invoices", "portal_credit_transfers", "portal_credit_revisions",
-		"portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_orders", "portal_numina_contacts"} {
+		"portal_work_approvals", "portal_work_revocations", "portal_work_current", "portal_orders", "portal_numina_contacts", "portal_request_closures"} {
 		var left int
 		if err := migrator.QueryRow(ctx, "SELECT count(*) FROM public."+table+" WHERE client_id=$1", client).Scan(&left); err != nil || left != 0 {
 			t.Errorf("%s kept %d of the former client's records: %v", table, left, err)

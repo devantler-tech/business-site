@@ -174,7 +174,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 		}
 		page.AcceptanceEnabled = true
 		if billingEnabled {
-			if page.Order, err = b.foundation.readOperatorOrder(r.Context(), p, id); err != nil {
+			if page.Order, page.Feature, err = b.foundation.readOperatorOrder(r.Context(), p, id); err != nil {
 				b.triageError(w, r, err)
 				return
 			}
@@ -248,4 +248,5 @@ type triagePageData struct {
 	Acceptances       []proposalAcceptance
 	BillingEnabled    bool
 	Order             *projectOrder
+	Feature           *featureState // the client's feature-request level and this request's closure
 }
