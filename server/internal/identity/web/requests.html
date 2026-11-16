@@ -4,7 +4,7 @@
 <main id="main"><div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <section aria-label="{{.Title}}">
-{{if eq .FormError `invalid`}}<p role="alert" class="form-error">{{if eq .Lang `da`}}Forespørgslen blev ikke gemt. Udfyld alle felter inden for de viste grænser, og prøv igen.{{else}}The request was not saved. Complete all fields within the shown limits and try again.{{end}}</p>{{end}}
+{{if eq .FormError `invalid`}}<p role="alert" class="form-error">{{if eq .Lang `da`}}Forespørgslen blev ikke gemt. Udfyld alle felter inden for de viste grænser, og prøv igen.{{else}}The request was not saved. Complete all fields within the shown limits and try again.{{end}}</p>{{end}}{{if eq .FormError `in-progress`}}<p role="alert" class="form-error">{{if eq .Lang `da`}}Du har allerede en opgave under arbejde. Med hosting arbejdes der på én opgave ad gangen; du kan sende den næste, når den er færdig.{{else}}You already have a request in progress. With hosting, one request is worked on at a time; you can send the next one when it is finished.{{end}}</p>{{end}}
 {{if eq .View `new`}}
 <form class="contact-form request-form" method="post" action="{{root}}/requests">
 <input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="submission_key" value="{{.Request.Key}}"><input type="hidden" name="lang" value="{{.Lang}}">
