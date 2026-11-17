@@ -109,3 +109,31 @@ func serviceProposalContentHash(d projectProposal) (string, error) {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// prepareProposalContract computes the immutable parent binding from the actual
+// normalized content. A submitted digest is never accepted as that binding.
+func prepareProposalContract(d projectProposal) (projectProposal, error) {
+	if d.ContentFormat == 0 {
+		d.ContentFormat = 1
+	}
+	hash, err := proposalContentHash(d)
+	if err != nil {
+		return projectProposal{}, err
+	}
+	d.ContentSHA256 = ""
+	if d.ContentFormat == 2 {
+		d.ContentSHA256 = hash
+	}
+	return d, nil
+}
+
+func proposalServiceValues(d projectProposal) []any {
+	if d.ContentFormat == 1 {
+		return []any{1, nil, nil, nil, nil, nil, nil}
+	}
+	values := []any{2, string(d.Service.Kind), d.Service.DurationMinutes, nil, nil, nil, d.ContentSHA256}
+	if d.Service.Kind == proposalServiceAppointment {
+		values[3], values[4], values[5] = d.Service.AppointmentTermsEN, d.Service.AppointmentTermsDA, d.Service.AppointmentTermsSHA256
+	}
+	return values
+}

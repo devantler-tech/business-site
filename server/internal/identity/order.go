@@ -153,6 +153,9 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 	if current == nil || (current.Proposal.OneTimeMinor == 0 && current.Proposal.MonthlyMinor == 0) {
 		return projectOrder{}, errProposalConflict
 	}
+	if current.Proposal.ContentFormat == 2 && current.Proposal.Service.Kind == proposalServiceAppointment {
+		return projectOrder{}, ErrDenied
+	}
 	terms, termsHash := s.termsFor(mc.Lang)
 	if terms == "" || s.mail.Load() == nil {
 		return projectOrder{}, errOrderConfirmation
@@ -200,8 +203,12 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		early = &placed
 	}
 	orderID := secret()
-	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early); err != nil {
+	var serviceFormat any
+	if current.Proposal.ContentFormat == 2 {
+		serviceFormat = 2
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO portal_orders(id,request_id,client_id,acceptance_id,client_issuer,client_subject,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at,service_content_format) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		orderID, id, client, current.ID, p.issuer, p.subject, collection, oneTime, monthly, firstOfNextMonth(placed), placed, early, serviceFormat); err != nil {
 		return projectOrder{}, errTriageStorage
 	}
 	for _, a := range addons {

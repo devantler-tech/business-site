@@ -144,16 +144,7 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 	csrf.SetBaseCookie(http.Cookie{Name: "__Host-portal_csrf", Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: 1800})
 	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { b.render(w, r, 403, "error", "", "") }))
 	secured := sm.LoadAndSave(csrf)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if atRoot {
-			r, w = b.internal(r), rootRedirects{w}
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		// no-referrer forces native form POST Origin to "null". strict-origin
-		// preserves same-origin CSRF checks without sharing callback paths/tokens.
-		w.Header().Set("Referrer-Policy", "strict-origin")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", csp)
+	gated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.ready(r.Context()) {
 			http.NotFound(w, r)
 			return
@@ -215,7 +206,30 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 			mux.ServeHTTP(w, r)
 			return
 		}
+		if _, captured := r.Context().Value(proposalResponseSnapshotKey{}).(proposalResponseCapture); captured {
+			// These human decisions already loaded and captured their session
+			// before the common SDK gates. Never load or recapture it here.
+			csrf.ServeHTTP(w, r)
+			return
+		}
 		secured.ServeHTTP(w, r)
+	})
+	decisions := sm.LoadAndSave(b.captureProposalDecisionSession(gated))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atRoot {
+			r, w = b.internal(r), rootRedirects{w}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		// no-referrer forces native form POST Origin to "null". strict-origin
+		// preserves same-origin CSRF checks without sharing callback paths/tokens.
+		w.Header().Set("Referrer-Policy", "strict-origin")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", csp)
+		if proposalDecisionRequest(r) {
+			decisions.ServeHTTP(w, r)
+			return
+		}
+		gated.ServeHTTP(w, r)
 	}), nil
 }
 

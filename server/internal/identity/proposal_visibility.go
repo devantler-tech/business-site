@@ -109,6 +109,10 @@ func (s *Foundation) readVisibility(ctx context.Context, p Principal, id string)
 // persistVisibility shares the revision writer's per-request lock. Current
 // membership is locked through commit; retries are bound to content and actor.
 func (s *Foundation) persistVisibility(ctx context.Context, p Principal, id string, d visibilityDecision) error {
+	return s.persistVisibilityChecked(ctx, p, id, d, nil)
+}
+
+func (s *Foundation) persistVisibilityChecked(ctx context.Context, p Principal, id string, d visibilityDecision, check workResponseCheck) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := s.sharingOperator(ctx, p); err != nil {
@@ -119,6 +123,10 @@ func (s *Foundation) persistVisibility(ctx context.Context, p Principal, id stri
 		return err
 	}
 	defer rollbackProposalWrite(ctx, tx)
+	viewer, err := heldProposalViewer(ctx, tx, p, "operator")
+	if err != nil {
+		return err
+	}
 	var saved visibilityDecision
 	var issuer, subject string
 	err = tx.QueryRow(ctx, `SELECT expected_event,expected_proposal,proposal_version,action,operator_issuer,operator_subject FROM portal_proposal_visibility WHERE request_id=$1 AND submission_key=$2`, id, d.Key).Scan(&saved.ExpectedEvent, &saved.ExpectedProposal, &saved.Proposal, &saved.Action, &issuer, &subject)
@@ -141,11 +149,29 @@ func (s *Foundation) persistVisibility(ctx context.Context, p Principal, id stri
 		if state.Event != d.ExpectedEvent || latest != d.ExpectedProposal || d.Proposal < 1 || d.Proposal > latest || state.Event >= 100 || (d.Action == "share" && state.Shared[d.Proposal]) || (d.Action == "withdraw" && state.Active != d.Proposal) {
 			return errProposalConflict
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposal_visibility(request_id,client_id,event,expected_event,proposal_version,expected_proposal,action,submission_key,operator_issuer,operator_subject) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, client, state.Event+1, d.ExpectedEvent, d.Proposal, d.ExpectedProposal, d.Action, d.Key, p.issuer, p.subject); err != nil {
+		proposal, err := scanProposal(tx.QueryRow(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p WHERE p.request_id=$1 AND p.client_id=$2 AND p.version=$3`, id, client, d.Proposal))
+		if err != nil {
+			return errTriageStorage
+		}
+		var operatorClient, operatorIncarnation, contentHash any
+		if d.Action == "share" && proposal.ContentFormat == 2 {
+			// The complete confirmed/paid appointment commitment store is not
+			// available yet. A policy or calendar snapshot alone cannot issue an
+			// appointment offer; keep this path closed until that real layer lands.
+			if proposal.Service.Kind == proposalServiceAppointment {
+				return ErrDenied
+			}
+			hash, err := proposalContentHash(proposal)
+			if err != nil || hash != proposal.ContentSHA256 {
+				return errProposalConflict
+			}
+			operatorClient, operatorIncarnation, contentHash = viewer.Client, viewer.Incarnation, hash
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposal_visibility(request_id,client_id,event,expected_event,proposal_version,expected_proposal,action,submission_key,operator_issuer,operator_subject,operator_client,operator_incarnation,content_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, client, state.Event+1, d.ExpectedEvent, d.Proposal, d.ExpectedProposal, d.Action, d.Key, p.issuer, p.subject, operatorClient, operatorIncarnation, contentHash); err != nil {
 			return errTriageStorage
 		}
 	}
-	return commitProposalWrite(ctx, p, tx, s.sharingReady)
+	return s.finishProposalResponse(ctx, p, tx, s.sharingReady, time.Time{}, viewer.Client, check)
 }
 
 // readSharedProposal selects only the latest explicit decision for this client's
@@ -161,8 +187,7 @@ func (s *Foundation) readSharedProposal(ctx context.Context, p Principal, id str
 		}
 		return nil, ErrDenied
 	}
-	var d projectProposal
-	err = s.pool.QueryRow(ctx, `SELECT p.version,p.scope,p.deliverables,p.currency,p.one_time_minor,p.monthly_minor,p.one_time_terms,p.monthly_terms,p.prepared_at FROM portal_proposals p JOIN (SELECT proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND client_id=$2 ORDER BY event DESC LIMIT 1) v ON p.version=v.proposal_version AND v.action='share' WHERE p.request_id=$1 AND p.client_id=$2 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$3 AND m.subject=$4 AND m.client_id=$2 AND m.role='client' AND NOT m.revoked AND ($5='' OR m.incarnation::text=$5))`, id, client, p.issuer, p.subject, p.membershipIncarnation).Scan(&d.Version, &d.Scope, &d.Deliverables, &d.Currency, &d.OneTimeMinor, &d.MonthlyMinor, &d.OneTimeTerms, &d.MonthlyTerms, &d.Prepared)
+	d, err := scanProposal(s.pool.QueryRow(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p JOIN (SELECT proposal_version,action FROM portal_proposal_visibility WHERE request_id=$1 AND client_id=$2 ORDER BY event DESC LIMIT 1) v ON p.version=v.proposal_version AND v.action='share' WHERE p.request_id=$1 AND p.client_id=$2 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$3 AND m.subject=$4 AND m.client_id=$2 AND m.role='client' AND NOT m.revoked AND ($5='' OR m.incarnation::text=$5))`, id, client, p.issuer, p.subject, p.membershipIncarnation))
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, errTriageStorage
 	}
@@ -179,12 +204,18 @@ func (s *Foundation) readSharedProposal(ctx context.Context, p Principal, id str
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
+	d.Key, d.Expected = "", 0
 	return &d, nil
 }
 
 func (b *browser) submitVisibility(w http.ResponseWriter, r *http.Request) {
-	p := b.principal(r.Context())
-	if err := b.foundation.sharingOperator(r.Context(), p); err != nil {
+	ctx, cancel, p, check, ok := b.captureProposalResponse(r, "operator")
+	defer cancel()
+	if !ok {
+		b.triageError(w, r, ErrDenied)
+		return
+	}
+	if err := b.foundation.sharingOperator(ctx, p); err != nil {
 		b.triageError(w, r, err)
 		return
 	}
@@ -193,6 +224,6 @@ func (b *browser) submitVisibility(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 400, "sharing-invalid", "", "")
 		return
 	}
-	err := b.foundation.persistVisibility(r.Context(), p, r.PathValue("id"), d)
+	err := b.foundation.persistVisibilityChecked(ctx, p, r.PathValue("id"), d, check)
 	b.proposalMutationResult(w, r, err, "sharing-conflict")
 }
