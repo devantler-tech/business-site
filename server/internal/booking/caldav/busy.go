@@ -54,7 +54,11 @@ func (c *Client) Busy(ctx context.Context, coverage booking.Interval) (booking.B
 	if err != nil {
 		return booking.BusySnapshot{}, booking.ErrUnavailable
 	}
-	client := &http.Client{Transport: c.httpClient.Transport, Timeout: c.httpClient.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client, cleanup, err := c.reportClient(ctx)
+	if err != nil {
+		return booking.BusySnapshot{}, booking.ErrUnavailable
+	}
+	defer cleanup()
 	busy := make([]booking.Interval, 0)
 	for _, collection := range c.calendars {
 		periods, err := c.report(ctx, client, collection, data, coverage)
@@ -71,13 +75,16 @@ func (c *Client) Busy(ctx context.Context, coverage booking.Interval) (booking.B
 }
 
 func (c *Client) validSources() bool {
-	return c != nil && c.origin != nil && c.origin.Scheme == "https" && c.origin.Hostname() != "" && c.origin.User == nil && c.origin.RawQuery == "" && c.origin.Fragment == "" && c.origin.Opaque == "" && c.httpClient != nil && c.credentials != nil && c.now != nil && validCollections(c.calendars)
+	return c != nil && c.origin != nil && c.origin.Scheme == "https" && c.origin.Hostname() != "" && c.origin.User == nil && c.origin.RawQuery == "" && c.origin.Fragment == "" && c.origin.Opaque == "" && (c.httpClient != nil || c.network != nil) && c.credentials != nil && c.now != nil && validCollections(c.calendars)
 }
 
 func (c *Client) report(ctx context.Context, client *http.Client, collection string, data []byte, coverage booking.Interval) ([]booking.Interval, error) {
 	address := url.URL{Scheme: "https", Host: c.origin.Host, Path: collection}
 	req, err := http.NewRequestWithContext(ctx, "REPORT", address.String(), bytes.NewReader(data))
 	if err != nil {
+		return nil, booking.ErrUnavailable
+	}
+	if ctx.Err() != nil {
 		return nil, booking.ErrUnavailable
 	}
 	user, password, err := c.credentials(ctx)
