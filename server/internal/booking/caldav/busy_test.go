@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -94,6 +95,74 @@ func TestBusyRefusesIncompleteProviderReport(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), "fictional-private-response") {
 				t.Fatal("provider content escaped its private adapter")
+			}
+		})
+	}
+}
+
+// Following a redirect would reveal the credential to an unselected resource.
+func TestBusyNeverFollowsProviderRedirect(t *testing.T) {
+	var redirected atomic.Int32
+	other := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		redirected.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(other.Close)
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/unselected/", http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(server.Close)
+	now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
+	client := freeBusyFixtureClient(t, server, now)
+	snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
+	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) || redirected.Load() != 0 {
+		t.Fatal("redirect reached an unselected calendar or returned availability")
+	}
+}
+
+// A successful first calendar cannot hide an unavailable second calendar.
+func TestBusyRequiresEverySelectedCalendar(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/calendars/unavailable/" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/calendar")
+		_, _ = io.WriteString(w, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Fictional provider//EN\r\nBEGIN:VFREEBUSY\r\nDTSTAMP:20270327T210000Z\r\nDTSTART:20270327T210000Z\r\nDTEND:20270327T220000Z\r\nFREEBUSY:20270327T211500Z/PT15M\r\nEND:VFREEBUSY\r\nEND:VCALENDAR\r\n")
+	}))
+	t.Cleanup(server.Close)
+	now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
+	client := freeBusyFixtureClient(t, server, now)
+	client.calendars = append(client.calendars, "/calendars/unavailable/")
+	snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
+	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
+		t.Fatal("an incomplete calendar set released partial availability")
+	}
+}
+
+// These are provider uncertainty, not evidence that the calendar is empty.
+func TestBusyRefusesUncertainCalendarSemantics(t *testing.T) {
+	const complete = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Fictional provider//EN\r\nBEGIN:VFREEBUSY\r\nDTSTAMP:20270327T210000Z\r\nDTSTART:20270327T210000Z\r\nDTEND:20270327T220000Z\r\nFREEBUSY:20270327T211500Z/PT15M\r\nEND:VFREEBUSY\r\nEND:VCALENDAR\r\n"
+	cases := map[string]string{
+		"missing coverage":      strings.Replace(complete, "DTEND:20270327T220000Z\r\n", "", 1),
+		"short coverage":        strings.Replace(complete, "DTEND:20270327T220000Z", "DTEND:20270327T213000Z", 1),
+		"floating period":       strings.Replace(complete, "20270327T211500Z/PT15M", "20270327T211500/PT15M", 1),
+		"unexpanded recurrence": strings.Replace(complete, "END:VFREEBUSY", "RRULE:FREQ=DAILY\r\nEND:VFREEBUSY", 1),
+		"extra calendar":        complete + complete,
+		"overflowing duration":  strings.Replace(complete, "PT15M", "P18446744073709551615D", 1),
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "text/calendar")
+				_, _ = io.WriteString(w, body)
+			}))
+			t.Cleanup(server.Close)
+			now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
+			client := freeBusyFixtureClient(t, server, now)
+			snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
+			if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) {
+				t.Fatal("uncertain provider semantics produced availability")
 			}
 		})
 	}

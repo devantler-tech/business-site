@@ -22,9 +22,3 @@ type Client struct {
 }
 
 var _ booking.BusyProvider = (*Client)(nil)
-
-// Busy deliberately denies until the bounded provider contract is implemented.
-// This closed shell lets the first test fail for behavior instead of a missing API.
-func (*Client) Busy(context.Context, booking.Interval) (booking.BusySnapshot, error) {
-	return booking.BusySnapshot{}, booking.ErrUnavailable
-}
