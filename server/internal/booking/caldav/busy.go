@@ -9,11 +9,9 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 	"github.com/emersion/go-ical"
@@ -73,17 +71,7 @@ func (c *Client) Busy(ctx context.Context, coverage booking.Interval) (booking.B
 }
 
 func (c *Client) validSources() bool {
-	if c == nil || c.origin == nil || c.origin.Scheme != "https" || c.origin.Hostname() == "" || c.origin.User != nil || c.origin.RawQuery != "" || c.origin.Fragment != "" || c.origin.Opaque != "" || c.httpClient == nil || c.credentials == nil || c.now == nil || len(c.calendars) == 0 || len(c.calendars) > maxCalendars {
-		return false
-	}
-	seen := make(map[string]bool, len(c.calendars))
-	for _, collection := range c.calendars {
-		if collection == "/" || len(collection) > 2048 || !strings.HasPrefix(collection, "/") || !strings.HasSuffix(collection, "/") || strings.ContainsAny(collection, "%?#\\") || strings.ContainsFunc(collection, unicode.IsControl) || path.Clean(collection)+"/" != collection || seen[collection] {
-			return false
-		}
-		seen[collection] = true
-	}
-	return true
+	return c != nil && c.origin != nil && c.origin.Scheme == "https" && c.origin.Hostname() != "" && c.origin.User == nil && c.origin.RawQuery == "" && c.origin.Fragment == "" && c.origin.Opaque == "" && c.httpClient != nil && c.credentials != nil && c.now != nil && validCollections(c.calendars)
 }
 
 func (c *Client) report(ctx context.Context, client *http.Client, collection string, data []byte, coverage booking.Interval) ([]booking.Interval, error) {

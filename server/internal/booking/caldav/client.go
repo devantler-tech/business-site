@@ -11,8 +11,8 @@ import (
 	"github.com/devantler-tech/business-site/server/internal/booking"
 )
 
-// Client has no public constructor or runtime composition yet. Until its
-// provider protocol and confinement controls are implemented it stays closed.
+// Client admits a private source selection but has no runtime composition.
+// Provider operations stay closed until connection confinement is proved.
 type Client struct {
 	origin      *url.URL
 	calendars   []string

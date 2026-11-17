@@ -3,8 +3,10 @@ package caldav
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/devantler-tech/business-site/server/internal/booking"
 )
@@ -22,6 +24,27 @@ func TestConstructorAdmitsSelectionWithoutCredentialRead(t *testing.T) {
 	}
 	if credentialsRead.Load() != 0 {
 		t.Fatal("constructor read a credential")
+	}
+}
+
+func TestConstructorKeepsCopiedSelectionClosed(t *testing.T) {
+	var credentialsRead atomic.Int32
+	config := Config{Origin: "https://CALENDAR.example.test:443/", Calendars: []string{"/calendars/selected/"}}
+	client, err := New(config, func(context.Context) (string, string, error) {
+		credentialsRead.Add(1)
+		return "fictional-user", "fictional-password", nil
+	})
+	if err != nil || client == nil {
+		t.Fatal("explicit calendar selection was refused", err)
+	}
+	config.Calendars[0] = "/calendars/replaced/"
+	if client.origin.String() != "https://calendar.example.test" || !reflect.DeepEqual(client.calendars, []string{"/calendars/selected/"}) {
+		t.Fatal("constructor retained mutable or unconfined source selection")
+	}
+	now := time.Date(2027, 3, 27, 21, 0, 0, 0, time.UTC)
+	snapshot, err := client.Busy(t.Context(), booking.Interval{Start: now, End: now.Add(time.Hour)})
+	if !errors.Is(err, booking.ErrUnavailable) || !reflect.DeepEqual(snapshot, booking.BusySnapshot{}) || credentialsRead.Load() != 0 {
+		t.Fatal("unproved provider transport read a credential or returned availability")
 	}
 }
 
