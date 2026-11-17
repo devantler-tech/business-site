@@ -6,6 +6,8 @@ require (
 	github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.1-0.20250927102904-c45a9d145a22
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/emersion/go-ical v0.0.0-20261112170022-46c5b53a1723
+	github.com/emersion/go-webdav v0.7.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/justinas/nosurf v1.2.0
 	github.com/open-feature/go-sdk v1.20.0
@@ -19,6 +21,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
+	github.com/teambition/rrule-go v1.8.2 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
