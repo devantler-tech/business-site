@@ -16,6 +16,8 @@ import (
 var errProposalConflict = errors.New("proposal version or retry conflict")
 
 type projectProposal struct {
+	ContentFormat                                                  int
+	Service                                                        proposalServiceTerms
 	Version, Expected                                              int
 	Key, Scope, Deliverables, Currency, OneTimeTerms, MonthlyTerms string
 	OneTimeMinor, MonthlyMinor                                     int64
@@ -62,7 +64,7 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 			return projectProposal{}, false
 		}
 		switch name {
-		case "submission_key", "expected_version", "scope", "deliverables", "currency", "one_time_dkk", "monthly_dkk", "one_time_terms", "monthly_terms", "csrf_token", "lang":
+		case "submission_key", "expected_version", "scope", "deliverables", "currency", "one_time_dkk", "monthly_dkk", "one_time_terms", "monthly_terms", "csrf_token", "lang", "service_kind", "appointment_minutes", "appointment_terms_en", "appointment_terms_da":
 		default:
 			return projectProposal{}, false
 		}
@@ -71,6 +73,11 @@ func parseProposal(r *http.Request) (projectProposal, bool) {
 	one, ook := proposalNumber(r.PostForm.Get("one_time_dkk"), 10000000)
 	monthly, mok := proposalNumber(r.PostForm.Get("monthly_dkk"), 10000000)
 	d := projectProposal{Key: r.PostForm.Get("submission_key"), Expected: version, Currency: r.PostForm.Get("currency"), OneTimeMinor: int64(one) * 100, MonthlyMinor: int64(monthly) * 100}
+	format, service, serviceOK := parseProposalService(r.PostForm)
+	if !serviceOK {
+		return projectProposal{}, false
+	}
+	d.ContentFormat, d.Service = format, service
 	for _, field := range []struct {
 		name   string
 		limit  int

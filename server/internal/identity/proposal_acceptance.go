@@ -40,6 +40,12 @@ func (s *Foundation) acceptanceReady(ctx context.Context) bool {
 // proposalContentHash binds the typed, normalized stored content, not browser
 // assertions or ambiguous delimiter concatenation. It is not a legal signature.
 func proposalContentHash(d projectProposal) (string, error) {
+	if d.ContentFormat == 2 {
+		return serviceProposalContentHash(d)
+	}
+	if d.ContentFormat < 0 || d.ContentFormat > 1 || d.Service != (proposalServiceTerms{}) {
+		return "", errProposalConflict
+	}
 	content := struct {
 		Scope, Deliverables, Currency, OneTimeTerms, MonthlyTerms string
 		OneTimeMinor, MonthlyMinor                                int64
