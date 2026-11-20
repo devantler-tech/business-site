@@ -20,6 +20,7 @@ const links = node => walk(node).filter(item => item.tagName === "a").map(item =
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
 const portalPrivacy = process.env.FEATURE_PORTAL_PRIVACY === "true";
+const addonTerms = process.env.FEATURE_ADDONS === "true";
 /** The published phone number, or "" until the business adds one to company.json. */
 const companyPhone = JSON.parse(readFileSync(new URL("../../src/data/company.json", import.meta.url), "utf8")).phone?.trim() ?? "";
 
@@ -104,6 +105,11 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       // The portal's privacy text is unreleased content behind its own default-off flag.
       if (kind === "privacy") for (const phrase of ["accounts.devantler.tech", locale === "da" ? "30 dage" : "30 days", "GitHub"]) {
         assert.equal(text(main).includes(phrase), portalPrivacy, `portal privacy text follows FEATURE_PORTAL_PRIVACY: ${phrase}`);
+      }
+      if (kind === "terms") {
+        for (const phrase of locale === "da" ? ["Ønsker og tilvalg", "mål, ikke garantier"] : ["Feature requests and add-ons", "targets, not guarantees"]) {
+          assert.equal(text(main).includes(phrase), addonTerms, `add-on terms follow FEATURE_ADDONS: ${phrase}`);
+        }
       }
     }
     const path = join(candidate,`${prefix}company/index.html`);

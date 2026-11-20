@@ -142,7 +142,7 @@ const privacy = (portal: boolean) => ({
   },
 }) satisfies Record<Locale, LegalPage>;
 
-const terms = {
+const terms = (addons: boolean) => ({
   en: {
     title: 'Terms for projects and hosting',
     description: 'How agreements with Devantler Tech work: proposals, prices, payment, your right of withdrawal and ending hosting.',
@@ -197,6 +197,12 @@ const terms = {
         'As a private customer you can in any case end hosting with one month’s notice to the end of a month once five months have passed since the agreement. If you have paid for a period after the end date, I refund that amount immediately.',
         'When hosting ends, I hand over your content and code as described in your proposal.',
       ] },
+      ...(addons ? [{ title: 'Feature requests and add-ons', blocks: [
+        'You can send feature requests at any time while your project is hosted. Hosting and ending it says which are included and which get a fixed-price quote. There are no hourly rates.',
+        'Two monthly add-ons speed this up. With Priority, the target is to pick up your requests about once a week. With Express, the target is to start work on a request within 1 business day and to reply within 1 business day. Business days are Monday to Friday, except Danish public holidays. These are targets, not guarantees: during holidays or illness they can take longer, and I tell you as early as I can.',
+        'Fair use applies to every level: one request is in progress per customer at a time. The next request is picked up when the current one is finished.',
+        'Other add-ons, such as an extra language or visitor statistics, are part of your order at the prices it states. A monthly add-on is billed with your hosting. You can end it in the portal or by email from the next month, and it ends with your hosting.',
+      ] }] : []),
       { title: 'Faults and complaints', blocks: [
         `If something delivered does not match what we agreed, write to ${company.email} within a reasonable time after you notice it. Then we will find a solution. If you are a private customer, the rules on defects in the Danish Sale of Goods Act (købeloven) may apply.`,
         'If we cannot agree, a private customer can complain to Nævnenes Hus, Toldboden 2, 8800 Viborg. If you live in another EU country, the European Consumer Centre in Denmark (Forbruger Europa) can help.',
@@ -262,6 +268,12 @@ const terms = {
         'Som privatkunde kan du under alle omstændigheder opsige hostingen med en måneds varsel til udgangen af en måned, når der er gået fem måneder efter aftalens indgåelse. Har du betalt for en periode efter ophøret, tilbagebetaler jeg straks beløbet for den periode.',
         'Når hostingen ophører, overdrager jeg dit indhold og din kode som beskrevet i dit tilbud.',
       ] },
+      ...(addons ? [{ title: 'Ønsker og tilvalg', blocks: [
+        'Du kan til enhver tid sende ønsker til nye funktioner, mens dit projekt er hostet. Afsnittet om hosting og opsigelse beskriver, hvilke der er inkluderet, og hvilke der får et fastpristilbud. Der er ingen timepriser.',
+        'To månedlige tilvalg gør det hurtigere. Med Prioritet er målet at tage dine ønsker op cirka en gang om ugen. Med Ekspres er målet at begynde arbejdet på et ønske inden for 1 arbejdsdag og at svare inden for 1 arbejdsdag. Arbejdsdage er mandag til fredag undtagen danske helligdage. Det er mål, ikke garantier: Under ferie eller sygdom kan det tage længere tid, og jeg giver besked så tidligt, jeg kan.',
+        'Rimelig brug gælder på alle niveauer: én opgave er under arbejde pr. kunde ad gangen. Det næste ønske tages op, når det aktuelle er færdigt.',
+        'Andre tilvalg, fx et ekstra sprog eller besøgsstatistik, indgår i din ordre til de priser, den angiver. Et månedligt tilvalg betales sammen med hostingen. Du kan opsige det i portalen eller på e-mail fra næste måned, og det ophører sammen med hostingen.',
+      ] }] : []),
       { title: 'Fejl og klager', blocks: [
         `Hvis det leverede ikke svarer til det aftalte, så skriv til ${company.email} inden rimelig tid efter, at du har opdaget det. Så finder vi en løsning. Er du privatkunde, kan købelovens mangelsregler finde anvendelse.`,
         'Kan vi ikke blive enige, kan en privatkunde klage til Nævnenes Hus, Toldboden 2, 8800 Viborg. Bor du i et andet EU-land, kan Forbruger Europa hjælpe.',
@@ -273,11 +285,11 @@ const terms = {
       ] },
     ],
   },
-} as const satisfies Record<Locale, LegalPage>;
+}) as const satisfies Record<Locale, LegalPage>;
 
 export type LegalKind = 'privacy' | 'terms';
 
-/** One legal page; portal-only privacy text appears only when `portal` is true. */
-export function legalPage(kind: LegalKind, locale: Locale, portal: boolean): LegalPage {
-  return kind === 'privacy' ? privacy(portal)[locale] : terms[locale];
+/** Portal privacy and add-on terms have independent, default-off releases. */
+export function legalPage(kind: LegalKind, locale: Locale, portal: boolean, addons = false): LegalPage {
+  return kind === 'privacy' ? privacy(portal)[locale] : terms(addons)[locale];
 }
