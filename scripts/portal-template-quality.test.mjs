@@ -68,6 +68,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
       '--remap',
       '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
         'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
+      '--exclude', '^https://www\\.retsinformation\\.dk/',
     ],
   });
   assert.deepEqual(rules, {
