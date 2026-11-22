@@ -13,7 +13,8 @@ publish="$(yq -o=json '.' "$root/.github/workflows/publish-runtime.yaml")" || fa
 admission_valid() {
   jq -e '
     .jobs.admit.steps as $s |
-    .permissions=={} and .jobs.admit.permissions=={"contents":"read","actions":"read","packages":"read"} and
+    .permissions=={} and .jobs.admit["runs-on"]=="ubuntu-latest" and
+    .jobs.admit.permissions=={"contents":"read","actions":"read","packages":"read"} and
     $s[0].with.ref=="\u0024{{ github.sha }}" and $s[0].with["persist-credentials"]==false and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/admit-runtime-release.sh")]|length)==1 and
     ([range(0;$s|length)|select($s[.].run=="bash scripts/verify-runtime-origin.sh")]|length)==1 and
@@ -23,6 +24,10 @@ admission_valid() {
     all($s[]|select(.uses//""|startswith("actions/setup-go@")); .with.cache==false) and
     all($s[]|select(.uses!=null); .uses|test("@[0-9a-f]{40}$")) and
     $s[-1].run=="bash scripts/verify-runtime-origin.sh" and
+    $s[-1].env.PREBUILT_CI_AUTH_MODE=="job-token" and
+    $s[-1].env.PREBUILT_CI_READ_TOKEN=="\u0024{{ github.token }}" and
+    all([.env, .jobs.admit.env, ($s[0:-1][]|.env)][];
+      .PREBUILT_CI_AUTH_MODE==null and .PREBUILT_CI_READ_TOKEN==null) and
     .jobs.admit.outputs["image-digest"]=="\u0024{{ steps.admit.outputs.image-digest }}" and
     .jobs.admit.outputs["ci-run-id"]=="\u0024{{ steps.admit.outputs.ci-run-id }}" and
     .jobs.admit.outputs["ci-run-attempt"]=="\u0024{{ steps.admit.outputs.ci-run-attempt }}" and
@@ -71,10 +76,12 @@ publish_valid() {
   ' >/dev/null
 }
 for data in "$release" "$publish"; do
-  admission_valid <<<"$data" || fail 'credential-free admission and original signature verification are mandatory'
+  admission_valid <<<"$data" || fail 'read-only CI authentication and original signature verification are mandatory'
   for mutation in '.jobs.admit.permissions.contents="write"' '.jobs.admit.steps[-1]["continue-on-error"]=true' \
     '.jobs.admit.steps[-1].if="false"' '.jobs.admit.steps|=.[0:-1]' '.jobs.admit.steps[0].with.ref="main"' \
-    '.jobs.admit.outputs["ci-run-attempt"]="1"' \
+    '.jobs.admit.outputs["ci-run-attempt"]="1"' '.jobs.admit["runs-on"]="self-hosted"' \
+    'del(.jobs.admit.steps[-1].env.PREBUILT_CI_READ_TOKEN)' '.jobs.admit.steps[-1].env.PREBUILT_CI_AUTH_MODE="anonymous"' \
+    '.jobs.admit.env.PREBUILT_CI_READ_TOKEN=.jobs.admit.steps[-1].env.PREBUILT_CI_READ_TOKEN' \
     '.jobs.admit.steps |= map(if (.uses//""|startswith("actions/setup-go@")) then .with.cache=true else . end)'; do
     if admission_valid <<<"$(jq "$mutation" <<<"$data")"; then fail 'unsafe admission wiring accepted'; fi
   done

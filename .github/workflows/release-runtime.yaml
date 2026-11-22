@@ -66,6 +66,8 @@ jobs:
           persist-credentials: false
       - name: Verify the original image signature and complete provenance
         env:
+          PREBUILT_CI_AUTH_MODE: job-token
+          PREBUILT_CI_READ_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.admit.outputs.image-digest }}
           PUBLIC_DIGEST: ${{ steps.admit.outputs.public-digest }}
