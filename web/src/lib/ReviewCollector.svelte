@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { connectReviewFrame } from "../../../server/internal/identity/web/review-collector.mjs";
+  import controllerScript from "../../../server/internal/identity/web/review-collector.mjs?url&no-inline";
 
   let { locale }: { locale: "en" | "da" } = $props();
-  let open = $state(false);
   const template = "56278e9abfbbba0bdcd568bc";
   const frame = `https://widget.trustpilot.com/trustboxes/${template}/index.html?templateId=${template}&businessunitId=6b00bb09a7dbf30ad4d33478`;
   const labels = {
@@ -37,24 +36,23 @@
   <p>{copy.prompt}</p>
   <p id="review-privacy">{copy.disclosure} <a href="https://legal.trustpilot.com/for-everyone/end-user-privacy-terms" rel="noreferrer">{copy.privacy}</a></p>
   <div class="review-actions">
-    <button type="button" aria-expanded={open} aria-controls="review-frame" aria-describedby="review-privacy" onclick={() => { open = !open; }}>
-      {open ? copy.hide : copy.load}
+    <button type="button" hidden aria-expanded="false" aria-controls="review-frame" aria-describedby="review-privacy" data-review-toggle data-hide-label={copy.hide}>
+      {copy.load}
     </button>
     <a href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer">{copy.link}</a>
   </div>
-  <div id="review-frame" hidden={!open}>
-    {#if open}
-      <iframe
-        {@attach connectReviewFrame}
-        src={`${frame}#locale=${copy.locale}&styleHeight=52px&styleWidth=100%25`}
-        title={copy.frameTitle}
-        width="340"
-        height="52"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-        referrerpolicy="no-referrer"
-      ></iframe>
-    {/if}
-  </div>
+  <div id="review-frame" hidden></div>
+  <template data-review-frame>
+    <iframe
+      data-src={`${frame}#locale=${copy.locale}&styleHeight=52px&styleWidth=100%25`}
+      title={copy.frameTitle}
+      width="340"
+      height="52"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      referrerpolicy="no-referrer"
+    ></iframe>
+  </template>
+  <script type="module" src={controllerScript}></script>
 </section>
 
 <style>
@@ -94,9 +92,7 @@
     border-radius: 0.4rem;
     background: #fff;
   }
-  @media (scripting: none) {
-    button {
-      display: none;
-    }
+  button[hidden] {
+    display: none;
   }
 </style>

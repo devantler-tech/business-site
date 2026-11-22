@@ -24,3 +24,33 @@ export function connectReviewFrame(frame) {
 
   return () => controller.abort();
 }
+
+const collector = globalThis.document?.querySelector('[data-review-collector]');
+const toggle = collector?.querySelector('[data-review-toggle]');
+const target = collector?.querySelector('#review-frame');
+const template = collector?.querySelector('template[data-review-frame]');
+const templateFrame = collector && template instanceof HTMLTemplateElement ? template.content.querySelector('iframe') : null;
+const source = templateFrame?.dataset.src;
+if (collector && toggle instanceof HTMLButtonElement && target instanceof HTMLElement && templateFrame && source) {
+  const loadLabel = toggle.textContent?.trim() ?? '';
+  const hideLabel = toggle.dataset.hideLabel ?? loadLabel;
+  /** @type {(() => void) | undefined} */
+  let disconnect;
+
+  toggle.hidden = false;
+  toggle.addEventListener('click', () => {
+    const show = target.hidden;
+    if (show) {
+      const frame = document.importNode(templateFrame, true);
+      disconnect = connectReviewFrame(frame);
+      frame.src = source;
+      target.append(frame);
+    } else {
+      disconnect?.();
+      target.replaceChildren();
+    }
+    target.hidden = !show;
+    toggle.setAttribute('aria-expanded', String(show));
+    toggle.textContent = show ? hideLabel : loadLabel;
+  });
+}

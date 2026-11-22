@@ -71,8 +71,15 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         const collector = find(walk(contact), "data-review-collector");
         assert.equal(Boolean(collector), identity, "the collector follows the company release");
         if (collector) {
+          const nodes = walk(collector);
           assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/review/devantler.tech"), "the collector has a direct fallback");
-          assert.ok(!walk(collector).some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
+          assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
+          const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
+          const source = attr(controller, "src");
+          assert.ok(source, "the collector links its controller");
+          assert.match(source, /^\/_app\/.*review-collector[^/]*\.mjs$/, "the statically rendered collector links its local controller");
+          const script = readFileSync(join(candidate, source), "utf8");
+          assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
         }
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 

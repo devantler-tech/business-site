@@ -9,5 +9,6 @@
   </div>
   <div id="review-frame" hidden></div>
   <template data-review-frame><iframe data-src="{{reviewCollectorURL .Lang}}" title="{{if eq .Lang `da`}}Anmeld Devantler Tech på Trustpilot{{else}}Review Devantler Tech on Trustpilot{{end}}" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
+  <script type="module" src="{{root}}/assets/review-collector.mjs"></script>
 </section>
 {{- end}}
