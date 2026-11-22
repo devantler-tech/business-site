@@ -86,6 +86,7 @@ var wantPresentationAssets = []struct{ name, contentType string }{
 	{"logo-light.svg", "image/svg+xml"},
 	{"portal.css", "text/css; charset=utf-8"},
 	{"portal.js", "text/javascript; charset=utf-8"},
+	{"review-collector.mjs", "text/javascript; charset=utf-8"},
 }
 
 // TestBrowserPresentationAssets exercises the actual handlers, bytes and default-off
@@ -125,7 +126,7 @@ func TestBrowserPresentationAssets(t *testing.T) {
 				t.Fatal("portal presentation response is cacheable")
 			}
 		}
-		for _, name := range []string{"unknown.css", "portal.html", "contact.html", "requests.html", "triage.html"} {
+		for _, name := range []string{"unknown.css", "portal.html", "contact.html", "requests.html", "triage.html", "review-collector.html"} {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid/portal/assets/"+name, nil))
 			if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "{{") {
@@ -178,6 +179,43 @@ func TestBrowserSignInPage(t *testing.T) {
 		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 		if got := res.Header.Get("Content-Security-Policy"); got != wantCSP {
 			t.Errorf("security policy=%q want %q", got, wantCSP)
+		}
+	}
+}
+
+func TestReviewCollectorIsConfinedToClientHome(t *testing.T) {
+	b := &browser{foundation: &Foundation{}}
+	const frame = "https://widget.trustpilot.com/trustboxes/56278e9abfbbba0bdcd568bc/index.html"
+	for _, kind := range []string{"home", "operator", "no-access"} {
+		for _, lang := range []string{"en", "da"} {
+			r := httptest.NewRequest("GET", "/portal/?lang="+lang, nil)
+			w := httptest.NewRecorder()
+			w.Header().Set("Content-Security-Policy", "default-src 'none'")
+			b.render(w, r, http.StatusOK, kind, "synthetic-workspace", "")
+			body := w.Body.String()
+			if kind != "home" {
+				if strings.Contains(body, "trustpilot.com") || w.Header().Get("Content-Security-Policy") != "default-src 'none'" {
+					t.Fatalf("%s %s exposes a collector or its frame permission", kind, lang)
+				}
+				continue
+			}
+			if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'; frame-src "+frame {
+				t.Errorf("%s client home CSP = %q", lang, got)
+			}
+			for _, required := range []string{"data-review-collector", "data-review-frame", `href="https://www.trustpilot.com/review/devantler.tech"`, `rel="noreferrer"`, `referrerpolicy="no-referrer"`} {
+				if !strings.Contains(body, required) {
+					t.Errorf("%s client home is missing %q", lang, required)
+				}
+			}
+			_, collector, _ := strings.Cut(body, "<template data-review-frame>")
+			collector, _, _ = strings.Cut(collector, "</template>")
+			if strings.Contains(collector, ` src="`) || strings.Contains(collector, "synthetic-workspace") {
+				t.Errorf("%s client home exposes an active iframe source or workspace data", lang)
+			}
+			wantLocale := map[string]string{"en": "en-US", "da": "da-DK"}[lang]
+			if !strings.Contains(collector, "#locale="+wantLocale+"&amp;") {
+				t.Errorf("%s client home uses the wrong widget locale", lang)
+			}
 		}
 	}
 }

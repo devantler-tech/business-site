@@ -21,7 +21,7 @@
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="{{root}}/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
 {{if .RequestsEnabled}}<p><a href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
 {{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section><a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
+</section>{{if eq .Kind `home`}}{{template "review-collector" .}}{{end}}<a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}">{{if or (eq .Kind `broker-handoff`) (eq .Kind `sign-out-handoff`)}}<meta http-equiv="refresh" content="0;url={{.BrokerURL}}">{{end}}<title>{{.Title}} — Devantler Tech</title><link rel="icon" type="image/png" href="{{root}}/assets/icon.png"><link rel="stylesheet" href="{{root}}/assets/portal.css"></head>

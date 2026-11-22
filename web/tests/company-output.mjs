@@ -68,6 +68,12 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");
         assert.ok(contact);
+        const collector = find(walk(contact), "data-review-collector");
+        assert.equal(Boolean(collector), identity, "the collector follows the company release");
+        if (collector) {
+          assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/review/devantler.tech"), "the collector has a direct fallback");
+          assert.ok(!walk(collector).some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
+        }
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 
 

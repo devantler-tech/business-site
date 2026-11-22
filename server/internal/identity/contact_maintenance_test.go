@@ -251,6 +251,15 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		view := maintenanceContactViews[index%len(maintenanceContactViews)]
 		return checkMaintenanceState(markup, maintenancePage(lang, view), task)
 	}
+	if !task && name == "portal.html" {
+		state := maintenanceCases[name][index%len(maintenanceCases[name])]
+		if state == "home" || state == "home-links" {
+			markup, err = checkClientHomeReviewCollector(markup, lang)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
 	if err != nil {
 		return err
