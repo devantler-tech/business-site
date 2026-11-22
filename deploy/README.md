@@ -148,7 +148,7 @@ With sign-in on, invite customers from a web pod as
 ([MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job)), as login `portal_migrator`
 (which owns database `portal`) with `--runtime-role portal_web`:
 
-- **Image.** The shared publisher pins only the WebApp's image. `kustomization.yaml` copies
+- **Image.** The publisher pins only the WebApp's image. `kustomization.yaml` copies
   that image into the Job, so the Job always runs its own release. The Job carries the
   `kustomize.toolkit.fluxcd.io/force` annotation, so Flux recreates it when the image changes.
 - **Input.** The platform supplies Secret `business-site-portal-db-migration` with `database-url`
@@ -337,13 +337,17 @@ An explicit enabled `mode=release` dispatch on main can create a genuine semanti
 through the accepted shared release tool. Release initiation is manual: no privileged completion
 trigger or release dispatch is added to source CI. Both admission jobs disable Go-cache reuse.
 One `release: published`
-caller then rebinds the actual stable tag to its source and current original CI receipt. It calls
-only the consumer-accepted immutable prebuilt-WebApp publisher, with caller pinning and signed
-promotion required, rebuilding and recovery disabled. The release-only tool uses its maintained
+caller then rebinds the actual stable tag to its source and current original CI receipt. Its
+`publish` job runs the commit-pinned `devantler-tech/.github/actions/publish-app` action in
+`prebuilt-webapp` mode, directly in this workflow, so the image and the manifests are signed as
+`publish-runtime.yaml` on the release tag: this repository signs its own releases
+(devantler-tech/monorepo ADR 0017). The action stages, signs and verifies both digests before it
+exposes the version, and never rebuilds the image. The release-only tool uses its maintained
 Node 22/npm 11 environment; the application still builds and validates under Node 24/npm 11.
 
-The final read-only job verifies both immutable subjects and both version aliases under the exact
-accepted publisher identity and paired source/version/run/attempt/original-CI/public-digest claims.
+The final read-only job verifies both immutable subjects and both version aliases as signed by
+this repository's release workflow on the release tag, the only accepted publisher identity, with
+paired source/version/run/attempt/original-CI/public-digest claims.
 It compares the actual manifest package with the source YAML, allowing only the separately verified
 image pin, and rechecks current CI/publication attempts. The verifier creates an exclusive extraction
 directory for Flux before pulling the authenticated immutable package. A failed or partial pull

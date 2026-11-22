@@ -17,11 +17,9 @@ readonly source=0123456789abcdef0123456789abcdef01234567
 readonly image=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 readonly manifests=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 readonly public=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-# The publisher caller is the single written copy of the accepted publisher commit; a
-# dependency bump changes it there and these controls follow without a hand-made copy.
-workflow="$(yq -r '.jobs.publish.uses' "$root/$caller")" || fail 'publisher caller cannot be read'
-[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'publisher caller is not pinned to one full commit'
-readonly workflow
+# The repository signs its own releases: the only accepted publisher is this release
+# workflow on the release tag under test.
+readonly workflow="devantler-tech/business-site/$caller@refs/tags/v1.2.3"
 cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp.sh" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -175,31 +173,30 @@ for target in image-signature image-tag manifests-signature manifests-tag; do
     [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'invalid signature left a receipt'
   done
 done
-cp "$scratch/source/$caller" "$scratch/caller.yaml"
-publisher=${workflow%@*}
-other=1123456789abcdef0123456789abcdef01234567
-# A moving or foreign publisher reference is refused before any registry read; the frozen
-# caller naming a different commit than the one that signed is refused by the signature.
-for reference in "$publisher@main" "$publisher@v20.1.19" "$publisher@${workflow:${#publisher}+1:39}" \
-  "foreign/.github/.github/workflows/publish-app.yaml@${workflow#*@}" \
-  "devantler-tech/.github/.github/workflows/create-release.yaml@${workflow#*@}" "$publisher@$other"; do
+# Only this repository's release workflow on this exact tag may have signed the pair: a signature
+# from the retired shared publisher, another repository, another workflow file, a branch or another
+# tag is refused by the signature check, and never leaves a receipt.
+for signer in \
+  "devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35" \
+  "foreign/business-site/$caller@refs/tags/v1.2.3" \
+  "devantler-tech/business-site/.github/workflows/ci.yaml@refs/tags/v1.2.3" \
+  "devantler-tech/business-site/$caller@refs/heads/main" \
+  "devantler-tech/business-site/$caller@refs/tags/v1.2.4"; do
   reset_fixture
-  REFERENCE="$reference" yq '.jobs.publish.uses=strenv(REFERENCE)' "$scratch/caller.yaml" >"$scratch/source/$caller"
-  if verify; then fail "an unaccepted publisher reference was accepted: $reference"; fi
-  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'unaccepted publisher reference left a receipt'
-  if [[ "$reference" == "$publisher@$other" ]]; then
-    grep -q 'refused signature or publication claims' "$scratch/stderr" || fail 'a different publisher commit was not refused by its signature'
-  else
-    grep -q 'refused accepted publisher reference' "$scratch/stderr" || fail 'a moving or foreign publisher reference was not refused first'
-    [[ ! -s "$scratch/calls" ]] || fail 'a moving or foreign publisher reference reached the registry'
-  fi
+  if verify EXPECTED_WORKFLOW="$signer"; then fail "a pair signed by an unaccepted publisher was accepted: $signer"; fi
+  grep -q 'refused signature or publication claims' "$scratch/stderr" || fail "an unaccepted signer was not refused by its signature: $signer"
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'an unaccepted signer left a receipt'
+done
+for target in image-signature image-tag manifests-signature manifests-tag; do
+  reset_fixture
+  jq '.[0].optional["devantler.workflow-ref"]="devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35"' \
+    "$scratch/$target.json" >"$scratch/changed"
+  mv "$scratch/changed" "$scratch/$target.json"
+  if verify; then fail 'a signature claiming the retired shared publisher workflow was accepted'; fi
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'a shared publisher claim left a receipt'
 done
 reset_fixture
-rm "$scratch/source/$caller"
-if verify; then fail 'a missing publisher caller was accepted'; fi
-grep -q 'refused accepted publisher caller read' "$scratch/stderr" || fail 'a missing publisher caller was not refused as unreadable'
-[[ ! -e "$scratch/runner/runtime-publication.json" && ! -s "$scratch/calls" ]] || fail 'a missing publisher caller reached the registry or left a receipt'
-cp "$scratch/caller.yaml" "$scratch/source/$caller"
-reset_fixture
-verify || fail 'the restored publisher caller must verify again'
-printf 'runtime verification: PASS — origin failure, source immutability, accepted publisher read from its caller, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'
+verify || fail 'the release workflow on its own tag must verify again'
+jq -e --arg identity "https://github.com/$workflow" '.publisherIdentity==$identity' "$scratch/runner/runtime-publication.json" >/dev/null ||
+  fail 'the receipt does not name this repository'"'"'s release workflow on its tag'
+printf 'runtime verification: PASS — origin failure, source immutability, own release workflow on its tag as the only signer, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'

@@ -43,19 +43,25 @@ release_valid() {
     .jobs.release.with=={"disable-issue-side-effects":true,"warn-missing-breaking-bang":true,"dry-run":"\u0024{{ github.event_name == \u0027workflow_dispatch\u0027 && inputs.mode == \u0027dry-run\u0027 }}"}
   ' >/dev/null
 }
-# Admit a real enabled release, exact accepted publisher and independent mandatory pair readback.
+# Admit a real enabled release, signed as this repository's own release workflow on its tag by the
+# commit-pinned publish action called directly in this job, and independent mandatory pair readback.
 publish_valid() {
   jq -e '
     .on=={release:{types:["published"]}} and
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
-    .jobs.publish.needs=="admit" and .jobs.publish.if==null and
-    (.jobs.publish.uses|test("^devantler-tech/\\.github/\\.github/workflows/publish-app\\.yaml@[0-9a-f]{40}$")) and
+    .jobs.publish.needs=="admit" and .jobs.publish.if==null and .jobs.publish.uses==null and .jobs.publish.secrets==null and
     .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and
-    .jobs.publish.secrets==null and
-    .jobs.publish.with=={"app-name":"business-site","deploy-path":"./deploy","enable-caller-pin":true,"enable-signed-promotion":true,"enable-prebuilt-webapp":true,"enable-signed-recovery":false,
+    .jobs.publish.concurrency["cancel-in-progress"]==false and
+    (.jobs.publish.steps|type=="array" and length==2) and
+    (.jobs.publish.steps[0].uses//""|startswith("actions/checkout@")) and
+    .jobs.publish.steps[0].with=={"ref":"\u0024{{ github.sha }}","persist-credentials":false} and
+    (.jobs.publish.steps[1].uses//""|test("^devantler-tech/\\.github/actions/publish-app@[0-9a-f]{40}$")) and
+    .jobs.publish.steps[1].with=={"mode":"prebuilt-webapp","app-name":"business-site","deploy-path":"./deploy",
       "prebuilt-image-digest":"\u0024{{ needs.admit.outputs.image-digest }}","prebuilt-public-digest":"\u0024{{ needs.admit.outputs.public-digest }}",
       "prebuilt-ci-run-id":"\u0024{{ needs.admit.outputs.ci-run-id }}","prebuilt-ci-run-attempt":"\u0024{{ needs.admit.outputs.ci-run-attempt }}"} and
+    all(.jobs.publish.steps[]; .if==null and .env==null and .run==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
+      (.uses//""|test("@[0-9a-f]{40}$"))) and
     .jobs.verify.needs==["admit","publish"] and .jobs.verify.if==null and
     .jobs.verify.permissions=={"contents":"read","actions":"read","packages":"read"} and
     .jobs.verify.steps[-2].run=="bash scripts/verify-runtime-publication.sh" and
@@ -82,12 +88,19 @@ for mutation in '.jobs.admit.if="always()"' '.on.workflow_dispatch.inputs.mode.d
   if release_valid <<<"$(jq "$mutation" <<<"$release")"; then fail 'unsafe release boundary accepted'; fi
 done
 publish_valid <<<"$publish" || fail 'unsafe publisher or missing independent readback'
-for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.with["enable-signed-recovery"]=true' \
-  '.jobs.publish.with["enable-prebuilt-webapp"]=false' '.jobs.publish.with["prebuilt-ci-run-id"]="1"' \
-  '.jobs.publish.uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
+for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.steps[1].with.mode="deployment"' \
+  '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
+  '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
   '.jobs.verify.steps[-2]["continue-on-error"]=true' \
-  '.jobs.publish.uses|=sub("@[0-9a-f]{40}$";"@v20.1.19")' '.jobs.publish.uses|=sub("[0-9a-f]$";"")' \
-  '.jobs.publish.uses|=sub("^devantler-tech/";"foreign/")' '.jobs.publish.uses|=sub("publish-app";"create-release")'; do
+  '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@v21.7.2")' '.jobs.publish.steps[1].uses|=sub("[0-9a-f]$";"")' \
+  '.jobs.publish.steps[1].uses|=sub("^devantler-tech/";"foreign/")' \
+  '.jobs.publish.steps[1].uses|=sub("actions/publish-app";"actions/aggregate-job-checks")' \
+  '.jobs.publish.steps[1]["continue-on-error"]=true' '.jobs.publish.steps[1].if="false"' \
+  '.jobs.publish.steps[0].with["persist-credentials"]=true' '.jobs.publish.steps[0].with.ref="main"' \
+  '.jobs.publish.permissions["id-token"]="none"' '.jobs.publish.permissions.contents="write"' \
+  '.jobs.publish.concurrency["cancel-in-progress"]=true' \
+  '.jobs.publish.uses="devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35"' \
+  '.jobs.publish.steps=[.jobs.publish.steps[1]]' '.jobs.publish.steps+=[{"run":"true"}]'; do
   if publish_valid <<<"$(jq "$mutation" <<<"$publish")"; then fail 'unsafe publisher boundary accepted'; fi
 done
 jq -e '.branches==["main"] and (.plugins|length)==3 and .plugins[0][0]=="@semantic-release/commit-analyzer" and
@@ -115,4 +128,4 @@ for mutation in '.jobs["test-repository-contracts"].steps |= map(select(.run!="b
   '.jobs["test-repository-contracts"].steps |= map(if .run=="bash scripts/runtime-release.test.sh" then .["continue-on-error"]=true else . end)'; do
   if ci_valid <<<"$(jq "$mutation" <<<"$ci")"; then fail 'optional or absent runtime release controls accepted'; fi
 done
-printf 'runtime publisher contract: PASS — off-state, immutable callers, least privilege and mandatory independent verification\n'
+printf 'runtime publisher contract: PASS — off-state, immutable callers, own-repository signing, least privilege and mandatory independent verification\n'
