@@ -354,10 +354,14 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 	return count, since
 }
 
-// signIn goes straight to the broker: there is no portal page before the login.
-// Customers always sign in through ZITADEL, so customer Dex never shows a chooser.
+// signIn lets the broker show both sign-in methods when operators are configured.
+// A customer-only installation goes directly to ZITADEL.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
-	b.startSignIn(w, r, customeridentity.ZitadelConnectorID)
+	connector := customeridentity.ZitadelConnectorID
+	if b.foundation.OperatorsLinked() {
+		connector = ""
+	}
+	b.startSignIn(w, r, connector)
 }
 
 // operatorSignIn is the operators' own link: GitHub through platform SSO. It
@@ -411,7 +415,14 @@ func (b *browser) startSignIn(w http.ResponseWriter, r *http.Request, connector 
 		b.sessions.Put(r.Context(), "refused_since", since)
 	}
 	b.sessions.SetDeadline(r.Context(), time.Now().Add(refusalWindow))
-	address := b.oauth.AuthCodeURL(a.State, oauth2.S256ChallengeOption(a.PKCEVerifier), oauth2.SetAuthURLParam("nonce", a.Nonce), oauth2.SetAuthURLParam("connector_id", connector))
+	options := []oauth2.AuthCodeOption{
+		oauth2.S256ChallengeOption(a.PKCEVerifier),
+		oauth2.SetAuthURLParam("nonce", a.Nonce),
+	}
+	if connector != "" {
+		options = append(options, oauth2.SetAuthURLParam("connector_id", connector))
+	}
+	address := b.oauth.AuthCodeURL(a.State, options...)
 	// A GET navigation may redirect across origins; only a form POST is bound
 	// by form-action on every hop, which the handoff page exists for.
 	http.Redirect(w, r, address, http.StatusSeeOther)

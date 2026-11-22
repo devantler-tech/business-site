@@ -74,10 +74,29 @@ func TestLinkOperatorsAcceptsOnlyGitHubIdentities(t *testing.T) {
 	}
 }
 
-// TestOperatorSignsInThroughPlatformSSO: the operator link exists only with
-// configured operators and names the platform connector; customers' sign-in
-// names ZITADEL. A listed GitHub identity becomes the operator on first sign-in
-// and keeps that one membership.
+func TestSharedSignInOffersConfiguredMethods(t *testing.T) {
+	b := newBrowserFixture(t)
+	for _, path := range []string{"/portal/?lang=da", "/portal/sign-in?lang=da"} {
+		s, _, h := b.request("GET", path, nil, "")
+		address, err := url.Parse(h.Get("Location"))
+		if s != http.StatusSeeOther || err != nil || address.Query().Get("connector_id") != "customer-zitadel" {
+			t.Fatalf("%s did not start customer sign-in before operators were configured: status %d", path, s)
+		}
+	}
+	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/portal/?lang=da", "/portal/sign-in?lang=da"} {
+		s, _, h := b.request("GET", path, nil, "")
+		address, err := url.Parse(h.Get("Location"))
+		if s != http.StatusSeeOther || err != nil || address.Query().Has("connector_id") {
+			t.Fatalf("%s pinned a provider instead of opening the shared sign-in page: status %d", path, s)
+		}
+	}
+}
+
+// The operator bookmark still selects platform SSO. A listed GitHub identity
+// can enter through either link and keeps the same operator membership.
 func TestOperatorSignsInThroughPlatformSSO(t *testing.T) {
 	b := newBrowserFixture(t)
 	if s, _, _ := b.request("GET", operatorLink, nil, ""); s != http.StatusNotFound {
@@ -86,17 +105,15 @@ func TestOperatorSignsInThroughPlatformSSO(t *testing.T) {
 	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
 	}
-	for path, connector := range map[string]string{"/portal/sign-in": customeridentity.ZitadelConnectorID, operatorLink: customeridentity.PlatformConnectorID} {
-		s, _, h := b.request("GET", path, nil, "")
-		u, err := url.Parse(h.Get("Location"))
-		if s != http.StatusSeeOther || err != nil || u.Query().Get("connector_id") != connector {
-			t.Fatalf("%s did not name the %s connector: %d %s", path, connector, s, h.Get("Location"))
-		}
+	s, _, h := b.request("GET", operatorLink, nil, "")
+	u, err := url.Parse(h.Get("Location"))
+	if s != http.StatusSeeOther || err != nil || u.Query().Get("connector_id") != customeridentity.PlatformConnectorID {
+		t.Fatalf("the operator bookmark did not select platform SSO: status %d", s)
 	}
 	b.as(operatorSubject)
-	for range 2 {
-		b.finish(b.startAt(operatorLink))
-		if s, body, _ := b.request("GET", "/portal/operator?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, operatorWorkspace) {
+	for _, link := range []string{"/portal/?lang=da", operatorLink} {
+		b.finish(b.startAt(link))
+		if s, body, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, operatorWorkspace) {
 			t.Fatalf("the operator did not reach the operator page: %d", s)
 		}
 	}
@@ -115,7 +132,7 @@ func TestGitHubIdentityIsListedOperatorOrNobody(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.as(strangerSubject)
-	b.refused(b.startAt(operatorLink))
+	b.refused(b.start())
 	if b.memberships(strangerSubject, "operator")+b.memberships(strangerSubject, "client") != 0 {
 		t.Fatal("an unlisted GitHub identity gained a membership")
 	}
@@ -131,6 +148,15 @@ func TestGitHubIdentityIsListedOperatorOrNobody(t *testing.T) {
 	if err := b.svc.Invite(t.Context(), Invitation{b.f.issuer, customerSubject, "client-a", "client", time.Now().Add(time.Hour)}); err != nil {
 		t.Fatal("a customer could not be invited as a client:", err)
 	}
+	b.as(customerSubject)
+	b.finish(b.start())
+	if s, body, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, "client-a") {
+		t.Fatalf("the invited client did not reach their workspace: %d", s)
+	}
+	if s, _, _ := b.request("GET", "/portal/operator", nil, ""); s != http.StatusForbidden {
+		t.Fatalf("the invited client reached the operator area: %d", s)
+	}
+	b.client.Jar, _ = cookiejar.New(nil)
 
 	// A listed GitHub identity holding the client role is refused.
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_memberships(issuer,subject,client_id,role) VALUES($1,$2,'client-a','client')`, b.f.issuer, operatorSubject); err != nil {

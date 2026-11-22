@@ -284,12 +284,12 @@ deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
 Google, Microsoft, Apple and GitHub remain unconfigured.
 
-Operators sign in differently: with GitHub, through platform SSO. Customer Dex has a second
-connector, `platform`, and every login names its connector with Dex's `connector_id`, so
-nobody sees a chooser. The customer sign-in names `customer-zitadel`; the operator link,
-`/operator/sign-in`, names `platform` and exists only while `PORTAL_OPERATOR_SUBJECTS`
-lists operators. That setting, not the token, decides who is an operator: the portal
-decodes each returned subject's connector, and the role must match it. A GitHub identity
+The main portal sign-in shows both methods at the broker when operators are configured.
+Customers use their Devantler Tech account through ZITADEL. Operators use GitHub through
+platform SSO. When there are no configured operators, the main sign-in goes directly to
+ZITADEL. The `/operator/sign-in` bookmark goes directly to platform SSO while
+`PORTAL_OPERATOR_SUBJECTS` lists operators. The portal checks the verified subject's
+connector and current membership when it determines the role. A GitHub identity
 is a listed operator or nobody: on first sign-in it gets the operator membership in the
 `devantler-tech` workspace, it can never be invited or hold a client role, and removing it
 from the list ends its access at the next request. A customer through ZITADEL can never
