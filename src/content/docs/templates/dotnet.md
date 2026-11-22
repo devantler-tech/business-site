@@ -1,41 +1,34 @@
 ---
-title: 📁 .NET Template
-description: A minimal .NET template with CI/CD, GitHub Packages/NuGet publishing, GitHub Code Quality coverage, EditorConfig, and Dependabot.
+title: 📁 .NET Template (retiring)
+description: The .NET Template is retiring. Start new .NET projects from the Application Template, which lays down an ASP.NET Core stack with one command.
 ---
 
-A minimal, batteries-included template for new .NET projects and libraries. Skip the boilerplate — start shipping.
+The .NET Template is retiring and will be archived. Start new .NET projects from the [Application Template](/templates/platform-tenant-template/) instead: its .NET stack gives you a tested ASP.NET Core starting point, and it can also make your project a tenant on the devantler-tech platform.
 
-**Repository**: [devantler-tech/dotnet-template](https://github.com/devantler-tech/dotnet-template)
+**Repository**: [devantler-tech/platform-tenant-template](https://github.com/devantler-tech/platform-tenant-template) (being renamed `application-template`)
 
 ## What's Inside
 
-- **CI/CD** — GitHub Actions workflows for build, test, lint, and release
-- **Publishing** — Release libraries to [GitHub Packages](https://docs.github.com/en/packages) and [NuGet](https://www.nuget.org/) automatically
-- **Testing** — Test projects with coverage reporting via [GitHub Code Quality](https://docs.github.com/code-security/code-quality)
-- **Code style** — `.editorconfig` with opinionated .NET code style
-- **Dependency management** — [Dependabot](https://docs.github.com/code-security/dependabot) keeps NuGet packages and Actions up to date
-- **Release automation** — Semantic versioning and automated GitHub Releases
+The [.NET stack](/templates/platform-tenant-template/#net) is an ASP.NET Core minimal API with OpenFeature feature flags, xUnit tests and warnings-as-errors analyzers, built and tested in CI. Releases, linting, code scanning and dependency updates come from the template and stay current through its weekly sync.
+
+Package publishing, such as to NuGet, is not part of the Application Template; add it in your own repository if your library needs it.
 
 ## Getting Started
 
+Try the .NET stack in a throwaway copy. You need the .NET SDK that its `global.json` names:
+
 ```bash
-# Create a new repo from the template
-gh repo create my-project --template devantler-tech/dotnet-template --public --clone
+git clone --depth 1 https://github.com/devantler-tech/platform-tenant-template.git my-project
 cd my-project
-
-# Repoint the `Example` scaffold (.slnx, src/, tests/, README) to your project
-# name in one shot — run this first. With no argument it derives a PascalCase
-# name from your origin GitHub remote. Review the result with `git diff`.
-./scripts/rename-placeholders.sh Widget   # e.g. your project name
-
-# Restore packages
-dotnet restore
-
-# Run tests
+rm -rf .git                 # the scaffold refuses to run in the template itself
+scripts/scaffold.sh dotnet  # add --tenancy to run it on the devantler-tech platform
 dotnet test
 ```
 
+The scaffold names the solution, projects and namespace after the PascalCase form of the name, which defaults to the directory name. The [Application Template guide](/templates/platform-tenant-template/#getting-started) covers creating a real application from it.
+
 ## Links
 
-- 📦 [Template on GitHub](https://github.com/devantler-tech/dotnet-template)
-- 🔄 [Reusable workflows used by this template](https://github.com/devantler-tech/.github/tree/main/.github/workflows)
+- 🚀 [Application Template](/templates/platform-tenant-template/)
+- 📦 [Application Template on GitHub](https://github.com/devantler-tech/platform-tenant-template)
+- 📁 [.NET Template on GitHub](https://github.com/devantler-tech/dotnet-template) (retiring)

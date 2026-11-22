@@ -1,54 +1,83 @@
 ---
-title: 🚀 Platform Tenant Template
-description: A stack-neutral template for platform tenants on the devantler-tech platform, with signed build → publish → release plumbing kept current via template-sync.
+title: 🚀 Application Template
+description: One starter for new applications. Pick a Go, .NET, SvelteKit or your own stack, optionally run it on the devantler-tech platform as a tenant, and keep the shared CI/CD current through a weekly sync.
 ---
 
-A template for **platform tenants** on the [devantler-tech platform](https://github.com/devantler-tech/platform) — an application that runs on the platform from its own repository. Skip the CI/CD boilerplate — bring your own stack and start shipping.
+One command lays down a **Go**, **.NET**, **SvelteKit** or bring-your-own stack and, if you want it, makes the application a **platform tenant** on the [devantler-tech platform](https://github.com/devantler-tech/platform). A weekly sync keeps the shared plumbing current afterwards.
 
-**Repository**: [devantler-tech/platform-tenant-template](https://github.com/devantler-tech/platform-tenant-template)
-
-It is intentionally **stack-neutral**: it carries no application code or language-specific tooling. Bring your own language and framework, and fill in the scaffolding.
+**Repository**: [devantler-tech/platform-tenant-template](https://github.com/devantler-tech/platform-tenant-template) (being renamed `application-template`)
 
 ## What's Inside
 
-- **Signed supply chain** — On a `v*` tag, your image and `deploy/` manifests are built, digest-pinned, pushed as an OCI artifact, and [cosign](https://docs.sigstore.dev/)-signed. The platform checks that signature before it deploys anything, so only builds from this workflow can reach the cluster.
-- **Release automation** — [semantic-release](https://semantic-release.gitbook.io/) turns Conventional-Commit merges to `main` into the `vX.Y.Z` tags that trigger deployment.
-- **Stays current** — [template-sync](https://github.com/AndreasAugustin/actions-template-sync) opens a weekly PR keeping the shared CI/CD plumbing up to date across every tenant.
-- **Security baseline** — A `zizmor.yml` policy requires GitHub Actions to be pinned, and CI enforces it.
+`scripts/scaffold.sh <go|dotnet|svelte|none> [--tenancy] [name]` runs once in a new copy of the template and shapes it into your application.
+
+### Go
+
+A Go `net/http` server with [OpenFeature](https://openfeature.dev/) feature flags, table-driven tests and golangci-lint, checked in CI by the shared Go validator.
+
+### .NET
+
+An ASP.NET Core minimal API with OpenFeature feature flags, xUnit tests and warnings-as-errors analyzers, built and tested in CI. Package publishing, such as to NuGet, is not part of the template; add it in your own repository if you need it.
+
+### SvelteKit
+
+A [SvelteKit](https://svelte.dev/docs/kit) app with `adapter-node`, OpenFeature feature flags, Vitest, svelte-check and ESLint.
+
+### Your own stack
+
+Choose `none` to keep a placeholder CI job for the stack you bring yourself.
+
+### Platform tenancy
+
+`--tenancy` adds `deploy/` Kustomize manifests and CI that builds the image and renders `deploy/` before merge. On every `v*` tag, your image and manifests are built, digest-pinned, pushed as an OCI artifact and [cosign](https://docs.sigstore.dev/)-signed. The platform verifies that signature, which names your repository's own release workflow, before it deploys anything.
+
+Every stack's starter app serves a placeholder page at `GET /` on port 3000. With `--tenancy`, that is where the tenant's probes look, so a new tenant deploys before you write any code. Without `--tenancy`, the scaffold removes the tenant plumbing and the `Dockerfile`, and the application gets CI and releases only.
 
 ## What the template owns vs. what you own
 
-| Ownership | Files | Notes |
-| --- | --- | --- |
-| Template-owned | Shared CI/CD plumbing under `.github/workflows/` (`cd.yaml`, `release.yaml`, `template-sync.yaml`, `validate-scaffold.yaml`, `sync-labels.yaml`), `scripts/rename-placeholders.sh`, `CLAUDE.md`, `zizmor.yml` | Overwritten by `template-sync` |
-| You own | App code, `Dockerfile`, `deploy/` manifests, `.github/CODEOWNERS`, `.github/workflows/ci.yaml`, `.github/dependabot.yml`, `AGENTS.md`, `.claude/skills/maintain/SKILL.md`, `README.md`, `.releaserc`, `.gitignore`, `LICENSE`, `.templatesyncignore` | Declare in `.templatesyncignore` (same syntax as `.gitignore`), using these full paths |
+The weekly [template-sync](https://github.com/AndreasAugustin/actions-template-sync) keeps one copy of each cross-cutting concern current in every application. Where yours needs to differ, change your own file, which the sync never touches:
 
-See the template's [README](https://github.com/devantler-tech/platform-tenant-template#what-the-template-owns-vs-what-you-own) for the authoritative file-by-file list.
+| Concern | Shared, kept current by the sync | Yours, to diverge |
+| --- | --- | --- |
+| Releases | `release.yaml`: [semantic-release](https://semantic-release.gitbook.io/) turns Conventional-Commit merges into `vX.Y.Z` tags | `.releaserc` |
+| Linting | `lint.yaml` and a shared MegaLinter base configuration | `.mega-linter.yml`, which extends the base |
+| Code scanning | `codeql.yaml`: CodeQL for the languages it finds. It stays off until you turn off the repository's CodeQL default setup and set the `CODEQL_SETUP` variable to `advanced` | `.github/codeql/codeql-config.yml` |
+| Dependency updates | Renovate for a tenant's `deploy/` images and charts | `.github/dependabot.yml` for packages, Actions and the Dockerfile |
+| Agent instructions | `CLAUDE.md` | `AGENTS.md` |
+
+Your application code, `Dockerfile`, `deploy/`, `.github/workflows/ci.yaml`, `README.md` and the other files you own are listed in `.templatesyncignore` (same syntax as `.gitignore`), so the sync never overwrites them.
+
+The template's [reference](https://github.com/devantler-tech/platform-tenant-template/blob/main/docs/REFERENCE.md#what-the-template-owns-vs-what-you-own) has the authoritative file-by-file list.
 
 ## Getting Started
 
+Try it in a throwaway copy. You need Git, a POSIX shell and the stack's toolchain; no GitHub token, cloud account or cluster:
+
 ```bash
-# Create a new private repo from the template
-gh repo create devantler-tech/my-tenant --template devantler-tech/platform-tenant-template --private --clone
-cd my-tenant
-
-# Run this FIRST. It renames the `app` and `REPLACE_ME` placeholders in deploy/
-# to your tenant name — defaulting to the repo directory name, or pass your own.
-# Doing it by hand is easy to get half-wrong. Delete the helper once you're set up.
-scripts/rename-placeholders.sh        # or: scripts/rename-placeholders.sh my-tenant
-
-# Replace the rest of the scaffolding with your app (code, Dockerfile, ci.yaml),
-# then validate locally:
-kubectl kustomize deploy/             # manifests build
-actionlint .github/workflows/*        # workflows parse
+git clone --depth 1 https://github.com/devantler-tech/platform-tenant-template.git demo-app
+cd demo-app
+rm -rf .git                        # the scaffold refuses to run in the template itself
+scripts/scaffold.sh go --tenancy   # drop --tenancy for a plain app
+go test ./...
 ```
 
-Then register the tenant on the platform by following [`platform/docs/TENANTS.md`](https://github.com/devantler-tech/platform/blob/main/docs/TENANTS.md).
+For another stack, scaffold `dotnet` and run `dotnet test`, or scaffold `svelte` and run `npm ci && npm test`.
 
-> **Convention:** the Deployment's container `name` MUST equal the repository name — `publish-app` pins the built image digest into the container with that name.
+The scaffold prints `Scaffolded 'demo-app' (stack: go, platform tenant: yes).` With `--tenancy`, `kubectl kustomize deploy/` then renders the tenant's manifests and `docker build .` builds its image.
+
+Creating a real application waits on GitHub's template option for this repository, which is not enabled yet; [issue 211](https://github.com/devantler-tech/platform-tenant-template/issues/211) tracks it. Until then, the throwaway copy above is the supported way to try the template. Once the option is enabled:
+
+1. **Create its repository from the template.**
+2. **Scaffold it.** In the new checkout, run `scripts/scaffold.sh` once with your stack, and `--tenancy` if it will run on the platform. The name defaults to the directory name and must equal the repository name. Review `git status` and `git diff`, then commit.
+3. **Make it yours.** Replace the placeholder page with your app, fill in the remaining placeholders in `AGENTS.md`, and replace `README.md` and `CONTRIBUTING.md` with your own.
+4. **Protect your files from the weekly sync** by tailoring the supplied `.templatesyncignore`. The sync needs the template's GitHub App credentials.
+5. **If you scaffolded with `--tenancy`, register the tenant** on the platform by following [`platform/docs/TENANTS.md`](https://github.com/devantler-tech/platform/blob/main/docs/TENANTS.md).
+
+> **Convention:** a tenant's Deployment container `name` MUST equal the repository name — the release workflow pins the built image digest into the container with that name.
 
 ## Links
 
 - 📦 [Template on GitHub](https://github.com/devantler-tech/platform-tenant-template)
+- 📖 [Template reference](https://github.com/devantler-tech/platform-tenant-template/blob/main/docs/REFERENCE.md)
 - 🛰️ [The devantler-tech platform](https://github.com/devantler-tech/platform)
 - 🔄 [Reusable workflows used by this template](https://github.com/devantler-tech/.github/tree/main/.github/workflows)

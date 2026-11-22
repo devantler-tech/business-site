@@ -177,7 +177,7 @@ active/completed URLs redirect to the public catalogue or historical disclosure 
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
 The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
-an authored redirect to the sole Platform Tenant Template guide. Its canonical/noindex metadata,
+an authored redirect to the Application Template guide at `/templates/platform-tenant-template/`. Its canonical/noindex metadata,
 top-of-guide fallback and no-JavaScript continuation are checked against actual build output.
 Only the canonical destination guide is advertised in the sitemap, not the redirect entry.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
