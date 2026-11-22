@@ -73,12 +73,12 @@ func (s *Foundation) SyncInvoiceBilling(ctx context.Context, cfg InvoiceBilling)
 	if !s.invoiceBillingReady(ctx) {
 		return nil
 	}
-	return s.withRunLock(ctx, invoiceBillingLock, func() error { return s.syncInvoiceCharges(ctx, cfg) })
+	return s.withRunLock(ctx, invoiceBillingLock, func(*pgx.Conn) error { return s.syncInvoiceCharges(ctx, cfg) })
 }
 
-// withRunLock runs fn while this replica holds the advisory lock, and skips it
-// when another replica does.
-func (s *Foundation) withRunLock(ctx context.Context, key int64, fn func() error) error {
+// withRunLock gives fn the connection holding the advisory lock, and skips fn
+// when another replica holds the lock.
+func (s *Foundation) withRunLock(ctx context.Context, key int64, fn func(*pgx.Conn) error) error {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return errTriageStorage
@@ -100,7 +100,7 @@ func (s *Foundation) withRunLock(ctx context.Context, key int64, fn func() error
 			_ = conn.Conn().Close(cleanup)
 		}
 	}()
-	return fn()
+	return fn(conn.Conn())
 }
 
 // syncInvoiceCharges is one locked invoice sync.
