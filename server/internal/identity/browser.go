@@ -195,6 +195,13 @@ func (s *Foundation) Browser(callbackURL, clientSecret string) (http.Handler, er
 				return
 			}
 		}
+		// Bearer API calls authenticate independently of browser cookies. Only
+		// this API namespace bypasses session/CSRF middleware; operatorCall still
+		// verifies the machine proof and exact action before running anything.
+		if strings.HasPrefix(r.URL.Path, operatorAPIRoot+"/") && len(r.Header.Values("Authorization")) > 0 {
+			mux.ServeHTTP(w, r)
+			return
+		}
 		secured.ServeHTTP(w, r)
 	}), nil
 }
@@ -278,6 +285,8 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/{$}", b.home)
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
+	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
 	}
@@ -555,6 +564,7 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 	b.sessions.Put(r.Context(), "issuer", p.issuer)
 	b.sessions.Put(r.Context(), "subject", p.subject)
 	b.sessions.Put(r.Context(), "expires", p.expires.Unix())
+	b.sessions.Put(r.Context(), "membership_incarnation", p.membershipIncarnation)
 	b.sessions.Put(r.Context(), "lang", lang)
 	deadline := time.Now().Add(30 * time.Minute)
 	if p.expires.Before(deadline) {
@@ -576,7 +586,13 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 
 // principal reconstructs identity only from the server-owned durable session.
 func (b *browser) principal(ctx context.Context) Principal {
-	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0)}
+	incarnation := b.sessions.GetString(ctx, "membership_incarnation")
+	if incarnation == "" {
+		// Legacy authenticated payloads must sign in again; pre-authentication
+		// sessions remain anonymous and can complete their ordinary sign-in flow.
+		return Principal{}
+	}
+	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0), membershipIncarnation: incarnation}
 }
 
 // home rechecks current membership before rendering the client's workspace.
@@ -667,6 +683,9 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	}
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
+	}
+	if kind == "operator-action-error" {
+		path = "/portal/operator/customers"
 	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other
 	d.RequestsEnabled = kind == "home" && b.foundation.requestsReady(r.Context())

@@ -95,7 +95,7 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 // appends to, and the two billing state tables it also updates. None of them
 // allows deletion or delegation.
 var (
-	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_launch_places", "portal_order_addons", "portal_request_closures", "portal_addon_ends", "portal_addon_removals", "portal_operator_audit"}
+	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_launch_places", "portal_order_addons", "portal_request_closures", "portal_addon_ends", "portal_addon_removals", "portal_operator_audit", "portal_workspaces"}
 	billingStateTables = []string{"portal_order_charges", "portal_card_checkouts"}
 )
 

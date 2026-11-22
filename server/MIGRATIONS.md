@@ -230,6 +230,19 @@ v28 adds `portal_operator_audit`, one row per operator API call: who, what, when
 ended (CUSTOMER-IDENTITY.md, *Operator API*). Grant SELECT/INSERT only; the retention purge
 deletes rows older than the retention period.
 
+v29 adds `portal_workspaces`, including workspaces with no members yet, and records the
+workspace IDs already used by invitations and memberships. Grant SELECT/INSERT only;
+the runtime cannot rename or delete a workspace. The existing former-customer retention
+purge removes its workspace identifier together with its expired records.
+
+v30 adds nullable producer evidence to the existing immutable mail outbox. New
+complete-agreement confirmations use format 1 and bind the order, acceptance,
+proposal version/content hash, terms hash and frozen body hash. Constraints refuse
+partial metadata, a mismatched order/acceptance or a changed body. Existing rows
+retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
+Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
+This grants no service execution authority and does not prove inbox receipt.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

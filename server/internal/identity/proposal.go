@@ -101,7 +101,7 @@ func (s *Foundation) readProposals(ctx context.Context, p Principal, id string) 
 	if err := s.proposalOperator(ctx, p); err != nil {
 		return nil, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p JOIN portal_requests q ON q.id=p.request_id AND q.client_id=p.client_id WHERE q.id=$3 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked) ORDER BY p.version DESC LIMIT 50`, p.issuer, p.subject, id)
+	rows, err := s.pool.Query(ctx, `SELECT `+proposalColumns+` FROM portal_proposals p JOIN portal_requests q ON q.id=p.request_id AND q.client_id=p.client_id WHERE q.id=$3 AND EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4)) ORDER BY p.version DESC LIMIT 50`, p.issuer, p.subject, id, p.membershipIncarnation)
 	if err != nil {
 		return nil, errTriageStorage
 	}

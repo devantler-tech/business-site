@@ -2,6 +2,7 @@ package identity
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,15 +10,78 @@ import (
 	"time"
 )
 
+func TestOperatorAuditBoundsLongRecordIdentifiers(t *testing.T) {
+	original := operatorRoutes
+	operatorRoutes = append(append([]operatorRoute{}, original...), operatorRoute{"GET", "/test-target", "audit.target", func(_ *browser, ctx context.Context, _ *http.Request) (any, error) {
+		setOperatorTarget(ctx, strings.Repeat("synthetic-record-", 32))
+		return true, nil
+	}})
+	t.Cleanup(func() { operatorRoutes = original })
+	b := newOperatorBrowserFixture(t)
+	status, _, _ := b.request("GET", operatorAPIRoot+"/test-target", nil, "")
+	var target string
+	if err := b.pool.QueryRow(t.Context(), `SELECT target FROM portal_operator_audit WHERE action='audit.target'`).Scan(&target); err != nil {
+		t.Fatal("bounded audit target was not persisted", status)
+	}
+	if status != http.StatusOK || len(target) > 200 || !strings.HasPrefix(target, "sha256:") {
+		t.Fatalf("long validated target prevented audit completion: status=%d bytes=%d", status, len(target))
+	}
+}
+
 func newOperatorBrowserFixture(t *testing.T) *browserFixture {
 	t.Helper()
-	b := newBrowserFixture(t)
+	return configureOperatorBrowser(t, newBrowserFixture(t))
+}
+
+func configureOperatorBrowser(t *testing.T, b *browserFixture) *browserFixture {
+	t.Helper()
 	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
 	}
 	b.as(operatorSubject)
 	b.finish(b.startAt(operatorLink))
 	return b
+}
+
+// pauseOperatorAudit retains the actual privilege boundary and always restores
+// this disposable fixture, including when an assertion ends the test early.
+func pauseOperatorAudit(t *testing.T) func() {
+	t.Helper()
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `REVOKE INSERT ON portal_operator_audit FROM portal_runtime`); err != nil {
+		t.Fatal(err)
+	}
+	restore := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := migrator.Exec(ctx, `GRANT INSERT ON portal_operator_audit TO portal_runtime`); err != nil {
+			t.Error("restore fixture audit grant failed")
+		}
+	}
+	t.Cleanup(restore)
+	return restore
+}
+
+func (b *browserFixture) invitationCount() int {
+	b.t.Helper()
+	var count int
+	if err := b.pool.QueryRow(b.t.Context(), `SELECT count(*) FROM portal_invitations`).Scan(&count); err != nil {
+		b.t.Fatal(err)
+	}
+	return count
+}
+
+// retainOperatorWorker joins a paused request before its fixture closes.
+func retainOperatorWorker(t *testing.T, resume func(), done <-chan struct{}) {
+	t.Helper()
+	t.Cleanup(func() {
+		resume()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("operator request did not finish after release")
+		}
+	})
 }
 
 // auditRows returns the recorded actions as "kind action outcome", oldest first.
@@ -42,16 +106,9 @@ func (b *browserFixture) auditRows() []string {
 // TestOperatorOpenAPIDescribesEveryRoute: the OpenAPI file and the registered
 // operator routes name the same paths, methods and actions.
 func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
-	var doc struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(operatorOpenAPI, &doc); err != nil {
-		t.Fatal(err)
-	}
+	paths := operatorDocumentActions(t)
 	described := 0
-	for _, methods := range doc.Paths {
+	for _, methods := range paths {
 		described += len(methods)
 	}
 	if described != len(operatorRoutes) {
@@ -59,7 +116,7 @@ func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
 	}
 	actions := map[string]bool{}
 	for _, route := range operatorRoutes {
-		op, ok := doc.Paths["/operator/api"+route.path][strings.ToLower(route.method)]
+		op, ok := paths["/operator/api"+route.path][strings.ToLower(route.method)]
 		if !ok || op.OperationID != route.action || actions[route.action] {
 			t.Errorf("%s %s (%s) is missing from the OpenAPI file or not unique", route.method, route.path, route.action)
 		}
@@ -71,11 +128,19 @@ func TestOperatorOpenAPIDescribesEveryRoute(t *testing.T) {
 // nothing is recorded; a client is refused (403) and recorded; the operator gets
 // the data, and every call is recorded before it is answered.
 func TestOperatorAPIOnlyForOperators(t *testing.T) {
+	var routes []operatorRoute
+	for _, route := range operatorRoutes {
+		// Parameterized and independently gated reads have their own complete
+		// boundary tests, rather than this identity-only inventory fixture.
+		if route.method == "GET" && route.path != "/workspaces/members" && route.path != "/work-eligibility" {
+			routes = append(routes, route)
+		}
+	}
 	b := newBrowserFixture(t)
 	if err := b.svc.LinkOperators([]string{operatorSubject}); err != nil {
 		t.Fatal(err)
 	}
-	for _, route := range operatorRoutes {
+	for _, route := range routes {
 		if s, _, _ := b.request(route.method, operatorAPIRoot+route.path, nil, ""); s != http.StatusUnauthorized {
 			t.Fatalf("%s without a session: %d", route.path, s)
 		}
@@ -86,7 +151,7 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 
 	b.finish(b.startInvited("client-a", "client-a", "client"))
 	b.invite("pending-customer", "client-b", "client")
-	for _, route := range operatorRoutes {
+	for _, route := range routes {
 		if s, body, _ := b.request(route.method, operatorAPIRoot+route.path, nil, ""); s != http.StatusForbidden || strings.Contains(body, "client-b") {
 			t.Fatalf("a client reached %s: %d", route.path, s)
 		}
@@ -94,7 +159,7 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 	if s, _, _ := b.request("GET", "/portal/operator/audit", nil, ""); s != http.StatusForbidden {
 		t.Fatalf("a client reached the audit page: %d", s)
 	}
-	if got := b.auditRows(); len(got) != len(operatorRoutes)+1 || got[0] != "other invitations.list refused" || got[len(got)-1] != "other audit.view refused" {
+	if got := b.auditRows(); len(got) != len(routes)+1 || got[0] != "other invitations.list refused" || got[len(got)-1] != "other audit.view refused" {
 		t.Fatalf("the client's refused calls were not each recorded: %q", got)
 	}
 
@@ -102,7 +167,7 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 	b.as(operatorSubject)
 	b.finish(b.startAt(operatorLink))
 	results := map[string]string{}
-	for _, route := range operatorRoutes {
+	for _, route := range routes {
 		s, body, h := b.request(route.method, operatorAPIRoot+route.path, nil, "")
 		if s != http.StatusOK || h.Get("Content-Type") != "application/json" || h.Get("Cache-Control") != "no-store" {
 			t.Fatalf("the operator could not call %s: %d", route.path, s)
@@ -114,11 +179,11 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 		t.Fatalf("pending invitations: %s", results["invitations.list"])
 	}
 	var workspaces []workspaceView
-	if err := json.Unmarshal([]byte(results["workspaces.list"]), &workspaces); err != nil || len(workspaces) != 2 || workspaces[0].ID != "client-a" || workspaces[1].ID != operatorWorkspace || workspaces[1].Members[0].Role != "operator" {
+	if err := json.Unmarshal([]byte(results["workspaces.list"]), &workspaces); err != nil || len(workspaces) != 3 || workspaces[0].ID != "client-a" || workspaces[1].ID != "client-b" || len(workspaces[1].Members) != 0 || workspaces[2].ID != operatorWorkspace || workspaces[2].Members[0].Role != "operator" {
 		t.Fatalf("workspaces: %s", results["workspaces.list"])
 	}
 	var audit []auditEntry
-	if err := json.Unmarshal([]byte(results["audit.list"]), &audit); err != nil || len(audit) != len(operatorRoutes)+3 || audit[0].Action != "workspaces.list" || audit[0].Outcome != "allowed" || audit[0].Kind != "operator" || audit[0].Subject != operatorSubject {
+	if err := json.Unmarshal([]byte(results["audit.list"]), &audit); err != nil || len(audit) != len(routes)+3 || audit[0].Action != "workspaces.list" || audit[0].Outcome != "allowed" || audit[0].Kind != "operator" || audit[0].Subject != operatorSubject {
 		t.Fatalf("the audit log does not show the operator's own calls, newest first: %s", results["audit.list"])
 	}
 	var compacted bytes.Buffer
@@ -159,7 +224,7 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						case "/api/invitations":
 							query = "FROM portal_invitations WHERE"
 						case "/api/workspaces":
-							query = "FROM portal_memberships ORDER BY"
+							query = "FROM inventory i LEFT JOIN portal_memberships"
 						}
 						pause := installCompletedRead(t, b, query)
 						blocked, release = pause.blocked, pause.release
@@ -175,14 +240,7 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 						status, body, _ := b.request("GET", "/portal/operator"+path, nil, "")
 						result <- contactResponse{status, body}
 					}()
-					t.Cleanup(func() {
-						resume()
-						select {
-						case <-done:
-						case <-time.After(5 * time.Second):
-							t.Error("operator reader did not finish")
-						}
-					})
+					retainOperatorWorker(t, resume, done)
 					select {
 					case <-blocked:
 					case <-time.After(5 * time.Second):
@@ -219,14 +277,9 @@ func TestOperatorResponseRequiresDurableAuthority(t *testing.T) {
 func TestOperatorAPIFailsWithoutAudit(t *testing.T) {
 	b := newOperatorBrowserFixture(t)
 	b.invite("pending-customer", "client-b", "client")
-	migrator := migrationDB(t)
-	if _, err := migrator.Exec(b.f.ctx, "REVOKE INSERT ON portal_operator_audit FROM portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit := pauseOperatorAudit(t)
 	s, body, _ := b.request("GET", operatorAPIRoot+"/invitations", nil, "")
-	if _, err := migrator.Exec(b.f.ctx, "GRANT INSERT ON portal_operator_audit TO portal_runtime"); err != nil {
-		t.Fatal(err)
-	}
+	restoreAudit()
 	if s != http.StatusServiceUnavailable || strings.Contains(body, "client-b") {
 		t.Fatalf("an unrecorded call was answered: %d %s", s, body)
 	}

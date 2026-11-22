@@ -114,6 +114,8 @@ broker connection and sign-in off. The accepted keys keep their existing meaning
 | `PORTAL_UPSTREAM_END_SESSION_URL`      | optional: ZITADEL's `end_session` endpoint              |
 | `PORTAL_UPSTREAM_CLIENT_ID`            | optional: customer Dex's client ID in ZITADEL           |
 | `PORTAL_OPERATOR_SUBJECTS`             | optional: comma-separated operator subjects (below)     |
+| `PORTAL_AGENT_AUDIENCE`                | optional: dedicated machine JWT audience, paired below |
+| `PORTAL_AGENT_SUBJECTS`                | optional: JSON issuer/subject/grants list, paired below |
 
 The database URI names host `business-site-portal-db-rw.business-site.svc`,
 port 5432, database `portal` and login `portal_web` with its password, and the query
@@ -128,6 +130,14 @@ Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
 whitespace and CR line endings are refused. The staging lease and the owner-only
 secret file stay environment-only, and no portal variable may also be inherited
 from the environment. Errors never include values or paths. Restart to rotate.
+
+The two machine keys are both-or-neither and require the complete portal. They contain
+public policy only; no machine secret is projected into this application. The audience
+must differ from the browser client, and every listed issuer must match the portal broker.
+Agents are read-only by default, with exact write grants from a closed catalogue; money
+and deletion grants are always refused. See [machine callers](../server/CUSTOMER-IDENTITY.md#machine-callers)
+for the complete format, token limits and action names. Deploy this runtime before adding
+these keys to a settings projection; an older runtime refuses unknown keys.
 
 With sign-in on, invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
