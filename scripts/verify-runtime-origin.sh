@@ -9,7 +9,7 @@ trap 'rm -rf "$work"' EXIT
 cp -R deploy "$work/deploy"
 (
   cd "$work"
-  REPOSITORY=devantler-tech/business-site APP_NAME=business-site DEPLOY_PATH=deploy APP_MANIFEST=base/webapp.yaml \
+  REPOSITORY=devantler-tech/business-site APP_NAME=business-site DEPLOY_PATH=deploy/base \
     PREBUILT_IMAGE_DIGEST="${IMAGE_DIGEST:?}" PREBUILT_PUBLIC_DIGEST="${PUBLIC_DIGEST:?}" \
     PREBUILT_CI_RUN_ID="${ORIGINAL_CI_RUN_ID:?}" PREBUILT_CI_RUN_ATTEMPT="${ORIGINAL_CI_RUN_ATTEMPT:?}" \
     GITHUB_OUTPUT="$work/verified" bash "$helper"

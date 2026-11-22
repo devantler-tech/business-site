@@ -24,11 +24,11 @@ cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$REPOSITORY" == devantler-tech/business-site && "$SOURCE_SHA" == 0123456789abcdef0123456789abcdef01234567 &&
-   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy && "$APP_MANIFEST" == base/webapp.yaml &&
+   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy/base &&
    "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
    "$PREBUILT_PUBLIC_DIGEST" == "$(printf 'a%.0s' {1..64})" && "$PREBUILT_CI_RUN_ID" == 123 && "$PREBUILT_CI_RUN_ATTEMPT" == 2 ]]
 [[ "${ORIGIN_FAIL:-false}" == false ]] || exit 1
-PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' "deploy/$APP_MANIFEST"
+PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' "$DEPLOY_PATH/webapp.yaml"
 printf 'digest=%s\n' "$PREBUILT_IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
 FIXTURE
 cat >"$scratch/bin/gh" <<'FIXTURE'
