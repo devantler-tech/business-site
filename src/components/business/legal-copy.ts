@@ -2,9 +2,9 @@ import { launchDiscount, type Locale } from './business-copy.ts';
 import company from '../../data/company.json' with { type: 'json' };
 
 // Privacy notice and customer terms (#19). Plain statements of what the business
-// does and of the statutory rights, not a compliance claim. Keep the street
-// address out: these pages link to the company-information page instead, and
-// each proposal carries the complete withdrawal form with the address filled in.
+// does and of the statutory rights, not a compliance claim. These pages link to
+// the company-information page. Order confirmations include the complete
+// withdrawal form with the postal address.
 
 /** A paragraph, a bullet list, or a list of links. */
 export type LegalBlock = string | { list: readonly string[] } | { links: readonly { href: string; label: string }[] };
@@ -151,16 +151,17 @@ const terms = {
     title: 'Terms for projects and hosting',
     description: 'How agreements with Devantler Tech work: proposals, prices, payment, your right of withdrawal and ending hosting.',
     intro: 'These terms apply when you agree a project or hosting with Devantler Tech. Your written proposal gives the details of your project. Where the proposal and these terms differ, the proposal applies, but no proposal reduces your rights as a private customer.',
-    updated: updated.en,
+    updated: 'Last updated 22 November 2026.',
     sections: [
       { title: 'Who you agree with', blocks: [
         traderLine('en', company),
         { links: [{ href: companyPath.en, label: 'Company information and postal address' }] },
       ] },
       { title: 'Proposal and agreement', blocks: [
-        'The first consultation is free and does not commit you to anything.',
-        'You receive a written proposal by email. It describes what will be built or hosted, the total price, any monthly price, the schedule and the payment terms. These terms and the withdrawal form, with my postal address filled in, come with the proposal.',
-        'The agreement is made when you accept the proposal in writing. I then confirm the agreement by email, with these terms attached.',
+        'Get in touch and we’ll talk through your idea by email or phone. The first conversation is free and you don’t have to commit to a project. I’ll then invite you to the client portal.',
+        'You can review and accept your written proposal there. It sets out what I’ll build or host, the total price, any monthly price, the schedule and the payment terms. Before ordering, you can read these terms and the withdrawal form in the portal.',
+        'For paid work, the agreement is made when you place your order in the portal after accepting the proposal. I confirm the agreement by email before work starts. The confirmation includes these terms and the withdrawal form with my postal address.',
+        'You can follow your project’s progress and submit further requests in the portal.',
       ] },
       { title: 'Prices', blocks: [
         'Prices are in Danish kroner. For private customers and Danish businesses they include 25% Danish VAT. The prices on this website are fixed prices for the scope each offer describes; your proposal states the fixed price for your project, any monthly hosting price and the VAT that applies to you.',
@@ -176,14 +177,14 @@ const terms = {
         'Your proposal states the schedule. You can try the result before it goes live.',
       ] },
       { title: 'Your right of withdrawal (private customers)', blocks: [
-        'As a private customer, you can withdraw from an agreement made by email or online within 14 days, without giving a reason. The 14 days run from the day the agreement is made. If you receive these terms in writing only later, they run from that day instead. If the last day is a Saturday, Sunday, public holiday, 5 June, 24 December or 31 December, you have until the next working day.',
+        'As a private customer, you can withdraw from your agreement within 14 days, without giving a reason. The 14 days run from the day the agreement is made. If you receive these terms in writing only later, they run from that day instead. If the last day is a Saturday, Sunday, public holiday, 5 June, 24 December or 31 December, you have until the next working day.',
         `To withdraw, tell me clearly before the deadline, for example by email to ${company.email}. You can use the form below, but you do not have to. It is enough to send your message before the deadline.`,
-        'I only start work within the 14 days if you expressly ask me to: by ticking the box for it when you order in the customer portal, or in writing when you accept the proposal. When you ask, you also confirm that you lose the right of withdrawal once the work is completely finished.',
+        'I only start work within the 14 days if you expressly ask me to by ticking the box when you place your order in the client portal. When you ask, you also confirm that you lose the right of withdrawal once the work is completely finished.',
         'If you withdraw after the work has started, you pay for the work done until you told me, in proportion to the whole agreement. Once the work you asked me to start early is completely finished, you can no longer withdraw. If you do not ask for an early start, I start after the 14 days.',
         'If you withdraw, I refund what you have paid, minus any payment for work already done, without undue delay and no later than 14 days after I receive your message. I use the same payment method you used, unless you expressly agree to another, and the refund costs you nothing.',
       ] },
       { title: 'Withdrawal form', blocks: [
-        'Complete and return this form only if you wish to withdraw from the agreement. The copy that comes with your proposal has my postal address filled in.',
+        'Complete and return this form only if you wish to withdraw from the agreement. The copy in your order confirmation includes my postal address.',
         { list: [
           `To: Devantler Tech, [postal address on the company information page], ${company.email}`,
           'I/We (*) hereby give notice that I/We (*) withdraw from my/our (*) contract for the provision of the following service (*):',
@@ -216,16 +217,17 @@ const terms = {
     title: 'Handelsbetingelser for projekter og hosting',
     description: 'Sådan fungerer aftaler med Devantler Tech: tilbud, priser, betaling, din fortrydelsesret og opsigelse af hosting.',
     intro: 'Disse betingelser gælder, når du aftaler et projekt eller hosting med Devantler Tech. Dit skriftlige tilbud beskriver detaljerne i dit projekt. Er der uoverensstemmelse mellem tilbuddet og betingelserne, gælder tilbuddet, men intet tilbud forringer dine rettigheder som privatkunde.',
-    updated: updated.da,
+    updated: 'Senest opdateret 22. november 2026.',
     sections: [
       { title: 'Hvem du indgår aftale med', blocks: [
         traderLine('da', company),
         { links: [{ href: companyPath.da, label: 'Virksomhedsoplysninger og postadresse' }] },
       ] },
       { title: 'Tilbud og aftale', blocks: [
-        'Den første samtale er gratis og uforpligtende.',
-        'Du får et skriftligt tilbud på e-mail. Det beskriver, hvad der skal bygges eller hostes, den samlede pris, en eventuel månedspris, tidsplanen og betalingsbetingelserne. Disse betingelser og fortrydelsesformularen, med min postadresse udfyldt, følger med tilbuddet.',
-        'Aftalen er indgået, når du skriftligt accepterer tilbuddet. Derefter bekræfter jeg aftalen på e-mail med disse betingelser vedhæftet.',
+        'Kontakt mig, så taler vi om din idé på e-mail eller telefon. Den første samtale er gratis og uforpligtende. Derefter inviterer jeg dig til kundeportalen.',
+        'I portalen kan du læse og acceptere dit skriftlige tilbud. Det beskriver, hvad jeg skal bygge eller hoste, den samlede pris, en eventuel månedspris, tidsplanen og betalingsbetingelserne. Inden du bestiller, kan du læse disse betingelser og standardfortrydelsesformularen i portalen.',
+        'Ved betalt arbejde indgår vi aftalen, når du afgiver din bestilling i portalen efter at have accepteret tilbuddet. Jeg bekræfter aftalen på e-mail, inden arbejdet begynder. E-mailen indeholder disse betingelser og fortrydelsesformularen med min postadresse.',
+        'Du kan følge med i dit projekt og sende nye forespørgsler i portalen.',
       ] },
       { title: 'Priser', blocks: [
         'Priserne er i danske kroner. For privatkunder og danske virksomheder er de inkl. 25 % moms. Priserne på hjemmesiden er faste priser for det omfang, hver ydelse beskriver; dit tilbud oplyser den faste pris for dit projekt, en eventuel månedspris for hosting og den moms, der gælder for dig.',
@@ -241,14 +243,14 @@ const terms = {
         'Dit tilbud oplyser tidsplanen. Du kan afprøve resultatet, før det går i luften.',
       ] },
       { title: 'Din fortrydelsesret (privatkunder)', blocks: [
-        'Som privatkunde kan du fortryde en aftale, der er indgået på e-mail eller online, inden for 14 dage uden at give en begrundelse. De 14 dage regnes fra den dag, aftalen indgås. Får du først disse betingelser på skrift senere, regnes de i stedet fra den dag. Falder den sidste dag på en lørdag, søndag, helligdag, grundlovsdag, juleaftensdag eller nytårsaftensdag, har du frist til den følgende hverdag.',
+        'Som privatkunde kan du fortryde din aftale inden for 14 dage uden at give en begrundelse. De 14 dage regnes fra den dag, aftalen indgås. Får du først disse betingelser på skrift senere, regnes de i stedet fra den dag. Falder den sidste dag på en lørdag, søndag, helligdag, grundlovsdag, juleaftensdag eller nytårsaftensdag, har du frist til den følgende hverdag.',
         `Hvis du vil fortryde, skal du give mig en tydelig besked inden fristen, fx på e-mail til ${company.email}. Du kan bruge formularen nedenfor, men det er ikke et krav. Det er nok, at du sender beskeden inden fristens udløb.`,
-        'Jeg begynder kun arbejdet inden for de 14 dage, hvis du udtrykkeligt beder om det: ved at sætte kryds i feltet til det, når du bestiller i kundeportalen, eller skriftligt, når du accepterer tilbuddet. Når du beder om det, bekræfter du samtidig, at du mister fortrydelsesretten, når arbejdet er helt udført.',
+        'Jeg begynder kun arbejdet inden for de 14 dage, hvis du udtrykkeligt beder om det ved at sætte kryds i feltet, når du bestiller i kundeportalen. Når du beder om det, bekræfter du samtidig, at du mister fortrydelsesretten, når arbejdet er helt udført.',
         'Fortryder du, efter at arbejdet er begyndt, betaler du et beløb, der står i forhold til det arbejde, der er udført, indtil du fortrød, sammenlignet med hele aftalen. Når det arbejde, du har bedt mig begynde tidligt, er helt udført, kan du ikke længere fortryde. Beder du ikke om tidlig start, begynder jeg efter de 14 dage.',
         'Fortryder du, tilbagebetaler jeg det, du har betalt, med fradrag af en eventuel betaling for udført arbejde, uden unødig forsinkelse og senest 14 dage efter, at jeg har modtaget din besked. Jeg bruger samme betalingsmiddel, som du brugte, medmindre du udtrykkeligt accepterer et andet, og tilbagebetalingen koster dig intet.',
       ] },
       { title: 'Standardfortrydelsesformular', blocks: [
-        'Denne formular udfyldes og returneres kun, hvis fortrydelsesretten gøres gældende. Den udgave, der følger med dit tilbud, har min postadresse udfyldt.',
+        'Denne formular udfyldes og returneres kun, hvis fortrydelsesretten gøres gældende. Udgaven i din ordrebekræftelse indeholder min postadresse.',
         { list: [
           `Til: Devantler Tech, [postadressen under virksomhedsoplysninger], ${company.email}`,
           'Jeg/vi (*) meddeler herved, at jeg/vi (*) ønsker at gøre fortrydelsesretten gældende i forbindelse med min/vores (*) aftale om levering af følgende tjenesteydelser (*):',
