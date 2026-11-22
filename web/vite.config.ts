@@ -31,11 +31,10 @@ export default defineConfig(({ mode }) => ({
           response.end(Buffer.from(asset.source,"base64"));
         });
       },
-      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:technical-guides", "virtual:journal-feed", "virtual:business-sharing", "virtual:public-discovery"].includes(id)) return `\0${id}`; },
+      resolveId(id) { if (["virtual:journal", "virtual:journal-archives", "virtual:journal-reading", "virtual:journal-feed", "virtual:business-sharing", "virtual:public-discovery"].includes(id)) return `\0${id}`; },
       load(id) {
         if (id === "\0virtual:business-sharing") return `export default ${JSON.stringify(readPublicDiscoveryReference().sharingImage)};`;
         if (id === "\0virtual:public-discovery") return `export default ${JSON.stringify(readPublicDiscoveryReference().assets)};`;
-        if (id === "\0virtual:technical-guides") return `export default ${JSON.stringify(readReadingReference().guides)};`;
         if (id === "\0virtual:journal-feed") {
           const reference = readJournalFeedReference();
           return `export default ${JSON.stringify(reference ? {xml:reference.xml,assets:reference.assets} : null)};`;

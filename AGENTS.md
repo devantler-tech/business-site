@@ -1,7 +1,7 @@
 # AGENTS.md — business-site
 
-Devantler Tech's public English/Danish business website, Projects catalogue, journal and
-supporting technical pages. This file is canonical; the monorepo's reviewed
+Devantler Tech's public English/Danish business website, Projects catalogue and journal.
+This file is canonical; the monorepo's reviewed
 [shared engineering contract](https://github.com/devantler-tech/monorepo/blob/main/AGENTS.md)
 also applies. Use isolated worktrees, signed commits, issue-backed draft PRs and current-head
 review/CI/user-path evidence. Never use an admin merge bypass or request Copilot review.
@@ -12,16 +12,20 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   and `public/` retain framework-neutral copy, authored Markdown, images and downloads.
   Local builds, publication and both Go package profiles always use Svelte. The retired
   frontend release flag has no effect; Astro applications, compiler and recovery option are removed.
-- English/Danish Home, About and Projects, the complete English Journal, all technical guides,
-  RSS, discovery assets and historical redirects are permanent. Preserve incoming heading
-  bookmarks, the Devantler Tech favicon (`public/favicon.png`, the green "D" icon) and the
-  header wordmark (`src/assets/brand/`), which the maintainer approved on 2026-11-15. Never
-  invent Danish article or guide routes.
+- English/Danish Home, About and Projects, the complete English Journal, RSS, discovery assets
+  and historical redirects are permanent. Preserve incoming heading bookmarks, the Devantler
+  Tech favicon (`public/favicon.png`, the green "D" icon) and the header wordmark
+  (`src/assets/brand/`), which the maintainer approved on 2026-11-15. Never invent Danish
+  article routes.
+- The site has no technical guides. The maintainer retired the template guides and the
+  Agentic Engineering page on 2026-11-22 (#697): the template READMEs are their documentation
+  and the Journal post carries the process diagram. Their old addresses stay as `noindex`,
+  bookmark-preserving redirects listed in `web/src/retired-guides.ts`. Link to a template's
+  repository rather than adding a guide page for it.
 - `src/data/build-content.mjs` compiles the maintained Markdown with Satteri, YAML metadata,
   Expressive Code, Sharp and the existing CV renderer. It never evaluates MDX. Historical
-  `.mdx` filenames remain content inputs, not executable components. Technical template
-  cards come from the maintained template collection. Catalogue/CV legacy metadata remains
-  available to the cross-product drift guards; it is not another web application.
+  `.mdx` filenames remain content inputs, not executable components. Catalogue/CV legacy
+  metadata remains available to the cross-product drift guards; it is not another web application.
 - `scripts/build-journal-reference.sh` prepares source-bound content under ignored
   `.generated/`; the normal build invokes it automatically. Use it before standalone
   `web/` builds. Complete own-source Git history, before/after input fingerprints, exact
@@ -119,8 +123,8 @@ cross-product drift check runs in the monorepo against its pinned site and maint
 standalone CI exercises the checker's hermetic fixtures and the actual CV. Do not substitute
 fixtures for the aggregator's cross-product validation or weaken a failing check.
 
-Exercise English/Danish Home, About and Projects, journal and technical navigation, old
-project redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and synchronized
+Exercise English/Danish Home, About and Projects, journal navigation, old project and
+retired-guide redirects/bookmarks, the CV, keyboard disclosures, mobile layouts and synchronized
 System/Light/Dark appearance before promotion. Stop any local preview server after checking it.
 `CI - Required Checks` aggregates every applicable CI job with `always()`. Merge is squash,
 pinned to the reviewed head, after the repository's ordered review lanes and complete readiness

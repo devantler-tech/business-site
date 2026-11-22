@@ -9,8 +9,8 @@ const valid = JSON.parse(original);
 /** @typedef {NonNullable<typeof import("virtual:journal-reading").default>[number]} Reading */
 /** @param {ReturnType<typeof readReadingReference>} value @returns {Reading} */
 const diagramReading = value => {
-  const reading = value.readings.find((/** @type {Reading} */ reading) => reading.diagrams.length);
-  assert.ok(reading, "the real reference must include a diagram article");
+  const reading = value.readings.find((/** @type {Reading} */ reading) => reading.diagrams.length > 1);
+  assert.ok(reading, "the real reference must include an article with two diagrams");
   return reading;
 };
 assert.ok(valid.assets.length > 1, "partial asset failure needs a healthy asset beside the rejected one");
@@ -37,10 +37,7 @@ try {
     ["missing body", value => { delete value.readings[0].html; }, /complete reading body required/, true],
     ["missing article beside healthy articles", value => { value.readings.splice(1, 1); }, /complete reading inventory required/, true],
     ["repeated article", value => { value.readings[1] = value.readings[0]; }, /complete reading inventory required/, true],
-    ["missing guide beside healthy articles and guides", value => { value.guides.splice(1, 1); }, /Guide complete reading inventory required/, true],
-    ["empty later guide beside a healthy guide", value => { value.guides[1].html = ""; }, /Guide complete reading body required/, true],
-    ["missing technical diagram beside healthy Journal diagrams", value => { value.guides[0].html = value.guides[0].html.replace(/<figure class="reading-diagram"[\s\S]*?<\/figure>/, ""); }, /diagram body is incomplete/, true],
-    ["missing guide stylesheet beside healthy images", value => { const stylesheet = value.guides.find((/** @type {Reading} */ guide) => guide.path === "/templates/go/").html.match(/href="(\/_app\/immutable\/assets\/reading-[^"]+\.css)"/)[1]; value.assets = value.assets.filter((/** @type {{filename:string}} */ asset) => `/${asset.filename}` !== stylesheet); }, /referenced asset is missing/, true],
+    ["retired guide collection reintroduced", value => { value.guides = []; }, /Retired technical guides must not re-enter/, true],
     ["empty later article beside a healthy article", value => { value.readings[1].html = ""; }, /complete reading body required/, true],
     ["missing asset inventory", value => { value.assets = []; }, /asset inventory is missing/, true],
     ["second asset corrupted", value => { value.assets[1].source = "broken"; }, /asset digest mismatch/, true],

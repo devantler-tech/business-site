@@ -129,7 +129,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
     for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}company/`));
   }
   // Supporting frames participate too, not only the six top-level pages.
-  for (const route of ["blog/index.html", "blog/welcome/index.html", "templates/index.html"]) {
+  for (const route of ["blog/index.html", "blog/welcome/index.html", "blog/tags/kubernetes/index.html"]) {
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);

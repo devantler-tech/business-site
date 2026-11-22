@@ -11,7 +11,7 @@ import { assertVisitorPrivacy } from './visitor-privacy.mjs';
 import { readerText } from './reader-text.mjs';
 import { publicEntries } from '../web/public-selection.ts';
 import { journalPaths } from '../src/data/journal.mjs';
-import { readingPaths, guidePaths } from '../src/data/journal-reading.mjs';
+import { readingPaths } from '../src/data/journal-reading.mjs';
 
 const [directory, ...extraArguments] = process.argv.slice(2);
 assert.ok(directory && extraArguments.length === 0, 'Usage: check-business-site.mjs <build-directory>');
@@ -145,7 +145,7 @@ for (const locale of ['en', 'da']) {
   }
 }
 
-for (const path of [...journalPaths(), ...readingPaths(), ...guidePaths()]) navigation(all(parse(pageAt(path))), 'en');
+for (const path of [...journalPaths(), ...readingPaths()]) navigation(all(parse(pageAt(path))), 'en');
 const covers = await readJournalCovers(resolve(fileURLToPath(new URL('..', import.meta.url))));
 const paths = new Set(), pixels = new Set();
 for (const {slug,path:sourcePath} of covers) {

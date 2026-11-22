@@ -1,2 +1,1 @@
-import { loadGuide } from "#lib/guide-loader.server.ts";
-export const load = () => loadGuide("/agentic-engineering/");
+export const load = () => ({path:"/agentic-engineering/" as const});

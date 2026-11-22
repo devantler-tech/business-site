@@ -23,7 +23,7 @@ I use a scheduled **Agentic Engineer** across the Devantler Tech portfolio. It k
 
 An open pull request is activity. Green CI is useful evidence. The outcome is a working solution that resolves the problem that started the work.
 
-The [current process diagram and reference](/agentic-engineering/#the-process) show the maintained selection rules alongside research, review and delivery. This post explains why I structured the loop this way.
+This post shows [the process](#the-process) step by step and explains why I structured the loop this way.
 
 ## The unit of work is a proved outcome
 
@@ -36,6 +36,87 @@ I therefore frame the work in three categories:
 3. **Outcome** — deliver the change, confirm the behavior, and close the issue with evidence.
 
 The categories are containers. The numbered activities are the actual process.
+
+## The process
+
+Read the numbered arrows down **Problem**, upward through **Solution**, and then down **Outcome**. The outer boxes only categorize the work; the activities form the actual sequence.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "#ffffff",
+    "fontFamily": "Arial, Helvetica, sans-serif",
+    "fontSize": "17px",
+    "lineColor": "#64748b",
+    "primaryTextColor": "#0f172a"
+  },
+  "themeCSS": ".nodeLabel, .edgeLabel, .blockLabel { font-family: Arial, Helvetica, sans-serif !important; } .flowchart-link { stroke: #475569 !important; stroke-width: 3px !important; } .arrowMarkerPath { fill: #475569 !important; stroke: #475569 !important; }",
+  "block": {"padding": 24}
+}}%%
+
+block-beta
+  columns 20
+
+  block:Problem:6
+    columns 1
+    PH["<b>PROBLEM</b>"]
+    P1["<b>1. Research the product and context</b><br/>Docs · roadmap · code · release notes"]
+    P2["<b>2. Survey the current state</b><br/>GitHub API · CI · logs · monitoring"]
+    P3["<b>3. Reproduce and record the issue</b><br/>GitHub Issues · Project board"]
+  end
+
+  space
+
+  block:Solution:6
+    columns 1
+    SH["<b>SOLUTION</b>"]
+    S5["<b>8. Verify the exact change</b><br/>GitHub Actions · required checks · exact head"]
+    S4["<b>7. Review the proposed change</b><br/>AI review · optional human steering"]
+    S3["<b>6. Test against the identified issue</b><br/>Unit · integration · end-to-end · security"]
+    S2["<b>5. Implement an isolated change</b><br/>Git worktree · branch · feature flag"]
+    S1["<b>4. Finish first, then select by value</b><br/>Live breakage → started work → critical obligations<br/>Ready work → refinement"]
+  end
+
+  space
+
+  block:Outcome:6
+    columns 1
+    OH["<b>OUTCOME</b><br/>Proved working solution"]
+    O1["<b>9. Deliver the verified change</b><br/>Merge · release · deploy"]
+    O2["<b>10. Confirm the original issue is solved</b><br/>Runtime or user evidence"]
+    O3["<b>11. Close with proof</b><br/>Issue · PR · evidence feeds the next cycle"]
+  end
+
+  P1 --> P2
+  P2 --> P3
+  P3 --> S1
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S5
+  S5 --> O1
+  O1 --> O2
+  O2 --> O3
+
+  style P1 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style P2 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style P3 fill:#ffffff,stroke:#e11d48,stroke-width:2px,color:#4c0519
+  style S1 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S2 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S3 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S4 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style S5 fill:#ffffff,stroke:#2563eb,stroke-width:2px,color:#172554
+  style O1 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style O2 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style O3 fill:#ffffff,stroke:#059669,stroke-width:2px,color:#064e3b
+  style PH fill:#ffe4e6,stroke:#e11d48,stroke-width:0px,color:#881337
+  style SH fill:#dbeafe,stroke:#2563eb,stroke-width:0px,color:#172554
+  style OH fill:#d1fae5,stroke:#059669,stroke-width:0px,color:#064e3b
+  style Problem fill:#fff5f6,stroke:#e11d48,stroke-width:3px
+  style Solution fill:#f3f7ff,stroke:#2563eb,stroke-width:3px
+  style Outcome fill:#f1fbf6,stroke:#059669,stroke-width:3px
+```
 
 ## Problem means discovery work
 

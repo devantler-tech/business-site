@@ -154,12 +154,12 @@ checks. CI builds enabled, explicit false and entirely unset states before uploa
 production output. Existing quality/security, prices, inquiry, theme, historical-bookmark and image checks
 remain active in the new presentation.
 
-The same Svelte shell serves Home, About, Projects, the English Journal and technical guides.
+The same Svelte shell serves Home, About, Projects and the English Journal.
 All main, topic and author archives remain local; the main archive has five-post pagination,
 and filtered archives contain every matching post. Each native card title remains the single
 keyboard destination. The shared card controller leaves nested controls and reading surfaces alone.
 
-The native content builder reads all authored articles and guides, preserves complete prose,
+The native content builder reads all authored articles, preserves complete prose,
 heading bookmarks, copy payloads, tables, diagrams, committed dates and metadata, and generates
 RSS plus its image closure. Source fingerprints and digests bind generated input to the actual
 checkout. Svelte emits the sole public application. Run `scripts/build-journal-reference.sh`
@@ -170,16 +170,18 @@ Projects presents up to six curated, stars-ranked maintained tools, followed by 
 website example and a hosting card that links to the hosting offer on Home. KSail's product introduction explains setup, deployment and operation rather
 than leading with a dashboard. The real desktop cluster-overview capture is an optional link,
 with private details masked and the redaction disclosed in both languages. Historical English
-references and diagrams remain in the closed “Earlier project links” disclosure, without a feature
+references and diagrams remain in the closed “Earlier research” disclosure, without a feature
 heading, hero or section-index link. Legacy catalogue metadata remains in
 `src/content/docs/projects/completed.mdx` for drift/provenance checks. The legacy
 active/completed URLs redirect to the public catalogue or historical disclosure of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
-The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
-an authored redirect to the Application Template guide at `/templates/platform-tenant-template/`. Its canonical/noindex metadata,
-top-of-guide fallback and no-JavaScript continuation are checked against actual build output.
-Only the canonical destination guide is advertised in the sitemap, not the redirect entry.
+The site has no technical guides (#697). Each former guide address in `web/src/retired-guides.ts`
+is a `noindex` redirect that preserves heading bookmarks: the template guides, including the old
+`/templates/gitops-tenant-template/`, forward to the template's GitHub README, `/templates/` to the
+public tools on Projects, and `/agentic-engineering/` to the Journal post that carries the process
+diagram. Their canonical/noindex metadata, fallback section, no-JavaScript continuation and absence
+from the sitemap are checked against actual build output.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
 reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
 a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript

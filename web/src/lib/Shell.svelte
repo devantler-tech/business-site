@@ -15,10 +15,9 @@
     page = "about",
     journalPage = 1,
     journalSlug = "",
-    guidePath = "",
     customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "privacy" | "terms" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "privacy" | "terms" | "journal"; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
   const frame = getContext<() => BusinessFrame>(businessFrameContext);
   let business = $derived(frame());
   const words = {
@@ -55,8 +54,8 @@
   let portal = $derived(portalCopy[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
-  let englishOnly = $derived(page === "journal" || page === "guide");
-  let suffix = $derived(page === "guide" ? guidePath.slice(1) : page === "home" ? "" : page === "journal" ? `blog/${journalSlug ? `${journalSlug}/` : journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
+  let englishOnly = $derived(page === "journal");
+  let suffix = $derived(page === "home" ? "" : page === "journal" ? `blog/${journalSlug ? `${journalSlug}/` : journalPage > 1 ? `${journalPage}/` : ""}` : `${page}/`);
 </script>
 
 <svelte:head>
