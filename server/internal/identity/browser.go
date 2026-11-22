@@ -50,7 +50,7 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html", "web/review-collector.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.

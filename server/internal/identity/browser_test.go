@@ -126,7 +126,7 @@ func TestBrowserPresentationAssets(t *testing.T) {
 				t.Fatal("portal presentation response is cacheable")
 			}
 		}
-		for _, name := range []string{"unknown.css", "portal.html", "contact.html", "requests.html", "triage.html", "review-collector.html"} {
+		for _, name := range []string{"unknown.css", "portal.html", "contact.html", "requests.html", "triage.html"} {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid/portal/assets/"+name, nil))
 			if w.Code != http.StatusNotFound || strings.Contains(w.Body.String(), "{{") {
@@ -202,7 +202,7 @@ func TestReviewCollectorIsConfinedToClientHome(t *testing.T) {
 			if got := w.Header().Get("Content-Security-Policy"); got != "default-src 'none'; frame-src "+frame {
 				t.Errorf("%s client home CSP = %q", lang, got)
 			}
-			for _, required := range []string{"data-review-collector", "data-review-frame", `href="https://www.trustpilot.com/review/devantler.tech"`, `rel="noreferrer"`, `referrerpolicy="no-referrer"`} {
+			for _, required := range []string{"data-review-collector", "data-review-frame", `href="https://www.trustpilot.com/evaluate/devantler.tech"`, `rel="noreferrer"`, `referrerpolicy="no-referrer"`} {
 				if !strings.Contains(body, required) {
 					t.Errorf("%s client home is missing %q", lang, required)
 				}

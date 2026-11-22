@@ -15,7 +15,7 @@ const reviewCollectorExpectation = `<section class="review-collector" aria-label
   <p id="review-privacy">@DISCLOSURE@ <a href="https://legal.trustpilot.com/for-everyone/end-user-privacy-terms" rel="noreferrer">@PRIVACY@</a></p>
   <div class="review-actions">
     <button type="button" hidden aria-controls="review-frame" aria-expanded="false" aria-describedby="review-privacy" data-review-toggle data-hide-label="@HIDE@">@LOAD@</button>
-    <a href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer">@LINK@</a>
+    <a href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">@LINK@</a>
   </div>
   <div id="review-frame" hidden></div>
   <template data-review-frame><iframe data-src="https://widget.trustpilot.com/trustboxes/56278e9abfbbba0bdcd568bc/index.html?templateId=56278e9abfbbba0bdcd568bc&amp;businessunitId=6b00bb09a7dbf30ad4d33478#locale=@LOCALE@&amp;styleHeight=52px&amp;styleWidth=100%25" title="@FRAME_TITLE@" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>

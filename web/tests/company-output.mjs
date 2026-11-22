@@ -72,7 +72,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         assert.equal(Boolean(collector), identity, "the collector follows the company release");
         if (collector) {
           const nodes = walk(collector);
-          assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/review/devantler.tech"), "the collector has a direct fallback");
+          assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/evaluate/devantler.tech"), "the collector has a direct fallback");
           assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
           const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
           const source = attr(controller, "src");

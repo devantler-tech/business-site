@@ -39,7 +39,7 @@
     <button type="button" hidden aria-expanded="false" aria-controls="review-frame" aria-describedby="review-privacy" data-review-toggle data-hide-label={copy.hide}>
       {copy.load}
     </button>
-    <a href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer">{copy.link}</a>
+    <a href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{copy.link}</a>
   </div>
   <div id="review-frame" hidden></div>
   <template data-review-frame>
