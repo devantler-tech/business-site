@@ -196,8 +196,8 @@ func (s *Foundation) SendQueuedMail(ctx context.Context) error {
 	if !s.ready(ctx) {
 		return nil
 	}
-	return s.withRunLock(ctx, mailLock, func() error {
-		rows, err := s.pool.Query(ctx, `SELECT o.id,o.recipient,o.subject,o.body FROM portal_mail_outbox o WHERE NOT EXISTS (SELECT 1 FROM portal_mail_deliveries d WHERE d.outbox_id=o.id) ORDER BY o.queued_at,o.id LIMIT 20`)
+	return s.withRunLock(ctx, mailLock, func(conn *pgx.Conn) error {
+		rows, err := conn.Query(ctx, `SELECT o.id,o.recipient,o.subject,o.body FROM portal_mail_outbox o WHERE NOT EXISTS (SELECT 1 FROM portal_mail_deliveries d WHERE d.outbox_id=o.id) ORDER BY o.queued_at,o.id LIMIT 20`)
 		if err != nil {
 			return errTriageStorage
 		}
@@ -212,7 +212,7 @@ func (s *Foundation) SendQueuedMail(ctx context.Context) error {
 			if err = m.Send(ctx, msg); err != nil {
 				return err
 			}
-			if _, err = s.pool.Exec(ctx, `INSERT INTO portal_mail_deliveries(outbox_id) VALUES($1) ON CONFLICT DO NOTHING`, msg.ID); err != nil {
+			if _, err = conn.Exec(ctx, `INSERT INTO portal_mail_deliveries(outbox_id) VALUES($1) ON CONFLICT DO NOTHING`, msg.ID); err != nil {
 				return errTriageStorage
 			}
 		}
