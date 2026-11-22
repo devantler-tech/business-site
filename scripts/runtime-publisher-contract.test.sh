@@ -56,13 +56,15 @@ publish_valid() {
     .jobs.admit.if=="\u0024{{ github.repository == \u0027devantler-tech/business-site\u0027 && github.event_name == \u0027release\u0027 && vars.RUNTIME_PUBLICATION_ENABLED == \u0027true\u0027 && !github.event.release.draft && !github.event.release.prerelease && !startsWith(github.event.release.tag_name, \u0027identity-\u0027) }}" and
     all(.jobs.admit.steps[]|select(.run=="bash scripts/admit-runtime-release.sh"); .env.RELEASE_MODE=="release") and
     .jobs.publish.needs=="admit" and .jobs.publish.if==null and .jobs.publish.uses==null and .jobs.publish.secrets==null and
-    .jobs.publish.permissions=={"contents":"read","packages":"write","id-token":"write"} and
+    .jobs.publish["runs-on"]=="ubuntu-latest" and
+    .jobs.publish.permissions=={"contents":"read","actions":"read","packages":"write","id-token":"write"} and
     .jobs.publish.concurrency["cancel-in-progress"]==false and
     (.jobs.publish.steps|type=="array" and length==2) and
     (.jobs.publish.steps[0].uses//""|startswith("actions/checkout@")) and
     .jobs.publish.steps[0].with=={"ref":"\u0024{{ github.sha }}","persist-credentials":false} and
     (.jobs.publish.steps[1].uses//""|test("^devantler-tech/\\.github/actions/publish-app@[0-9a-f]{40}$")) and
     .jobs.publish.steps[1].with=={"mode":"prebuilt-webapp","app-name":"business-site","deploy-path":"./deploy","app-manifest":"base/webapp.yaml",
+      "prebuilt-ci-auth-mode":"job-token",
       "prebuilt-image-digest":"\u0024{{ needs.admit.outputs.image-digest }}","prebuilt-public-digest":"\u0024{{ needs.admit.outputs.public-digest }}",
       "prebuilt-ci-run-id":"\u0024{{ needs.admit.outputs.ci-run-id }}","prebuilt-ci-run-attempt":"\u0024{{ needs.admit.outputs.ci-run-attempt }}"} and
     all(.jobs.publish.steps[]; .if==null and .env==null and .run==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
@@ -106,6 +108,9 @@ for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publ
   '.jobs.publish.steps[1]["continue-on-error"]=true' '.jobs.publish.steps[1].if="false"' \
   '.jobs.publish.steps[0].with["persist-credentials"]=true' '.jobs.publish.steps[0].with.ref="main"' \
   '.jobs.publish.permissions["id-token"]="none"' '.jobs.publish.permissions.contents="write"' \
+  'del(.jobs.publish.permissions.actions)' '.jobs.publish.permissions.actions="write"' \
+  '.jobs.publish["runs-on"]="self-hosted"' \
+  'del(.jobs.publish.steps[1].with["prebuilt-ci-auth-mode"])' '.jobs.publish.steps[1].with["prebuilt-ci-auth-mode"]="anonymous"' \
   '.jobs.publish.concurrency["cancel-in-progress"]=true' \
   '.jobs.publish.uses="devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35"' \
   '.jobs.publish.steps=[.jobs.publish.steps[1]]' '.jobs.publish.steps+=[{"run":"true"}]'; do
