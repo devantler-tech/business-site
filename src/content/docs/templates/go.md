@@ -5,7 +5,7 @@ description: The Go Template is retiring. Start new Go projects from the Applica
 
 The Go Template is retiring and will be archived. Start new Go projects from the [Application Template](/templates/application-template/) instead: its Go stack gives you the same kind of starting point, and it can also make your project a tenant on the devantler-tech platform.
 
-**Repository**: [devantler-tech/application-template](https://github.com/devantler-tech/application-template)
+**Repository**: [devantler-tech/go-template](https://github.com/devantler-tech/go-template) (retiring; new projects use [devantler-tech/application-template](https://github.com/devantler-tech/application-template))
 
 ## What's Inside
 

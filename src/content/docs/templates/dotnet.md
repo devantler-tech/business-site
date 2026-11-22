@@ -5,7 +5,7 @@ description: The .NET Template is retiring. Start new .NET projects from the App
 
 The .NET Template is retiring and will be archived. Start new .NET projects from the [Application Template](/templates/application-template/) instead: its .NET stack gives you a tested ASP.NET Core starting point, and it can also make your project a tenant on the devantler-tech platform.
 
-**Repository**: [devantler-tech/application-template](https://github.com/devantler-tech/application-template)
+**Repository**: [devantler-tech/dotnet-template](https://github.com/devantler-tech/dotnet-template) (retiring; new projects use [devantler-tech/application-template](https://github.com/devantler-tech/application-template))
 
 ## What's Inside
 
