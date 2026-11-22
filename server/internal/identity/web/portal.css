@@ -49,6 +49,30 @@
   padding-left: 1rem;
 }
 
+.review-collector {
+  margin-block: 1.75rem;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.review-actions button[hidden] {
+  display: none;
+}
+
+.review-collector iframe {
+  display: block;
+  max-width: 100%;
+  margin-block-start: 1rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: #fff;
+}
+
 .field-limit {
   font-weight: 400;
   font-size: 0.85rem;

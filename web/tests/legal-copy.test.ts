@@ -20,3 +20,12 @@ test("the portal's privacy text appears only when FEATURE_PORTAL_PRIVACY is on",
 test("the terms do not depend on the portal flag", () => {
   for (const locale of ["en", "da"] as const) assert.deepEqual(legalPage("terms", locale, true), legalPage("terms", locale, false));
 });
+
+test("the privacy notice explains how to load and hide the optional review collector", () => {
+  for (const locale of ["en", "da"] as const) {
+    const notice = flat(legalPage("privacy", locale, true));
+    assert.match(notice, /Trustpilot/);
+    assert.match(notice, /IP-adresse|IP address/);
+    assert.match(notice, locale === "da" ? /Skjul Trustpilot/ : /Hide Trustpilot/);
+  }
+});

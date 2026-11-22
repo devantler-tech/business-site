@@ -21,7 +21,7 @@
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="{{root}}/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
 {{if .RequestsEnabled}}<p><a href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
 {{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section><a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
+</section>{{if eq .Kind `home`}}{{template "review-collector" .}}{{end}}<a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}">{{if or (eq .Kind `broker-handoff`) (eq .Kind `sign-out-handoff`)}}<meta http-equiv="refresh" content="0;url={{.BrokerURL}}">{{end}}<title>{{.Title}} — Devantler Tech</title><link rel="icon" type="image/png" href="{{root}}/assets/icon.png"><link rel="stylesheet" href="{{root}}/assets/portal.css"></head>
@@ -51,3 +51,16 @@
 <p>{{if eq .Lang `da`}}Deaktivering stopper portaladgang med det samme. Hvis identitetstjenesten ikke svarer, bliver portaladgangen ved med at være lukket. Prøv handlingen igen for at færdiggøre ændringen. Ingen kundedata slettes.{{else}}Deactivation stops portal access immediately. If the identity service is unavailable, portal access stays closed. Retry the action to finish synchronizing access. Customer data is retained.{{end}}</p>
 <p><a href="{{root}}/operator?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til operatørsiden{{else}}Back to the operator page{{end}}</a></p>
 {{end}}
+{{define "review-collector" -}}
+<section class="review-collector" aria-labelledby="review-title" data-review-collector>
+  <h2 id="review-title">{{if eq .Lang `da`}}Anmeld Devantler Tech{{else}}Review Devantler Tech{{end}}</h2>
+  <p>{{if eq .Lang `da`}}Har du brugt vores ydelser? Del din oplevelse på Trustpilot.{{else}}Have you used our services? Share your experience on Trustpilot.{{end}}</p>
+  <p id="review-privacy">{{if eq .Lang `da`}}Hvis du viser widgetten, modtager Trustpilot din IP-adresse og browseroplysninger og kan bruge cookies.{{else}}Loading the widget shares your IP address and browser details with Trustpilot, which may use cookies.{{end}} <a href="https://legal.trustpilot.com/for-everyone/end-user-privacy-terms" rel="noreferrer">{{if eq .Lang `da`}}Trustpilots privatlivspolitik{{else}}Trustpilot’s privacy policy{{end}}</a></p>
+  <div class="review-actions">
+    <button type="button" hidden aria-controls="review-frame" aria-expanded="false" aria-describedby="review-privacy" data-review-toggle data-hide-label="{{if eq .Lang `da`}}Skjul Trustpilot-widget{{else}}Hide Trustpilot widget{{end}}">{{if eq .Lang `da`}}Vis Trustpilot-widget{{else}}Load Trustpilot widget{{end}}</button>
+    <a href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Åbn på Trustpilot{{else}}Open on Trustpilot{{end}}</a>
+  </div>
+  <div id="review-frame" hidden></div>
+  <template data-review-frame><iframe data-src="{{reviewCollectorURL .Lang}}" title="{{if eq .Lang `da`}}Anmeld Devantler Tech på Trustpilot{{else}}Review Devantler Tech on Trustpilot{{end}}" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
+</section>
+{{- end -}}

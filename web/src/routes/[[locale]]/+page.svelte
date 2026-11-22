@@ -1,5 +1,6 @@
 <script lang="ts">
   import CustomerScope from "#lib/CustomerScope.svelte";
+  import ReviewCollector from "#lib/ReviewCollector.svelte";
   import Shell from "#lib/Shell.svelte";
   import { linkedInUrl } from "../../../../src/components/business/business-copy";
   import { portalCopy } from "../../../../src/components/business/portal-copy";
@@ -96,6 +97,7 @@
           <div><h3 id="client-access-title">{portal.heading}</h3><p>{portal.instructions}</p></div>
           <a class="text-link" href={portal.href}>{portal.login}</a>
         </aside>
+        {#if data.companyEnabled}<ReviewCollector locale={data.locale} />{/if}
       </div>
     </section>
   </main>
