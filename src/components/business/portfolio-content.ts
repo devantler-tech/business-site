@@ -1,7 +1,7 @@
 export const portfolioText = {
   da: {
   pageIntro: 'Udvalgt arbejde — fra en offentlig hjemmeside til værktøjer, der løser konkrete problemer.',
-  earlierLinks: 'Tidligere projektlinks',
+  earlierLinks: 'Tidligere forskning',
   sourceAvailable: 'Kildekode tilgængelig — se projektets licens.',
   reuse: 'Hvert projekt har sin egen licens. Se projektets vilkår før genbrug.',
   work: 'Udvalgt arbejde', intro: 'En offentlig hjemmeside, du kan besøge og udforske.',
@@ -11,7 +11,7 @@ export const portfolioText = {
 },
   en: {
   pageIntro: 'Selected work — from a public website to tools that solve practical problems.',
-  earlierLinks: 'Earlier project links',
+  earlierLinks: 'Earlier research',
   sourceAvailable: 'Source-available — see the project’s licence.',
   reuse: 'Each project has its own licence. Check its terms before reuse.',
   work: 'Selected work', intro: 'A public website you can visit and explore.',

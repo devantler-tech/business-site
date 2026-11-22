@@ -1,6 +1,7 @@
 <script lang="ts">
-  import JournalReading from "#lib/JournalReading.svelte";
+  import RetiredGuide from "#lib/RetiredGuide.svelte";
   import type { load } from "./+page.server";
   let { data }: {data:ReturnType<typeof load>} = $props();
 </script>
-<JournalReading data={data.reading} guides={data.guides} technical />
+
+<RetiredGuide path={data.path} />

@@ -19,7 +19,7 @@ cover:
 ---
 
 > [!NOTE]
-> This post describes my earlier, KSail-specific GitHub Agentic Workflows setup. The current portfolio-wide process is documented in [Agentic Engineering](/agentic-engineering/) and [How My Agentic Engineer Turns Problems into Proved Working Solutions](/blog/how-my-agentic-engineer-turns-problems-into-proved-working-solutions/).
+> This post describes my earlier, KSail-specific GitHub Agentic Workflows setup. The current portfolio-wide process is documented in [How My Agentic Engineer Turns Problems into Proved Working Solutions](/blog/how-my-agentic-engineer-turns-problems-into-proved-working-solutions/).
 
 A Mac Mini runs 24/7 in my house on Funen. It doesn't serve media, it doesn't compile code, it doesn't host a website. Its only job is to fire scheduled prompts at GitHub agents so they can work on [KSail](https://github.com/devantler-tech/ksail) in the background.
 

@@ -34,24 +34,9 @@ export function readingPaths() {
   return paths;
 }
 
-/** The maintained English technical collection, not a second content catalogue. */
-export function guidePaths() {
-  const templates = readdirSync(join(root, "src/content/docs/templates"), {withFileTypes:true});
-  assert.ok(templates.every(file => file.isFile() && /\.(?:md|mdx)$/.test(file.name)), "Guide nested or unsupported source needs explicit migration");
-  return ["/agentic-engineering/", ...templates.map(file => file.name.replace(/\.(?:md|mdx)$/, "")).sort().map(stem => stem === "index" ? "/templates/" : `/templates/${stem}/`)];
-}
-
-/** @param {string} path */
-export function guideMetadata(path) {
-  const file = articleSource(path);
-  const {frontmatter} = parseFrontmatter(readFileSync(join(root, file), "utf8"));
-  assert.ok(typeof frontmatter.title === "string" && frontmatter.title.trim() && typeof frontmatter.description === "string" && frontmatter.description.trim(), "Guide title and description required");
-  return {title:frontmatter.title,description:frontmatter.description,href:`https://devantler.tech${path}`};
-}
-
 /** @param {string} path */
 export function articleSource(path) {
-  const stem = `src/content/docs${path === "/templates/" ? "/templates/index" : path.slice(0, -1)}`;
+  const stem = `src/content/docs${path.slice(0, -1)}`;
   const file = [stem + ".md", stem + ".mdx"].find(file => existsSync(join(root, file)));
   assert.ok(file, "Journal reading source required");
   return file;
@@ -73,9 +58,8 @@ export function authoredDiagrams(path) {
  * @param {string} html Actual compiled content artifact.
  * @param {{title:string,description:string,date?:string,href:string}} post Authored metadata.
  * @param {readonly string[]} expectedDiagrams Independently parsed authored definitions.
- * @param {"journal"|"guide"} kind The actual source collection's date/navigation contract.
  */
-export function extractReading(html, post, expectedDiagrams = [], kind = "journal") {
+export function extractReading(html, post, expectedDiagrams = []) {
   const document = all(parse(html));
   assert.equal(text(document.find(node => node.tagName === "title")), `${post.title} | Devantler Tech`, "Journal reference title mismatch");
   assert.equal(attr(document.find(node => node.tagName === "meta" && attr(node, "name") === "description"), "content"), post.description, "Journal reference description mismatch");
@@ -148,19 +132,18 @@ export function extractReading(html, post, expectedDiagrams = [], kind = "journa
     }
   }
   const times = document.filter(node => node.tagName === "time").map(node => attr(node, "datetime"));
-  if (kind === "journal") assert.equal(times[0], post.date, "Journal publication date mismatch");
-  assert.equal(times.length, kind === "journal" ? 2 : 1, "Journal/guide committed modification date required");
-  const modified = times[kind === "journal" ? 1 : 0];
-  assert.ok(modified && Number.isFinite(Date.parse(modified)), "Journal/guide committed modification date required");
+  assert.equal(times[0], post.date, "Journal publication date mismatch");
+  assert.equal(times.length, 2, "Journal committed modification date required");
+  const modified = times[1];
+  assert.ok(modified && Number.isFinite(Date.parse(modified)), "Journal committed modification date required");
   const adjacent = document.filter(node => node.tagName === "a" && ["prev", "next"].includes(attr(node, "rel") ?? "")).map(node => {
     const destination = attr(node, "href");
     assert.ok(destination, "Journal adjacent article destination missing");
     const href = new URL(destination, "https://devantler.tech");
-    assert.ok(href.origin === "https://devantler.tech" && (kind === "guide" || href.pathname.startsWith("/blog/")) && text(node).trim(), "Journal/guide adjacent article destination required");
-    const label = kind === "guide" ? all(node).find(child => hasClass(child,"link-title")) : undefined;
-    return {rel:attr(node, "rel"),href:href.href,title:text(label ?? node).trim()};
+    assert.ok(href.origin === "https://devantler.tech" && href.pathname.startsWith("/blog/") && text(node).trim(), "Journal adjacent article destination required");
+    return {rel:attr(node, "rel"),href:href.href,title:text(node).trim()};
   });
-  if (kind === "journal") assert.ok(adjacent.length && new Set(adjacent.map(item => item.rel)).size === adjacent.length, "Journal distinct adjacent articles required");
+  assert.ok(adjacent.length && new Set(adjacent.map(item => item.rel)).size === adjacent.length, "Journal distinct adjacent articles required");
   const metadata = document.filter(node => node.tagName === "meta" &&
     (attr(node, "property")?.startsWith("og:") || ["author", "twitter:card", "twitter:image"].includes(attr(node, "name") ?? "")))
     .map(node => ({name:attr(node,"name"),property:attr(node,"property"),content:attr(node,"content")}));
@@ -196,7 +179,7 @@ export function readingFingerprint() {
   for (const path of ["src", "public", "package.json", "package-lock.json", "web/package.json", "web/package-lock.json", "web/src/lib/journal-diagrams.js"]) visit(path);
   const env = {...process.env};
   for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX", "GIT_NAMESPACE"]) delete env[key];
-  for (const path of [...readingPaths(), ...guidePaths()]) {
+  for (const path of readingPaths()) {
     const sourcePath = articleSource(path);
     hash.update(sourcePath + "\0");
     hash.update(execFileSync("git", ["--no-replace-objects", "log", "-1", "--format=%cI", "--", sourcePath], {cwd:root,encoding:"utf8",env}));
@@ -215,8 +198,7 @@ export async function captureReadingReference() {
   const fingerprint = readingFingerprint();
   assert.equal(readFileSync(input, "utf8"), fingerprint, "Journal source changed during rendering");
   const paths = readingPaths();
-  const technicalPaths = guidePaths();
-  const admitted = new Set([...paths, ...technicalPaths, ...journalPaths(), "/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/"]);
+  const admitted = new Set([...paths, ...journalPaths(), "/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/"]);
   /** @type {{filename:string,source:string,digest:string}[]} */
   const assets = [];
   /** @param {string} href */
@@ -228,10 +210,10 @@ export async function captureReadingReference() {
     if (!assets.some(asset => asset.filename === filename)) assets.push({filename,source:bytes.toString("base64"),digest:digest(bytes)});
     return `/${filename}`;
   };
-  /** @param {{title:string,description:string,date?:string,href:string}} post @param {"journal"|"guide"} kind */
-  const projectReading = (post, kind) => {
+  /** @param {{title:string,description:string,date?:string,href:string}} post */
+  const projectReading = post => {
     const path = new URL(post.href).pathname;
-    const reading = extractReading(readFileSync(join(root, ".generated/content", path, "index.html"), "utf8"), post, authoredDiagrams(path), kind);
+    const reading = extractReading(readFileSync(join(root, ".generated/content", path, "index.html"), "utf8"), post, authoredDiagrams(path));
     const fragment = parseFragment(reading.html);
     for (const node of all(fragment)) for (const item of node.attrs ?? []) {
       if (node.tagName === "a" && item.name === "href" && !item.value.startsWith("#")) {
@@ -247,18 +229,11 @@ export async function captureReadingReference() {
         continue;
       }
       if (!((node.tagName === "img" && item.name === "src") || (node.tagName === "link" && item.name === "href"))) continue;
-      // Preserve authored external illustrations (currently the sponsor badge),
-      // without fetching them during the build or treating them as local assets.
-      if (!(kind === "guide" && node.tagName === "img" && /^https:\/\//.test(item.value))) item.value = projectAsset(item.value);
+      item.value = projectAsset(item.value);
     }
-    const adjacent = kind === "guide" ? reading.adjacent.map(item => {
-      const href = new URL(item.href);
-      return {...item,href:admitted.has(href.pathname) ? href.pathname + href.search + href.hash : item.href};
-    }) : reading.adjacent;
-    return {path,...post,...reading,adjacent,html:serialize(fragment)};
+    return {path,...post,...reading,html:serialize(fragment)};
   };
-  const readings = readJournal().filter(post => paths.includes(new URL(post.href).pathname)).map(post => projectReading(post, "journal"));
-  const guides = technicalPaths.map(path => projectReading(guideMetadata(path), "guide"));
+  const readings = readJournal().filter(post => paths.includes(new URL(post.href).pathname)).map(projectReading);
   // Keep canonical sharing/schema image URLs reachable too, not only body images.
   const metadataImages = new Set(["/author.png"]);
   for (const reading of readings) for (const json of reading.structuredData) {
@@ -269,18 +244,19 @@ export async function captureReadingReference() {
     const bytes = readFileSync(join(root,".generated/content",href));
     assets.push({filename:href.slice(1),source:bytes.toString("base64"),digest:digest(bytes)});
   }
-  const bundle = [...readings, ...guides].some(reading => reading.diagrams.length) ? await bundleJournalDiagrams() : null;
+  const bundle = readings.some(reading => reading.diagrams.length) ? await bundleJournalDiagrams() : null;
   if (bundle) assets.push(...bundle.assets);
   assert.equal(readingFingerprint(), fingerprint, "Journal source changed during diagram bundling");
   const withDiagram = (/** @type {typeof readings[number]} */ reading) => ({...reading,diagramScript:reading.diagrams.length ? bundle?.entry : undefined});
-  const value = {version:4,fingerprint,readings:readings.map(withDiagram),guides:guides.map(withDiagram),assets};
+  // Version 5 retired the technical-guide collection (#697).
+  const value = {version:5,fingerprint,readings:readings.map(withDiagram),assets};
   writeFileSync(generated, JSON.stringify({...value,checksum:digest(JSON.stringify(value))}));
 }
 
 /** Read a complete current reference; a missing/stale build never becomes an empty article. */
 export function readReadingReference() {
   const value = JSON.parse(readFileSync(generated, "utf8"));
-  assert.ok(value.version === 4 && value.fingerprint === readingFingerprint(), "Journal reference is stale; run bash scripts/build-journal-reference.sh");
+  assert.ok(value.version === 5 && value.fingerprint === readingFingerprint(), "Journal reference is stale; run bash scripts/build-journal-reference.sh");
   const {checksum,...content} = value;
   assert.equal(checksum,digest(JSON.stringify(content)), "Journal reference content is incomplete or altered");
   assert.ok(Array.isArray(value.readings), "Journal complete reading inventory required");
@@ -288,8 +264,7 @@ export function readReadingReference() {
   const readings = value.readings;
   assert.deepEqual(readings.map(reading => reading.path), readingPaths(), "Journal complete reading inventory required");
   assert.ok(readings.every(reading => typeof reading.html === "string" && reading.html.trim() && Array.isArray(reading.headings)), "Journal complete reading body required");
-  assert.deepEqual(value.guides?.map((/** @type {{path:string}} */ guide) => guide.path), guidePaths(), "Guide complete reading inventory required");
-  assert.ok(value.guides.every((/** @type {{html:string,headings:unknown[]}} */ guide) => typeof guide.html === "string" && guide.html.trim() && Array.isArray(guide.headings)), "Guide complete reading body required");
+  assert.equal(value.guides, undefined, "Retired technical guides must not re-enter the reading reference");
   assert.ok(value.assets?.length, "Journal asset inventory is missing");
   for (const asset of value.assets) {
     assert.match(asset.filename, /^(?:_app\/immutable\/assets\/(?:reading-[a-f0-9]{16}-[A-Za-z0-9._-]+|reading-diagrams\/[A-Za-z0-9_-]+\.js)|_astro\/[A-Za-z0-9._-]+\.(?:webp|png|jpg)|author\.png)$/);
@@ -297,19 +272,19 @@ export function readReadingReference() {
   }
   const filenames = new Set(value.assets.map((/** @type {{filename:string}} */ asset) => `/${asset.filename}`));
   for (const asset of value.assets) for (const dependency of asset.dependencies ?? []) assert.ok(filenames.has(`/${dependency}`), "Journal diagram referenced module is missing");
-  for (const reading of [...value.readings, ...value.guides]) {
+  for (const reading of value.readings) {
     assert.deepEqual(reading.diagrams?.map((/** @type {{source:string}} */ diagram) => diagram.source), authoredDiagrams(reading.path), "Journal diagram definitions are incomplete or stale");
     assert.ok(reading.diagrams.length ? filenames.has(reading.diagramScript) : !reading.diagramScript, "Journal diagram entry is missing or unexpected");
     if (reading.diagrams.length) assert.match(reading.diagramScript, /^\/_app\/immutable\/assets\/reading-diagrams\/journal-diagrams-[A-Za-z0-9_-]+\.js$/, "Journal diagram entry is missing or unexpected");
     const figures = all(parseFragment(reading.html)).filter(node => hasClass(node, "reading-diagram"));
     assert.deepEqual(figures.map(figure => ({id:attr(figure, "data-diagram-id"),source:text(all(figure).find(node => node.tagName === "pre"))})), reading.diagrams, "Journal diagram body is incomplete or altered");
   }
-  for (const reading of [...readings, ...value.guides]) for (const node of all(parseFragment(reading.html))) for (const item of node.attrs ?? []) {
+  for (const reading of readings) for (const node of all(parseFragment(reading.html))) for (const item of node.attrs ?? []) {
     if (["img", "source"].includes(node.tagName ?? "") && item.name === "srcset") {
       for (const entry of item.value.split(",")) assert.ok(filenames.has(entry.trim().split(/\s+/)[0]), "Journal referenced asset is missing");
     }
     if ((node.tagName === "img" && item.name === "src") || (node.tagName === "link" && item.name === "href")) {
-      assert.ok(filenames.has(item.value) || (value.guides.includes(reading) && node.tagName === "img" && /^https:\/\//.test(item.value)), "Journal referenced asset is missing");
+      assert.ok(filenames.has(item.value), "Journal referenced asset is missing");
     }
   }
   return value;

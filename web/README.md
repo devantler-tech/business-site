@@ -25,10 +25,10 @@ changing authored Markdown or shared content inputs. Never edit generated output
 ## Content and routes
 
 The public application retains English/Danish Home, About and Projects, all English Journal
-articles, three main archive pages, complete topic/author archives, six technical guides,
+articles, three main archive pages, complete topic/author archives,
 RSS, CV/thesis downloads, sitemap, robots, sharing images and the Devantler Tech logo favicon.
-Historical project/template redirects preserve heading fragments and native continuation links.
-Do not invent Danish articles, feeds or guides.
+Historical project redirects and the retired-guide redirects in `src/retired-guides.ts` preserve
+heading fragments and native continuation links. Do not invent Danish articles or feeds.
 
 The maintained content remains under `src/content/docs/`. `src/data/build-content.mjs`
 compiles Markdown with Satteri, YAML metadata and Expressive Code, resolves local images with

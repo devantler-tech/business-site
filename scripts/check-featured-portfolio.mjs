@@ -46,9 +46,9 @@ for (const prefix of ['', 'da/']) {
   for (const id of ['open-title', 'family-title', 'technical-projects', 'research', 'engineering-checks', '-self-hosted-personal-apps']) assert.ok(projects.includes(`id="${id}"`));
   assert.doesNotMatch(projects, /href="#research"|<section\b[^>]*aria-labelledby="research-title"/, 'Academic work is not a promoted section');
   const archive = projects.match(/<details\b([^>]*\bid="research"[^>]*)>([\s\S]*?)<\/details>/);
-  assert.ok(archive, 'Earlier project links preserve real historical destinations');
+  assert.ok(archive, 'Earlier research preserves real historical destinations');
   assert.doesNotMatch(archive[1], /\bopen(?:\s|=|$)/);
-  assert.ok(archive[2].includes(prefix ? 'Tidligere projektlinks' : 'Earlier project links'));
+  assert.ok(archive[2].includes(prefix ? 'Tidligere forskning' : 'Earlier research'));
   assert.ok(projects.includes('href="/pdfs/thesis.pdf"'));
   assert.doesNotMatch(projects, /<script[^>]*>[\s\S]*?(?:api\.github\.com|fetch\()[\s\S]*?<\/script>/, 'No visitor-side GitHub calls');
 }

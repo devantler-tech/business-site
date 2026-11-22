@@ -29,7 +29,6 @@
       <section class="browse-group" aria-labelledby="journal-tags"><h2 id="journal-tags">Tags</h2><ul>{#each data.browse.tags as tag}<li><a href={tag.href}>{tag.label} ({tag.count})</a></li>{/each}</ul></section>
       <a href="/blog/rss.xml">RSS</a>
       {#each data.authors as author}<p><a href={author.path}>Articles by {author.label}</a></p>{/each}
-      <p>Technical guides open on the published website.</p>
     </div></details>
     <section class="posts" aria-label="Journal articles">
       {#each data.posts as post, index}
