@@ -63,7 +63,7 @@ test('the pinned checker examines the complete tracked server source', () => {
   });
   assert.ifError(tracked.error);
   assert.equal(tracked.status, 0);
-  const files = tracked.stdout.split('\0').filter(file => /\.(go|html|js|css|md|sql|json)$/.test(file));
+  const files = tracked.stdout.split('\0').filter(file => /\.(go|html|m?js|css|md|sql|json)$/.test(file));
   assert.ok(files.length > 0);
   assertCompleteScan(checkFiles(files), files.length);
 });
