@@ -252,6 +252,19 @@ EOF
 fail_match "Templates: doc page not dispositioned templates-page" "$c" \
   "not dispositioned templates-page in the marker: [qux-template]"
 
+# 11a. Templates page (renamed repository): the submodule keeps its path but its
+#      .gitmodules url names the renamed repository. A doc page naming the new
+#      repository matches; one still naming the path basename does not.
+c="$tmp/templates-renamed-repo"; build_fixture "$c"
+sed -i.bak 's#devantler-tech/foo-template\.git#devantler-tech/renamed-template.git#' "$c/.gitmodules"
+sed -i.bak 's#devantler-tech/foo-template#devantler-tech/renamed-template#g' \
+  "$c/src/content/docs/templates/foo.md"
+pass_case "Templates: renamed repository keeps its submodule path" "$c"
+c="$tmp/templates-renamed-repo-stale-page"; build_fixture "$c"
+sed -i.bak 's#devantler-tech/foo-template\.git#devantler-tech/renamed-template.git#' "$c/.gitmodules"
+fail_match "Templates: doc page still names the old repository after a rename" "$c" \
+  "link is wrong): [renamed-template]"
+
 # 12. die_missing: a required submodule is absent → hard error (exit 1 with the
 #     "is the submodule checked out?" message), distinct from a drift failure.
 c="$tmp/missing-submodule"; build_fixture "$c"

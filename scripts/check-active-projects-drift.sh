@@ -66,14 +66,16 @@
 #                          forces that) yet never get a doc page — silently
 #                          vanishing from the site — and a renamed/removed
 #                          template page could likewise linger. So we enforce SET
-#                          equality between the basenames of the
-#                          `=templates-page` submodules and the source repos that
+#                          equality between the repositories the
+#                          `=templates-page` submodules track (their .gitmodules
+#                          url, so a rename that keeps the submodule path still
+#                          matches) and the source repos that
 #                          the template doc pages declare in their
 #                          `**Repository**: [devantler-tech/<repo>]` line. Adding,
 #                          removing, or renaming a template therefore forces both
 #                          the doc page and the marker disposition to be updated
-#                          in lockstep. (Reads only the marker and the in-repo doc
-#                          pages, so it stays network-free.)
+#                          in lockstep. (Reads only the marker, .gitmodules and the
+#                          in-repo doc pages, so it stays network-free.)
 #   - Homepage featured  — the homepage intentionally promotes a curated subset
 #                          of Active Projects, but both surfaces are hand-written.
 #                          We extract the literal LinkCard titles from only the
@@ -383,13 +385,28 @@ else
 fi
 
 # --- Templates page: every templates-page submodule has a doc page (& vice versa) ---
-# Basenames of the submodules dispositioned `=templates-page` in the marker above
-# (the path is always `templates/<repo>`, so the basename is the repo name).
+# Repository each submodule dispositioned `=templates-page` in the marker above
+# tracks: the basename of its .gitmodules url. A renamed repository may keep its
+# submodule path (templates/platform-tenant-template tracks application-template),
+# so the path basename is used only when the submodule records no url.
+template_repository() { # submodule-path
+  local key="" url=""
+  key=$(git config --file "$gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+    | awk -v path="$1" '$2 == path { print $1; exit }' || true)
+  if [ -n "$key" ]; then
+    url=$(git config --file "$gitmodules" --get "${key%.path}.url" 2>/dev/null || true)
+  fi
+  url="${url%/}"
+  url="${url%.git}"
+  if [ -n "$url" ]; then printf '%s\n' "${url##*[/:]}"; else printf '%s\n' "${1##*/}"; fi
+}
 templates_declared=$(
   printf '%s' "$submodules_marker" | tr ',' '\n' \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
     | grep -E '=templates-page$' \
-    | sed -E 's/=templates-page$//; s#^.*/##' | sort -u
+    | sed -E 's/=templates-page$//' \
+    | while IFS= read -r template_path; do template_repository "$template_path"; done \
+    | sort -u
 )
 
 # Source repos the live template doc pages declare in their `**Repository**:`
