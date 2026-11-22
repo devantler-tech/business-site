@@ -25,6 +25,7 @@ cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp
 set -euo pipefail
 [[ "$REPOSITORY" == devantler-tech/business-site && "$SOURCE_SHA" == 0123456789abcdef0123456789abcdef01234567 &&
    "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy/base &&
+   "$PREBUILT_CI_AUTH_MODE" == job-token && "$PREBUILT_CI_READ_TOKEN" == fixture-read-token &&
    "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
    "$PREBUILT_PUBLIC_DIGEST" == "$(printf 'a%.0s' {1..64})" && "$PREBUILT_CI_RUN_ID" == 123 && "$PREBUILT_CI_RUN_ATTEMPT" == 2 ]]
 [[ "${ORIGIN_FAIL:-false}" == false ]] || exit 1
@@ -131,6 +132,7 @@ verify() {
 # Run the real origin adapter against an isolated deployment and an explicit verifier outcome.
 origin() {
   (cd "$scratch/source" && env RUNNER_TEMP="$scratch/runner" SOURCE_SHA="$source" IMAGE_DIGEST="$image" \
+    PREBUILT_CI_AUTH_MODE=job-token PREBUILT_CI_READ_TOKEN=fixture-read-token \
     PUBLIC_DIGEST="$public" ORIGINAL_CI_RUN_ID=123 ORIGINAL_CI_RUN_ATTEMPT=2 "$@" \
     bash "$root/scripts/verify-runtime-origin.sh") >"$scratch/stdout" 2>"$scratch/stderr"
 }
@@ -138,6 +140,7 @@ cp "$scratch/source/deploy/base/webapp.yaml" "$scratch/original.yaml"
 origin || fail 'original-image verification did not complete'
 cmp "$scratch/original.yaml" "$scratch/source/deploy/base/webapp.yaml" || fail 'original verifier mutated the source deployment'
 if origin ORIGIN_FAIL=true; then fail 'original cryptographic verifier failure was suppressed'; fi
+if origin PREBUILT_CI_READ_TOKEN=; then fail 'missing verifier CI credential was accepted'; fi
 reset_fixture
 verify || fail 'the independently signed matching immutable subjects and version aliases must verify'
 [[ "$(wc -l <"$scratch/calls" | tr -d ' ')" == 4 ]] || fail 'both immutable subjects and both version aliases must be read'
