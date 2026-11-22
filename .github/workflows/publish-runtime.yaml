@@ -93,6 +93,7 @@ jobs:
           mode: prebuilt-webapp
           app-name: business-site
           deploy-path: ./deploy
+          app-manifest: base/webapp.yaml
           prebuilt-image-digest: ${{ needs.admit.outputs.image-digest }}
           prebuilt-public-digest: ${{ needs.admit.outputs.public-digest }}
           prebuilt-ci-run-id: ${{ needs.admit.outputs.ci-run-id }}

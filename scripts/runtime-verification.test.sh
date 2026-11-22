@@ -10,7 +10,7 @@ fail() {
   exit 1
 }
 mkdir -p "$scratch/bin" "$scratch/runner" "$scratch/source/deploy" "$scratch/source/.github/workflows" "$scratch/source/.runtime-publisher/.github/scripts"
-cp "$root"/deploy/*.yaml "$scratch/source/deploy/"
+cp -R "$root/deploy/." "$scratch/source/deploy/"
 readonly caller=.github/workflows/publish-runtime.yaml
 cp "$root/$caller" "$scratch/source/$caller"
 readonly source=0123456789abcdef0123456789abcdef01234567
@@ -24,10 +24,11 @@ cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$REPOSITORY" == devantler-tech/business-site && "$SOURCE_SHA" == 0123456789abcdef0123456789abcdef01234567 &&
-   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy && "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
+   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy/base &&
+   "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
    "$PREBUILT_PUBLIC_DIGEST" == "$(printf 'a%.0s' {1..64})" && "$PREBUILT_CI_RUN_ID" == 123 && "$PREBUILT_CI_RUN_ATTEMPT" == 2 ]]
 [[ "${ORIGIN_FAIL:-false}" == false ]] || exit 1
-PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' deploy/webapp.yaml
+PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' "$DEPLOY_PATH/webapp.yaml"
 printf 'digest=%s\n' "$PREBUILT_IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
 FIXTURE
 cat >"$scratch/bin/gh" <<'FIXTURE'
@@ -80,21 +81,25 @@ set -euo pipefail
 [[ "$#" == 5 && "$1" == pull && "$2" == artifact && "$3" == "oci://ghcr.io/devantler-tech/business-site/manifests@$MANIFESTS_DIGEST" && "$4" == --output ]] || exit 97
 # Flux v2.9.6 requires the caller to create its extraction directory.
 [[ -d "$5" && ! -L "$5" ]] || { printf 'invalid output path: directory must already exist\n' >&2; exit 1; }
-cp "$FIXTURE/source/deploy/"*.yaml "$5/"
-IMAGE="ghcr.io/devantler-tech/business-site@$IMAGE_DIGEST" yq -i '.spec.image=strenv(IMAGE)' "$5/webapp.yaml"
+cp -R "$FIXTURE/source/deploy/." "$5/"
+IMAGE="ghcr.io/devantler-tech/business-site@$IMAGE_DIGEST" yq -i '.spec.image=strenv(IMAGE)' "$5/base/webapp.yaml"
 [[ "${PULL_FAIL:-false}" == false ]] || exit 1
-if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.example.invalid"' "$5/webapp.yaml"; fi
+if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.example.invalid"' "$5/base/webapp.yaml"; fi
 if [[ "${EXTRA_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/extra.txt"; fi
-if [[ "${MISSING_STORE:-false}" == true ]]; then rm "$5/secret-store.yaml"; fi
-if [[ "${MISSING_DISCLOSURE:-false}" == true ]]; then rm "$5/external-secret-disclosure.yaml"; fi
-if [[ "${ALTER_STORE:-false}" == true ]]; then yq -i '.spec.provider.vault.auth.kubernetes.role="foreign-tenant"' "$5/secret-store.yaml"; fi
-if [[ "${ALTER_DISCLOSURE:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.property="unapproved"' "$5/external-secret-disclosure.yaml"; fi
-if [[ "${MISSING_STRIPE:-false}" == true ]]; then rm "$5/external-secret-stripe.yaml"; fi
-if [[ "${ALTER_NUMINA:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.key="apps/other/numina"' "$5/external-secret-numina.yaml"; fi
-if [[ "${MISSING_MIGRATION:-false}" == true ]]; then rm "$5/job-portal-migration.yaml"; fi
-if [[ "${ALTER_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[1]="--migration-database-file"' "$5/job-portal-migration.yaml"; fi
-if [[ "${MISSING_RETENTION:-false}" == true ]]; then rm "$5/cronjob-portal-retention.yaml"; fi
-if [[ "${ALTER_RETENTION:-false}" == true ]]; then yq -i '.spec.schedule="* * * * *"' "$5/cronjob-portal-retention.yaml"; fi
+if [[ "${EXTRA_NESTED_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/dev/extra.yaml"; fi
+if [[ "${EXTRA_DIRECTORY:-false}" == true ]]; then mkdir "$5/other"; fi
+if [[ "${MISSING_DEV:-false}" == true ]]; then rm "$5/dev/kustomization.yaml"; fi
+if [[ "${ALTER_DEV:-false}" == true ]]; then yq -i '.namespace="business-site"' "$5/dev/kustomization.yaml"; fi
+if [[ "${MISSING_STORE:-false}" == true ]]; then rm "$5/prod/secret-store.yaml"; fi
+if [[ "${MISSING_DISCLOSURE:-false}" == true ]]; then rm "$5/prod/external-secret-disclosure.yaml"; fi
+if [[ "${ALTER_STORE:-false}" == true ]]; then yq -i '.spec.provider.vault.auth.kubernetes.role="foreign-tenant"' "$5/prod/secret-store.yaml"; fi
+if [[ "${ALTER_DISCLOSURE:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.property="unapproved"' "$5/prod/external-secret-disclosure.yaml"; fi
+if [[ "${MISSING_STRIPE:-false}" == true ]]; then rm "$5/prod/external-secret-stripe.yaml"; fi
+if [[ "${ALTER_NUMINA:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.key="apps/other/numina"' "$5/prod/external-secret-numina.yaml"; fi
+if [[ "${MISSING_MIGRATION:-false}" == true ]]; then rm "$5/prod/job-portal-migration.yaml"; fi
+if [[ "${ALTER_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[1]="--migration-database-file"' "$5/prod/job-portal-migration.yaml"; fi
+if [[ "${MISSING_RETENTION:-false}" == true ]]; then rm "$5/prod/cronjob-portal-retention.yaml"; fi
+if [[ "${ALTER_RETENTION:-false}" == true ]]; then yq -i '.spec.schedule="* * * * *"' "$5/prod/cronjob-portal-retention.yaml"; fi
 FIXTURE
 chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
 # Restore independent signed-subject fixtures and clear receipts/read counters between controls.
@@ -129,9 +134,9 @@ origin() {
     PUBLIC_DIGEST="$public" ORIGINAL_CI_RUN_ID=123 ORIGINAL_CI_RUN_ATTEMPT=2 "$@" \
     bash "$root/scripts/verify-runtime-origin.sh") >"$scratch/stdout" 2>"$scratch/stderr"
 }
-cp "$scratch/source/deploy/webapp.yaml" "$scratch/original.yaml"
+cp "$scratch/source/deploy/base/webapp.yaml" "$scratch/original.yaml"
 origin || fail 'original-image verification did not complete'
-cmp "$scratch/original.yaml" "$scratch/source/deploy/webapp.yaml" || fail 'original verifier mutated the source deployment'
+cmp "$scratch/original.yaml" "$scratch/source/deploy/base/webapp.yaml" || fail 'original verifier mutated the source deployment'
 if origin ORIGIN_FAIL=true; then fail 'original cryptographic verifier failure was suppressed'; fi
 reset_fixture
 verify || fail 'the independently signed matching immutable subjects and version aliases must verify'
@@ -146,7 +151,7 @@ if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a move
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
 reset_fixture
 verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
-for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true MISSING_STRIPE=true ALTER_NUMINA=true MISSING_MIGRATION=true ALTER_MIGRATION=true MISSING_RETENTION=true ALTER_RETENTION=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
+for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true EXTRA_NESTED_MEMBER=true EXTRA_DIRECTORY=true MISSING_DEV=true ALTER_DEV=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true MISSING_STRIPE=true ALTER_NUMINA=true MISSING_MIGRATION=true ALTER_MIGRATION=true MISSING_RETENTION=true ALTER_RETENTION=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
   if verify "$context"; then fail 'failed signature/pull, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'

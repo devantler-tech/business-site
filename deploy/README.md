@@ -2,8 +2,24 @@
 
 This directory prepares the public website for the platform's namespace-bound
 WebApp interface. The source-owned runtime publisher can publish this package after
-explicit release admission; no workflow applies it to a cluster. The platform serves
-this package at devantler.tech since GitHub Pages was retired; portal access stays disabled.
+explicit release admission. The platform applies it to serve the public site at
+devantler.tech and the invitation-only portal at portal.devantler.tech.
+
+The whole directory is published as one artifact and split into Kustomize overlays
+([ADR 0016 in the monorepo](https://github.com/devantler-tech/monorepo/blob/main/docs/adr/0016-dev-and-prod-deployments.md)):
+
+- `kustomization.yaml` is the prod entry the platform reconciles at the artifact root. It
+  only includes `prod/`.
+- `base/` holds the shared WebApp. The publisher pins its image in `base/webapp.yaml`.
+- `prod/` holds the production routes, network policy, disruption budget, secret
+  synchronization, migration Job and retention CronJob.
+- `dev/` (#542) uses one WebApp replica in `business-site-dev` with
+  `dev.devantler.tech` as its host and `business-site-dev-disclosure` as its sole
+  Secret projection. Serving it requires the dev disclosure Secret and the platform's
+  private ingress and network policies (devantler-tech/platform#6126).
+
+Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
+must render, and `deploy` must render exactly what `deploy/prod` renders.
 
 From the repository root, with Node 24, installed root dependencies, Kubectl and
 Docker available:
@@ -68,8 +84,8 @@ image or publication receipt. Tests use fictional values in disposable volumes.
 
 The WebApp uses exactly `business-site.platform.devantler.tech`, where the public pages are
 checked before a DNS switch. Two routes add the public names on their own gateway listeners:
-`http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
-`http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
+`prod/http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
+`prod/http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
 `--portal-host` arguments route by host, so nothing is served twice: `portal.devantler.tech`
 serves the portal at its root (`/`, `/sign-in`, …; an old `/portal…` address redirects 301
 without the prefix) and redirects public pages to devantler.tech, `www` redirects to the
@@ -148,7 +164,7 @@ With sign-in on, invite customers from a web pod as
 ([MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job)), as login `portal_migrator`
 (which owns database `portal`) with `--runtime-role portal_web`:
 
-- **Image.** The publisher pins only the WebApp's image. `kustomization.yaml` copies
+- **Image.** The publisher pins the WebApp's image. `prod/kustomization.yaml` copies
   that image into the Job, so the Job always runs its own release. The Job carries the
   `kustomize.toolkit.fluxcd.io/force` annotation, so Flux recreates it when the image changes.
 - **Input.** The platform supplies Secret `business-site-portal-db-migration` with `database-url`
@@ -175,7 +191,7 @@ With sign-in on, invite customers from a web pod as
 time. It deletes the portal records of former clients 3 years after their last membership ended,
 as the privacy notice states:
 
-- **Image and input.** Same as the migration Job. `kustomization.yaml` copies the WebApp's
+- **Image and input.** Same as the migration Job. `prod/kustomization.yaml` copies the WebApp's
   pinned image into it, and it reads the platform's `business-site-portal-db-migration` Secret
   through `--migration-database-projection`, as the migration role. The runtime cannot delete
   this history.
