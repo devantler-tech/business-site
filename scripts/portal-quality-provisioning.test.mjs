@@ -13,7 +13,7 @@ const packages = {
   htmlhint: '1.9.2',
   secretlint: '13.1.0',
   '@secretlint/secretlint-rule-preset-recommend': '13.1.0',
-  cspell: '10.5.0',
+  cspell: '10.5.1',
 };
 
 const manifest = JSON.parse(readFileSync('package.json'));
