@@ -57,7 +57,7 @@ publish_valid() {
     (.jobs.publish.steps[0].uses//""|startswith("actions/checkout@")) and
     .jobs.publish.steps[0].with=={"ref":"\u0024{{ github.sha }}","persist-credentials":false} and
     (.jobs.publish.steps[1].uses//""|test("^devantler-tech/\\.github/actions/publish-app@[0-9a-f]{40}$")) and
-    .jobs.publish.steps[1].with=={"mode":"prebuilt-webapp","app-name":"business-site","deploy-path":"./deploy",
+    .jobs.publish.steps[1].with=={"mode":"prebuilt-webapp","app-name":"business-site","deploy-path":"./deploy","app-manifest":"base/webapp.yaml",
       "prebuilt-image-digest":"\u0024{{ needs.admit.outputs.image-digest }}","prebuilt-public-digest":"\u0024{{ needs.admit.outputs.public-digest }}",
       "prebuilt-ci-run-id":"\u0024{{ needs.admit.outputs.ci-run-id }}","prebuilt-ci-run-attempt":"\u0024{{ needs.admit.outputs.ci-run-attempt }}"} and
     all(.jobs.publish.steps[]; .if==null and .env==null and .run==null and (.["continue-on-error"]==null or .["continue-on-error"]==false) and
@@ -90,6 +90,7 @@ done
 publish_valid <<<"$publish" || fail 'unsafe publisher or missing independent readback'
 for mutation in '.on.push={tags:["v*"]}' '.jobs.admit.if="always()"' '.jobs.publish.steps[1].with.mode="deployment"' \
   '.jobs.publish.steps[1].with["prebuilt-ci-run-id"]="1"' '.jobs.publish.steps[1].with["deploy-path"]="./"' \
+  '.jobs.publish.steps[1].with["app-manifest"]="webapp.yaml"' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@main")' '.jobs.verify.needs=["admit"]' \
   '.jobs.verify.steps[-2]["continue-on-error"]=true' \
   '.jobs.publish.steps[1].uses|=sub("@[0-9a-f]{40}$";"@v21.7.2")' '.jobs.publish.steps[1].uses|=sub("[0-9a-f]$";"")' \

@@ -59,7 +59,9 @@ review/CI/user-path evidence. Never use an admin merge bypass or request Copilot
   records the rejected private-frontend experiment; public Svelte remains selected.
 - `.github/workflows/ci.yaml` validates source and uploads a downloadable production preview.
 - `deploy/` is the Kustomize package for the namespace-bound Platform WebApp contract;
-  read `deploy/README.md` before changing it. One runtime serves `devantler.tech` (public pages)
+  read `deploy/README.md` before changing it. Shared manifests live in `deploy/base/`, prod-only
+  ones in `deploy/prod/` (the root `kustomization.yaml` includes only `prod/`), and
+  `deploy/dev/` patches the base for the dev deployment (#542). One runtime serves `devantler.tech` (public pages)
   and `portal.devantler.tech` (the portal), routing by host so nothing appears twice, and it
   grants no portal activation. Platform hostname approval and registration remain separate.
   The source-owned runtime release/publisher callers are default-off behind the

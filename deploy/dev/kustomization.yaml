@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Dev (devantler-tech/business-site#542): the shared base, changed only by the
+# patches below. The platform reconciles it at `path: ./dev` in its own
+# namespace and owns its ingress behind sign-on (devantler-tech/platform#6126),
+# so dev adds no route, certificate, DNS, disruption budget or prod secret store.
+namespace: business-site-dev
+resources:
+  - ../base
+patches:
+  # A tenant WebApp's name and spec.name must equal its namespace; spec.name also
+  # names and labels the generated Deployment, Service and route.
+  - target:
+      kind: WebApp
+      name: business-site
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: business-site-dev
+      - op: replace
+        path: /spec/name
+        value: business-site-dev
+      - op: replace
+        path: /spec/host
+        value: dev.devantler.tech
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      # Configure the preview explicitly so new production settings do not
+      # become preview inputs when the shared WebApp evolves.
+      - op: replace
+        path: /spec/args
+        value:
+          - --public
+          - /app/public
+          - --listen
+          - 0.0.0.0:8080
+          - --company-disclosure-projection
+          - /run/webapp-inputs/disclosure
+      - op: replace
+        path: /spec/secretProjections
+        value:
+          - secretName: business-site-dev-disclosure
+            items:
+              - key: company-disclosure
+                path: disclosure

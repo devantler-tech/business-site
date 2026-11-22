@@ -112,16 +112,39 @@ done
 # Flux reads the read-only registry credentials established by the workflow's login action.
 mkdir "$work/manifests"
 flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests" || fail 'immutable manifest pull'
+readonly manifest_members=(
+  kustomization.yaml
+  base/kustomization.yaml base/webapp.yaml
+  prod/kustomization.yaml prod/http-route-public.yaml prod/http-route-portal.yaml
+  prod/network-policy.yaml prod/disruption-budget.yaml prod/secret-store.yaml
+  prod/external-secret-disclosure.yaml prod/external-secret-numina.yaml prod/external-secret-stripe.yaml
+  prod/job-portal-migration.yaml prod/cronjob-portal-retention.yaml
+  dev/kustomization.yaml
+)
+is_manifest_member() {
+  local expected
+  for expected in "${manifest_members[@]}"; do
+    [[ "$1" != "$expected" ]] || return 0
+  done
+  return 1
+}
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
 while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
-  case "$member" in webapp.yaml | http-route-public.yaml | http-route-portal.yaml | network-policy.yaml | disruption-budget.yaml | secret-store.yaml | external-secret-disclosure.yaml | external-secret-numina.yaml | external-secret-stripe.yaml | job-portal-migration.yaml | cronjob-portal-retention.yaml | kustomization.yaml | README.md) ;; *) fail 'unexpected manifest member' ;; esac
+  case "$member" in
+    base | prod | dev)
+      [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest overlay directory'
+      continue
+      ;;
+    README.md) ;;
+    *) is_manifest_member "$member" || fail 'unexpected manifest member' ;;
+  esac
   [[ -f "$entry" && ! -L "$entry" && "$(wc -c <"$entry")" -le 1048576 ]] || fail 'manifest member bounds'
 done <<<"$entries"
-for member in webapp.yaml http-route-public.yaml http-route-portal.yaml network-policy.yaml disruption-budget.yaml secret-store.yaml external-secret-disclosure.yaml external-secret-numina.yaml external-secret-stripe.yaml job-portal-migration.yaml cronjob-portal-retention.yaml kustomization.yaml; do
+for member in "${manifest_members[@]}"; do
   [[ -f "$work/manifests/$member" && -f "deploy/$member" && ! -L "deploy/$member" ]] || fail 'missing source manifest'
   yq -o=json -I=0 '.' "deploy/$member" >"$work/source.json" || fail 'source manifest parse'
-  if [[ "$member" == webapp.yaml ]]; then
+  if [[ "$member" == base/webapp.yaml ]]; then
     jq --arg image "$image@$IMAGE_DIGEST" '.spec.image=$image' "$work/source.json" >"$work/pinned.json"
     mv "$work/pinned.json" "$work/source.json"
   fi
