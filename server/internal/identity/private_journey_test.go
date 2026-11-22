@@ -50,10 +50,10 @@ func completeJourneyReport(runs []journeyRun, expected int) (journeyReport, erro
 		n := 0
 		for _, actor := range []string{"client-a", "client-b", "operator"} {
 			phases := []string{"workspace", "contact", "save", "reload", "stale-edit", "recover", "logout", "signed-out"}
-			statuses := []int{200, 200, 303, 200, 409, 200, 303, 401}
+			statuses := []int{200, 200, 303, 200, 409, 200, 200, 401}
 			if actor == "operator" {
 				phases = []string{"workspace", "operator", "contact-denied", "logout", "signed-out"}
-				statuses = []int{200, 200, 403, 303, 403}
+				statuses = []int{200, 200, 403, 200, 403}
 			}
 			for i, phase := range phases {
 				sample := run.Responses[n]
@@ -68,8 +68,8 @@ func completeJourneyReport(runs []journeyRun, expected int) (journeyReport, erro
 }
 
 type journeyActor struct {
-	id, lang, name, email, invitation string
-	client                            *http.Client
+	id, lang, name, email string
+	client                *http.Client
 }
 
 // journeyActors gives each fictional identity its own invitation and cookie jar
@@ -87,7 +87,7 @@ func journeyActors(f *browserFixture) []journeyActor {
 		if a.id == "operator" {
 			role = "operator"
 		}
-		a.invitation = f.invite(a.id, a.id, role)
+		f.invite(a.id, a.id, role)
 	}
 	return actors
 }
@@ -122,9 +122,8 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 		f.subject = a.id
 		f.mu.Unlock()
 		started := time.Now()
-		f.finish(f.start(a.invitation))
+		f.finish(f.start())
 		run.SignInNS = append(run.SignInNS, time.Since(started).Nanoseconds())
-		a.invitation = "" // Existing membership signs in without re-enrollment.
 		request := func(phase, method, path string, form url.Values, want int) (string, http.Header) {
 			f.t.Helper()
 			origin := ""
@@ -151,7 +150,7 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 			if len(token) != 2 {
 				f.t.Fatal("journey operator logout token missing")
 			}
-			request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, 303)
+			request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, 200)
 			request("signed-out", "GET", "/portal/operator", nil, 403)
 			continue
 		}
@@ -185,7 +184,7 @@ func privateContactJourney(f *browserFixture, actors []journeyActor) journeyRun 
 		if recoveredRevision != savedRevision || !strings.Contains(body, `value="`+a.name+`"`) || !strings.Contains(body, `value="`+a.email+`"`) || strings.Contains(body, "Rejected stale edit") {
 			f.t.Fatal("journey stale edit changed the saved record")
 		}
-		request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {token}, "lang": {a.lang}}, 303)
+		request("logout", "POST", "/portal/logout", url.Values{"csrf_token": {token}, "lang": {a.lang}}, 200)
 		request("signed-out", "GET", "/portal/contact?lang="+a.lang, nil, 401)
 	}
 	return run
@@ -202,8 +201,7 @@ func assertIndependentJourneyActors(f *browserFixture, actors []journeyActor) {
 		f.mu.Lock()
 		f.subject = a.id
 		f.mu.Unlock()
-		f.finish(f.start(a.invitation))
-		a.invitation = ""
+		f.finish(f.start())
 	}
 	workspace := func(a journeyActor) string {
 		t.Helper()
@@ -222,7 +220,7 @@ func assertIndependentJourneyActors(f *browserFixture, actors []journeyActor) {
 			t.Fatal("independent actor logout token missing")
 		}
 		status, _, _ := f.request("POST", "/portal/logout", url.Values{"csrf_token": {html.UnescapeString(token[1])}, "lang": {a.lang}}, f.site.URL)
-		if status != 303 {
+		if status != http.StatusOK {
 			t.Fatal("independent actor logout failed")
 		}
 	}

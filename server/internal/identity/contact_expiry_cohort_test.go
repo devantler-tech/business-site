@@ -22,13 +22,13 @@ func TestContactConfirmationRetainsRealExpiry(t *testing.T) {
 			client := fmt.Sprintf("expiry-confirmation-%s-%t", checkpoint, delayed)
 			b := newBrowserFixtureOnPool(t, pool)
 			b.client.Timeout = 10 * time.Second
-			b.finish(b.start(b.invite("client-a", client, "client")))
+			b.finish(b.startInvited("client-a", client, "client"))
 			contactVerificationFlags(t, b, true)
 			status, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Fictional Client", "a@example.invalid", ""), b.site.URL)
 			if status != http.StatusSeeOther {
 				t.Fatal("expiry contact preparation failed")
 			}
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, delayed)
 			var blocked <-chan struct{}
 			var release func()

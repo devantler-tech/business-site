@@ -15,6 +15,7 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/activation"
 	"github.com/devantler-tech/business-site/server/internal/identity"
+	"github.com/devantler-tech/business-site/server/internal/webapp"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
 )
@@ -26,6 +27,26 @@ var ErrConfig = errors.New("portal configuration is invalid")
 type Config struct {
 	database, issuer, client, callback, secretFile string
 	secretProjected                                bool
+	billing                                        billingConfig
+	cards                                          cardConfig
+	mail                                           mailConfig
+	// endSession and endSessionClient are the optional upstream logout; both or neither.
+	endSession, endSessionClient string
+	// operators are the optional operator subjects, signing in through platform SSO.
+	operators string
+	customers customerDirectoryConfig
+	// Machine policy contains public identities and action grants, never credentials.
+	agentAudience, agentSubjects string
+	// publicSite is the public website a portal on its own host links back to.
+	publicSite string
+	orderTerms [2]string
+}
+
+// billingConfig is the optional Numina invoice path (ADR 0030). Its own
+// false-default gate still decides whether anything is invoiced.
+type billingConfig struct {
+	tokenFile, baseURL, vatCode string
+	salesAccount                int
 }
 
 // IdentityProvider keeps ordinary startup closed. An explicit production profile
@@ -121,18 +142,51 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 			count++
 		}
 	}
+	billing, err := readBillingConfig(getenv)
+	if err != nil || (count == 0 && billing != (billingConfig{})) {
+		return Config{}, ErrConfig
+	}
+	cards, err := readCardConfig(getenv)
+	if err != nil || (count == 0 && cards != (cardConfig{})) {
+		return Config{}, ErrConfig
+	}
+	mailing, err := readMailConfig(getenv)
+	if err != nil || (count == 0 && mailing != (mailConfig{})) {
+		return Config{}, ErrConfig
+	}
+	endSession, endSessionClient := getenv("PORTAL_UPSTREAM_END_SESSION_URL"), getenv("PORTAL_UPSTREAM_CLIENT_ID")
+	if (endSession == "") != (endSessionClient == "") || (count == 0 && endSession != "") {
+		return Config{}, ErrConfig
+	}
+	operators := getenv("PORTAL_OPERATOR_SUBJECTS")
+	if count == 0 && operators != "" {
+		return Config{}, ErrConfig
+	}
+	customers, err := readCustomerDirectoryConfig(getenv)
+	if err != nil || (count == 0 && customers != (customerDirectoryConfig{})) {
+		return Config{}, ErrConfig
+	}
+	agentAudience, agentSubjects := getenv("PORTAL_AGENT_AUDIENCE"), getenv("PORTAL_AGENT_SUBJECTS")
+	if identity.ValidateAgents(c.issuer, c.client, agentAudience, agentSubjects) != nil {
+		return Config{}, ErrConfig
+	}
 	if count == 0 {
 		return c, nil
 	}
 	if count != 5 || !filepath.IsAbs(c.secretFile) {
 		return Config{}, ErrConfig
 	}
+	c.billing, c.cards, c.mail = billing, cards, mailing
+	c.endSession, c.endSessionClient = endSession, endSessionClient
+	c.operators = operators
+	c.customers = customers
+	c.agentAudience, c.agentSubjects = agentAudience, agentSubjects
 	issuer, err := url.Parse(c.issuer)
 	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil || issuer.RawQuery != "" || issuer.Fragment != "" {
 		return Config{}, ErrConfig
 	}
 	callback, err := url.Parse(c.callback)
-	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || callback.Path != "/portal/callback" || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
+	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || (callback.Path != "/portal/callback" && callback.Path != "/callback") || callback.RawPath != "" || callback.RawQuery != "" || callback.Fragment != "" {
 		return Config{}, ErrConfig
 	}
 	db, err := pgxpool.ParseConfig(c.database)
@@ -175,9 +229,77 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err != nil {
 		return nil, closed, ErrConfig
 	}
-	cfg, err := pgxpool.ParseConfig(c.database)
+	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	pool, broker, err := connectPortal(startup, c)
 	if err != nil {
 		return nil, closed, ErrConfig
+	}
+	foundation := identity.New(pool, broker, flags)
+	if c.orderTerms != [2]string{} {
+		if err := foundation.LinkOrderTerms(c.orderTerms[0], c.orderTerms[1]); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if c.publicSite != "" {
+		if err := foundation.LinkPublicSite(c.publicSite); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if c.endSession != "" {
+		if err := foundation.LinkUpstreamLogout(c.endSession, c.endSessionClient); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if c.operators != "" {
+		if err := foundation.LinkOperators(strings.Split(c.operators, ",")); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if err := linkCustomerDirectory(foundation, c.customers); err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	if c.agentAudience != "" {
+		if err := foundation.LinkAgents(startup, c.agentAudience, c.agentSubjects); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	}
+	if err := enableCardBilling(foundation, c.cards); err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	handler, err := foundation.Browser(c.callback, secret)
+	if err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	stopBilling, err := startInvoiceBilling(foundation, c.billing)
+	if err != nil {
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	stopMail, err := startMail(foundation, c.mail)
+	if err != nil {
+		stopBilling()
+		pool.Close()
+		return nil, closed, ErrConfig
+	}
+	return handler, func() { stopMail(); stopBilling(); pool.Close() }, nil
+}
+
+// connectPortal opens the bounded runtime pool, then checks its restricted login
+// and grants before discovering the broker. Errors are generic; the caller owns
+// the returned pool.
+func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.Broker, error) {
+	cfg, err := pgxpool.ParseConfig(c.database)
+	if err != nil {
+		return nil, nil, ErrConfig
 	}
 	cfg.MaxConns = 4
 	cfg.MinConns = 0
@@ -188,13 +310,11 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	cfg.ConnConfig.RuntimeParams["search_path"] = "public"
 	cfg.ConnConfig.RuntimeParams["statement_timeout"] = "5000"
 	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
-	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
 	pool, err := pgxpool.NewWithConfig(startup, cfg)
 	if err != nil {
-		return nil, closed, ErrConfig
+		return nil, nil, ErrConfig
 	}
-	fail := func() (http.Handler, func(), error) { pool.Close(); return nil, closed, ErrConfig }
+	fail := func() (*pgxpool.Pool, *identity.Broker, error) { pool.Close(); return nil, nil, ErrConfig }
 	// Assess the actual configured login, not a restricted role adopted by a
 	// broader credential. Both identities must agree before checking its grants.
 	var loginMatches bool
@@ -204,13 +324,54 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 	if err := identity.CheckRuntimeRole(startup, pool); err != nil {
 		return fail()
 	}
+	// Serve only once this release's migration job has migrated the store.
+	if err := identity.CheckSchemaCurrent(startup, pool); err != nil {
+		return fail()
+	}
 	broker, err := identity.NewBroker(startup, c.issuer, c.client)
 	if err != nil {
 		return fail()
 	}
-	handler, err := identity.New(pool, broker, flags).Browser(c.callback, secret)
-	if err != nil {
-		return fail()
+	return pool, broker, nil
+}
+
+// FitsPortalHost reports whether the configured portal matches the runtime's host
+// routing. With its own host the portal lives at that host's root, so its callback
+// must be exactly https://<host>/callback; sharing the public host, it lives under
+// /portal and its callback path is /portal/callback. No configured portal fits both.
+func (c Config) FitsPortalHost(host string) bool {
+	if c == (Config{}) {
+		return true
 	}
-	return handler, pool.Close, nil
+	callback, err := url.Parse(c.callback)
+	if err != nil {
+		return false
+	}
+	if host == "" {
+		return callback.Path == "/portal/callback"
+	}
+	return callback.Host == host && callback.Path == "/callback"
+}
+
+// WithPublicHost records the public website a portal on its own host links back
+// to. It leaves an unconfigured portal unconfigured, and has no effect without a host.
+func (c Config) WithPublicHost(host string) Config {
+	if c == (Config{}) || host == "" {
+		return c
+	}
+	c.publicSite = "https://" + host
+	return c
+}
+
+// WithOrderTerms binds orders to the admitted serving artifact, after its private
+// company projection. Missing documents close ordering, independently of sign-in.
+func (c Config) WithOrderTerms(artifact *webapp.Artifact) Config {
+	if c == (Config{}) {
+		return c
+	}
+	c.orderTerms = [2]string{}
+	if terms, err := artifact.OrderTerms(); err == nil {
+		c.orderTerms = terms
+	}
+	return c
 }

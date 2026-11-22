@@ -10,13 +10,12 @@ fail() {
   printf 'runtime publication: refused %s\n' "$1" >&2
   exit 1
 }
-# The frozen source's own publisher caller is the only record of the accepted shared publisher;
-# accept exactly one full commit of the organisation's publish-app workflow, never a branch or tag.
-workflow="$(yq -r '.jobs.publish.uses' .github/workflows/publish-runtime.yaml 2>/dev/null)" || fail 'accepted publisher caller read'
-[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'accepted publisher reference'
-readonly workflow
 [[ "${GITHUB_REPOSITORY:-}" == "$repo" && "${SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ && "${GITHUB_SHA:-}" == "$SOURCE_SHA" ]] || fail 'source context'
 [[ "${VERSION:-}" =~ ^(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})\.(0|[1-9][0-9]{0,14})$ && "${GITHUB_REF:-}" == "refs/tags/v$VERSION" ]] || fail 'version context'
+# This repository signs its own releases (devantler-tech/monorepo ADR 0017): the only accepted
+# publisher is this release workflow on this exact release tag, never another repository,
+# workflow, branch or the retired shared publisher.
+readonly workflow="$repo/.github/workflows/publish-runtime.yaml@refs/tags/v$VERSION"
 [[ "${IMAGE_DIGEST:-}" =~ ^sha256:[0-9a-f]{64}$ && "${PUBLIC_DIGEST:-}" =~ ^[0-9a-f]{64}$ ]] || fail 'original digests'
 [[ "${ORIGINAL_CI_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${ORIGINAL_CI_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ &&
   "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]{0,14}$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]{0,5}$ && -d "${RUNNER_TEMP:-}" ]] || fail 'run identity'
@@ -113,14 +112,20 @@ done
 # Flux reads the read-only registry credentials established by the workflow's login action.
 mkdir "$work/manifests"
 flux pull artifact "oci://$artifact@$manifests_digest" --output "$work/manifests" || fail 'immutable manifest pull'
-# The package is the whole deploy tree: the prod entry at its root, the shared base and both overlays.
-readonly manifest_members=(kustomization.yaml base/kustomization.yaml base/webapp.yaml base/network-policy.yaml
-  prod/kustomization.yaml prod/http-route-public.yaml prod/http-route-portal.yaml prod/disruption-budget.yaml
-  prod/secret-store.yaml prod/external-secret-disclosure.yaml dev/kustomization.yaml)
-# Exact membership in the reviewed file list, never a substring match.
+readonly manifest_members=(
+  kustomization.yaml
+  base/kustomization.yaml base/webapp.yaml
+  prod/kustomization.yaml prod/http-route-public.yaml prod/http-route-portal.yaml
+  prod/network-policy.yaml prod/disruption-budget.yaml prod/secret-store.yaml
+  prod/external-secret-disclosure.yaml prod/external-secret-numina.yaml prod/external-secret-stripe.yaml
+  prod/job-portal-migration.yaml prod/cronjob-portal-retention.yaml
+  dev/kustomization.yaml
+)
 is_manifest_member() {
-  local candidate
-  for candidate in "${manifest_members[@]}"; do [[ "$1" == "$candidate" ]] && return 0; done
+  local expected
+  for expected in "${manifest_members[@]}"; do
+    [[ "$1" != "$expected" ]] || return 0
+  done
   return 1
 }
 entries="$(find "$work/manifests" -mindepth 1 -print)" || fail 'manifest inventory'
@@ -128,7 +133,7 @@ while IFS= read -r entry; do
   member=${entry#"$work/manifests/"}
   case "$member" in
     base | prod | dev)
-      [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest directory bounds'
+      [[ -d "$entry" && ! -L "$entry" ]] || fail 'manifest overlay directory'
       continue
       ;;
     README.md) ;;

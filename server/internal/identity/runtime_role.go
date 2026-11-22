@@ -85,7 +85,42 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	if err := CheckMembershipRecorder(ctx, pool); err != nil {
 		return err
 	}
-	return checkWorkApprovalRole(ctx, pool)
+	if err := checkWorkApprovalRole(ctx, pool); err != nil {
+		return err
+	}
+	return checkBillingRole(ctx, pool)
+}
+
+// Billing tables and the operator audit log, which the web runtime only reads and
+// appends to, and the two billing state tables it also updates. None of them
+// allows deletion or delegation.
+var (
+	billingFixedTables = []string{"portal_orders", "portal_numina_contacts", "portal_stripe_events", "portal_order_ends", "portal_card_cancellations", "portal_charge_reversals", "portal_order_withdrawals", "portal_withdrawal_cancellations", "portal_order_completions", "portal_withdrawal_settlements", "portal_mail_outbox", "portal_mail_deliveries", "portal_launch_places", "portal_order_addons", "portal_request_closures", "portal_addon_ends", "portal_addon_removals", "portal_operator_audit", "portal_workspaces"}
+	billingStateTables = []string{"portal_order_charges", "portal_card_checkouts"}
+)
+
+// checkBillingRole requires SELECT/INSERT on every billing table and UPDATE on
+// the state tables only. Fixed tables are never changed, and nothing is
+// deleted, directly, by delegation or assumable role.
+func checkBillingRole(ctx context.Context, pool queryRower) error {
+	var allowed bool
+	err := pool.QueryRow(ctx, `SELECT
+ (SELECT bool_and(has_table_privilege(current_user,table_name,privilege))
+  FROM unnest($1::text[]||$2::text[]) table_name
+  CROSS JOIN unnest(ARRAY['SELECT','INSERT']) privilege)
+ AND (SELECT bool_and(has_table_privilege(current_user,table_name,'UPDATE')) FROM unnest($2::text[]) table_name)
+ AND NOT EXISTS (
+  SELECT 1 FROM pg_roles role WHERE (role.rolname=current_user OR pg_has_role(current_user,role.oid,'MEMBER')) AND (
+   EXISTS (SELECT 1 FROM unnest($1::text[]) fixed(table_name)
+    WHERE has_any_column_privilege(role.oid,fixed.table_name,'UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION'))
+   OR EXISTS (SELECT 1 FROM unnest($2::text[]) state(table_name)
+    WHERE has_any_column_privilege(role.oid,state.table_name,'REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION'))
+   OR EXISTS (SELECT 1 FROM unnest($1::text[]||$2::text[]) billing(table_name)
+    WHERE has_table_privilege(role.oid,billing.table_name,'DELETE,TRUNCATE,TRIGGER,MAINTAIN'))))`, billingFixedTables, billingStateTables).Scan(&allowed)
+	if err != nil || !allowed {
+		return ErrDenied
+	}
+	return nil
 }
 
 // checkWorkApprovalRole distinguishes immutable evidence from the two mutable

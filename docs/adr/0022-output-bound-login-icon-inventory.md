@@ -1,6 +1,6 @@
 # Output-bound Login V1 icon inventory
 
-Status: Accepted
+Status: Superseded by [ADR 0031](0031-upstream-zitadel-image.md); previously Accepted.
 
 ## Context
 

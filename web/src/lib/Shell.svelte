@@ -4,7 +4,10 @@
   import { businessFrameContext, type BusinessFrame } from "./business-frame";
   import themeScript from "../../../src/components/business/theme.js?url";
   import favicon from "../../../public/favicon.png?url";
+  import logoDark from "../../../src/assets/brand/devantler-tech-logo-dark.svg?url";
+  import logoLight from "../../../src/assets/brand/devantler-tech-logo-light.svg?url";
   import sharingImage from "virtual:business-sharing";
+  import { portalCopy } from "../../../src/components/business/portal-copy";
   let {
     locale,
     title,
@@ -15,7 +18,7 @@
     guidePath = "",
     customSocialMetadata = false,
     children,
-  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
+  }: { locale: "en" | "da"; title: string; description: string; page?: "home" | "about" | "projects" | "company" | "privacy" | "terms" | "journal" | "guide"; guidePath?:string; journalPage?:number; journalSlug?:string; customSocialMetadata?:boolean; children: Snippet } = $props();
   const frame = getContext<() => BusinessFrame>(businessFrameContext);
   let business = $derived(frame());
   const words = {
@@ -49,6 +52,7 @@
     },
   };
   let t = $derived(words[locale]);
+  let portal = $derived(portalCopy[locale]);
   let home = $derived(locale === "da" ? "/da/" : "/");
   let publishedHome = $derived(`https://devantler.tech${home}`);
   let englishOnly = $derived(page === "journal" || page === "guide");
@@ -76,15 +80,15 @@
 <header>
   <div class="business-header container">
     <a href={home} class="brand" aria-label="Devantler Tech"
-      ><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"
-        ><path d="M8 8h8a8 8 0 0 1 0 16H8V8Zm5 5v6h3a3 3 0 0 0 0-6h-3Z" fill="currentColor" /></svg
-      ><span>Devantler<span class="brand-tech"> Tech</span></span></a
+      ><img class="brand-logo brand-logo-dark" src={logoDark} alt="" width="573" height="108" /><img
+        class="brand-logo brand-logo-light" src={logoLight} alt="" width="573" height="108" /></a
     >
     <nav aria-label={t.navigation}>
       <a href={`${home}#services`}>{t.services}</a><a href={`${home}projects/`} aria-current={page === "projects" ? "page" : undefined}>{t.projects}</a><a
         href={locale === "da" ? "/da/about/" : "/about/"}
         aria-current={page === "about" ? "page" : undefined}>{t.about}</a
       ><a href="/blog/" aria-current={page === "journal" ? "page" : undefined}>{t.journal}</a><a href={`${home}#contact`}>{t.contact}</a>
+      <a class="client-login" href={portal.href}>{portal.login}</a>
     </nav>
     <div class="controls">
       <div id="theme-control" hidden>
@@ -108,7 +112,7 @@
     <p>{business.footer.identity}</p><p>{business.footer.note}</p>
     {#if business.identity}<p>CVR {business.identity.cvr} · {business.footer.registration}</p><a class="company-email" href={business.inquiryUrl}>{business.identity.email}</a>{/if}
   </div>
-  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a></div>
+  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a><a href={portal.href}>{portal.login}</a></div>
 </footer>
 
 <style>
@@ -132,16 +136,29 @@
     text-decoration: none;
     color: var(--ink);
   }
-  .brand-tech {
-    color: var(--accent);
+  /* The Devantler Tech wordmark: the dark-background version by default, the
+     light-background one when the page is light, following theme.css. */
+  .brand-logo {
+    display: block;
+    width: auto;
+    height: 32px;
   }
-  .brand-mark {
-    width: 34px;
-    height: 34px;
-    margin-right: 0.45rem;
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: 8px;
+  .brand-logo-light {
+    display: none;
+  }
+  :global(:root[data-theme="light"]) .brand-logo-dark {
+    display: none;
+  }
+  :global(:root[data-theme="light"]) .brand-logo-light {
+    display: block;
+  }
+  @media (prefers-color-scheme: light) {
+    :global(:root:not([data-theme])) .brand-logo-dark {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .brand-logo-light {
+      display: block;
+    }
   }
   nav {
     display: flex;
@@ -156,6 +173,16 @@
     font-size: 0.875rem;
     text-decoration: none;
     color: var(--ink);
+    white-space: nowrap;
+  }
+  .client-login {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding-inline: 0.85rem;
+    font-weight: 600;
+  }
+  .client-login:hover {
+    border-color: var(--accent);
   }
   a:hover,
   a[aria-current] {
@@ -224,7 +251,7 @@
   }
   .company-email, .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .8rem; color: var(--ink); text-underline-offset: .2em; overflow-wrap: anywhere; }
   .footer-links { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-  @media (max-width: 1050px) {
+  @media (max-width: 1200px) {
     .business-header {
       gap: 0.5rem 1rem;
       flex-wrap: wrap;
@@ -246,12 +273,21 @@
     .brand {
       font-size: 1.1rem;
     }
-    .brand-mark {
-      width: 28px;
-      height: 28px;
+    .brand-logo {
+      height: 26px;
     }
     .controls {
       gap: 0.6rem;
+    }
+  }
+  @media (max-width: 520px) {
+    nav {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.25rem 1rem;
+    }
+    .client-login {
+      justify-content: center;
     }
   }
 </style>

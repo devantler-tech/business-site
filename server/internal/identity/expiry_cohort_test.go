@@ -124,7 +124,7 @@ func TestPrivateReadersRetainRealExpiry(t *testing.T) {
 	}
 	for _, outcome := range []string{"false", "error"} {
 		probes = append(probes, browserExpiryProbe(t, base, "client", "portal-proposal-acceptance", outcome))
-		for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoices"} {
+		for _, key := range []string{"portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance", "portal-invoice-billing"} {
 			probes = append(probes, browserExpiryProbe(t, base, "operator", key, outcome))
 		}
 	}
@@ -177,7 +177,7 @@ func directExpiryProbe(t *testing.T, base *browserFixture, selector, emptyReques
 			return value != (contactData{}), err
 		}
 	case "membership":
-		key, blockAt, query = "portal-identity", 0, "SELECT client_id,role FROM portal_memberships"
+		key, blockAt, query = "portal-identity", 0, "SELECT client_id,role,incarnation::text FROM portal_memberships"
 		read = func(ctx context.Context, principal Principal) (bool, error) {
 			clientID, currentRole, err := b.svc.membership(ctx, principal)
 			return clientID != "" || currentRole != "", err

@@ -4,4 +4,3 @@ kind: Kustomization
 # network policy. Never reconciled on its own; prod/ and dev/ build on it.
 resources:
   - webapp.yaml
-  - network-policy.yaml

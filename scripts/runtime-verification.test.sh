@@ -17,19 +17,18 @@ readonly source=0123456789abcdef0123456789abcdef01234567
 readonly image=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 readonly manifests=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 readonly public=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-# The publisher caller is the single written copy of the accepted publisher commit; a
-# dependency bump changes it there and these controls follow without a hand-made copy.
-workflow="$(yq -r '.jobs.publish.uses' "$root/$caller")" || fail 'publisher caller cannot be read'
-[[ "$workflow" =~ ^devantler-tech/\.github/\.github/workflows/publish-app\.yaml@[0-9a-f]{40}$ ]] || fail 'publisher caller is not pinned to one full commit'
-readonly workflow
+# The repository signs its own releases: the only accepted publisher is this release
+# workflow on the release tag under test.
+readonly workflow="devantler-tech/business-site/$caller@refs/tags/v1.2.3"
 cat >"$scratch/source/.runtime-publisher/.github/scripts/prepare-prebuilt-webapp.sh" <<'FIXTURE'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$REPOSITORY" == devantler-tech/business-site && "$SOURCE_SHA" == 0123456789abcdef0123456789abcdef01234567 &&
-   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy && "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
+   "$APP_NAME" == business-site && "$DEPLOY_PATH" == deploy && "$APP_MANIFEST" == base/webapp.yaml &&
+   "$PREBUILT_IMAGE_DIGEST" == "sha256:$(printf 'b%.0s' {1..64})" &&
    "$PREBUILT_PUBLIC_DIGEST" == "$(printf 'a%.0s' {1..64})" && "$PREBUILT_CI_RUN_ID" == 123 && "$PREBUILT_CI_RUN_ATTEMPT" == 2 ]]
 [[ "${ORIGIN_FAIL:-false}" == false ]] || exit 1
-PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' deploy/base/webapp.yaml
+PREBUILT_IMAGE="ghcr.io/devantler-tech/business-site@$PREBUILT_IMAGE_DIGEST" yq -i '.spec.image=strenv(PREBUILT_IMAGE)' "deploy/$APP_MANIFEST"
 printf 'digest=%s\n' "$PREBUILT_IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
 FIXTURE
 cat >"$scratch/bin/gh" <<'FIXTURE'
@@ -87,14 +86,20 @@ IMAGE="ghcr.io/devantler-tech/business-site@$IMAGE_DIGEST" yq -i '.spec.image=st
 [[ "${PULL_FAIL:-false}" == false ]] || exit 1
 if [[ "${ALTER_MANIFEST:-false}" == true ]]; then yq -i '.spec.host="unapproved.example.invalid"' "$5/base/webapp.yaml"; fi
 if [[ "${EXTRA_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/extra.txt"; fi
+if [[ "${EXTRA_NESTED_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/dev/extra.yaml"; fi
+if [[ "${EXTRA_DIRECTORY:-false}" == true ]]; then mkdir "$5/other"; fi
+if [[ "${MISSING_DEV:-false}" == true ]]; then rm "$5/dev/kustomization.yaml"; fi
+if [[ "${ALTER_DEV:-false}" == true ]]; then yq -i '.namespace="business-site"' "$5/dev/kustomization.yaml"; fi
 if [[ "${MISSING_STORE:-false}" == true ]]; then rm "$5/prod/secret-store.yaml"; fi
 if [[ "${MISSING_DISCLOSURE:-false}" == true ]]; then rm "$5/prod/external-secret-disclosure.yaml"; fi
 if [[ "${ALTER_STORE:-false}" == true ]]; then yq -i '.spec.provider.vault.auth.kubernetes.role="foreign-tenant"' "$5/prod/secret-store.yaml"; fi
 if [[ "${ALTER_DISCLOSURE:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.property="unapproved"' "$5/prod/external-secret-disclosure.yaml"; fi
-if [[ "${EXTRA_NESTED_MEMBER:-false}" == true ]]; then printf 'unapproved\n' > "$5/dev/extra.yaml"; fi
-if [[ "${EXTRA_DIRECTORY:-false}" == true ]]; then mkdir "$5/staging"; fi
-if [[ "${MISSING_DEV:-false}" == true ]]; then rm -r "$5/dev"; fi
-if [[ "${ALTER_DEV:-false}" == true ]]; then yq -i '.namespace="business-site"' "$5/dev/kustomization.yaml"; fi
+if [[ "${MISSING_STRIPE:-false}" == true ]]; then rm "$5/prod/external-secret-stripe.yaml"; fi
+if [[ "${ALTER_NUMINA:-false}" == true ]]; then yq -i '.spec.data[0].remoteRef.key="apps/other/numina"' "$5/prod/external-secret-numina.yaml"; fi
+if [[ "${MISSING_MIGRATION:-false}" == true ]]; then rm "$5/prod/job-portal-migration.yaml"; fi
+if [[ "${ALTER_MIGRATION:-false}" == true ]]; then yq -i '.spec.template.spec.containers[0].args[1]="--migration-database-file"' "$5/prod/job-portal-migration.yaml"; fi
+if [[ "${MISSING_RETENTION:-false}" == true ]]; then rm "$5/prod/cronjob-portal-retention.yaml"; fi
+if [[ "${ALTER_RETENTION:-false}" == true ]]; then yq -i '.spec.schedule="* * * * *"' "$5/prod/cronjob-portal-retention.yaml"; fi
 FIXTURE
 chmod +x "$scratch/bin/gh" "$scratch/bin/cosign" "$scratch/bin/flux"
 # Restore independent signed-subject fixtures and clear receipts/read counters between controls.
@@ -146,7 +151,7 @@ if verify TAG_SOURCE=1123456789abcdef0123456789abcdef01234567; then fail 'a move
 [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'moved Git tag left a receipt'
 reset_fixture
 verify TAG_KIND=tag || fail 'a matching annotated release tag must verify'
-for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true EXTRA_NESTED_MEMBER=true EXTRA_DIRECTORY=true MISSING_DEV=true ALTER_DEV=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
+for context in VERIFY_FAIL=true PULL_FAIL=true CI_ATTEMPT=3 PUBLISH_ATTEMPT=2 ALTER_MANIFEST=true EXTRA_MEMBER=true EXTRA_NESTED_MEMBER=true EXTRA_DIRECTORY=true MISSING_DEV=true ALTER_DEV=true MISSING_STORE=true MISSING_DISCLOSURE=true ALTER_STORE=true ALTER_DISCLOSURE=true MISSING_STRIPE=true ALTER_NUMINA=true MISSING_MIGRATION=true ALTER_MIGRATION=true MISSING_RETENTION=true ALTER_RETENTION=true VERSION=01.2.3 RELEASE_DRAFT=true RELEASE_PRERELEASE=true PUBLISHED_AT= WITHDRAW_AFTER_VERIFY=true MOVE_AFTER_VERIFY=true; do
   reset_fixture
   if verify "$context"; then fail 'failed signature/pull, stale attempt or substituted manifests were accepted'; fi
   [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'refusal left a successful publication receipt'
@@ -173,31 +178,30 @@ for target in image-signature image-tag manifests-signature manifests-tag; do
     [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'invalid signature left a receipt'
   done
 done
-cp "$scratch/source/$caller" "$scratch/caller.yaml"
-publisher=${workflow%@*}
-other=1123456789abcdef0123456789abcdef01234567
-# A moving or foreign publisher reference is refused before any registry read; the frozen
-# caller naming a different commit than the one that signed is refused by the signature.
-for reference in "$publisher@main" "$publisher@v20.1.19" "$publisher@${workflow:${#publisher}+1:39}" \
-  "foreign/.github/.github/workflows/publish-app.yaml@${workflow#*@}" \
-  "devantler-tech/.github/.github/workflows/create-release.yaml@${workflow#*@}" "$publisher@$other"; do
+# Only this repository's release workflow on this exact tag may have signed the pair: a signature
+# from the retired shared publisher, another repository, another workflow file, a branch or another
+# tag is refused by the signature check, and never leaves a receipt.
+for signer in \
+  "devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35" \
+  "foreign/business-site/$caller@refs/tags/v1.2.3" \
+  "devantler-tech/business-site/.github/workflows/ci.yaml@refs/tags/v1.2.3" \
+  "devantler-tech/business-site/$caller@refs/heads/main" \
+  "devantler-tech/business-site/$caller@refs/tags/v1.2.4"; do
   reset_fixture
-  REFERENCE="$reference" yq '.jobs.publish.uses=strenv(REFERENCE)' "$scratch/caller.yaml" >"$scratch/source/$caller"
-  if verify; then fail "an unaccepted publisher reference was accepted: $reference"; fi
-  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'unaccepted publisher reference left a receipt'
-  if [[ "$reference" == "$publisher@$other" ]]; then
-    grep -q 'refused signature or publication claims' "$scratch/stderr" || fail 'a different publisher commit was not refused by its signature'
-  else
-    grep -q 'refused accepted publisher reference' "$scratch/stderr" || fail 'a moving or foreign publisher reference was not refused first'
-    [[ ! -s "$scratch/calls" ]] || fail 'a moving or foreign publisher reference reached the registry'
-  fi
+  if verify EXPECTED_WORKFLOW="$signer"; then fail "a pair signed by an unaccepted publisher was accepted: $signer"; fi
+  grep -q 'refused signature or publication claims' "$scratch/stderr" || fail "an unaccepted signer was not refused by its signature: $signer"
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'an unaccepted signer left a receipt'
+done
+for target in image-signature image-tag manifests-signature manifests-tag; do
+  reset_fixture
+  jq '.[0].optional["devantler.workflow-ref"]="devantler-tech/.github/.github/workflows/publish-app.yaml@a76d5df9371cf712a8f60307fde060825a34cf35"' \
+    "$scratch/$target.json" >"$scratch/changed"
+  mv "$scratch/changed" "$scratch/$target.json"
+  if verify; then fail 'a signature claiming the retired shared publisher workflow was accepted'; fi
+  [[ ! -e "$scratch/runner/runtime-publication.json" ]] || fail 'a shared publisher claim left a receipt'
 done
 reset_fixture
-rm "$scratch/source/$caller"
-if verify; then fail 'a missing publisher caller was accepted'; fi
-grep -q 'refused accepted publisher caller read' "$scratch/stderr" || fail 'a missing publisher caller was not refused as unreadable'
-[[ ! -e "$scratch/runner/runtime-publication.json" && ! -s "$scratch/calls" ]] || fail 'a missing publisher caller reached the registry or left a receipt'
-cp "$scratch/caller.yaml" "$scratch/source/$caller"
-reset_fixture
-verify || fail 'the restored publisher caller must verify again'
-printf 'runtime verification: PASS — origin failure, source immutability, accepted publisher read from its caller, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'
+verify || fail 'the release workflow on its own tag must verify again'
+jq -e --arg identity "https://github.com/$workflow" '.publisherIdentity==$identity' "$scratch/runner/runtime-publication.json" >/dev/null ||
+  fail 'the receipt does not name this repository'"'"'s release workflow on its tag'
+printf 'runtime verification: PASS — origin failure, source immutability, own release workflow on its tag as the only signer, both immutable/tag subjects, paired claims, rendered source closure and current release/tag checkpoints\n'

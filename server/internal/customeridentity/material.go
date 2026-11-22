@@ -151,7 +151,7 @@ func materialDocuments(phase string, settings map[string]string, files map[strin
 	if err != nil {
 		return nil, errMaterial
 	}
-	portal, err := endpoint(endpoints.PortalCallback, "/portal/callback")
+	portal, err := endpoint(endpoints.PortalCallback, "/callback")
 	if err != nil {
 		return nil, errMaterial
 	}

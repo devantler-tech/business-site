@@ -4,14 +4,14 @@ set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
-unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
+unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_PORTAL_PRIVACY PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
 bash scripts/build-journal-reference.sh > "$scratch/content.log" 2>&1 || { tail -80 "$scratch/content.log" >&2; exit 1; }
 for mode in false published preview independent template unset; do
-  unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
+  unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_PORTAL_PRIVACY PUBLIC_CONTENT_PROFILE COMPANY_POSTAL_ADDRESS
   case "$mode" in
     false) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=false ;;
     published) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=false ;;
-    preview|template) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=true ;;
+    preview|template) export FEATURE_COMPANY_IDENTITY=true FEATURE_OFFER_COPY=true FEATURE_PORTAL_PRIVACY=true ;;
     independent) export FEATURE_COMPANY_IDENTITY=false FEATURE_OFFER_COPY=true ;;
   esac
   export COMPANY_POSTAL_ADDRESS=$'Example & <b>company-address-fixture-187</b> 1\n1234 Exampletown'
@@ -30,8 +30,8 @@ for mode in false published preview independent template unset; do
 done
 
 # Native framework validation must reject ambiguous switches before output.
-unset COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY
-for flag in FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY; do
+unset COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_PORTAL_PRIVACY
+for flag in FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_PORTAL_PRIVACY; do
   if env "$flag=ambiguous" npm --prefix web run build > "$scratch/rejected.log" 2>&1; then
     printf 'Invalid business setting was accepted: %s\n' "$flag" >&2; exit 1
   fi
@@ -52,7 +52,7 @@ if PUBLIC_CONTENT_PROFILE=invalid npm --prefix web run build > "$scratch/rejecte
 fi
 grep -q 'PUBLIC_CONTENT_PROFILE must be' "$scratch/rejected.log"
 # With identity off the public application needs no private disclosure input.
-unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE
+unset FEATURE_COMPANY_IDENTITY FEATURE_OFFER_COPY FEATURE_PORTAL_PRIVACY COMPANY_POSTAL_ADDRESS PUBLIC_CONTENT_PROFILE
 npm --prefix web run build > "$scratch/default.log" 2>&1
 node web/tests/check-output.mjs enabled
 node web/tests/check-discovery-output.mjs enabled

@@ -9,20 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/net/html"
 )
 
 var workRenderViews = []string{"absent", "current", "paused", "expired", "selected", "eligible", "ineligible", "history", "closed"}
 
 // workRenderFixture is fictional presentation input, never authorization.
-func workRenderFixture(view string) (workReviewData, int) {
+func workRenderFixture(view string) (workReviewData, bool) {
 	at := time.Date(2026, 10, 1, 12, 0, 0, 123456000, time.UTC)
 	d := workReviewData{Request: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", State: workAbsent, CanReview: view != "closed"}
-	invoice := projectInvoice{Sequence: 1, Reference: "TEST-01", Purpose: "Fictional iteration", Version: 1, AmountMinor: 12500, NetMinor: pgtype.Int8{Int64: 10000, Valid: true}, VATMinor: pgtype.Int8{Int64: 2500, Valid: true}, Current: true}
-	if d.CanReview {
-		d.Invoices = []projectInvoice{invoice}
-	}
 	if view == "current" || view == "paused" || view == "expired" || view == "selected" || view == "closed" {
 		d.State = workReviewState(view)
 		if view == "closed" {
@@ -31,19 +26,17 @@ func workRenderFixture(view string) (workReviewData, int) {
 		d.Pointer = workPointer{ID: "BBBBBBBBBBBBBBBBBBBBBBBBBB", Generation: 3}
 		d.Current = workApprovalReceipt{ID: d.Pointer.ID, Decided: at, Expires: at.Add(168 * time.Hour)}
 	}
-	selected := 0
-	if view == "eligible" || view == "ineligible" || view == "selected" {
-		selected = 1
-	}
+	selected := view == "eligible" || view == "ineligible" || view == "selected"
 	if view == "eligible" {
 		proposal := projectProposal{Scope: "<script>inert</script>", Deliverables: "Fictional deliverables", OneTimeMinor: 375000, MonthlyMinor: 12500, OneTimeTerms: "Fictional iteration terms", MonthlyTerms: "Fictional monthly terms", Version: 1}
-		revision := creditRevision{Source: "fixture-bank", Reference: "transfer-01", State: "confirmed", Revision: 1, AmountMinor: 12500, Note: "<script>inert</script>", Recorded: at}
-		d.Candidate = &workCandidate{Evidence: workEvidence{Acceptance: "CCCCCCCCCCCCCCCCCCCCCCCCCC", Proposal: proposal, Invoice: invoice}, Input: workApprovalInput{Key: "DDDDDDDDDDDDDDDDDDDDDDDDDD", Acceptance: "CCCCCCCCCCCCCCCCCCCCCCCCCC", EvidenceHash: strings.Repeat("a", 64), Invoice: 1}, Funding: creditHistory{Invoice: invoice, Transfers: []creditTransfer{{Latest: revision, History: []creditRevision{revision}}}}}
+		order := workOrder{ID: "FFFFFFFFFFFFFFFFFFFFFFFFFF", Collection: "invoice", OneTimeMinor: 375000, MonthlyMinor: 12500}
+		funding := workFunding{Period: "acceptance", Reference: "fixture-payment-01", GrossMinor: 375000, NetMinor: 300000, VATMinor: 75000, Settled: at}
+		d.Candidate = &workCandidate{Evidence: workEvidence{Acceptance: "CCCCCCCCCCCCCCCCCCCCCCCCCC", Proposal: proposal, Order: order, Funding: funding}, Input: workApprovalInput{Key: "DDDDDDDDDDDDDDDDDDDDDDDDDD", Acceptance: "CCCCCCCCCCCCCCCCCCCCCCCCCC", Order: order.ID, EvidenceHash: strings.Repeat("a", 64)}}
 	}
 	if view == "history" {
 		alphabet := "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 		for i := range workHistorySize {
-			d.History = append(d.History, workHistoryItem{ID: strings.Repeat("A", 25) + string(alphabet[i]), Invoice: 1, Version: 1, Decided: at, Expires: at.Add(168 * time.Hour), Terminal: "superseded", Ended: &at})
+			d.History = append(d.History, workHistoryItem{ID: strings.Repeat("A", 25) + string(alphabet[i]), Period: "acceptance", Version: 1, Decided: at, Expires: at.Add(168 * time.Hour), Terminal: "superseded", Ended: &at})
 		}
 		d.History[0].Terminal = "revoked"
 		d.Next = triageCursor{ID: d.History[19].ID, Submitted: at}
@@ -51,20 +44,20 @@ func workRenderFixture(view string) (workReviewData, int) {
 	return d, selected
 }
 
-// renderedWorkLinkPages exercises both languages of each explicit work state
+// renderedWorkLinkPagesFor exercises both languages of each explicit work state
 // through the actual template set for method-aware route and asset validation.
-func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
+func renderedWorkLinkPagesFor(templates *template.Template, b *browser) ([]linkPage, error) {
 	var pages []linkPage
 	for _, lang := range []string{"en", "da"} {
 		for _, view := range workRenderViews {
-			d, invoice := workRenderFixture(view)
+			d, review := workRenderFixture(view)
 			r := httptest.NewRequest("GET", "https://portal.example.invalid/portal/operator/requests/"+d.Request+"/work-review?lang="+lang, nil)
-			if invoice != 0 {
+			if review {
 				q := r.URL.Query()
-				q.Set("invoice", "1")
+				q.Set("review", "funding")
 				r.URL.RawQuery = q.Encode()
 			}
-			page := (&browser{}).workPage(r, d, invoice)
+			page := b.workPage(r, d, review)
 			page.CSRF, page.RevocationKey = "fictional-form-nonce", "EEEEEEEEEEEEEEEEEEEEEEEEEE"
 			var body bytes.Buffer
 			if err := templates.ExecuteTemplate(&body, "work-review.html", page); err != nil {
@@ -77,7 +70,7 @@ func renderedWorkLinkPages(templates *template.Template) ([]linkPage, error) {
 }
 
 // checkWorkDocument uses explicit state/form expectations, separate from the
-// renderer. It does not regenerate or replace the 120 historical body oracles.
+// renderer. It does not regenerate or replace the 98 historical body oracles.
 func checkWorkDocument(markup, lang, view string) error {
 	if err := checkMaintenanceDocument(markup, lang, false, false); err != nil {
 		return err
@@ -112,7 +105,7 @@ func checkWorkDocument(markup, lang, view string) error {
 			fields := map[string]string{"csrf_token": "fictional-form-nonce", "lang": lang, "work_key": "EEEEEEEEEEEEEEEEEEEEEEEEEE", "work_expected": "3", "approval": "BBBBBBBBBBBBBBBBBBBBBBBBBB"}
 			if view == "eligible" {
 				suffix = "work-approvals"
-				fields = map[string]string{"csrf_token": "fictional-form-nonce", "lang": lang, "work_key": "DDDDDDDDDDDDDDDDDDDDDDDDDD", "work_expected": "0", "acceptance": "CCCCCCCCCCCCCCCCCCCCCCCCCC", "invoice": "1", "evidence_hash": strings.Repeat("a", 64)}
+				fields = map[string]string{"csrf_token": "fictional-form-nonce", "lang": lang, "work_key": "DDDDDDDDDDDDDDDDDDDDDDDDDD", "work_expected": "0", "acceptance": "CCCCCCCCCCCCCCCCCCCCCCCCCC", "order": "FFFFFFFFFFFFFFFFFFFFFFFFFF", "evidence_hash": strings.Repeat("a", 64)}
 			}
 			if !maintenanceRendered(n) || linkAttribute(n, "method") != "post" || linkAttribute(n, "action") != "/portal/operator/requests/ABCDEFGHIJKLMNOPQRSTUVWXYZ/"+suffix {
 				return errors.New("work form is inactive or has a different action")
@@ -158,10 +151,7 @@ func checkWorkDocument(markup, lang, view string) error {
 		return errors.New("wrong state actions or escaped evidence")
 	}
 	if view == "eligible" {
-		for _, want := range []string{`data-work-price="one-time">3750 DKK`, `data-work-price="monthly">125 DKK`, "Fictional deliverables", "Fictional iteration terms", "Fictional monthly terms", "TEST-01", "100.00 DKK", "25.00 DKK", "125.00 DKK", "transfer-01", "&lt;script&gt;inert&lt;/script&gt;"} {
-			if lang == "da" {
-				want = strings.ReplaceAll(want, ".00 DKK", ",00 DKK")
-			}
+		for _, want := range []string{`data-work-price="one-time">3750 DKK`, `data-work-price="monthly">125 DKK`, "Fictional deliverables", "Fictional iteration terms", "Fictional monthly terms", `data-work-funding="acceptance"`, ": 3750 DKK</dd>", "<code>FFFFFFFFFFFFFFFFFFFFFFFFFF</code>", "<code>fixture-payment-01</code>", "2026-10-01 12:00:00 UTC", "&lt;script&gt;inert&lt;/script&gt;"} {
 			if !strings.Contains(markup, want) {
 				return errors.New("exact agreement or funding fact missing")
 			}

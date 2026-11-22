@@ -26,6 +26,19 @@ func TestMigrationModeRejectsMixedOptionsWithoutListening(t *testing.T) {
 		{"--migrate", "--migrate=false", "--public", public},
 		{"--migration-database-file=", "--public", public},
 		{"--migrate", "--migration-database-file", "/one", "--migration-database-file", "/two"},
+		{"--runtime-role", "portal_web"},
+		{"--runtime-role", "portal_web", "--public", public},
+		{"--migrate", "--migration-database-file", "/missing/private-connection", "--runtime-role="},
+		{"--migrate", "--migration-database-file", "/missing/private-connection", "--runtime-role", "portal_web", "--runtime-role", "portal_other"},
+		{"--migrate", "--migration-database-file", "/missing/private-connection", "--runtime-role", "portal_web", "--listen", "127.0.0.1:0"},
+		{"--migrate", "--migration-database-file", "/missing/private-connection", "--portal-settings-projection", "/missing/portal-settings"},
+		{"--migration-database-projection", "/missing/projected-connection"},
+		{"--migrate=false", "--migration-database-projection", "/missing/projected-connection"},
+		{"--migration-database-projection=", "--public", public},
+		{"--migrate", "--migration-database-projection", "/one", "--migration-database-projection", "/two"},
+		{"--migrate", "--migration-database-file", "/one", "--migration-database-projection", "/two"},
+		{"--migrate", "--migration-database-projection", "/missing/projected-connection", "--listen", "127.0.0.1:0"},
+		{"--migrate", "--migration-database-projection", "/missing/projected-connection", "--runtime-role", "portal_web", "--public", public},
 	} {
 		listened := false
 		listen := func(string, string) (net.Listener, error) {
@@ -40,5 +53,8 @@ func TestMigrationModeRejectsMixedOptionsWithoutListening(t *testing.T) {
 	cancel()
 	if err := run(ctx, []string{"--migrate", "--migration-database-file", "/missing/private-connection"}, io.Discard); !errors.Is(err, runtimeapp.ErrMigration) {
 		t.Fatal("cancelled migration did not fail privately before opening a dependency")
+	}
+	if err := run(ctx, []string{"--migrate", "--migration-database-projection", "/missing/projected-connection"}, io.Discard); !errors.Is(err, runtimeapp.ErrMigration) {
+		t.Fatal("cancelled projected migration did not fail privately before opening a dependency")
 	}
 }

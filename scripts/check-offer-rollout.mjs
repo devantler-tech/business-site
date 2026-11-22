@@ -11,8 +11,8 @@ const legacyProjects = (process.env.FEATURE_CLIENT_PORTFOLIO ?? 'true') !== 'tru
 // published offer through actual maintenance terms, not neutral labels (#41).
 // Retire this check with the temporary gate after activation.
 const cases = [
-  ['', 'Hosting capacity, maintenance, backups and support scope are agreed separately.', 'Hosted projects include routine maintenance in the agreed monthly price;'],
-  ['da', 'Hostingkapacitet, vedligeholdelse, backup og support aftales særskilt.', 'Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris;'],
+  ['', 'There are no hourly rates: work beyond the agreed scope gets its own fixed-price quote before it starts.', 'Hosted projects include routine maintenance in the agreed monthly price;'],
+  ['da', 'Der er ingen timepriser: Arbejde ud over det aftalte omfang får sit eget fastpristilbud, før det begynder.', 'Hostede projekter har løbende vedligeholdelse med i den aftalte månedspris;'],
   ['about', 'Planned work, not an emergency service', 'Included maintenance, agreed development'],
   ['da/about', 'Planlagt arbejde, ikke akut beredskab', 'Inkluderet vedligeholdelse, aftalt udvikling'],
   ...(legacyProjects ? [

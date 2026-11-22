@@ -15,6 +15,7 @@ func publicFixture() fstest.MapFS {
 		"index.html":                        {Data: []byte("<h1>English public site</h1>")},
 		"da/index.html":                     {Data: []byte("<h1>Dansk public site</h1>")},
 		"projects/index.html":               {Data: []byte("<h1>Projects</h1>")},
+		"404.html":                          {Data: []byte("<h1>Page not found</h1>")},
 		"assets/site.css":                   {Data: []byte("body { color: navy; }")},
 		".well-known/site-publication.json": {Data: []byte(`{"repository":"devantler-tech/business-site"}`)},
 	}
@@ -40,10 +41,10 @@ func TestPublicRoutesAndClosedPortal(t *testing.T) {
 		contains     string
 	}{
 		{"GET", "/", 200, "English"}, {"GET", "/da/", 200, "Dansk"},
-		{"GET", "/projects", 200, "Projects"}, {"HEAD", "/projects/", 200, ""},
+		{"GET", "/projects", 301, ""}, {"GET", "/projects/", 200, "Projects"}, {"HEAD", "/projects/", 200, ""},
 		{"GET", "/assets/site.css", 200, "navy"},
 		{"GET", "/.well-known/site-publication.json", 200, "business-site"},
-		{"GET", "/missing", 404, ""}, {"GET", "/assets/", 404, ""},
+		{"GET", "/missing", 404, "Page not found"}, {"HEAD", "/missing", 404, ""}, {"GET", "/assets/", 404, "Page not found"},
 		{"POST", "/", 405, ""}, {"GET", "/portal", 404, ""},
 		{"GET", "/portal/sign-in", 404, ""}, {"GET", "/portal/operator", 404, ""},
 		{"GET", "/portal.js", 404, ""}, {"GET", "/healthz", 200, "ok"},
@@ -59,6 +60,16 @@ func TestPublicRoutesAndClosedPortal(t *testing.T) {
 			}
 			if strings.HasPrefix(tc.path, "/portal") && w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("private miss is cacheable")
+			}
+			private := tc.path == "/portal" || strings.HasPrefix(tc.path, "/portal/")
+			if private && strings.Contains(w.Body.String(), "Page not found") {
+				t.Fatal("private miss shows the public 404 page")
+			}
+			if tc.status == 301 && w.Header().Get("Location") != tc.path+"/" {
+				t.Fatalf("folder redirect location=%q; want %q", w.Header().Get("Location"), tc.path+"/")
+			}
+			if tc.status == 404 && !private && (w.Header().Get("Content-Type") != "text/html; charset=utf-8" || w.Header().Get("Cache-Control") != "no-store") {
+				t.Fatalf("public miss headers=%v; want an uncached HTML page", w.Header())
 			}
 		})
 	}
@@ -189,30 +200,39 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 		status             int
 		location, contains string
 	}{
-		// The portal host opens the portal and sends public pages away.
-		{"GET", "portal.devantler.tech", "/", 302, "/portal/", ""},
-		{"GET", "Portal.Devantler.Tech:443", "/?lang=da", 302, "/portal/?lang=da", ""},
-		{"HEAD", "portal.devantler.tech", "/", 302, "/portal/", ""},
+		// The portal lives at the root of its own host and sends public pages away.
+		{"GET", "portal.devantler.tech", "/", 418, "", ""},
+		{"GET", "Portal.Devantler.Tech:443", "/?lang=da", 418, "", ""},
+		{"HEAD", "portal.devantler.tech", "/", 418, "", ""},
+		{"GET", "portal.devantler.tech", "/sign-in?lang=da", 418, "", ""},
+		{"POST", "portal.devantler.tech", "/sign-in", 418, "", ""},
+		{"POST", "portal.devantler.tech", "/stripe/webhook", 418, "", ""},
 		{"GET", "portal.devantler.tech", "/da/", 302, "https://devantler.tech/da/", ""},
+		{"GET", "portal.devantler.tech", "/projects", 302, "https://devantler.tech/projects", ""},
 		{"GET", "portal.devantler.tech", "/assets/site.css?v=1", 302, "https://devantler.tech/assets/site.css?v=1", ""},
-		{"GET", "portal.devantler.tech", "/portal/", 418, "", ""},
-		{"POST", "portal.devantler.tech", "/portal/sign-in", 418, "", ""},
-		{"POST", "portal.devantler.tech", "/", 405, "", ""},
 		{"GET", "portal.devantler.tech", "/healthz", 200, "", "ok"},
+		// An old "/portal…" address moves permanently to the same path without the prefix.
+		{"GET", "portal.devantler.tech", "/portal", 301, "/", ""},
+		{"GET", "portal.devantler.tech", "/portal/", 301, "/", ""},
+		{"GET", "portal.devantler.tech", "/portal/requests/new?lang=da", 301, "/requests/new?lang=da", ""},
+		{"HEAD", "portal.devantler.tech", "/portal/sign-in", 301, "/sign-in", ""},
+		{"POST", "portal.devantler.tech", "/portal/sign-in", 405, "", ""},
+		{"POST", "portal.devantler.tech", "/portal/stripe/webhook", 405, "", ""},
 		// The public host serves pages and sends portal paths to the portal host.
 		{"GET", "devantler.tech", "/", 200, "", "English"},
 		{"GET", "devantler.tech.", "/da/", 200, "", "Dansk"},
-		{"GET", "devantler.tech", "/portal", 302, "https://portal.devantler.tech/portal", ""},
-		{"GET", "devantler.tech", "/portal/sign-in?lang=da", 302, "https://portal.devantler.tech/portal/sign-in?lang=da", ""},
+		{"GET", "devantler.tech", "/portal", 302, "https://portal.devantler.tech/", ""},
+		{"GET", "devantler.tech", "/portal/sign-in?lang=da", 302, "https://portal.devantler.tech/sign-in?lang=da", ""},
 		{"POST", "devantler.tech", "/portal/sign-in", 405, "", ""},
-		{"GET", "devantler.tech", "/missing", 404, "", ""},
+		{"GET", "devantler.tech", "/missing", 404, "", "Page not found"},
+		{"GET", "devantler.tech", "/projects?lang=da", 301, "/projects/?lang=da", ""},
 		// www has one canonical name.
-		{"GET", "www.devantler.tech", "/projects", 302, "https://devantler.tech/projects", ""},
-		{"GET", "www.devantler.tech", "/portal/", 302, "https://devantler.tech/portal/", ""},
+		{"GET", "www.devantler.tech", "/projects", 301, "https://devantler.tech/projects", ""},
+		{"GET", "www.devantler.tech", "/portal/", 301, "https://devantler.tech/portal/", ""},
 		// A staging name or a probe's address behaves like the public host.
 		{"GET", "business-site.platform.devantler.tech", "/", 200, "", "English"},
 		{"GET", "10.0.0.7:8080", "/healthz", 200, "", "ok"},
-		{"GET", "10.0.0.7:8080", "/portal/", 302, "https://portal.devantler.tech/portal/", ""},
+		{"GET", "10.0.0.7:8080", "/portal/", 302, "https://portal.devantler.tech/", ""},
 	} {
 		t.Run(tc.method+" "+tc.host+tc.path, func(t *testing.T) {
 			r := httptest.NewRequest(tc.method, tc.path, nil)
@@ -222,7 +242,7 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 			if w.Code != tc.status || w.Header().Get("Location") != tc.location || !strings.Contains(w.Body.String(), tc.contains) {
 				t.Fatalf("status=%d location=%q body=%q; want %d %q containing %q", w.Code, w.Header().Get("Location"), w.Body, tc.status, tc.location, tc.contains)
 			}
-			if tc.status == 302 && w.Header().Get("Cache-Control") != "no-store" {
+			if (tc.status == 301 || tc.status == 302) && w.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("host redirect is cacheable")
 			}
 			if tc.method == "HEAD" && w.Body.Len() != 0 {
@@ -230,8 +250,8 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 			}
 		})
 	}
-	if calls != 2 {
-		t.Fatalf("portal handler calls = %d, want 2", calls)
+	if calls != 6 {
+		t.Fatalf("portal handler calls = %d, want 6", calls)
 	}
 	// Unsafe spellings never become redirects to another origin, on any host.
 	for _, host := range []string{"portal.devantler.tech", "devantler.tech", "www.devantler.tech"} {
@@ -245,7 +265,32 @@ func TestHostHandlerShowsEachPageOnOneHost(t *testing.T) {
 			}
 		}
 	}
-	if calls != 2 {
+	if calls != 6 {
 		t.Fatal("ambiguous path reached private handler")
+	}
+}
+
+// TestHostHandlerKeepsAnUnconfiguredPortalClosed denies every portal address on the
+// portal host while no portal is configured, and still moves old addresses.
+func TestHostHandlerKeepsAnUnconfiguredPortalClosed(t *testing.T) {
+	h := loadPublicFixture(t).HostHandler(nil, Hosts{Public: "devantler.tech", Portal: "portal.devantler.tech"})
+	for _, tc := range []struct {
+		method, path, location string
+		status                 int
+	}{
+		{"GET", "/", "", 404}, {"GET", "/sign-in", "", 404}, {"POST", "/sign-in", "", 404},
+		{"POST", "/stripe/webhook", "", 404}, {"POST", "/portal/stripe/webhook", "", 405},
+		{"GET", "/portal/", "/", 301}, {"GET", "/da/", "https://devantler.tech/da/", 302},
+	} {
+		r := httptest.NewRequest(tc.method, tc.path, nil)
+		r.Host = "portal.devantler.tech"
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.status || w.Header().Get("Location") != tc.location {
+			t.Fatalf("%s %s: status=%d location=%q; want %d %q", tc.method, tc.path, w.Code, w.Header().Get("Location"), tc.status, tc.location)
+		}
+		if tc.status >= 400 && (w.Header().Get("Location") != "" || w.Header().Get("Cache-Control") != "no-store") {
+			t.Fatalf("%s %s: closed portal leaked a redirect or cacheable miss: %v", tc.method, tc.path, w.Header())
+		}
 	}
 }

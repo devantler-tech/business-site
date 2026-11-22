@@ -8,8 +8,17 @@ import path from "node:path";
 
 export const disclosureFixture = "Example & Partners Road 1\n1234 Exampletown";
 
+/** The platform runtime Secret's other items while portal sign-in is off. */
+export const runtimeSecretFixture = {
+  "portal-settings": "# Portal sign-in is off.\n",
+  "portal-client-secret": "fictional-portal-client-secret",
+  "portal-database-ca": "fictional database trust material\n",
+  "smtp-username": "fictional-smtp-username",
+  "smtp-password": "fictional-smtp-password",
+};
+
 /** Read-only numeric listing verifies the actual copied file, never an input-header assumption. */
-export function assertDisclosureArchive(archive, uid, gid) {
+export function assertDisclosureArchive(archive, uid, gid, name = "disclosure") {
   const listing = execFileSync("tar", ["--numeric-owner", "-tvf", "-"], {
     input: archive,
     encoding: "utf8",
@@ -22,7 +31,7 @@ export function assertDisclosureArchive(archive, uid, gid) {
   assert.equal(listing.length, 1, "Expected exactly one copied fixture file.");
   const fields = listing[0].trim().split(/\s+/);
   assert.match(fields[0], /^-[rwx-]{9}$/, "Copied fixture must be regular.");
-  assert.equal(fields.at(-1), "disclosure", "Unexpected copied fixture entry.");
+  assert.equal(fields.at(-1), name, "Unexpected copied fixture entry.");
   if (process.platform === "darwin") {
     assert.equal(fields[2], String(uid), "Copied fixture owner differs.");
     assert.equal(fields[3], String(gid), "Copied fixture group differs.");
@@ -53,9 +62,12 @@ export function containerDisclosureFixture(image, docker) {
 }
 
 /** Preserve a synthetic Kubernetes-style atomic projection's root/group ownership.
- * This is an actual Docker filesystem control, not a live kubelet/controller proof.
+ * Extra files join the disclosure in the same generation, as further items of one
+ * projected Secret. This is an actual Docker filesystem control, not a live
+ * kubelet/controller proof.
  */
-export function containerGroupDisclosureFixture(image, docker, owner = 0, group = 65532, mode = 0o440) {
+export function containerGroupDisclosureFixture(image, docker, owner = 0, group = 65532, mode = 0o440, extra = {}) {
+  const files = { disclosure: disclosureFixture, ...extra };
   const directory = mkdtempSync(path.join(tmpdir(), "runtime-group-disclosure-"));
   const timestamp = path.join(directory, "..timestamp");
   let timestampCreated = false;
@@ -69,10 +81,12 @@ export function containerGroupDisclosureFixture(image, docker, owner = 0, group 
   try {
     mkdirSync(timestamp, { mode: 0o700 });
     timestampCreated = true;
-    writeFileSync(path.join(timestamp, "disclosure"), disclosureFixture, { mode });
-    chmodSync(path.join(timestamp, "disclosure"), mode);
+    for (const [name, content] of Object.entries(files)) {
+      writeFileSync(path.join(timestamp, name), content, { mode });
+      chmodSync(path.join(timestamp, name), mode);
+    }
     symlinkSync("..timestamp", path.join(directory, "..data"));
-    symlinkSync("..data/disclosure", path.join(directory, "disclosure"));
+    for (const name of Object.keys(files)) symlinkSync(`..data/${name}`, path.join(directory, name));
     chmodSync(timestamp, 0o550);
   } catch (error) {
     close();
@@ -84,7 +98,7 @@ export function containerGroupDisclosureFixture(image, docker, owner = 0, group 
     { directory, close },
     owner,
     group,
-    ["..timestamp", "..data", "disclosure"],
+    ["..timestamp", "..data", ...Object.keys(files)],
     "--company-disclosure-projection",
   );
 }
@@ -103,20 +117,25 @@ function containerFixture(image, docker, local, uid, gid, entries, inputFlag) {
       image,
       "--version",
     );
+    // macOS tar would also archive provenance extended attributes, which a Linux
+    // daemon cannot set on the volume; the fixture needs only ownership and modes.
+    // cspell:words xattrs
     const owner =
       process.platform === "darwin"
-        ? ["--uid", String(uid), "--gid", String(gid)]
+        ? ["--uid", String(uid), "--gid", String(gid), "--no-mac-metadata", "--no-xattrs"]
         : [`--owner=${uid}`, `--group=${gid}`];
     const archive = execFileSync("tar", [...owner, "-cf", "-", "-C", local.directory, ...entries], { timeout: 5000 });
     // For streamed tar, --archive remaps entries to the container user instead
     // of retaining these explicit numeric headers (Moby tarCopyOptions).
     execFileSync("docker", ["cp", "-", `${carrier}:/projection`], { input: archive, timeout: 30000 });
-    const leaf = entries.includes("..timestamp") ? "..timestamp/disclosure" : "disclosure";
-    const copied = execFileSync("docker", ["cp", `${carrier}:/projection/${leaf}`, "-"], {
-      timeout: 30000,
-      maxBuffer: 65536,
-    });
-    assertDisclosureArchive(copied, uid, gid);
+    const generation = entries.includes("..timestamp") ? "..timestamp/" : "";
+    for (const name of entries.filter((entry) => !entry.startsWith(".."))) {
+      const copied = execFileSync("docker", ["cp", `${carrier}:/projection/${generation}${name}`, "-"], {
+        timeout: 30000,
+        maxBuffer: 65536,
+      });
+      assertDisclosureArchive(copied, uid, gid, name);
+    }
     docker("rm", carrier);
     carrier = undefined;
     return {

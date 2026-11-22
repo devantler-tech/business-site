@@ -84,7 +84,7 @@ func (s *Foundation) readTriage(ctx context.Context, p Principal, id string, cur
 	if id != "" {
 		limit = 1
 	}
-	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,CASE WHEN $3='' THEN '' ELSE q.brief END,q.submitted_at FROM portal_requests q WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked) AND ($3='' OR q.id=$3) AND ($4='' OR (q.submitted_at,q.id COLLATE "C") > ($5::timestamptz,$4 COLLATE "C")) ORDER BY q.submitted_at,q.id COLLATE "C" LIMIT $6`, p.issuer, p.subject, id, cursor.ID, cursor.Submitted, limit)
+	rows, err := s.pool.Query(ctx, `SELECT q.id,q.product,q.title,CASE WHEN $3='' THEN '' ELSE q.brief END,q.submitted_at FROM portal_requests q WHERE EXISTS(SELECT 1 FROM portal_memberships m WHERE m.issuer=$1 AND m.subject=$2 AND m.role='operator' AND NOT m.revoked AND ($7='' OR m.incarnation::text=$7)) AND ($3='' OR q.id=$3) AND ($4='' OR (q.submitted_at,q.id COLLATE "C") > ($5::timestamptz,$4 COLLATE "C")) ORDER BY q.submitted_at,q.id COLLATE "C" LIMIT $6`, p.issuer, p.subject, id, cursor.ID, cursor.Submitted, limit, p.membershipIncarnation)
 	if err != nil {
 		return nil, errTriageStorage
 	}
@@ -131,8 +131,7 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 	proposalsEnabled := id != "" && b.foundation.proposalsReady(r.Context())
 	sharingEnabled := proposalsEnabled && b.foundation.sharingReady(r.Context())
 	acceptanceEnabled := sharingEnabled && b.foundation.acceptanceReady(r.Context())
-	invoicesEnabled := acceptanceEnabled && b.foundation.invoicesReady(r.Context())
-	creditsEnabled := invoicesEnabled && b.foundation.creditsReady(r.Context())
+	billingEnabled := acceptanceEnabled && b.foundation.orderReady(r.Context())
 	workEnabled := id != "" && b.foundation.workApprovalGate(r.Context())
 	rows, err := b.foundation.readTriage(r.Context(), p, id, cursor)
 	if missingProjectRequest(id, rows, err) {
@@ -152,6 +151,11 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		b.proposalPresentation(r, &page, proposals)
+		if len(rows) == 1 {
+			// Set here, not in proposalPresentation: the frozen maintenance
+			// inventory renders proposal states without a generated draft.
+			page.Generated, page.GeneratedOK = generatedProposal(rows[0].Product, rows[0].Title, page.Lang)
+		}
 		if sharingEnabled {
 			page.Visibility, err = b.foundation.readVisibility(r.Context(), p, id)
 			if err != nil {
@@ -169,19 +173,17 @@ func (b *browser) showTriage(w http.ResponseWriter, r *http.Request, id string) 
 			return
 		}
 		page.AcceptanceEnabled = true
-	}
-	if invoicesEnabled {
-		page.Invoices, err = b.foundation.readInvoices(r.Context(), p, id)
-		if err != nil {
-			b.triageError(w, r, err)
-			return
+		if billingEnabled {
+			if page.Order, page.Feature, err = b.foundation.readOperatorOrder(r.Context(), p, id); err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+			page.BillingEnabled = true
 		}
-		page.InvoicesEnabled, page.InvoiceKey = true, secret()
-		page.CreditsEnabled = creditsEnabled
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_ = browserPage.ExecuteTemplate(w, "triage.html", page)
+	_ = b.templates().ExecuteTemplate(w, "triage.html", page)
 }
 
 // triagePage builds presentation only, after showTriage's current authority and
@@ -198,15 +200,15 @@ func (b *browser) triagePage(r *http.Request, rows []projectRequest, id, cursor 
 	}
 	if len(rows) > triagePageSize {
 		page.Requests = rows[:triagePageSize]
-		page.Next = triageURL(encodeTriageCursor(rows[triagePageSize-1]), page.Lang)
+		page.Next = b.visible(triageURL(encodeTriageCursor(rows[triagePageSize-1]), page.Lang))
 	}
 	other := "da"
 	if page.Lang == "da" {
 		other = "en"
 	}
-	page.LanguageURL = triageURL(cursor, other)
+	page.LanguageURL = b.visible(triageURL(cursor, other))
 	if id != "" {
-		page.LanguageURL = "/portal/operator/requests/" + id + "?lang=" + other
+		page.LanguageURL = b.visible("/portal/operator/requests/" + id + "?lang=" + other)
 	}
 	return page
 }
@@ -235,6 +237,8 @@ type triagePageData struct {
 	Next, LanguageURL string
 	ProposalsEnabled  bool
 	Proposals         []projectProposal
+	Generated         projectProposal
+	GeneratedOK       bool
 	ExpectedVersion   int
 	ProposalKey       string
 	SharingEnabled    bool
@@ -242,8 +246,7 @@ type triagePageData struct {
 	Visibility        proposalVisibility
 	AcceptanceEnabled bool
 	Acceptances       []proposalAcceptance
-	InvoicesEnabled   bool
-	CreditsEnabled    bool
-	InvoiceKey        string
-	Invoices          invoiceHistory
+	BillingEnabled    bool
+	Order             *projectOrder
+	Feature           *featureState // the client's feature-request level and this request's closure
 }

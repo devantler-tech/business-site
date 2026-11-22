@@ -18,6 +18,10 @@ const load = path => { assert.ok(existsSync(path), "required bilingual page is m
 const links = node => walk(node).filter(item => item.tagName === "a").map(item => [text(item), attr(item,"href")]);
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
+/** The portal's privacy section is released separately from the rest of the notice. */
+const portalPrivacy = process.env.FEATURE_PORTAL_PRIVACY === "true";
+/** The published phone number, or "" until the business adds one to company.json. */
+const companyPhone = JSON.parse(readFileSync(new URL("../../src/data/company.json", import.meta.url), "utf8")).phone?.trim() ?? "";
 
 /** Validate inline text exactly as the rendered paragraph joins its text nodes.
  * @param {string} candidate @param {string} locale
@@ -55,6 +59,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         assert.doesNotMatch(text(footer), /PMV|personally owned small business|personligt ejet mindre virksomhed/i, 'current footer cannot retain PMV wording');
       }
       assert.equal(walk(footer).some(node => attr(node,"href") === `/${prefix}company/`),identity);
+      for (const kind of ["privacy/","terms/"]) assert.equal(links(footer).some(([,href]) => href === `/${prefix}${kind}`),identity,"privacy and terms footer links follow company identity");
       assert.equal(actual.some(node => attr(node,"href") === "mailto:ned@devantler.tech"),identity);
       assert.equal(!!find(actual,"data-customer-scope"),scope);
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
@@ -69,7 +74,36 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
         /** @param {MarkupNode[]} nodes */
         const offers = nodes => nodes.filter(node => attr(node,"data-offer") !== undefined).map(node => [attr(node,"data-offer"),attr(node,"data-setup"),attr(node,"data-monthly"),text(node)]);
 
-        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","3750","125"],["app","10000","375"],["service","6250","250"],["other",undefined,undefined]]);
+        assert.deepEqual(offers(actual).map(item => item.slice(0,3)),[["website","6000","300"],["app","15000","800"],["service","9500","500"],["other",undefined,undefined]]);
+        assert.deepEqual(actual.filter(node => attr(node,"data-launch-setup") !== undefined).map(node => attr(node,"data-launch-setup")),["4500","11250","7125"],"each offer shows its launch price");
+        const launchOffer = find(actual,"data-launch-offer");
+        assert.ok(launchOffer && text(launchOffer).includes(locale === "da" ? "De første 50 kunder" : "the first 50 customers"),"the launch offer states its limit");
+      }
+    }
+    for (const kind of ["privacy","terms"]) {
+      const legalPath = join(candidate,`${prefix}${kind}/index.html`);
+      if (!identity) { assert.equal(existsSync(legalPath),false,`disabled ${kind} route must be absent, not merely empty`); continue; }
+      const page = load(legalPath), main = find(page,"data-legal-page");
+      assert.ok(main && attr(main,"data-legal-page") === kind,`${kind} page renders its legal content`);
+      assert.ok(page.some(node => node.tagName === "html" && attr(node,"lang") === locale));
+      assert.ok(page.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${kind}/`));
+      for (const language of ["en","da","x-default"]) assert.ok(page.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${kind}/`));
+      for (const fact of ["46830385","ned@devantler.tech"]) assert.ok(text(main).includes(fact),`${kind} page names the registered business`);
+      if (kind === "terms") assert.ok(companyPhone ? text(main).includes(companyPhone) : !/Phone:|Telefon:/.test(text(main)), "terms name the phone number exactly when one is set");
+      assert.ok(links(main).some(([,href]) => href === `/${prefix}company/`),`${kind} page links to the postal address instead of copying it`);
+      const required = kind === "privacy"
+        ? (locale === "da" ? ["Datatilsynet","seks måneder","fem år","cookies"] : ["Datatilsynet","six months","five years","cookies"])
+        : (locale === "da" ? ["14 dage","Standardfortrydelsesformular","sætte kryds","helt udført","en måneds varsel","Nævnenes Hus","købeloven"] : ["14 days","Withdrawal form","ticking the box","completely finished","one month’s notice","Nævnenes Hus","Sale of Goods Act"]);
+      for (const phrase of required) assert.ok(text(main).includes(phrase),`${kind} page is missing: ${phrase}`);
+      // List items carry the withdrawal form and the recipients; headings alone must not satisfy them.
+      const items = walk(main).filter(node => node.tagName === "li").map(text);
+      const listed = kind === "privacy"
+        ? ["Numina","Stripe","Cloudflare"]
+        : (locale === "da" ? ["Forbrugerens underskrift","Bestilt den (*)/modtaget den (*)"] : ["Signature of consumer(s)","Ordered on (*)/received on (*)"]);
+      for (const phrase of listed) assert.ok(items.some(item => item.includes(phrase)),`${kind} list is missing: ${phrase}`);
+      // The portal's privacy text is unreleased content behind its own default-off flag.
+      if (kind === "privacy") for (const phrase of ["accounts.devantler.tech", locale === "da" ? "30 dage" : "30 days", "GitHub"]) {
+        assert.equal(text(main).includes(phrase), portalPrivacy, `portal privacy text follows FEATURE_PORTAL_PRIVACY: ${phrase}`);
       }
     }
     const path = join(candidate,`${prefix}company/index.html`);
@@ -80,6 +114,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
 
     const registration = locale === 'da' ? 'Enkeltmandsvirksomhed' : 'Sole proprietorship';
     for (const fact of ["Devantler Tech","46830385",registration,"Nikolai Emil Damm","ned@devantler.tech"]) assert.ok(text(disclosure).includes(fact),"registered company fact is missing");
+    assert.equal(!!find(actual,"data-company-phone"), companyPhone !== "", "company page shows the phone number exactly when one is set");
+    if (companyPhone) assert.ok(text(disclosure).includes(companyPhone), "company page shows the published phone number");
     {
       const document = actual.find(node => node.tagName === 'html');
       assert.ok(document, 'current disclosure has a document element');
@@ -97,6 +133,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);
+    for (const kind of ["/privacy/","/terms/"]) assert.equal(links(footer).some(([,href]) => href === kind),identity,"supporting footer links the privacy notice and terms");
     if (identity) {
       assert.ok(text(footer).includes('Sole proprietorship'), 'supporting footer independently identifies the ordinary business');
       assert.doesNotMatch(text(footer), /\bPMV\b/i);
@@ -104,6 +141,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
   }
   for (const file of files(candidate)) {
     const bytes = readFileSync(file);
+    // Consumer law needs the phone only before an agreement: on the company page and the terms.
+    if (companyPhone) assert.ok(!bytes.includes(Buffer.from(companyPhone)) || /^(?:da\/)?(?:company|terms)\/(?:index\.html|__data\.json)$/.test(file.slice(candidate.length + 1)), `phone number leaked into ${file.slice(candidate.length + 1)}`);
     for (const needle of ["company-address-fixture-187", "1234 Exampletown"]) {
       assert.ok(!bytes.includes(Buffer.from(needle)) || (identity && !template && companyPages.has(file)), "address leaked outside the two disclosure HTML pages");
     }

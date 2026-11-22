@@ -19,36 +19,89 @@ import (
 var ErrMigration = errors.New("portal schema migration failed")
 
 // MigrateDatabase runs the existing embedded transaction under a separate,
-// constrained role. This explicit job neither serves HTTP nor enables identity.
-func MigrateDatabase(ctx context.Context, filename string) error {
+// constrained role. A nonempty runtimeRole names the existing web login that the
+// same transaction grants exactly its runtime privileges; empty grants nothing.
+// This explicit job neither serves HTTP nor enables identity. With projected,
+// the connection file is a Kubernetes Secret projection for this job's group.
+func MigrateDatabase(ctx context.Context, filename, runtimeRole string, projected bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+	if ctx.Err() != nil || !filepath.IsAbs(filename) || runtimeRole != "" && !identity.ValidRuntimeRoleName(runtimeRole) {
 		return ErrMigration
 	}
-	connection, err := migrationConnection(filename)
-	if err != nil {
+	pool, user, err := openMigrationPool(ctx, filename, projected, "business-site-migration")
+	if err != nil || runtimeRole == user {
 		return ErrMigration
+	}
+	defer pool.Close()
+	migrate := identity.Migrate
+	if runtimeRole != "" {
+		migrate = func(ctx context.Context, pool *pgxpool.Pool) error {
+			return identity.MigrateWithRuntimeRole(ctx, pool, runtimeRole)
+		}
+	}
+	if !migrationRoleAllowed(ctx, pool, false) || migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
+		return ErrMigration
+	}
+	return nil
+}
+
+// openMigrationPool opens one bounded connection as the migration role from its
+// confined connection file, or with projected its Kubernetes Secret projection,
+// and returns the role's name.
+func openMigrationPool(ctx context.Context, filename string, projected bool, application string) (*pgxpool.Pool, string, error) {
+	read := migrationConnection
+	if projected {
+		read = migrationProjectedConnection
+	}
+	connection, err := read(filename)
+	if err != nil {
+		return nil, "", err
 	}
 	cfg, err := migrationConfig(connection)
 	if err != nil {
-		return ErrMigration
+		return nil, "", err
 	}
 	cfg.MaxConns = 1
 	cfg.MinConns = 0
 	cfg.MinIdleConns = 0
 	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
 	// Do not inherit service/PGOPTIONS startup parameters from the operator host.
-	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": "business-site-migration"}
+	cfg.ConnConfig.RuntimeParams = map[string]string{"search_path": "public", "statement_timeout": "5000", "lock_timeout": "1000", "application_name": application}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		return ErrMigration
+		return nil, "", err
+	}
+	return pool, cfg.ConnConfig.User, nil
+}
+
+// ErrRetention is the entire public diagnostic of the retention purge.
+var ErrRetention = errors.New("portal retention purge failed")
+
+// PurgeRetention deletes the portal records of every former client whose
+// memberships all ended more than identity.RetentionYears ago. It runs as the
+// migration role, which owns the complete schema, and reports only how many
+// clients lost records. With projected, the connection file is a Kubernetes
+// Secret projection for this job's group, as for MigrateDatabase.
+func PurgeRetention(ctx context.Context, filename string, projected bool) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if ctx.Err() != nil || !filepath.IsAbs(filename) {
+		return 0, ErrRetention
+	}
+	pool, _, err := openMigrationPool(ctx, filename, projected, "business-site-retention")
+	if err != nil {
+		return 0, ErrRetention
 	}
 	defer pool.Close()
-	if !migrationRoleAllowed(ctx, pool, false) || identity.Migrate(ctx, pool) != nil || !migrationRoleAllowed(ctx, pool, true) || identity.CheckMembershipRecorder(ctx, pool) != nil {
-		return ErrMigration
+	if !migrationRoleAllowed(ctx, pool, true) {
+		return 0, ErrRetention
 	}
-	return nil
+	purged, err := identity.PurgeExpiredClients(ctx, pool, time.Now())
+	if err != nil {
+		return purged, ErrRetention
+	}
+	return purged, nil
 }
 
 // migrationRoleAllowed checks authority before DDL and a complete owned schema
@@ -65,7 +118,7 @@ func migrationRoleAllowed(ctx context.Context, pool *pgxpool.Pool, complete bool
  AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND starts_with(p.proname,'portal_') AND p.proowner<>r.oid)
  AND (NOT $1::boolean OR (
    SELECT bool_and(c.oid IS NOT NULL AND c.relowner=r.oid AND c.relkind IN ('r','p'))
-   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_membership_transitions','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions','portal_work_approvals','portal_work_revocations','portal_work_current']) managed(name)
+   FROM unnest(ARRAY['portal_schema_version','portal_login_attempts','portal_invitations','portal_memberships','portal_membership_transitions','portal_sessions','portal_contacts','portal_requests','portal_proposals','portal_proposal_visibility','portal_proposal_reviews','portal_proposal_acceptances','portal_invoices','portal_credit_transfers','portal_credit_revisions','portal_work_approvals','portal_work_revocations','portal_work_current','portal_orders','portal_order_charges','portal_numina_contacts','portal_card_checkouts','portal_stripe_events','portal_order_ends','portal_card_cancellations','portal_charge_reversals','portal_order_withdrawals','portal_withdrawal_cancellations','portal_order_completions','portal_withdrawal_settlements','portal_mail_outbox','portal_mail_deliveries','portal_launch_places','portal_order_addons','portal_request_closures','portal_addon_ends','portal_addon_removals','portal_operator_audit']) managed(name)
    LEFT JOIN pg_class c ON c.relname=managed.name AND c.relnamespace='public'::regnamespace))
  AND (NOT $1::boolean OR (
    SELECT bool_and(t.oid IS NOT NULL AND t.typtype='d' AND t.typowner=r.oid AND t.typbasetype=managed.base::regtype)
@@ -145,5 +198,5 @@ func migrationConfig(connection string) (*pgxpool.Config, error) {
 // the secret reader's same-descriptor/nonblocking confinement while permitting
 // ordinary readable certificate permissions and a bounded 64 KiB CA bundle.
 func migrationCertificate(filename string) ([]byte, error) {
-	return readMigrationInput(filename, 65536, 0022)
+	return readMigrationInput(filename, 65536, 0022, false)
 }

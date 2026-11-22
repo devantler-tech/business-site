@@ -1,0 +1,294 @@
+{
+  "offerings": [
+    {
+      "id": "website",
+      "setup": 6000,
+      "monthly": 300,
+      "text": {
+        "en": {
+          "title": "A website",
+          "description": "Present what you do with a clear, professional website.",
+          "includes": [
+            "Up to 5 straightforward pages",
+            "Mobile-friendly design",
+            "Your content, services and contact details",
+            "Basic search and sharing metadata"
+          ],
+          "boundary": "You supply your logo, text and images. Copywriting, extra languages, booking and online payments are quoted separately."
+        },
+        "da": {
+          "title": "En hjemmeside",
+          "description": "Præsenter det, du laver, med en klar og professionel hjemmeside.",
+          "includes": [
+            "Op til 5 enkle sider",
+            "Mobilvenligt design",
+            "Dit indhold, dine ydelser og kontaktoplysninger",
+            "Grundlæggende metadata til søgning og deling"
+          ],
+          "boundary": "Du leverer logo, tekst og billeder. Tekstforfatning, ekstra sprog, booking og onlinebetaling aftales og prissættes særskilt."
+        }
+      }
+    },
+    {
+      "id": "app",
+      "setup": 15000,
+      "monthly": 800,
+      "text": {
+        "en": {
+          "title": "A web app",
+          "description": "Replace a recurring manual task with a tool made for the way you work.",
+          "includes": [
+            "One clearly defined workflow",
+            "A focused browser-based interface",
+            "Agreed data inputs and outputs",
+            "Testing and a practical handover"
+          ],
+          "boundary": "The fixed price covers an agreed first version. Further development gets its own fixed-price quote. Complex permissions, payments, sensitive data and integrations need a separate scope."
+        },
+        "da": {
+          "title": "En webapp",
+          "description": "Erstat en tilbagevendende manuel opgave med et værktøj til din måde at arbejde på.",
+          "includes": [
+            "Én klart afgrænset arbejdsgang",
+            "En fokuseret brugerflade i browseren",
+            "Aftalte data ind og ud",
+            "Test og en praktisk overdragelse"
+          ],
+          "boundary": "Den faste pris dækker en aftalt første version. Videreudvikling får sit eget fastpristilbud. Komplekse adgangsrettigheder, betaling, følsomme data og integrationer kræver en særskilt aftale."
+        }
+      }
+    },
+    {
+      "id": "service",
+      "setup": 9500,
+      "monthly": 500,
+      "text": {
+        "en": {
+          "title": "A web service",
+          "description": "Connect a process or let two systems exchange useful information.",
+          "includes": [
+            "One bounded automation or connection",
+            "Agreed inputs, outputs and limits",
+            "Basic operating documentation",
+            "Testing against the agreed use case"
+          ],
+          "boundary": "External subscriptions, API charges, extra integrations and high-volume processing are not included in the fixed price."
+        },
+        "da": {
+          "title": "En webservice",
+          "description": "Forbind en proces, eller lad to systemer udveksle nyttig information.",
+          "includes": [
+            "Én afgrænset automatisering eller forbindelse",
+            "Aftalte input, output og begrænsninger",
+            "Grundlæggende driftsdokumentation",
+            "Test af den aftalte anvendelse"
+          ],
+          "boundary": "Eksterne abonnementer, API-gebyrer, ekstra integrationer og behandling af store datamængder indgår ikke i den faste pris."
+        }
+      }
+    }
+  ],
+  "hosting": {
+    "en": "Optional hosting runs your project on the Devantler Tech platform for a fixed monthly price. It covers hosting, monitoring, backups, security updates and minor fixes. Clearly bounded feature requests are included and are picked up in a monthly round, one at a time. A large wish, such as a whole new module or a new integration, gets a fixed-price quote before any work starts.",
+    "da": "Med valgfri hosting kører dit projekt på Devantler Tech-platformen til en fast månedspris. Den dækker hosting, overvågning, backup, sikkerhedsopdateringer og mindre rettelser. Klart afgrænsede ønsker om nye funktioner er inkluderet og tages op i en månedlig runde, ét ad gangen. Et stort ønske, fx et helt nyt modul eller en ny integration, får et fastpristilbud, før arbejdet begynder."
+  },
+  "vat": {
+    "en": "Prices include 25% Danish VAT.",
+    "da": "Priserne er inkl. 25 % moms."
+  },
+  "launchDiscount": {
+    "percent": 25,
+    "limit": 50,
+    "appliesTo": "setup",
+    "requiresHosting": true,
+    "text": {
+      "en": "Launch offer: the first 50 customers who order a project together with hosting get 25% off its one-time price. Hosting is charged at the normal monthly price.",
+      "da": "Introduktionstilbud: De første 50 kunder, der bestiller et projekt sammen med hosting, får 25 % rabat på projektets engangspris. Hosting koster den normale månedspris."
+    }
+  },
+  "consultation": {
+    "en": "The first consultation is free.",
+    "da": "Den første samtale er gratis."
+  },
+  "addons": [
+    {
+      "id": "priority",
+      "kind": "monthly",
+      "price": 400,
+      "offerings": ["website", "app", "service"],
+      "tier": "priority",
+      "text": {
+        "en": {
+          "title": "Priority feature requests",
+          "description": "The target is to pick up your feature requests about once a week instead of in the monthly round."
+        },
+        "da": {
+          "title": "Prioriterede ønsker",
+          "description": "Målet er at tage dine ønsker til nye funktioner op cirka en gang om ugen i stedet for i den månedlige runde."
+        }
+      }
+    },
+    {
+      "id": "express",
+      "kind": "monthly",
+      "price": 1000,
+      "offerings": ["website", "app", "service"],
+      "tier": "express",
+      "text": {
+        "en": {
+          "title": "Express feature requests",
+          "description": "The target is to start work on your feature request within 1 business day, with replies within 1 business day."
+        },
+        "da": {
+          "title": "Ekspres-ønsker",
+          "description": "Målet er, at arbejdet på dit ønske begynder inden for 1 arbejdsdag, og at du får svar inden for 1 arbejdsdag."
+        }
+      }
+    },
+    {
+      "id": "statistics",
+      "kind": "monthly",
+      "price": 75,
+      "offerings": ["website", "app"],
+      "text": {
+        "en": {
+          "title": "Visitor statistics",
+          "description": "Privacy-friendly visitor statistics without cookies, on the Devantler Tech platform."
+        },
+        "da": {
+          "title": "Besøgsstatistik",
+          "description": "Privatlivsvenlig besøgsstatistik uden cookies på Devantler Tech-platformen."
+        }
+      }
+    },
+    {
+      "id": "email",
+      "kind": "monthly",
+      "price": 100,
+      "offerings": ["website", "app", "service"],
+      "text": {
+        "en": {
+          "title": "Email sending",
+          "description": "Your project sends email, such as receipts and notifications, through the platform's mail sender."
+        },
+        "da": {
+          "title": "Afsendelse af e-mail",
+          "description": "Dit projekt sender e-mail, fx kvitteringer og beskeder, gennem platformens afsender."
+        }
+      }
+    },
+    {
+      "id": "language",
+      "kind": "one-time",
+      "price": 1500,
+      "offerings": ["website", "app"],
+      "max": 5,
+      "text": {
+        "en": {
+          "title": "Extra language",
+          "description": "Your project in one more language, per language. You supply the translated text."
+        },
+        "da": {
+          "title": "Ekstra sprog",
+          "description": "Dit projekt på ét sprog mere, pr. sprog. Du leverer den oversatte tekst."
+        }
+      }
+    },
+    {
+      "id": "contact-form",
+      "kind": "one-time",
+      "price": 1500,
+      "offerings": ["website", "app"],
+      "text": {
+        "en": {
+          "title": "Contact form",
+          "description": "A form that sends your visitors' messages to your email."
+        },
+        "da": {
+          "title": "Kontaktformular",
+          "description": "En formular, der sender dine besøgendes beskeder til din e-mail."
+        }
+      }
+    },
+    {
+      "id": "payments",
+      "kind": "one-time",
+      "price": 3000,
+      "offerings": ["website", "app"],
+      "text": {
+        "en": {
+          "title": "Online payments",
+          "description": "Card and MobilePay payments through Stripe. Stripe's own fees come on top."
+        },
+        "da": {
+          "title": "Onlinebetaling",
+          "description": "Betaling med kort og MobilePay via Stripe. Stripes egne gebyrer kommer oveni."
+        }
+      }
+    },
+    {
+      "id": "news",
+      "kind": "one-time",
+      "price": 2500,
+      "offerings": ["website"],
+      "text": {
+        "en": {
+          "title": "News section",
+          "description": "A news section you can update yourself."
+        },
+        "da": {
+          "title": "Nyhedssektion",
+          "description": "En nyhedssektion, du selv kan opdatere."
+        }
+      }
+    },
+    {
+      "id": "accounts",
+      "kind": "one-time",
+      "price": 4000,
+      "offerings": ["app"],
+      "text": {
+        "en": {
+          "title": "User accounts and sign-in",
+          "description": "Your users sign in to your app with their own accounts."
+        },
+        "da": {
+          "title": "Brugerkonti og login",
+          "description": "Dine brugere logger ind i din app med deres egne konti."
+        }
+      }
+    },
+    {
+      "id": "migration",
+      "kind": "one-time",
+      "price": 1500,
+      "offerings": ["website"],
+      "text": {
+        "en": {
+          "title": "Content move",
+          "description": "The content of your old site is moved to the new one."
+        },
+        "da": {
+          "title": "Flytning af indhold",
+          "description": "Indholdet fra din gamle side flyttes til den nye."
+        }
+      }
+    },
+    {
+      "id": "seo",
+      "kind": "one-time",
+      "price": 1000,
+      "offerings": ["website", "app"],
+      "text": {
+        "en": {
+          "title": "Search engine setup",
+          "description": "Your project is registered with Google and Bing, with a sitemap and basic search settings."
+        },
+        "da": {
+          "title": "Opsætning til søgemaskiner",
+          "description": "Dit projekt registreres hos Google og Bing med sitemap og grundlæggende indstillinger til søgning."
+        }
+      }
+    }
+  ]
+}

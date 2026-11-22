@@ -13,12 +13,15 @@ function keys(value, allowed) {
 export function validateTenantPackage(input) {
   assert.ok(typeof input === "string" && Buffer.byteLength(input) <= 262144, "input size");
   const docs = yaml.loadAll(input);
-  assert.equal(docs.length, 7, "resource count");
+  assert.equal(docs.length, 11, "resource count");
   const app = docs.find((d) => d?.kind === "WebApp");
   const network = docs.find((d) => d?.kind === "CiliumNetworkPolicy");
   const budget = docs.find((d) => d?.kind === "PodDisruptionBudget");
   const store = docs.find((d) => d?.kind === "SecretStore");
-  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
+  const secrets = docs.filter((d) => d?.kind === "ExternalSecret");
+  const secret = (name) => secrets.find((d) => d?.metadata?.name === name);
+  const [disclosure, numina, stripe] = ["business-site-disclosure", "business-site-numina", "business-site-stripe"].map(secret);
+  assert.equal(secrets.length, 3, "external secret count");
   const routes = docs.filter((d) => d?.kind === "HTTPRoute");
   for (const resource of [app, network, budget]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
@@ -33,7 +36,7 @@ export function validateTenantPackage(input) {
     maxUnavailable: 1,
     selector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
   });
-  for (const [resource, name] of [[store, "openbao"], [disclosure, "business-site-disclosure"]]) {
+  for (const [resource, name] of [[store, "openbao"], [disclosure, "business-site-disclosure"], [numina, "business-site-numina"], [stripe, "business-site-stripe"]]) {
     keys(resource, ["apiVersion", "kind", "metadata", "spec"]);
     keys(resource.metadata, ["name", "namespace"]);
     assert.equal(resource.apiVersion, "external-secrets.io/v1");
@@ -50,12 +53,16 @@ export function validateTenantPackage(input) {
       },
     },
   });
-  assert.deepEqual(disclosure.spec, {
+  // Each Secret reads named properties of one exact entry through the namespaced store.
+  const synchronized = (target, key, properties) => ({
     refreshInterval: "1h",
     secretStoreRef: { name: "openbao", kind: "SecretStore" },
-    target: { name: "business-site-disclosure", creationPolicy: "Owner" },
-    data: [{ secretKey: "company-disclosure", remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" } }],
+    target: { name: target, creationPolicy: "Owner" },
+    data: properties.map(([secretKey, property]) => ({ secretKey, remoteRef: { key, property } })),
   });
+  assert.deepEqual(disclosure.spec, synchronized("business-site-disclosure", "apps/business-site/public-disclosure", [["company-disclosure", "company-disclosure"]]));
+  assert.deepEqual(numina.spec, synchronized("business-site-numina", "apps/business-site/numina", [["api-key", "api-key"]]));
+  assert.deepEqual(stripe.spec, synchronized("business-site-stripe", "apps/business-site/stripe", [["api-key", "api-key"], ["webhook-secret", "webhook-secret"]]));
   // Each public name attaches to its own listener; nothing else may claim a host.
   const route = (name, listeners, hostnames) => ({
     apiVersion: "gateway.networking.k8s.io/v1",
@@ -96,12 +103,108 @@ export function validateTenantPackage(input) {
   assert.equal(spec.runAsUser, 65532);
   assert.equal(spec.runAsGroup, 65532);
   assert.equal(spec.readOnlyRootFilesystem, true);
-  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech"]);
-  assert.deepEqual(spec.secretProjections, [{ secretName: "business-site-disclosure", items: [{ key: "company-disclosure", path: "disclosure" }] }]);
+  assert.deepEqual(spec.args, ["--public", "/app/public", "--listen", "0.0.0.0:8080", "--company-disclosure-projection", "/run/webapp-inputs/disclosure", "--public-host", "devantler.tech", "--portal-host", "portal.devantler.tech", "--portal-settings-projection", "/run/webapp-inputs/portal-settings"]);
+  // The platform composes this one Secret. Its settings item keeps sign-in off
+  // until it holds activation keys; no migration or other private input is admitted.
+  assert.deepEqual(spec.secretProjections, [{
+    secretName: "business-site-runtime",
+    items: [
+      { key: "company-disclosure", path: "disclosure" },
+      { key: "portal-settings", path: "portal-settings" },
+      { key: "portal-client-secret", path: "portal-client-secret" },
+      { key: "portal-database-ca", path: "portal-database-ca" },
+      { key: "smtp-username", path: "smtp-username" },
+      { key: "smtp-password", path: "smtp-password" },
+    ],
+  }]);
+  // The one migration Job runs this release's own image with only migration
+  // arguments. It reads the platform's migration Secret and nothing else, so the
+  // package names that Secret but carries no migration input.
+  assert.deepEqual(docs.find((d) => d?.kind === "Job"), {
+    apiVersion: "batch/v1",
+    kind: "Job",
+    metadata: {
+      name: "business-site-portal-migration",
+      namespace: "business-site",
+      annotations: { "kustomize.toolkit.fluxcd.io/force": "enabled" },
+    },
+    spec: {
+      backoffLimit: 2,
+      activeDeadlineSeconds: 240,
+      template: {
+        metadata: { labels: { "app.kubernetes.io/name": "business-site-portal-migration" } },
+        spec: {
+          restartPolicy: "Never",
+          automountServiceAccountToken: false,
+          enableServiceLinks: false,
+          securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: "RuntimeDefault" } },
+          containers: [{
+            name: "migrate",
+            image: spec.image,
+            args: ["--migrate", "--migration-database-projection", "/run/portal-migration/database-url", "--runtime-role", "portal_web"],
+            resources: { requests: { cpu: "10m", memory: "32Mi" }, limits: { cpu: "500m", memory: "128Mi" } },
+            securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } },
+            volumeMounts: [
+              { name: "migration", mountPath: "/run/portal-migration", readOnly: true },
+              { name: "tmp", mountPath: "/tmp" },
+            ],
+          }],
+          volumes: [
+            {
+              name: "migration",
+              secret: {
+                secretName: "business-site-portal-db-migration",
+                defaultMode: 0o400,
+                items: [{ key: "database-url", path: "database-url" }, { key: "ca.crt", path: "ca.crt" }],
+              },
+            },
+            { name: "tmp", emptyDir: { medium: "Memory", sizeLimit: "1Mi" } },
+          ],
+        },
+      },
+    },
+  });
+  // The one retention CronJob runs this release's image once a day with only
+  // the purge and the migration Job's Secret, label and pod hardening.
+  const job = docs.find((d) => d?.kind === "Job");
+  assert.deepEqual(docs.find((d) => d?.kind === "CronJob"), {
+    apiVersion: "batch/v1",
+    kind: "CronJob",
+    metadata: { name: "business-site-portal-retention", namespace: "business-site" },
+    spec: {
+      schedule: "17 3 * * *",
+      timeZone: "Europe/Copenhagen",
+      concurrencyPolicy: "Forbid",
+      startingDeadlineSeconds: 3600,
+      successfulJobsHistoryLimit: 1,
+      failedJobsHistoryLimit: 3,
+      jobTemplate: {
+        spec: {
+          backoffLimit: 0,
+          activeDeadlineSeconds: 300,
+          template: {
+            metadata: { labels: { "app.kubernetes.io/name": "business-site-portal-migration", "app.kubernetes.io/component": "retention-purge" } },
+            spec: {
+              ...job.spec.template.spec,
+              containers: [{
+                ...job.spec.template.spec.containers[0],
+                name: "purge",
+                args: ["--retention-purge", "--migration-database-projection", "/run/portal-migration/database-url"],
+              }],
+            },
+          },
+        },
+      },
+    },
+  });
   assert.deepEqual(network.spec, {
     endpointSelector: { matchLabels: { "app.kubernetes.io/name": "business-site" } },
     ingress: [{ fromEntities: ["ingress"], toPorts: [{ ports: [{ port: "8080", protocol: "TCP" }] }] }],
-    egress: [{}],
+    // Exact HTTPS names for the two billing APIs; nothing else leaves the pod.
+    egress: [{
+      toFQDNs: [{ matchName: "api.numina.app" }, { matchName: "api.stripe.com" }],
+      toPorts: [{ ports: [{ port: "443", protocol: "TCP" }] }],
+    }],
   });
   return spec;
 }

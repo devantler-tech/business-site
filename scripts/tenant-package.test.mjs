@@ -24,84 +24,79 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
-test("the artifact root reconciles exactly the prod overlay", () => {
-  // The platform reconciles prod at the artifact root; it must stay the prod overlay.
+test("the artifact root renders the production overlay", () => {
   assert.equal(render(), render(path.join(root, "deploy/prod")));
 });
 
-test("the shared base holds only the WebApp and its network policy", () => {
-  const kinds = yaml.loadAll(render(path.join(root, "deploy/base"))).map((d) => d.kind).sort();
-  assert.deepEqual(kinds, ["CiliumNetworkPolicy", "WebApp"]);
-});
-
-/** Every scalar in a rendered document set, so a value cannot hide in an unexpected field. */
-function scalars(value) {
-  if (value === null || typeof value !== "object") return [value];
-  return Object.values(value).flatMap(scalars);
-}
-
-test("the dev overlay renders the shared base with only its own differences", () => {
-  const dir = path.join(root, "deploy/dev");
-  const first = render(dir);
-  assert.equal(render(dir), first, "the dev overlay must render deterministically");
-  const dev = yaml.loadAll(first);
-  const prod = yaml.loadAll(render());
-  assert.deepEqual(dev.map((d) => d.kind).sort(), ["CiliumNetworkPolicy", "WebApp"],
-    "dev adds no route, certificate, DNS record, disruption budget or secret store");
-  for (const doc of dev) assert.equal(doc.metadata.namespace, "business-site-dev");
-  const app = dev.find((d) => d.kind === "WebApp");
-  const prodApp = prod.find((d) => d.kind === "WebApp");
-  // A tenant WebApp's name and spec.name equal its namespace.
+test("the hosted preview uses only its own disclosure input", () => {
+  const preview = yaml.loadAll(render(path.join(root, "deploy/dev")));
+  assert.deepEqual(preview.map((document) => document.kind), ["WebApp"]);
+  const [app] = preview;
+  assert.equal(app.metadata.namespace, "business-site-dev");
   assert.equal(app.metadata.name, "business-site-dev");
   assert.equal(app.spec.name, "business-site-dev");
-  assert.equal(app.spec.replicas, 1);
   assert.equal(app.spec.host, "dev.devantler.tech");
-  assert.equal(app.spec.image, prodApp.spec.image, "dev runs the same published image as prod");
-  assert.deepEqual(app.spec.args, prodApp.spec.args.slice(0, 6), "dev drops only prod's host routing");
-  const omit = (spec, ...keys) => Object.fromEntries(Object.entries(spec).filter(([key]) => !keys.includes(key)));
-  assert.deepEqual(omit(app.spec, "name", "host", "replicas", "args"), omit(prodApp.spec, "name", "host", "replicas", "args"),
-    "every other WebApp input comes unchanged from base");
-  const policy = dev.find((d) => d.kind === "CiliumNetworkPolicy");
-  const prodPolicy = prod.find((d) => d.kind === "CiliumNetworkPolicy");
-  assert.deepEqual(policy.spec.endpointSelector, { matchLabels: { "app.kubernetes.io/name": "business-site-dev" } });
-  assert.deepEqual(omit(policy.spec, "endpointSelector"), omit(prodPolicy.spec, "endpointSelector"));
-  // No prod hostname, secret path or secret store reaches dev, in any field.
-  const prodHosts = new Set([prodApp.spec.host,
-    ...prod.filter((d) => d.kind === "HTTPRoute").flatMap((d) => d.spec.hostnames),
-    ...prodApp.spec.args.filter((_, i, all) => ["--public-host", "--portal-host"].includes(all[i - 1]))]);
-  for (const name of ["devantler.tech", "www.devantler.tech", "portal.devantler.tech", "business-site.platform.devantler.tech"]) {
-    assert.ok(prodHosts.has(name), "the prod hostname inventory must be complete before it is compared");
-  }
-  const prodPaths = prod.filter((d) => d.kind === "ExternalSecret").flatMap((d) => d.spec.data.map((x) => x.remoteRef.key));
-  assert.ok(prodPaths.length > 0);
-  for (const value of scalars(dev)) {
-    assert.ok(!prodHosts.has(value), `dev must not carry the prod hostname ${value}`);
-    for (const secretPath of prodPaths) assert.ok(!String(value).includes(secretPath), "dev must not read a prod secret path");
-  }
+  assert.equal(app.spec.replicas, 1);
+  assert.deepEqual(app.spec.secretProjections, [{
+    secretName: "business-site-dev-disclosure",
+    items: [{ key: "company-disclosure", path: "disclosure" }],
+  }]);
+  const [base] = yaml.loadAll(render(path.join(root, "deploy/base")));
+  assert.equal(app.spec.image, base.spec.image);
+  assert.deepEqual(app.spec.args, [
+    "--public", "/app/public",
+    "--listen", "0.0.0.0:8080",
+    "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+  ]);
 });
 
-test("the rendered network policy explicitly enables egress default deny", () => {
+test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
   const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
-  // Cilium's documented default-deny rule is one empty rule, not an empty list.
-  assert.deepEqual(network.spec.egress, [{}]);
+  // One named-destination rule keeps egress default deny for every other peer.
+  assert.deepEqual(network.spec.egress, [{
+    toFQDNs: [{ matchName: "api.numina.app" }, { matchName: "api.stripe.com" }],
+    toPorts: [{ ports: [{ port: "443", protocol: "TCP" }] }],
+  }]);
+  assert.equal(network.spec.enableDefaultDeny, undefined);
 });
 
-test("the rendered package supplies the required disclosure through its own namespaced store", () => {
+test("the billing keys synchronize through the same namespaced store without being projected", () => {
   const docs = yaml.loadAll(render());
   const store = docs.find((d) => d?.kind === "SecretStore");
-  const disclosure = docs.find((d) => d?.kind === "ExternalSecret");
   const app = docs.find((d) => d?.kind === "WebApp");
-  assert.ok(store, "the required file needs an application-owned store declaration");
-  assert.ok(disclosure, "the required file needs an explicit synchronization declaration");
+  const secret = (name) => docs.find((d) => d?.kind === "ExternalSecret" && d.metadata.name === name);
+  assert.deepEqual(secret("business-site-numina").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
+  assert.deepEqual(secret("business-site-stripe").spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
+  assert.deepEqual(secret("business-site-numina").spec.data.map((d) => d.secretKey), ["api-key"]);
+  assert.deepEqual(secret("business-site-stripe").spec.data.map((d) => d.secretKey), ["api-key", "webhook-secret"]);
+  // The platform WebApp mounts one Secret, never optionally: the platform's
+  // business-site-runtime. The billing keys are not in it, so a missing billing
+  // entry cannot stop the public pages from starting.
+  assert.deepEqual(app.spec.secretProjections.map((p) => p.secretName), ["business-site-runtime"]);
+  assert.ok(!app.spec.secretProjections.some((p) => /numina|stripe/.test(p.secretName)));
+});
+
+test("the rendered package projects the platform's runtime Secret with portal settings", () => {
+  const docs = yaml.loadAll(render());
+  const store = docs.find((d) => d?.kind === "SecretStore");
+  const disclosure = docs.find((d) => d?.kind === "ExternalSecret" && d.metadata.name === "business-site-disclosure");
+  const app = docs.find((d) => d?.kind === "WebApp");
+  // The platform composes business-site-runtime; the retained application-owned
+  // disclosure synchronization stays valid but is no longer projected.
   assert.equal(store.metadata.namespace, "business-site");
   assert.equal(store.spec.provider.vault.auth.kubernetes.role, "business-site");
   assert.deepEqual(store.spec.provider.vault.auth.kubernetes.serviceAccountRef, { name: "business-site" });
   assert.deepEqual(disclosure.spec.secretStoreRef, { name: store.metadata.name, kind: "SecretStore" });
-  assert.equal(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
-  assert.deepEqual(disclosure.spec.data, [{
-    secretKey: app.spec.secretProjections[0].items[0].key,
-    remoteRef: { key: "apps/business-site/public-disclosure", property: "company-disclosure" },
+  assert.notEqual(disclosure.spec.target.name, app.spec.secretProjections[0].secretName);
+  assert.deepEqual(app.spec.secretProjections, [{
+    secretName: "business-site-runtime",
+    items: ["disclosure", "portal-settings", "portal-client-secret", "portal-database-ca", "smtp-username", "smtp-password"].map((path) => ({ key: path === "disclosure" ? disclosure.spec.data[0].secretKey : path, path })),
   }]);
+  // Each projected file the runtime reads is a path the projection actually supplies.
+  for (const flag of ["--company-disclosure-projection", "--portal-settings-projection"]) {
+    const file = app.spec.args[app.spec.args.indexOf(flag) + 1];
+    assert.ok(app.spec.secretProjections[0].items.some((item) => `/run/webapp-inputs/${item.path}` === file), flag);
+  }
   assert.equal(check(render()).status, 0);
 });
 
@@ -170,6 +165,18 @@ for (const [name, mutate] of [
   ["an extra private key", (d) => { d[0].spec.secretProjections[0].items.push({ key: "db", path: "db" }); }],
   ["a traversal projection", (d) => { d[0].spec.secretProjections[0].items[0].path = "../disclosure"; }],
   ["an additional Secret projection", (d) => { d[0].spec.secretProjections.push({ secretName: "other", items: [] }); }],
+  ["the retired disclosure-only Secret", (d) => { d[0].spec.secretProjections[0].secretName = "business-site-disclosure"; }],
+  ["a foreign runtime Secret", (d) => { d[0].spec.secretProjections[0].secretName = "other-runtime"; }],
+  ["a missing portal settings item", (d) => { d[0].spec.secretProjections[0].items.splice(1, 1); }],
+  ["a missing portal client secret item", (d) => { d[0].spec.secretProjections[0].items.splice(2, 1); }],
+  ["a missing database trust item", (d) => { d[0].spec.secretProjections[0].items.splice(3, 1); }],
+  ["a migration credential item", (d) => { d[0].spec.secretProjections[0].items.push({ key: "migration-database", path: "migration-database" }); }],
+  ["a renamed settings path", (d) => { d[0].spec.secretProjections[0].items[1].path = "settings"; }],
+  ["a settings key projected at another key's path", (d) => { d[0].spec.secretProjections[0].items[1].key = "portal-client-secret"; }],
+  ["a missing settings argument", (d) => { d[0].spec.args.splice(-2, 2); }],
+  ["settings outside the projection", (d) => { d[0].spec.args[d[0].spec.args.length - 1] = "/tmp/portal-settings"; }],
+  ["a repeated settings argument", (d) => { d[0].spec.args.push("--portal-settings-projection", "/run/webapp-inputs/portal-settings"); }],
+  ["a one-shot invitation argument", (d) => { d[0].spec.args.push("--portal-invite"); }],
   ["world ingress", (d) => { d[1].spec.ingress[0].fromEntities = ["world"]; }],
   ["extra egress", (d) => { d[1].spec.egress = [{ toEntities: ["world"] }]; }],
   ["an empty egress list without default-deny enforcement", (d) => { d[1].spec.egress = []; }],
@@ -217,13 +224,79 @@ for (const [name, mutate] of [
   ["a route to another backend", (d) => { d[5].spec.rules[0].backendRefs[0].name = "other"; }],
   ["a route with a request filter", (d) => { d[6].spec.rules[0].filters = [{ type: "RequestRedirect", requestRedirect: { hostname: "evil.example" } }]; }],
   ["a route in another namespace", (d) => { d[5].metadata.namespace = "foreign"; }],
+  ["a missing Numina synchronization", (d) => { d.splice(7, 1); }],
+  ["a missing Stripe synchronization", (d) => { d.splice(8, 1); }],
+  ["a duplicate billing synchronization", (d) => { d[8] = structuredClone(d[7]); }],
+  ["a Numina key from another entry", (d) => { d[7].spec.data[0].remoteRef.key = "apps/business-site/public-disclosure"; }],
+  ["a Numina key from another tenant", (d) => { d[7].spec.data[0].remoteRef.key = "apps/other/numina"; }],
+  ["a different Numina property", (d) => { d[7].spec.data[0].remoteRef.property = "token"; }],
+  ["a Numina synchronization through the shared cluster store", (d) => { d[7].spec.secretStoreRef.kind = "ClusterSecretStore"; }],
+  ["a Numina Secret overwriting the disclosure", (d) => { d[7].spec.target.name = "business-site-disclosure"; }],
+  ["a merged Numina Secret", (d) => { d[7].spec.target.creationPolicy = "Merge"; }],
+  ["an inline Numina value", (d) => { d[7].spec.target.template = { data: { "api-key": "fictional private value" } }; }],
+  ["a bulk Stripe import", (d) => { d[8].spec.dataFrom = [{ extract: { key: "apps/business-site/stripe" } }]; }],
+  ["an extra Stripe property", (d) => { d[8].spec.data.push({ secretKey: "publishable-key", remoteRef: { key: "apps/business-site/stripe", property: "publishable-key" } }); }],
+  ["a missing Stripe webhook secret", (d) => { d[8].spec.data.pop(); }],
+  ["a Stripe key from the Numina entry", (d) => { d[8].spec.data[0].remoteRef.key = "apps/business-site/numina"; }],
+  ["a billing key projected into the WebApp", (d) => { d[0].spec.secretProjections = [{ secretName: "business-site-stripe", items: [{ key: "api-key", path: "stripe-api-key" }] }]; }],
+  ["a third billing API", (d) => { d[1].spec.egress[0].toFQDNs.push({ matchName: "api.example.invalid" }); }],
+  ["a billing API wildcard", (d) => { d[1].spec.egress[0].toFQDNs[1] = { matchPattern: "*.stripe.com" }; }],
+  ["a catch-all name pattern", (d) => { d[1].spec.egress[0].toFQDNs = [{ matchPattern: "*" }]; }],
+  ["plain-HTTP billing egress", (d) => { d[1].spec.egress[0].toPorts[0].ports[0].port = "80"; }],
+  ["an extra billing port", (d) => { d[1].spec.egress[0].toPorts[0].ports.push({ port: "8443", protocol: "TCP" }); }],
+  ["port-only billing egress", (d) => { delete d[1].spec.egress[0].toFQDNs; }],
+  ["unrestricted billing ports", (d) => { delete d[1].spec.egress[0].toPorts; }],
+  ["a second egress rule", (d) => { d[1].spec.egress.push(structuredClone(d[1].spec.egress[0])); }],
+  ["the previous egress-free policy", (d) => { d[1].spec.egress = [{}]; }],
+  ["a missing migration Job", (d) => { d.splice(9, 1); }],
+  ["a second migration Job", (d) => { const extra = structuredClone(d[9]); extra.metadata.name = "business-site-extra"; d.push(extra); }],
+  ["a migration Job on another image", (d) => { d[9].spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
+  ["a mutable migration image tag", (d) => { d[9].spec.template.spec.containers[0].image = "ghcr.io/devantler-tech/business-site:latest"; }],
+  ["a migration Job that serves the web", (d) => { d[9].spec.template.spec.containers[0].args = structuredClone(d[0].spec.args); }],
+  ["the strict file option, which cannot read a Secret projection", (d) => { d[9].spec.template.spec.containers[0].args[1] = "--migration-database-file"; }],
+  ["a migration without the web role grant", (d) => { d[9].spec.template.spec.containers[0].args.splice(3, 2); }],
+  ["a migration granting another role", (d) => { d[9].spec.template.spec.containers[0].args[4] = "portal_migrator"; }],
+  ["a migration Job running as root", (d) => { d[9].spec.template.spec.securityContext.runAsUser = 0; }],
+  ["a migration Job without its file group", (d) => { delete d[9].spec.template.spec.securityContext.fsGroup; }],
+  ["a migration Job with a service-account token", (d) => { d[9].spec.template.spec.automountServiceAccountToken = true; }],
+  ["a disk-backed migration temp directory", (d) => { delete d[9].spec.template.spec.volumes[1].emptyDir.medium; }],
+  ["a writable migration root", (d) => { d[9].spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem = false; }],
+  ["a group-readable migration Secret mode", (d) => { d[9].spec.template.spec.volumes[0].secret.defaultMode = 0o440; }],
+  ["the web runtime Secret in the migration Job", (d) => { d[9].spec.template.spec.volumes[0].secret.secretName = "business-site-runtime"; }],
+  ["an extra migration Secret item", (d) => { d[9].spec.template.spec.volumes[0].secret.items.push({ key: "password", path: "password" }); }],
+  ["migration input from the environment", (d) => { d[9].spec.template.spec.containers[0].envFrom = [{ secretRef: { name: "business-site-portal-db-migration" } }]; }],
+  ["unbounded migration retries", (d) => { d[9].spec.backoffLimit = 10; }],
+  ["no migration deadline", (d) => { delete d[9].spec.activeDeadlineSeconds; }],
+  ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
+  ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
+  ["a migration container that does not itself refuse root", (d) => { delete d[9].spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
+  ["a retention container that does not itself refuse root", (d) => { delete d[10].spec.jobTemplate.spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
+  ["a missing retention CronJob", (d) => { d.splice(10, 1); }],
+  ["a retention CronJob on another image", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
+  ["a retention CronJob that migrates", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args = structuredClone(d[9].spec.template.spec.containers[0].args); }],
+  ["the strict file option in the retention CronJob", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args[1] = "--migration-database-file"; }],
+  ["overlapping retention runs", (d) => { d[10].spec.concurrencyPolicy = "Allow"; }],
+  ["a retention purge more than once a day", (d) => { d[10].spec.schedule = "*/5 * * * *"; }],
+  ["retention retries", (d) => { d[10].spec.jobTemplate.spec.backoffLimit = 3; }],
+  ["no retention deadline", (d) => { delete d[10].spec.jobTemplate.spec.activeDeadlineSeconds; }],
+  ["a retention pod running as root", (d) => { d[10].spec.jobTemplate.spec.template.spec.securityContext.runAsUser = 0; }],
+  ["a retention pod with a service-account token", (d) => { d[10].spec.jobTemplate.spec.template.spec.automountServiceAccountToken = true; }],
+  ["the web runtime Secret in the retention CronJob", (d) => { d[10].spec.jobTemplate.spec.template.spec.volumes[0].secret.secretName = "business-site-runtime"; }],
+  ["a retention pod labelled as the web workload", (d) => { d[10].spec.jobTemplate.spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
 ]) {
   test(`the actual rendered package rejects ${name}`, () => {
     const rendered = yaml.loadAll(render());
     // Each target is selected by kind, independent of Kustomize's sort order.
-    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore", "ExternalSecret"].map((kind) => rendered.find((d) => d.kind === kind));
+    const docs = ["WebApp", "CiliumNetworkPolicy", "PodDisruptionBudget", "SecretStore"].map((kind) => rendered.find((d) => d.kind === kind));
+    const named = (kind, name) => rendered.find((d) => d.kind === kind && d.metadata.name === name);
+    // Index 4 is the disclosure synchronization, selected by name.
+    docs.push(named("ExternalSecret", "business-site-disclosure"));
     // The two routes follow at indexes 5 (portal) and 6 (public), selected by name.
-    for (const name of ["business-site-portal", "business-site-public"]) docs.push(rendered.find((d) => d.kind === "HTTPRoute" && d.metadata.name === name));
+    for (const name of ["business-site-portal", "business-site-public"]) docs.push(named("HTTPRoute", name));
+    // The billing synchronizations follow at indexes 7 (Numina) and 8 (Stripe).
+    for (const name of ["business-site-numina", "business-site-stripe"]) docs.push(named("ExternalSecret", name));
+    // The migration Job follows at index 9 and the retention CronJob at 10.
+    docs.push(named("Job", "business-site-portal-migration"), named("CronJob", "business-site-portal-retention"));
     assert.equal(check(docs.map((d) => yaml.dump(d)).join("---\n")).status, 0,
       "each refusal must start from a complete accepted package");
     mutate(docs);
@@ -233,6 +306,54 @@ for (const [name, mutate] of [
     assert.match(result.stderr, /^tenant package: rejected /);
   });
 }
+
+test("every package pod passes the cluster's pod-security admission rule", () => {
+  // Mirrors the platform's Kyverno validate-pod-security policy, which refused
+  // v3.9.0's Job for setting runAsNonRoot only at pod level: each container must
+  // itself refuse root and privilege escalation and drop ALL capabilities, and
+  // the pod must use the RuntimeDefault or Localhost seccomp profile.
+  const docs = yaml.loadAll(render());
+  const pods = [
+    ...docs.filter((d) => d?.kind === "Job").map((d) => d.spec.template.spec),
+    ...docs.filter((d) => d?.kind === "CronJob").map((d) => d.spec.jobTemplate.spec.template.spec),
+  ];
+  assert.equal(pods.length, 2, "the migration Job and the retention CronJob");
+  for (const pod of pods) {
+    assert.ok(["RuntimeDefault", "Localhost"].includes(pod.securityContext?.seccompProfile?.type));
+    for (const c of [...(pod.initContainers ?? []), ...pod.containers]) {
+      const s = c.securityContext ?? {};
+      assert.equal(s.allowPrivilegeEscalation, false, `${c.name} allowPrivilegeEscalation`);
+      assert.notEqual(s.privileged, true, `${c.name} privileged`);
+      assert.equal(s.runAsNonRoot, true, `${c.name} runAsNonRoot`);
+      assert.deepEqual(s.capabilities?.drop, ["ALL"], `${c.name} capabilities`);
+    }
+  }
+});
+
+test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
+  // The shared publisher pins the WebApp image. The production overlay copies
+  // that image into both jobs.
+  const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
+  try {
+    cpSync(path.join(root, "deploy"), fixture, { recursive: true });
+    const pinned = `ghcr.io/devantler-tech/business-site@sha256:${"b".repeat(64)}`;
+    const appManifest = path.join(fixture, "base/webapp.yaml");
+    const app = yaml.load(readFileSync(appManifest, "utf8"));
+    app.spec.image = pinned;
+    writeFileSync(appManifest, yaml.dump(app));
+    const rendered = yaml.loadAll(render(fixture));
+    const job = rendered.find((d) => d?.kind === "Job");
+    assert.equal(job.spec.template.spec.containers[0].image, pinned);
+    const cron = rendered.find((d) => d?.kind === "CronJob");
+    assert.equal(cron.spec.jobTemplate.spec.template.spec.containers[0].image, pinned);
+    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/prod/cronjob-portal-retention.yaml"), "utf8"));
+    assert.equal(cronSource.spec.jobTemplate.spec.template.spec.containers[0].image, undefined, "the source CronJob names no image of its own");
+    const source = yaml.load(readFileSync(path.join(root, "deploy/prod/job-portal-migration.yaml"), "utf8"));
+    assert.equal(source.spec.template.spec.containers[0].image, undefined, "the source Job names no image of its own");
+  } finally {
+    rmSync(fixture, { recursive: true });
+  }
+});
 
 test("a local Kustomize overlay cannot smuggle an unsupported resource into validation", () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));

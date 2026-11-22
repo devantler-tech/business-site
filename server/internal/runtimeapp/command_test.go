@@ -1,15 +1,12 @@
 package runtimeapp
 
 import (
-	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -20,28 +17,10 @@ import (
 func TestActualExecutableStagingIdentity(t *testing.T) {
 	dir := t.TempDir()
 	binary, public := buildActualCommand(t)
-	var issuer string
-	var discoveryDelay atomic.Int64
+	broker, _, discoveryDelay := syntheticBroker(t)
+	issuer := broker.URL
+	// Slow but valid broker startup must leave time for the enabled assertion.
 	discoveryDelay.Store(int64(5 * time.Second))
-	broker := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/openid-configuration" {
-			http.NotFound(w, r)
-			return
-		}
-		// Slow but valid broker startup must leave time for the enabled assertion.
-		if delay := time.Duration(discoveryDelay.Swap(0)); delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-r.Context().Done():
-				return
-			}
-		}
-		if err := json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": issuer + "/authorize", "token_endpoint": issuer + "/token", "jwks_uri": issuer + "/keys", "id_token_signing_alg_values_supported": []string{"RS256"}}); err != nil {
-			t.Error("synthetic discovery response failed")
-		}
-	}))
-	t.Cleanup(broker.Close)
-	issuer = broker.URL
 	database := runtimeFixtureDatabase(t)
 	prepareConstructorDatabase(t, database)
 	database.Host = fixtureTLSDatabase(t, database.Host, broker.TLS.Certificates[0])
@@ -66,16 +45,16 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 		want                                                             int
 		projected, ordinary, refuse, conflictingLease, missingDependency bool
 	}{
-		{name: "explicit identity after slow startup", flag: on, want: 200},
+		{name: "explicit identity after slow startup", flag: on, want: 303},
 		{name: "missing flag", want: 404},
 		{name: "false", flag: `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, want: 404},
 		{name: "malformed", flag: "{invalid", want: 404},
 		{name: "wrong type", flag: `{"defaultVariant":"on","variants":[{"name":"on","value":"true"}]}`, want: 404},
-		{name: "explicit projected identity", flag: on, want: 200, projected: true},
+		{name: "explicit projected identity", flag: on, want: 303, projected: true},
 		{name: "projected identity remains off", want: 404, projected: true},
 		{name: "ordinary complete dependencies remain off", want: 404, ordinary: true},
-		{name: "production without staging lease", flag: on, profile: "production", want: 200},
-		{name: "production projected secret", flag: on, profile: "production", want: 200, projected: true},
+		{name: "production without staging lease", flag: on, profile: "production", want: 303},
+		{name: "production projected secret", flag: on, profile: "production", want: 303, projected: true},
 		{name: "production disabled", flag: `{"defaultVariant":"off","variants":[{"name":"off","value":false}]}`, profile: "production", want: 404},
 		{name: "production missing flag", profile: "production", refuse: true},
 		{name: "production malformed flag", flag: "{invalid", profile: "production", refuse: true},
@@ -87,7 +66,7 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			until := time.Now().Add(30 * time.Second)
 			env := append([]string{}, environment...)
 			if tc.projected {
-				if tc.want == 200 {
+				if tc.want == 303 {
 					// Projection startup must also tolerate a slow but valid discovery.
 					discoveryDelay.Store(int64(7 * time.Second))
 				}
@@ -139,9 +118,9 @@ func TestActualExecutableStagingIdentity(t *testing.T) {
 			commandStatus(t, address, "/portal/requests", 404)
 			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-review", 404)
 			commandStatus(t, address, "/portal/requests/AAAAAAAAAAAAAAAAAAAAAAAAAA/proposal-acceptance", 404)
-			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 200])
+			commandStatus(t, address, "/portal/operator", map[bool]int{true: 403, false: 404}[tc.want == 303])
 			// The ordinary transport retains the actual shared-provider expiry proof.
-			if tc.want == 200 && !tc.projected && tc.profile == "" {
+			if tc.want == 303 && !tc.projected && tc.profile == "" {
 				<-time.After(time.Until(until) + time.Millisecond)
 				commandStatus(t, address, "/portal/sign-in", 404)
 				commandStatus(t, address, "/", 200)
@@ -173,9 +152,9 @@ func commandStatus(t *testing.T, address, route string, want int) {
 }
 
 // startActualCommand owns the executable through readiness, lease expiry and clean shutdown.
-func startActualCommand(t *testing.T, binary, public string, environment []string) (string, func()) {
+func startActualCommand(t *testing.T, binary, public string, environment []string, extra ...string) (string, func()) {
 	t.Helper()
-	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment)
+	process := launchActualCommand(t, binary, public, "127.0.0.1:0", environment, extra...)
 	address, err := process.awaitReady()
 	if err != nil {
 		t.Fatal(err)

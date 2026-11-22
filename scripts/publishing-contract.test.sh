@@ -21,6 +21,35 @@ for extension in yaml yml; do
   fi
   rm "$ownership_fixture/publish-pages.$extension"
 done
+# GitHub Pages is retired (platform#6177): the signed platform runtime is the only
+# public deployment, so no workflow may build, configure or deploy a Pages site.
+pages_retired() {
+  local workflow
+  for workflow in "$1"/*.yaml "$1"/*.yml; do
+    [[ -e "$workflow" ]] || continue
+    yq -o=json '.' "$workflow" | jq -e '
+      ([.. | objects | .uses? | strings | select(test("^actions/(deploy-pages|upload-pages-artifact|configure-pages)@"))] | length) == 0 and
+      ([.. | objects | .permissions? | objects | select(has("pages"))] | length) == 0 and
+      ([.. | objects | .environment? | if type == "object" then .name else . end | strings | select(. == "github-pages")] | length) == 0
+    ' >/dev/null || return 1
+  done
+}
+pages_retired "$root/.github/workflows" || fail 'a workflow still publishes to GitHub Pages'
+pages_retired "$ownership_fixture" || fail 'empty workflow directory rejected as a Pages publisher'
+for restored in \
+  'jobs: {build: {steps: [{uses: actions/upload-pages-artifact@0000000000000000000000000000000000000000}]}}' \
+  'jobs: {deploy: {steps: [{uses: actions/deploy-pages@0000000000000000000000000000000000000000}]}}' \
+  'jobs: {build: {steps: [{uses: actions/configure-pages@0000000000000000000000000000000000000000}]}}' \
+  'jobs: {deploy: {permissions: {pages: write}, steps: [{run: "true"}]}}' \
+  'jobs: {deploy: {environment: github-pages, steps: [{run: "true"}]}}' \
+  'jobs: {deploy: {environment: {name: github-pages}, steps: [{run: "true"}]}}' \
+  'jobs: [unparsable'; do
+  for extension in yaml yml; do
+    printf 'on: push\n%s\n' "$restored" > "$ownership_fixture/publish-site.$extension"
+    if pages_retired "$ownership_fixture" 2>/dev/null; then fail "restored Pages publication was accepted: $restored"; fi
+    rm "$ownership_fixture/publish-site.$extension"
+  done
+done
 ci_json="$(yq -o=json '.' "$root/.github/workflows/ci.yaml")" || fail 'cannot parse source CI'
 ci_gate_valid() {
   jq -e '
@@ -83,4 +112,4 @@ for broken_ci in \
     fail 'a broken CI aggregate passed its negative control'
   fi
 done
-printf 'publishing contract: PASS — one current publisher, source CI aggregate and negative controls\n'
+printf 'publishing contract: PASS — one current publisher, no GitHub Pages deployment, source CI aggregate and negative controls\n'

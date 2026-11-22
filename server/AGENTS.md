@@ -1,44 +1,6 @@
 # Portal server maintenance
 
 The parent repository's AGENTS.md and reviewed shared engineering contract apply.
-`cmd/identity-release` explicitly retains and verifies the frozen identity base's
-original source data; read its README. Preserve its embedded closed profile,
-complete OCI/layer/package/descriptor joins, original modes, private read-only
-capsule, external seal and deterministic archive readback. It never executes
-retained content, verifies OpenPGP/image signatures, publishes or activates users.
-Keep those four proof fields false; publisher admission remains separate.
-Its explicit base-transport unpacker requires both external seals and the same
-closed capsule plan, rejects altered transport and preserves source archives
-as opaque data in a new private reservation. It grants no distribution authority.
-Its explicit `prepare-handoff` operation binds the original local archives and
-raw native witness bytes to caller-supplied source/run metadata. Preserve its
-closed input roles, complete stable snapshots and exclusive manifest output.
-It neither repeats the native engines nor authenticates the supplied CI identity;
-all publication and activation claims stay false. No raw archive upload is added.
-`cmd/zitadel-module-sources` is an inert, explicit build command; read its README.
-Its selected-source capture uses checksum-pinned `golang.org/x/mod`, without
-importing portal authority or entering the frozen identity service's graph.
-CI builds the command with this module's exact compiler before selecting the
-unchanged upstream compiler. Preserve its complete tests, external-seal readback
-and narrow evidence fields; it never grants image or portal activation.
-The explicit `restore-go-inputs` operation admits only the three sealed source
-capsules and fixed trust policy into a new owned native cache. Preserve literal
-conflict refusal, physical input/output separation and failed-write cleanup.
-Its separate sealed file proxy enumerates only verified retained versions, never
-claims upstream latest, and preserves native deprecation/retraction/checksum
-checks. Keep writable native caches separate and prohibit network/direct fallbacks.
-Its network-denied native Go reader is not full generation/compilation replay;
-both overall proof flags must remain false until issue #343's full acceptance.
-Its separate native generator checkpoint reads fourteen actual executables before
-the console overwrites API OpenAPI 2.28. Preserve exact compiler/platform/command
-joins, complete original build metadata, path-and-version effective unions and
-external-seal readback. Metadata observation is not generator source retention or
-complete cold-build replay; both overall proof flags remain false.
-`cmd/zitadel-bsr-sources` is a separate otherwise inert standard-library source
-package verifier in the same module; read its README. Preserve the frozen BSR
-profile, complete native digest and export joins, external seals, bounded I/O,
-canonical private modes and verified-snapshot restore/cache checks. It does not
-run upstream commands or complete native Linux replay or source admission.
 `cmd/customer-identity-config` explicitly prepares dormant native ZITADEL/Dex
 documents with no network, user, secret-value or activation operations. Read
 `CUSTOMER-IDENTITY.md`. Preserve skipped first-instance bootstrap, closed user and
@@ -76,12 +38,14 @@ Retain the closed receipt/member schema, bounded same-descriptor snapshot, compl
 CRC checks and caller-bound original source/run/attempt. Its ordinary tests include
 the compiled command. Admission is not signature, current-CI, release or deployment
 proof; #276 owns the separate publisher caller and independent signed-pair proof.
-The shared test-only maintenance inventory preserves all 120 original Go documents.
+The shared test-only maintenance inventory preserves the 98 original Go documents of the
+screens that still exist; #117 and #120 retired the 22 invoice and credit documents with
+their screens.
 The separate work-review inventory adds 18 actual EN/DA documents with explicit
 state, native-form and evidence expectations; retain both inventories.
 Read `CONTACT-MAINTENANCE.md` before changing it.
 Keep its explicit task option separate from ordinary source checks; preserve
-all five families, both languages, complete counts and negative controls. Markup
+all four remaining families, both languages, complete counts and negative controls. Markup
 inventory is not authenticated/browser proof or a completed comparison.
 The offline `cmd/contact-trial-inputs` checks frozen source identities for #213;
 read `CONTACT-TRIAL-INPUTS.md` before changing it. Preserve its closed presentation
@@ -117,10 +81,14 @@ Preserve each package's existing 90-second bound;
 never make these expensive real-process controls optional to fit the ordinary suite.
 This Go module is the unified product's **default-off browser identity boundary**,
 not a deployed portal. It provides sign-in/callback/shell/logout and private contact
-profile handlers and separately default-off free project-request intake; no order,
-payment collection or agent endpoint exists. Read `REQUESTS.md` for the request boundary and
-`INVOICES.md` for private external invoice metadata and `CREDITS.md` for operator
-bank-credit evidence. Read `WORK-APPROVALS.md` before changing internal work
+profile handlers, separately default-off free project-request intake and default-off
+Numina invoice and Stripe card billing (`BILLING.md`). The separately configured operator
+API accepts short-lived machine proofs with exact per-action grants alongside authenticated
+human operators. Application configuration contains public machine policy, never a human
+session or machine credential. Read `CUSTOMER-IDENTITY.md` for its closed grant catalogue,
+audit-before-effects requirement and membership-incarnation-bound browser sessions.
+Legacy unbound sessions must sign in again; deactivation never scans unrelated sessions.
+Read `REQUESTS.md` for the request boundary. Read `WORK-APPROVALS.md` before changing internal work
 decisions; its independently default-off operator review uses native forms, with
 no client decision route, queue or execution adapter. Contact emails remain
 self-declared unless the separately default-off broker confirmation in `CONTACTS.md`
@@ -135,7 +103,7 @@ and the pinned `govulncheck` command in CI. Follow README.md's exact inventory,
 every test and each existing 90-second package/cohort bound. Database tests require BOTH fixture URLs
 documented in README.md and fail rather than skip if absent. Never point them at
 a real customer database; they refuse non-fixture database/role names and truncate
-only the fixture's seventeen identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
+only the fixture's thirty-six identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal/mail/launch/add-on/closure/add-on-end tables. Protected history resets use the fixture migrator, never deployed runtime grants. Provision a fresh disposable PostgreSQL
 17 service with `testdata/provision.sql`; never start a permanent service for tests.
 The tracked module-local `.go-test-fixture.json` also opts input-free organization
 validation into its closed disposable PostgreSQL fixture. Keep its namespace and
@@ -163,7 +131,7 @@ OSV's supported executable override rebuilds the same scanner version with the
 module-selected stable compiler before analysis. Preserve its complete target,
 arguments and exit status; run `bash scripts/scan-go-source.test.sh` from the
 repository root. A compiler-selection or analysis error is never a clean scan.
-Lychee's test-only preprocessor renders all six actual private templates in EN/DA.
+Lychee's test-only preprocessor renders all five actual private templates in EN/DA.
 It checks effective form methods against the production route registrations and
 canonical public/private boundary, and exercises actual asset handlers. Ordinary
 public links and documents retain normal Lychee checking; no status is exempted.
@@ -192,7 +160,10 @@ resource lifecycle at the call.
 
 Preserve issuer/subject identity, nonce/authorized-party checks, atomic database
 consumption, current membership and concrete record client scopes. A token's
-email/groups or browser fields cannot assign a role. `Invite`/`Revoke` are trusted
+email/groups or browser fields cannot assign a role. Operators come only from the
+`PORTAL_OPERATOR_SUBJECTS` setting and sign in with GitHub through the `platform`
+connector; a role must match its subject's connector, which the callback decodes rather
+than trusting the requested `connector_id`. `Invite`/`Revoke` are trusted
 control-plane provisioning methods, not permission to expose unauthenticated APIs.
 Browser routes use maintained code exchange/PKCE, durable opaque sessions,
 token-based CSRF, current membership and accessible EN/DA forms. Keep the
@@ -217,8 +188,11 @@ the exact saved revision/address for the same broker identity and current client
 never use email to link identities, grant roles or authorize work. Ordinary sign-in
 does not confirm contacts. SDK waits precede private-read authorization and final
 write expiry/cancellation checks. Edits clear confirmation/provenance; recovered
-draft values cannot inherit a saved address's confirmation. The environment provider
-remains identity-only, with no new activation mapping. Preserve unchanged v1–v7;
+draft values cannot inherit a saved address's confirmation. Bounded staging remains
+identity-only. The explicit production capability settings in README.md are
+independently false by default and preserve every operation's prerequisite gates;
+configuration alone grants no membership, agreement, funding or work authority.
+Preserve unchanged v1–v7;
 v8 adds bound purposes and confirmation provenance without broadening table authority.
 Free project requests additionally require false-default `portal-requests` on every
 operation. A receipt never authorizes a quote, agreement, payment or worker execution.
@@ -237,6 +211,9 @@ and content-bound retry keys, and retain original intake order. Grant their tabl
 SELECT/INSERT only, never UPDATE/DELETE/TRUNCATE or schema ownership. A draft is
 not a dispatched offer, agreement, payment or work authorization. Keep credited
 funds, worker claims and API/MCP execution separate from draft preparation.
+Generated drafts (#552) come from `internal/identity/offerings.json` and post the
+ordinary proposal form; keep that file equal to the public offer copy and prices
+(`scripts/proposal-offerings.test.mjs`). Requests outside the offerings are priced by hand.
 
 Explicit sharing/withdrawal additionally requires false-default
 `portal-proposal-sharing`; review retirement under business-site#78 by 13 November 2026. Its append-only v7 ledger follows unchanged v1–v6. Client reads expose only
@@ -264,24 +241,16 @@ authorization checkpoints.
 Original actor-bound retries return historical receipts, not consent to later scope.
 New unshared drafts remain
 readable only through the old shared snapshot and are never acceptable or exposed.
-No environment activation mapping, credited funds or worker eligibility is added.
+Production capability configuration grants neither credited funds nor worker eligibility.
 
-External invoice metadata additionally requires independent false-default
-`portal-invoices`; review retirement under business-site#117 by 15 November 2026.
-Read `INVOICES.md`. Record only explicit external references, purpose/period and
-exact DKK net, VAT and positive payable-total minor units against current accepted proposal content. Never
-derive a first-month invoice from proposal prices. v10 follows unchanged v1–v9;
-its composite foreign key preserves the immutable acceptance binding. Retain
-SELECT/INSERT-only runtime privileges, content/actor-bound retries, bounded
-history and the shared request/operator lock. Optional display SDK waits precede
-private reads. v12 appends explicit net/VAT columns after unchanged v1–v11;
-bounded net plus VAT must equal the existing payable amount. Preserve legacy
-NULL/NULL facts as unrecorded, with exact absent-component retries only for
-those old receipts. A NOT VALID non-NULL constraint preserves historical rows
-while refusing incomplete new SQL inserts. Never infer rates or reclassify old
-receipts; bind both components in retry equality. Bank-credit status still uses
-the payable total, not net. Historical invoices grant no payment, monthly or execution
-authority; no environment activation mapping or client/agent invoice route exists.
+The external invoice-record and bank-credit evidence modules (#117, #120) are
+retired by ADR 0030: Numina is the record for invoices and bank payments. Their
+v10–v12 tables stay as historical schema, nothing in the portal writes them, and
+earlier work approvals still reference them. New approvals bind the order's
+funding charge instead (#268, migration v19, `WORK-APPROVALS.md`). Their former
+gates `portal-invoices` and `portal-credit-reconciliation` no longer exist. Test
+fixtures in `retired_evidence_fixture_test.go` seed that historical evidence for
+migration-history tests.
 
 Migrations run under a separate migration role; the runtime must not own schema
 creation, the migration ledger, superuser or BYPASSRLS authority. Authorization
@@ -319,24 +288,49 @@ unchanged v1–v14. Keep existing rows, checksums and runtime grants intact.
 Both languages show the category and case-by-case assessment boundary; the
 existing independent false-default identity/request gates remain mandatory.
 
-Manual bank-credit evidence additionally requires independent false-default
-`portal-credit-reconciliation`; review retirement under business-site#120 by
-15 November 2026. Read `CREDITS.md`. v11 follows unchanged v1–v10. Reserve each
-case-sensitive source/reference pair globally to its immutable invoice/client,
-including after invalidation. Append corrections under the shared request lock;
-never sum historical confirmations. Unverified/disputed evidence prevents full
-credit, and excess is distinct. Keep 32 identities per invoice and 16 revisions
-per identity, reserving the last for invalidation. Preserve complete history,
-content/actor-bound retries and SELECT/INSERT-only runtime permissions. Historical
-money remains recordable after a re-quote but never approves its replacement.
-No environment mapping, bank connection, client/agent route or work-start
-authority is introduced. Optional display SDK waits precede private reads.
+v16 appends orders, per-period charges and the Numina contact map after unchanged
+v1–v15. Read `BILLING.md`. Orders and the contact map are SELECT/INSERT; charges
+add UPDATE for their state. Every step requires the acceptance gates plus false-default
+`portal-invoice-billing`, explicitly configured in production by
+`PORTAL_INVOICE_BILLING_FLAG`. Record a charge's identity
+before any Numina call, find a lost creation by its memo before retrying, settle only on
+`paid` with nothing outstanding, and hold what the path must not decide (no contact
+profile, a customer outside Denmark). The Numina key never reaches logs or diagnostics.
+v17 appends the card path's Checkout Sessions and applied Stripe events. The false-default
+`portal-card-billing` gate has the independent production setting
+`PORTAL_CARD_BILLING_FLAG`. Fund a card order only from a
+signature-verified webhook for its exact Checkout Session or subscription invoice and amount,
+apply each event once, never from a browser return, and never also invoice it in Numina. The
+webhook alone bypasses sessions and CSRF; keep its body bound and signature check first.
+v18 appends order ends, Stripe-confirmed subscription ends and charge reversals, each
+SELECT/INSERT only. Never bill after an order's last month, count a refunded or disputed charge
+as funding, or trust a reversal or end that does not resolve to the portal's own stored session,
+invoice or subscription. v19 binds every new work approval to its order's settled funding charge,
+never refunded or disputed, through composite keys; earlier approvals keep their invoice binding. v20
+adds the client as an order end's source: the client ends monthly billing after the current
+month, recorded once with the client's identity under the request's client lock. v21 records
+a client's withdrawal within 14 days and Stripe's confirmed end of its card subscription, both
+SELECT/INSERT only; a withdrawn order is never billed or charged again and funds no work
+approval, and its subscription end takes precedence over one scheduled earlier. v22 records the
+client's optional request to start early, dated with the order; without it no work is approved
+within the withdrawal period. After a withdrawal that followed an early start, the operator
+records the amount owed once, and a completion record ends the right of withdrawal. v23 queues
+the order confirmation and withdrawal receipt with what causes them and sends them through the
+site's SES sender (`BILLING.md`, *Emails*), SELECT/INSERT only. The exclusive
+`--retention-purge` job deletes a former client's records 3 years after their last membership
+ended (`identity.RetentionYears`), as the migration role; never give the runtime DELETE for it.
+
 The web constructor binds both session and effective database identity to the
 parsed login before its permission gate and broker discovery. Preserve the real
 restricted-login positive control and mismatched-login refusal controls.
 The actual executable's `--migrate` job requires a private verified-TLS migration
 connection file, rejects broad/assumable authority and mixed server options, and
-has fixed connection/statement/lock/overall deadlines. Read `MIGRATIONS.md` before
+has fixed connection/statement/lock/overall deadlines. Its optional `--runtime-role`
+grants an existing web login exactly `runtimeGrants` (beside the embedded
+migrations) in the migration transaction; change both together, and keep
+`CheckRuntimeRole` the independent startup gate. `--portal-settings-projection`
+only installs the existing `PORTAL_*` settings from one confined file and refuses
+inherited ones; `--portal-invite` is a trusted operator command, not an API. Read `MIGRATIONS.md` before
 changing it. Normal web startup must never read migration credentials or perform
 DDL. Exercise the compiled job against its uniquely named disposable databases;
 source proof never authorizes a production migration or customer activation.
@@ -345,8 +339,7 @@ scope the data query; an application helper is not blanket database isolation.
 
 Keep fixtures fictional. No tokens, login secrets, customer records or raw
 database errors in public responses/logs. No server files under `public/` or the
-Astro content collection. Static Pages publication remains source-owned and
-uploads only `dist`; it does not deploy this module. Application code stays here,
+Astro content collection. Application code stays here,
 never in the monorepo or a separate portal source repository.
 
 Sign-in credentials select exactly one ordinary owner-only file or explicit

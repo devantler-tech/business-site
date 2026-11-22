@@ -10,8 +10,8 @@ The portal's billing pieces are merged source code behind default-off gates, and
 none is deployed. Today:
 
 - the operator writes proposal versions by hand ([`server/PROPOSALS.md`](../../server/PROPOSALS.md));
-- invoices issued elsewhere are recorded ([`server/INVOICES.md`](../../server/INVOICES.md));
-- bank credits are recorded manually ([`server/CREDITS.md`](../../server/CREDITS.md));
+- invoices issued elsewhere are recorded ([`server/INVOICES.md`](https://github.com/devantler-tech/business-site/blob/303e366d26a1a58d87d7574541c065ccc560f14c/server/INVOICES.md));
+- bank credits are recorded manually ([`server/CREDITS.md`](https://github.com/devantler-tech/business-site/blob/303e366d26a1a58d87d7574541c065ccc560f14c/server/CREDITS.md));
 - a work approval needs a fully credited invoice record ([`server/WORK-APPROVALS.md`](../../server/WORK-APPROVALS.md)).
 
 No payment, checkout or subscription code exists.

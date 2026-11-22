@@ -1,0 +1,442 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Devantler Tech portal operator API",
+    "version": "1",
+    "description": "Every operator action, as the operator pages use it. Human callers need a current operator session. Configured machine identities use a distinct JWT audience and are read-only unless granted an exact action. Agents cannot move money or delete customer data. Every verified caller is recorded in the audit log before answering, refusals included; a call that cannot be recorded fails."
+  },
+  "servers": [{ "url": "/" }],
+  "security": [{ "portalSession": [] }, { "agentBearer": [] }],
+  "paths": {
+    "/operator/api/invitations": {
+      "post": {
+        "operationId": "invitations.create",
+        "summary": "Invite a customer and send account setup for a new customer",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Required for browser sessions; machine bearer calls never carry browser cookies.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CustomerInvitationInput" } },
+            "application/x-www-form-urlencoded": { "schema": { "$ref": "#/components/schemas/CustomerInvitationForm" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Single-use invitation recorded, valid for seven days",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Invitation" } } }
+          },
+          "303": { "description": "Native HTML form returns to the customer overview" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "get": {
+        "operationId": "invitations.list",
+        "summary": "Invitations that can still be accepted",
+        "responses": {
+          "200": {
+            "description": "All pending invitations, soonest expiry first; more than 1000 returns 503",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Invitation" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces": {
+      "post": {
+        "operationId": "workspaces.create",
+        "summary": "Create an empty customer workspace",
+        "requestBody": { "$ref": "#/components/requestBodies/NewWorkspace" },
+        "responses": {
+          "200": { "description": "The workspace is recorded" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      },
+      "get": {
+        "operationId": "workspaces.list",
+        "summary": "Every workspace and its members, revoked ones included",
+        "responses": {
+          "200": {
+            "description": "All workspaces by ID; more than 1000 memberships across them returns 503",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Workspace" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/invitations/revoke": {
+      "post": {
+        "operationId": "invitations.revoke",
+        "summary": "Revoke a pending customer invitation",
+        "requestBody": { "$ref": "#/components/requestBodies/RevokeInvitation" },
+        "responses": {
+          "200": { "description": "The invitation cannot be accepted" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces/members": {
+      "get": {
+        "operationId": "workspaces.members.list",
+        "summary": "List the members of one customer workspace",
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The workspace members, including deactivated members",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
+              }
+            }
+          },
+          "400": { "description": "The workspace is missing or invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/members/deactivate": {
+      "post": {
+        "operationId": "members.deactivate",
+        "summary": "Deactivate a customer membership and its ZITADEL user",
+        "requestBody": { "$ref": "#/components/requestBodies/ChangeMember" },
+        "responses": {
+          "200": { "description": "Portal and identity-provider access are disabled" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/members/reactivate": {
+      "post": {
+        "operationId": "members.reactivate",
+        "summary": "Reactivate a customer after its ZITADEL user is active",
+        "requestBody": { "$ref": "#/components/requestBodies/ChangeMember" },
+        "responses": {
+          "200": { "description": "Portal and identity-provider access are enabled" },
+          "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/work-eligibility": {
+      "get": {
+        "operationId": "work.eligibility.list",
+        "summary": "Observe current work eligibility without granting execution",
+        "description": "Human operators only; no administrative machine grant. Requires the independent default-off portal-work-eligibility decision. Observations use original submission time and request-ID byte order. Each observation has its own database time; this is not an atomic queue snapshot or execution lease. Missing prerequisites remain ineligible. Unreadable evidence fails the whole page.",
+        "security": [{ "portalSession": [] }],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation position from the prior page; conveys no authority",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "At most twenty timestamped observations, never execution rights",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkEligibilityPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/audit": {
+      "get": {
+        "operationId": "audit.list",
+        "summary": "The newest 100 audit entries",
+        "responses": {
+          "200": {
+            "description": "Audit entries, newest first",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/AuditEntry" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/openapi.json": {
+      "get": {
+        "operationId": "openapi.read",
+        "summary": "This description",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    }
+  },
+  "components": {
+    "requestBodies": {
+      "NewWorkspace": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/NewWorkspace" } },
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      },
+      "RevokeInvitation": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/RevokeInvitation" } },
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["subject"],
+              "properties": {
+                "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      },
+      "ChangeMember": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ChangeMember" } },
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace", "subject"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "portalSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-portal_session",
+        "description": "The operator's portal session, from signing in at /operator/sign-in. Never combine it with a bearer token."
+      },
+      "agentBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Platform-issued machine JWT: configured issuer and subject, exact separate audience, signed and valid for at most five minutes. No browser session or human page access."
+      }
+    },
+    "responses": {
+      "InvalidInput": {
+        "description": "Invalid or conflicting action; recorded as refused",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "SignIn": {
+        "description": "No session, invalid machine proof, or combined bearer and session",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "OperatorsOnly": {
+        "description": "The verified caller is not a current operator or lacks this machine action; recorded as refused",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unavailable": {
+        "description": "The action failed or could not be recorded",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "WorkEligibilityPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/WorkObservation" } },
+          "nextCursor": { "type": "string", "minLength": 1, "maxLength": 160 }
+        }
+      },
+      "WorkObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requestId", "approvalGeneration", "submittedAt", "observedAt", "state"],
+        "properties": {
+          "requestId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
+          "approvalId": { "type": "string", "pattern": "^[A-Z2-7]{26}$" },
+          "approvalGeneration": { "type": "integer", "format": "int64", "minimum": 0 },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Original server-owned submission instant"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database observation instant; later calls must revalidate"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["approval-required", "approval-paused", "confirmation-pending", "closed", "eligible"],
+            "description": "Eligible requires certified original confirmation acceptance by the sender; this does not prove inbox delivery or grant execution"
+          }
+        }
+      },
+      "NewWorkspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace"],
+        "properties": { "workspace": { "type": "string", "minLength": 1, "maxLength": 100 } }
+      },
+      "RevokeInvitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subject"],
+        "properties": { "subject": { "type": "string", "minLength": 1, "maxLength": 512 } }
+      },
+      "ChangeMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace", "subject"],
+        "properties": {
+          "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "subject": { "type": "string", "minLength": 1, "maxLength": 512 }
+        }
+      },
+      "CustomerInvitationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "email", "workspace"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200,
+            "description": "First and last name, up to 200 UTF-8 bytes"
+          },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "workspace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Workspace ID, up to 100 UTF-8 bytes"
+          }
+        }
+      },
+      "CustomerInvitationForm": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "email", "workspace", "csrf_token"],
+        "properties": {
+          "name": { "type": "string", "minLength": 3, "maxLength": 200 },
+          "email": { "type": "string", "format": "email", "maxLength": 254 },
+          "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "csrf_token": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Native browser form CSRF token; JSON clients use the header."
+          }
+        }
+      },
+      "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
+      "Invitation": {
+        "type": "object",
+        "required": ["subject", "workspace", "role", "expires"],
+        "properties": {
+          "subject": { "type": "string", "description": "The invited customer Dex subject" },
+          "workspace": { "type": "string" },
+          "role": { "type": "string", "enum": ["client", "operator"] },
+          "expires": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "required": ["id", "members"],
+        "properties": {
+          "id": { "type": "string" },
+          "members": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": ["subject", "role", "revoked"],
+        "properties": {
+          "subject": { "type": "string" },
+          "role": { "type": "string", "enum": ["client", "operator"] },
+          "revoked": { "type": "boolean" }
+        }
+      },
+      "AuditEntry": {
+        "type": "object",
+        "required": ["at", "actorKind", "actorSubject", "action", "target", "outcome"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "actorKind": { "type": "string", "enum": ["operator", "agent", "other"] },
+          "actorSubject": { "type": "string" },
+          "action": { "type": "string" },
+          "target": { "type": "string" },
+          "outcome": { "type": "string", "enum": ["allowed", "refused", "failed"] }
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # 0023: Seal and replay the identity build's corresponding source
 
-Status: Proposed
+Status: Superseded by [ADR 0031](0031-upstream-zitadel-image.md); previously Proposed.
 
 ## Context
 

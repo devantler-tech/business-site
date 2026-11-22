@@ -1,9 +1,13 @@
 # Private work decisions
 
 This internal service records an operator's explicit decision against an exact
-current agreement and fully credited external invoice. Its default-off operator
+current agreement and the order's settled funding from [portal billing](BILLING.md)
+(ADR 0030, decision 6; #268). It replaced the retired invoice-record and
+bank-credit evidence (#117, #120). Its default-off operator
 screen uses the retained Go frame and native forms; it has no client decision
-form, worker, queue, API or MCP adapter. It does not activate the portal,
+form, worker, queue or MCP adapter. The human-only
+[eligibility reader](WORK-ELIGIBILITY.md) observes service prerequisites without
+granting execution. This foundation does not activate the portal,
 start work, collect money or create a monthly entitlement. Operator review is
 tracked in [#267](https://github.com/devantler-tech/business-site/issues/267)
 under [#138](https://github.com/devantler-tech/business-site/issues/138);
@@ -11,28 +15,31 @@ the portal-owned work queue remains under #20, not a client-orders repository.
 
 ## Exact evidence and lifetime
 
-A prepared review is only a content hash, the selected acceptance/invoice and a
+A prepared review is only a content hash, the acceptance and order and a
 current-generation comparison token. It is not a persisted approval and grants
 no authority. A fresh decision independently reconstructs the same evidence
 inside the request transaction:
 
 - Current shared proposal version, visibility event, content and exact client
   acceptance, without manufacturing new client consent.
-- Selected invoice's explicit net, VAT and payable amount, plus the complete
-  bounded invoice history. Legacy unknown components cannot authorize work.
-- Complete bounded bank-transfer reservation and revision history, and every
-  latest observation. Only an exact confirmed total with no disputed or
-  unverified observation is eligible. Missing observations, revision gaps,
-  overflow or failed reads are unavailable, never a zero or success.
+- The client's order for that acceptance, with its one collection path and amounts,
+  and its first charge: the accepted one-time amount, or the first month for a
+  monthly-only order. Only a charge its billing path settled (a paid Numina invoice
+  or a verified Stripe payment), for exactly the agreed amount, with its net and
+  VAT, and never refunded or disputed, is funding. Anything else, or a failed
+  read, is unavailable, never a zero or success.
+- When work may start: the client asked for an early start when ordering, or the
+  14-day withdrawal period has ended (Consumer Contracts Act, section 18). A
+  withdrawn order never funds work.
 - Exact client acceptor and original operator identities, workspaces and
   database-owned membership incarnations. The current viewing operator is
   independently authorized; a different authorized operator may review a
   decision without changing its original actor.
 
-The closed typed encoding normalizes timestamps to UTC and sorts transfer
-identities before hashing. It contains private evidence and must not be logged
-or published. Changes to agreement, invoice history, credit observations or the
-bound memberships invalidate the existing approval even when totals or current
+The closed typed encoding (format 2) normalizes timestamps to UTC before
+hashing. It contains private evidence and must not be logged or published.
+Changes to the agreement, the order, the funding charge (its state, amounts,
+payment reference or a reversal) or the bound memberships invalidate the existing approval even when totals or current
 membership values later return to their earlier values.
 
 The database assigns the decision time after locking and feature evaluation.
@@ -51,6 +58,9 @@ This is not a rule requiring the client to repeat unchanged consent.
 Migration v14 follows unchanged v1–v13. Immutable approvals and terminal
 revocations/supersessions are separate from one confined current pointer per
 request. Composite foreign keys bind request, client, invoice and agreement.
+Migration v19 rebinds every new approval to its order and funding charge, whose
+request, client, acceptance and exact amounts composite foreign keys bind; earlier
+rows keep their invoice binding, and no row may have both or neither.
 The request lock comes before deterministic issuer/subject membership locks;
 membership writers never acquire request locks. Locks survive the transaction's
 final release checks.
@@ -73,10 +83,10 @@ decisions per page. The cursor binds original database time and receipt ID at
 microsecond precision, including equal-time ties. Read/scan failures are unavailable,
 never successful empty history. Historical terminal receipts are never a fallback.
 
-Selecting an explicit `invoice` opens a fresh candidate review, not an assertion
-that an earlier selected approval is still valid. It shows the exact accepted
-scope, deliverables, one-time/monthly amounts and terms, selected invoice's
-net/VAT/payable facts, and every transfer observation/revision. The candidate
+`?review=funding` opens a fresh candidate review, not an assertion that an
+earlier selected approval is still valid. It shows the exact accepted scope,
+deliverables, one-time/monthly amounts and terms, the order and its collection
+path, and the paid charge with its payment reference and time. The candidate
 and comparison identity are captured under the same request lock. Its native
 `POST .../work-approvals` reconstructs the evidence and checks generation before
 recording a decision. A separate `POST .../work-revocations` clears only the
@@ -84,8 +94,7 @@ expected selected decision. GET/HEAD never write authority or review contexts.
 
 Both actions use existing domain operations and actor/content-bound retries.
 Revocation does not need positive old funding, current client consent, the former
-approver's membership or an unexpired old deadline. No migration or grant changes
-are needed. The UI does not calculate eligibility from localized labels or totals.
+approver's membership or an unexpired old deadline. No grant changes are needed. The UI does not calculate eligibility from localized labels or totals.
 
 The whole frame is buffered. A real maintained SCS store/codec snapshot is captured
 before acquiring a work transaction; it is only comparison material. After the last
@@ -111,7 +120,7 @@ The independent false-default `portal-work-approvals` decision has no environmen
 activation mapping. Review retirement under
 [#268](https://github.com/devantler-tech/business-site/issues/268) by
 20 November 2026. Approval reads/writes also require the existing identity,
-request, triage, proposal, sharing, acceptance, invoice and credit gates.
+request, triage, proposal, sharing and acceptance gates.
 Revocation deliberately requires only identity, request, triage and approval
 gates, so invalid old evidence cannot trap an approval.
 
@@ -122,5 +131,5 @@ disposable and use no real payment, customer or bank connection. Passing source
 tests and a merged foundation are not deployed identity, recovery, legal
 clearance or permission for an agent to execute client work. The eighteen new
 EN/DA work documents have explicit state/form/fact expectations and common-frame
-and method-aware link controls. The original 120 document/body references remain
-unchanged; they are not regenerated from the new renderer.
+and method-aware link controls. The 98 original document/body references that remain
+after the invoice and credit screens were retired are unchanged; they are not regenerated from the new renderer.

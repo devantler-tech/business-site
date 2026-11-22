@@ -43,7 +43,7 @@ func TestContactResponseRequiresOriginalDurableSession(t *testing.T) {
 		for _, change := range []string{"unchanged", "deleted", "expired", "replacement identity", "extended deadline", "corrupt data", "wrong expiry type"} {
 			t.Run(checkpoint+"/"+change, func(t *testing.T) {
 				b := newBrowserFixture(t)
-				b.finish(b.start(b.invite("client-a", "client-a", "client")))
+				b.finish(b.startInvited("client-a", "client-a", "client"))
 				status, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Private Fictional Contact", "a@example.invalid", ""), b.site.URL)
 				if status != http.StatusSeeOther {
 					t.Fatal("fixture contact was not saved")

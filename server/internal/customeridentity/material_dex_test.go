@@ -20,7 +20,7 @@ func dexFixture(t *testing.T) (string, string) {
 	settings := map[string]string{
 		"schemaVersion": "customer-dex-private-v1",
 		"dexIssuer":     "https://login.example.invalid", "zitadelIssuer": "https://accounts.example.invalid",
-		"portalCallback": "https://site.example.invalid/portal/callback",
+		"portalCallback": "https://site.example.invalid/callback",
 		"databaseHost":   "database.example.invalid", "databaseName": "customer_dex", "databaseUser": "dex_runtime",
 		"zitadelClientID": "1234567890@fictional",
 	}
@@ -143,7 +143,7 @@ func dexAssertOutput(t *testing.T, input, output string) {
 	}
 	client := config.StaticClients[0]
 	if client.ID != "business-portal" || client.Public || client.SecretEnv != "" || client.Secret != string(read(input, "portal-client-secret")) ||
-		!slices.Equal(client.RedirectURIs, []string{"https://site.example.invalid/portal/callback"}) {
+		!slices.Equal(client.RedirectURIs, []string{"https://site.example.invalid/callback"}) {
 		t.Fatal("broker portal client or its independent private credential differs")
 	}
 }

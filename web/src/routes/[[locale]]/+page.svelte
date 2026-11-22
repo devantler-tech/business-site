@@ -2,12 +2,16 @@
   import CustomerScope from "#lib/CustomerScope.svelte";
   import Shell from "#lib/Shell.svelte";
   import { linkedInUrl } from "../../../../src/components/business/business-copy";
+  import { portalCopy } from "../../../../src/components/business/portal-copy";
   import coachingOriginal from "../../../../src/assets/ascoaching-homepage.jpg?url";
   import type { load } from "./+page.server";
   let { data }: { data: ReturnType<typeof load> } = $props();
   let t = $derived(data.home);
+  let portal = $derived(portalCopy[data.locale]);
   let home = $derived(data.locale === "da" ? "/da/" : "/");
   const format = (value: number) => new Intl.NumberFormat(data.locale === "da" ? "da-DK" : "en-GB").format(value);
+  // "DKK 6,000" in English, "6.000 kr." in Danish.
+  const money = (value: number) => data.locale === "en" ? `${t.currency} ${format(value)}` : `${format(value)} ${t.currency}`;
 </script>
 
 <Shell locale={data.locale} title={data.title} description={data.description} page="home">
@@ -44,8 +48,11 @@
       <div class="section-heading"><h2 id="services-title">{t.servicesTitle}</h2><p>{t.servicesIntro}</p></div>
       <div class="offers">{#each t.offers as offer}<article class="offer" data-offer={offer.id} data-setup={offer.setup} data-monthly={offer.monthly}>
         <h3>{offer.title}</h3><p class="offer-description">{offer.description}</p>
-        <div class="price"><span>{t.starting}</span><strong>{data.locale === "en" ? `${t.currency} ` : ""}{format(offer.setup)}{data.locale === "da" ? ` ${t.currency}` : ""}</strong>{#if t.vatMarker}<small class="vat-marker">{t.vatMarker}</small>{/if}</div>
-        <p class="hosting-price">{t.monthly} <b>{format(offer.monthly)} {t.currency}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}</p>
+        <div class="price"><span class="price-label">{t.starting}</span>
+          <!-- Each label comes first, so a screen reader hears "normal price …, launch price …"; CSS shows the amount above it. -->
+          <div class="price-pair"><p class="normal-price"><span>{t.normalLabel}{#if t.vatMarker}, <span class="vat-marker">{t.vatMarker}</span>{/if}</span><del>{money(offer.setup)}</del></p>
+            <p class="launch-price" data-launch-setup={offer.launchSetup}><span>{t.launchLabel}{#if t.vatMarker}, <span class="vat-marker">{t.vatMarker}</span>{/if}</span><strong>{money(offer.launchSetup)}</strong></p></div></div>
+        <p class="hosting-price">{t.monthly} <b>{money(offer.monthly)}</b> {t.perMonth}{" "}{#if t.vatMarker}<span class="vat-marker"> {t.vatMarker}</span>{/if}{t.hostingExcluded}</p>
         <ul>{#each offer.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{offer.boundary}</p><a class="text-link" href="#contact">{t.contact}<span aria-hidden="true">↗</span></a>
       </article>{/each}
@@ -55,7 +62,9 @@
         <ul>{#each t.otherRequest.includes as item}<li>{item}</li>{/each}</ul>
         <p class="boundary">{t.otherRequest.boundary}</p><a class="text-link" href="#contact">{t.otherRequest.action}<span aria-hidden="true">↗</span></a>
       </article></div>
+      <p class="launch-note" data-launch-offer>{t.launchNote}</p>
       <p class="price-note">{t.priceNote}</p>
+      {#if t.addons}<div class="addons" data-addons><h3>{t.addons.title}</h3><p>{t.addons.intro}</p><ul>{#each t.addons.items as addon}<li data-addon={addon.id} data-price={addon.price}><b>{addon.title}</b>: {data.locale === "en" ? `${t.currency} ` : ""}{format(addon.price)}{data.locale === "da" ? ` ${t.currency}` : ""}{addon.monthly ? ` ${t.addons.perMonth}` : ""}{addon.each ? ` ${t.addons.each}` : ""}<br><span>{addon.description}</span></li>{/each}</ul></div>{/if}
       <div class="scope-notes"><div><h3>{t.hostingTitle}</h3><p>{t.hostingText}</p><p class="hosting-location" data-hosting-location>{t.hostingLocation}</p></div><div><h3>{t.fitTitle}</h3><p>{t.fitText}</p></div></div>
     </section>
     <section id="work" class="work-band" aria-labelledby="work-title">
@@ -77,7 +86,17 @@
       <ol>{#each t.steps as step}<li><h3>{step.title}</h3><p>{step.text}</p></li>{/each}</ol>
     </section>
     <section id="contact" class="contact-band" aria-labelledby="contact-title">
-      <div class="container"><h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p><CustomerScope locale={data.locale} heading="h3" /><div class="actions"><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>{#if data.companyEnabled}<a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a>{/if}</div><p class="contact-note">{t.contactNote}</p></div>
+      <div class="container">
+        <h2 id="contact-title">{t.contactTitle}</h2><p>{t.contactText}</p>
+        <CustomerScope locale={data.locale} heading="h3" />
+        <p>{portal.contactFirst}</p>
+        <div class="actions"><a class="button" href={data.inquiryUrl}>{t.contactAction}<span aria-hidden="true">↗</span></a>{#if data.companyEnabled}<a class="text-link" href={linkedInUrl}>{t.contactAlternative}<span aria-hidden="true">↗</span></a>{/if}</div>
+        <p class="contact-note">{t.contactNote}</p>
+        <aside class="client-access" aria-labelledby="client-access-title">
+          <div><h3 id="client-access-title">{portal.heading}</h3><p>{portal.instructions}</p></div>
+          <a class="text-link" href={portal.href}>{portal.login}</a>
+        </aside>
+      </div>
     </section>
   </main>
 </Shell>
@@ -126,14 +145,28 @@
   .assessment { margin-top: 1.5rem; padding-bottom: 1.3rem; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 1.2rem; font-weight: 600; }
   .price { display: flex; flex-direction: column; margin-top: 1.5rem; }
   .price > span { font-size: .8rem; color: var(--muted); }
-  .price strong { font-size: 2rem; font-weight: 600; letter-spacing: -.05em; color: var(--ink); }
-  .hosting-price { font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
+  /* Normal and launch prices side by side at the same size; each label sits under its amount. */
+  .price-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem 1.25rem; max-width: 32rem; margin-top: .35rem; }
+  .normal-price, .launch-price { display: flex; flex-direction: column-reverse; justify-content: flex-end; margin: 0; }
+  .price-pair del, .price-pair strong { font-size: clamp(1.3rem, 5.6vw, 2rem); font-weight: 600; letter-spacing: -.05em; line-height: 1.2; white-space: nowrap; }
+  .price-pair del { color: var(--price-normal); text-decoration-thickness: 2px; }
+  .price-pair strong { color: var(--accent); }
+  .price-pair > p > span { font-size: .74rem; color: var(--muted); max-width: 14rem; }
+  .price-pair .vat-marker { font-size: inherit; }
+  .hosting-price { margin-top: .9rem; font-size: .8rem; border-bottom: 1px solid var(--line); padding-bottom: 1.3rem; }
   .offer ul { padding-left: 1.1rem; font-size: .86rem; margin-block: 1.35rem; }
   .offer li { padding-left: .15rem; margin-block: .45rem; }
   .offer li::marker { color: var(--accent); }
   .boundary { font-size: .79rem; margin-bottom: 1rem; }
   .offer .text-link { margin-top: auto; }
+  .launch-note { font-size: .9rem; margin-top: 1.5rem; max-width: 1000px; padding: 1rem 1.25rem; border: 1px solid var(--accent); border-radius: 8px; }
   .price-note { font-size: .8rem; margin-top: 1.3rem; max-width: 1000px; }
+  .addons { margin-top: 2.5rem; }
+  .addons h3 { font-size: 1.2rem; }
+  .addons > p { font-size: .9rem; margin-top: .6rem; max-width: 1000px; }
+  .addons ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 2.5rem; margin-top: 1.2rem; padding: 0; list-style: none; }
+  .addons li { font-size: .9rem; }
+  .addons li span { font-size: .85rem; }
   .scope-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; margin-top: 3rem; padding-top: 3rem; border-top: 1px solid var(--line); }
   .scope-notes h3 { font-size: 1.2rem; }
   .scope-notes p { font-size: .9rem; margin-top: .9rem; }
@@ -157,8 +190,10 @@
   .contact-band { background: var(--contact); border-top: 1px solid var(--line); padding-block: 4.5rem; }
   .contact-band h2 { max-width: 700px; }
   .contact-band p { max-width: 650px; margin-top: 1.3rem; }
-  .contact-band .button { margin-top: 1.6rem; }
   .contact-band .contact-note { font-size: .75rem; max-width: 700px; }
+  .client-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 2rem; max-width: 700px; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+  .client-access h3 { font-size: 1.1rem; }
+  .client-access p { margin-top: .4rem; font-size: .9rem; }
   @media (max-width: 1050px) { .hero { gap: 2rem; } .offers { gap: .75rem; } .offer { padding: 1.2rem; } }
   @media (max-width: 760px) {
     .hero { grid-template-columns: 1fr; gap: 2rem; padding-block: 2rem; }
@@ -169,7 +204,7 @@
     h1 { font-size: clamp(2.2rem, 8vw, 3.4rem); }
     .promise ul { flex-direction: column; gap: .5rem; }
     .section { padding-block: 3rem; }
-    .offers, .scope-notes, .quality-columns, .process ol { grid-template-columns: 1fr; gap: 1.5rem; }
+    .offers, .scope-notes, .quality-columns, .process ol, .addons ul { grid-template-columns: 1fr; gap: 1.5rem; }
     .portfolio-bridge { flex-direction: column; align-items: flex-start; gap: .5rem; }
     .quality { padding-block: 2.5rem; }
     .offer { padding: 1.5rem; }

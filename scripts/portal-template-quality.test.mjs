@@ -19,7 +19,7 @@ function mandatoryQualityChecks(candidate) {
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
     'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
-    'npx --yes --package=cspell@10.4.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    'npx --yes --package=cspell@10.5.0 -- node --test scripts/portal-spelling-quality.test.mjs',
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
     'npx --yes --package=secretlint@13.1.0 --package=@secretlint/secretlint-rule-preset-recommend@13.1.0 -- node --test scripts/portal-credential-quality.test.mjs',
@@ -68,6 +68,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
       '--remap',
       '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
         'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
+      '--exclude', '^https://www\\.retsinformation\\.dk/',
     ],
   });
   assert.deepEqual(rules, {
@@ -106,28 +107,15 @@ function lint(files) {
   return { status: result.status, output: result.stdout + result.stderr };
 }
 
-test('the pinned checker analyzes all six actual Go HTML templates', () => {
+test('the pinned checker analyzes all five actual Go HTML templates', () => {
   const version = spawnSync('htmlhint', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
   assert.equal(version.stdout.trim(), '1.9.2');
-  const result = lint(['portal', 'contact', 'requests', 'triage', 'credits', 'work-review'].map(name =>
+  const result = lint(['portal', 'contact', 'requests', 'triage', 'work-review'].map(name =>
     join(root, 'server/internal/identity/web', `${name}.html`)));
   assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /Scanned 6 files/);
-});
-
-test('the actual credit identity patterns retain native Unicode-v validation', () => {
-  const source = readFileSync(join(root, 'server/internal/identity/web/credits.html'), 'utf8');
-  const patterns = [...source.matchAll(/pattern="([^"]+)"/g)];
-  assert.equal(patterns.length, 2);
-  for (const [, pattern] of patterns) {
-    const native = new RegExp(`^(?:${pattern})$`, 'v');
-    assert.ok(native.test('bank-01/transfer_2.3'));
-    assert.ok(!native.test('bank account'));
-    assert.ok(!native.test('bank:account'));
-    assert.ok(!native.test('A'.repeat(65)));
-  }
+  assert.match(result.output, /Scanned 5 files/);
 });
 
 for (const [name, content] of [

@@ -8,6 +8,11 @@ and current client/operator membership. Accounts use issuer + subject, not email
 Synthetic tests use a local TLS broker with generated keys; they are not proof of
 live Dex, Google or Microsoft federation.
 
+The separate [private booking boundary](BOOKINGS.md) computes candidate intervals only.
+It has no registered route or runtime configuration; missing operator policy and unknown
+availability deny slots. Durable reservations, calendar effects and customer activation remain
+sequential delivery gates.
+
 For the credential-free public-site first run and contribution workflow, start with the
 [repository README](../README.md) and [contribution guide](../CONTRIBUTING.md). This reference
 covers the optional combined runtime and its separate disposable database tests. Implementation
@@ -21,7 +26,7 @@ missing broker/store also denies it. Changing the provider to false closes the
 boundary without creating a new service. Ordinary startup installs the maintained
 SDK's no-op provider. The optional [bounded staging provider](#bounded-identity-staging)
 uses operator-only process configuration; it is not production activation.
-Public Pages builds
+Public static builds
 never import this module. The existing mock preview remains a separate simulation.
 The temporary release flag's retirement task is [#34](https://github.com/devantler-tech/business-site/issues/34),
 with a review date of 10 November 2026. An overdue review is not activation
@@ -37,7 +42,13 @@ cannot transfer clients or revive revoked access. Membership is re-read on every
 authorization, which requires a concrete server-owned record client ID.
 
 `Browser` constructs sign-in, callback, private workspace, operator and logout handlers
-for one fixed HTTPS callback at `/portal/callback`. The callback consumes the
+for one fixed HTTPS callback. A callback at `/callback` mounts the portal at the root of its
+own host (`https://portal.devantler.tech/callback` in production); `/portal/callback` mounts it
+under `/portal` on a host it shares with the public site. Routes and feature gates are
+registered once under `/portal`; at the root, each request is mapped onto them and every
+redirect and rendered link drops the prefix. Links back to the public website then name
+its origin (`https://<--public-host>`), because `/` there is the portal itself; a root-mounted
+portal without it is refused. The callback consumes the
 browser-bound attempt before exchanging the authorization code with its S256 PKCE
 verifier. Code exchange is bounded and cannot follow redirects. Signed issuer,
 audience, expiry and nonce checks remain mandatory. No return URL, email, provider
@@ -52,8 +63,16 @@ not allow arbitrary form destinations or maintain a social-provider origin list.
 
 Opaque SCS sessions are stored in PostgreSQL with hashed storage keys, rotated
 across sign-in, destroyed on logout, and bounded by both token expiry and a
-30-minute absolute lifetime. Each private request rechecks current membership;
-only a stored operator role can access `/portal/operator`. Session and CSRF
+30-minute absolute lifetime. A completed login keeps its opaque cookie across
+browser restarts only until that same deadline; unfinished sign-ins remain
+session-only. Visiting the public website does not sign out or extend the
+session. The portal's website links preserve English/Danish, and returning with
+a valid session opens the workspace directly. A new authorization can reuse the
+provider's SSO session subject to its existing authentication/MFA policy.
+Each private request rechecks current membership and the incarnation bound by
+its verified sign-in. A membership change invalidates prior sessions, including
+late session writes; reactivation requires a fresh sign-in.
+Only a stored operator role can access `/portal/operator`. Session and CSRF
 cookies are Secure, HttpOnly, SameSite=Lax and `__Host-` scoped. Patched nosurf
 protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
@@ -68,9 +87,11 @@ Contact responses buffer the complete frame and revalidate the original durable 
 after waits. A replacement identity, client or extended deadline cannot authorize
 the original response, and a read never refreshes or resurrects a deleted session.
 
-`Invite` and `Revoke` remain **trusted control-plane operations**, not public
-HTTP endpoints. An operator workspace does not expose these operations. Likewise,
-`Complete` accepts only a server-obtained token, never a browser authentication claim.
+`Invite` and `Revoke` remain **trusted control-plane operations**. The authenticated
+[operator customer area](CUSTOMER-IDENTITY.md) exposes bounded, audited invitation,
+workspace and member actions, with a separate restricted machine identity policy.
+No anonymous endpoint grants membership. `Complete` accepts only a server-obtained
+token, never a browser authentication claim.
 
 Authenticated clients can edit their name, contact email and optional company at
 `/portal/contact`. The actual query uses current server-owned issuer/subject membership
@@ -94,7 +115,7 @@ retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,
-production customer intake, payment, queue, MCP or agent execution. No paid service is used.
+production customer intake, payment, queue, MCP or work execution. No paid service is used.
 
 The separately default-off [project-request intake](REQUESTS.md) lets a synthetic
 invited client submit a free brief and revisit a durable private receipt. It does
@@ -109,19 +130,10 @@ acceptance records an audited
 version/content-bound receipt after explicit review; it never approves payments or
 worker execution. See [the consent boundary](PROPOSALS.md#exact-client-review-and-acceptance).
 
-Private [external invoice records](INVOICES.md) let the operator associate an
-explicit net, VAT, payable total and purpose with exact current client acceptance.
-Historical records without a breakdown remain unknown; no tax rate or eligibility
-is inferred. Credit reconciliation continues to use the unchanged payable total.
-They do not generate invoices, confirm funds or authorize work, and remain
-independently default-off with no environment activation mapping.
-
-Separately default-off [bank-credit evidence](CREDITS.md) records operator
-observations and append-only corrections against those invoices. Exact confirmed
-totals distinguish partial/full/excess credit; disputes and unverified evidence
-prevent a fully-credited result. A globally reserved transfer identity cannot
-belong to two invoices or clients. This is manual evidence, not payment processing
-or work-start authority; no bank connection or activation mapping is added.
+Private external invoice records and bank-credit evidence are retired by ADR 0030
+(#117, #120): [portal billing](BILLING.md) issues Numina invoices and collects
+cards through Stripe instead. Their historical tables remain, unwritten, as work
+approval evidence until #268 binds approvals to an order's funding record.
 
 The separately default-off [work-approval review](WORK-APPROVALS.md) persists
 an operator decision against exact agreement, invoice, funding and membership
@@ -138,7 +150,10 @@ Schemas v1 (identity), v2 (sessions), v3 (contacts), v4 (requests), v5 (triage i
 v6 (draft proposals), v7 (explicit sharing), v8 (contact confirmation), v9 (exact consent)
 v10 (external invoice records), v11 (bank-credit evidence), v12 (explicit invoice tax components)
 v13 (durable membership incarnations), v14 (expiring work-approval evidence),
-and v15 (the case-by-case other-request category)
+v15 (the case-by-case other-request category), v16 (orders and Numina charges), v17 (card
+Checkouts and Stripe events), v18 (order ends and charge reversals), v19 (work approval bound
+to the order's funding), v20 (an order end chosen by its client), v21 (order withdrawals),
+v22 (early start, completion and withdrawal settlement) and v23 (the portal's emails)
 are embedded and transactionally serialized with a contiguous version/checksum
 ledger. The tax-component migration preserves the original v1–v11 bytes and old
 receipts, while refusing incomplete new invoice rows.
@@ -203,7 +218,7 @@ unconditionally alongside the existing identity checks. It also extracts and run
 `runtime-dist/business-site-runtime.tar.gz`, then uploads that permission-preserving
 archive as the review artifact, not a production backend. After downloading the
 artifact, extract the tar archive before running the executable; no manual `chmod`
-is required. Pages publication is unchanged and uploads only `dist`.
+is required.
 
 Packaging copies the selected Go distribution's license and patent notice. Official
 distributions keep both under `GOROOT`; Homebrew keeps `LICENSE` at the same-version
@@ -216,7 +231,8 @@ With no `PORTAL_*` dependencies, startup serves public pages without broker/stor
 connections and reserves private routes as non-cacheable 404s. For later private
 wiring, supply **all** `PORTAL_DATABASE_URL` (verified TLS, no insecure fallback),
 `PORTAL_OIDC_ISSUER`, `PORTAL_OIDC_CLIENT_ID`, fixed HTTPS `PORTAL_CALLBACK_URL`
-ending `/portal/callback`, and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
+(`https://<portal host>/callback` with `--portal-host`, otherwise ending `/portal/callback`;
+startup refuses any other pairing), and exactly one absolute `PORTAL_CLIENT_SECRET_FILE` or
 `PORTAL_CLIENT_SECRET_PROJECTION_FILE`. The ordinary file input requires owner-only
 permissions. The explicit projection input supports a non-root Unix process and
 a root/current-user-owned regular file with read access for its primary group only;
@@ -227,6 +243,13 @@ For the restricted image, project mode `0440` with group 65532 and searchable
 directories. Configuration is snapshotted at startup; restart to rotate it.
 Store the secret privately; never put it in arguments,
 public assets, build receipts or logs. Partial/unsafe configuration fails generically.
+Where no environment is available, `--portal-settings-projection <absolute-file>`
+supplies these settings (with the projected secret input) and the production
+identity profile from one confined `KEY=value` file instead; see
+[the deploy package](../deploy/README.md#portal-settings-and-invitations). A file
+without keys keeps the portal off, and none of these variables may also be inherited.
+The exclusive `--portal-invite` mode uses the same file to create one invitation;
+see [CUSTOMER-IDENTITY.md](CUSTOMER-IDENTITY.md#invite-a-customer).
 The Unix service runtime requires an already migrated least-privilege store. Its
 configured database login must match both the session and effective role before
 the existing permission check and broker discovery; switching a broader login
@@ -251,6 +274,29 @@ completion or failure, and exits without opening HTTP or contacting the broker.
 See [the migration procedure](MIGRATIONS.md) for prerequisites, invocation,
 permissions and failure handling. No migration enables a portal operation or
 establishes a production deployment.
+
+### Retention purge job
+
+The privacy notice keeps a former client's portal records for 3 years after their last
+portal membership ended (#614). The same executable's exclusive one-shot
+`--retention-purge --migration-database-file <file>` mode deletes them; a Kubernetes job
+passes `--migration-database-projection <file>` instead, as for the migration (MIGRATIONS.md).
+It runs as the migration role, because the web runtime can delete none of this history, and checks first
+that the role owns the complete schema. A client is due when all their memberships were client
+memberships, none is still active, no invitation is pending, and the last membership change lies
+more than `identity.RetentionYears` (3) years back; a member's move to another client counts as a
+change. No order may still bill: monthly billing must have ended or been withdrawn, and a card
+subscription needs Stripe's confirmed end, so the purge never strands a subscription the portal
+could no longer stop. Each client goes in one transaction that locks invitations and memberships and checks the
+client again, so a redemption during the purge keeps the client. It deletes billing, email, work,
+proposals, requests, contacts, invitations and memberships, and the whole history of each of
+the client's memberships, one chain of events from its creation across renames and moves, whose
+last change is also 3 years old. A chain stays while it names another client that still has
+records (so that client can still be found) or while a remaining work approval cites it. It
+prints only how many former clients lost records.
+Invoices and other accounting records live in Numina and Stripe for 5 years, and backups age
+out after 30 days. A daily CronJob in the package (`deploy/`) is to run it beside the portal
+migration Job, on the same image and migration credential, with `concurrencyPolicy: Forbid`.
 
 ### Separate native identity preparation job
 
@@ -307,11 +353,32 @@ Leaving the profile and activation values absent retains ordinary disabled start
 The staging selection remains unchanged and cannot exceed ten minutes.
 
 The selected provider inherits process cancellation and SDK shutdown instead of
-borrowing a staging timer. Only the identity capability can be enabled. Current
-issuer/subject invitations and membership still authorize every private session;
-the profile grants no role and enables no request, payment or work capability.
+borrowing a staging timer. Identity alone enables no other capability. Each optional
+production setting below uses the same maintained-provider JSON as the identity flag:
+
+| OpenFeature capability        | Production setting                 |
+|-------------------------------|------------------------------------|
+| `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
+| `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
+| `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
+| `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |
+| `portal-proposal-sharing`     | `PORTAL_PROPOSAL_SHARING_FLAG`     |
+| `portal-proposal-acceptance`  | `PORTAL_PROPOSAL_ACCEPTANCE_FLAG`  |
+| `portal-invoice-billing`      | `PORTAL_INVOICE_BILLING_FLAG`      |
+| `portal-card-billing`         | `PORTAL_CARD_BILLING_FLAG`         |
+
+An absent or typed false setting keeps its capability off, even when another is on.
+A supplied malformed, wrong-type or oversized setting refuses production startup.
+The existing confined settings projection accepts these same named inputs and
+refuses mixing them with inherited values. Staging still maps identity only.
+Work approvals, worker execution and unrecognized flags have no production mapping.
+Current issuer/subject invitations and membership still authorize every private session;
+the profile grants no role, agreement, payment evidence or work authority.
 Before listening, the real command still verifies its restricted database login
 and configured TLS broker. Complete dependency configuration alone enables nothing.
+Every operation retains its existing prerequisite gates. Actual customer intake and
+payment activation remain a separate reviewed deployment after the applicable #21
+legal, provider and deployed-user-path checks; this configuration adds none of them.
 
 Configuration belongs to the operator's private process environment. Changing an
 external environment file does not change a running process. Disable the flag
@@ -323,8 +390,9 @@ The required suite exercises the compiled command's ordinary, staging, enabled,
 disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitation,
 cookie-session, membership-revocation and cancellation checks. These are source
 acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
-The shipped deployment stays disabled: #305 retains runtime delivery and #302
-retains deployed acceptance and the separately reviewed activation change.
+Source checks do not establish deployed acceptance: #305 retains runtime delivery,
+[Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
+identity acceptance and #21 owns later intake/payment activation.
 
 ### Production public-content template
 
@@ -371,14 +439,22 @@ certification. Restart deliberately to rotate the projected disclosure.
 `--public-host` and `--portal-host` let one runtime serve the public site and the portal on
 their own hosts (`devantler.tech` and `portal.devantler.tech` in the package):
 
-| Host                 | `/portal…`                          | Public pages                |
-|----------------------|-------------------------------------|-----------------------------|
-| portal host          | served; `/` redirects to `/portal/` | redirect to the public host |
-| `www.` + public host | redirect to the public host         | redirect to the public host |
-| any other host       | redirect to the portal host         | served                      |
+| Host                 | Portal                                                    | Public pages                |
+|----------------------|-----------------------------------------------------------|-----------------------------|
+| portal host          | served at the root; `/portal…` redirects 301 without it   | redirect to the public host |
+| `www.` + public host | redirect to the public host                               | redirect to the public host |
+| any other host       | `/portal…` redirects to the portal host without `/portal` | served                      |
 
-Redirects are 302 with `Cache-Control: no-store`. Unsafe or encoded paths still return 404,
-never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
+On the portal host a path the public site serves (other than `/`) goes to the public host and
+everything else goes to the portal, so a public page must never take a portal path such as
+`/sign-in`, `/requests` or `/contact`. The Stripe webhook is `/stripe/webhook`; a POST to an old
+`/portal…` address is refused, not redirected, because Stripe does not follow redirects.
+
+Redirects carry `Cache-Control: no-store`. The `www` redirect is 301, as it was on GitHub Pages;
+the redirects between the public and portal hosts are 302. On a host that serves public pages, a
+folder requested without its trailing slash (`/about`) redirects with 301 to `/about/`, and a
+missing page returns 404 with the built `404.html`. Unsafe or encoded paths still return a plain
+404, never a redirect. Both arguments are required together, must be distinct lowercase DNS names,
 and are checked before a listener opens. Routing changes nothing else: the portal stays behind
 its own default-off gates.
 
@@ -429,7 +505,7 @@ Run the same container smoke test against that digest and its matching CI runtim
 archive. Registry push, signing and post-publication testing must all succeed;
 a staging tag alone is not release proof.
 
-If publication fails, keep Pages unchanged and diagnose the specific run; do
+If publication fails, keep the platform on its current release and diagnose the specific run; do
 not deploy its unverified staging tag or rebuild an artifact under an old receipt.
 A CI rerun on the same main source can retry distribution of its newly tested
 artifact through the same gates. Roll back a future deployment only to an earlier
@@ -525,11 +601,11 @@ pgx discards failed rollback connections before releasing them to the pool.
 These URLs are test-only examples, not production configuration. Tests require
 the exact fixture database and role names; missing configuration fails. They
 grant runtime table DML within the fixture, exercise the restricted role, and
-clear the seventeen fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval tables between tests. The migrator deletes rows in dependency order within the
+clear the thirty-six fixture identity/session/contact/request/proposal/visibility/consent/invoice/credit/membership-history/work-approval/order/billing/card/order-end/withdrawal/mail/launch/add-on/closure/add-on-end tables between tests. The migrator deletes rows in dependency order within the
 same transaction as the grant reset, retaining real constraints and membership
 recording without rebuilding table files on every fixture. Database fixtures stay
 serial; this is not concurrent reset isolation. The reset control populates every
-relation first and requires all seventeen to be empty afterward. Domain-only work
+relation first and requires all thirty-six to be empty afterward. Domain-only work
 approval controls own their real database, TLS broker and feature provider but do
 not start an unused application server or session manager; browser journeys retain
 their separate complete HTTP fixtures. Never reuse a database
@@ -580,9 +656,6 @@ exercise the real HTTPS boundary directly. No browser security warning is bypass
 
 Review locked dependencies and their upstream licenses before every update.
 The current compiled-module inventory is in [DEPENDENCIES.md](DEPENDENCIES.md).
-Only Devantler Tech's authored material in the exact file list and license documents
-in [the identity build-tool scope](../third_party/zitadel-build-tools/README.md)
-is granted under AGPL-3.0-only. This does not license the whole Go module or any
-other application source. Dependency notices do not expand that grant. Include
+Dependency notices do not license this module's own source. Include
 the required upstream license/notice texts when distributing a binary; the runtime
 packager carries the actually linked Go graph and Go standard-library notices.

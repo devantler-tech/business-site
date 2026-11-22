@@ -28,8 +28,20 @@ spec:
     - devantler.tech
     - --portal-host
     - portal.devantler.tech
+    - --portal-settings-projection
+    - /run/webapp-inputs/portal-settings
   secretProjections:
-    - secretName: business-site-disclosure
+    - secretName: business-site-runtime
       items:
         - key: company-disclosure
           path: disclosure
+        - key: portal-settings
+          path: portal-settings
+        - key: portal-client-secret
+          path: portal-client-secret
+        - key: portal-database-ca
+          path: portal-database-ca
+        - key: smtp-username
+          path: smtp-username
+        - key: smtp-password
+          path: smtp-password

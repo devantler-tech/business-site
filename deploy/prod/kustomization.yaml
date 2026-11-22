@@ -1,11 +1,36 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# Production: the shared base plus everything only prod owns — the public and
-# portal routes, the disruption budget and the disclosure read from prod OpenBao.
 resources:
   - ../base
   - http-route-public.yaml
   - http-route-portal.yaml
+  - network-policy.yaml
   - disruption-budget.yaml
   - secret-store.yaml
   - external-secret-disclosure.yaml
+  - external-secret-numina.yaml
+  - external-secret-stripe.yaml
+  - job-portal-migration.yaml
+  - cronjob-portal-retention.yaml
+# The publisher pins only the WebApp's image; the migration Job and the retention
+# CronJob run that same image.
+replacements:
+  - source:
+      kind: WebApp
+      name: business-site
+      fieldPath: spec.image
+    targets:
+      - select:
+          kind: Job
+          name: business-site-portal-migration
+        fieldPaths:
+          - spec.template.spec.containers.[name=migrate].image
+        options:
+          create: true
+      - select:
+          kind: CronJob
+          name: business-site-portal-retention
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.[name=purge].image
+        options:
+          create: true

@@ -77,8 +77,9 @@ func (b *browser) captureDurableResponse(ctx context.Context, original contactAu
 	issuer, issuerOK := values["issuer"].(string)
 	subject, subjectOK := values["subject"].(string)
 	expires, expiresOK := values["expires"].(int64)
-	principal := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expires, 0)}
-	if err != nil || !issuerOK || !subjectOK || !expiresOK || principal != original.principal || !deadline.Equal(original.deadline) {
+	incarnation, incarnationOK := values["membership_incarnation"].(string)
+	principal := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expires, 0), membershipIncarnation: incarnation}
+	if err != nil || !issuerOK || !subjectOK || !expiresOK || !incarnationOK || incarnation == "" || principal != original.principal || !deadline.Equal(original.deadline) {
 		return durableResponseSnapshot{}, false
 	}
 	return durableResponseSnapshot{original: original, key: key, data: data}, true
@@ -102,7 +103,7 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 	// The SDK wait precedes fresh durable reads. This SQL is scoped to the
 	// original client, not whichever client a replacement membership might own.
 	var allowed bool
-	err := query.QueryRow(fresh, `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>clock_timestamp() AND s.data=$5 WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role=$6 AND NOT m.revoked)`, original.principal.issuer, original.principal.subject, client, snapshot.key, snapshot.data, role).Scan(&allowed)
+	err := query.QueryRow(fresh, `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>clock_timestamp() AND s.data=$5 WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role=$6 AND NOT m.revoked AND m.incarnation::text=$7)`, original.principal.issuer, original.principal.subject, client, snapshot.key, snapshot.data, role, original.principal.membershipIncarnation).Scan(&allowed)
 	return err == nil && allowed && ctx.Err() == nil && fresh.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState && time.Now().Before(original.deadline) && time.Now().Before(original.principal.expires)
 }
 
@@ -111,7 +112,7 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 func (b *browser) renderContact(w http.ResponseWriter, r *http.Request, status int, d contactData, problem string, verification bool, authority contactAuthority) {
 	page := b.contactPage(r, d, problem, verification)
 	var buffer bytes.Buffer
-	if browserPage.ExecuteTemplate(&buffer, "contact.html", page) != nil {
+	if b.templates().ExecuteTemplate(&buffer, "contact.html", page) != nil {
 		b.render(w, r, 503, "unavailable", "", "")
 		return
 	}

@@ -6,11 +6,11 @@ local first use and [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete contr
 The reference below covers editorial standards, bilingual content, catalogue maintenance,
 CV data and build-time previews. Application paths are relative to the repository root.
 
-The source-owned `.github/workflows/publish-site.yaml` builds this repository's exact `main`
-revision and publishes to its own Pages resource at devantler.tech when its admission gates
-pass. It is an ordinary push/manual/scheduled workflow, not a callable reusable workflow.
-Historical immutable callers retain their Git revision; no legacy publisher is exported on
-the default branch. The current publisher does not deploy the private portal backend.
+The devantler-tech platform serves devantler.tech from this repository's signed Go runtime.
+CI builds its production image from each `main` revision, and a runtime release
+(`release-runtime.yaml`, then `publish-runtime.yaml`) hands that image to the platform.
+GitHub Pages publication is retired; former publishers remain only at historical immutable
+Git revisions. The runtime keeps the private portal off.
 
 ## Develop
 
@@ -67,15 +67,17 @@ their published English/Danish alternatives until reviewed activation. CI builds
 false and entirely unset states, and each build checks all six emitted routes. Adoption, activation,
 live verification and removal of the temporary gate are tracked in #18.
 
-The VAT-inclusive guide prices decided in #154 are permanent: DKK 3,750 plus 125/month for
-a website, 10,000 plus 375/month for a web app and 6,250 plus 250/month for a web service.
-Each price is marked "incl. VAT" / "inkl. moms" and the note states the included 25% Danish VAT.
-The totals live in `vatInclusiveOffers` in `business-copy.ts`; `scripts/vat-prices.test.mjs`
-guards the exact approved totals, net floors and no double VAT. Current ordinary company facts
+The VAT-inclusive fixed prices the maintainer approved on 15 November 2026 are DKK 6,000 plus
+300/month for a website, 15,000 plus 800/month for a web app and 9,500 plus 500/month for a
+web service, with no hourly rates. Each price is marked "incl. VAT" / "inkl. moms" and the note
+states the included 25% Danish VAT. The launch offer takes 25% off the one-time price for the first
+50 customers who order with hosting. The totals live in `vatInclusiveOffers` and `launchDiscount`
+in `business-copy.ts`; `scripts/vat-prices.test.mjs` guards the exact approved totals, launch
+prices and net floors. Current ordinary company facts
 are shared by the public frontend and every package profile. The temporary VAT gate and historical
 comparison inputs are removed in source. Reviewed publication and fresh bilingual live verification
 remain tracked in #346 until their completion is recorded.
-The publisher and production-template packager retain company identity enabled and the
+The production-template packager retains company identity enabled and the
 revised-offer release disabled. The customer invitation is permanent. Every package retains current prices. This does not activate orders, payments or additional customer eligibility.
 
 The site keeps the original green palette and locally served Matrix artwork. Its appearance
@@ -115,9 +117,8 @@ it requires a rebuild and publication, not a browser setting. CI builds enabled,
 and entirely-unset states and uploads only the final normal production output.
 `scripts/check-client-facing.mjs` exercises the emitted EN/DA visitor pages;
 `scripts/client-rollout.test.mjs` guards the production default and actual CI invocation.
-The source-owned publisher runs after merges to this repository's `main`. A merge still needs a
-successful Pages deployment, a matching live source/run receipt and visitor verification before
-it counts as published. After live visitor verification, remove this short-lived release flag.
+A merge to this repository's `main` counts as published only after a runtime release, its
+verified publication receipt and visitor verification. After live visitor verification, remove this short-lived release flag.
 
 ### Featured portfolio (#5)
 
@@ -137,13 +138,14 @@ this showcase. All twelve entries remain in the
 underlying inventory. KSail is labelled source-available with its PolyForm Shield terms, not
 unrestricted open source. Stars indicate popularity, not a quality guarantee.
 
-The source-owned publisher refreshes the complete metadata before every build with read-only GitHub
-authority; no GitHub API call or token is sent to a visitor's browser. The page shows the observation
-date quietly and keeps the exact UTC timestamp in its machine-readable `datetime`. Failed, partial or malformed reads abort publication and leave the
-previous live artifact with its previous timestamp; they are never presented as a fresh read.
-The source-owned publisher refreshes the ranking on main pushes, admitted manual publications and
-its daily schedule. GitHub scheduled runs can be delayed or disabled
-after inactivity, so the displayed observation time is the freshness signal, not a promised SLA.
+The production runtime package refreshes the complete metadata before its build with read-only
+GitHub authority; no GitHub API call or token is sent to a visitor's browser. The page shows the observation
+date quietly and keeps the exact UTC timestamp in its machine-readable `datetime`. Failed, partial or malformed reads abort the package and leave the
+live runtime with its previous timestamp; they are never presented as a fresh read.
+CI refreshes the ranking each time it builds the production image, and a runtime release serves
+the image built from its `main` revision, so the date shown changes with each runtime release.
+There is no separate daily refresh; the displayed observation time is the freshness signal, not a
+promised SLA.
 Implementation, activation, caller adoption, bilingual live proof and release-flag cleanup stay
 tracked on #5. The disabled Codex chat schedule is unrelated and remains disabled.
 
@@ -194,7 +196,7 @@ the same subject may use its same image. Source and emitted-image checks reject 
 paths or decoded pixels. Covers do not replace factual inline screenshots or diagrams.
 
 `npm run build` renders the business experience directly and verifies its English/Danish visitor
-journeys and supporting pages. The same command is used by CI and GitHub Pages publication.
+journeys and supporting pages. The same command is used by CI and the runtime packager.
 The core business pages are always rendered. Short-lived presentation flags protect reviewable
 redesigns; reverting the publication change and redeploying remains the recovery path.
 
@@ -234,10 +236,12 @@ pages group the registered facts and physical address behind native footer links
 rendered as escaped text only on those pages and excluded from the site's search index. Publication
 does not make the address confidential: it will be visible on the public disclosure page.
 
-The source-owned publisher enables `FEATURE_COMPANY_IDENTITY` and supplies the two-line
-`COMPANY_POSTAL_ADDRESS` repository secret to the build step. The build aborts before artifact
-upload if the setting is missing, empty, malformed or contains control characters. The secret is
-server-only configuration, not a browser environment variable; the required address still appears
+The production-template packager enables `FEATURE_COMPANY_IDENTITY` without the address: the two
+company pages carry escaped placeholders, and the runtime fills them at start from its private
+projected disclosure file. A missing or unsafe file stops the runtime before it serves. A
+default-profile build with identity enabled instead reads the two-line `COMPANY_POSTAL_ADDRESS`
+and aborts if it is missing, empty, malformed or contains control characters. Both inputs are
+server-only configuration, not browser environment variables; the required address still appears
 in the two public HTML pages. CI uses a fictional fixture, never the registered residential address.
 For a local preview, provide an explicitly fictional two-line `COMPANY_POSTAL_ADDRESS` together
 with `FEATURE_COMPANY_IDENTITY=true`. Explicit-false and entirely-unset builds require no address,
@@ -253,8 +257,8 @@ CV and detailed technical documentation remain in English and are labelled accor
 
 The separate Go module in `server/` provides default-off invitation-only browser
 sign-in through one identity broker, with durable private sessions and current
-client/operator authorization. It is not included in the static Pages artifact
-and has no production listener or provider wiring. See its [runtime boundary and
+client/operator authorization. It is not included in the static public artifact,
+and the runtime keeps it off with no production provider wiring. See its [runtime boundary and
 validation guide](../server/README.md); deploying and enabling the real portal
 requires the remaining provider, operational and legal release gates.
 
@@ -262,7 +266,7 @@ Public pages do not load a visitor-statistics client or tag outbound links for a
 Both the business layout and supporting Journal/documentation layout serve their scripts locally.
 Every production build checks all emitted HTML for automatic external scripts and statistics
 attributes, including explicit rollback builds. Links to other websites remain ordinary links;
-public repository metadata is refreshed by the publisher, not by visitors' browsers.
+public repository metadata is refreshed by the runtime packager, not by visitors' browsers.
 
 The appearance selector uses the local `starlight-theme` preference only to remember System,
 Light or Dark. Removing the statistics client does not eliminate requests needed to serve the
@@ -294,7 +298,7 @@ Use a complete checkout for local production builds; for an existing shallow clo
 `git fetch --unshallow` before rebuilding. Git-less source archives cannot establish these dates.
 An untracked article has no committed modification date and fails the content build.
 `bash scripts/journal-history.test.sh` exercises real commit histories and the checkout depths
-configured by CI, source publication and legacy callers. Article revisions advance the date;
+configured by CI's preview and production runtime builders. Article revisions advance the date;
 unrelated commits do not. Publication, provider authority and portal rollout boundaries are unchanged.
 
 The blog is a maintained product for people outside the repository, not a release-note feed or an

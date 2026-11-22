@@ -214,7 +214,7 @@ func TestContactVerificationConcurrentCallbackOnlyConfirmsOnce(t *testing.T) {
 
 func TestContactVerificationPurposeConsumersAreIndependent(t *testing.T) {
 	b := savedVerificationContact(t)
-	p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+	p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 	a, err := b.svc.beginContactAttempt(t.Context(), p, 1)
 	if err != nil {
 		t.Fatal("valid confirmation attempt failed", err)
@@ -240,7 +240,7 @@ func TestContactVerificationPurposeConsumersAreIndependent(t *testing.T) {
 func TestContactVerificationOrdinaryLoginNeverConfirmsAddress(t *testing.T) {
 	b := savedVerificationContact(t)
 	b.configure(map[string]any{"email": "a@example.invalid", "email_verified": true}, false)
-	b.finish(b.start(""))
+	b.finish(b.start())
 	assertContactUnconfirmed(t, b)
 }
 
@@ -269,7 +269,7 @@ func TestContactVerificationFinalWriteChecksExpiryFlagsAndCancellation(t *testin
 	for _, change := range []string{"unchanged", "identity flag", "verification flag", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Hour)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Hour)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			tracer := installCompletedRead(t, b, "UPDATE portal_contacts SET email_verified=true")
 			ctx, cancel, done := startContactConfirmation(t, b, p, d, raw, nonce)
@@ -321,7 +321,7 @@ func TestContactVerificationRechecksAuthorityAfterFinalSDKEvaluation(t *testing.
 	for _, change := range []string{"identity flag"} {
 		t.Run(change, func(t *testing.T) {
 			b := savedVerificationContact(t)
-			p := Principal{b.f.issuer, "client-a", "portal-fixture", time.Now().Add(time.Minute)}
+			p := Principal{issuer: b.f.issuer, subject: "client-a", audience: "portal-fixture", expires: time.Now().Add(time.Minute)}
 			d, raw, nonce := prepareContactConfirmation(t, b, p, false)
 			provider := installReadProvider(t, b, "portal-contact-verification", 2)
 			ctx, _, done := startContactConfirmation(t, b, p, d, raw, nonce)
@@ -479,7 +479,7 @@ func savedVerificationContact(t *testing.T) *browserFixture {
 	t.Helper()
 	b := newBrowserFixture(t)
 	b.client.Timeout = 10 * time.Second
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	contactVerificationFlags(t, b, true)
 	status, _, _ := b.request("POST", "/portal/contact", contactForm(b.csrf("/portal/contact"), "0", "Fictional Client", "a@example.invalid", ""), b.site.URL)
 	if status != http.StatusSeeOther {

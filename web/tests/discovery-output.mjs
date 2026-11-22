@@ -5,6 +5,7 @@ import { parse } from "parse5";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { journalPaths } from "../../src/data/journal.mjs";
 import { readingPaths, guidePaths } from "../../src/data/journal-reading.mjs";
+import { identityEntries } from "../src/public-routes.ts";
 
 /** Read the complete actual artifact, not a success-shaped subset. @param {string} root @returns {Map<string,Buffer>} */
 export function artifact(root) {
@@ -63,7 +64,7 @@ export function assertSitemap(candidate, baseline) {
     if (!page) return false;
     const elements = nodes(page);
     return !meta(elements,"robots").some(value => /\bnoindex\b/i.test(value)) && attr(links(elements,"canonical")[0],"href") === href;
-  }) : ["/","/da/","/about/","/da/about/","/projects/","/da/projects/",...(process.env.FEATURE_COMPANY_IDENTITY === "true" ? ["/company/","/da/company/"] : []),...journalPaths(),...readingPaths(),...guidePaths()].map(path=>origin+path);
+  }) : ["/","/da/","/about/","/da/about/","/projects/","/da/projects/",...(process.env.FEATURE_COMPANY_IDENTITY === "true" ? identityEntries : []),...journalPaths(),...readingPaths(),...guidePaths()].map(path=>origin+path);
   assert.ok(expected.length > 10,"Public discovery baseline must contain real route coverage");
   assert.equal(new Set(actual).size,actual.length,"Public discovery duplicate sitemap entry");
   assert.deepEqual([...actual].sort(),[...expected].sort(),"Public discovery complete canonical route membership");

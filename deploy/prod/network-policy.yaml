@@ -1,0 +1,28 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: business-site
+  namespace: business-site
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: business-site
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  # Any egress rule switches the pods to egress default deny. Only the two
+  # billing APIs are allowed, by exact name on HTTPS. The platform's
+  # business-site-dns-visibility policy lets Cilium's DNS proxy see the
+  # lookups these names need (devantler-tech/platform#6337).
+  egress:
+    - toFQDNs:
+        - matchName: api.numina.app
+        - matchName: api.stripe.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

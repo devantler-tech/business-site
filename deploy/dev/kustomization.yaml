@@ -26,34 +26,21 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
-      # Drop prod's host routing; with neither host argument one host serves
-      # the public pages and the portal paths. The tests fail the build if
-      # base moves these arguments.
-      - op: test
-        path: /spec/args/6
-        value: --public-host
-      - op: test
-        path: /spec/args/7
-        value: devantler.tech
-      - op: test
-        path: /spec/args/8
-        value: --portal-host
-      - op: test
-        path: /spec/args/9
-        value: portal.devantler.tech
-      - op: remove
-        path: /spec/args/9
-      - op: remove
-        path: /spec/args/8
-      - op: remove
-        path: /spec/args/7
-      - op: remove
-        path: /spec/args/6
-  # Select the renamed workload's pods.
-  - target:
-      kind: CiliumNetworkPolicy
-      name: business-site
-    patch: |-
+      # Configure the preview explicitly so new production settings do not
+      # become preview inputs when the shared WebApp evolves.
       - op: replace
-        path: /spec/endpointSelector/matchLabels/app.kubernetes.io~1name
-        value: business-site-dev
+        path: /spec/args
+        value:
+          - --public
+          - /app/public
+          - --listen
+          - 0.0.0.0:8080
+          - --company-disclosure-projection
+          - /run/webapp-inputs/disclosure
+      - op: replace
+        path: /spec/secretProjections
+        value:
+          - secretName: business-site-dev-disclosure
+            items:
+              - key: company-disclosure
+                path: disclosure

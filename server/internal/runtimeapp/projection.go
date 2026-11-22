@@ -11,9 +11,19 @@ import (
 // ErrCompanyProjection is the entire diagnostic; private paths and bytes stay private.
 var ErrCompanyProjection = errors.New("company disclosure projection is unavailable")
 
-// projectionBytes snapshots a Unix projection without changing its ownership or modes.
+// projectionBytes snapshots a nonempty Unix projection without changing its ownership or modes.
 // Only root/the current user may own it, and group reads require the current primary group.
 func projectionBytes(filename string) ([]byte, error) {
+	data, err := projectionSnapshot(filename)
+	if err != nil || len(data) == 0 {
+		return nil, ErrCompanyProjection
+	}
+	return data, nil
+}
+
+// projectionSnapshot applies projectionBytes's confinement but admits an empty
+// file, which the portal settings format defines as "no portal dependencies".
+func projectionSnapshot(filename string) ([]byte, error) {
 	root, err := os.OpenRoot(filepath.Dir(filename))
 	if err != nil {
 		return nil, ErrCompanyProjection
@@ -33,7 +43,7 @@ func projectionBytes(filename string) ([]byte, error) {
 		return nil, ErrCompanyProjection
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 16385))
-	if err != nil || len(data) == 0 || len(data) > 16384 {
+	if err != nil || len(data) > 16384 {
 		return nil, ErrCompanyProjection
 	}
 	return data, nil

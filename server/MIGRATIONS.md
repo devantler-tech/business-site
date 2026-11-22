@@ -76,8 +76,37 @@ arguments:
 ./business-site --migrate --migration-database-file "$MIGRATION_FILE"
 ```
 
-No server, version, public-check or disclosure option may be combined with this
-mode. Repeated migration options are rejected. The operation is off by default;
+To also grant the web login its runtime privileges, name that existing login:
+
+```sh
+./business-site --migrate --migration-database-file "$MIGRATION_FILE" --runtime-role portal_web
+```
+
+The role must be a lowercase SQL identifier, differ from the migration login,
+be able to log in, have no superuser, bypass-RLS, create-role, create-database
+or replication attribute, and not be able to assume the migration role. In the
+same transaction as the schema changes, the job revokes what the migration role
+earlier granted that role on every managed table, then grants schema usage and
+exactly the privileges listed below. Grants made by another role are not
+revoked; web startup still checks the runtime boundary below. A refused role
+or grant rolls back the whole job; re-running converges on the same grants. The
+list lives beside the embedded migrations in `internal/identity/migrate.go`
+(`runtimeGrants`); a migration that changes runtime access updates both.
+Without `--runtime-role`, the job grants nothing, as before.
+
+In Kubernetes, the kubelet writes a Secret projection root-owned, and with the
+pod's `fsGroup` it is readable by that group (mode 0440), which the private-file
+option refuses. A Job reading a Secret uses `--migration-database-projection`
+instead of `--migration-database-file`, running as a non-root UID whose primary
+group is the `fsGroup`. Only that group may read the file, and no other user may.
+Every other check above is unchanged, and the two options cannot be combined.
+
+```sh
+/app/business-site --migrate --migration-database-projection /run/portal-migration/database-url --runtime-role portal_web
+```
+
+No server, version, public-check, disclosure or portal-settings option may be
+combined with this mode. Repeated migration options are rejected. The operation is off by default;
 browser dependency settings and identity flags cannot activate it. Unbound
 ordinary Go builds are not distributable migration jobs.
 
@@ -98,10 +127,11 @@ obstacle is understood.
 
 ## Web-runtime permissions and deployment proof
 
-Migration does not create roles, grant web permissions, invite clients, change
-membership, dispatch offers or enable any release flag. The reviewed store
-provisioning must give the separate web role schema usage and only its required
-table DML: SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
+Migration does not create roles, invite clients, change membership, dispatch
+offers or enable any release flag. It grants web permissions only to an explicit
+`--runtime-role`; otherwise the reviewed store provisioning must grant them. The
+separate web role gets schema usage and only its required table DML:
+SELECT/INSERT/UPDATE/DELETE on login attempts, invitations,
 memberships, sessions and contacts; SELECT/INSERT only on immutable requests and
 proposals, proposal-visibility events, acceptance receipts, external invoices,
 bank-transfer identities and credit revisions; SELECT/INSERT/UPDATE
@@ -115,13 +145,22 @@ DELETE/TRUNCATE is also refused. Context rotation never mutates the receipt ledg
 Actual
 web startup independently checks this boundary and refuses incomplete grants.
 
+The web role may also read the ledger (SELECT only on `portal_schema_version`, which
+holds version numbers and checksums, never records). Web startup refuses to serve the
+portal until the ledger holds every migration that release embeds, with unchanged
+checksums. A new web revision and its migration job start together, so the revision
+serves only after its job has finished. A ledger with later versions is accepted,
+so an older release keeps serving while a newer one migrates. The job itself refuses
+a ledger newer than the versions it embeds, so roll back to such a release only if
+it is compatible.
+
 v14 adds `portal_work_approvals`, `portal_work_revocations` and
 `portal_work_current` after unchanged v1–v13. Grant SELECT/INSERT on all three,
 and UPDATE only on the current pointer's `approval_id` and `generation` columns.
 Do not grant request/client key updates, immutable-history mutation, DELETE,
 TRUNCATE, references, triggers, maintenance, delegation or ownership to the
 runtime or an assumable role. The compiled migration job must own these relations
-as well as every earlier managed relation. It does not grant the web permissions.
+as well as every earlier managed relation. Only `--runtime-role` grants the web permissions.
 See [the approval boundary](WORK-APPROVALS.md); this migration adds no endpoint
 or client-work execution authority.
 
@@ -131,6 +170,79 @@ existing requests, indexes and runtime grants are preserved. Unknown categories
 still fail the database constraint. This adds no priced product, payment or
 execution authority and enables no release gate.
 
+v16 adds `portal_orders`, `portal_order_charges` and `portal_numina_contacts` after
+unchanged v1–v15 (see [portal billing](BILLING.md)). Grant SELECT/INSERT on orders and the
+Numina contact map, and SELECT/INSERT/UPDATE on charges, whose state, provider reference and
+send/settle markers change as an invoice advances. Never grant DELETE, TRUNCATE, references,
+triggers, maintenance, delegation or ownership on them to the runtime or an assumable role.
+
+v17 adds `portal_card_checkouts` and `portal_stripe_events` after unchanged v1–v16. Grant
+SELECT/INSERT/UPDATE on card checkouts (every session is kept; only its state and subscription
+change) and SELECT/INSERT only on Stripe events, which are applied once and never changed.
+
+v18 adds `portal_order_ends`, `portal_card_cancellations` and `portal_charge_reversals` after
+unchanged v1–v17 (see [portal billing](BILLING.md#ending-and-reversing-orders)). Grant
+SELECT/INSERT only: an order's end, Stripe's confirmed subscription end and each refund or
+dispute are recorded once and never changed or deleted.
+
+v19 rebinds work approval to an order's funding (#268) after unchanged v1–v18. New approvals
+name their order and its settled funding charge, and composite foreign keys bind the request,
+client, acceptance and exact amounts. Earlier rows keep their invoice binding unchanged, and a
+check refuses a row with both bindings or neither. No grant changes.
+
+v20 lets a client end their own order's monthly billing (#21) after unchanged v1–v19.
+`portal_order_ends` gains the `client` source with the client's issuer and subject, and a
+check requires exactly those for a client end. No grant changes: the end is still recorded once.
+
+v21 adds `portal_order_withdrawals` (#21) after unchanged v1–v20: a client's withdrawal from an
+order, recorded once with the client's identity. It also adds `portal_withdrawal_cancellations`,
+Stripe's confirmed end of a withdrawn order's card subscription, which takes precedence over an
+end scheduled earlier. Grant SELECT/INSERT only on both, like the other fixed billing tables:
+neither is changed or deleted.
+
+v22 records the client's request, when ordering, to start work within the withdrawal period
+(#21): `portal_orders` gains `early_start_at`, dated with the order. It also adds
+`portal_order_completions`, the operator's record that early-started work is completely finished,
+and `portal_withdrawal_settlements`, the amount owed for the work done before a withdrawal. Grant
+SELECT/INSERT only on both; the order's new column is written only when the order is inserted.
+
+v23 adds the portal's own emails (#21): `portal_mail_outbox`, an order confirmation or withdrawal
+receipt queued with its order or withdrawal, and `portal_mail_deliveries`, one record per sent
+email. Grant SELECT/INSERT only on both.
+
+v24 adds `portal_launch_places`, the launch offer's places (BILLING.md, *Launch discount*): one
+row per taken place, with the client, the order, the percent, the full one-time price and the
+discount. Grant SELECT/INSERT only; the retention purge, as the migration role, clears the client
+and order of a purged customer's place and keeps the place itself.
+
+v25 adds `portal_order_addons`, the standard add-ons of an order (BILLING.md, *Add-ons*): the
+add-on, its kind, units and unit price at the time of the order. Grant SELECT/INSERT only; the
+order's prices already include them.
+
+v26 adds `portal_request_closures`, the operator's record that a request is finished (BILLING.md,
+*Feature-request priority and fair use*). Grant SELECT/INSERT only.
+
+v27 adds `portal_addon_ends`, a client's end of one monthly add-on, and `portal_addon_removals`,
+Stripe's confirmation that a card subscription no longer charges it (BILLING.md, *Add-ons*). Grant
+SELECT/INSERT only on both.
+
+v28 adds `portal_operator_audit`, one row per operator API call: who, what, when and how it
+ended (CUSTOMER-IDENTITY.md, *Operator API*). Grant SELECT/INSERT only; the retention purge
+deletes rows older than the retention period.
+
+v29 adds `portal_workspaces`, including workspaces with no members yet, and records the
+workspace IDs already used by invitations and memberships. Grant SELECT/INSERT only;
+the runtime cannot rename or delete a workspace. The existing former-customer retention
+purge removes its workspace identifier together with its expired records.
+
+v30 adds nullable producer evidence to the existing immutable mail outbox. New
+complete-agreement confirmations use format 1 and bind the order, acceptance,
+proposal version/content hash, terms hash and frozen body hash. Constraints refuse
+partial metadata, a mismatched order/acceptance or a changed body. Existing rows
+retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
+Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
+This grants no service execution authority and does not prove inbox receipt.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
@@ -138,7 +250,11 @@ trigger-bypass parameter authority to the runtime or an assumable role. These
 grants are unnecessary for ordinary sign-in and trusted provisioning. The v13
 baseline and subsequent immutable events stay with the database across process
 restarts and deletion/re-enrollment. Do not prune them or reset incarnations as
-routine maintenance. Future retention design must preserve approval invalidation.
+routine maintenance. The only pruning is the retention purge (README, *Retention purge job*):
+3 years after a client's last membership ended, it deletes the client's approvals, then the
+whole event chain of each of its memberships whose last change is as old. A chain that names
+another client with records, or that a remaining approval cites, stays, so no approval outlives
+the history that invalidates it.
 There is no application history cap; physical database/storage failures still
 refuse a transaction rather than claim unrecorded success.
 

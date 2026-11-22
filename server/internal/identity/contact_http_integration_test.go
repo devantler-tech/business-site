@@ -17,7 +17,7 @@ import (
 func TestGoContactHTTP(t *testing.T) {
 	b := newBrowserFixture(t)
 	contactVerificationFlags(t, b, true)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, lang := range []string{"en", "da"} {
 		s, body, headers := b.request("GET", "/portal/contact?lang="+lang, nil, "")
 		for _, want := range []string{`<html lang="` + lang + `">`, `name="revision" value="0"`, `method="post" action="/portal/contact"`, `noindex,nofollow`, `<footer>Devantler Tech</footer>`} {
@@ -111,7 +111,7 @@ func TestGoContactHTTP(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("operator", "operator-space", "operator")))
+	b.finish(b.startInvited("operator", "operator-space", "operator"))
 	if s, body, _ := b.request("GET", "/portal/contact", nil, ""); s != 403 || strings.Contains(body, "Alice Fictional") || strings.Contains(body, "Bob Fictional") {
 		t.Fatal("operator gained contact override")
 	}

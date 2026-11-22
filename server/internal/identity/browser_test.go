@@ -15,15 +15,27 @@ import (
 // browserHandler requires a fully configured, fixed-callback application surface.
 func browserHandler(t testing.TB, foundation *Foundation, callback string) http.Handler {
 	t.Helper()
+	return fixturePublic(t).Handler(portalHandler(t, foundation, callback))
+}
+
+// portalHandler is the configured portal alone, before any site routing.
+func portalHandler(t testing.TB, foundation *Foundation, callback string) http.Handler {
+	t.Helper()
 	h, err := foundation.Browser(callback, "synthetic-client-secret")
 	if err != nil {
 		t.Fatal(err)
 	}
+	return h
+}
+
+// fixturePublic is the synthetic bilingual public site the portal shares a runtime with.
+func fixturePublic(t testing.TB) *webapp.Artifact {
+	t.Helper()
 	public, err := webapp.Load(fstest.MapFS{"index.html": {Data: []byte("English public site")}, "da/index.html": {Data: []byte("Dansk public site")}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return public.Handler(h)
+	return public
 }
 
 type browserGateCase struct {
@@ -49,8 +61,12 @@ func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequest("GET", "https://app.example.invalid"+route, nil))
 			want := 200
-			if strings.HasPrefix(route, "/portal") && tc.state != "true" {
-				want = 404
+			if strings.HasPrefix(route, "/portal") {
+				// Enabled sign-in redirects straight to the broker.
+				want = http.StatusSeeOther
+				if tc.state != "true" {
+					want = 404
+				}
 			}
 			if w.Code != want {
 				t.Fatalf("state=%s route=%s status=%d want=%d", tc.state, route, w.Code, want)
@@ -62,14 +78,33 @@ func TestCombinedPublicAndPrivateFlagBoundary(t *testing.T) {
 	}
 }
 
+// wantPresentationAssets is the exact public asset set and each file's type,
+// written out independently of presentationAssets.
+var wantPresentationAssets = []struct{ name, contentType string }{
+	{"icon.png", "image/png"},
+	{"logo-dark.svg", "image/svg+xml"},
+	{"logo-light.svg", "image/svg+xml"},
+	{"portal.css", "text/css; charset=utf-8"},
+	{"portal.js", "text/javascript; charset=utf-8"},
+}
+
 // TestBrowserPresentationAssets exercises the actual handlers, bytes and default-off
 // boundary. Template files and unknown assets are never a public file server.
 func TestBrowserPresentationAssets(t *testing.T) {
+	if len(presentationAssets) != len(wantPresentationAssets) {
+		t.Fatalf("served presentation assets = %d, want exactly %d", len(presentationAssets), len(wantPresentationAssets))
+	}
+	for _, asset := range wantPresentationAssets {
+		if presentationAssets[asset.name] != asset.contentType {
+			t.Fatalf("asset %s is served as %q, want %q", asset.name, presentationAssets[asset.name], asset.contentType)
+		}
+	}
 	f := fixtureBroker(t)
 	pool := fixtureDB(t)
 	for _, tc := range browserGateCases() {
 		h := browserHandler(t, New(pool, f.broker, flagAPI(t, tc.value).NewClient()), "https://app.example.invalid/portal/callback")
-		for name, contentType := range map[string]string{"portal.css": "text/css; charset=utf-8", "portal.js": "text/javascript; charset=utf-8"} {
+		for _, asset := range wantPresentationAssets {
+			name, contentType := asset.name, asset.contentType
 			data, err := browserFiles.ReadFile("web/" + name)
 			if err != nil || len(data) == 0 {
 				t.Fatal("actual presentation asset is missing")
@@ -100,8 +135,8 @@ func TestBrowserPresentationAssets(t *testing.T) {
 	}
 }
 
-// TestBrowserSignInPage checks rendered native forms and their security headers
-// in both supported languages, without bypassing TLS or CSRF handling.
+// TestBrowserSignInPage checks that sign-in redirects straight to the broker in
+// both supported languages, with the portal's security headers, over real TLS.
 func TestBrowserSignInPage(t *testing.T) {
 	f := fixtureBroker(t)
 	svc := enabled(t, fixtureDB(t), f)
@@ -109,8 +144,10 @@ func TestBrowserSignInPage(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
 	defer srv.Close()
 	handler = browserHandler(t, svc, srv.URL+"/portal/callback")
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	for _, language := range []string{"en", "da"} {
-		res, err := srv.Client().Get(srv.URL + "/portal/sign-in?lang=" + language)
+		res, err := client.Get(srv.URL + "/portal/sign-in?lang=" + language)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,13 +158,12 @@ func TestBrowserSignInPage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("sign-in page status=%d want 200; body=%s", res.StatusCode, body)
+		if res.StatusCode != http.StatusSeeOther || !strings.HasPrefix(res.Header.Get("Location"), f.broker.endpoint.AuthURL+"?") {
+			t.Fatalf("sign-in did not redirect straight to the broker: status=%d location=%s", res.StatusCode, res.Header.Get("Location"))
 		}
-		for _, want := range []string{`lang="` + language + `"`, `name="csrf_token"`, `method="post"`, `name="invitation"`} {
-			if !strings.Contains(string(body), want) {
-				t.Errorf("sign-in page missing %s", want)
-			}
+		// There is no portal page before the login, so no form and no invitation code.
+		if strings.Contains(string(body), "<form") || strings.Contains(string(body), `name="invitation"`) {
+			t.Error("sign-in still renders a portal form")
 		}
 		if res.Header.Get("Cache-Control") != "no-store" {
 			t.Error("identity page may be cached")
@@ -139,7 +175,7 @@ func TestBrowserSignInPage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
+		wantCSP := "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; form-action 'self' https://" + issuer.Host + "; frame-ancestors 'none'; base-uri 'none'"
 		if got := res.Header.Get("Content-Security-Policy"); got != wantCSP {
 			t.Errorf("security policy=%q want %q", got, wantCSP)
 		}

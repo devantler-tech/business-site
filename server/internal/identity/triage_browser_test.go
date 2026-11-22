@@ -214,7 +214,7 @@ func TestOperatorInboxDeniesDowngradeAndExpiredSession(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "logout":
-				if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {b.csrf("/portal/operator")}}, b.site.URL); status != 303 {
+				if status, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {b.csrf("/portal/operator")}}, b.site.URL); status != http.StatusOK {
 					t.Fatal("logout failed")
 				}
 			}
@@ -349,7 +349,7 @@ func beginTriageSignIn(t *testing.T, b *browserFixture, subject, client, role st
 	b.mu.Lock()
 	b.subject = subject
 	b.mu.Unlock()
-	return b.start(b.invite(subject, client, role))
+	return b.startInvited(subject, client, role)
 }
 
 // A missing operator route, a client-scoped aggregate query or raw brief HTML

@@ -4,7 +4,6 @@ package identity
 
 import (
 	"fmt"
-	"html"
 	"io"
 	"net"
 	"net/http"
@@ -24,7 +23,7 @@ import (
 func TestBrowserVisualFixture(t *testing.T) {
 	b := newBrowserFixture(t)
 	sharingFlags(t, b, true, true, true, true, true)
-	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-invoices", "portal-credit-reconciliation", "portal-work-approvals"}, []any{true, true, true, true, true, true, true, true, true, true})
+	setFixturePortalFlags(t, b, []string{"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-contact-verification", "portal-proposal-acceptance", "portal-work-approvals"}, []any{true, true, true, true, true, true, true, true})
 	b.mu.Lock()
 	b.claims = map[string]any{"email": "fixture@example.invalid", "email_verified": true}
 	b.mu.Unlock()
@@ -68,7 +67,6 @@ func TestBrowserVisualFixture(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	inv := "" // Both fixed actors already have durable membership.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -97,9 +95,6 @@ func TestBrowserVisualFixture(t *testing.T) {
 			}
 			b.mu.Lock()
 			b.subject = subject
-			// Both fixed actors are already provisioned once the visual gateway
-			// starts. Subsequent sign-in uses current membership, not re-invitation.
-			inv = ""
 			b.mu.Unlock()
 			http.Redirect(w, r, "/portal/sign-in", http.StatusSeeOther)
 			return
@@ -171,25 +166,12 @@ func TestBrowserVisualFixture(t *testing.T) {
 			_, _ = io.WriteString(w, strings.ReplaceAll(string(body), b.broker.URL+"/auth", origin+"/fixture/broker/auth"))
 			return
 		}
-		if r.Method == http.MethodGet && r.URL.Path == "/portal/sign-in" && res.StatusCode == http.StatusOK {
-			// Fictional, disposable gateway only: preload its synthetic invitation
-			// so UI evaluation does not expose any token in terminal diagnostics.
-			body, readErr := io.ReadAll(io.LimitReader(res.Body, 64*1024+1))
-			if readErr != nil || len(body) > 64*1024 {
-				return
-			}
-			b.mu.RLock()
-			invitation := inv
-			b.mu.RUnlock()
-			_, _ = io.WriteString(w, strings.Replace(string(body), `id="invitation"`, `id="invitation" value="`+html.EscapeString(invitation)+`"`, 1))
-			return
-		}
 		_, _ = io.Copy(w, res.Body)
 	})}
 	t.Cleanup(func() { _ = server.Close() })
 	go func() { _ = server.Serve(listener) }()
 	if !t.Run("ConcurrentPageLoads", func(t *testing.T) {
-		client := &http.Client{Timeout: 5 * time.Second}
+		client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		for i := range 8 {
 			t.Run(fmt.Sprint(i), func(t *testing.T) {
 				t.Parallel()
@@ -201,8 +183,8 @@ func TestBrowserVisualFixture(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if res.StatusCode != http.StatusOK {
-					t.Errorf("synthetic sign-in status = %d; want 200", res.StatusCode)
+				if res.StatusCode != http.StatusSeeOther {
+					t.Errorf("synthetic sign-in status = %d; want 303 to the broker", res.StatusCode)
 				}
 				if _, err := io.Copy(io.Discard, res.Body); err != nil {
 					t.Error(err)
@@ -216,7 +198,7 @@ func TestBrowserVisualFixture(t *testing.T) {
 		return
 	}
 	if !t.Run("PreparedOperatorSignIn", func(t *testing.T) {
-		b.finish(b.start(""))
+		b.finish(b.start())
 		status, body, _ := b.request("GET", "/portal/?lang=en", nil, "")
 		if status != http.StatusOK || !strings.Contains(body, "fictional-operator") {
 			t.Fatal("prepared operator cannot sign in to its own workspace")

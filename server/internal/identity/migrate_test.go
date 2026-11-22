@@ -68,8 +68,171 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindOriginalConfirmationFixture removes only the disposable v30 producer
+// metadata. It never rewrites the frozen mail, sender receipt or older ledger.
+func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_mail_outbox
+ DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,
+ DROP CONSTRAINT portal_mail_complete_producer, DROP CONSTRAINT portal_mail_body_digest,
+ DROP COLUMN producer_format, DROP COLUMN acceptance_id, DROP COLUMN proposal_version,
+ DROP COLUMN proposal_sha256, DROP COLUMN terms_sha256, DROP COLUMN body_sha256;
+ ALTER TABLE portal_orders DROP CONSTRAINT portal_order_confirmation_binding;
+ ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_confirmation_binding;
+ DELETE FROM portal_schema_version WHERE version=30`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-confirmation-proof schema", err)
+	}
+}
+
+// rewindOperatorAuditFixture removes only the disposable v28 operator audit log.
+func rewindOperatorAuditFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOriginalConfirmationFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_workspaces; DELETE FROM portal_schema_version WHERE version=29`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-workspace schema", err)
+	}
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_operator_audit;
+ DELETE FROM portal_schema_version WHERE version=28`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-audit schema", err)
+	}
+}
+
+// rewindAddonEndsFixture removes only the disposable v27 add-on ends.
+func rewindAddonEndsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOperatorAuditFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_removals,portal_addon_ends;
+ DELETE FROM portal_schema_version WHERE version=27`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-add-on-end schema", err)
+	}
+}
+
+// rewindRequestClosuresFixture removes only the disposable v26 request closures.
+func rewindRequestClosuresFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindAddonEndsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_request_closures;
+ DELETE FROM portal_schema_version WHERE version=26`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-closure schema", err)
+	}
+}
+
+// rewindOrderAddonsFixture removes only the disposable v25 order add-ons.
+func rewindOrderAddonsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindRequestClosuresFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_order_addons;
+ DELETE FROM portal_schema_version WHERE version=25`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-add-on schema", err)
+	}
+}
+
+// rewindLaunchPlacesFixture removes only the disposable v24 launch places.
+func rewindLaunchPlacesFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOrderAddonsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_launch_places;
+ DELETE FROM portal_schema_version WHERE version=24`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-launch schema", err)
+	}
+}
+
+// rewindMailFixture removes only the disposable v23 mail outbox and deliveries.
+func rewindMailFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindLaunchPlacesFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_mail_deliveries,portal_mail_outbox;
+ DELETE FROM portal_schema_version WHERE version=23`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-mail schema", err)
+	}
+}
+
+// rewindEarlyStartFixture removes only the disposable v22 early start, completion
+// and settlement records.
+func rewindEarlyStartFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindMailFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_withdrawal_settlements,portal_order_completions;
+ ALTER TABLE portal_orders DROP COLUMN early_start_at;
+ DELETE FROM portal_schema_version WHERE version=22`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-early-start schema", err)
+	}
+}
+
+// rewindWithdrawalsFixture removes only the disposable v21 withdrawal table.
+func rewindWithdrawalsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindEarlyStartFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_withdrawal_cancellations,portal_order_withdrawals;
+ DELETE FROM portal_schema_version WHERE version=21`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-withdrawal schema", err)
+	}
+}
+
+// rewindClientOrderEndsFixture removes only the disposable v20 client ends,
+// with the synthetic subscription ends that follow them.
+func rewindClientOrderEndsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindWithdrawalsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DELETE FROM portal_card_cancellations WHERE order_id IN (SELECT order_id FROM portal_order_ends WHERE source='client');
+ DELETE FROM portal_order_ends WHERE source='client';
+ ALTER TABLE portal_order_ends DROP CONSTRAINT portal_order_end_client, DROP CONSTRAINT portal_order_end_source, DROP COLUMN client_issuer, DROP COLUMN client_subject,
+  ADD CONSTRAINT portal_order_ends_source_check CHECK(source IN ('operator','stripe'));
+ DELETE FROM portal_schema_version WHERE version=20`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-client-end schema", err)
+	}
+}
+
+// rewindWorkFundingFixture removes only the disposable v19 funding binding,
+// with the synthetic approvals that use it.
+func rewindWorkFundingFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindClientOrderEndsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DELETE FROM portal_work_current WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
+ DELETE FROM portal_work_revocations WHERE approval_id IN (SELECT id FROM portal_work_approvals WHERE order_id IS NOT NULL);
+ DELETE FROM portal_work_approvals WHERE order_id IS NOT NULL;
+ ALTER TABLE portal_work_approvals DROP CONSTRAINT portal_work_approval_charge, DROP CONSTRAINT portal_work_approval_order, DROP CONSTRAINT portal_work_approval_agreement,
+  DROP CONSTRAINT portal_work_approval_one_binding, DROP COLUMN order_id, DROP COLUMN charge_period, ALTER COLUMN invoice_sequence SET NOT NULL;
+ ALTER TABLE portal_order_charges DROP CONSTRAINT portal_charge_work_binding;
+ ALTER TABLE portal_orders DROP CONSTRAINT portal_order_work_binding;
+ DELETE FROM portal_schema_version WHERE version=19`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-work-funding schema", err)
+	}
+}
+
+// rewindOrderEndsFixture removes only the disposable v18 end and reversal tables.
+func rewindOrderEndsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindWorkFundingFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_charge_reversals,portal_card_cancellations,portal_order_ends;
+ DELETE FROM portal_schema_version WHERE version=18`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-order-end schema", err)
+	}
+}
+
+// rewindCardsFixture removes only the disposable v17 card checkout and event tables.
+func rewindCardsFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOrderEndsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_card_checkouts,portal_stripe_events;
+ DELETE FROM portal_schema_version WHERE version=17`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-card schema", err)
+	}
+}
+
+// rewindOrdersFixture removes only the disposable v16 order and billing tables.
+func rewindOrdersFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindCardsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_order_charges,portal_orders,portal_numina_contacts;
+ DELETE FROM portal_schema_version WHERE version=16`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-order schema", err)
+	}
+}
+
 func rewindWorkApprovalFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindOrdersFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_requests DROP CONSTRAINT portal_requests_product_check;
  ALTER TABLE portal_requests ADD CONSTRAINT portal_requests_product_check CHECK(product IN ('website','app','service'));
  DELETE FROM portal_schema_version WHERE version=15`); err != nil {

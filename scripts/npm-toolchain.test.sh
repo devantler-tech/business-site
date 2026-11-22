@@ -9,7 +9,8 @@
 # dependency update of the site went red. package.json declares the npm major in
 # devEngines.packageManager, and npm refuses to install, audit or run with another major.
 # This test keeps the workflows on a Node line that bundles that major, so no workflow can
-# drift back unnoticed — including the publish workflow, which runs only on main.
+# drift back unnoticed — including the production runtime package and the container
+# publication job, which runs only on main.
 #
 # CHECKS
 #   1. package.json declares devEngines.packageManager as npm "^<major>.0.0" with
@@ -55,8 +56,9 @@ required_jobs=(
   ci.yaml:build-docs
   ci.yaml:audit-docs
   ci.yaml:drift-check-active-projects
+  ci.yaml:test-combined-runtime
+  ci.yaml:publish-container
   audit-docs.yaml:audit-docs
-  publish-site.yaml:build
 )
 
 # Paths the CI filter gating this test must list, so a change to any input reruns it.
@@ -78,9 +80,7 @@ required_filter_paths=(
 # A job works in docs/ when its own or the workflow's default working directory is docs/, a
 # step's working directory is, or a step enters it with cd, pushd or npm --prefix. Any path
 # with a docs component counts (./docs, ${{ github.workspace }}/docs), quoted or not. A step
-# that runs npm or npx anywhere counts too, except the closed, independently
-# checksum-bound native identity SDK profile below. Any website/unknown command
-# in that same job still counts. Audit wrapper invocations count
+# that runs npm or npx anywhere counts too. Audit wrapper invocations count
 # from the root too. Legacy docs paths remain detectable, but a root working-directory
 # default alone must not turn every Bash-only job into a Node job.
 jobs_query=""
@@ -91,39 +91,15 @@ def enters_docs:
   or test("--prefix[ =]([^\\s;&|]*[/\"'])?docs([\"'/\\s;&|)]|$)");
 def runs_npm: test("(^|[\\s;&|(])(npm|npx|node)(\\s|$)");
 def runs_audit: test("(^|[/\\s;&|(])audit-dependencies(\\.test)?\\.sh([\\s;&|)]|$)");
-def mandatory: .if == null and (.["continue-on-error"] == null or .["continue-on-error"] == false);
-# This exact bootstrap, not a job/step name or marker, admits the SDK's own
-# older toolchain. It cannot admit a different download, skipped checksum, root
-# npm command, conditional setup or setup that runs after the SDK command.
-def native_sdk_setup:
-  ((.run // "") | rtrimstr("\n")) == ([
-    "tools=\"$RUNNER_TEMP/zitadel-tools\"",
-    "mkdir \"$tools\"",
-    "curl --fail --location --silent --show-error --max-time 120 https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.xz -o \"$tools/node.tar.xz\"",
-    "(cd \"$tools\" && printf '%s\\n' 'df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de  node.tar.xz' | shasum -a 256 -c -)",
-    "tar -xJf \"$tools/node.tar.xz\" -C \"$tools\"",
-    "export PATH=\"$tools/node-v22.23.3-linux-x64/bin:$PATH\"",
-    "corepack enable",
-    "corepack prepare pnpm@10.30.3 --activate",
-    "echo \"$tools/node-v22.23.3-linux-x64/bin\" >> \"$GITHUB_PATH\""
-  ] | join("\n")) and mandatory;
-def without_native_sdk_commands:
-  split("\n") | map(select((gsub("^\\s+|\\s+$"; "") |
-    . == "npm ci --prefix tools/zitadel-pnpm-source --ignore-scripts" or
-    . == "node --test tools/zitadel-pnpm-source/index.test.mjs" or
-    . == "node tools/zitadel-pnpm-source/index.mjs restore --capsule \"$RUNNER_TEMP/zitadel-pnpm-sources-roundtrip\" --sha256 \"$seal\" --scratch \"$RUNNER_TEMP/zitadel-pnpm-restore-work\" --store \"$RUNNER_TEMP/zitadel-pnpm-restored-store\" > \"$RUNNER_TEMP/zitadel-build/pnpm-source-roundtrip.json\"") | not)) | join("\n");
 (((.defaults // {}).run // {})["working-directory"]) as $workflow_default |
 (.jobs // {}) | to_entries[] |
 (((((.value.defaults // {}).run // {})["working-directory"]) // $workflow_default // "") | docs_dir)
   as $default_docs |
 (.value.steps // []) as $steps |
-[range(0; $steps | length) | select($steps[.] | native_sdk_setup)] as $native |
 [range(0; $steps | length) | select(
   (($steps[.]["working-directory"] // "") | docs_dir) or
   (($steps[.].run // "") | enters_docs) or
-  (. as $index | ($steps[$index].run // "") |
-    (if ($native | length) == 1 and $native[0] < $index and ($steps[$index] | mandatory)
-      then without_native_sdk_commands else . end) | runs_npm) or
+  (($steps[.].run // "") | runs_npm) or
   (($steps[.].run // "") | runs_audit) or
   ($default_docs and ($steps[.].run != null))
 )] as $docs |
@@ -134,9 +110,7 @@ select($default_docs or ($docs | length > 0) or ($setup | length > 0)) |
  (if ($setup | length) > 0 then ($steps[$setup[0]].with["node-version-file"] // "-" | tostring) else "-" end),
  (if ($setup | length) > 0 and ($docs | length) > 0 then ($setup[0] < $docs[0]) else true end | tostring),
  (if ($setup | length) > 0 then ($steps[$setup[0]] | .if == null and
-   (.["continue-on-error"] == null or .["continue-on-error"] == false)) else false end | tostring),
- (if ($native | length) == 1 and ($docs | length) > 0 and ($setup | length) > 0
-   then $setup[0] > $native[0] else true end | tostring)]
+   (.["continue-on-error"] == null or .["continue-on-error"] == false)) else false end | tostring)]
 | @tsv
 JQ
 
@@ -194,21 +168,19 @@ check() {
   ')" || violation "cannot read Node types update policy" || return 1
   [ "${policy}" = true ] || violation "Node types major updates must be coordinated with the runtime" || return 1
 
-  local workflow base json rows job count node_version node_version_file ordered mandatory native_authority line npm_major
+  local workflow base json rows job count node_version node_version_file ordered mandatory line npm_major
   local found=" "
   for workflow in "${workflows_dir}"/*.yaml "${workflows_dir}"/*.yml; do
     [ -f "${workflow}" ] || continue
     base="$(basename "${workflow}")"
     json="$(yq -o=json '.' "${workflow}")" || violation "cannot parse ${base}" || return 1
     rows="$(jq -r "${jobs_query}" <<<"${json}")" || violation "cannot read the jobs of ${base}" || return 1
-    while IFS=$'\t' read -r job count node_version node_version_file ordered mandatory native_authority; do
+    while IFS=$'\t' read -r job count node_version node_version_file ordered mandatory; do
       [ -n "${job}" ] || continue
       found="${found}${base}:${job} "
       [ "${count}" = "1" ] ||
         violation "${base}:${job} works in docs/ but has ${count} actions/setup-node steps; it needs exactly one" ||
         return 1
-      [ "${native_authority}" = "true" ] ||
-        violation "${base}:${job} website Node setup must follow the native toolchain override" || return 1
       [ "${ordered}" = "true" ] ||
         violation "${base}:${job} sets up Node after its first step in docs/, so that step runs on the runner's default Node" ||
         return 1
@@ -302,34 +274,6 @@ reset_fixture() {
 
 output="$(check "${repo_root}/package.json" "${repo_root}/.github/workflows")" || fail "${output}"
 
-reset_fixture
-yq -i '.jobs["build-zitadel-linux"].steps =
-  [{"uses":"actions/setup-node@fixture","with":{"node-version-file":".node-version"}}] +
-  .jobs["build-zitadel-linux"].steps + [{"run":"npm ci"}]' "${fixture}/.github/workflows/ci.yaml"
-expect_failure "native bootstrap overrides an earlier website Node setup" "website Node setup must follow"
-
-# The frozen native SDK has its own Node authority. Recognize only its exact
-# commands after the unconditional checksum-verified bootstrap. Website npm and
-# unknown/mixed commands in that same job must still require the site toolchain.
-for mutation in \
-  '.jobs["build-zitadel-linux"].steps += [{"run":"npm ci"}]' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run += "npm ci\n" else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("--ignore-scripts"; "--ignore-scripts; npm ci")) else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("--ignore-scripts"; "--ignore-scripts \u0024(npm ci)")) else . end)' \
-  '.jobs["build-zitadel-linux"].steps += [{"run":"node scripts/unknown.mjs"}]' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .run=(.run | sub("tools/zitadel-pnpm-source"; "tools/unrecognized")) else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .if="false" else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .["continue-on-error"]=true else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Prepare the frozen identity JavaScript toolchain" then .run=(.run | sub("df450af8"; "00000000")) else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= map(select(.name != "Prepare the frozen identity JavaScript toolchain"))' \
-  '.jobs["build-zitadel-linux"].steps |= map(if .name == "Verify native pnpm source retention" then .if="false" else . end)' \
-  '.jobs["build-zitadel-linux"].steps |= sort_by(if .name == "Verify native pnpm source retention" then 0 else 1 end)'; do
-  reset_fixture
-  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" | jq "$mutation" >"${fixture}/native-broken.json"
-  yq -P '.' "${fixture}/native-broken.json" >"${fixture}/.github/workflows/ci.yaml"
-  expect_failure "native SDK must not hide a website/unchecked toolchain command" "ci.yaml:build-zitadel-linux works in docs/ but has 0"
-done
-
 # A version-file consumer must fail closed on absent or conflicting authority,
 # and type checking must not admit APIs newer than the selected runtime.
 reset_fixture
@@ -365,12 +309,12 @@ yq -i 'del(.updates[] | select(.directory == "/web") | .ignore)' "${fixture}/.gi
 expect_failure "uncoordinated Node types major update" "Node types major updates must be coordinated"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version-file") = "web/.node-version"' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "second Node authority" "must read the root .node-version"
+yq -i '(.jobs.test-combined-runtime.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version-file") = "web/.node-version"' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "second Node authority" "ci.yaml:test-combined-runtime must read the root .node-version"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "24"' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "inline version overrides declaration" "must read the root .node-version"
+yq -i '(.jobs.test-combined-runtime.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "24"' "${fixture}/.github/workflows/ci.yaml"
+expect_failure "inline version overrides declaration" "ci.yaml:test-combined-runtime must read the root .node-version"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
@@ -385,10 +329,10 @@ expect_failure "Node-only job missing setup" "ci.yaml:extra works in docs/ but h
 
 for control in '.if = "false"' '.["continue-on-error"] = true'; do
   reset_fixture
-  yq -o=json '.' "${fixture}/.github/workflows/publish-site.yaml" |
-    jq "(.jobs.build.steps[] | select((.uses // \"\") | startswith(\"actions/setup-node@\"))) |= (${control})" >"${fixture}/conditional-node.json"
-  yq -P '.' "${fixture}/conditional-node.json" >"${fixture}/.github/workflows/publish-site.yaml"
-  expect_failure "Node setup cannot be skipped: ${control}" "Node setup must run and propagate failures"
+  yq -o=json '.' "${fixture}/.github/workflows/ci.yaml" |
+    jq "(.jobs[\"test-combined-runtime\"].steps[] | select((.uses // \"\") | startswith(\"actions/setup-node@\"))) |= (${control})" >"${fixture}/conditional-node.json"
+  yq -P '.' "${fixture}/conditional-node.json" >"${fixture}/.github/workflows/ci.yaml"
+  expect_failure "Node setup cannot be skipped: ${control}" "ci.yaml:test-combined-runtime Node setup must run and propagate failures"
 done
 
 # A root-native application still audits through its wrapper, not a literal npm
@@ -400,15 +344,15 @@ yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
     {"uses": "actions/setup-node@fixture", "with": {"node-version": "22"}},
     {"run": "./scripts/audit-dependencies.sh"}
   ]
-}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "root-default audit wrapper" "publish-site.yaml:extra sets up Node 22"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "root-default audit wrapper" "publish-runtime.yaml:extra sets up Node 22"
 
 # Root defaults alone must not classify every Bash-only repository check as a
 # Node job. The wrapper/npm invocation, not the application's folder name, matters.
 reset_fixture
 yq -i '.defaults.run.working-directory = "." | .jobs.extra = {
   "runs-on": "ubuntu-latest", "steps": [{"run": "bash scripts/editorial-contract.test.sh"}]
-}' "${fixture}/.github/workflows/publish-site.yaml"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
 check "${fixture}/package.json" "${fixture}/.github/workflows" ||
   fail "root-default Bash-only jobs must not require Node"
 
@@ -418,38 +362,38 @@ yq -i '.jobs.extra = {
     {"run": "./scripts/audit-dependencies.sh", "working-directory": "."},
     {"uses": "actions/setup-node@fixture", "with": {"node-version": "24"}}
   ]
-}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "root audit before Node setup" "publish-site.yaml:extra sets up Node after"
+}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "root audit before Node setup" "publish-runtime.yaml:extra sets up Node after"
 
 reset_fixture
-yq -i '(.jobs.build.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "22"' \
-  "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "publish on Node 22" "publish-site.yaml:build sets up Node 22, which bundles npm 10"
-
-reset_fixture
-yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
-  {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "cd docs && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ with cd" "publish-site.yaml:extra sets up Node 22"
+yq -i '(.jobs.publish-container.steps[] | select((.uses // "") | test("^actions/setup-node@")) | .with."node-version") = "22"' \
+  "${fixture}/.github/workflows/ci.yaml"
+expect_failure "main-only publication on Node 22" "ci.yaml:publish-container sets up Node 22, which bundles npm 10"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "pushd \"docs\" && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ with a quoted pushd" "publish-site.yaml:extra sets up Node 22"
+  {"run": "cd docs && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ with cd" "publish-runtime.yaml:extra sets up Node 22"
+
+reset_fixture
+yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
+  {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
+  {"run": "pushd \"docs\" && ./scripts/audit-dependencies.sh"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ with a quoted pushd" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 CD_STEP="cd \"\${GITHUB_WORKSPACE}\"/docs && ./scripts/audit-dependencies.sh" yq -i '.jobs.extra = {
   "runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": strenv(CD_STEP)}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job entering docs/ through a quoted variable" "publish-site.yaml:extra sets up Node 22"
+  {"run": strenv(CD_STEP)}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job entering docs/ through a quoted variable" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
-  {"run": "npx astro build"}]}' "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job running npx" "publish-site.yaml:extra sets up Node 22"
+  {"run": "npx astro build"}]}' "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job running npx" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 yq -i '.jobs.test-docs-npm-toolchain.if = "needs.changes.outputs.docs-npm-toolchain != '"'"'true'"'"'"' \
@@ -460,8 +404,8 @@ reset_fixture
 WORKSPACE_DOCS="\${{ github.workspace }}/docs" yq -i '.jobs.extra = {"runs-on": "ubuntu-latest", "steps": [
   {"uses": "actions/setup-node@v7", "with": {"node-version": "22"}},
   {"run": "npm ci", "working-directory": strenv(WORKSPACE_DOCS)}]}' \
-  "${fixture}/.github/workflows/publish-site.yaml"
-expect_failure "new job in docs/ by workspace path" "publish-site.yaml:extra sets up Node 22"
+  "${fixture}/.github/workflows/publish-runtime.yaml"
+expect_failure "new job in docs/ by workspace path" "publish-runtime.yaml:extra sets up Node 22"
 
 reset_fixture
 cat >"${fixture}/.github/workflows/extra.yaml" <<'YAML'

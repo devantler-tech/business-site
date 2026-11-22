@@ -34,7 +34,7 @@ for (const [path, locale, title] of pages) {
       assert.ok(html.includes(`id="${section}"`), `missing homepage destination ${section}`);
     }
     assert.ok(html.indexOf('id="quality-title"') < html.indexOf('id="services"'), "quality precedes prices");
-    for (const [id, setup, monthly] of [["website",3750,125],["app",10000,375],["service",6250,250]]) {
+    for (const [id, setup, monthly] of [["website",6000,300],["app",15000,800],["service",9500,500]]) {
       assert.match(html, new RegExp(`data-offer="${id}"[^>]*data-setup="${setup}"[^>]*data-monthly="${monthly}"`));
     }
     const services = html.match(/<section\b[^>]*id="services"[^>]*>([\s\S]*?)<\/section>/)?.[1] ?? "";

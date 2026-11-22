@@ -2,6 +2,7 @@
 
 Status: completed — resource/domain cutover and old monorepo publisher retirement verified
 10 October 2026 in [#25](https://github.com/devantler-tech/business-site/issues/25).
+Superseded for hosting on 15 November 2026: GitHub Pages is retired (see the amendment below).
 
 ## Current ownership
 
@@ -71,3 +72,19 @@ and cleanup must finish before the migration issue is closed.
 References: [GitHub custom Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages),
 [custom-domain management](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 and [Pages API](https://docs.github.com/en/rest/pages/pages).
+
+## Amendment — GitHub Pages retired, 15 November 2026
+
+devantler.tech moved to the devantler-tech platform
+([platform#6177](https://github.com/devantler-tech/platform/issues/6177),
+[monorepo#3939](https://github.com/devantler-tech/monorepo/issues/3939)). The platform serves
+the site from this repository's signed Go runtime image, built by CI and released through
+`release-runtime.yaml` and `publish-runtime.yaml` ([ADR 0020](0020-public-staging-hostname.md)).
+Publication stays source-owned; only the host changed.
+
+`publish-site.yaml`, its `SITE_PUBLICATION_ENABLED` switch, `public/CNAME` and the
+`publication-source.json` receipt are removed. The runtime release's verified
+`business-site-runtime-publication` receipt now identifies the served source. The ranking is
+refreshed whenever CI builds the production image, so the daily Pages rebuild has no successor.
+`publishing-contract.test.sh` refuses any workflow that builds or deploys a Pages site. The
+cutover and rollback steps above are historical.

@@ -1,15 +1,37 @@
 # Private draft proposals
 
-> [ADR 0030](../docs/adr/0030-numina-first-billing.md) plans to replace hand-written versions
-> with proposals generated from the request and the published prices. Custom work is drafted by
-> the Agentic Engineer and approved by the maintainer. Until generation ships, versions are
-> still written in the form below. Client acceptance is unchanged, and Numina becomes the
-> backend for quotes once its API can create them.
-
 An authorized operator can prepare immutable scope and price versions for an
 existing project request. The private request-detail page shows complete history
 and a native English/Danish form. A draft is **not accepted or approved for work**;
 unshared versions remain private to the operator.
+
+## Generated drafts
+
+Following [ADR 0030](../docs/adr/0030-numina-first-billing.md), the operator does not write a
+quote for a published offering. A request for a website, web app or web service shows a
+**generated draft** on the operator's request page: its scope names the offering and the
+request title, its deliverables and terms are the published offer copy, and its prices are the
+published VAT-inclusive fixed prices in minor units (website 6,000 + 300/month, web app
+15,000 + 800/month, web service 9,500 + 500/month). Its one-time terms also say the first
+consultation is free. The `launchDiscount` block (25% off the one-time price for the first 50
+customers who order with hosting) is decoded but not yet applied by quotes, orders or invoices.
+The operator reviews it and chooses
+**Save generated draft as a new version**, then shares that version as usual. The draft uses
+the page language, so open the page in Danish for a Danish quote.
+
+The save posts the ordinary proposal form to the existing route, so every rule below (exact
+fields, limits, retry keys, expected version, immutable history) still applies. The operator
+can instead write a different version in the form below. A request outside the published
+offerings (`other`) has no generated draft: the maintainer sets its scope and price, and the
+Agentic Engineer may draft it for his approval.
+
+The server copy of the offerings is `internal/identity/offerings.json`.
+`scripts/proposal-offerings.test.mjs` fails when it differs from the public site's offer copy
+or prices. The frozen maintenance inventory renders proposal states without a generated
+draft; `TestProposalGeneratedVersionSavesWithoutTyping` covers the generated block in both
+languages. Generation adds
+no flag: it is inside the existing false-default `portal-proposals` gate. Numina becomes the
+backend for quotes once its API can create them (Numina-Technologies/mcp#14).
 
 ## Release boundary
 
