@@ -77,7 +77,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
           const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
           const source = attr(controller, "src");
           assert.ok(source, "the collector links its controller");
-          assert.match(source, /^\/_app\/.*review-collector[^/]*\.mjs$/, "the statically rendered collector links its local controller");
+          assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
           const script = readFileSync(join(candidate, source), "utf8");
           assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
         }

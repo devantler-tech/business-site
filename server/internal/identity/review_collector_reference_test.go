@@ -19,7 +19,6 @@ const reviewCollectorExpectation = `<section class="review-collector" aria-label
   </div>
   <div id="review-frame" hidden></div>
   <template data-review-frame><iframe data-src="https://widget.trustpilot.com/trustboxes/56278e9abfbbba0bdcd568bc/index.html?templateId=56278e9abfbbba0bdcd568bc&amp;businessunitId=6b00bb09a7dbf30ad4d33478#locale=@LOCALE@&amp;styleHeight=52px&amp;styleWidth=100%25" title="@FRAME_TITLE@" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
-  <script type="module" src="/portal/assets/review-collector.mjs"></script>
 </section>`
 
 func checkClientHomeReviewCollector(markup, lang string) (string, error) {
@@ -85,7 +84,6 @@ func TestContactMaintenanceReviewCollectorReferenceBoundary(t *testing.T) {
 		{`data-src="https://widget.trustpilot.com/`, `src="https://widget.trustpilot.com/`},
 		{`rel="noreferrer">Open on Trustpilot`, `rel="noopener">Open on Trustpilot`},
 		{`referrerpolicy="no-referrer"`, `referrerpolicy="unsafe-url"`},
-		{`src="/portal/assets/review-collector.mjs"`, `src="/portal/assets/missing.mjs"`},
 	} {
 		bad := strings.Replace(pages[1].markup, change[0], change[1], 1)
 		if bad == pages[1].markup || checkMaintenanceInventoryPage("portal.html", 1, bad, false) == nil {

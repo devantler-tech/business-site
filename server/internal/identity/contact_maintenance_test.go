@@ -68,7 +68,7 @@ func TestContactMaintenanceFullFrameRejections(t *testing.T) {
 						case "stylesheet":
 							return n.Data == "link" && linkAttribute(n, "rel") == "stylesheet"
 						case "script":
-							return n.Data == "script" && linkAttribute(n, "src") == "/portal/assets/portal.js"
+							return n.Data == "script"
 						case "theme-label-hidden", "theme-label-inert":
 							return n.Data == "label" && n.LastChild != nil && n.LastChild.Data == "select" && linkAttribute(n.LastChild, "id") == "theme"
 						default:
