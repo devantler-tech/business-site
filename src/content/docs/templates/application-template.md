@@ -5,7 +5,7 @@ description: One starter for new applications. Pick a Go, .NET, SvelteKit or you
 
 One command lays down a **Go**, **.NET**, **SvelteKit** or bring-your-own stack and, if you want it, makes the application a **platform tenant** on the [devantler-tech platform](https://github.com/devantler-tech/platform). A weekly sync keeps the shared plumbing current afterwards.
 
-**Repository**: [devantler-tech/platform-tenant-template](https://github.com/devantler-tech/platform-tenant-template) (being renamed `application-template`)
+**Repository**: [devantler-tech/application-template](https://github.com/devantler-tech/application-template) (formerly `platform-tenant-template`)
 
 ## What's Inside
 
@@ -47,14 +47,14 @@ The weekly [template-sync](https://github.com/AndreasAugustin/actions-template-s
 
 Your application code, `Dockerfile`, `deploy/`, `.github/workflows/ci.yaml`, `README.md` and the other files you own are listed in `.templatesyncignore` (same syntax as `.gitignore`), so the sync never overwrites them.
 
-The template's [reference](https://github.com/devantler-tech/platform-tenant-template/blob/main/docs/REFERENCE.md#what-the-template-owns-vs-what-you-own) has the authoritative file-by-file list.
+The template's [reference](https://github.com/devantler-tech/application-template/blob/main/docs/REFERENCE.md#what-the-template-owns-vs-what-you-own) has the authoritative file-by-file list.
 
 ## Getting Started
 
 Try it in a throwaway copy. You need Git, a POSIX shell and the stack's toolchain; no GitHub token, cloud account or cluster:
 
 ```bash
-git clone --depth 1 https://github.com/devantler-tech/platform-tenant-template.git demo-app
+git clone --depth 1 https://github.com/devantler-tech/application-template.git demo-app
 cd demo-app
 rm -rf .git                        # the scaffold refuses to run in the template itself
 scripts/scaffold.sh go --tenancy   # drop --tenancy for a plain app
@@ -65,7 +65,7 @@ For another stack, scaffold `dotnet` and run `dotnet test`, or scaffold `svelte`
 
 The scaffold prints `Scaffolded 'demo-app' (stack: go, platform tenant: yes).` With `--tenancy`, `kubectl kustomize deploy/` then renders the tenant's manifests and `docker build .` builds its image.
 
-Creating a real application waits on GitHub's template option for this repository, which is not enabled yet; [issue 211](https://github.com/devantler-tech/platform-tenant-template/issues/211) tracks it. Until then, the throwaway copy above is the supported way to try the template. Once the option is enabled:
+Creating a real application waits on GitHub's template option for this repository, which is not enabled yet; [issue 211](https://github.com/devantler-tech/application-template/issues/211) tracks it. Until then, the throwaway copy above is the supported way to try the template. Once the option is enabled:
 
 1. **Create its repository from the template.**
 2. **Scaffold it.** In the new checkout, run `scripts/scaffold.sh` once with your stack, and `--tenancy` if it will run on the platform. The name defaults to the directory name and must equal the repository name. Review `git status` and `git diff`, then commit.
@@ -77,7 +77,7 @@ Creating a real application waits on GitHub's template option for this repositor
 
 ## Links
 
-- 📦 [Template on GitHub](https://github.com/devantler-tech/platform-tenant-template)
-- 📖 [Template reference](https://github.com/devantler-tech/platform-tenant-template/blob/main/docs/REFERENCE.md)
+- 📦 [Template on GitHub](https://github.com/devantler-tech/application-template)
+- 📖 [Template reference](https://github.com/devantler-tech/application-template/blob/main/docs/REFERENCE.md)
 - 🛰️ [The devantler-tech platform](https://github.com/devantler-tech/platform)
 - 🔄 [Reusable workflows used by this template](https://github.com/devantler-tech/.github/tree/main/.github/workflows)

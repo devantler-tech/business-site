@@ -144,32 +144,39 @@ return function check(html) {
 };
 }
 
-const legacyTemplate = new URL("templates/gitops-tenant-template/index.html", candidate);
+// Both former names of the application template guide redirect to it, keeping incoming bookmarks.
+const templateGuide = "/templates/application-template/";
+const legacyBookmarks = ["#whats-inside", "#what-the-template-owns-vs-what-you-own", "#getting-started", "#links"];
+for (const legacyName of ["gitops-tenant-template", "platform-tenant-template"]) {
+const legacyTemplate = new URL(`templates/${legacyName}/index.html`, candidate);
 if (process.argv[2] === "disabled") {
-  assert.ok(!existsSync(legacyTemplate), "disabled legacy template redirect must be removed");
+  assert.ok(!existsSync(legacyTemplate), `disabled legacy template redirect ${legacyName} must be removed`);
 } else {
-  assert.ok(existsSync(legacyTemplate), "enabled legacy template redirect required beside healthy guides");
+  assert.ok(existsSync(legacyTemplate), `enabled legacy template redirect ${legacyName} required beside healthy guides`);
+  const guideHeadings = new Set(all(parse(readFileSync(new URL(`${templateGuide.slice(1)}index.html`, candidate), "utf8"))).map(node => attr(node, "id")));
+  for (const hash of legacyBookmarks) assert.ok(guideHeadings.has(hash.slice(1)), `legacy bookmark ${hash} lands on a real application template heading`);
   const redirectNodes = all(parse(readFileSync(legacyTemplate, "utf8")));
-  assert.equal(attr(redirectNodes.find(node => node.tagName === "link" && attr(node,"rel") === "canonical"), "href"), "https://devantler.tech/templates/platform-tenant-template/");
+  assert.equal(attr(redirectNodes.find(node => node.tagName === "link" && attr(node,"rel") === "canonical"), "href"), `https://devantler.tech${templateGuide}`);
   assert.equal(attr(redirectNodes.find(node => node.tagName === "meta" && attr(node,"name") === "robots"), "content"), "noindex");
-  assert.ok(redirectNodes.some(node => node.tagName === "a" && attr(node,"href") === "/templates/platform-tenant-template/#_top"), "legacy redirect retains a native continuation link");
+  assert.ok(redirectNodes.some(node => node.tagName === "a" && attr(node,"href") === `${templateGuide}#_top`), "legacy redirect retains a native continuation link");
   const redirect = redirectNodes.filter(node => node.tagName === "script");
   assert.equal(redirect.length, 1, "redirect needs only its local bookmark controller");
-  assert.equal(attr(redirect[0], "data-destination"), "/templates/platform-tenant-template/");
+  assert.equal(attr(redirect[0], "data-destination"), templateGuide);
   assert.equal(attr(redirect[0], "data-fallback"), "#_top");
   const href = attr(redirect[0], "src");
   assert.match(href ?? "", /^\/_app\/immutable\/assets\/project-redirect\.[A-Za-z0-9_-]+\.js$/);
   const actualScript = asset(candidate, href).toString("utf8");
-  for (const hash of ["", "#getting-started", "#what-the-template-owns-vs-what-you-own"]) {
+  for (const hash of ["", ...legacyBookmarks]) {
     let destination = "";
     runInNewContext(actualScript, {
       document:{currentScript:{dataset:{destination:attr(redirect[0], "data-destination"),fallback:attr(redirect[0], "data-fallback")}}},
       location:{hash,replace:(/** @type {string} */ value) => { destination = value; }},
     });
-    assert.equal(destination, `/templates/platform-tenant-template/${hash || "#_top"}`, "actual emitted legacy redirect preserves the incoming bookmark");
+    assert.equal(destination, `${templateGuide}${hash || "#_top"}`, "actual emitted legacy redirect preserves the incoming bookmark");
   }
-  assert.match(readFileSync(legacyTemplate, "utf8"), /<noscript><meta http-equiv="refresh" content="0;url=\/templates\/platform-tenant-template\/#_top"/);
-  console.log("Svelte guides: actual legacy redirect retains three bookmark cases and a no-script continuation");
+  assert.match(readFileSync(legacyTemplate, "utf8"), /<noscript><meta http-equiv="refresh" content="0;url=\/templates\/application-template\/#_top"/);
+  console.log(`Svelte guides: actual ${legacyName} redirect retains ${legacyBookmarks.length + 1} bookmark cases and a no-script continuation`);
+}
 }
 
 for (const path of paths) {

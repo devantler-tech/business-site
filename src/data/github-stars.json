@@ -4,13 +4,13 @@
   "repositories": {
     ".github": 1,
     "agent-plugins": 3,
+    "application-template": 2,
     "dotnet-template": 1,
     "go-template": 1,
     "khoist": 1,
     "ksail": 164,
     "kyverno-policies": 1,
     "platform-template": 2,
-    "platform-tenant-template": 2,
     "provider-upjet-unifi": 1,
     "world-at-ruin": 4
   },
@@ -21,6 +21,11 @@
       "fork": false
     },
     "agent-plugins": {
+      "private": false,
+      "archived": false,
+      "fork": false
+    },
+    "application-template": {
       "private": false,
       "archived": false,
       "fork": false
@@ -51,11 +56,6 @@
       "fork": false
     },
     "platform-template": {
-      "private": false,
-      "archived": false,
-      "fork": false
-    },
-    "platform-tenant-template": {
       "private": false,
       "archived": false,
       "fork": false

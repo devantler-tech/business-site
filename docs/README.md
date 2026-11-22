@@ -176,10 +176,11 @@ heading, hero or section-index link. Legacy catalogue metadata remains in
 active/completed URLs redirect to the public catalogue or historical disclosure of `/projects/`; the
 documentation sidebar links only to that canonical page. Browser redirects preserve incoming
 heading fragments, which land on the corresponding public tool, website example or research content.
-The renamed `/templates/gitops-tenant-template/` entry likewise preserves heading bookmarks through
-an authored redirect to the Application Template guide at `/templates/platform-tenant-template/`. Its canonical/noindex metadata,
-top-of-guide fallback and no-JavaScript continuation are checked against actual build output.
-Only the canonical destination guide is advertised in the sitemap, not the redirect entry.
+The renamed `/templates/gitops-tenant-template/` and `/templates/platform-tenant-template/` entries
+likewise preserve heading bookmarks through authored redirects to the sole Application Template
+guide. Their canonical/noindex metadata, top-of-guide fallback and no-JavaScript continuation are
+checked against actual build output. Only the canonical destination guide is advertised in the
+sitemap, not the redirect entries.
 The deployed-platform bookmark lands on the separate Platform hosting-project example, not the
 reusable Platform Template in the public software catalogue. The explicit legacy rollback opens
 a bookmarked card's containing disclosure when one exists. Links without a fragment and the no-JavaScript

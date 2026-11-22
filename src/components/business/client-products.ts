@@ -11,5 +11,5 @@ export const clientProducts: Record<string, Record<'en' | 'da', string>> = {
   'go-template': { en: 'A prepared starting point for a new software project built in Go.', da: 'Et forberedt udgangspunkt for et nyt softwareprojekt bygget i Go.' },
   'dotnet-template': { en: 'A prepared starting point for .NET software, with conventions and automatic checks.', da: 'Et forberedt udgangspunkt for .NET-software med fælles rammer og automatiske kontroller.' },
   'platform-template': { en: 'A reusable starting point for building an application-hosting platform—not a copy of a live installation.', da: 'En genbrugelig startpakke til en platform for applikationshosting, ikke en kopi af en aktiv installation.' },
-  'platform-tenant-template': { en: 'A reusable starting point for putting an application on a hosting platform.', da: 'Et genbrugeligt udgangspunkt for at lægge en applikation på en hostingplatform.' },
+  'application-template': { en: 'A prepared starting point for a new application, built in Go, .NET, SvelteKit or another technology, optionally ready for a hosting platform.', da: 'Et forberedt udgangspunkt for en ny applikation bygget i Go, .NET, SvelteKit eller en anden teknologi, eventuelt klar til en hostingplatform.' },
 };

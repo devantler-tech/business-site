@@ -4,7 +4,7 @@ import { parseBooleanRelease, frontendEntries, checkUnseenRoutes } from "../src/
 
 test("ordinary builds admit the complete public site with company identity separately controlled", () => {
   const routes = frontendEntries();
-  for (const path of ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/blog/", "/blog/rss.xml", "/blog/welcome/", "/blog/authors/nikolai-emil-damm/", "/blog/tags/kubernetes/", "/agentic-engineering/", "/templates/", "/templates/gitops-tenant-template/", "/pdfs/nikolai-emil-damm-cv.pdf", "/pdfs/thesis.pdf", "/favicon.png", "/robots.txt"]) assert.ok(routes.includes(path as `/${string}`));
+  for (const path of ["/", "/da/", "/about/", "/da/about/", "/projects/", "/da/projects/", "/blog/", "/blog/rss.xml", "/blog/welcome/", "/blog/authors/nikolai-emil-damm/", "/blog/tags/kubernetes/", "/agentic-engineering/", "/templates/", "/templates/gitops-tenant-template/", "/templates/platform-tenant-template/", "/pdfs/nikolai-emil-damm-cv.pdf", "/pdfs/thesis.pdf", "/favicon.png", "/robots.txt"]) assert.ok(routes.includes(path as `/${string}`));
   assert.ok(!routes.includes("/company/"));
   assert.ok(frontendEntries("true").includes("/company/"));
   assert.ok(frontendEntries("true").includes("/da/company/"));

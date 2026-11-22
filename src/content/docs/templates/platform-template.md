@@ -26,7 +26,7 @@ Everything below is reconciled onto the cluster by Flux — you don't wire any o
 - **Virtualization** — KubeVirt and CDI run VM workloads alongside containers (local/CI only).
 - **Demo apps** — Homepage, Headlamp and whoami, so the platform comes up with something to look at.
 
-To run **your own** application on the platform, add it as a platform tenant from its own repository — start it from the [Application Template](/templates/platform-tenant-template/) with `--tenancy`.
+To run **your own** application on the platform, add it as a platform tenant from its own repository — start it from the [Application Template](/templates/application-template/) with `--tenancy`.
 
 ## Getting Started
 
@@ -60,4 +60,4 @@ ksail workload reconcile
 - 📦 [Template on GitHub](https://github.com/devantler-tech/platform-template)
 - 🚀 [Bootstrap guide](https://github.com/devantler-tech/platform-template/blob/main/docs/BOOTSTRAP.md)
 - 🛰️ [The devantler-tech platform](https://github.com/devantler-tech/platform) (the upstream this template is derived from)
-- 🚀 [Application Template](/templates/platform-tenant-template/) (run your own app on the platform)
+- 🚀 [Application Template](/templates/application-template/) (run your own app on the platform)

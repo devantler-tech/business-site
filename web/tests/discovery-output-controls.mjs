@@ -25,6 +25,7 @@ const controls = [
   ["missing canonical member",files => replace(files,"sitemap-0.xml","<url><loc>https://devantler.tech/about/</loc></url>","")],
   ["stale membership",files => replace(files,"sitemap-0.xml","https://devantler.tech/about/","https://devantler.tech/not-admitted/")],
   ["duplicate redirect member",files => replace(files,"sitemap-0.xml","</urlset>","<url><loc>https://devantler.tech/templates/gitops-tenant-template/</loc></url></urlset>")],
+  ["duplicate renamed-guide redirect member",files => replace(files,"sitemap-0.xml","</urlset>","<url><loc>https://devantler.tech/templates/platform-tenant-template/</loc></url></urlset>")],
   ["missing real HTML",files => { files.delete("about/index.html"); }],
   ["incorrect Danish locale",files => replace(files,"da/about/index.html",'property="og:locale" content="da_DK"','property="og:locale" content="en_GB"')],
   ["incorrect canonical",files => replace(files,"da/about/index.html",'rel="canonical" href="https://devantler.tech/da/about/"','rel="canonical" href="https://devantler.tech/about/"')],

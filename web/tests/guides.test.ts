@@ -5,16 +5,18 @@ import { frontendEntries } from "../src/public-routes.ts";
 // Losing any established guide route must fail independently of healthy Journal routes.
 test("enabled visitors can finish every existing technical guide locally", () => {
   const entries = frontendEntries("true");
-  for (const path of ["/agentic-engineering/", "/templates/", "/templates/go/", "/templates/dotnet/", "/templates/platform-template/", "/templates/platform-tenant-template/"]) {
+  for (const path of ["/agentic-engineering/", "/templates/", "/templates/go/", "/templates/dotnet/", "/templates/platform-template/", "/templates/application-template/"]) {
     assert.ok(entries.includes(path as `/${string}`), `missing ${path}`);
   }
   assert.ok(!entries.some(path => path.startsWith("/da/templates/") || path === "/da/agentic-engineering/"), "do not invent translated guides");
 });
 
-test("the old GitOps tenant bookmark remains reachable in every public build", () => {
-  assert.ok(frontendEntries("true").includes("/templates/gitops-tenant-template/"), "missing legacy template redirect");
-  assert.ok(frontendEntries("false").includes("/templates/gitops-tenant-template/"));
-  assert.ok(frontendEntries().includes("/templates/gitops-tenant-template/"));
+test("the old GitOps and platform tenant bookmarks remain reachable in every public build", () => {
+  for (const legacy of ["/templates/gitops-tenant-template/", "/templates/platform-tenant-template/"] as const) {
+    assert.ok(frontendEntries("true").includes(legacy), `missing legacy template redirect ${legacy}`);
+    assert.ok(frontendEntries("false").includes(legacy));
+    assert.ok(frontendEntries().includes(legacy));
+  }
 });
 
 test("technical bodies preserve their committed date without inventing Journal metadata", async () => {
