@@ -18,6 +18,16 @@ const load = path => { assert.ok(existsSync(path), "required bilingual page is m
 const links = node => walk(node).filter(item => item.tagName === "a").map(item => [text(item), attr(item,"href")]);
 /** @param {MarkupNode} node */
 const trustpilotLink = node => node.tagName === "a" && attr(node, "class")?.split(/\s+/).includes("trustpilot-link");
+/** @param {MarkupNode} node */
+const loadsTrustpilot = node => {
+  const imageCandidates = attr(node, "srcset")?.split(",").map(entry => entry.trim().split(/\s+/)[0]) ?? [];
+  const targets = [attr(node, "src"), attr(node, "data-src"), ...imageCandidates];
+  return targets.some(target => {
+    if (!target) return false;
+    const { hostname } = new URL(target, "https://devantler.tech");
+    return hostname === "trustpilot.com" || hostname.endsWith(".trustpilot.com");
+  });
+};
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
@@ -69,7 +79,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       assert.ok(actual.some(node => node.tagName === "html" && attr(node,"lang") === locale));
       const profileLinks = walk(footer).filter(trustpilotLink);
       assert.equal(profileLinks.length, Number(identity), "the profile link follows the company release");
-      assert.ok(!actual.some(node => [attr(node, "src"), attr(node, "data-src"), attr(node, "srcset")].some(value => value?.includes("trustpilot.com"))), "the page makes no Trustpilot subresource requests");
+      assert.ok(!actual.some(loadsTrustpilot), "the page makes no Trustpilot subresource requests");
       assert.ok(!find(actual, "data-review-consent"), "the direct link needs no review consent banner");
       if (identity) {
         const [directLink] = profileLinks;
