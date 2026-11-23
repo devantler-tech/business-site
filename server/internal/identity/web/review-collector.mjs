@@ -81,7 +81,6 @@ if (collector && link instanceof HTMLAnchorElement && settings instanceof HTMLBu
   }
   /** @type {(() => void) | undefined} */
   let disconnect;
-  let openedFromSettings = false;
 
   const stopWidget = () => {
     const focused = target.contains(document.activeElement);
@@ -138,19 +137,18 @@ if (collector && link instanceof HTMLAnchorElement && settings instanceof HTMLBu
   settings.hidden = false;
   applyConsent(readReviewConsent(storage));
   settings.addEventListener('click', () => {
-    openedFromSettings = panel.hidden === true;
-    showPreferences(openedFromSettings);
-    if (openedFromSettings) panel.querySelector('button')?.focus();
+    const open = panel.hidden === true;
+    showPreferences(open);
+    if (open) panel.querySelector('button')?.focus();
   });
   panel.addEventListener('click', event => {
     if (!(event.target instanceof HTMLButtonElement)) return;
     const decision = event.target.dataset.reviewDecision;
     if (decision !== 'allow' && decision !== 'deny') return;
-    const returnFocus = openedFromSettings && panel.contains(document.activeElement);
-    openedFromSettings = false;
+    const returnFocus = panel.contains(document.activeElement);
     saveReviewConsent(storage, decision);
     applyConsent(decision);
-    if (returnFocus) settings.focus();
+    if (returnFocus) settings.focus({ preventScroll: event.detail > 0 });
   });
   window.addEventListener('storage', event => {
     if (event.key === consentKey || event.key === null) applyConsent(readReviewConsent(storage));
