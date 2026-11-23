@@ -151,17 +151,17 @@ const operatorWorkspace = "devantler-tech"
 // maxOperators bounds the server-side operator list.
 const maxOperators = 10
 
-// LinkOperators names the operators: customer Dex subjects issued through the
-// platform connector, where the maintainer signs in with GitHub. Such an identity
-// holds the operator role only while it is listed here, and never anything else.
-// Customers sign in through ZITADEL and can never become operators this way.
+// LinkOperators pins exact customer Dex subjects. ZITADEL issues the same
+// subject for every sign-in method linked to the same account. The platform
+// connector is also admitted during the transition from the old operator login.
 func (s *Foundation) LinkOperators(subjects []string) error {
 	if s == nil || len(subjects) == 0 || len(subjects) > maxOperators {
 		return ErrDenied
 	}
 	operators := make(map[string]bool, len(subjects))
 	for _, subject := range subjects {
-		if !platformIdentity(subject) || operators[subject] {
+		connector := customeridentity.DexConnector(subject)
+		if (connector != customeridentity.ZitadelConnectorID && connector != customeridentity.PlatformConnectorID) || operators[subject] {
 			return ErrDenied
 		}
 		operators[subject] = true
@@ -170,23 +170,33 @@ func (s *Foundation) LinkOperators(subjects []string) error {
 	return nil
 }
 
-// OperatorsLinked reports whether operators can sign in through platform SSO.
+// OperatorsLinked reports whether any operator subject is configured.
 func (s *Foundation) OperatorsLinked() bool {
 	return s != nil && len(s.operators) > 0
 }
 
+// legacyOperatorSignIn preserves the existing login until the deployment has a
+// verified operator account on ZITADEL. From that point the shared page is used.
+func (s *Foundation) legacyOperatorSignIn() bool {
+	for subject := range s.operators {
+		if customeridentity.DexConnector(subject) == customeridentity.ZitadelConnectorID {
+			return false
+		}
+	}
+	return s.OperatorsLinked()
+}
+
 // platformIdentity reports whether customer Dex issued subject through the
-// platform connector, which only operators use.
+// legacy platform connector, which only operators use.
 func platformIdentity(subject string) bool {
 	return customeridentity.DexConnector(subject) == customeridentity.PlatformConnectorID
 }
 
-// canInvite reports whether an invitation may name subject and role: never a
-// GitHub identity, which is a listed operator or nobody, and never the operator
-// role for any other customer Dex identity.
-func canInvite(subject, role string) bool {
+// canInvite keeps all configured operators and the legacy platform connector
+// out of customer invitations. The customer Dex cannot invite an operator.
+func (s *Foundation) canInvite(subject, role string) bool {
 	connector := customeridentity.DexConnector(subject)
-	return connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
+	return !s.operators[subject] && connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
 }
 
 // enrollOperator gives a listed operator its operator membership on first sign-in.
@@ -277,7 +287,7 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller after any provider or SDK wait.
 func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
-	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
+	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !s.canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
 	// One identity has at most one pending invitation and none once it has any
@@ -362,9 +372,9 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// A platform identity is an operator listed in the server configuration or
-	// nobody: it is never invited and never redeems an invitation.
-	if platformIdentity(p.subject) {
+	// Listed operators enroll directly. Legacy platform identities are admitted
+	// only through this branch, which never falls back to an invitation.
+	if s.operators[p.subject] || platformIdentity(p.subject) {
 		if err = s.enrollOperator(ctx, p); err != nil {
 			return Principal{}, err
 		}
@@ -424,7 +434,7 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
-	if pending != 1 {
+	if pending != 1 || !s.canInvite(p.subject, role) {
 		return ErrDenied
 	}
 	// An existing identity cannot gain a new client or revive revoked membership.
@@ -473,10 +483,10 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 	if !s.ready(ctx) || p.subject == "" || p.issuer != s.broker.issuer || p.audience != s.broker.clientID || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied
 	}
-	// A GitHub identity is a listed operator or nobody, so removing it from the
-	// server configuration ends its access at once. A customer is never an operator.
+	// Legacy platform identities can only be operators.
 	connector := customeridentity.DexConnector(p.subject)
-	if connector == customeridentity.PlatformConnectorID && !s.operators[p.subject] {
+	listed := s.operators[p.subject]
+	if connector == customeridentity.PlatformConnectorID && !listed {
 		return "", "", "", ErrDenied
 	}
 	var own, role, incarnation string
@@ -491,9 +501,9 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 	if err != nil {
 		return "", "", "", fmt.Errorf("read membership: %w", err)
 	}
-	// The role must match the connector: GitHub through platform SSO is the only
-	// way in for an operator, and it admits nothing else.
-	if connector != "" && (connector == customeridentity.PlatformConnectorID) != (role == "operator") {
+	// A customer Dex operator must hold both the configured grant and the
+	// current operator membership. A grant does not promote an existing client.
+	if connector != "" && listed != (role == "operator") {
 		return "", "", "", ErrDenied
 	}
 	return own, role, incarnation, nil

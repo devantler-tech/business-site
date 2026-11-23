@@ -282,20 +282,19 @@ page instead, so a lasting upstream session cannot cause a redirect loop. Sign-o
 the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
-Google, Microsoft, Apple and GitHub remain unconfigured.
 
-The main portal sign-in shows both methods at the broker when operators are configured.
-Customers use their Devantler Tech account through ZITADEL. Operators use GitHub through
-platform SSO. When there are no configured operators, the main sign-in goes directly to
-ZITADEL. The `/operator/sign-in` bookmark goes directly to platform SSO while
-`PORTAL_OPERATOR_SUBJECTS` lists operators. The portal checks the verified subject's
-connector and current membership when it determines the role. A GitHub identity
-is a listed operator or nobody: on first sign-in it gets the operator membership in the
-`devantler-tech` workspace, it can never be invited or hold a client role, and removing it
-from the list ends its access at the next request. A customer through ZITADEL can never
-hold the operator role. The operator's subject is
-`DexSubject(<platform Dex subject>, "platform")`, computed with the same function as an
-invitation's.
+Customers and operators use the same ZITADEL sign-in when the operator's ZITADEL identity
+is configured. ZITADEL can link GitHub to the same account. Configure the exact customer's
+Dex broker subject in `PORTAL_OPERATOR_SUBJECTS` using
+`DexSubject(<ZITADEL user ID>, "customer-zitadel")`. First sign-in creates the configured
+operator's membership in the `devantler-tech` workspace. Operator access requires both the
+grant and current operator membership. Revoking either ends access at the next request.
+An existing client membership requires explicit resolution before the same account can
+become an operator. Invited customers sign in to their own workspace.
+
+During cutover, a deployment with only legacy platform subjects retains its GitHub
+sign-in through platform SSO. Once a ZITADEL operator subject is configured, the old
+`/operator/sign-in` bookmark opens the same sign-in as `/sign-in`.
 
 ### Operator API
 

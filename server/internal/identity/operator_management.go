@@ -96,7 +96,7 @@ func managementFields(r *http.Request, fields ...string) (managementInput, error
 
 func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request) (any, error) {
 	input, err := managementFields(r, "subject")
-	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !canInvite(input.Subject, "client") {
+	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !b.foundation.canInvite(input.Subject, "client") {
 		return nil, errOperatorInput
 	}
 	tx, err := b.customerIdentityTransaction(ctx, input.Subject)
