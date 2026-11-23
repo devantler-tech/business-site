@@ -191,7 +191,10 @@ func TestOperatorAPIOnlyForOperators(t *testing.T) {
 		t.Fatal("the API does not serve its own OpenAPI file")
 	}
 	s, body, _ := b.request("GET", "/portal/operator/audit?lang=da", nil, "")
-	if s != http.StatusOK || !strings.Contains(body, "Revisionslog") || !strings.Contains(body, "operator · "+operatorSubject+" · openapi.read · allowed") {
+	_, entry, found := strings.Cut(body, "<strong>openapi.read</strong>")
+	entry, _, bounded := strings.Cut(entry, "</li>")
+	if s != http.StatusOK || !strings.Contains(body, "Revisionslog") || !found || !bounded ||
+		!strings.Contains(entry, "Tilladt") || !strings.Contains(entry, "operator <code>"+operatorSubject+"</code>") {
 		t.Fatalf("the audit page does not list the calls: %d", s)
 	}
 	if got := b.auditRows(); got[len(got)-1] != "operator audit.view allowed" {

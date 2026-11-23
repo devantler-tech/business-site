@@ -15,7 +15,6 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
-	"github.com/justinas/nosurf"
 )
 
 type customerInvitationInput struct {
@@ -95,9 +94,9 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 // Native forms POST to that API; their success returns to the customer inventory.
 func (b *browser) operatorInvitationPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "invitations.view", func(_ context.Context, client string) ([]byte, error) {
-		d := b.data(r, "operator-invite", client, nosurf.Token(r))
+		d := b.operatorData(r, "operator-invite", client)
 		var buffer bytes.Buffer
-		err := b.templates().ExecuteTemplate(&buffer, "portal.html", d)
+		err := b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
 	})
 	if status != http.StatusOK {

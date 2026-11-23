@@ -11,7 +11,6 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
-	"github.com/justinas/nosurf"
 )
 
 var managementRoutes = []operatorRoute{
@@ -38,9 +37,9 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		data := managementPage{pageData: b.data(r, "operator-customers", client, nosurf.Token(r)), Workspaces: spaces, Invitations: invitations}
+		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations}
 		var buffer bytes.Buffer
-		err = b.templates().ExecuteTemplate(&buffer, "portal.html", data)
+		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)
 		return buffer.Bytes(), err
 	})
 	if status != http.StatusOK {

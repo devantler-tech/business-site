@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 12} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -245,6 +245,43 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 			return nil
 		}
 		switch name {
+		case "operator.html":
+			for _, view := range []struct {
+				path, kind     string
+				triage, events bool
+			}{
+				{"/operator", "operator", false, false},
+				{"/operator", "operator", true, false},
+				{"/operator/customers", "operator-customers", true, false},
+				{"/operator/invitations/new", "operator-invite", true, false},
+				{"/operator/audit", "operator-audit", true, false},
+				{"/operator/audit", "operator-audit", true, true},
+			} {
+				err := add("/portal"+view.path, func(w *httptest.ResponseRecorder, r *http.Request) error {
+					d := b.operatorData(r, view.kind, "fictional-operator")
+					d.CSRF, d.TriageEnabled = "fictional-csrf", view.triage
+					if view.kind == "operator-customers" {
+						return templates.ExecuteTemplate(w, name, managementPage{
+							pageData: d,
+							Workspaces: []workspaceView{{ID: "fictional-workspace", Members: []workspaceMember{
+								{Subject: strings.Repeat("FictionalMember", 9), Role: "client"},
+								{Subject: "fictional-disabled", Role: "client", Revoked: true},
+							}}},
+							Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: "fictional-workspace", Expires: request.Submitted}},
+						})
+					}
+					if view.events {
+						d.Audit = []auditEntry{
+							{At: request.Submitted, Kind: "operator", Subject: "fictional-operator", Action: "invitations.create", Target: "fictional-workspace", Outcome: "allowed"},
+							{At: request.Submitted.Add(-time.Minute), Kind: "agent", Subject: "fictional-agent", Action: "workspaces.list", Outcome: "refused"},
+						}
+					}
+					return templates.ExecuteTemplate(w, name, d)
+				})
+				if err != nil {
+					return nil, err
+				}
+			}
 		case "portal.html":
 			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
