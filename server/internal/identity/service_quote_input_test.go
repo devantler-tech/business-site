@@ -31,6 +31,14 @@ func parseServiceQuoteForm(form url.Values) (projectProposal, bool) {
 	return parseProposal(r)
 }
 
+func parseServiceQuoteCase(kind string, change func(url.Values)) (projectProposal, bool) {
+	form := serviceQuoteForm(kind)
+	if change != nil {
+		change(form)
+	}
+	return parseServiceQuoteForm(form)
+}
+
 // A valid typed human quote must retain its exact ordinary agreement fields;
 // accepting only legacy input or silently dropping the service contract fails.
 func TestServiceQuoteV2Input(t *testing.T) {
@@ -65,11 +73,7 @@ func TestServiceQuoteV2Input(t *testing.T) {
 		{name: "duplicate kind", kind: "software", change: func(f url.Values) { f.Add("service_kind", "appointment") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			form := serviceQuoteForm(tc.kind)
-			if tc.change != nil {
-				tc.change(form)
-			}
-			d, ok := parseServiceQuoteForm(form)
+			d, ok := parseServiceQuoteCase(tc.kind, tc.change)
 			if ok != tc.want {
 				t.Fatalf("valid typed quote = %v, want %v", ok, tc.want)
 			}
@@ -97,11 +101,7 @@ func TestServiceQuoteV2HashBindsContract(t *testing.T) {
 		{name: "changed Danish terms", kind: "appointment", change: func(f url.Values) { f.Set("appointment_terms_da", "Særskilt aftalte syntetiske danske vilkår.") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			form := serviceQuoteForm(tc.kind)
-			if tc.change != nil {
-				tc.change(form)
-			}
-			d, ok := parseServiceQuoteForm(form)
+			d, ok := parseServiceQuoteCase(tc.kind, tc.change)
 			if !ok {
 				t.Fatal("valid service contract was refused")
 			}

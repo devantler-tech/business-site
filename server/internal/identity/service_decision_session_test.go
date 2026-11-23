@@ -142,7 +142,7 @@ func runServiceSessionDecision(t *testing.T, operation, checkpoint, change strin
 			t.Fatal(err)
 		}
 		release := onceRelease(provider.release)
-		done, finished := startServiceSessionDecision(t, d, release)
+		done, finished := startBrowserRequest(t, d.b, "POST", d.path, d.form, d.b.site.URL, release)
 		select {
 		case <-provider.blocked:
 		case <-ctx.Done():
@@ -162,30 +162,11 @@ func runServiceSessionDecision(t *testing.T, operation, checkpoint, change strin
 			t.Error("request lock cleanup failed", err)
 		}
 	}
-	done, finished := startServiceSessionDecision(t, d, release)
+	done, finished := startBrowserRequest(t, d.b, "POST", d.path, d.form, d.b.site.URL, release)
 	waitForFixtureProposalWrite(ctx, t, migrator, proposalRequestID)
 	changeServiceDecisionSession(ctx, t, d, key, change, replacement)
 	release()
 	assertServiceSessionDecision(t, d, key, change, done, finished)
-}
-
-func startServiceSessionDecision(t *testing.T, d serviceDecisionFixture, release func()) (<-chan contactResponse, <-chan struct{}) {
-	t.Helper()
-	done, finished := make(chan contactResponse, 1), make(chan struct{})
-	go func() {
-		defer close(finished)
-		status, body, _ := d.b.request("POST", d.path, d.form, d.b.site.URL)
-		done <- contactResponse{status, body}
-	}()
-	t.Cleanup(func() {
-		release()
-		select {
-		case <-finished:
-		case <-time.After(5 * time.Second):
-			t.Error("native decision did not stop before fixture cleanup")
-		}
-	})
-	return done, finished
 }
 
 func assertServiceSessionDecision(t *testing.T, d serviceDecisionFixture, key, change string, done <-chan contactResponse, finished <-chan struct{}) {

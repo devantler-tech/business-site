@@ -36,39 +36,24 @@ func (s *Foundation) beginClientServiceRequest(ctx context.Context, p Principal,
 	if err != nil {
 		return nil, "", workMember{}, ErrDenied
 	}
-	if !opaqueRequestID.MatchString(id) {
-		return nil, "", workMember{}, pgx.ErrNoRows
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, "", workMember{}, errTriageStorage
-	}
-	handedOff := false
-	defer func() {
-		if !handedOff {
-			rollbackProposalWrite(ctx, tx)
-		}
-	}()
-	if err := lockProposalRequest(ctx, tx, id); err != nil {
-		return nil, "", workMember{}, err
-	}
-	viewer, err := resolveClientServiceViewer(ctx, tx, p)
-	if err != nil || viewer.Client != bound {
+	return s.beginLockedProposalRequest(ctx, id, func(tx pgx.Tx) (string, workMember, error) {
+		viewer, err := resolveClientServiceViewer(ctx, tx, p)
 		if err != nil {
-			return nil, "", workMember{}, err
+			return "", workMember{}, err
 		}
-		return nil, "", workMember{}, ErrDenied
-	}
-	var request string
-	if err := tx.QueryRow(ctx, `SELECT id FROM portal_requests WHERE id=$1 AND client_id=$2`, id, bound).Scan(&request); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", workMember{}, err
+		if viewer.Client != bound {
+			return "", workMember{}, ErrDenied
 		}
-		return nil, "", workMember{}, errTriageStorage
-	}
-	if ctx.Err() != nil || !time.Now().Before(p.expires) {
-		return nil, "", workMember{}, ErrDenied
-	}
-	handedOff = true
-	return tx, bound, viewer, nil
+		var request string
+		if err := tx.QueryRow(ctx, `SELECT id FROM portal_requests WHERE id=$1 AND client_id=$2`, id, bound).Scan(&request); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", workMember{}, err
+			}
+			return "", workMember{}, errTriageStorage
+		}
+		if ctx.Err() != nil || !time.Now().Before(p.expires) {
+			return "", workMember{}, ErrDenied
+		}
+		return bound, viewer, nil
+	})
 }

@@ -57,6 +57,33 @@ func lockProposalClient(ctx context.Context, tx pgx.Tx, p Principal, id string) 
 	return client, nil
 }
 
+// beginLockedProposalRequest owns the transaction until the caller's scope
+// check succeeds. The request lock itself grants no record access.
+func (s *Foundation) beginLockedProposalRequest(ctx context.Context, id string, checkScope func(pgx.Tx) (string, workMember, error)) (pgx.Tx, string, workMember, error) {
+	if !opaqueRequestID.MatchString(id) {
+		return nil, "", workMember{}, pgx.ErrNoRows
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, "", workMember{}, errTriageStorage
+	}
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			rollbackProposalWrite(ctx, tx)
+		}
+	}()
+	if err := lockProposalRequest(ctx, tx, id); err != nil {
+		return nil, "", workMember{}, err
+	}
+	client, viewer, err := checkScope(tx)
+	if err != nil {
+		return nil, "", workMember{}, err
+	}
+	handedOff = true
+	return tx, client, viewer, nil
+}
+
 // lockProposalRequest serializes draft, visibility and client-consent decisions.
 // It grants no role or record access; each caller separately locks its membership.
 func lockProposalRequest(ctx context.Context, tx pgx.Tx, id string) error {

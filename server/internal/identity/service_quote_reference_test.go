@@ -66,16 +66,11 @@ func checkTriageProposalServiceFields(markup, lang string, expected bool) (strin
 			"@LIMIT@", "Højst 2.000 tegn i hvert felt med vilkår for ydelsen.",
 		}
 	}
-	want, err := maintenanceMainDigest("<main>"+strings.NewReplacer(language...).Replace(proposalServiceFieldsReference)+"</main>", false)
+	matches, err := matchesMaintenanceFragment(fields, strings.NewReplacer(language...).Replace(proposalServiceFieldsReference))
 	if err != nil {
 		return "", err
 	}
-	var actual strings.Builder
-	if err := html.Render(&actual, fields); err != nil {
-		return "", err
-	}
-	got, err := maintenanceMainDigest("<main>"+actual.String()+"</main>", false)
-	if err != nil || got != want {
+	if !matches {
 		return "", errors.New("triage proposal service fields differ from their independent reference")
 	}
 	form.RemoveChild(fields)

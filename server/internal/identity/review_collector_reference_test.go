@@ -54,16 +54,11 @@ func checkClientHomeReviewCollector(markup, lang string) (string, error) {
 			"@LINK@", "Åbn på Trustpilot", "@LOCALE@", "da-DK", "@FRAME_TITLE@", "Anmeld Devantler Tech på Trustpilot",
 		}
 	}
-	want, err := maintenanceMainDigest("<main>"+strings.NewReplacer(words...).Replace(reviewCollectorExpectation)+"</main>", false)
+	matches, err := matchesMaintenanceFragment(collector, strings.NewReplacer(words...).Replace(reviewCollectorExpectation))
 	if err != nil {
 		return "", err
 	}
-	var actual strings.Builder
-	if err := html.Render(&actual, collector); err != nil {
-		return "", err
-	}
-	got, err := maintenanceMainDigest("<main>"+actual.String()+"</main>", false)
-	if err != nil || got != want {
+	if !matches {
 		return "", errors.New("review collector differs from the independent client home reference")
 	}
 	collector.Parent.RemoveChild(collector)

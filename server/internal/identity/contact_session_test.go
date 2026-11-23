@@ -2,6 +2,7 @@ package identity
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,14 +15,20 @@ type contactResponse struct {
 	body   string
 }
 
-// startContactRead owns the actual HTTP worker until its selected wait releases.
 func startContactRead(t *testing.T, b *browserFixture, release func()) <-chan contactResponse {
+	t.Helper()
+	result, _ := startBrowserRequest(t, b, http.MethodGet, "/portal/contact", nil, "", release)
+	return result
+}
+
+// startBrowserRequest owns the HTTP worker until its selected wait releases.
+func startBrowserRequest(t *testing.T, b *browserFixture, method, path string, form url.Values, origin string, release func()) (<-chan contactResponse, <-chan struct{}) {
 	t.Helper()
 	result := make(chan contactResponse, 1)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		status, body, _ := b.request("GET", "/portal/contact", nil, "")
+		status, body, _ := b.request(method, path, form, origin)
 		result <- contactResponse{status, body}
 	}()
 	t.Cleanup(func() {
@@ -29,10 +36,10 @@ func startContactRead(t *testing.T, b *browserFixture, release func()) <-chan co
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			t.Error("contact reader did not finish")
+			t.Errorf("%s %s did not finish before fixture cleanup", method, path)
 		}
 	})
-	return result
+	return result, done
 }
 
 // TestContactResponseRequiresOriginalDurableSession changes the real session

@@ -58,33 +58,18 @@ func (s *Foundation) beginWorkRequest(ctx context.Context, p Principal, id strin
 	if !ready(ctx) || s.triageOperator(ctx, p) != nil {
 		return nil, "", workMember{}, ErrDenied
 	}
-	if !opaqueRequestID.MatchString(id) {
-		return nil, "", workMember{}, pgx.ErrNoRows
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, "", workMember{}, errTriageStorage
-	}
-	handedOff := false
-	defer func() {
-		if !handedOff {
-			rollbackProposalWrite(ctx, tx)
-		}
-	}()
-	if err := lockProposalRequest(ctx, tx, id); err != nil {
-		return nil, "", workMember{}, err
-	}
-	viewer := workMember{Issuer: p.issuer, Subject: p.subject, Role: "operator", Incarnation: p.membershipIncarnation}
-	var client string
-	err = tx.QueryRow(ctx, `SELECT r.client_id,m.client_id FROM portal_requests r JOIN portal_memberships m ON m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4) WHERE r.id=$1`, id, p.issuer, p.subject, p.membershipIncarnation).Scan(&client, &viewer.Client)
-	if err != nil {
+	return s.beginLockedProposalRequest(ctx, id, func(tx pgx.Tx) (string, workMember, error) {
+		viewer := workMember{Issuer: p.issuer, Subject: p.subject, Role: "operator", Incarnation: p.membershipIncarnation}
+		var client string
+		err := tx.QueryRow(ctx, `SELECT r.client_id,m.client_id FROM portal_requests r JOIN portal_memberships m ON m.issuer=$2 AND m.subject=$3 AND m.role='operator' AND NOT m.revoked AND ($4='' OR m.incarnation::text=$4) WHERE r.id=$1`, id, p.issuer, p.subject, p.membershipIncarnation).Scan(&client, &viewer.Client)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", workMember{}, ErrDenied
+			return "", workMember{}, ErrDenied
 		}
-		return nil, "", workMember{}, errTriageStorage
-	}
-	handedOff = true
-	return tx, client, viewer, nil
+		if err != nil {
+			return "", workMember{}, errTriageStorage
+		}
+		return client, viewer, nil
+	})
 }
 
 func readWorkPointer(ctx context.Context, tx pgx.Tx, id, client string) (workPointer, error) {
