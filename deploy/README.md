@@ -180,8 +180,12 @@ With sign-in on, invite customers from a web pod as
   package. With the portal on, web startup refuses to serve until the ledger holds the release's
   migrations, so new pods become ready only after the Job. Old pods keep serving meanwhile.
 - **Failure.** It retries at most twice within 240 seconds, inside Flux's five-minute health
-  wait. A failed Job leaves this tenant's Kustomization unhealthy. Once a transient cause is
-  resolved, retry the same signed release only if its migrator accepts the current ledger.
+  wait. A terminally failed Job stays failed when Flux reconciles the same release. After
+  resolving a transient cause, verify that the failed Job's pods have exited, the same
+  signed release is still selected, and its migrator supports the committed ledger.
+  An authorized platform operator can then delete that failed Job. Flux recreates it
+  from the signed release on the next reconcile. Verify that the replacement Job completes
+  and the tenant Kustomization becomes Ready.
 
 ### Recovery after an additive migration
 
