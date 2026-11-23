@@ -180,9 +180,34 @@ With sign-in on, invite customers from a web pod as
   package. With the portal on, web startup refuses to serve until the ledger holds the release's
   migrations, so new pods become ready only after the Job. Old pods keep serving meanwhile.
 - **Failure.** It retries at most twice within 240 seconds, inside Flux's five-minute health
-  wait. A failed Job leaves only this tenant's Kustomization unhealthy. Find the cause, then
-  delete the Job, and Flux runs it again. A ledger newer than the release refuses the Job, so
-  roll forward rather than back.
+  wait. A terminally failed Job stays failed when Flux reconciles the same release. After
+  resolving a transient cause, verify that the failed Job's pods have exited, the same
+  signed release is still selected, and its migrator supports the committed ledger.
+  An authorized platform operator can then delete that failed Job. Flux recreates it
+  from the signed release on the next reconcile. Verify that the replacement Job completes
+  and the tenant Kustomization becomes Ready.
+
+### Recovery after an additive migration
+
+An older web pod can keep serving after an additive migration, while its release's migration
+Job refuses ledger versions beyond its embedded list. A responding homepage alone cannot
+show that the older package will reconcile.
+
+1. Check the migration Job result and the committed ledger versions and checksums through the
+   authorized database read path. Treat the Job's generic failure as inconclusive. Record the
+   last successful migration image and the attempted and applied Flux revisions.
+2. If migrations from the newer release committed, prepare a forward fix that retains every
+   committed migration byte for byte. Rehearse upgrade and recovery on disposable PostgreSQL
+   with the release's migration command and separate migration and runtime roles. Verify that
+   a repeat run leaves the ledger unchanged and preserves an existing synthetic record.
+3. Use the normal signed release workflow and the platform's
+   [tenant recovery procedure](https://github.com/devantler-tech/platform/blob/main/docs/TENANTS.md#releases-reach-production-by-themselves).
+   Check that Flux applied the intended signed manifest digest, the Job completed from the
+   paired runtime image, and the rollout and Kustomization remain ready on a later reconcile.
+   Complete an authenticated portal journey before closing the recovery.
+
+Preserve the committed ledger and the separate database roles throughout recovery. If a
+forward fix is unavailable, use the separately authorized backup and restore procedure.
 
 ## Portal retention purge
 
