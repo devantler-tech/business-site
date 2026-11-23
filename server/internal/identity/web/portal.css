@@ -69,10 +69,6 @@
   cursor: pointer;
 }
 
-.review-collector p {
-  margin-block: 0 0.75rem;
-}
-
 .review-collector button[hidden] {
   display: none;
 }
@@ -273,6 +269,10 @@ p {
   line-height: 1.7;
   max-width: 60ch;
   color: var(--muted);
+}
+
+.review-collector p {
+  margin-block: 0 0.75rem;
 }
 
 section {
