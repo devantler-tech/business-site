@@ -26,31 +26,49 @@ export function connectReviewFrame(frame) {
 }
 
 const collector = globalThis.document?.querySelector('[data-review-collector]');
+const options = collector?.querySelector('[data-review-options]');
 const toggle = collector?.querySelector('[data-review-toggle]');
 const target = collector?.querySelector('#review-frame');
 const template = collector?.querySelector('template[data-review-frame]');
 const templateFrame = collector && template instanceof HTMLTemplateElement ? template.content.querySelector('iframe') : null;
 const source = templateFrame?.dataset.src;
-if (collector && toggle instanceof HTMLButtonElement && target instanceof HTMLElement && templateFrame && source) {
+if (collector && options instanceof HTMLDetailsElement && toggle instanceof HTMLButtonElement && target instanceof HTMLElement && templateFrame && source) {
   const loadLabel = toggle.textContent?.trim() ?? '';
   const hideLabel = toggle.dataset.hideLabel ?? loadLabel;
   /** @type {(() => void) | undefined} */
   let disconnect;
 
-  toggle.hidden = false;
-  toggle.addEventListener('click', () => {
-    const show = target.hidden;
+  /** @param {boolean} show */
+  const setShowing = show => {
     if (show) {
       const frame = document.importNode(templateFrame, true);
+      const url = new URL(source);
+      const parameters = new URLSearchParams(url.hash.slice(1));
+      const appearance = document.documentElement.dataset.theme;
+      const theme = appearance === 'light' || appearance === 'dark'
+        ? appearance
+        : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      parameters.set('theme', theme);
+      url.hash = parameters.toString();
       disconnect = connectReviewFrame(frame);
-      frame.src = source;
+      frame.src = url.href;
       target.append(frame);
     } else {
       disconnect?.();
+      disconnect = undefined;
       target.replaceChildren();
     }
     target.hidden = !show;
     toggle.setAttribute('aria-expanded', String(show));
     toggle.textContent = show ? hideLabel : loadLabel;
+  };
+
+  options.hidden = false;
+  toggle.hidden = false;
+  toggle.addEventListener('click', () => {
+    if (options.open) setShowing(target.hasAttribute('hidden'));
+  });
+  options.addEventListener('toggle', () => {
+    if (!options.open && !target.hidden) setShowing(false);
   });
 }

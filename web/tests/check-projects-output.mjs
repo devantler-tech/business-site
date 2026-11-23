@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { parse } from "parse5";
 import catalogue from "../../src/data/public-products.json" with { type: "json" };
 import { publicStarSnapshot, selectPublicTools } from "../../src/data/public-products.ts";
+
+/**
+ * @param {import("parse5").DefaultTreeAdapterTypes.Node} node
+ * @returns {import("parse5").DefaultTreeAdapterTypes.Element[]}
+ */
+function scriptsIn(node) {
+  if ("tagName" in node && node.tagName === "script") return [node];
+  return "childNodes" in node ? node.childNodes.flatMap(scriptsIn) : [];
+}
 
 const enabled = process.argv[2] === "enabled";
 assert.ok(enabled || process.argv[2] === "disabled");
@@ -43,11 +53,23 @@ for (const locale of ["en", "da"]) {
   assert.ok(archive[2].includes(locale === "da" ? "Tidligere forskning" : "Earlier research"));
   assert.ok(!/Family project|family member|Familieprojekt|familieprojekter|Wedding App|github\.com\/[^"]+\/blob\//.test(html));
   assert.equal(/mailto:|CVR|46830385/.test(html),process.env.FEATURE_COMPANY_IDENTITY === "true");
-  assert.ok(!/sveltekit.start|type="module"/.test(html));
-  const scripts = [...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map(([, src]) => src);
-  assert.equal(scripts.length, 2, "theme plus the existing bookmark disclosure controller only");
-  for (const src of scripts) {
-    assert.match(src, /^\/_app\/immutable\/assets\/(theme|project-reveal)\.[A-Za-z0-9_-]+\.js$/);
+  assert.ok(!/sveltekit.start/.test(html));
+  const scripts = scriptsIn(parse(html));
+  const controllers = [
+    /^\/_app\/immutable\/assets\/theme\.[A-Za-z0-9_-]+\.js$/,
+    /^\/_app\/immutable\/assets\/project-reveal\.[A-Za-z0-9_-]+\.js$/,
+  ];
+  if (process.env.FEATURE_COMPANY_IDENTITY === "true") {
+    controllers.push(/^\/_app\/immutable\/assets\/review-collector\.[A-Za-z0-9_-]+\.mjs$/);
+  }
+  assert.equal(scripts.length, controllers.length, "only the approved local controllers load");
+  for (const controller of controllers) {
+    const matches = scripts.filter(script => controller.test(script.attrs.find(attribute => attribute.name === "src")?.value ?? ""));
+    assert.equal(matches.length, 1, "each approved controller loads once");
+    const script = matches[0];
+    const src = script.attrs.find(attribute => attribute.name === "src")?.value;
+    assert.ok(src);
+    assert.equal(script.attrs.find(attribute => attribute.name === "type")?.value, src.endsWith(".mjs") ? "module" : undefined, "only the collector controller is a module");
     await readFile(new URL(src.slice(1), root));
   }
 }

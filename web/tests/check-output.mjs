@@ -64,7 +64,7 @@ for (const [path, locale, title] of pages) {
   }
   const scripts = scriptsIn(parse(html));
   const expected = [/^\/_app\/immutable\/assets\/theme\.[A-Za-z0-9_-]+\.js$/];
-  if (isHome && process.env.FEATURE_COMPANY_IDENTITY === "true") {
+  if (process.env.FEATURE_COMPANY_IDENTITY === "true") {
     expected.push(/^\/_app\/immutable\/assets\/review-collector\.[A-Za-z0-9_-]+\.mjs$/);
   }
   assert.equal(scripts.length, expected.length, "only the local controllers for this route");

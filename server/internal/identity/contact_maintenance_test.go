@@ -240,6 +240,16 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if index >= count/2 {
 		lang = "da"
 	}
+	if !task && name == "portal.html" {
+		state := maintenanceCases[name][index%len(maintenanceCases[name])]
+		if state == "home" || state == "home-links" {
+			withoutCollector, err := checkClientHomeReviewCollector(markup, lang)
+			if err != nil {
+				return err
+			}
+			markup = withoutCollector
+		}
+	}
 	if err := checkMaintenanceDocument(markup, lang, name == "contact.html", task); err != nil {
 		return err
 	}
@@ -250,15 +260,6 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if name == "contact.html" {
 		view := maintenanceContactViews[index%len(maintenanceContactViews)]
 		return checkMaintenanceState(markup, maintenancePage(lang, view), task)
-	}
-	if !task && name == "portal.html" {
-		state := maintenanceCases[name][index%len(maintenanceCases[name])]
-		if state == "home" || state == "home-links" {
-			markup, err = checkClientHomeReviewCollector(markup, lang)
-			if err != nil {
-				return err
-			}
-		}
 	}
 	got, err := maintenanceMainDigest(markup, maintenanceDraftKey(name, index))
 	if err != nil {
