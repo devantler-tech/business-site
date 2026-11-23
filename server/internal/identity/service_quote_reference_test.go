@@ -53,17 +53,17 @@ func checkTriageProposalServiceFields(markup, lang string, expected bool) (strin
 	language := []string{
 		"@TYPE@", "Service type", "@CHOOSE@", "Choose the service type", "@PLACEHOLDER@", "Choose a type",
 		"@SOFTWARE@", "Software work", "@APPOINTMENT@", "Appointment",
-		"@HELP@", "For an appointment, enter its duration and terms in both languages. Leave these fields empty for software work. Saving a draft does not reserve a time.",
+		"@HELP@", "For an appointment, enter its duration and terms in both languages. Leave these fields empty for software work.",
 		"@DURATION@", "Appointment duration (whole minutes)", "@EN_TERMS@", "Appointment terms (English)", "@DA_TERMS@", "Appointment terms (Danish)",
-		"@LIMIT@", "Up to 2,000 characters in each appointment terms field. The other agreement terms remain unchanged.",
+		"@LIMIT@", "Up to 2,000 characters in each appointment terms field.",
 	}
 	if lang == "da" {
 		language = []string{
 			"@TYPE@", "Ydelsestype", "@CHOOSE@", "Vælg ydelsestype", "@PLACEHOLDER@", "Vælg en type",
 			"@SOFTWARE@", "Softwarearbejde", "@APPOINTMENT@", "Ydelse med aftalt varighed",
-			"@HELP@", "Ved en ydelse med aftalt varighed skal du angive varigheden og vilkårene på både engelsk og dansk. Lad disse felter stå tomme ved softwarearbejde. Udkastet reserverer ikke et tidspunkt.",
+			"@HELP@", "Ved en ydelse med aftalt varighed skal du angive varigheden og vilkårene på både engelsk og dansk. Lad disse felter stå tomme ved softwarearbejde.",
 			"@DURATION@", "Aftalt varighed (hele minutter)", "@EN_TERMS@", "Vilkår for ydelsen (engelsk)", "@DA_TERMS@", "Vilkår for ydelsen (dansk)",
-			"@LIMIT@", "Højst 2.000 tegn i hvert felt med vilkår for ydelsen. De øvrige aftalevilkår er uændrede.",
+			"@LIMIT@", "Højst 2.000 tegn i hvert felt med vilkår for ydelsen.",
 		}
 	}
 	want, err := maintenanceMainDigest("<main>"+strings.NewReplacer(language...).Replace(proposalServiceFieldsReference)+"</main>", false)
