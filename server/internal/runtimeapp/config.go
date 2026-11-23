@@ -32,7 +32,7 @@ type Config struct {
 	mail                                           mailConfig
 	// endSession and endSessionClient are the optional upstream logout; both or neither.
 	endSession, endSessionClient string
-	// operators are the optional operator subjects, signing in through platform SSO.
+	// operators are the optional exact customer Dex operator subjects.
 	operators string
 	customers customerDirectoryConfig
 	// Machine policy contains public identities and action grants, never credentials.
