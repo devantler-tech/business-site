@@ -11,7 +11,7 @@ import { load } from 'js-yaml';
 const root = process.cwd();
 const packages = {
   htmlhint: '1.9.2',
-  secretlint: '14.0.0',
+  secretlint: '14.0.1',
   cspell: '10.5.1',
 };
 
@@ -116,7 +116,7 @@ test('installed exact checkers need no registry resolution and retain observer f
     const before = requests.length;
     for (const specifications of [
       ['htmlhint@1.9.2'],
-      ['secretlint@14.0.0'],
+      ['secretlint@14.0.1'],
       ['cspell@10.5.1'],
     ]) {
       assert.deepEqual(await run(root, specifications).result, { code: 0, signal: null, output: '' });
