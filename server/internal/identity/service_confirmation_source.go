@@ -11,10 +11,10 @@ import (
 // lineage is verified here without granting current authority or locking a late
 // membership. Actor and session identifiers never enter the email projection.
 type orderConfirmationSource struct {
-	ContentFormat  int
+	ContentFormat   int
 	ProposalVersion int
-	ProposalSHA256 string
-	Service proposalServiceTerms
+	ProposalSHA256  string
+	Service         proposalServiceTerms
 }
 
 func readOrderConfirmationSource(ctx context.Context, tx pgx.Tx, clientID, orderID, acceptanceID string) (orderConfirmationSource, error) {

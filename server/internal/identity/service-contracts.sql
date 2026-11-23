@@ -215,7 +215,8 @@ DECLARE
 BEGIN
   -- Withdrawal rights retain their independent all-NULL metadata path.
   IF NEW.kind<>'order-confirmation' THEN RETURN NEW; END IF;
-  SELECT * INTO placed FROM public.portal_orders WHERE id=NEW.order_id AND client_id=NEW.client_id;
+  -- The outbox references the unique order; the order supplies the client.
+  SELECT * INTO placed FROM public.portal_orders WHERE id=NEW.order_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'confirmation order binding refused' USING ERRCODE='23514'; END IF;
   SELECT * INTO agreement FROM public.portal_proposal_acceptances WHERE id=placed.acceptance_id
     AND request_id=placed.request_id AND client_id=placed.client_id;

@@ -16,7 +16,7 @@ import (
 var errProposalConflict = errors.New("proposal version or retry conflict")
 
 type projectProposal struct {
-	ContentSHA256 string
+	ContentSHA256                                                  string
 	ContentFormat                                                  int
 	Service                                                        proposalServiceTerms
 	Version, Expected                                              int
@@ -185,7 +185,7 @@ func (s *Foundation) persistProposal(ctx context.Context, p Principal, id string
 		if version != d.Expected || version >= 50 {
 			return errProposalConflict
 		}
-		values := []any{id, client, version+1, d.Expected, d.Key, p.issuer, p.subject, d.Scope, d.Deliverables, d.Currency, d.OneTimeMinor, d.MonthlyMinor, d.OneTimeTerms, d.MonthlyTerms}
+		values := []any{id, client, version + 1, d.Expected, d.Key, p.issuer, p.subject, d.Scope, d.Deliverables, d.Currency, d.OneTimeMinor, d.MonthlyMinor, d.OneTimeTerms, d.MonthlyTerms}
 		values = append(values, proposalServiceValues(d)...)
 		if _, err = tx.Exec(ctx, `INSERT INTO portal_proposals(request_id,client_id,version,expected_version,submission_key,operator_issuer,operator_subject,scope,deliverables,currency,one_time_minor,monthly_minor,one_time_terms,monthly_terms,content_format,service_kind,duration_minutes,appointment_terms_en,appointment_terms_da,appointment_terms_sha256,content_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, values...); err != nil {
 			return errTriageStorage

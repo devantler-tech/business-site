@@ -75,6 +75,32 @@ func TestServiceQuotePersistenceRetainsContract(t *testing.T) {
 	}
 }
 
+func TestServiceQuoteSaveShareAcceptBindsOriginalContract(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	var quoteHash, sharedHash, acceptedHash string
+	var operatorRecorded, clientRecorded bool
+	err := b.pool.QueryRow(t.Context(), `
+		SELECT p.content_sha256, v.content_hash, a.content_hash,
+			v.operator_incarnation IS NOT NULL, a.client_incarnation IS NOT NULL
+		FROM portal_proposals p
+		JOIN portal_proposal_acceptances a
+			ON a.request_id=p.request_id AND a.client_id=p.client_id AND a.proposal_version=p.version
+		JOIN portal_proposal_visibility v
+			ON v.request_id=a.request_id AND v.client_id=a.client_id
+			AND v.proposal_version=a.proposal_version AND v.event=a.visibility_event
+		WHERE p.request_id=$1 AND p.content_format=2 AND p.service_kind='software' AND v.action='share'
+	`, proposalRequestID).Scan(&quoteHash, &sharedHash, &acceptedHash, &operatorRecorded, &clientRecorded)
+	if err != nil {
+		t.Fatal("typed quote acceptance chain is unavailable", err)
+	}
+	if quoteHash == "" || quoteHash != sharedHash || quoteHash != acceptedHash {
+		t.Fatalf("quote hash differs across save, share and accept: %q, %q, %q", quoteHash, sharedHash, acceptedHash)
+	}
+	if !operatorRecorded || !clientRecorded {
+		t.Fatal("typed quote acceptance lacks original membership authority")
+	}
+}
+
 func TestServiceQuoteRetryCannotChangeContract(t *testing.T) {
 	for _, change := range []string{"kind", "duration", "English terms", "Danish terms"} {
 		t.Run(change, func(t *testing.T) {

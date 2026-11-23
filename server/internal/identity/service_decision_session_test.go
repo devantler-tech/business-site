@@ -15,11 +15,11 @@ import (
 )
 
 type serviceDecisionFixture struct {
-	b                       *browserFixture
-	form                    url.Values
-	path, gate, subject     string
-	countQuery              string
-	wantCount               int
+	b                   *browserFixture
+	form                url.Values
+	path, gate, subject string
+	countQuery          string
+	wantCount           int
 }
 
 func prepareServiceDecision(t *testing.T, operation string, retry bool) serviceDecisionFixture {
