@@ -326,6 +326,12 @@ button:hover,
   outline-offset: 5px;
 }
 
+.operator-form label {
+  display: block;
+  margin-block-end: 0.35rem;
+  font-weight: 650;
+}
+
 .contact-form label:not(:first-of-type) {
   margin-top: 1.5rem;
 }
@@ -408,17 +414,6 @@ footer {
   text-decoration: none;
 }
 
-.operator-navigation a:hover,
-.operator-navigation [aria-current]:not([aria-current="false"]) {
-  background: var(--operator-subtle, var(--bg));
-  color: var(--ink);
-  text-decoration: underline;
-}
-
-.operator-navigation [aria-current]:not([aria-current="false"]) {
-  box-shadow: inset 3px 0 var(--accent);
-}
-
 .operator-navigation form {
   padding-block-start: 0.75rem;
   border-block-start: 1px solid var(--operator-rule, var(--line));
@@ -498,10 +493,6 @@ footer {
   text-decoration: none;
 }
 
-.operator-destinations a:hover {
-  border-color: var(--accent);
-}
-
 .operator-destinations strong {
   text-decoration: underline;
   text-underline-offset: 0.18em;
@@ -530,12 +521,6 @@ footer {
   justify-self: start;
 }
 
-.operator-form label {
-  display: block;
-  margin-block-end: 0.35rem;
-  font-weight: 650;
-}
-
 .operator-form input:not([type="hidden"]) {
   max-width: none;
 }
@@ -543,13 +528,6 @@ footer {
 .operator-panel h2 {
   margin: 0 0 0.9rem;
   font-size: 1.2rem;
-}
-
-.operator-workspace,
-.operator-member,
-.operator-pending,
-.operator-events li + li {
-  border-block-start: 1px solid var(--operator-rule);
 }
 
 .operator-workspace summary,
@@ -565,6 +543,13 @@ footer {
 .operator-pending,
 .operator-events li {
   padding-block: 0.75rem;
+}
+
+.operator-workspace,
+.operator-member,
+.operator-pending,
+.operator-events li + li {
+  border-block-start: 1px solid var(--operator-rule);
 }
 
 .operator-member > code,
@@ -595,6 +580,21 @@ footer {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+}
+
+.operator-navigation a:hover,
+.operator-navigation [aria-current]:not([aria-current="false"]) {
+  background: var(--operator-subtle, var(--bg));
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.operator-navigation [aria-current]:not([aria-current="false"]) {
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+.operator-destinations a:hover {
+  border-color: var(--accent);
 }
 
 .operator-events time {

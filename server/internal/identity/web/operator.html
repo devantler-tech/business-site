@@ -5,7 +5,10 @@
   {{template "operator-navigation" .}}
   <div class="operator-content">
     <div class="operator-heading">
-      <div><h1>{{.Title}}</h1>{{if .Intro}}<p>{{.Intro}}</p>{{end}}</div>
+      <div>
+        <h1>{{.Title}}</h1>
+        {{if .Intro}}<p>{{.Intro}}</p>{{end}}
+      </div>
       {{if or (eq .Kind "operator") (eq .Kind "operator-customers")}}
       <a class="button" href="{{root}}/operator/invitations/new?lang={{.Lang}}">{{template "operator-invite-label" .}}</a>
       {{end}}
