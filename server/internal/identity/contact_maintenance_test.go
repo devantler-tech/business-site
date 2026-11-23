@@ -243,11 +243,11 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 	if !task && name == "portal.html" {
 		state := maintenanceCases[name][index%len(maintenanceCases[name])]
 		if state == "home" || state == "home-links" {
-			withoutCollector, err := checkClientHomeReviewCollector(markup, lang)
+			withoutLink, err := checkClientHomeTrustpilotLink(markup, lang)
 			if err != nil {
 				return err
 			}
-			markup = withoutCollector
+			markup = withoutLink
 		}
 	}
 	if err := checkMaintenanceDocument(markup, lang, name == "contact.html", task); err != nil {

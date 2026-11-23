@@ -16,6 +16,8 @@ const find = (nodes, name) => nodes.find(node => attr(node, name) !== undefined)
 const load = path => { assert.ok(existsSync(path), "required bilingual page is missing"); return walk(parse(readFileSync(path, "utf8"))); };
 /** @param {MarkupNode} node */
 const links = node => walk(node).filter(item => item.tagName === "a").map(item => [text(item), attr(item,"href")]);
+/** @param {MarkupNode} node */
+const trustpilotLink = node => node.tagName === "a" && attr(node, "class")?.split(/\s+/).includes("trustpilot-link");
 /** @param {string} dir @returns {string[]} */
 const files = dir => readdirSync(dir, {withFileTypes:true}).flatMap(entry => entry.isDirectory() ? files(join(dir,entry.name)) : [join(dir,entry.name)]);
 /** The portal's privacy section is released separately from the rest of the notice. */
@@ -65,34 +67,21 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
       assert.ok(actual.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${route}`));
       assert.ok(actual.some(node => node.tagName === "html" && attr(node,"lang") === locale));
-      const collector = find(walk(footer), "data-review-collector");
-      assert.equal(Boolean(collector), identity, "the footer collector follows the company release");
-      if (collector) {
-        const nodes = walk(collector);
-        const directLink = collector.childNodes?.find(node => attr(node, "id") === "review-title");
-        assert.ok(directLink && attr(directLink, "hidden") === undefined, "the first-party review button is visible by default");
-        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/evaluate/devantler.tech");
+      const profileLinks = walk(footer).filter(trustpilotLink);
+      assert.equal(profileLinks.length, Number(identity), "the profile link follows the company release");
+      assert.ok(!actual.some(node => [attr(node, "src"), attr(node, "data-src"), attr(node, "srcset")].some(value => value?.includes("trustpilot.com"))), "the page makes no Trustpilot subresource requests");
+      assert.ok(!find(actual, "data-review-consent"), "the direct link needs no review consent banner");
+      if (identity) {
+        const [directLink] = profileLinks;
+        assert.equal(attr(directLink, "hidden"), undefined, "the link is visible by default");
+        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/review/devantler.tech");
         assert.equal(attr(directLink, "rel"), "noreferrer");
-        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeld os på Trustpilot" : "Review us on Trustpilot");
-        const settings = find(nodes, "data-review-settings");
-        const banner = find(nodes, "data-review-consent");
-        assert.ok(settings && attr(settings, "aria-controls") === "review-consent", "the footer links to cookie settings");
-        assert.ok(banner && attr(banner, "hidden") !== undefined, "the banner awaits the browser's saved choice before showing");
-        const preferences = walk(banner).filter(node => node.tagName === "button");
-        assert.deepEqual(preferences.map(node => attr(node, "data-review-decision")), ["deny", "allow"]);
-        assert.ok(links(banner).some(([, href]) => href === `/${prefix}privacy/`), "consent links to the local privacy notice");
-        assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
-        const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
-        const source = attr(controller, "src");
-        assert.ok(source, "the collector links its controller");
-        assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
-        const script = readFileSync(join(candidate, source), "utf8");
-        assert.match(script, /data-review-consent/, "the published controller applies the optional consent");
+        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeldelser på Trustpilot" : "Reviews on Trustpilot");
       }
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");
         assert.ok(contact);
-        assert.ok(!find(walk(contact), "data-review-collector"), "the contact section keeps its contact actions together");
+        assert.ok(!walk(contact).some(trustpilotLink), "the contact section keeps its contact actions together");
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 
 

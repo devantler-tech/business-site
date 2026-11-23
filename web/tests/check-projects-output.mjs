@@ -59,9 +59,6 @@ for (const locale of ["en", "da"]) {
     /^\/_app\/immutable\/assets\/theme\.[A-Za-z0-9_-]+\.js$/,
     /^\/_app\/immutable\/assets\/project-reveal\.[A-Za-z0-9_-]+\.js$/,
   ];
-  if (process.env.FEATURE_COMPANY_IDENTITY === "true") {
-    controllers.push(/^\/_app\/immutable\/assets\/review-collector\.[A-Za-z0-9_-]+\.mjs$/);
-  }
   assert.equal(scripts.length, controllers.length, "only the approved local controllers load");
   for (const controller of controllers) {
     const matches = scripts.filter(script => controller.test(script.attrs.find(attribute => attribute.name === "src")?.value ?? ""));

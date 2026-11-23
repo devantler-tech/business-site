@@ -1,4 +1,4 @@
-@import url("./review-collector.css");
+@import url("./trustpilot-link.css");
 
 :root {
   color-scheme: light dark;
@@ -338,6 +338,11 @@ footer {
   padding: 1.5rem 2rem;
   border-top: 1px solid var(--line);
   color: var(--muted);
+}
+
+footer .trustpilot-link {
+  display: flex;
+  inline-size: fit-content;
 }
 
 .skip {

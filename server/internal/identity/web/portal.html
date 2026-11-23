@@ -24,24 +24,9 @@
 {{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
 <header><a class="brand" href="{{public .Lang}}" aria-label="Devantler Tech"><img class="brand-logo brand-on-dark" src="{{root}}/assets/logo-dark.svg" alt="" width="191" height="36"><img class="brand-logo brand-on-light" src="{{root}}/assets/logo-light.svg" alt="" width="191" height="36"></a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{if eq .Kind `contact`}}?lang={{if eq .Lang `da`}}en{{else}}da{{end}}{{else}}{{.LanguageURL}}{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>{{end}}
 
-{{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech{{if eq .Kind `home`}}{{template "review-collector" .}}{{end}}</footer>
+{{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech{{if eq .Kind `home`}}{{template "trustpilot-link" .}}{{end}}</footer>
 <script src="{{root}}/assets/portal.js" defer></script>
 </body></html>{{end}}
-{{define "review-collector" -}}
-<div class="review-collector" data-review-collector>
-  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Anmeld os på{{else}}Review us on{{end}} <strong>Trustpilot</strong><span aria-hidden="true">↗</span></a>
-  <div id="review-frame" hidden></div>
-  <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>{{if eq .Lang `da`}}Cookieindstillinger{{else}}Cookie settings{{end}}</button>
-  <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
-    <div class="review-consent-copy">
-      <strong id="review-consent-title">{{if eq .Lang `da`}}Valgfrie cookies{{else}}Optional cookies{{end}}</strong>
-      <p>{{if eq .Lang `da`}}Trustpilot bruger cookies til at måle og teste sin anmeldelseswidget.{{else}}Trustpilot uses cookies to measure and test its review widget.{{end}} <a href="{{public .Lang}}privacy/">{{if eq .Lang `da`}}Privatliv og cookies{{else}}Privacy and cookies{{end}}</a></p>
-    </div>
-    <div class="review-consent-actions">
-      <button type="button" data-review-decision="deny">{{if eq .Lang `da`}}Afvis{{else}}Decline{{end}}</button>
-      <button type="button" data-review-decision="allow">{{if eq .Lang `da`}}Tillad Trustpilot{{else}}Allow Trustpilot{{end}}</button>
-    </div>
-  </section>
-  <template data-review-frame><iframe data-src="{{reviewCollectorURL .Lang}}" title="{{if eq .Lang `da`}}Anmeld Devantler Tech på Trustpilot{{else}}Review Devantler Tech on Trustpilot{{end}}" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
-</div>
+{{define "trustpilot-link" -}}
+<a class="trustpilot-link" href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer"><span>{{if eq .Lang `da`}}Anmeldelser på{{else}}Reviews on{{end}} <strong>Trustpilot</strong></span><span class="trustpilot-link-arrow" aria-hidden="true">↗</span></a>
 {{- end -}}
