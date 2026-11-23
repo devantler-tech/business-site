@@ -227,10 +227,10 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, err
 		}
-		d := b.data(r, "operator-audit", client, "")
+		d := b.operatorData(r, "operator-audit", client)
 		d.Audit, _ = entries.([]auditEntry)
 		var buffer bytes.Buffer
-		err = b.templates().ExecuteTemplate(&buffer, "portal.html", d)
+		err = b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
 	})
 	switch status {

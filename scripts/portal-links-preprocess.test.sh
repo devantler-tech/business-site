@@ -43,7 +43,7 @@ if [[ "$#" -eq 1 ]]; then
   # remain visible to the actual checker, including a deliberately broken one.
   controls="$(mktemp -d "$root/server/.portal-link-controls.XXXXXX")"
   trap 'rm -rf -- "$scratch" "$controls"' EXIT
-  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/work-review.html"
+  lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$root/server/internal/identity/web/portal.html" "$root/server/internal/identity/web/operator.html" "$root/server/internal/identity/web/contact.html" "$root/server/internal/identity/web/requests.html" "$root/server/internal/identity/web/triage.html" "$root/server/internal/identity/web/work-review.html"
   printf '<html><body><a href="https://devantler.tech/portal-link-contract-missing-01a132ba/">Broken link control</a></body></html>\n' >"$controls/broken.html"
   if lychee --no-progress --max-retries 0 --timeout 10 --preprocess "$root/scripts/portal-links-preprocess.sh" "$controls/broken.html" >"$scratch/broken-receipt" 2>&1; then
     echo 'portal-links: real Lychee accepted a broken ordinary link' >&2; exit 1

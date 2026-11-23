@@ -50,7 +50,7 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
@@ -628,11 +628,11 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 		b.signIn(w, r)
 		return
 	}
-	kind := "home"
 	if role == "operator" {
-		kind = "operator"
+		b.renderOperator(w, r, client)
+		return
 	}
-	b.render(w, r, 200, kind, client, nosurf.Token(r))
+	b.render(w, r, 200, "home", client, nosurf.Token(r))
 }
 
 // operator requires the current database role, never token groups or form fields.
@@ -642,7 +642,7 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 403, "error", "", "")
 		return
 	}
-	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+	b.renderOperator(w, r, client)
 }
 
 // browserMember preserves the common unauthenticated response before role checks.
