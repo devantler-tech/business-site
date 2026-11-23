@@ -67,16 +67,16 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
       assert.ok(actual.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${route}`));
       assert.ok(actual.some(node => node.tagName === "html" && attr(node,"lang") === locale));
-      const reviewLinks = walk(footer).filter(trustpilotLink);
-      assert.equal(reviewLinks.length, Number(identity), "the review link follows the company release");
+      const profileLinks = walk(footer).filter(trustpilotLink);
+      assert.equal(profileLinks.length, Number(identity), "the profile link follows the company release");
       assert.ok(!actual.some(node => [attr(node, "src"), attr(node, "data-src"), attr(node, "srcset")].some(value => value?.includes("trustpilot.com"))), "the page makes no Trustpilot subresource requests");
       assert.ok(!find(actual, "data-review-consent"), "the direct link needs no review consent banner");
       if (identity) {
-        const [directLink] = reviewLinks;
+        const [directLink] = profileLinks;
         assert.equal(attr(directLink, "hidden"), undefined, "the link is visible by default");
-        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/evaluate/devantler.tech");
+        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/review/devantler.tech");
         assert.equal(attr(directLink, "rel"), "noreferrer");
-        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeld os på Trustpilot" : "Review us on Trustpilot");
+        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeldelser på Trustpilot" : "Reviews on Trustpilot");
       }
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");

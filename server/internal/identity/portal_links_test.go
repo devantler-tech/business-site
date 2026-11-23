@@ -213,7 +213,23 @@ func preprocessLinkInput(source string) ([]byte, error) {
 		}
 		fmt.Fprintf(&result, "<!-- method-aware link contract: %s targets=%d -->\n%s\n", name, count, output)
 	}
-	return []byte(result.String()), nil
+	output := result.String()
+	profileHref := ` href="` + trustpilotProfileURL + `"`
+	if name == "portal.html" && strings.Contains(output, profileHref) {
+		client := &http.Client{
+			Timeout: 8 * time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		if err := checkTrustpilotProfile(client.Get); err != nil {
+			return nil, err
+		}
+		// Keep this link out of the generic scanner's output only after it has
+		// passed its own check. All other public links still go to Lychee.
+		output = strings.ReplaceAll(output, profileHref, ` data-trustpilot-profile-checked="true"`)
+	}
+	return []byte(output), nil
 }
 
 func renderedLinkPages(name string) ([]linkPage, error) {

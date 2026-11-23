@@ -9,7 +9,7 @@ import (
 )
 
 // The rest of the client home still has to match its existing frozen body.
-const trustpilotLinkExpectation = `<a class="trustpilot-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer"><span>@LABEL@ <strong>Trustpilot</strong></span><span class="trustpilot-link-arrow" aria-hidden="true">↗</span></a>`
+const trustpilotLinkExpectation = `<a class="trustpilot-link" href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer"><span>@LABEL@ <strong>Trustpilot</strong></span><span class="trustpilot-link-arrow" aria-hidden="true">↗</span></a>`
 
 func checkClientHomeTrustpilotLink(markup, lang string) (string, error) {
 	doc, err := html.Parse(strings.NewReader(markup))
@@ -28,9 +28,9 @@ func checkClientHomeTrustpilotLink(markup, lang string) (string, error) {
 	if badge == nil || badge.Parent == nil || badge.Parent.Data != "footer" {
 		return "", errors.New("Trustpilot link must be in the client home footer")
 	}
-	label := "Review us on"
+	label := "Reviews on"
 	if lang == "da" {
-		label = "Anmeld os på"
+		label = "Anmeldelser på"
 	}
 	want, err := maintenanceMainDigest("<main>"+strings.Replace(trustpilotLinkExpectation, "@LABEL@", label, 1)+"</main>", false)
 	if err != nil {
@@ -60,9 +60,9 @@ func TestContactMaintenanceTrustpilotLinkReferenceBoundary(t *testing.T) {
 	}
 	for _, change := range [][2]string{
 		{`class="trustpilot-link"`, `class="missing-trustpilot-link"`},
-		{`/evaluate/devantler.tech`, `/evaluate/example.invalid`},
+		{`/review/devantler.tech`, `/evaluate/devantler.tech`},
 		{`rel="noreferrer"`, `rel="noopener"`},
-		{`<span>Review us on`, `<span>5 stars on`},
+		{`<span>Reviews on`, `<span>5 stars on`},
 	} {
 		bad := strings.Replace(pages[1].markup, change[0], change[1], 1)
 		if bad == pages[1].markup || checkMaintenanceInventoryPage("portal.html", 1, bad, false) == nil {

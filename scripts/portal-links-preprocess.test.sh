@@ -14,6 +14,7 @@ for template in portal contact requests triage work-review; do
   grep -q 'data-route-checked-' "$scratch/$template.html"
   if grep -q '{{' "$scratch/$template.html"; then echo 'portal-links: unrendered template' >&2; exit 1; fi
 done
+grep -q 'data-trustpilot-profile-checked="true"' "$scratch/portal.html"
 # Byte identity also preserves every normal public/document target for Lychee.
 bash "$root/scripts/portal-links-preprocess.sh" "$root/server/README.md" >"$scratch/README.md"
 cmp "$root/server/README.md" "$scratch/README.md"
