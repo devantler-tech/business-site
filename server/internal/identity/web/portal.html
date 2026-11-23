@@ -28,14 +28,20 @@
 <script src="{{root}}/assets/portal.js" defer></script>
 </body></html>{{end}}
 {{define "review-collector" -}}
-<section class="review-collector" aria-labelledby="review-title" data-review-collector>
-  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Anmeld os på Trustpilot{{else}}Review us on Trustpilot{{end}}</a>
-  <details data-review-options hidden>
-    <summary>{{if eq .Lang `da`}}Brug Trustpilot-widgetten{{else}}Use the Trustpilot widget{{end}}</summary>
-    <p id="review-privacy">{{if eq .Lang `da`}}Trustpilot A/S modtager din IP-adresse og browseroplysninger, når du viser widgetten. Trustpilot bruger cookies til at måle brugen og teste widgetten. Du kan trække dit samtykke tilbage ved at skjule den. <a href="https://dk.corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025" rel="noreferrer">Trustpilots cookiepolitik</a>{{else}}Trustpilot A/S receives your IP address and browser details when you load the widget. It uses cookies to measure and test the widget. You can withdraw consent by hiding it. <a href="https://corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025" rel="noreferrer">Trustpilot’s cookie policy</a>{{end}}</p>
-    <button type="button" hidden aria-controls="review-frame" aria-expanded="false" aria-describedby="review-privacy" data-review-toggle data-hide-label="{{if eq .Lang `da`}}Skjul widget og træk samtykke tilbage{{else}}Hide widget and withdraw consent{{end}}">{{if eq .Lang `da`}}Tillad cookies og vis widget{{else}}Allow cookies and show widget{{end}}</button>
-    <div id="review-frame" hidden></div>
-  </details>
+<div class="review-collector" data-review-collector>
+  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Anmeld os på{{else}}Review us on{{end}} <strong>Trustpilot</strong><span aria-hidden="true">↗</span></a>
+  <div id="review-frame" hidden></div>
+  <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>{{if eq .Lang `da`}}Cookieindstillinger{{else}}Cookie settings{{end}}</button>
+  <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
+    <div class="review-consent-copy">
+      <strong id="review-consent-title">{{if eq .Lang `da`}}Valgfrie cookies{{else}}Optional cookies{{end}}</strong>
+      <p>{{if eq .Lang `da`}}Trustpilot bruger cookies til at måle og teste sin anmeldelseswidget.{{else}}Trustpilot uses cookies to measure and test its review widget.{{end}} <a href="{{public .Lang}}privacy/">{{if eq .Lang `da`}}Privatliv og cookies{{else}}Privacy and cookies{{end}}</a></p>
+    </div>
+    <div class="review-consent-actions">
+      <button type="button" data-review-decision="deny">{{if eq .Lang `da`}}Afvis{{else}}Decline{{end}}</button>
+      <button type="button" data-review-decision="allow">{{if eq .Lang `da`}}Tillad Trustpilot{{else}}Allow Trustpilot{{end}}</button>
+    </div>
+  </section>
   <template data-review-frame><iframe data-src="{{reviewCollectorURL .Lang}}" title="{{if eq .Lang `da`}}Anmeld Devantler Tech på Trustpilot{{else}}Review Devantler Tech on Trustpilot{{end}}" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
-</section>
+</div>
 {{- end -}}

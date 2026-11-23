@@ -1,10 +1,43 @@
 const origin = 'https://widget.trustpilot.com';
 const widgetId = 'devantler-review-collector';
+const consentKey = 'devantler:trustpilot-consent-v1';
+const consentDuration = 180 * 86_400_000;
 
-// Start only the collector's frame protocol. The vendor bootstrap otherwise
-// runs on the host page and also sends impression and visibility data.
-/** @param {HTMLIFrameElement} frame */
-export function connectReviewFrame(frame) {
+/** @typedef {'allow' | 'deny'} ReviewConsent */
+
+/**
+ * @param {Pick<Storage, 'getItem'> | null} storage
+ * @returns {ReviewConsent | null}
+ */
+export function readReviewConsent(storage, now = Date.now()) {
+  try {
+    const entry = JSON.parse(storage?.getItem(consentKey) ?? 'null');
+    if ((entry?.decision === 'allow' || entry?.decision === 'deny') &&
+        Number.isSafeInteger(entry.expiresAt) && entry.expiresAt > now &&
+        entry.expiresAt <= now + consentDuration) {
+      return entry.decision;
+    }
+  } catch {
+    // Missing or inaccessible storage leaves optional requests blocked.
+  }
+  return null;
+}
+
+/**
+ * @param {Pick<Storage, 'setItem'> | null} storage
+ * @param {ReviewConsent} decision
+ */
+export function saveReviewConsent(storage, decision, now = Date.now()) {
+  try {
+    storage?.setItem(consentKey, JSON.stringify({ decision, expiresAt: now + consentDuration }));
+  } catch {
+    // An explicit choice still applies for the lifetime of this page.
+  }
+}
+
+// Use the frame protocol without loading the vendor bootstrap on our page.
+/** @param {HTMLIFrameElement} frame @param {() => void} [onReady] */
+export function connectReviewFrame(frame, onReady) {
   const controller = new AbortController();
   const options = { signal: controller.signal };
   /** @param {object} message */
@@ -19,56 +52,105 @@ export function connectReviewFrame(frame) {
     } catch {
       return;
     }
-    if (message?.widgetId === widgetId && message.command === 'ping') send({ command: 'pong' });
+    if (message?.widgetId === widgetId && message.command === 'ping') {
+      send({ command: 'pong' });
+      onReady?.();
+    }
   }, options);
 
   return () => controller.abort();
 }
 
 const collector = globalThis.document?.querySelector('[data-review-collector]');
-const options = collector?.querySelector('[data-review-options]');
-const toggle = collector?.querySelector('[data-review-toggle]');
+const link = collector?.querySelector('#review-title');
+const settings = collector?.querySelector('[data-review-settings]');
+const panel = collector?.querySelector('[data-review-consent]');
 const target = collector?.querySelector('#review-frame');
 const template = collector?.querySelector('template[data-review-frame]');
 const templateFrame = collector && template instanceof HTMLTemplateElement ? template.content.querySelector('iframe') : null;
 const source = templateFrame?.dataset.src;
-if (collector && options instanceof HTMLDetailsElement && toggle instanceof HTMLButtonElement && target instanceof HTMLElement && templateFrame && source) {
-  const loadLabel = toggle.textContent?.trim() ?? '';
-  const hideLabel = toggle.dataset.hideLabel ?? loadLabel;
+
+if (collector && link instanceof HTMLAnchorElement && settings instanceof HTMLButtonElement && panel instanceof HTMLElement &&
+    target instanceof HTMLElement && templateFrame && source) {
+  /** @type {Storage | null} */
+  let storage = null;
+  try {
+    storage = window.localStorage;
+  } catch {
+    // The fallback link and the current visit's choice work without storage.
+  }
   /** @type {(() => void) | undefined} */
   let disconnect;
 
-  /** @param {boolean} show */
-  const setShowing = show => {
-    if (show) {
-      const frame = document.importNode(templateFrame, true);
-      const url = new URL(source);
-      const parameters = new URLSearchParams(url.hash.slice(1));
-      const appearance = document.documentElement.dataset.theme;
-      const theme = appearance === 'light' || appearance === 'dark'
-        ? appearance
-        : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      parameters.set('theme', theme);
-      url.hash = parameters.toString();
-      disconnect = connectReviewFrame(frame);
-      frame.src = url.href;
-      target.append(frame);
-    } else {
-      disconnect?.();
-      disconnect = undefined;
-      target.replaceChildren();
-    }
-    target.hidden = !show;
-    toggle.setAttribute('aria-expanded', String(show));
-    toggle.textContent = show ? hideLabel : loadLabel;
+  const stopWidget = () => {
+    const focused = target.contains(document.activeElement);
+    disconnect?.();
+    disconnect = undefined;
+    target.replaceChildren();
+    target.hidden = true;
+    delete target.dataset.ready;
+    link.hidden = false;
+    if (focused) link.focus();
   };
 
-  options.hidden = false;
-  toggle.hidden = false;
-  toggle.addEventListener('click', () => {
-    if (options.open) setShowing(target.hasAttribute('hidden'));
+  const startWidget = () => {
+    if (disconnect) return;
+    const frame = document.importNode(templateFrame, true);
+    const url = new URL(source);
+    const parameters = new URLSearchParams(url.hash.slice(1));
+    const appearance = document.documentElement.dataset.theme;
+    parameters.set('theme', appearance === 'light' || appearance === 'dark'
+      ? appearance
+      : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    url.hash = parameters.toString();
+    frame.tabIndex = -1;
+    const showWidget = () => {
+      if (!target.contains(frame)) return;
+      target.dataset.ready = '';
+      frame.removeAttribute('tabindex');
+      link.hidden = true;
+    };
+    disconnect = connectReviewFrame(frame, () => {
+      if (document.activeElement === link) {
+        link.addEventListener('blur', showWidget, { once: true });
+      } else {
+        showWidget();
+      }
+    });
+    frame.src = url.href;
+    target.hidden = false;
+    target.append(frame);
+  };
+
+  /** @param {boolean} open */
+  const showPreferences = open => {
+    panel.hidden = !open;
+    settings.setAttribute('aria-expanded', String(open));
+  };
+  /** @param {ReviewConsent | null} decision */
+  const applyConsent = decision => {
+    if (decision === 'allow') startWidget();
+    else stopWidget();
+    showPreferences(decision === null);
+  };
+
+  settings.hidden = false;
+  applyConsent(readReviewConsent(storage));
+  settings.addEventListener('click', () => {
+    const open = panel.hidden === true;
+    showPreferences(open);
+    if (open) panel.querySelector('button')?.focus();
   });
-  options.addEventListener('toggle', () => {
-    if (!options.open && !target.hidden) setShowing(false);
+  panel.addEventListener('click', event => {
+    if (!(event.target instanceof HTMLButtonElement)) return;
+    const decision = event.target.dataset.reviewDecision;
+    if (decision !== 'allow' && decision !== 'deny') return;
+    const returnFocus = panel.contains(document.activeElement);
+    saveReviewConsent(storage, decision);
+    applyConsent(decision);
+    if (returnFocus) settings.focus({ preventScroll: event.detail > 0 });
+  });
+  window.addEventListener('storage', event => {
+    if (event.key === consentKey || event.key === null) applyConsent(readReviewConsent(storage));
   });
 }
