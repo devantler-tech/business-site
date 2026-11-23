@@ -70,19 +70,24 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       if (collector) {
         const nodes = walk(collector);
         const directLink = collector.childNodes?.find(node => attr(node, "id") === "review-title");
-        assert.ok(directLink && attr(directLink, "hidden") === undefined, "the direct review link is visible outside the options");
+        assert.ok(directLink && attr(directLink, "hidden") === undefined, "the first-party review button is visible by default");
         assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/evaluate/devantler.tech");
         assert.equal(attr(directLink, "rel"), "noreferrer");
-        assert.equal(text(directLink), locale === "da" ? "Anmeld os på Trustpilot" : "Review us on Trustpilot");
-        const options = find(nodes, "data-review-options");
-        assert.ok(options && options.tagName === "details" && attr(options, "hidden") !== undefined && attr(options, "open") === undefined, "the inline choice starts closed");
+        assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeld os på Trustpilot" : "Review us on Trustpilot");
+        const settings = find(nodes, "data-review-settings");
+        const banner = find(nodes, "data-review-consent");
+        assert.ok(settings && attr(settings, "aria-controls") === "review-consent", "the footer links to cookie settings");
+        assert.ok(banner && attr(banner, "hidden") !== undefined, "the banner awaits the browser's saved choice before showing");
+        const preferences = walk(banner).filter(node => node.tagName === "button");
+        assert.deepEqual(preferences.map(node => attr(node, "data-review-decision")), ["deny", "allow"]);
+        assert.ok(links(banner).some(([, href]) => href === `/${prefix}privacy/`), "consent links to the local privacy notice");
         assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
         const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
         const source = attr(controller, "src");
         assert.ok(source, "the collector links its controller");
         assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
         const script = readFileSync(join(candidate, source), "utf8");
-        assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
+        assert.match(script, /data-review-consent/, "the published controller applies the optional consent");
       }
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");

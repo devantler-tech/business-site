@@ -43,12 +43,13 @@ test("the terms describe the portal agreement and follow-up in both languages", 
   }
 });
 
-test("the privacy notice explains how to load and hide the optional review collector", () => {
+test("the privacy notice explains consent, its duration and withdrawal", () => {
   for (const locale of ["en", "da"] as const) {
     const notice = flat(legalPage("privacy", locale, true));
     assert.match(notice, /Trustpilot/);
     assert.match(notice, /IP-adresse|IP address/);
-    assert.match(notice, locale === "da" ? /Tillad cookies og vis widget/ : /Allow cookies and show widget/);
-    assert.match(notice, locale === "da" ? /Skjul widget og træk samtykke tilbage/ : /Hide widget and withdraw consent/);
+    assert.match(notice, locale === "da" ? /Tillad Trustpilot/ : /Allow Trustpilot/);
+    assert.match(notice, locale === "da" ? /Cookieindstillinger/ : /Cookie settings/);
+    assert.match(notice, locale === "da" ? /180 dage/ : /180 days/);
   }
 });

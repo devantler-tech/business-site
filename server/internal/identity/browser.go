@@ -26,6 +26,7 @@ var browserFiles embed.FS
 var presentationAssets = map[string]string{
 	"portal.css":           "text/css; charset=utf-8",
 	"portal.js":            "text/javascript; charset=utf-8",
+	"review-collector.css": "text/css; charset=utf-8",
 	"review-collector.mjs": "text/javascript; charset=utf-8",
 	"icon.png":             "image/png",
 	"logo-dark.svg":        "image/svg+xml",
