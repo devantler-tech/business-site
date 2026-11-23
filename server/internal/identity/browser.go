@@ -367,22 +367,20 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 	return count, since
 }
 
-// signIn lets the broker show both sign-in methods when operators are configured.
-// A customer-only installation goes directly to ZITADEL.
+// signIn uses the same ZITADEL login for customers and operators. During
+// rollout the old broker page remains available until an operator is linked.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 	connector := customeridentity.ZitadelConnectorID
-	if b.foundation.OperatorsLinked() {
+	if b.foundation.legacyOperatorSignIn() {
 		connector = ""
 	}
 	b.startSignIn(w, r, connector)
 }
 
-// operatorSignIn is the operators' own link: GitHub through platform SSO. It
-// exists only while the server configuration lists operators, and reaching it
-// grants nothing: the identity that returns must be listed.
+// operatorSignIn keeps existing bookmarks usable through the transition.
 func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
-	if !b.foundation.OperatorsLinked() {
-		http.NotFound(w, r)
+	if !b.foundation.legacyOperatorSignIn() {
+		b.signIn(w, r)
 		return
 	}
 	b.startSignIn(w, r, customeridentity.PlatformConnectorID)

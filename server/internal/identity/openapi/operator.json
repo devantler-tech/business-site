@@ -279,7 +279,7 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-portal_session",
-        "description": "The operator's portal session, from signing in at /operator/sign-in. Never combine it with a bearer token."
+        "description": "The portal session for an authenticated operator, from signing in at /sign-in. Never combine it with a bearer token."
       },
       "agentBearer": {
         "type": "http",
