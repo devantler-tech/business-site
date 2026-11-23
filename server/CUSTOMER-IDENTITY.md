@@ -292,7 +292,7 @@ grant and current operator membership. Revoking either ends access at the next r
 An existing client membership requires explicit resolution before the same account can
 become an operator. Invited customers sign in to their own workspace.
 
-During cutover, a deployment with only legacy platform subjects retains its GitHub
+During the transition, a deployment with only legacy platform subjects retains its GitHub
 sign-in through platform SSO. Once a ZITADEL operator subject is configured, the old
 `/operator/sign-in` bookmark opens the same sign-in as `/sign-in`.
 
