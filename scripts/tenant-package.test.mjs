@@ -24,6 +24,32 @@ test("the real Kustomize package renders deterministically and admits the public
   assert.equal(result.stdout, "tenant package: public-only package accepted\n");
 });
 
+test("the artifact root renders the production overlay", () => {
+  assert.equal(render(), render(path.join(root, "deploy/prod")));
+});
+
+test("the hosted preview uses only its own disclosure input", () => {
+  const preview = yaml.loadAll(render(path.join(root, "deploy/dev")));
+  assert.deepEqual(preview.map((document) => document.kind), ["WebApp"]);
+  const [app] = preview;
+  assert.equal(app.metadata.namespace, "business-site-dev");
+  assert.equal(app.metadata.name, "business-site-dev");
+  assert.equal(app.spec.name, "business-site-dev");
+  assert.equal(app.spec.host, "dev.devantler.tech");
+  assert.equal(app.spec.replicas, 1);
+  assert.deepEqual(app.spec.secretProjections, [{
+    secretName: "business-site-dev-disclosure",
+    items: [{ key: "company-disclosure", path: "disclosure" }],
+  }]);
+  const [base] = yaml.loadAll(render(path.join(root, "deploy/base")));
+  assert.equal(app.spec.image, base.spec.image);
+  assert.deepEqual(app.spec.args, [
+    "--public", "/app/public",
+    "--listen", "0.0.0.0:8080",
+    "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+  ]);
+});
+
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {
   const network = yaml.loadAll(render()).find((d) => d?.kind === "CiliumNetworkPolicy");
   // One named-destination rule keeps egress default deny for every other peer.
@@ -243,6 +269,8 @@ for (const [name, mutate] of [
   ["no migration deadline", (d) => { delete d[9].spec.activeDeadlineSeconds; }],
   ["a migration Job Flux cannot recreate", (d) => { delete d[9].metadata.annotations; }],
   ["a migration pod labelled as the web workload", (d) => { d[9].spec.template.metadata.labels["app.kubernetes.io/name"] = "business-site"; }],
+  ["a migration container that does not itself refuse root", (d) => { delete d[9].spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
+  ["a retention container that does not itself refuse root", (d) => { delete d[10].spec.jobTemplate.spec.template.spec.containers[0].securityContext.runAsNonRoot; }],
   ["a missing retention CronJob", (d) => { d.splice(10, 1); }],
   ["a retention CronJob on another image", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].image = `ghcr.io/devantler-tech/business-site@sha256:${"a".repeat(64)}`; }],
   ["a retention CronJob that migrates", (d) => { d[10].spec.jobTemplate.spec.template.spec.containers[0].args = structuredClone(d[9].spec.template.spec.containers[0].args); }],
@@ -279,24 +307,48 @@ for (const [name, mutate] of [
   });
 }
 
+test("every package pod passes the cluster's pod-security admission rule", () => {
+  // Mirrors the platform's Kyverno validate-pod-security policy, which refused
+  // v3.9.0's Job for setting runAsNonRoot only at pod level: each container must
+  // itself refuse root and privilege escalation and drop ALL capabilities, and
+  // the pod must use the RuntimeDefault or Localhost seccomp profile.
+  const docs = yaml.loadAll(render());
+  const pods = [
+    ...docs.filter((d) => d?.kind === "Job").map((d) => d.spec.template.spec),
+    ...docs.filter((d) => d?.kind === "CronJob").map((d) => d.spec.jobTemplate.spec.template.spec),
+  ];
+  assert.equal(pods.length, 2, "the migration Job and the retention CronJob");
+  for (const pod of pods) {
+    assert.ok(["RuntimeDefault", "Localhost"].includes(pod.securityContext?.seccompProfile?.type));
+    for (const c of [...(pod.initContainers ?? []), ...pod.containers]) {
+      const s = c.securityContext ?? {};
+      assert.equal(s.allowPrivilegeEscalation, false, `${c.name} allowPrivilegeEscalation`);
+      assert.notEqual(s.privileged, true, `${c.name} privileged`);
+      assert.equal(s.runAsNonRoot, true, `${c.name} runAsNonRoot`);
+      assert.deepEqual(s.capabilities?.drop, ["ALL"], `${c.name} capabilities`);
+    }
+  }
+});
+
 test("the migration Job and retention CronJob run whatever image the publisher pins in the WebApp", () => {
-  // The shared publisher rewrites only webapp.yaml's WebApp image; the package
-  // build copies it into both jobs, so neither runs another release's image.
+  // The shared publisher pins the WebApp image. The production overlay copies
+  // that image into both jobs.
   const fixture = mkdtempSync(path.join(tmpdir(), "tenant-package-"));
   try {
     cpSync(path.join(root, "deploy"), fixture, { recursive: true });
     const pinned = `ghcr.io/devantler-tech/business-site@sha256:${"b".repeat(64)}`;
-    const app = yaml.load(readFileSync(path.join(fixture, "webapp.yaml"), "utf8"));
+    const appManifest = path.join(fixture, "base/webapp.yaml");
+    const app = yaml.load(readFileSync(appManifest, "utf8"));
     app.spec.image = pinned;
-    writeFileSync(path.join(fixture, "webapp.yaml"), yaml.dump(app));
+    writeFileSync(appManifest, yaml.dump(app));
     const rendered = yaml.loadAll(render(fixture));
     const job = rendered.find((d) => d?.kind === "Job");
     assert.equal(job.spec.template.spec.containers[0].image, pinned);
     const cron = rendered.find((d) => d?.kind === "CronJob");
     assert.equal(cron.spec.jobTemplate.spec.template.spec.containers[0].image, pinned);
-    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/cronjob-portal-retention.yaml"), "utf8"));
+    const cronSource = yaml.load(readFileSync(path.join(root, "deploy/prod/cronjob-portal-retention.yaml"), "utf8"));
     assert.equal(cronSource.spec.jobTemplate.spec.template.spec.containers[0].image, undefined, "the source CronJob names no image of its own");
-    const source = yaml.load(readFileSync(path.join(root, "deploy/job-portal-migration.yaml"), "utf8"));
+    const source = yaml.load(readFileSync(path.join(root, "deploy/prod/job-portal-migration.yaml"), "utf8"));
     assert.equal(source.spec.template.spec.containers[0].image, undefined, "the source Job names no image of its own");
   } finally {
     rmSync(fixture, { recursive: true });

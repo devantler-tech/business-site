@@ -2,8 +2,24 @@
 
 This directory prepares the public website for the platform's namespace-bound
 WebApp interface. The source-owned runtime publisher can publish this package after
-explicit release admission; no workflow applies it to a cluster. The platform serves
-this package at devantler.tech since GitHub Pages was retired; portal access stays disabled.
+explicit release admission. The platform applies it to serve the public site at
+devantler.tech and the invitation-only portal at portal.devantler.tech.
+
+The whole directory is published as one artifact and split into Kustomize overlays
+([ADR 0016 in the monorepo](https://github.com/devantler-tech/monorepo/blob/main/docs/adr/0016-dev-and-prod-deployments.md)):
+
+- `kustomization.yaml` is the prod entry the platform reconciles at the artifact root. It
+  only includes `prod/`.
+- `base/` holds the shared WebApp. The publisher pins its image in `base/webapp.yaml`.
+- `prod/` holds the production routes, network policy, disruption budget, secret
+  synchronization, migration Job and retention CronJob.
+- `dev/` (#542) uses one WebApp replica in `business-site-dev` with
+  `dev.devantler.tech` as its host and `business-site-dev-disclosure` as its sole
+  Secret projection. Serving it requires the dev disclosure Secret and the platform's
+  private ingress and network policies (devantler-tech/platform#6126).
+
+Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
+must render, and `deploy` must render exactly what `deploy/prod` renders.
 
 From the repository root, with Node 24, installed root dependencies, Kubectl and
 Docker available:
@@ -68,8 +84,8 @@ image or publication receipt. Tests use fictional values in disposable volumes.
 
 The WebApp uses exactly `business-site.platform.devantler.tech`, where the public pages are
 checked before a DNS switch. Two routes add the public names on their own gateway listeners:
-`http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
-`http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
+`prod/http-route-public.yaml` for `devantler.tech` and `www.devantler.tech`, and
+`prod/http-route-portal.yaml` for `portal.devantler.tech`. The runtime's `--public-host` and
 `--portal-host` arguments route by host, so nothing is served twice: `portal.devantler.tech`
 serves the portal at its root (`/`, `/sign-in`, …; an old `/portal…` address redirects 301
 without the prefix) and redirects public pages to devantler.tech, `www` redirects to the
@@ -111,17 +127,33 @@ broker connection and sign-in off. The accepted keys keep their existing meaning
 | `PORTAL_CLIENT_SECRET_PROJECTION_FILE` | `/run/webapp-inputs/portal-client-secret`               |
 | `PORTAL_IDENTITY_PROFILE`              | `production`, only when sign-in is switched on          |
 | `PORTAL_IDENTITY_FLAG`                 | provider JSON for `portal-identity`, with the profile   |
+| `PORTAL_UPSTREAM_END_SESSION_URL`      | optional: ZITADEL's `end_session` endpoint              |
+| `PORTAL_UPSTREAM_CLIENT_ID`            | optional: customer Dex's client ID in ZITADEL           |
+| `PORTAL_OPERATOR_SUBJECTS`             | optional: comma-separated operator subjects (below)     |
+| `PORTAL_AGENT_AUDIENCE`                | optional: dedicated machine JWT audience, paired below |
+| `PORTAL_AGENT_SUBJECTS`                | optional: JSON issuer/subject/grants list, paired below |
 
 The database URI names host `business-site-portal-db-rw.business-site.svc`,
 port 5432, database `portal` and login `portal_web` with its password, and the query
 `sslmode=verify-full&sslrootcert=/run/webapp-inputs/portal-database-ca`.
 
-The five dependency keys come all together or not at all. With them but no
+The two upstream logout keys come together and only with the five dependency keys. With
+them, sign-out and a refused sign-in also end the ZITADEL session; the ZITADEL client must
+list `https://portal.devantler.tech/signed-out` and `https://devantler.tech/` as post-logout
+addresses. `PORTAL_OPERATOR_SUBJECTS` also comes only with the five dependency keys. It lists, comma-separated, the customer Dex subjects of the operators, who sign in with GitHub through the `platform` connector at `https://portal.devantler.tech/operator/sign-in`; startup refuses any other subject. The five dependency keys come all together or not at all. With them but no
 activation keys, startup checks the database login and grants and discovers
 Dex, but sign-in stays off. Unknown or repeated keys, empty values, surrounding
 whitespace and CR line endings are refused. The staging lease and the owner-only
 secret file stay environment-only, and no portal variable may also be inherited
 from the environment. Errors never include values or paths. Restart to rotate.
+
+The two machine keys are both-or-neither and require the complete portal. They contain
+public policy only; no machine secret is projected into this application. The audience
+must differ from the browser client, and every listed issuer must match the portal broker.
+Agents are read-only by default, with exact write grants from a closed catalogue; money
+and deletion grants are always refused. See [machine callers](../server/CUSTOMER-IDENTITY.md#machine-callers)
+for the complete format, token limits and action names. Deploy this runtime before adding
+these keys to a settings projection; an older runtime refuses unknown keys.
 
 With sign-in on, invite customers from a web pod as
 [CUSTOMER-IDENTITY.md](../server/CUSTOMER-IDENTITY.md#invite-a-customer) describes.
@@ -132,7 +164,7 @@ With sign-in on, invite customers from a web pod as
 ([MIGRATIONS.md](../server/MIGRATIONS.md#run-the-explicit-job)), as login `portal_migrator`
 (which owns database `portal`) with `--runtime-role portal_web`:
 
-- **Image.** The shared publisher pins only the WebApp's image. `kustomization.yaml` copies
+- **Image.** The publisher pins the WebApp's image. `prod/kustomization.yaml` copies
   that image into the Job, so the Job always runs its own release. The Job carries the
   `kustomize.toolkit.fluxcd.io/force` annotation, so Flux recreates it when the image changes.
 - **Input.** The platform supplies Secret `business-site-portal-db-migration` with `database-url`
@@ -159,7 +191,7 @@ With sign-in on, invite customers from a web pod as
 time. It deletes the portal records of former clients 3 years after their last membership ended,
 as the privacy notice states:
 
-- **Image and input.** Same as the migration Job. `kustomization.yaml` copies the WebApp's
+- **Image and input.** Same as the migration Job. `prod/kustomization.yaml` copies the WebApp's
   pinned image into it, and it reads the platform's `business-site-portal-db-migration` Secret
   through `--migration-database-projection`, as the migration role. The runtime cannot delete
   this history.
@@ -321,13 +353,17 @@ An explicit enabled `mode=release` dispatch on main can create a genuine semanti
 through the accepted shared release tool. Release initiation is manual: no privileged completion
 trigger or release dispatch is added to source CI. Both admission jobs disable Go-cache reuse.
 One `release: published`
-caller then rebinds the actual stable tag to its source and current original CI receipt. It calls
-only the consumer-accepted immutable prebuilt-WebApp publisher, with caller pinning and signed
-promotion required, rebuilding and recovery disabled. The release-only tool uses its maintained
+caller then rebinds the actual stable tag to its source and current original CI receipt. Its
+`publish` job runs the commit-pinned `devantler-tech/.github/actions/publish-app` action in
+`prebuilt-webapp` mode, directly in this workflow, so the image and the manifests are signed as
+`publish-runtime.yaml` on the release tag: this repository signs its own releases
+(devantler-tech/monorepo ADR 0017). The action stages, signs and verifies both digests before it
+exposes the version, and never rebuilds the image. The release-only tool uses its maintained
 Node 22/npm 11 environment; the application still builds and validates under Node 24/npm 11.
 
-The final read-only job verifies both immutable subjects and both version aliases under the exact
-accepted publisher identity and paired source/version/run/attempt/original-CI/public-digest claims.
+The final read-only job verifies both immutable subjects and both version aliases as signed by
+this repository's release workflow on the release tag, the only accepted publisher identity, with
+paired source/version/run/attempt/original-CI/public-digest claims.
 It compares the actual manifest package with the source YAML, allowing only the separately verified
 image pin, and rechecks current CI/publication attempts. The verifier creates an exclusive extraction
 directory for Flux before pulling the authenticated immutable package. A failed or partial pull

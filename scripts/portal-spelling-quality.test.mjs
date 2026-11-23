@@ -57,13 +57,13 @@ test('the pinned checker examines the complete tracked server source', () => {
   const version = spawnSync('cspell', ['--version'], { encoding: 'utf8', timeout: 30000 });
   assert.ifError(version.error);
   assert.equal(version.status, 0);
-  assert.equal(version.stdout.trim(), '10.4.1');
+  assert.equal(version.stdout.trim(), '10.5.1');
   const tracked = spawnSync('git', ['ls-files', '-z', '--', 'server'], {
     cwd: root, encoding: 'utf8', timeout: 30000,
   });
   assert.ifError(tracked.error);
   assert.equal(tracked.status, 0);
-  const files = tracked.stdout.split('\0').filter(file => /\.(go|html|js|css|md|sql|json)$/.test(file));
+  const files = tracked.stdout.split('\0').filter(file => /\.(go|html|m?js|css|md|sql|json)$/.test(file));
   assert.ok(files.length > 0);
   assertCompleteScan(checkFiles(files), files.length);
 });

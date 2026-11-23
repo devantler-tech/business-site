@@ -69,6 +69,19 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");
         assert.ok(contact);
+        const collector = find(walk(contact), "data-review-collector");
+        assert.equal(Boolean(collector), identity, "the collector follows the company release");
+        if (collector) {
+          const nodes = walk(collector);
+          assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/evaluate/devantler.tech"), "the collector has a direct fallback");
+          assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
+          const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
+          const source = attr(controller, "src");
+          assert.ok(source, "the collector links its controller");
+          assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
+          const script = readFileSync(join(candidate, source), "utf8");
+          assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
+        }
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 
 
@@ -135,7 +148,7 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
     for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}company/`));
   }
   // Supporting frames participate too, not only the six top-level pages.
-  for (const route of ["blog/index.html", "blog/welcome/index.html", "templates/index.html"]) {
+  for (const route of ["blog/index.html", "blog/welcome/index.html", "blog/tags/kubernetes/index.html"]) {
     const nodes = load(join(candidate,route)), footer = find(nodes,"data-business-footer");
     assert.ok(footer,"supporting page retains the business footer");
     assert.equal(links(footer).some(([,href]) => href === "/company/"),identity);

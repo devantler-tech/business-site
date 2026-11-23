@@ -80,6 +80,13 @@ func closeRequestReadAuthority(ctx context.Context, t *testing.T, b *browserFixt
 		if err := b.svc.Revoke(ctx, p.issuer, p.subject); err != nil {
 			t.Fatal("fixture revocation failed", err)
 		}
+	case "incarnation":
+		for range 2 {
+			tag, err := b.pool.Exec(ctx, `UPDATE portal_memberships SET revoked=NOT revoked WHERE issuer=$1 AND subject=$2`, p.issuer, p.subject)
+			if err != nil || tag.RowsAffected() != 1 {
+				t.Fatal("fixture membership incarnation change failed", err)
+			}
+		}
 	case "role", "rebind":
 		query := `UPDATE portal_memberships SET role='operator' WHERE issuer=$1 AND subject=$2`
 		if change == "rebind" {

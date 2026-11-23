@@ -20,7 +20,7 @@ export const load = ({ params }: { params: { locale?: string } }) => {
       promise: t.promise, servicesTitle: t.servicesTitle, servicesIntro: t.servicesIntro,
       starting: t.starting, monthly: t.monthly, perMonth: t.perMonth, currency: t.currency,
       offers: business.offers.map((offer, i) => ({ ...offer, launchSetup: launchSetupOf(offer.setup), ...t.offerCopy[i] })),
-      launchLabel: t.launchLabel, launchNote: t.launchNote,
+      normalLabel: t.normalLabel, launchLabel: t.launchLabel, launchNote: t.launchNote, hostingExcluded: t.hostingExcluded,
       // Listed only once they can be ordered: the portal sells them (#21).
       addons: !FEATURE_ADDONS ? undefined : { ...addonsCopy[locale], items: standardAddons.map((a) => ({ id: a.id, price: a.price, monthly: a.kind === "monthly", each: (a.max ?? 1) > 1, ...a.text[locale] })) },
       otherRequest: t.otherRequest,

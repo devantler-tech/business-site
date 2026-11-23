@@ -75,6 +75,7 @@ var purgeRecords = []string{
 	`DELETE FROM portal_requests WHERE client_id=$1`,
 	`DELETE FROM portal_contacts WHERE client_id=$1`,
 	`DELETE FROM portal_invitations WHERE client_id=$1`,
+	`DELETE FROM portal_workspaces WHERE id=$1`,
 }
 
 // clientTables hold a client's records by client_id; the order and email
@@ -131,6 +132,10 @@ func clientHasRecords(column string) string {
 // migration role: the web runtime can delete none of this history.
 func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time) (int, error) {
 	cutoff := now.AddDate(-RetentionYears, 0, 0)
+	// The operator audit log keeps every call for the same period, then forgets it.
+	if _, err := pool.Exec(ctx, `DELETE FROM portal_operator_audit WHERE at<$1`, cutoff); err != nil {
+		return 0, errTriageStorage
+	}
 	rows, err := pool.Query(ctx, retentionDue, cutoff, "")
 	if err != nil {
 		return 0, errTriageStorage

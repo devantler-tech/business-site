@@ -61,7 +61,11 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 				if err != nil || count < 5 || strings.Contains(output, "{{") {
 					t.Fatalf("rendered link contract: targets=%d error=%v", count, err)
 				}
-				if !strings.Contains(output, `href="https://devantler.tech/"`) || !strings.Contains(output, "data-route-checked-") {
+				publicPath := "/"
+				if strings.Contains(page.uri, "lang=da") {
+					publicPath = "/da/"
+				}
+				if !strings.Contains(output, `href="https://devantler.tech`+publicPath+`"`) || !strings.Contains(output, "data-route-checked-") {
 					t.Fatal("public homepage or explicit method-aware coverage missing")
 				}
 			}
@@ -242,10 +246,10 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 		}
 		switch name {
 		case "portal.html":
-			for _, kind := range []string{"sign-in", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
+			for _, kind := range []string{"no-access", "home", "operator", "error", "unavailable", "triage-invalid", "home-links", "operator-links", "proposal-invalid", "proposal-conflict", "sharing-invalid", "sharing-conflict"} {
 				uri := "/portal/"
 				switch kind {
-				case "sign-in", "unavailable":
+				case "no-access", "unavailable":
 					uri = "/portal/sign-in"
 				case "operator", "operator-links":
 					uri = "/portal/operator"

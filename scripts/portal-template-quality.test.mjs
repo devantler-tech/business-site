@@ -19,10 +19,10 @@ function mandatoryQualityChecks(candidate) {
   assert.ok(job['continue-on-error'] == null || job['continue-on-error'] === false);
   for (const command of [
     'npx --yes --package=htmlhint@1.9.2 -- node --test scripts/portal-template-quality.test.mjs',
-    'npx --yes --package=cspell@10.4.1 -- node --test scripts/portal-spelling-quality.test.mjs',
+    'npx --yes --package=cspell@10.5.1 -- node --test scripts/portal-spelling-quality.test.mjs',
     'node --test scripts/portal-go-analyzer-quality.test.mjs',
     'bash scripts/portal-links-preprocess.test.sh',
-    'npx --yes --package=secretlint@13.1.0 --package=@secretlint/secretlint-rule-preset-recommend@13.1.0 -- node --test scripts/portal-credential-quality.test.mjs',
+    'npx --yes --package=secretlint@14.0.0 -- node --test scripts/portal-credential-quality.test.mjs',
     'go install github.com/mgechev/revive@v1.16.0\nPORTAL_REVIVE="$GOBIN/revive" bash scripts/portal-package-quality.test.sh\n',
   ]) {
     const steps = job.steps.filter(step => step.run === command);
@@ -68,6 +68,7 @@ test('package grouping retains selected-file analysis and every HTML rule', () =
       '--remap',
       '^https://github\\.com/bufbuild/buf/blob/v1\\.72\\.0/private/bufpkg/bufmodule/digest\\.go$ ' +
         'https://raw.githubusercontent.com/bufbuild/buf/v1.72.0/private/bufpkg/bufmodule/digest.go',
+      '--exclude', '^https://www\\.retsinformation\\.dk/',
     ],
   });
   assert.deepEqual(rules, {

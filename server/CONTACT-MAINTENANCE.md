@@ -14,7 +14,9 @@ bounded terminal history and closed funding gates with revocation retained. Its
 explicit form comparisons, exact displayed facts, active section associations and
 negative controls live in `work_review_render_test.go`. Shared frame, actual-route
 and quality checks cover this fifth template. The remaining original frozen
-references are unchanged; no new renderer output is used to regenerate them.
+body references are unchanged; no new renderer output is used to regenerate them.
+The frame references have reviewed records for branding and localized public
+navigation (see below).
 
 From `server/`, with the exact compiler in `go.mod`:
 
@@ -70,7 +72,48 @@ Its fixture is `portal_links_test.go` blob
 | triage.html   | fd22f5ee2716adb1a9d2c0cfa5736b1b8c1890f9 |
 | credits.html  | dd0840fb0a42a2e82a6f08eaca4a7d0838eb6ed3 |
 
-The original tables remain unchanged apart from removing the retired entries.
+### Re-recorded frame references (Devantler Tech brand, 2026-11-16)
+
+The frame references were re-recorded once, on purpose, when the portal took the
+Devantler Tech brand. Every private page now links the tab icon
+(`/portal/assets/icon.png`) in its head. Its header brand link now shows the
+theme-matched wordmark images, named by `aria-label="Devantler Tech"`, instead of
+the text "Devantler Tech". That changes the head and header of all 98 documents and
+nothing inside `main`.
+
+Before recording, the rendered frames of every document were compared with the
+previous source's frames. Those two edits were the only differences. The new frame
+references were then recorded from the branding change's own rendered output, and
+the body references were not touched. This branding record and the separate
+navigation record below are the only exceptions to the original references.
+Any later frame change needs its own reviewed record here.
+
+### Localized public navigation (2026-11-16, #652)
+
+The ordinary references now record the Danish brand link to `/da/` in all
+49 Danish frames and the public return link to `/da/` in the twelve Danish
+portal bodies. English links and every other part of all 98 documents are
+unchanged. Before recording, both template sets were rendered from the same
+fixture inventory against source `93e4324dd9509b95898776c635897354b53f612e`.
+Every baseline document first passed its existing frame and body references.
+The complete before/after documents then had to match exactly after the two
+explicit Danish href substitutions, with only the already-validated random
+draft keys represented identically. Any other difference refused recording.
+This is a reviewed navigation change, not runtime regeneration of expectations.
+All complete counts and negative controls remain; the return journey additionally
+checks both literal public URLs, authenticated return, unchanged deadlines and
+post-logout refusal over the actual HTTP handlers.
+
+The original tables otherwise remain unchanged apart from removing retired entries.
+The four ordinary operator landing documents use an independently authored
+complete main-document expectation in `operator_reference_test.go`, including
+the invitation, customer-management and audit links, the optional request inbox
+and the current localized public return link. The four ordinary client landing
+documents additionally check the Review Collector's exact placement, wording,
+inert iframe and direct link against an independent bilingual expectation.
+The rest of each client landing document still matches the frozen body after
+that verified section is removed. Historical task references retain their
+reviewed values. Missing, incomplete or altered ordinary references fail closed.
 The separate ordinary invoice table (recorded from signed snapshot
 `90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
 retired invoice and credit bodies, so it was removed with them; triage now uses
@@ -85,7 +128,8 @@ form controls, text limits, privacy guidance and return links. The other 26
 unchanged bodies retain their original immutable references. No production
 renderer or reverse projection produces these expectations. Missing, truncated
 or malformed ordinary tables fail closed. Task mode always retains all
-original body and frame references, and rejects the newer ordinary forms.
+original body references and the current frame references, and rejects the
+newer ordinary forms.
 Mutation controls reject absent/incorrect options, selection, assessment text
 and its accessible association; the separate Other-request HTTP tests cover
 its receipt and operator views. This does not renew the retired comparison.

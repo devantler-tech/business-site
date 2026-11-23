@@ -43,7 +43,7 @@ func (s *Foundation) beginContactAttempt(ctx context.Context, p Principal, revis
  SELECT $1,$2,$3,$4,least(now()+interval '10 minutes',$5),'contact',m.issuer,m.subject,m.client_id,c.email,c.revision
  FROM portal_memberships m JOIN portal_contacts c ON c.client_id=m.client_id
  WHERE m.issuer=$6 AND m.subject=$7 AND m.client_id=$8 AND m.role='client' AND NOT m.revoked
- AND c.revision=$9 AND NOT c.email_verified`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier, p.expires, p.issuer, p.subject, client, revision)
+ AND c.revision=$9 AND NOT c.email_verified AND ($10='' OR m.incarnation::text=$10)`, digest(a.State), digest(a.BrowserBinding), a.Nonce, a.PKCEVerifier, p.expires, p.issuer, p.subject, client, revision, p.membershipIncarnation)
 	if err != nil || result.RowsAffected() != 1 {
 		return Attempt{}, ErrDenied
 	}
@@ -95,8 +95,8 @@ func (s *Foundation) confirmContact(ctx context.Context, original Principal, d c
 		// Commit decides success; pgx closes/discards a failed rollback connection.
 		_ = tx.Rollback(ctx)
 	}()
-	var client string
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, d.Issuer, d.Subject).Scan(&client); err != nil || client != d.Client {
+	var client, incarnation string
+	if err = tx.QueryRow(ctx, `SELECT client_id,incarnation::text FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, d.Issuer, d.Subject, original.membershipIncarnation).Scan(&client, &incarnation); err != nil || client != d.Client {
 		return Principal{}, ErrDenied
 	}
 	result, err := tx.Exec(ctx, `UPDATE portal_contacts SET email_verified=true,email_verified_at=now(),revision=revision+1,updated_at=now()
@@ -107,7 +107,7 @@ func (s *Foundation) confirmContact(ctx context.Context, original Principal, d c
 	if err = tx.Commit(ctx); err != nil {
 		return Principal{}, ErrDenied
 	}
-	return Principal{s.broker.issuer, token.Subject, s.broker.clientID, token.Expiry}, nil
+	return Principal{issuer: s.broker.issuer, subject: token.Subject, audience: s.broker.clientID, expires: token.Expiry, membershipIncarnation: incarnation}, nil
 }
 
 func (b *browser) beginContactVerification(w http.ResponseWriter, r *http.Request) {

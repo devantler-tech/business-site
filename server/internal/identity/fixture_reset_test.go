@@ -17,7 +17,7 @@ func seedEveryRelation(t *testing.T) (*browserFixture, string) {
 	if err := b.svc.saveContact(t.Context(), client, contactData{Name: "Fictional reset client", Email: "reset@example.invalid"}); err != nil {
 		t.Fatal("fixture contact unavailable", err)
 	}
-	_, _ = invitedAttempt(t, b.svc, b.f, "reset-pending", "reset-pending-client", "client")
+	_ = invitedAttempt(t, b.svc, b.f, "reset-pending", "reset-pending-client", "client")
 	if _, err := migrationDB(t).Exec(t.Context(), `INSERT INTO portal_sessions(token,data,expiry) VALUES('fixture-reset-session','fixture-reset-data',clock_timestamp()+interval '1 hour')`); err != nil {
 		t.Fatal("fixture session unavailable", err)
 	}

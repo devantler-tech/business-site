@@ -3,7 +3,8 @@
 [ADR 0030](../docs/adr/0030-numina-first-billing.md) decides how the portal collects money:
 Numina, the registered bookkeeping system, issues invoices and matches bank payments, and
 Stripe only collects cards. This page describes what the source does today. Nothing here runs
-in production: the gate below is false by default and has no environment mapping.
+in production: the gates below remain false by default and require their own
+explicit production settings and the separate reviewed activation under #21.
 
 ## Orders: one collection path
 
@@ -304,17 +305,37 @@ The portal sends two emails itself, in the language the client used:
 - an **order confirmation** when an order is placed (Consumer Contracts Act, section 13). It
   restates the order, its scope, prices and terms, the payment path, the early-start request
   or the first day work may begin, the last day to withdraw and how, and links to the terms
-  with the model withdrawal form;
+  with the model withdrawal form. The complete terms and form, including the
+  existing privately projected trader address, are copied into the email from
+  the runtime's immutable public serving snapshot. The original acceptance ID,
+  proposal version/content reference and terms reference are retained with it;
 - a **withdrawal receipt** when the client withdraws (section 20 a), with what happens to
   what they paid.
 
 Each is queued in the same transaction as the order or withdrawal that causes it
 (`portal_mail_outbox`, migration v23), once per order and kind, to the client's contact address.
-A client without one gets none, and the operator's page says so. One replica at a time (an
+New orders require a configured sender, complete terms and a contact address;
+otherwise the order and its side effects roll back. The client can read the full
+terms before ordering, and a changed terms reference requires a fresh review.
+An existing order's retry acknowledges the original order without replacing its
+frozen confirmation, even after the terms or contact change. Withdrawal itself
+does not depend on those new-order prerequisites. Its receipt uses the current
+contact address, or the original order-confirmation recipient if that contact
+has been removed. One replica at a time (an
 advisory lock) sends the queue every minute and records each delivery
 (`portal_mail_deliveries`). A failure stops the pass and is tried again on the next one; a
 message whose delivery record was lost may arrive twice. The operator's page shows each email
 as queued or sent.
+
+New complete confirmations retain format-1 producer metadata in the immutable
+outbox (migration v30), bound to the exact order, acceptance and proposal. The
+terms and complete body have separate SHA256 references. The shared
+`readOriginalConfirmation` lookup runs inside a caller's already authorized,
+request-locked transaction and returns only missing, prepared or sender-accepted
+evidence with its opaque outbox reference, digests and timestamps. It returns no
+recipient or email body and grants no authorization or service execution power.
+Legacy or unknown formats remain unproven even with a sender receipt; storage
+failure returns a sanitized error rather than usable or missing evidence.
 
 Emails go through the site's send-only SES sender (platform#5400): SMTP submission on port 587
 with STARTTLS required before AUTH, From `no-reply@devantler.tech` only. The sender starts only
@@ -325,10 +346,20 @@ when `PORTAL_SMTP_USERNAME_FILE` and `PORTAL_SMTP_PASSWORD_FILE` name the projec
 `business-site-runtime` (platform#6368). While SES is in its sandbox, it delivers only to
 verified addresses.
 
+The runtime obtains confirmation terms only from its already-admitted serving
+artifact after the company disclosure projection, never by fetching the website.
+Missing or ambiguous documents keep new ordering closed while sign-in can remain
+available. The outbox retains the complete original text under the existing portal
+retention policy. A submitted SMTP message is not proof that the customer received
+it; real receipt remains an acceptance gate. See [commerce acceptance](COMMERCE-ACCEPTANCE.md).
+
 ## Gate and configuration
 
 Every step requires the existing identity, request, triage, proposal, sharing and acceptance
-gates plus the false-default `portal-invoice-billing` OpenFeature flag. Missing, wrong-type or
+gates plus the false-default `portal-invoice-billing` OpenFeature flag. Its explicit
+production setting is `PORTAL_INVOICE_BILLING_FLAG`, using the maintained-provider
+JSON documented in [README.md](README.md#explicit-production-identity-profile).
+Missing, wrong-type or
 error evaluations deny. Turning the flag off stops order placement, hides the order and stops
 the sync between calls.
 
@@ -356,8 +387,8 @@ read-only projection for that entry, the platform role's read permission on it, 
 allow rule to `api.numina.app` (the package denies egress by default), and the runtime grants
 below. None of these is added here.
 
-The card path has its own false-default `portal-card-billing` flag, also without an environment
-mapping. It is enabled only when `PORTAL_STRIPE_KEY_FILE` and
+The card path has its own false-default `portal-card-billing` flag and independent
+`PORTAL_CARD_BILLING_FLAG` production setting. It is enabled only when `PORTAL_STRIPE_KEY_FILE` and
 `PORTAL_STRIPE_WEBHOOK_SECRET_FILE` name projected files and `PORTAL_STRIPE_TAX_RATE` names the
 VAT tax rate (`txr_…`); `PORTAL_STRIPE_API_URL` is optional, HTTPS only. In production all of
 them come from the portal settings projection, and the two files are separate projected

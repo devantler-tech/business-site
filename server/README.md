@@ -8,6 +8,11 @@ and current client/operator membership. Accounts use issuer + subject, not email
 Synthetic tests use a local TLS broker with generated keys; they are not proof of
 live Dex, Google or Microsoft federation.
 
+The separate [private booking boundary](BOOKINGS.md) computes candidate intervals only.
+It has no registered route or runtime configuration; missing operator policy and unknown
+availability deny slots. Durable reservations, calendar effects and customer activation remain
+sequential delivery gates.
+
 For the credential-free public-site first run and contribution workflow, start with the
 [repository README](../README.md) and [contribution guide](../CONTRIBUTING.md). This reference
 covers the optional combined runtime and its separate disposable database tests. Implementation
@@ -58,8 +63,16 @@ not allow arbitrary form destinations or maintain a social-provider origin list.
 
 Opaque SCS sessions are stored in PostgreSQL with hashed storage keys, rotated
 across sign-in, destroyed on logout, and bounded by both token expiry and a
-30-minute absolute lifetime. Each private request rechecks current membership;
-only a stored operator role can access `/portal/operator`. Session and CSRF
+30-minute absolute lifetime. A completed login keeps its opaque cookie across
+browser restarts only until that same deadline; unfinished sign-ins remain
+session-only. Visiting the public website does not sign out or extend the
+session. The portal's website links preserve English/Danish, and returning with
+a valid session opens the workspace directly. A new authorization can reuse the
+provider's SSO session subject to its existing authentication/MFA policy.
+Each private request rechecks current membership and the incarnation bound by
+its verified sign-in. A membership change invalidates prior sessions, including
+late session writes; reactivation requires a fresh sign-in.
+Only a stored operator role can access `/portal/operator`. Session and CSRF
 cookies are Secure, HttpOnly, SameSite=Lax and `__Host-` scoped. Patched nosurf
 protects state-changing forms; fixed Host/Origin checks, no-store responses and
 an origin-only referrer policy complement it. EN/DA native forms support keyboard,
@@ -74,9 +87,11 @@ Contact responses buffer the complete frame and revalidate the original durable 
 after waits. A replacement identity, client or extended deadline cannot authorize
 the original response, and a read never refreshes or resurrects a deleted session.
 
-`Invite` and `Revoke` remain **trusted control-plane operations**, not public
-HTTP endpoints. An operator workspace does not expose these operations. Likewise,
-`Complete` accepts only a server-obtained token, never a browser authentication claim.
+`Invite` and `Revoke` remain **trusted control-plane operations**. The authenticated
+[operator customer area](CUSTOMER-IDENTITY.md) exposes bounded, audited invitation,
+workspace and member actions, with a separate restricted machine identity policy.
+No anonymous endpoint grants membership. `Complete` accepts only a server-obtained
+token, never a browser authentication claim.
 
 Authenticated clients can edit their name, contact email and optional company at
 `/portal/contact`. The actual query uses current server-owned issuer/subject membership
@@ -100,7 +115,7 @@ retention/expired-record cleanup and
 deployed two-client/operator proof. `Browser` requires a live least-privilege store,
 a configured broker and a private client secret; construction neither migrates
 the database nor enables the injected flag. There is no production identity endpoint,
-production customer intake, payment, queue, MCP or agent execution. No paid service is used.
+production customer intake, payment, queue, MCP or work execution. No paid service is used.
 
 The separately default-off [project-request intake](REQUESTS.md) lets a synthetic
 invited client submit a free brief and revisit a durable private receipt. It does
@@ -338,11 +353,32 @@ Leaving the profile and activation values absent retains ordinary disabled start
 The staging selection remains unchanged and cannot exceed ten minutes.
 
 The selected provider inherits process cancellation and SDK shutdown instead of
-borrowing a staging timer. Only the identity capability can be enabled. Current
-issuer/subject invitations and membership still authorize every private session;
-the profile grants no role and enables no request, payment or work capability.
+borrowing a staging timer. Identity alone enables no other capability. Each optional
+production setting below uses the same maintained-provider JSON as the identity flag:
+
+| OpenFeature capability        | Production setting                 |
+|-------------------------------|------------------------------------|
+| `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
+| `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
+| `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
+| `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |
+| `portal-proposal-sharing`     | `PORTAL_PROPOSAL_SHARING_FLAG`     |
+| `portal-proposal-acceptance`  | `PORTAL_PROPOSAL_ACCEPTANCE_FLAG`  |
+| `portal-invoice-billing`      | `PORTAL_INVOICE_BILLING_FLAG`      |
+| `portal-card-billing`         | `PORTAL_CARD_BILLING_FLAG`         |
+
+An absent or typed false setting keeps its capability off, even when another is on.
+A supplied malformed, wrong-type or oversized setting refuses production startup.
+The existing confined settings projection accepts these same named inputs and
+refuses mixing them with inherited values. Staging still maps identity only.
+Work approvals, worker execution and unrecognized flags have no production mapping.
+Current issuer/subject invitations and membership still authorize every private session;
+the profile grants no role, agreement, payment evidence or work authority.
 Before listening, the real command still verifies its restricted database login
 and configured TLS broker. Complete dependency configuration alone enables nothing.
+Every operation retains its existing prerequisite gates. Actual customer intake and
+payment activation remain a separate reviewed deployment after the applicable #21
+legal, provider and deployed-user-path checks; this configuration adds none of them.
 
 Configuration belongs to the operator's private process environment. Changing an
 external environment file does not change a running process. Disable the flag
@@ -354,8 +390,9 @@ The required suite exercises the compiled command's ordinary, staging, enabled,
 disabled, invalid and conflicting profiles, plus real synthetic TLS/SQL invitation,
 cookie-session, membership-revocation and cancellation checks. These are source
 acceptance fixtures, not deployed Dex/ZITADEL, mail/MFA or visual-browser proof.
-The shipped deployment stays disabled: #305 retains runtime delivery and #302
-retains deployed acceptance and the separately reviewed activation change.
+Source checks do not establish deployed acceptance: #305 retains runtime delivery,
+[Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
+identity acceptance and #21 owns later intake/payment activation.
 
 ### Production public-content template
 

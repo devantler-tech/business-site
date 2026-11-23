@@ -273,10 +273,128 @@ derive identity from email or use the upstream ZITADEL subject directly. Preserv
 the adopted Dex issuer and `customer-zitadel` connector ID. Changing federation
 paths needs explicit migration/linking with proof of both identities.
 
-Portal logout destroys its local session, not all upstream SSO sessions. Upstream
+Opening the portal without a session goes straight to the login; there is no portal page
+first. A sign-in that authenticates without an invitation or membership is refused
+without an error page: the portal session and, with the upstream logout configured, the
+ZITADEL session end, and the browser returns to a fresh login. Every refusal looks the
+same. After three refusals within ten minutes the browser sees one static invitation-only
+page instead, so a lasting upstream session cannot cause a redirect loop. Sign-out ends
+the portal session and the ZITADEL session, then lands on the public site. Upstream
 deactivation prevents new login but does not instantly revoke portal sessions;
 revoke portal membership/sessions for immediate denial and test each boundary.
 Google, Microsoft, Apple and GitHub remain unconfigured.
+
+The main portal sign-in shows both methods at the broker when operators are configured.
+Customers use their Devantler Tech account through ZITADEL. Operators use GitHub through
+platform SSO. When there are no configured operators, the main sign-in goes directly to
+ZITADEL. The `/operator/sign-in` bookmark goes directly to platform SSO while
+`PORTAL_OPERATOR_SUBJECTS` lists operators. The portal checks the verified subject's
+connector and current membership when it determines the role. A GitHub identity
+is a listed operator or nobody: on first sign-in it gets the operator membership in the
+`devantler-tech` workspace, it can never be invited or hold a client role, and removing it
+from the list ends its access at the next request. A customer through ZITADEL can never
+hold the operator role. The operator's subject is
+`DexSubject(<platform Dex subject>, "platform")`, computed with the same function as an
+invitation's.
+
+### Operator API
+
+Every operator action is a small JSON API under `/operator/api`, described by
+[`internal/identity/openapi/operator.json`](internal/identity/openapi/operator.json), which the
+API also serves at `/operator/api/openapi.json`; a test keeps the file and the routes identical.
+The operator pages use the same authorization and records. Human callers need a current operator.
+Every authenticated call writes to `portal_operator_audit` (who, what, when and the
+outcome: allowed, refused or failed), refusals included. Reads write one completion row.
+Before a write can have any effect, its authorized attempt is durably appended as
+`<action>.attempt` with outcome `allowed`; that means permission to try, not success.
+A separate row under the ordinary action records the result. An attempt without a
+completion remains visible if later recording fails. Missing audit access prevents writes.
+A browser without a session gets 401 and is not recorded.
+The rows hold IDs, never request bodies or customer details, and the retention purge removes
+them after the retention period. The operator page links to the newest 100 entries at
+`/operator/audit`. The API lists pending invitations, workspaces and members, reads the log
+and serves its OpenAPI file. `/operator/customers` provides native English/Danish forms
+for creating a workspace, revoking a pending invitation and changing a customer's access.
+The same authenticated API actions serve browser forms and JSON clients. Workspaces can
+be empty; member lists also include deactivated members. Operator memberships are managed
+only through server configuration and cannot be changed by these customer actions.
+Inventory responses allow at most 1000 pending invitations or 1000 workspace/member rows;
+larger inventories return 503
+instead of an incomplete list. JSON and audit-page responses are buffered, then checked against
+the original durable session and current operator membership after all rendering and SDK waits.
+Each displayed audit entry includes the actor's subject as well as their kind.
+
+The native invitation form at `/operator/invitations/new` posts to the same
+`invitations.create` API action. It accepts a first and last name, email and workspace;
+unknown or repeated form fields are refused. A new user is created only in the configured
+Customers organization, with no supplied password and an unverified email, so ZITADEL
+sends its own account-setup message. An exact organization-and-email lookup reuses an
+existing human account. The seven-day invitation binds only that user's customer Dex
+subject; first sign-in consumes it atomically. Concurrent invitations for that identity
+cannot leave two pending invitations, and provider errors leave none. No delete is called.
+
+The directory is optional and requires all three settings together:
+`PORTAL_ZITADEL_URL` (an HTTPS origin), `PORTAL_ZITADEL_ORG_ID` and the absolute
+`PORTAL_ZITADEL_TOKEN_PROJECTION_FILE`. The platform supplies the organization-scoped
+service credential privately. Every call reads its current confined projection and sends
+the explicit organization header; lookup responses must name that same owner. Redirects
+are refused and replies are bounded. Every external write rechecks the original operator
+session or exact machine grant after provider and credential waits. Portal writes recheck
+again in their held transaction before commit. Source fixtures do not prove email delivery,
+native provider setup or live portal access.
+
+### Machine callers
+
+Machine callers use the API with `Authorization: Bearer <JWT>`, never the maintainer's
+login. Platform administration provisions the credential in OpenBao and issues short-lived
+tokens; the portal reads only public identity policy, not that credential. Both optional
+settings must be present together, alongside the complete portal dependencies:
+
+- `PORTAL_AGENT_AUDIENCE`: a dedicated audience, different from `PORTAL_OIDC_CLIENT_ID`.
+- `PORTAL_AGENT_SUBJECTS`: a JSON array of objects with `issuer`, `subject` and optional
+  `grants`. For example, `[{"issuer":"https://login.example.invalid","subject":"ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ","grants":[]}]`.
+
+The issuer must equal the configured portal broker. Subjects must be canonical Dex machine
+subjects without a connector; customer and operator subjects are refused. At most ten
+identities are allowed. Unknown or duplicate properties, identities and grants stop startup.
+The runtime validates the signature through discovered JWKS, exact issuer, a single exact
+audience, authorized party, expiry, issued-at and not-before. Tokens last at most five minutes
+and carry no browser nonce. Browser sign-in separately refuses machine subjects.
+
+An empty grant list permits only `invitations.list`, `workspaces.list`,
+`workspaces.members.list`, `audit.list` and `openapi.read`. The closed write catalogue is
+`invitations.create`, `invitations.revoke`, `workspaces.create`, `members.deactivate` and
+`members.reactivate`. Each needs its own grant; `invitations.create` explicitly permits the
+customer-facing account-setup email. A grant does not create an unimplemented route.
+There is no wildcard, operator role, payment, refund or deletion grant. Unknown actions and
+money/deletion grants are refused at startup and at dispatch, even if policy is malformed.
+
+Machine calls do not create memberships or browser sessions and cannot open human pages.
+A bearer combined with the portal session cookie is refused, and an invalid bearer never
+falls back to human authority. Verified machine calls use `actorKind: agent` in the audit
+log, including denied actions. Writes recheck their bound authority after external waits
+before committing; responses recheck it after audit recording. Policy changes require a
+restart, and already issued tokens remain bounded by their five-minute expiry. Source tests
+do not prove that the platform has provisioned or activated a machine identity.
+
+Revocation takes the identity's invitation/sign-in lock, so a revoked invitation cannot
+be redeemed. Deactivation commits the portal membership's refusal and changes its
+incarnation before asking ZITADEL to deactivate the corresponding Customers user. A
+reserved database connection retains the identity lock across the local commit and
+provider update, serializing transitions across replicas. Unconfirmed lock cleanup
+destroys the connection instead of returning it to the pool. If the
+provider is unavailable, portal access stays closed; retry the action to synchronize it.
+Reactivation confirms that the provider user is active before restoring portal membership.
+An already-active retry does not rewrite the membership or invalidate its work approvals.
+Authenticated sessions retain the incarnation authorized at sign-in, including through
+contact verification. Private entry, data queries and final response checks require that
+exact incarnation. Old sessions, including delayed session-store writes, stay invalid after
+reactivation. Unbound sessions must sign in again. Deactivation never scans unrelated or
+anonymous sessions; old physical rows follow the maintained expiry and retention policy.
+Both transitions recheck the original operator or exact agent grant before each provider
+effect and database commit. Customer data is retained. These controls are tested against
+real disposable storage and a fictional provider; deployed operator sign-in and the
+scoped production service account still require their own live verification.
 
 ## Invite a customer
 
@@ -297,14 +415,20 @@ profile and an enabled flag (see [the settings file](../deploy/README.md#portal-
    ```
 
    `--invite-client` is the new membership's lowercase workspace ID,
-   `--invite-role` is `client` or `operator` and `--invite-days` is 1–7. The
+   `--invite-role` is `client` (operators come only from `PORTAL_OPERATOR_SUBJECTS`)
+   and `--invite-days` is 1–7. The
    command computes the customer Dex subject for that user through the
    `customer-zitadel` connector, binds the invitation to the configured Dex
-   issuer and prints only `portal invitation code: <code>`. Missing settings,
-   sign-in switched off or any mixed option is refused with a fixed message.
-3. Send the code to the customer through an approved private channel. On first
-   sign-in at `https://portal.devantler.tech` they enter it once; it is
-   consumed with their first successful sign-in and grants no other identity.
+   issuer and prints only `portal invitation created: that user accepts it by
+   signing in`. There is no code to pass on. Missing settings, sign-in switched
+   off or any mixed option is refused with a fixed message.
+3. Tell the customer to finish ZITADEL's invitation email (it sets their
+   password and MFA) and sign in at `https://portal.devantler.tech` within the
+   invitation's lifetime. Their first successful sign-in as that exact Dex
+   issuer/subject accepts it and creates the membership. Any other identity has
+   nothing to accept and is refused: the portal is invitation-only. A current
+   member signs straight in and never gains another invitation's workspace, and
+   a revoked member cannot be revived by a new invitation.
 
 ## Validation and remaining proof
 

@@ -44,6 +44,9 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 	}
 	cases := []privilegeCase{
 		{"restricted", "SET ROLE portal_runtime", true},
+		{"missing workspace INSERT", "REVOKE INSERT ON portal_workspaces FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"editable workspace", "GRANT UPDATE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
+		{"deletable workspace", "GRANT DELETE ON portal_workspaces TO portal_runtime; SET ROLE portal_runtime", false},
 		{"membership recorder disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_transition; SET ROLE portal_runtime", false},
 		{"membership incarnation disabled", "ALTER TABLE portal_memberships DISABLE TRIGGER portal_membership_incarnation; SET ROLE portal_runtime", false},
 		{"membership recorder conditional", "DROP TRIGGER portal_membership_transition ON portal_memberships; CREATE TRIGGER portal_membership_transition AFTER INSERT OR UPDATE OR DELETE ON portal_memberships FOR EACH ROW WHEN (false) EXECUTE FUNCTION portal_record_membership_transition(); SET ROLE portal_runtime", false},
@@ -72,6 +75,9 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"missing Checkout UPDATE", "REVOKE UPDATE ON portal_card_checkouts FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"missing Stripe event INSERT", "REVOKE INSERT ON portal_stripe_events FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"mutable Stripe event UPDATE", "GRANT UPDATE(type) ON portal_stripe_events TO portal_runtime; SET ROLE portal_runtime", false},
+		{"missing audit INSERT", "REVOKE INSERT ON portal_operator_audit FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"deletable audit log", "GRANT DELETE ON portal_operator_audit TO portal_runtime; SET ROLE portal_runtime", false},
+		{"editable audit log", "GRANT UPDATE(outcome) ON portal_operator_audit TO portal_runtime; SET ROLE portal_runtime", false},
 		{"missing order end INSERT", "REVOKE INSERT ON portal_order_ends FROM portal_runtime; SET ROLE portal_runtime", false},
 		{"mutable reversal UPDATE", "GRANT UPDATE(reason) ON portal_charge_reversals TO portal_runtime; SET ROLE portal_runtime", false},
 		{"cancellation DELETE", "GRANT DELETE ON portal_card_cancellations TO portal_runtime; SET ROLE portal_runtime", false},

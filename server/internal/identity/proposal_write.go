@@ -42,7 +42,7 @@ func lockProposalClient(ctx context.Context, tx pgx.Tx, p Principal, id string) 
 		return "", err
 	}
 	var role, client string
-	if err := tx.QueryRow(ctx, `SELECT role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&role); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT role FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='operator' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&role); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrDenied
 		}

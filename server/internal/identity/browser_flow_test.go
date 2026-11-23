@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"html"
 	"io"
 	"net/http"
@@ -71,7 +72,7 @@ func (b *browserFixture) reconnect(ctx context.Context) *pgxpool.Pool {
 func startedBrowserAttempt(t *testing.T) (*browserFixture, *url.URL, url.Values) {
 	t.Helper()
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	u, err := url.Parse(callback)
 	if err != nil {
 		t.Fatal(err)
@@ -219,36 +220,51 @@ func (b *browserFixture) csrf(path string) string {
 }
 
 // invite provisions one fictional subject through the trusted control plane.
-func (b *browserFixture) invite(subject, client, role string) string {
+func (b *browserFixture) invite(subject, client, role string) {
 	b.t.Helper()
-	inv, err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)})
-	if err != nil {
+	if err := b.svc.Invite(b.f.ctx, Invitation{b.f.issuer, subject, client, role, time.Now().Add(time.Hour)}); err != nil {
 		b.t.Fatal(err)
 	}
-	return inv
 }
 
-// TestBrowserBrokerHandoffDocument prevents form-action from following the
-// broker's entire upstream chain, without widening the portal's CSP origins.
-func TestBrowserBrokerHandoffDocument(t *testing.T) {
+// startInvited invites one fictional subject, then starts its sign-in.
+func (b *browserFixture) startInvited(subject, client, role string) string {
+	b.t.Helper()
+	b.invite(subject, client, role)
+	return b.start()
+}
+
+// TestBrowserSignInGoesStraightToTheBroker: opening the portal or its sign-in
+// address without a session starts one attempt-bound login at the configured
+// broker, with no portal page first and nothing taken from the caller's query.
+func TestBrowserSignInGoesStraightToTheBroker(t *testing.T) {
 	b := newBrowserFixture(t)
-	for _, lang := range []string{"en", "da"} {
-		token := b.csrf("/portal/sign-in?lang=" + lang)
-		status, body, headers := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "lang": {lang}, "return_to": {"https://attacker.example.invalid"}}, b.site.URL)
-		if status != http.StatusOK || headers.Get("Location") != "" || headers.Get("Refresh") != "" {
-			t.Fatalf("handoff must finish the form navigation in a fresh HTML document: status=%d", status)
+	for _, path := range []string{"/portal/sign-in?lang=en&return_to=https://attacker.example.invalid", "/portal/?lang=da&role=operator"} {
+		status, body, headers := b.request("GET", path, nil, "")
+		if status != http.StatusSeeOther || headers.Get("Cache-Control") != "no-store" || strings.Contains(body, "<form") {
+			t.Fatalf("%s did not redirect straight to the login: status=%d", path, status)
 		}
-		if headers.Get("Cache-Control") != "no-store" || !strings.Contains(headers.Get("Content-Security-Policy"), "form-action 'self' "+b.broker.URL+";") {
-			t.Fatal("handoff weakened its cache or form-action boundary")
-		}
-		address := brokerHandoffAddress(t, body)
-		u, err := url.Parse(address)
+		u, err := url.Parse(headers.Get("Location"))
 		if err != nil || u.Scheme+"://"+u.Host != b.broker.URL || u.Path != "/authorize" || u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("nonce") == "" || u.Query().Get("state") == "" {
-			t.Fatal("handoff destination was not the configured, attempt-bound broker")
+			t.Fatalf("%s did not start an attempt-bound login at the configured broker", path)
 		}
-		if brokerHandoffRefreshAddress(t, body) != address || strings.Contains(body, "attacker.example.invalid") || !strings.Contains(body, `<html lang="`+lang+`">`) {
-			t.Fatal("automatic and accessible native handoffs disagree or leak caller navigation")
+		if strings.Contains(u.String(), "attacker.example.invalid") || strings.Contains(u.String(), "operator") {
+			t.Fatal("the caller's query leaked into the login request")
 		}
+	}
+}
+
+// TestBrowserMemberIsNotSignedOutBySignIn: a member who opens the sign-in address
+// goes home, so a link there cannot end someone's session.
+func TestBrowserMemberIsNotSignedOutBySignIn(t *testing.T) {
+	b := newBrowserFixture(t)
+	b.finish(b.startInvited("client-a", "client-a", "client"))
+	status, _, headers := b.request("GET", "/portal/sign-in?lang=da", nil, "")
+	if status != http.StatusSeeOther || headers.Get("Location") != "/portal/?lang=da" {
+		t.Fatalf("member sign-in did not go home: status=%d location=%s", status, headers.Get("Location"))
+	}
+	if status, _, _ = b.request("GET", "/portal/?lang=da", nil, ""); status != http.StatusOK {
+		t.Fatalf("member lost the session: %d", status)
 	}
 }
 
@@ -270,15 +286,34 @@ func brokerHandoffRefreshAddress(t testing.TB, body string) string {
 	return html.UnescapeString(refreshes[0][1])
 }
 
-// start follows the real CSRF-protected sign-in and synthetic broker redirect.
-func (b *browserFixture) start(inv string) string {
+// start follows the real sign-in redirect and the synthetic broker's redirect.
+// A signed-in member goes home from sign-in, so it signs out first.
+func (b *browserFixture) start() string {
 	b.t.Helper()
-	token := b.csrf("/portal/sign-in?lang=da")
-	status, body, _ := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}, "invitation": {inv}, "lang": {"da"}, "return_to": {"https://attacker.example.invalid"}, "role": {"operator"}}, b.site.URL)
-	if status != http.StatusOK {
-		b.t.Fatalf("login start status=%d want200: %s", status, body)
+	return b.startAt("/portal/sign-in?lang=da&return_to=https://attacker.example.invalid&role=operator")
+}
+
+// startAt starts a sign-in from one of the portal's sign-in links.
+func (b *browserFixture) startAt(path string) string {
+	b.t.Helper()
+	status, body, headers := b.request("GET", path, nil, "")
+	if status == http.StatusSeeOther && headers.Get("Location") == "/portal/?lang=da" {
+		b.signOut()
+		status, body, headers = b.request("GET", path, nil, "")
 	}
-	return b.authorize(brokerHandoffAddress(b.t, body))
+	if status != http.StatusSeeOther {
+		b.t.Fatalf("login start status=%d want 303: %s", status, body)
+	}
+	return b.authorize(headers.Get("Location"))
+}
+
+// signOut posts the workspace's own sign-out form.
+func (b *browserFixture) signOut() {
+	b.t.Helper()
+	token := b.csrf("/portal/?lang=da")
+	if s, _, _ := b.request("POST", "/portal/logout", url.Values{"csrf_token": {token}}, b.site.URL); s != http.StatusOK {
+		b.t.Fatalf("sign-out status=%d", s)
+	}
 }
 
 // authorize follows the synthetic broker's authorization redirect and returns the
@@ -335,7 +370,7 @@ func (b *browserFixture) cookie() *http.Cookie {
 
 func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	preauth := b.cookie().Value
 	b.finish(callback)
 	authenticated := b.cookie().Value
@@ -357,7 +392,7 @@ func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 	}
 	token := b.csrf("/portal/")
 	s, _, _ = b.request("POST", "/portal/logout", url.Values{"csrf_token": {token}}, b.site.URL)
-	if s != 303 {
+	if s != http.StatusOK {
 		t.Fatalf("logout=%d", s)
 	}
 	u, _ := url.Parse(b.site.URL)
@@ -375,7 +410,7 @@ func TestBrowserSessionDurabilityAndLogout(t *testing.T) {
 
 func TestBrowserCallbackIsConsumedBeforeExchange(t *testing.T) {
 	b := newBrowserFixture(t)
-	callback := b.start(b.invite("client-a", "client-a", "client"))
+	callback := b.startInvited("client-a", "client-a", "client")
 	u, _ := url.Parse(b.site.URL)
 	cookies := b.client.Jar.Cookies(u)
 	var successes atomic.Int32
@@ -444,9 +479,8 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 	for _, kind := range []string{"nonce", "issuer", "audience", "expired token", "uninvited"} {
 		t.Run(kind, func(t *testing.T) {
 			b := newBrowserFixture(t)
-			inv := b.invite("client-a", "client-a", "client")
-			if kind == "uninvited" {
-				inv = ""
+			if kind != "uninvited" {
+				b.invite("client-a", "client-a", "client")
 			}
 			switch kind {
 			case "nonce":
@@ -458,10 +492,11 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 			case "expired token":
 				b.configure(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}, false)
 			}
-			callback := b.start(inv)
-			s, _, _ := b.request("GET", callback, nil, "")
-			if s != 400 {
-				t.Fatalf("invalid identity accepted: %d", s)
+			callback := b.start()
+			// Every refusal looks the same: no page, straight back to a fresh login.
+			s, body, h := b.request("GET", callback, nil, "")
+			if s != http.StatusSeeOther || h.Get("Location") != b.site.URL+"/portal/signed-out" || strings.Contains(body, "invitation") {
+				t.Fatalf("refused identity was not sent back to the login: %d %s", s, h.Get("Location"))
 			}
 			s, _, _ = b.request("GET", "/portal/", nil, "")
 			if s == 200 {
@@ -471,9 +506,72 @@ func TestBrowserSignedClaimsAndMembership(t *testing.T) {
 	}
 }
 
+// TestBrowserRefusalsCannotLoop: an identity that keeps authenticating without
+// an invitation (for example through a lasting upstream session) is sent back to
+// the login twice, then shown one static page, which also holds at the entry.
+func TestBrowserRefusalsCannotLoop(t *testing.T) {
+	b := newBrowserFixture(t)
+	for round := 1; round <= refusalLimit; round++ {
+		s, body, h := b.request("GET", b.start(), nil, "")
+		if round < refusalLimit {
+			if s != http.StatusSeeOther || h.Get("Location") != b.site.URL+"/portal/signed-out" {
+				t.Fatalf("refusal %d did not return to the login: %d %s", round, s, h.Get("Location"))
+			}
+			// The upstream logout returns here, which starts a fresh login.
+			if s, _, h = b.request("GET", "/portal/signed-out", nil, ""); s != http.StatusSeeOther || !strings.HasPrefix(h.Get("Location"), b.broker.URL+"/authorize?") {
+				t.Fatalf("signed-out return %d did not start a fresh login: %d", round, s)
+			}
+			continue
+		}
+		if s != http.StatusForbidden || h.Get("Location") != "" || !strings.Contains(body, "Portalen kræver en invitation") {
+			t.Fatalf("refusal %d did not stop the round trips: %d %s", round, s, h.Get("Location"))
+		}
+	}
+	for _, path := range []string{"/portal/", "/portal/sign-in", "/portal/signed-out"} {
+		if s, _, h := b.request("GET", path, nil, ""); s != http.StatusForbidden || h.Get("Location") != "" {
+			t.Fatalf("%s restarted a login after the refusal limit: %d %s", path, s, h.Get("Location"))
+		}
+	}
+}
+
+// TestBrowserUpstreamLogout: with the upstream logout configured, a refusal ends
+// the upstream session before the fresh login, and sign-out ends both sessions
+// and lands on the public site.
+func TestBrowserUpstreamLogout(t *testing.T) {
+	b := newBrowserFixture(t)
+	if err := b.svc.LinkUpstreamLogout("https://accounts.example.invalid/oidc/v1/end_session", "broker-upstream"); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range [][2]string{{"http://accounts.example.invalid/end", "c"}, {"https://accounts.example.invalid/end?x=1", "c"}, {"https://accounts.example.invalid/end", ""}, {"https://accounts.example.invalid/end", "a b"}} {
+		if err := b.svc.LinkUpstreamLogout(bad[0], bad[1]); !errors.Is(err, ErrDenied) {
+			t.Fatalf("unsafe upstream logout %q accepted", bad)
+		}
+	}
+	s, _, h := b.request("GET", b.start(), nil, "")
+	u, err := url.Parse(h.Get("Location"))
+	if s != http.StatusSeeOther || err != nil || u.Scheme+"://"+u.Host+u.Path != "https://accounts.example.invalid/oidc/v1/end_session" ||
+		u.Query().Get("client_id") != "broker-upstream" || u.Query().Get("post_logout_redirect_uri") != b.site.URL+"/portal/signed-out" {
+		t.Fatalf("refusal did not end the upstream session first: %d %s", s, h.Get("Location"))
+	}
+	b.invite("client-a", "client-a", "client")
+	b.finish(b.start())
+	token := b.csrf("/portal/?lang=da")
+	s, body, _ := b.request("POST", "/portal/logout?lang=da", url.Values{"csrf_token": {token}}, b.site.URL)
+	if s != http.StatusOK {
+		t.Fatalf("sign-out status=%d", s)
+	}
+	out, err := url.Parse(brokerHandoffRefreshAddress(t, body))
+	if err != nil || out.Host != "accounts.example.invalid" || out.Query().Get("client_id") != "broker-upstream" || out.Query().Get("post_logout_redirect_uri") != b.site.URL+"/" || brokerHandoffAddress(t, body) != out.String() {
+		t.Fatalf("sign-out did not end the upstream session on the way to the site: %v", out)
+	}
+	if s, _, _ = b.request("GET", "/portal/contact?lang=da", nil, ""); s == http.StatusOK {
+		t.Fatal("sign-out kept the portal session")
+	}
+}
+
 func TestBrowserCurrentRevocationExpiryAndIsolation(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	for _, path := range []string{"/portal/?client_id=client-b&role=operator", "/portal/operator"} {
 		s, body, _ := b.request("GET", path, nil, "")
 		if path == "/portal/operator" && s != 403 {
@@ -494,7 +592,7 @@ func TestBrowserCurrentRevocationExpiryAndIsolation(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "operator"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("operator", "operator-client", "operator")))
+	b.finish(b.startInvited("operator", "operator-client", "operator"))
 	s, body, _ := b.request("GET", "/portal/operator?lang=da", nil, "")
 	if s != 200 || !strings.Contains(body, "Operatør") {
 		t.Fatal("explicit operator denied")
@@ -511,8 +609,13 @@ func TestBrowserCurrentRevocationExpiryAndIsolation(t *testing.T) {
 
 func TestBrowserCSRFAndClosedFlags(t *testing.T) {
 	b := newBrowserFixture(t)
-	token := b.csrf("/portal/sign-in")
-	for _, path := range []string{"/portal/sign-in", "/portal/logout"} {
+	b.finish(b.startInvited("client-a", "client-a", "client"))
+	token := b.csrf("/portal/?lang=da")
+	// Sign-in is a plain navigation now; no form starts or replays a login.
+	if s, _, _ := b.request("POST", "/portal/sign-in", url.Values{"csrf_token": {token}}, b.site.URL); s == http.StatusOK || s == http.StatusSeeOther {
+		t.Fatalf("a POST started a login: %d", s)
+	}
+	for _, path := range []string{"/portal/logout"} {
 		for _, kind := range []string{"missing token", "bad token", "missing metadata", "unsafe origin"} {
 			t.Run(path+kind, func(t *testing.T) {
 				form := url.Values{"csrf_token": {token}}
@@ -537,7 +640,7 @@ func TestBrowserCSRFAndClosedFlags(t *testing.T) {
 	}
 	for _, value := range []any{false, nil, "true"} {
 		setFlag(t, b.flags, value)
-		for _, path := range []string{"/portal/", "/portal/sign-in", "/portal/callback?code=x&state=y", "/portal/operator", "/portal/logout"} {
+		for _, path := range []string{"/portal/", "/portal/sign-in", "/portal/signed-out", "/portal/callback?code=x&state=y", "/portal/operator", "/portal/logout"} {
 			s, _, h := b.request("GET", path, nil, "")
 			if s != 404 || len(h.Values("Set-Cookie")) != 0 {
 				t.Fatalf("closed flag exposed %s: %d", path, s)
@@ -553,7 +656,7 @@ func TestBrowserCSRFAndClosedFlags(t *testing.T) {
 func TestBrowserCodeExchangeDoesNotFollowRedirects(t *testing.T) {
 	b := newBrowserFixture(t)
 	b.configure(nil, true)
-	s, _, _ := b.request("GET", b.start(b.invite("client-a", "client-a", "client")), nil, "")
+	s, _, _ := b.request("GET", b.startInvited("client-a", "client-a", "client"), nil, "")
 	if s != 400 || b.unexpectedExchanges.Load() != 0 {
 		t.Fatalf("code exchange followed a redirect: status=%d unexpected_requests=%d", s, b.unexpectedExchanges.Load())
 	}
@@ -625,7 +728,7 @@ func TestBrowserMissingOrInvalidConfigurationHasNoHandler(t *testing.T) {
 
 func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 	b := newBrowserFixture(t)
-	b.finish(b.start(b.invite("client-a", "client-a", "client")))
+	b.finish(b.startInvited("client-a", "client-a", "client"))
 	clientA := b.client
 	clientB := *clientA
 	clientB.Jar, _ = cookiejar.New(nil)
@@ -633,7 +736,7 @@ func TestBrowserTwoClientsKeepTheirServerOwnedWorkspace(t *testing.T) {
 	b.mu.Lock()
 	b.subject = "client-b"
 	b.mu.Unlock()
-	b.finish(b.start(b.invite("client-b", "client-b", "client")))
+	b.finish(b.startInvited("client-b", "client-b", "client"))
 	for _, tc := range []struct {
 		client     *http.Client
 		own, other string
@@ -666,4 +769,26 @@ func (b *browserFixture) callbackURL() string {
 		return b.site.URL + "/portal/callback"
 	}
 	return b.site.URL + b.callbackPath
+}
+
+// TestBrowserSignInKeepsSessionWhenLookupFails: a failed membership lookup is
+// not a missing membership, so opening sign-in shows the unavailable page and
+// keeps the member's session instead of starting a new login.
+func TestBrowserSignInKeepsSessionWhenLookupFails(t *testing.T) {
+	b := newBrowserFixture(t)
+	b.finish(b.startInvited("client-a", "client-a", "client"))
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(b.f.ctx, "REVOKE SELECT ON portal_memberships FROM portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	status, _, headers := b.request("GET", "/portal/sign-in?lang=da", nil, "")
+	if _, err := migrator.Exec(b.f.ctx, "GRANT SELECT ON portal_memberships TO portal_runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if status != http.StatusServiceUnavailable || headers.Get("Location") != "" {
+		t.Fatalf("a failed lookup started a new login: %d %s", status, headers.Get("Location"))
+	}
+	if status, _, _ = b.request("GET", "/portal/?lang=da", nil, ""); status != http.StatusOK {
+		t.Fatalf("a failed lookup cleared the member's session: %d", status)
+	}
 }

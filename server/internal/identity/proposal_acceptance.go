@@ -79,7 +79,7 @@ func (s *Foundation) beginClientProposalWrite(ctx context.Context, p Principal, 
 		return nil, "", err
 	}
 	var client string
-	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked FOR SHARE`, p.issuer, p.subject).Scan(&client); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, "", ErrDenied
 		}

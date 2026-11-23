@@ -33,10 +33,10 @@ type portalInviteOptions struct {
 // registerPortalInviteOptions keeps operator provisioning inside the packaged executable.
 func registerPortalInviteOptions(options *flag.FlagSet) *portalInviteOptions {
 	command := &portalInviteOptions{}
-	options.BoolVar(&command.enabled, "portal-invite", false, "create one portal invitation code without starting services")
+	options.BoolVar(&command.enabled, "portal-invite", false, "create one portal invitation for a ZITADEL user without starting services")
 	options.StringVar(&command.user, "invite-zitadel-user", "", "ZITADEL user ID of the already created customer account")
 	options.StringVar(&command.client, "invite-client", "", "portal client workspace ID for the new membership")
-	options.StringVar(&command.role, "invite-role", "", "client or operator")
+	options.StringVar(&command.role, "invite-role", "", "client; operators come only from PORTAL_OPERATOR_SUBJECTS")
 	options.StringVar(&command.days, "invite-days", "", "invitation lifetime in whole days, 1 to 7")
 	return command
 }
@@ -51,7 +51,7 @@ func (command *portalInviteOptions) selected(seen map[string]int) bool {
 func (command *portalInviteOptions) run(ctx context.Context, options *flag.FlagSet, seen map[string]int, settings string, output io.Writer) error {
 	names := []string{"portal-invite", "portal-settings-projection", "invite-zitadel-user", "invite-client", "invite-role", "invite-days"}
 	allowed := command.enabled && settings != "" && inviteUser.MatchString(command.user) && inviteClient.MatchString(command.client) &&
-		(command.role == "client" || command.role == "operator") && inviteDays.MatchString(command.days) && ctx.Err() == nil
+		command.role == "client" && inviteDays.MatchString(command.days) && ctx.Err() == nil
 	for _, name := range names {
 		if seen[name] != 1 {
 			allowed = false
@@ -73,10 +73,9 @@ func (command *portalInviteOptions) run(ctx context.Context, options *flag.FlagS
 	}
 	subject := customeridentity.DexSubject(command.user, customeridentity.ZitadelConnectorID)
 	lifetime := time.Duration(command.days[0]-'0') * 24 * time.Hour
-	token, err := runtimeapp.Invite(ctx, subject, command.client, command.role, lifetime)
-	if err != nil {
+	if err := runtimeapp.Invite(ctx, subject, command.client, command.role, lifetime); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(output, "portal invitation code: "+token)
+	_, err := fmt.Fprintln(output, "portal invitation created: that user accepts it by signing in")
 	return err
 }

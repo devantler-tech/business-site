@@ -68,9 +68,39 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
+// rewindOriginalConfirmationFixture removes only the disposable v30 producer
+// metadata. It never rewrites the frozen mail, sender receipt or older ledger.
+func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_mail_outbox
+ DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,
+ DROP CONSTRAINT portal_mail_complete_producer, DROP CONSTRAINT portal_mail_body_digest,
+ DROP COLUMN producer_format, DROP COLUMN acceptance_id, DROP COLUMN proposal_version,
+ DROP COLUMN proposal_sha256, DROP COLUMN terms_sha256, DROP COLUMN body_sha256;
+ ALTER TABLE portal_orders DROP CONSTRAINT portal_order_confirmation_binding;
+ ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_confirmation_binding;
+ DELETE FROM portal_schema_version WHERE version=30`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-confirmation-proof schema", err)
+	}
+}
+
+// rewindOperatorAuditFixture removes only the disposable v28 operator audit log.
+func rewindOperatorAuditFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindOriginalConfirmationFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_workspaces; DELETE FROM portal_schema_version WHERE version=29`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-workspace schema", err)
+	}
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_operator_audit;
+ DELETE FROM portal_schema_version WHERE version=28`); err != nil {
+		t.Fatal("historical fixture could not reconstruct pre-audit schema", err)
+	}
+}
+
 // rewindAddonEndsFixture removes only the disposable v27 add-on ends.
 func rewindAddonEndsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	rewindOperatorAuditFixture(t, pool)
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_addon_removals,portal_addon_ends;
  DELETE FROM portal_schema_version WHERE version=27`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-add-on-end schema", err)
