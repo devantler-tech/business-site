@@ -11,7 +11,6 @@ import (
 
 	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
-	"github.com/justinas/nosurf"
 )
 
 var managementRoutes = []operatorRoute{
@@ -38,9 +37,9 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		data := managementPage{pageData: b.data(r, "operator-customers", client, nosurf.Token(r)), Workspaces: spaces, Invitations: invitations}
+		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations}
 		var buffer bytes.Buffer
-		err = b.templates().ExecuteTemplate(&buffer, "portal.html", data)
+		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)
 		return buffer.Bytes(), err
 	})
 	if status != http.StatusOK {
@@ -96,7 +95,7 @@ func managementFields(r *http.Request, fields ...string) (managementInput, error
 
 func (b *browser) revokeCustomerInvitation(ctx context.Context, r *http.Request) (any, error) {
 	input, err := managementFields(r, "subject")
-	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !canInvite(input.Subject, "client") {
+	if err != nil || input.Subject == "" || len(input.Subject) > 512 || strings.ContainsFunc(input.Subject, unicode.IsControl) || !b.foundation.canInvite(input.Subject, "client") {
 		return nil, errOperatorInput
 	}
 	tx, err := b.customerIdentityTransaction(ctx, input.Subject)

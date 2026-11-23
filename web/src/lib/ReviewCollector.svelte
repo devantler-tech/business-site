@@ -6,24 +6,24 @@
   const frame = `https://widget.trustpilot.com/trustboxes/${template}/index.html?templateId=${template}&businessunitId=6b00bb09a7dbf30ad4d33478`;
   const labels = {
     en: {
-      title: "Review Devantler Tech",
-      prompt: "Have you used our services? Share your experience on Trustpilot.",
-      disclosure: "Loading the widget shares your IP address and browser details with Trustpilot, which may use cookies.",
-      privacy: "Trustpilot’s privacy policy",
-      load: "Load Trustpilot widget",
-      hide: "Hide Trustpilot widget",
-      link: "Open on Trustpilot",
+      link: "Review us on Trustpilot",
+      options: "Use the Trustpilot widget",
+      disclosure: "Trustpilot A/S receives your IP address and browser details when you load the widget. It uses cookies to measure and test the widget. You can withdraw consent by hiding it.",
+      cookies: "Trustpilot’s cookie policy",
+      cookiesURL: "https://corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025",
+      load: "Allow cookies and show widget",
+      hide: "Hide widget and withdraw consent",
       frameTitle: "Review Devantler Tech on Trustpilot",
       locale: "en-US",
     },
     da: {
-      title: "Anmeld Devantler Tech",
-      prompt: "Har du brugt vores ydelser? Del din oplevelse på Trustpilot.",
-      disclosure: "Hvis du viser widgetten, modtager Trustpilot din IP-adresse og browseroplysninger og kan bruge cookies.",
-      privacy: "Trustpilots privatlivspolitik",
-      load: "Vis Trustpilot-widget",
-      hide: "Skjul Trustpilot-widget",
-      link: "Åbn på Trustpilot",
+      link: "Anmeld os på Trustpilot",
+      options: "Brug Trustpilot-widgetten",
+      disclosure: "Trustpilot A/S modtager din IP-adresse og browseroplysninger, når du viser widgetten. Trustpilot bruger cookies til at måle brugen og teste widgetten. Du kan trække dit samtykke tilbage ved at skjule den.",
+      cookies: "Trustpilots cookiepolitik",
+      cookiesURL: "https://dk.corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025",
+      load: "Tillad cookies og vis widget",
+      hide: "Skjul widget og træk samtykke tilbage",
       frameTitle: "Anmeld Devantler Tech på Trustpilot",
       locale: "da-DK",
     },
@@ -32,16 +32,15 @@
 </script>
 
 <section class="review-collector" aria-labelledby="review-title" data-review-collector>
-  <h3 id="review-title">{copy.title}</h3>
-  <p>{copy.prompt}</p>
-  <p id="review-privacy">{copy.disclosure} <a href="https://legal.trustpilot.com/for-everyone/end-user-privacy-terms" rel="noreferrer">{copy.privacy}</a></p>
-  <div class="review-actions">
+  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{copy.link}</a>
+  <details data-review-options hidden>
+    <summary>{copy.options}</summary>
+    <p id="review-privacy">{copy.disclosure} <a href={copy.cookiesURL} rel="noreferrer">{copy.cookies}</a></p>
     <button type="button" hidden aria-expanded="false" aria-controls="review-frame" aria-describedby="review-privacy" data-review-toggle data-hide-label={copy.hide}>
       {copy.load}
     </button>
-    <a href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{copy.link}</a>
-  </div>
-  <div id="review-frame" hidden></div>
+    <div id="review-frame" hidden></div>
+  </details>
   <template data-review-frame>
     <iframe
       data-src={`${frame}#locale=${copy.locale}&styleHeight=52px&styleWidth=100%25`}
@@ -57,18 +56,25 @@
 
 <style>
   .review-collector {
-    margin-block-start: 2rem;
-    padding-block-start: 1.5rem;
-    border-top: 1px solid var(--line);
+    margin-block-start: 0.6rem;
+    max-inline-size: 34rem;
+    font-size: 0.85rem;
   }
-  .review-collector p {
-    margin-block: 0.5rem;
-  }
-  .review-actions {
-    display: flex;
-    flex-wrap: wrap;
+  .review-link {
+    display: inline-flex;
     align-items: center;
-    gap: 0.75rem 1rem;
+    min-block-size: 44px;
+    font-weight: 600;
+  }
+  summary {
+    min-block-size: 44px;
+    padding-block: 0.7rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  p {
+    color: var(--muted);
+    margin-block: 0 0.75rem;
   }
   button {
     min-height: 44px;
@@ -84,13 +90,13 @@
     color: var(--accent);
     text-underline-offset: 0.2em;
   }
-  iframe {
+  .review-collector :global(iframe) {
     display: block;
     max-width: 100%;
     margin-block-start: 1rem;
     border: 0;
     border-radius: 0.4rem;
-    background: #fff;
+    background: var(--canvas);
   }
   button[hidden] {
     display: none;

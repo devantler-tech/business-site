@@ -50,7 +50,7 @@ func templateFuncs(root, site string) template.FuncMap {
 // when the portal shares a host with the public site, "" when it has its own host;
 // links to the public website use {{public .Lang}}.
 func pages(root, site string) *template.Template {
-	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
+	return template.Must(template.New("portal").Funcs(templateFuncs(root, site)).ParseFS(browserFiles, "web/portal.html", "web/operator.html", "web/contact.html", "web/requests.html", "web/triage.html", "web/work-review.html"))
 }
 
 // internalRoot is where every private route is registered and gated.
@@ -381,22 +381,20 @@ func (b *browser) refusals(ctx context.Context) (int, int64) {
 	return count, since
 }
 
-// signIn lets the broker show both sign-in methods when operators are configured.
-// A customer-only installation goes directly to ZITADEL.
+// signIn uses the same ZITADEL login for customers and operators. During
+// rollout the old broker page remains available until an operator is linked.
 func (b *browser) signIn(w http.ResponseWriter, r *http.Request) {
 	connector := customeridentity.ZitadelConnectorID
-	if b.foundation.OperatorsLinked() {
+	if b.foundation.legacyOperatorSignIn() {
 		connector = ""
 	}
 	b.startSignIn(w, r, connector)
 }
 
-// operatorSignIn is the operators' own link: GitHub through platform SSO. It
-// exists only while the server configuration lists operators, and reaching it
-// grants nothing: the identity that returns must be listed.
+// operatorSignIn keeps existing bookmarks usable through the transition.
 func (b *browser) operatorSignIn(w http.ResponseWriter, r *http.Request) {
-	if !b.foundation.OperatorsLinked() {
-		http.NotFound(w, r)
+	if !b.foundation.legacyOperatorSignIn() {
+		b.signIn(w, r)
 		return
 	}
 	b.startSignIn(w, r, customeridentity.PlatformConnectorID)
@@ -642,11 +640,11 @@ func (b *browser) home(w http.ResponseWriter, r *http.Request) {
 		b.signIn(w, r)
 		return
 	}
-	kind := "home"
 	if role == "operator" {
-		kind = "operator"
+		b.renderOperator(w, r, client)
+		return
 	}
-	b.render(w, r, 200, kind, client, nosurf.Token(r))
+	b.render(w, r, 200, "home", client, nosurf.Token(r))
 }
 
 // operator requires the current database role, never token groups or form fields.
@@ -656,7 +654,7 @@ func (b *browser) operator(w http.ResponseWriter, r *http.Request) {
 		b.render(w, r, 403, "error", "", "")
 		return
 	}
-	b.render(w, r, 200, "operator", client, nosurf.Token(r))
+	b.renderOperator(w, r, client)
 }
 
 // browserMember preserves the common unauthenticated response before role checks.

@@ -65,22 +65,29 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       for (const language of ["en","da","x-default"]) assert.ok(actual.some(node => attr(node,"hreflang") === language && attr(node,"href") === `https://devantler.tech/${language === "da" ? "da/" : ""}${route}`), "canonical language alternative is local and complete");
       assert.ok(actual.some(node => attr(node,"rel") === "canonical" && attr(node,"href") === `https://devantler.tech/${prefix}${route}`));
       assert.ok(actual.some(node => node.tagName === "html" && attr(node,"lang") === locale));
+      const collector = find(walk(footer), "data-review-collector");
+      assert.equal(Boolean(collector), identity, "the footer collector follows the company release");
+      if (collector) {
+        const nodes = walk(collector);
+        const directLink = collector.childNodes?.find(node => attr(node, "id") === "review-title");
+        assert.ok(directLink && attr(directLink, "hidden") === undefined, "the direct review link is visible outside the options");
+        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/evaluate/devantler.tech");
+        assert.equal(attr(directLink, "rel"), "noreferrer");
+        assert.equal(text(directLink), locale === "da" ? "Anmeld os på Trustpilot" : "Review us on Trustpilot");
+        const options = find(nodes, "data-review-options");
+        assert.ok(options && options.tagName === "details" && attr(options, "hidden") !== undefined && attr(options, "open") === undefined, "the inline choice starts closed");
+        assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
+        const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
+        const source = attr(controller, "src");
+        assert.ok(source, "the collector links its controller");
+        assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
+        const script = readFileSync(join(candidate, source), "utf8");
+        assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
+      }
       if (route === "") {
         const contact = actual.find(node => attr(node,"id") === "contact");
         assert.ok(contact);
-        const collector = find(walk(contact), "data-review-collector");
-        assert.equal(Boolean(collector), identity, "the collector follows the company release");
-        if (collector) {
-          const nodes = walk(collector);
-          assert.ok(links(collector).some(([, href]) => href === "https://www.trustpilot.com/evaluate/devantler.tech"), "the collector has a direct fallback");
-          assert.ok(!nodes.some(node => node.tagName === "iframe"), "the initial collector loads no iframe");
-          const controller = nodes.find(node => node.tagName === "script" && attr(node, "type") === "module");
-          const source = attr(controller, "src");
-          assert.ok(source, "the collector links its controller");
-          assert.match(source, /^\/_app\/immutable\/assets\/review-collector\.[\w-]+\.mjs$/, "the statically rendered collector links its local controller");
-          const script = readFileSync(join(candidate, source), "utf8");
-          assert.match(script, /data-review-toggle/, "the published controller activates the opt-in button");
-        }
+        assert.ok(!find(walk(contact), "data-review-collector"), "the contact section keeps its contact actions together");
         assert.ok(links(contact).some(([,href])=>href===(identity?"mailto:ned@devantler.tech":"https://www.linkedin.com/in/nikolai-emil-damm-14a786150/")), "contact journey retains its approved destination");
 
 

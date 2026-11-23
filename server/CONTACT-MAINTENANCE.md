@@ -105,10 +105,12 @@ checks both literal public URLs, authenticated return, unchanged deadlines and
 post-logout refusal over the actual HTTP handlers.
 
 The original tables otherwise remain unchanged apart from removing retired entries.
-The four ordinary operator landing documents use an independently authored
-complete main-document expectation in `operator_reference_test.go`, including
-the invitation, customer-management and audit links, the optional request inbox
-and the current localized public return link. The four ordinary client landing
+The historical operator landing documents retain their independently authored
+expectation in `operator_reference_test.go`. The current operator workspace uses
+its own template. Its twelve English and Danish documents run through the
+method-aware link inventory. The authenticated navigation test exercises the
+operator landing, customer directory, invitation and audit routes with a signed-in
+operator. The four ordinary client landing
 documents additionally check the Review Collector's exact placement, wording,
 inert iframe and direct link against an independent bilingual expectation.
 The rest of each client landing document still matches the frozen body after

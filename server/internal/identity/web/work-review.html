@@ -1,7 +1,7 @@
 <!doctype html>
 {{template "portal-head" .}}
 {{template "portal-header" .}}
-<main id="main"><div class="intro"><h1>{{.Title}}</h1>
+<main id="main">{{if .TriageEnabled}}<div class="operator-workflow-navigation">{{template "operator-navigation" .}}</div>{{end}}<div class="intro"><h1>{{.Title}}</h1>
 <p>{{.Intro}}</p></div>
 <p>{{if eq .Lang `da`}}En beslutning starter ikke en opgave, indkræver ikke betaling og opretter ikke et abonnement. Nye funktioner kræver en særskilt aftale; inkluderet vedligeholdelse ændres ikke.{{else}}Recording a decision does not start a job, collect payment or create a subscription. New features need a separate agreement; included maintenance is unchanged.{{end}}</p>
 <section aria-labelledby="work-current"><h2 id="work-current">{{if eq .Lang `da`}}Valgt beslutning{{else}}Selected decision{{end}}</h2>

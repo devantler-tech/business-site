@@ -29,7 +29,7 @@ var projectedPortalSettings = []string{
 	"PORTAL_SMTP_USERNAME_FILE", "PORTAL_SMTP_PASSWORD_FILE", "PORTAL_SMTP_ADDR", "PORTAL_MAIL_FROM",
 	// The optional upstream logout, which ends the identity provider's session too.
 	"PORTAL_UPSTREAM_END_SESSION_URL", "PORTAL_UPSTREAM_CLIENT_ID",
-	// The optional operators: customer Dex subjects issued through platform SSO.
+	// The optional operators: exact customer Dex subjects.
 	"PORTAL_OPERATOR_SUBJECTS",
 	// The customer directory's token stays in its separate rotating projection.
 	"PORTAL_ZITADEL_URL", "PORTAL_ZITADEL_ORG_ID", "PORTAL_ZITADEL_TOKEN_PROJECTION_FILE",

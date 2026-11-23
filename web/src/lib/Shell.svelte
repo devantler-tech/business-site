@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import { getContext } from "svelte";
   import { businessFrameContext, type BusinessFrame } from "./business-frame";
+  import ReviewCollector from "./ReviewCollector.svelte";
   import themeScript from "../../../src/components/business/theme.js?url";
   import favicon from "../../../public/favicon.png?url";
   import logoDark from "../../../src/assets/brand/devantler-tech-logo-dark.svg?url";
@@ -111,7 +112,10 @@
     <p>{business.footer.identity}</p><p>{business.footer.note}</p>
     {#if business.identity}<p>CVR {business.identity.cvr} · {business.footer.registration}</p><a class="company-email" href={business.inquiryUrl}>{business.identity.email}</a>{/if}
   </div>
-  <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a><a href={portal.href}>{portal.login}</a></div>
+  <div class="footer-actions">
+    <div class="footer-links"><a href={`${home}about/`}>{business.footer.about}</a><a href={`${home}projects/`}>{business.footer.projects}</a>{#if business.identity}<a href={`${home}company/`}>{locale === "da" ? "Virksomhedsoplysninger" : "Company information"}</a><a href={`${home}terms/`}>{locale === "da" ? "Handelsbetingelser" : "Terms"}</a><a href={`${home}privacy/`}>{locale === "da" ? "Privatliv og cookies" : "Privacy and cookies"}</a>{/if}<a href={`${home}#contact`}>{business.footer.contact}</a><a href={portal.href}>{portal.login}</a></div>
+    {#if business.identity}<ReviewCollector {locale} />{/if}
+  </div>
 </footer>
 
 <style>
@@ -249,6 +253,7 @@
     margin-top: 0.5rem;
   }
   .company-email, .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .8rem; color: var(--ink); text-underline-offset: .2em; overflow-wrap: anywhere; }
+  .footer-actions { min-inline-size: 0; }
   .footer-links { display: flex; flex-wrap: wrap; gap: 1.25rem; }
   @media (max-width: 1200px) {
     .business-header {

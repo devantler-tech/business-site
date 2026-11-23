@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -109,19 +110,31 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 			t.Fatal("complete dependencies activated the closed portal")
 		}
 	}
-	// A customer (ZITADEL) subject in the operator list stops startup.
-	customerOperator := map[string]string{"PORTAL_OPERATOR_SUBJECTS": "ChIzNDU2Nzg5MDEyMzQ1Njc4OTASEGN1c3RvbWVyLXppdGFkZWw"}
+	// An explicit ZITADEL subject can be used by the closed portal. An unknown
+	// connector still stops startup.
+	operatorValues := map[string]string{}
 	for key, value := range values {
-		customerOperator[key] = value
+		operatorValues[key] = value
 	}
-	listed, err := ReadConfig(func(key string) string { return customerOperator[key] })
+	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = customeridentity.DexSubject("fixture-operator", customeridentity.ZitadelConnectorID)
+	listed, err := ReadConfig(func(key string) string { return operatorValues[key] })
+	if err != nil {
+		t.Fatal("the shared operator configuration was refused")
+	}
+	operatorHandler, closeOperator, err := Portal(ctx, listed, api.NewClient())
+	defer closeOperator()
+	if err != nil || operatorHandler == nil {
+		t.Fatal("startup refused a configured shared operator")
+	}
+	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = customeridentity.DexSubject("fixture-operator", "other")
+	listed, err = ReadConfig(func(key string) string { return operatorValues[key] })
 	if err != nil {
 		t.Fatal("an operator list was refused before startup could check it")
 	}
 	refused, closeRefused, err := Portal(ctx, listed, api.NewClient())
 	closeRefused()
 	if !errors.Is(err, ErrConfig) || refused != nil {
-		t.Fatal("startup accepted a customer as an operator")
+		t.Fatal("startup accepted an unsupported operator connector")
 	}
 	for _, tc := range []struct {
 		name, parameter, value string
