@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "../../../server/internal/identity/web/review-collector.css";
   import controllerScript from "../../../server/internal/identity/web/review-collector.mjs?url&no-inline";
 
   let { locale }: { locale: "en" | "da" } = $props();
@@ -6,24 +7,26 @@
   const frame = `https://widget.trustpilot.com/trustboxes/${template}/index.html?templateId=${template}&businessunitId=6b00bb09a7dbf30ad4d33478`;
   const labels = {
     en: {
-      link: "Review us on Trustpilot",
-      options: "Use the Trustpilot widget",
-      disclosure: "Trustpilot A/S receives your IP address and browser details when you load the widget. It uses cookies to measure and test the widget. You can withdraw consent by hiding it.",
-      cookies: "Trustpilot’s cookie policy",
-      cookiesURL: "https://corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025",
-      load: "Allow cookies and show widget",
-      hide: "Hide widget and withdraw consent",
+      action: "Review us on",
+      settings: "Cookie settings",
+      title: "Optional cookies",
+      purpose: "Trustpilot uses cookies to measure and test its review widget.",
+      privacy: "Privacy and cookies",
+      privacyURL: "/privacy/",
+      deny: "Decline",
+      allow: "Allow Trustpilot",
       frameTitle: "Review Devantler Tech on Trustpilot",
       locale: "en-US",
     },
     da: {
-      link: "Anmeld os på Trustpilot",
-      options: "Brug Trustpilot-widgetten",
-      disclosure: "Trustpilot A/S modtager din IP-adresse og browseroplysninger, når du viser widgetten. Trustpilot bruger cookies til at måle brugen og teste widgetten. Du kan trække dit samtykke tilbage ved at skjule den.",
-      cookies: "Trustpilots cookiepolitik",
-      cookiesURL: "https://dk.corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025",
-      load: "Tillad cookies og vis widget",
-      hide: "Skjul widget og træk samtykke tilbage",
+      action: "Anmeld os på",
+      settings: "Cookieindstillinger",
+      title: "Valgfrie cookies",
+      purpose: "Trustpilot bruger cookies til at måle og teste sin anmeldelseswidget.",
+      privacy: "Privatliv og cookies",
+      privacyURL: "/da/privacy/",
+      deny: "Afvis",
+      allow: "Tillad Trustpilot",
       frameTitle: "Anmeld Devantler Tech på Trustpilot",
       locale: "da-DK",
     },
@@ -31,16 +34,20 @@
   const copy = $derived(labels[locale]);
 </script>
 
-<section class="review-collector" aria-labelledby="review-title" data-review-collector>
-  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{copy.link}</a>
-  <details data-review-options hidden>
-    <summary>{copy.options}</summary>
-    <p id="review-privacy">{copy.disclosure} <a href={copy.cookiesURL} rel="noreferrer">{copy.cookies}</a></p>
-    <button type="button" hidden aria-expanded="false" aria-controls="review-frame" aria-describedby="review-privacy" data-review-toggle data-hide-label={copy.hide}>
-      {copy.load}
-    </button>
-    <div id="review-frame" hidden></div>
-  </details>
+<div class="review-collector" data-review-collector>
+  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{copy.action} <strong>Trustpilot</strong><span aria-hidden="true">↗</span></a>
+  <div id="review-frame" hidden></div>
+  <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>{copy.settings}</button>
+  <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
+    <div class="review-consent-copy">
+      <strong id="review-consent-title">{copy.title}</strong>
+      <p>{copy.purpose} <a href={copy.privacyURL}>{copy.privacy}</a></p>
+    </div>
+    <div class="review-consent-actions">
+      <button type="button" data-review-decision="deny">{copy.deny}</button>
+      <button type="button" data-review-decision="allow">{copy.allow}</button>
+    </div>
+  </section>
   <template data-review-frame>
     <iframe
       data-src={`${frame}#locale=${copy.locale}&styleHeight=52px&styleWidth=100%25`}
@@ -52,53 +59,4 @@
     ></iframe>
   </template>
   <script type="module" src={controllerScript}></script>
-</section>
-
-<style>
-  .review-collector {
-    margin-block-start: 0.6rem;
-    max-inline-size: 34rem;
-    font-size: 0.85rem;
-  }
-  .review-link {
-    display: inline-flex;
-    align-items: center;
-    min-block-size: 44px;
-    font-weight: 600;
-  }
-  summary {
-    min-block-size: 44px;
-    padding-block: 0.7rem;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  p {
-    color: var(--muted);
-    margin-block: 0 0.75rem;
-  }
-  button {
-    min-height: 44px;
-    border: 1px solid var(--line);
-    border-radius: 0.4rem;
-    padding: 0.5rem 0.75rem;
-    color: inherit;
-    background: var(--canvas);
-    font: inherit;
-    cursor: pointer;
-  }
-  a {
-    color: var(--accent);
-    text-underline-offset: 0.2em;
-  }
-  .review-collector :global(iframe) {
-    display: block;
-    max-width: 100%;
-    margin-block-start: 1rem;
-    border: 0;
-    border-radius: 0.4rem;
-    background: var(--canvas);
-  }
-  button[hidden] {
-    display: none;
-  }
-</style>
+</div>

@@ -22,17 +22,22 @@
     "ydelse",
     "ydelsen",
     "ydelsestype",
+    "afvis",
     "anmeld",
+    "anmeldelseswidget",
     "browseroplysninger",
     "bruge",
     "brugen",
     "businessunit",
+    "cookiebanneret",
+    "cookieindstillinger",
     "cookiepolitik",
     "måle",
     "modtager",
     "noopener",
     "noreferrer",
     "oplevelse",
+    "privatliv",
     "privatlivspolitik",
     "referrerpolicy",
     "samtykke",
@@ -43,6 +48,7 @@
     "trække",
     "trustpilot",
     "trustpilots",
+    "valgfrie",
     "viser",
     "widgetten",
     "ChVidXNpbmVzcy1wb3J0YWwtYWdlbnQ",
@@ -954,7 +960,11 @@
   "overrides": [
     {
       "filename": "server/internal/webapp/app_test.go",
-      "ignoreRegExpList": ["/%70ortal/sign-in", "/portal%2fsign-in", "/%2fportal"]
+      "ignoreRegExpList": [
+        "/%70ortal/sign-in",
+        "/portal%2fsign-in",
+        "/%2fportal"
+      ]
     }
   ]
 }

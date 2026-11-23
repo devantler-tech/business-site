@@ -86,6 +86,7 @@ var wantPresentationAssets = []struct{ name, contentType string }{
 	{"logo-light.svg", "image/svg+xml"},
 	{"portal.css", "text/css; charset=utf-8"},
 	{"portal.js", "text/javascript; charset=utf-8"},
+	{"review-collector.css", "text/css; charset=utf-8"},
 	{"review-collector.mjs", "text/javascript; charset=utf-8"},
 }
 
