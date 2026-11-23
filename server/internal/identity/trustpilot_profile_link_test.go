@@ -21,7 +21,7 @@ func checkTrustpilotProfile(get func(string) (*http.Response, error)) error {
 	if err != nil {
 		return fmt.Errorf("open Trustpilot profile: %w", err)
 	}
-	defer profile.Body.Close()
+	defer func() { _ = profile.Body.Close() }()
 	if profile.StatusCode == http.StatusOK {
 		return nil
 	}
@@ -40,7 +40,7 @@ func checkTrustpilotProfile(get func(string) (*http.Response, error)) error {
 	if err != nil {
 		return fmt.Errorf("open Trustpilot review page: %w", err)
 	}
-	defer review.Body.Close()
+	defer func() { _ = review.Body.Close() }()
 	if review.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected Trustpilot review page HTTP %d", review.StatusCode)
 	}
