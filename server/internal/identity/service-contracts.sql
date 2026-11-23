@@ -199,7 +199,7 @@ CREATE TRIGGER portal_service_order BEFORE INSERT ON public.portal_orders
 ALTER TABLE public.portal_mail_outbox
   DROP CONSTRAINT portal_mail_outbox_producer_format_check,
   DROP CONSTRAINT portal_mail_complete_producer,
-  ADD CONSTRAINT portal_mail_producer_format CHECK(producer_format IN (1,2)),
+  ADD CONSTRAINT portal_mail_outbox_producer_format_check CHECK(producer_format IN (1,2)),
   ADD CONSTRAINT portal_mail_complete_producer CHECK(
     num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=0
     OR (num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=6
@@ -248,7 +248,7 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.portal_guard_service_confirmation() FROM PUBLIC;
-CREATE TRIGGER portal_service_confirmation BEFORE INSERT ON public.portal_mail_outbox
+CREATE TRIGGER portal_service_confirmation BEFORE INSERT OR UPDATE ON public.portal_mail_outbox
   FOR EACH ROW EXECUTE FUNCTION public.portal_guard_service_confirmation();
 
 -- One permanent root per accepted paid order. Consumer identity is append-only

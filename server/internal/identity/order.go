@@ -222,9 +222,21 @@ func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance
 		}
 	}
 	// The order's confirmation on a durable medium (section 13), queued with it.
+	confirmationFormat := 1
+	if current.Proposal.ContentFormat == 2 {
+		source, err := readOrderConfirmationSource(ctx, tx, client, orderID, current.ID)
+		if err != nil {
+			return projectOrder{}, err
+		}
+		if source.ContentFormat != 2 || source.Service.Kind != proposalServiceSoftware ||
+			source.ProposalVersion != current.Proposal.Version || source.ProposalSHA256 != proposalHash {
+			return projectOrder{}, errProposalConflict
+		}
+		confirmationFormat = source.ContentFormat
+	}
 	when := projectOrder{Placed: placed, OneTimeMinor: oneTime, MonthlyMinor: monthly, Addons: addons}
 	if err = s.queueOrderMail(ctx, tx, client, "order-confirmation", mc, orderMail{OrderID: orderID, Scope: current.Proposal.Scope, Deliverables: current.Proposal.Deliverables,
-		Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
+		ProducerFormat: confirmationFormat, Acceptance: current.ID, ProposalVersion: current.Proposal.Version, ProposalHash: proposalHash, TermsText: terms, TermsHash: termsHash,
 		OneTimeTerms: current.Proposal.OneTimeTerms, MonthlyTerms: current.Proposal.MonthlyTerms, Collection: collection,
 		OneTimeDKK: oneTime / 100, BaseOneTimeDKK: when.BaseOneTimeDKK(), Launch: place, MonthlyDKK: monthly / 100, BaseMonthlyDKK: when.BaseMonthlyDKK(), Addons: addons, MonthlyStart: firstOfNextMonth(placed).Format("2006-01"),
 		WithdrawUntil: when.WithdrawUntil(), WorkStartsFrom: when.WorkStartsFrom(), Placed: placed.UTC().Format("2006-01-02 15:04"), EarlyStart: earlyStart}); err != nil {

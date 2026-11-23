@@ -68,18 +68,32 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
-// rewindOriginalConfirmationFixture removes only the disposable v30 producer
-// metadata. It never rewrites the frozen mail, sender receipt or older ledger.
+// rewindOriginalConfirmationFixture removes v31 dependencies and the v30
+// producer metadata while preserving the frozen mail, sender receipt and older ledger.
 func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_mail_outbox
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_service_consumers,portal_service_fulfillments;
+ DROP TRIGGER portal_service_confirmation ON portal_mail_outbox;
+ DROP TRIGGER portal_service_order ON portal_orders;
+ DROP TRIGGER portal_service_acceptance ON portal_proposal_acceptances;
+ DROP TRIGGER portal_service_visibility ON portal_proposal_visibility;
+ DROP FUNCTION portal_guard_service_confirmation(),portal_guard_service_order(),
+   portal_guard_service_acceptance(),portal_guard_service_visibility();
+ ALTER TABLE portal_orders DROP CONSTRAINT portal_order_service_binding,DROP COLUMN service_content_format;
+ ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_service_binding,DROP COLUMN client_incarnation;
+ ALTER TABLE portal_proposal_visibility DROP COLUMN operator_client,DROP COLUMN operator_incarnation,DROP COLUMN content_hash;
+ ALTER TABLE portal_proposals DROP COLUMN content_format,DROP COLUMN service_kind,DROP COLUMN duration_minutes,
+   DROP COLUMN appointment_terms_en,DROP COLUMN appointment_terms_da,DROP COLUMN appointment_terms_sha256,DROP COLUMN content_sha256;
+ DROP FUNCTION portal_service_quote_hash(text,text,text,text,text,bigint,bigint,text,integer,text,text,text),
+   portal_service_terms_hash(text,text),portal_service_json_text(text);
+ ALTER TABLE portal_mail_outbox
  DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,
  DROP CONSTRAINT portal_mail_complete_producer, DROP CONSTRAINT portal_mail_body_digest,
  DROP COLUMN producer_format, DROP COLUMN acceptance_id, DROP COLUMN proposal_version,
  DROP COLUMN proposal_sha256, DROP COLUMN terms_sha256, DROP COLUMN body_sha256;
  ALTER TABLE portal_orders DROP CONSTRAINT portal_order_confirmation_binding;
  ALTER TABLE portal_proposal_acceptances DROP CONSTRAINT portal_acceptance_confirmation_binding;
- DELETE FROM portal_schema_version WHERE version=30`); err != nil {
+ DELETE FROM portal_schema_version WHERE version IN (30,31)`); err != nil {
 		t.Fatal("historical fixture could not reconstruct pre-confirmation-proof schema", err)
 	}
 }

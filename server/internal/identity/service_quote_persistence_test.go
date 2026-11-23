@@ -2,6 +2,7 @@ package identity
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -98,6 +99,39 @@ func TestServiceQuoteSaveShareAcceptBindsOriginalContract(t *testing.T) {
 	}
 	if !operatorRecorded || !clientRecorded {
 		t.Fatal("typed quote acceptance lacks original membership authority")
+	}
+}
+
+func TestServiceQuoteQueuesOriginalSoftwareConfirmation(t *testing.T) {
+	for _, tc := range []struct {
+		lang, serviceLabel string
+	}{
+		{"en", "Service: Software development"},
+		{"da", "Ydelse: Softwareudvikling"},
+	} {
+		t.Run(tc.lang, func(t *testing.T) {
+			b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+			path := "/portal/requests/" + proposalRequestID + "/orders"
+			if status, _, _ := b.request("POST", path, orderForm(t, b, tc.lang), b.site.URL); status != 303 {
+				t.Fatalf("typed software order refused: %d", status)
+			}
+			var format int
+			var body string
+			var evidenceMatches bool
+			err := b.pool.QueryRow(t.Context(), `
+				SELECT m.producer_format, m.body,
+					m.acceptance_id=a.id AND m.proposal_version=a.proposal_version
+					AND m.proposal_sha256=a.content_hash
+					AND m.body_sha256=encode(sha256(convert_to(m.body,'UTF8')),'hex')
+				FROM portal_orders o
+				JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id
+				JOIN portal_mail_outbox m ON m.order_id=o.id AND m.kind='order-confirmation'
+				WHERE o.request_id=$1
+			`, proposalRequestID).Scan(&format, &body, &evidenceMatches)
+			if err != nil || format != 2 || !evidenceMatches || !strings.Contains(body, tc.serviceLabel) {
+				t.Fatal("typed confirmation does not carry its original service terms and evidence", err)
+			}
+		})
 	}
 }
 

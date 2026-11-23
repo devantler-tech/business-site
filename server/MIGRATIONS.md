@@ -243,6 +243,11 @@ retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
 Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
 This grants no service execution authority and does not prove inbox receipt.
 
+v31 records typed proposal terms and the original membership incarnations at
+sharing and acceptance. Existing proposals remain in their original format.
+The service fulfillment and consumer tables grant the runtime SELECT and INSERT.
+Appointment sharing and prepayment remain held pending the booking workflow.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or
