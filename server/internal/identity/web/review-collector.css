@@ -143,7 +143,7 @@ body:has(.review-consent:not([hidden])) {
   padding-block-end: 12rem;
 }
 
-@media (min-width: 48rem) {
+@media (width >= 48rem) {
   html:has(.review-consent:not([hidden])) {
     scroll-padding-block-end: 8rem;
   }
