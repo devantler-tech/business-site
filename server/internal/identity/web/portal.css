@@ -1,4 +1,4 @@
-@import "./trustpilot-link.css";
+@import url("./trustpilot-link.css");
 
 :root {
   color-scheme: light dark;
