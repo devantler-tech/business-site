@@ -48,6 +48,7 @@ test("the privacy notice explains how to load and hide the optional review colle
     const notice = flat(legalPage("privacy", locale, true));
     assert.match(notice, /Trustpilot/);
     assert.match(notice, /IP-adresse|IP address/);
-    assert.match(notice, locale === "da" ? /Skjul Trustpilot/ : /Hide Trustpilot/);
+    assert.match(notice, locale === "da" ? /Tillad cookies og vis widget/ : /Allow cookies and show widget/);
+    assert.match(notice, locale === "da" ? /Skjul widget og træk samtykke tilbage/ : /Hide widget and withdraw consent/);
   }
 });

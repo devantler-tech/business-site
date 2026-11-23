@@ -15,7 +15,7 @@
 {{else}}<p role="alert">{{if eq .Kind `unavailable`}}{{.Unavailable}}{{else}}{{.Error}}{{end}}</p><a class="button" href="{{root}}/sign-in?lang={{.Lang}}">{{.Action}}</a>{{end}}
 {{if .RequestsEnabled}}<p><a href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine projektforespørgsler{{else}}Your project requests{{end}}</a></p>{{end}}
 {{if .TriageEnabled}}<p><a href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Læs projektforespørgsler{{else}}Review project requests{{end}}</a></p>{{end}}
-</section>{{if eq .Kind `home`}}{{template "review-collector" .}}{{end}}<a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
+</section><a class="back" href="{{public .Lang}}">{{.Back}}</a></main>{{template "portal-footer" .}}
 
 {{define "portal-head"}}<html lang="{{.Lang}}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="description" content="{{.Intro}}">{{if or (eq .Kind `broker-handoff`) (eq .Kind `sign-out-handoff`)}}<meta http-equiv="refresh" content="0;url={{.BrokerURL}}">{{end}}<title>{{.Title}} — Devantler Tech</title><link rel="icon" type="image/png" href="{{root}}/assets/icon.png"><link rel="stylesheet" href="{{root}}/assets/portal.css"></head>
@@ -24,19 +24,18 @@
 {{define "portal-header"}}<a class="skip" href="#main">{{if eq .Lang `da`}}Gå til indhold{{else}}Skip to content{{end}}</a>
 <header><a class="brand" href="{{public .Lang}}" aria-label="Devantler Tech"><img class="brand-logo brand-on-dark" src="{{root}}/assets/logo-dark.svg" alt="" width="191" height="36"><img class="brand-logo brand-on-light" src="{{root}}/assets/logo-light.svg" alt="" width="191" height="36"></a><nav aria-label="{{if eq .Lang `da`}}Indstillinger{{else}}Preferences{{end}}"><a href="{{if eq .Kind `contact`}}?lang={{if eq .Lang `da`}}en{{else}}da{{end}}{{else}}{{.LanguageURL}}{{end}}" lang="{{if eq .Lang `da`}}en{{else}}da{{end}}">{{if eq .Lang `da`}}English{{else}}Dansk{{end}}</a><label>{{.Theme}}<select id="theme"><option value="auto">{{.System}}</option><option value="light">{{.Light}}</option><option value="dark">{{.Dark}}</option></select></label></nav></header>{{end}}
 
-{{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech</footer>
+{{define "invoice-tax"}}{{if .Recorded}}<dl class="request-receipt"><dt>{{if eq .Lang `da`}}Nettobeløb{{else}}Net amount{{end}}</dt><dd>{{.Net}} DKK</dd><dt>{{if eq .Lang `da`}}Moms på fakturaen{{else}}VAT on invoice{{end}}</dt><dd>{{.VAT}} DKK</dd></dl>{{else}}<p>{{if eq .Lang `da`}}Momsopdeling er ikke registreret.{{else}}Tax breakdown not recorded.{{end}}</p>{{end}}{{end}}{{define "portal-footer"}}<footer>Devantler Tech{{if eq .Kind `home`}}{{template "review-collector" .}}{{end}}</footer>
 <script src="{{root}}/assets/portal.js" defer></script>
 </body></html>{{end}}
 {{define "review-collector" -}}
 <section class="review-collector" aria-labelledby="review-title" data-review-collector>
-  <h2 id="review-title">{{if eq .Lang `da`}}Anmeld Devantler Tech{{else}}Review Devantler Tech{{end}}</h2>
-  <p>{{if eq .Lang `da`}}Har du brugt vores ydelser? Del din oplevelse på Trustpilot.{{else}}Have you used our services? Share your experience on Trustpilot.{{end}}</p>
-  <p id="review-privacy">{{if eq .Lang `da`}}Hvis du viser widgetten, modtager Trustpilot din IP-adresse og browseroplysninger og kan bruge cookies.{{else}}Loading the widget shares your IP address and browser details with Trustpilot, which may use cookies.{{end}} <a href="https://legal.trustpilot.com/for-everyone/end-user-privacy-terms" rel="noreferrer">{{if eq .Lang `da`}}Trustpilots privatlivspolitik{{else}}Trustpilot’s privacy policy{{end}}</a></p>
-  <div class="review-actions">
-    <button type="button" hidden aria-controls="review-frame" aria-expanded="false" aria-describedby="review-privacy" data-review-toggle data-hide-label="{{if eq .Lang `da`}}Skjul Trustpilot-widget{{else}}Hide Trustpilot widget{{end}}">{{if eq .Lang `da`}}Vis Trustpilot-widget{{else}}Load Trustpilot widget{{end}}</button>
-    <a href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Åbn på Trustpilot{{else}}Open on Trustpilot{{end}}</a>
-  </div>
-  <div id="review-frame" hidden></div>
+  <a id="review-title" class="review-link" href="https://www.trustpilot.com/evaluate/devantler.tech" rel="noreferrer">{{if eq .Lang `da`}}Anmeld os på Trustpilot{{else}}Review us on Trustpilot{{end}}</a>
+  <details data-review-options hidden>
+    <summary>{{if eq .Lang `da`}}Brug Trustpilot-widgetten{{else}}Use the Trustpilot widget{{end}}</summary>
+    <p id="review-privacy">{{if eq .Lang `da`}}Trustpilot A/S modtager din IP-adresse og browseroplysninger, når du viser widgetten. Trustpilot bruger cookies til at måle brugen og teste widgetten. Du kan trække dit samtykke tilbage ved at skjule den. <a href="https://dk.corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025" rel="noreferrer">Trustpilots cookiepolitik</a>{{else}}Trustpilot A/S receives your IP address and browser details when you load the widget. It uses cookies to measure and test the widget. You can withdraw consent by hiding it. <a href="https://corporate.trustpilot.com/legal/for-everyone/cookie-policy/may-2025" rel="noreferrer">Trustpilot’s cookie policy</a>{{end}}</p>
+    <button type="button" hidden aria-controls="review-frame" aria-expanded="false" aria-describedby="review-privacy" data-review-toggle data-hide-label="{{if eq .Lang `da`}}Skjul widget og træk samtykke tilbage{{else}}Hide widget and withdraw consent{{end}}">{{if eq .Lang `da`}}Tillad cookies og vis widget{{else}}Allow cookies and show widget{{end}}</button>
+    <div id="review-frame" hidden></div>
+  </details>
   <template data-review-frame><iframe data-src="{{reviewCollectorURL .Lang}}" title="{{if eq .Lang `da`}}Anmeld Devantler Tech på Trustpilot{{else}}Review Devantler Tech on Trustpilot{{end}}" width="340" height="52" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></template>
 </section>
 {{- end -}}
