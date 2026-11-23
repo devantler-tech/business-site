@@ -33,7 +33,7 @@
   <div id="review-frame" hidden></div>
   <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>{{if eq .Lang `da`}}Cookieindstillinger{{else}}Cookie settings{{end}}</button>
   <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
-    <div>
+    <div class="review-consent-copy">
       <strong id="review-consent-title">{{if eq .Lang `da`}}Valgfrie cookies{{else}}Optional cookies{{end}}</strong>
       <p>{{if eq .Lang `da`}}Trustpilot bruger cookies til at måle og teste sin anmeldelseswidget.{{else}}Trustpilot uses cookies to measure and test its review widget.{{end}} <a href="{{public .Lang}}privacy/">{{if eq .Lang `da`}}Privatliv og cookies{{else}}Privacy and cookies{{end}}</a></p>
     </div>

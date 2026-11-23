@@ -94,6 +94,10 @@
   line-height: 1.45;
 }
 
+.review-consent-copy {
+  flex: 1 1 18rem;
+}
+
 .review-consent a {
   color: var(--ink);
   text-underline-offset: 0.18em;
@@ -137,4 +141,14 @@ html:has(.review-consent:not([hidden])) {
 
 body:has(.review-consent:not([hidden])) {
   padding-block-end: 12rem;
+}
+
+@media (min-width: 48rem) {
+  html:has(.review-consent:not([hidden])) {
+    scroll-padding-block-end: 8rem;
+  }
+
+  body:has(.review-consent:not([hidden])) {
+    padding-block-end: 8rem;
+  }
 }

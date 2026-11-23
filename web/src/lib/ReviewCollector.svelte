@@ -39,7 +39,7 @@
   <div id="review-frame" hidden></div>
   <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>{copy.settings}</button>
   <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
-    <div>
+    <div class="review-consent-copy">
       <strong id="review-consent-title">{copy.title}</strong>
       <p>{copy.purpose} <a href={copy.privacyURL}>{copy.privacy}</a></p>
     </div>

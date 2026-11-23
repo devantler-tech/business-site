@@ -14,7 +14,7 @@ const reviewCollectorExpectation = `<div class="review-collector" data-review-co
   <div id="review-frame" hidden></div>
   <button type="button" class="review-settings" data-review-settings aria-controls="review-consent" aria-expanded="false" hidden>@SETTINGS@</button>
   <section class="review-consent" id="review-consent" data-review-consent aria-labelledby="review-consent-title" hidden>
-    <div>
+    <div class="review-consent-copy">
       <strong id="review-consent-title">@TITLE@</strong>
       <p>@PURPOSE@ <a href="@PRIVACY_URL@">@PRIVACY@</a></p>
     </div>
