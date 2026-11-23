@@ -50,6 +50,16 @@ func (b *browserFixture) refused(callback string) {
 	b.client.Jar, _ = cookiejar.New(nil)
 }
 
+func (b *browserFixture) requireClientWorkspace(client string) {
+	b.t.Helper()
+	if s, body, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, client) {
+		b.t.Fatalf("the invited client did not reach their workspace: %d", s)
+	}
+	if s, _, _ := b.request("GET", "/portal/operator", nil, ""); s != http.StatusForbidden {
+		b.t.Fatalf("the invited client reached the operator area: %d", s)
+	}
+}
+
 func TestLinkOperatorsAcceptsOnlySupportedDexSubjects(t *testing.T) {
 	f := &Foundation{}
 	many := make([]string, maxOperators+1)
@@ -152,12 +162,7 @@ func TestOperatorAndCustomerUseTheSameSignIn(t *testing.T) {
 	}
 	b.as(customerSubject)
 	b.finish(b.start())
-	if s, body, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, "client-a") {
-		t.Fatalf("the invited customer did not open their workspace: %d", s)
-	}
-	if s, _, _ := b.request("GET", "/portal/operator", nil, ""); s != http.StatusForbidden {
-		t.Fatalf("the customer reached the operator area: %d", s)
-	}
+	b.requireClientWorkspace("client-a")
 	b.signOut()
 	b.as(sharedOperator)
 	b.finish(b.start())
@@ -225,12 +230,7 @@ func TestGitHubIdentityIsListedOperatorOrNobody(t *testing.T) {
 	}
 	b.as(customerSubject)
 	b.finish(b.start())
-	if s, body, _ := b.request("GET", "/portal/?lang=da", nil, ""); s != http.StatusOK || !strings.Contains(body, "client-a") {
-		t.Fatalf("the invited client did not reach their workspace: %d", s)
-	}
-	if s, _, _ := b.request("GET", "/portal/operator", nil, ""); s != http.StatusForbidden {
-		t.Fatalf("the invited client reached the operator area: %d", s)
-	}
+	b.requireClientWorkspace("client-a")
 	b.client.Jar, _ = cookiejar.New(nil)
 
 	// A listed GitHub identity holding the client role is refused.
