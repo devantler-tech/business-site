@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/devantler-tech/business-site/server/internal/identity"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -115,7 +116,7 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 	for key, value := range values {
 		operatorValues[key] = value
 	}
-	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = "ChIzNDU2Nzg5MDEyMzQ1Njc4OTASEGN1c3RvbWVyLXppdGFkZWw"
+	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = customeridentity.DexSubject("fixture-operator", customeridentity.ZitadelConnectorID)
 	listed, err := ReadConfig(func(key string) string { return operatorValues[key] })
 	if err != nil {
 		t.Fatal("the shared operator configuration was refused")
@@ -125,7 +126,7 @@ func configuredPortalConstructor(t *testing.T, projected bool) {
 	if err != nil || operatorHandler == nil {
 		t.Fatal("startup refused a configured shared operator")
 	}
-	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = "CgR1c2VyEgVvdGhlcg"
+	operatorValues["PORTAL_OPERATOR_SUBJECTS"] = customeridentity.DexSubject("fixture-operator", "other")
 	listed, err = ReadConfig(func(key string) string { return operatorValues[key] })
 	if err != nil {
 		t.Fatal("an operator list was refused before startup could check it")
