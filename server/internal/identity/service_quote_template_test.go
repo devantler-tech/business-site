@@ -123,11 +123,12 @@ func TestServiceQuoteTemplateAppointmentFactsRemainVisibleAndEscaped(t *testing.
 					templateName, data = "triage.html", page
 				default:
 					page := serviceQuoteClientPage(lang)
-					if view == "client-review" {
+					switch view {
+					case "client-review":
 						page.SharedProposal = &proposal
-					} else if view == "client-receipt" {
+					case "client-receipt":
 						page.Acceptances = []proposalAcceptance{{Proposal: proposal, Current: true}}
-					} else {
+					case "client-order-review":
 						page.BillingEnabled = true
 						page.OrderAcceptance = "fictional-accepted-proposal"
 						page.OrderProposal = &proposal

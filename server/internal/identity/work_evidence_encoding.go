@@ -51,10 +51,6 @@ func proposalEvidenceLegacy(d projectProposal) proposalEvidenceV1 {
 	}
 }
 
-func memberEvidenceLegacy(m workMember) memberEvidenceV2 {
-	return memberEvidenceV2{m.Issuer, m.Subject, m.Client, m.Role, m.Incarnation}
-}
-
 // MarshalJSON keeps the historical encoder independent of projectProposal's
 // expanded fields. Classified quotes must use a separately versioned receipt;
 // silently labeling their reduced contents as format 2 is refused.
@@ -68,6 +64,6 @@ func (e workEvidence) MarshalJSON() ([]byte, error) {
 		Proposal: proposalEvidenceLegacy(e.Proposal),
 		Order:    orderEvidenceV2{e.Order.ID, e.Order.Collection, e.Order.OneTimeMinor, e.Order.MonthlyMinor, e.Order.MonthlyFrom},
 		Funding:  fundingEvidenceV2{e.Funding.Period, e.Funding.Reference, e.Funding.GrossMinor, e.Funding.NetMinor, e.Funding.VATMinor, e.Funding.Settled},
-		Acceptor: memberEvidenceLegacy(e.Acceptor), Actor: memberEvidenceLegacy(e.Actor),
+		Acceptor: memberEvidenceV2(e.Acceptor), Actor: memberEvidenceV2(e.Actor),
 	})
 }

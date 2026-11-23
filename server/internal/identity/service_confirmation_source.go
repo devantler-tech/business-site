@@ -17,7 +17,7 @@ type orderConfirmationSource struct {
 	Service         proposalServiceTerms
 }
 
-func readOrderConfirmationSource(ctx context.Context, tx pgx.Tx, clientID, orderID, acceptanceID string) (orderConfirmationSource, error) {
+func readOrderConfirmationSource(ctx context.Context, tx confirmationQuery, clientID, orderID, acceptanceID string) (orderConfirmationSource, error) {
 	if tx == nil || ctx.Err() != nil {
 		return orderConfirmationSource{}, errTriageStorage
 	}

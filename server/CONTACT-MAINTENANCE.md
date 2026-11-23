@@ -116,8 +116,11 @@ that verified section is removed. Historical task references retain their
 reviewed values. Missing, incomplete or altered ordinary references fail closed.
 The separate ordinary invoice table (recorded from signed snapshot
 `90ade40aa63a54b62012e89a820277dc56eddb5c`) differed from the original only in the
-retired invoice and credit bodies, so it was removed with them; triage now uses
-the original references. Missing or malformed references fail without fallback.
+retired invoice and credit bodies, so it was removed with them. The triage
+inventory checks the bilingual service fields against their own reference
+and verifies their placement between currency and scope in the operator form.
+After that check, the rest of each triage document must match its original
+reference. Missing or malformed references fail without fallback.
 Validation never generates its own expected values from the application renderer.
 
 Ordinary request validation retains all 38 states. The 12 new/invalid forms

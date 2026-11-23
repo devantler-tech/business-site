@@ -116,10 +116,10 @@ func TestServiceQuoteQueuesOriginalSoftwareConfirmation(t *testing.T) {
 				t.Fatalf("typed software order refused: %d", status)
 			}
 			var format int
-			var body string
+			var body, client, acceptance, order string
 			var evidenceMatches bool
 			err := b.pool.QueryRow(t.Context(), `
-				SELECT m.producer_format, m.body,
+				SELECT m.producer_format, m.body, o.client_id, a.id, o.id,
 					m.acceptance_id=a.id AND m.proposal_version=a.proposal_version
 					AND m.proposal_sha256=a.content_hash
 					AND m.body_sha256=encode(sha256(convert_to(m.body,'UTF8')),'hex')
@@ -127,9 +127,25 @@ func TestServiceQuoteQueuesOriginalSoftwareConfirmation(t *testing.T) {
 				JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id
 				JOIN portal_mail_outbox m ON m.order_id=o.id AND m.kind='order-confirmation'
 				WHERE o.request_id=$1
-			`, proposalRequestID).Scan(&format, &body, &evidenceMatches)
+			`, proposalRequestID).Scan(&format, &body, &client, &acceptance, &order, &evidenceMatches)
 			if err != nil || format != 2 || !evidenceMatches || !strings.Contains(body, tc.serviceLabel) {
 				t.Fatal("typed confirmation does not carry its original service terms and evidence", err)
+			}
+			before, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, client, acceptance, order)
+			if err != nil || before.State != confirmationPrepared || before.OutboxID == "" || before.SenderAcceptedAt != nil {
+				t.Fatal("typed confirmation was not recognized as prepared", err)
+			}
+			if err := b.svc.SendQueuedMail(t.Context()); err != nil {
+				t.Fatal("synthetic sender rejected the typed confirmation", err)
+			}
+			after, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, client, acceptance, order)
+			if err != nil || after.State != confirmationSenderAccepted || after.OutboxID != before.OutboxID ||
+				after.BodySHA256 != before.BodySHA256 || after.SenderAcceptedAt == nil {
+				t.Fatal("typed confirmation did not retain its evidence after sender acceptance", err)
+			}
+			other, err := readOriginalConfirmation(t.Context(), b.pool, proposalRequestID, "different-client", acceptance, order)
+			if err != nil || other != (originalConfirmation{State: confirmationMissing}) {
+				t.Fatal("typed confirmation crossed the customer boundary", err)
 			}
 		})
 	}

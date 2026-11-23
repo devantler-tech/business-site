@@ -125,7 +125,6 @@ func runServiceSessionDecision(t *testing.T, operation, checkpoint, change strin
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	release := func() {}
 	if checkpoint != "request lock" {
 		at := int32(3)
 		gate := d.gate
@@ -142,7 +141,7 @@ func runServiceSessionDecision(t *testing.T, operation, checkpoint, change strin
 		if err := d.b.flags.SetProviderAndWait(ctx, provider); err != nil {
 			t.Fatal(err)
 		}
-		release = onceRelease(provider.release)
+		release := onceRelease(provider.release)
 		done, finished := startServiceSessionDecision(t, d, release)
 		select {
 		case <-provider.blocked:
@@ -156,7 +155,7 @@ func runServiceSessionDecision(t *testing.T, operation, checkpoint, change strin
 	}
 	migrator := migrationDB(t)
 	tx := blockFixtureProposalWrite(ctx, t, migrator)
-	release = func() {
+	release := func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 2*time.Second)
 		defer stop()
 		if err := tx.Rollback(cleanup); err != nil && !errors.Is(err, pgx.ErrTxClosed) {

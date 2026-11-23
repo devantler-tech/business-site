@@ -251,6 +251,12 @@ func checkMaintenanceInventoryPage(name string, index int, markup string, task b
 		view := maintenanceContactViews[index%len(maintenanceContactViews)]
 		return checkMaintenanceState(markup, maintenancePage(lang, view), task)
 	}
+	if name == "triage.html" {
+		markup, err = checkTriageProposalServiceFields(markup, lang, maintenanceDraftKey(name, index))
+		if err != nil {
+			return err
+		}
+	}
 	if !task && name == "portal.html" {
 		state := maintenanceCases[name][index%len(maintenanceCases[name])]
 		if state == "home" || state == "home-links" {
