@@ -1,5 +1,3 @@
-{{define "proposal-service-en"}}{{if eq .ContentFormat 2}}{{if eq .Service.Kind `software`}}<dt>Service type</dt><dd>Software work</dd>{{else if eq .Service.Kind `appointment`}}<dt>Service type</dt><dd>Appointment</dd><dt>Appointment duration</dt><dd>{{.Service.DurationMinutes}} minutes</dd><dt>Appointment terms</dt><dd class="request-brief">{{.Service.AppointmentTermsEN}}</dd>{{end}}{{end}}{{end -}}
-{{define "proposal-service-da"}}{{if eq .ContentFormat 2}}{{if eq .Service.Kind `software`}}<dt>Ydelsestype</dt><dd>Softwarearbejde</dd>{{else if eq .Service.Kind `appointment`}}<dt>Ydelsestype</dt><dd>Ydelse med aftalt varighed</dd><dt>Aftalt varighed</dt><dd>{{.Service.DurationMinutes}} minutter</dd><dt>Vilkår for ydelsen</dt><dd class="request-brief">{{.Service.AppointmentTermsDA}}</dd>{{end}}{{end}}{{end -}}
 <!doctype html>
 {{template "portal-head" .}}
 {{template "portal-header" .}}
@@ -74,3 +72,5 @@
 {{if .Next}}<a class="button" href="{{.Next}}" rel="next">{{if eq .Lang `da`}}Næste forespørgsler{{else}}Next requests{{end}}</a>{{end}}
 {{end}}
 </section>{{if .Detail}}<a class="back" href="{{root}}/operator/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til forespørgsler{{else}}Back to requests{{end}}</a><br>{{end}}<a class="back" href="{{root}}/operator?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dit arbejdsområde{{else}}Back to your workspace{{end}}</a></main>{{template "portal-footer" .}}
+{{define "proposal-service-en"}}{{if eq .ContentFormat 2}}{{if eq .Service.Kind `software`}}<dt>Service type</dt><dd>Software work</dd>{{else if eq .Service.Kind `appointment`}}<dt>Service type</dt><dd>Appointment</dd><dt>Appointment duration</dt><dd>{{.Service.DurationMinutes}} minutes</dd><dt>Appointment terms</dt><dd class="request-brief">{{.Service.AppointmentTermsEN}}</dd>{{end}}{{end}}{{end -}}
+{{define "proposal-service-da"}}{{if eq .ContentFormat 2}}{{if eq .Service.Kind `software`}}<dt>Ydelsestype</dt><dd>Softwarearbejde</dd>{{else if eq .Service.Kind `appointment`}}<dt>Ydelsestype</dt><dd>Ydelse med aftalt varighed</dd><dt>Aftalt varighed</dt><dd>{{.Service.DurationMinutes}} minutter</dd><dt>Vilkår for ydelsen</dt><dd class="request-brief">{{.Service.AppointmentTermsDA}}</dd>{{end}}{{end}}{{end -}}
