@@ -291,6 +291,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	if b.foundation != nil && b.foundation.operatorOnly {
 		mux.HandleFunc("POST /portal/preview", b.enterClientPreview)
 		mux.HandleFunc("POST /portal/preview/leave", b.leaveClientPreview)
+		mux.HandleFunc("POST /portal/requests/{id}/preview-orders", b.submitPreviewPurchase)
 	}
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))

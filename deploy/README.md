@@ -13,10 +13,12 @@ The whole directory is published as one artifact and split into Kustomize overla
 - `base/` holds the shared WebApp. The publisher pins its image in `base/webapp.yaml`.
 - `prod/` holds the production routes, network policy, disruption budget, secret
   synchronization, migration Job and retention CronJob.
-- `dev/` (#542) uses one WebApp replica in `business-site-dev` with
-  `dev.devantler.tech` as its host and `business-site-dev-disclosure` as its sole
-  Secret projection. Serving it requires the dev disclosure Secret and the platform's
-  private ingress and network policies (devantler-tech/platform#6126).
+- `dev/` (#542) packages one portal replica and a migration Job for
+  `business-site-dev`. Both use the release's pinned image. The platform supplies
+  `business-site-dev-runtime` for the portal, `business-site-dev-migration` for
+  schema changes, and the restricted database and sign-in client. The platform's
+  authenticated proxy and network policies control access to `dev.devantler.tech`
+  (devantler-tech/platform#6126).
 
 Overlays reference only `../base` and their own files. `kubectl kustomize deploy/dev`
 must render, and `deploy` must render exactly what `deploy/prod` renders.

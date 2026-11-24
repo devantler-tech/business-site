@@ -325,6 +325,9 @@ func (b *browser) reviewProposal(w http.ResponseWriter, r *http.Request) {
 	page := b.requestPage(r, "review", rows[0], nil, "")
 	page.AcceptanceEnabled = true
 	page.Review, page.SharedProposal = &review, &review.Proposal
+	if page.ClientPreview {
+		page.PreviewPurchase = previewQuote("", review.Proposal)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = b.templates().ExecuteTemplate(w, "requests.html", page)
