@@ -49,6 +49,9 @@ type user struct {
 		Owner string `json:"resourceOwner"`
 	} `json:"details"`
 	Human *struct {
+		Profile struct {
+			DisplayName string `json:"displayName"`
+		} `json:"profile"`
 		Email struct {
 			Address string `json:"email"`
 		} `json:"email"`
