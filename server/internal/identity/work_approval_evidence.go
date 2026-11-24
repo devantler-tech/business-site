@@ -171,6 +171,9 @@ func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, acto
 	review.Proposal.Prepared = review.Proposal.Prepared.UTC()
 	evidence := workEvidence{Format: 2, Request: id, Client: client, Acceptance: acceptance, Event: review.Event, Hash: review.Hash, Proposal: review.Proposal, Order: order, Funding: funding, Acceptor: members[0], Actor: members[1]}
 	data, err := json.Marshal(evidence)
+	if errors.Is(err, errProposalConflict) {
+		return workEvidence{}, nil, "", errProposalConflict
+	}
 	if err != nil || len(data) == 0 || len(data) > 2097152 {
 		return workEvidence{}, nil, "", errTriageStorage
 	}

@@ -14,6 +14,29 @@ import (
 	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
+type proposalDecisionClock struct {
+	pgx.Tx
+	at time.Time
+}
+
+func (tx proposalDecisionClock) QueryRow(ctx context.Context, _ string, _ ...any) pgx.Row {
+	return tx.Tx.QueryRow(ctx, "SELECT $1::timestamptz", tx.at)
+}
+
+func TestProposalDecisionChecksDatabaseClockBeforeCommit(t *testing.T) {
+	ctx := t.Context()
+	deadline := time.Now().Add(time.Minute).Truncate(time.Second)
+	tx := proposalDecisionClock{
+		Tx: beginFixtureTransaction(ctx, t, fixtureDB(t)),
+		at: deadline,
+	}
+	s := &Foundation{}
+	p := Principal{expires: deadline.Add(time.Minute)}
+	if err := s.finishProposalResponse(ctx, p, tx, func(context.Context) bool { return true }, deadline, "", nil); !errors.Is(err, ErrDenied) {
+		t.Fatalf("acceptance at its exclusive database deadline returned %v, want denial", err)
+	}
+}
+
 type serviceDecisionFixture struct {
 	b                   *browserFixture
 	form                url.Values

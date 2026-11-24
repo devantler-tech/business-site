@@ -85,6 +85,14 @@ func rewindServiceContractsFixture(t *testing.T, pool *pgxpool.Pool) {
    DROP COLUMN appointment_terms_en,DROP COLUMN appointment_terms_da,DROP COLUMN appointment_terms_sha256,DROP COLUMN content_sha256;
  DROP FUNCTION portal_service_quote_hash(text,text,text,text,text,bigint,bigint,text,integer,text,text,text),
    portal_service_terms_hash(text,text),portal_service_json_text(text);
+ ALTER TABLE portal_mail_outbox
+   DROP CONSTRAINT portal_mail_outbox_producer_format_check,
+   DROP CONSTRAINT portal_mail_complete_producer,
+   ADD CONSTRAINT portal_mail_outbox_producer_format_check CHECK(producer_format=1),
+   ADD CONSTRAINT portal_mail_complete_producer CHECK(
+     num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=0 OR
+     (num_nonnulls(producer_format,acceptance_id,proposal_version,proposal_sha256,terms_sha256,body_sha256)=6 AND
+       producer_format=1 AND kind='order-confirmation'));
  DELETE FROM portal_schema_version WHERE version=32`); err != nil {
 		t.Fatal("historical fixture could not reconstruct the preview receipt schema", err)
 	}

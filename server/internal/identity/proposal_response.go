@@ -59,7 +59,7 @@ func (s *Foundation) finishProposalResponse(ctx context.Context, p Principal, tx
 		defer cancel()
 		ctx = bounded
 	}
-	return s.finishWorkResponse(ctx, p, tx, ready, time.Time{}, client, check)
+	return s.finishWorkResponse(ctx, p, tx, ready, deadline, client, check)
 }
 
 // heldProposalViewer derives the original actor's workspace independently of

@@ -162,6 +162,10 @@ func TestRuntimeDatabasePrivileges(t *testing.T) {
 		{"assumable replication", "CREATE ROLE portal_fixture_replication NOLOGIN REPLICATION; GRANT portal_fixture_replication TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"indirect predefined privilege", "CREATE ROLE portal_fixture_privileged NOLOGIN; GRANT pg_execute_server_program TO portal_fixture_privileged; GRANT portal_fixture_privileged TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 		{"fixture owner", "", false},
+		{"service fulfillment missing insert", "REVOKE INSERT ON portal_service_fulfillments FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"service consumer missing select", "REVOKE SELECT ON portal_service_consumers FROM portal_runtime; SET ROLE portal_runtime", false},
+		{"mutable service fulfillment", "GRANT UPDATE ON portal_service_fulfillments TO portal_runtime; SET ROLE portal_runtime", false},
+		{"assumable service consumer deletion", "CREATE ROLE portal_fixture_service_mutator NOLOGIN; GRANT DELETE ON portal_service_consumers TO portal_fixture_service_mutator; GRANT portal_fixture_service_mutator TO portal_runtime WITH INHERIT FALSE; SET ROLE portal_runtime", false},
 	}
 	for _, history := range []struct{ table, column string }{
 		{"portal_requests", "brief"}, {"portal_proposals", "scope"},

@@ -151,6 +151,16 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 		if checksum != publishedPreviewChecksum {
 			t.Fatal("migration 31 no longer matches the published preview receipts migration")
 		}
+		for _, name := range []string{"portal_mail_outbox_producer_format_check", "portal_mail_complete_producer"} {
+			var definition string
+			if err := migrator.QueryRow(ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conrelid='portal_mail_outbox'::regclass AND conname=$1`, name).Scan(&definition); err != nil {
+				t.Fatal("read the published producer constraint", err)
+			}
+			if !strings.Contains(definition, "producer_format = 1") {
+				t.Errorf("published preview schema permits a later producer format in %s: %s", name, definition)
+			}
+		}
 		if err := Migrate(ctx, migrator); err != nil {
 			t.Fatal("upgrade the published preview schema", err)
 		}

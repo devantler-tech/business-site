@@ -42,6 +42,20 @@ func TestWorkApprovalRequiresSettledFundingNeverReversed(t *testing.T) {
 	}
 }
 
+func TestWorkApprovalRefusesTypedEvidenceAsConflict(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	placeEarlyStartOrder(t, b)
+	fake, cfg := newFakeNumina(t)
+	paidInvoiceOrder(t, b, fake, cfg)
+	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(workApprovalFlags())); err != nil {
+		t.Fatal(err)
+	}
+	operator := authenticateExistingMember(t, b, "proposal-operator")
+	if _, err := b.svc.prepareWorkApproval(t.Context(), operator, proposalRequestID); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("unsupported typed evidence returned %v, want a proposal conflict", err)
+	}
+}
+
 // approvalFixture owns real storage, a TLS broker and independent SDK state.
 // Domain controls need no HTTP application or session store; native journeys
 // retain their separate browser fixtures and complete actor coverage.

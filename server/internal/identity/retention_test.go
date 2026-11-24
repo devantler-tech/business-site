@@ -201,6 +201,55 @@ func TestRetentionKeepsHistoryOtherApprovalsCite(t *testing.T) {
 	}
 }
 
+func TestRetentionKeepsHistoryOtherProposalSharesCite(t *testing.T) {
+	acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	if _, err := migrator.Exec(ctx, `UPDATE portal_memberships SET client_id='retired-operator-client',role='client',revoked=true
+ WHERE incarnation IN (SELECT operator_incarnation FROM portal_proposal_visibility)`); err != nil {
+		t.Fatal("prepare the former client's membership", err)
+	}
+	if n := purgeAged(t, migrator); n != 1 {
+		t.Fatalf("the former client was not purged: %d", n)
+	}
+	var retained, membership bool
+	if err := migrator.QueryRow(ctx, `SELECT
+ EXISTS (SELECT 1 FROM portal_proposal_visibility v JOIN portal_membership_transitions t ON t.incarnation=v.operator_incarnation),
+ EXISTS (SELECT 1 FROM portal_memberships WHERE client_id='retired-operator-client')`).Scan(&retained, &membership); err != nil || !retained || membership {
+		t.Fatalf("share provenance retained=%t, former membership retained=%t: %v", retained, membership, err)
+	}
+}
+
+func TestRetentionPurgesServiceFulfillmentAndConsumer(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	placeEarlyStartOrder(t, b)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	tag, err := migrator.Exec(ctx, `WITH fulfillment AS (
+ INSERT INTO portal_service_fulfillments(id,request_id,client_id,order_id,acceptance_id,proposal_version,proposal_sha256,service_kind)
+ SELECT $1,o.request_id,o.client_id,o.id,o.acceptance_id,a.proposal_version,a.content_hash,'software'
+ FROM portal_orders o JOIN portal_proposal_acceptances a ON a.id=o.acceptance_id RETURNING id
+ )
+ INSERT INTO portal_service_consumers(fulfillment_id,service_kind,aggregate_id)
+ SELECT id,'software','fictional-work' FROM fulfillment`, secret())
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatal("prepare a fulfillment with its consumer", err)
+	}
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_order_ends(order_id,last_month,source)
+ SELECT id,(date_trunc('month',now() AT TIME ZONE 'Europe/Copenhagen')-interval '1 month')::date,'stripe' FROM portal_orders;
+ UPDATE portal_memberships SET revoked=true WHERE client_id='private-client-key'`); err != nil {
+		t.Fatal("retire the fictional client's order and membership", err)
+	}
+	if n := purgeAged(t, migrator); n != 1 {
+		t.Fatalf("the former client was not purged: %d", n)
+	}
+	var remains bool
+	if err := migrator.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM portal_service_fulfillments)
+ OR EXISTS (SELECT 1 FROM portal_service_consumers) OR EXISTS (SELECT 1 FROM portal_orders)`).Scan(&remains); err != nil || remains {
+		t.Fatalf("retired order or service evidence remains=%t: %v", remains, err)
+	}
+}
+
 // purgeAged dates every membership event four years back and purges.
 func purgeAged(t *testing.T, migrator *pgxpool.Pool) int {
 	t.Helper()
