@@ -45,3 +45,5 @@ spec:
           path: smtp-username
         - key: smtp-password
           path: smtp-password
+        - key: portal-zitadel-token
+          path: portal-zitadel-token
