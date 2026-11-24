@@ -21,9 +21,13 @@ test("the portal notice describes account access and contact details in both lan
   const cases = [
     { locale: "en", title: "The customer portal", invitation: /by invitation/,
       profile: /save a contact profile/, purpose: /secure your access/,
+      portalRetention: /your portal records, including saved contact details, .*for 3 years after your last portal access ends.*The portal then deletes these records/,
+      identityRetention: /When your sign-in account is disabled, its record remains in the sign-in service/,
       transactions: /project requests|accept proposals|orders|payments|invoices|Stripe|Numina/ },
     { locale: "da", title: "Kundeportalen", invitation: /efter invitation/,
       profile: /gemmer en kontaktprofil/, purpose: /beskytte din adgang/,
+      portalRetention: /oplysninger i portalen, herunder gemte kontaktoplysninger, .*i 3 år efter, at din sidste adgang til portalen er ophørt.*Derefter sletter portalen disse oplysninger/,
+      identityRetention: /En deaktiveret loginkonto forbliver registreret i logintjenesten/,
       transactions: /projektforespørgsler|acceptere tilbud|ordrer|betalinger|faktura|Stripe|Numina/ },
   ] as const;
   for (const item of cases) {
@@ -34,6 +38,8 @@ test("the portal notice describes account access and contact details in both lan
     assert.match(text, item.invitation);
     assert.match(text, item.profile);
     assert.match(text, item.purpose);
+    assert.match(text, item.portalRetention);
+    assert.match(text, item.identityRetention);
     assert.match(text, /Amazon SES/);
     assert.doesNotMatch(text, item.transactions);
     assert.match(flat(notice), /Numina/);
