@@ -26,9 +26,3 @@ for (const field of document.querySelectorAll('[data-character-limit]')) {
   field.addEventListener('input', check);
   check();
 }
-
-if (document.querySelector('[data-review-collector]')) {
-  import('./review-collector.mjs').catch(() => {
-    // The direct Trustpilot link remains available if the controller is unavailable.
-  });
-}

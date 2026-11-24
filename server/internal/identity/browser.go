@@ -24,13 +24,12 @@ var browserFiles embed.FS
 // source: the stylesheet, the scripts, and the Devantler Tech tab icon and
 // wordmarks, each with its content type.
 var presentationAssets = map[string]string{
-	"portal.css":           "text/css; charset=utf-8",
-	"portal.js":            "text/javascript; charset=utf-8",
-	"review-collector.css": "text/css; charset=utf-8",
-	"review-collector.mjs": "text/javascript; charset=utf-8",
-	"icon.png":             "image/png",
-	"logo-dark.svg":        "image/svg+xml",
-	"logo-light.svg":       "image/svg+xml",
+	"portal.css":          "text/css; charset=utf-8",
+	"portal.js":           "text/javascript; charset=utf-8",
+	"trustpilot-link.css": "text/css; charset=utf-8",
+	"icon.png":            "image/png",
+	"logo-dark.svg":       "image/svg+xml",
+	"logo-light.svg":      "image/svg+xml",
 }
 
 // browserPage renders every private page with portal links under "/portal".
@@ -39,7 +38,7 @@ var browserPage = pages(internalRoot, "")
 // templateFuncs binds the portal mount and language-preserving public navigation.
 // The public origin is empty when both surfaces share a host.
 func templateFuncs(root, site string) template.FuncMap {
-	return template.FuncMap{"root": func() string { return root }, "reviewCollectorURL": reviewCollectorURL, "public": func(lang string) string {
+	return template.FuncMap{"root": func() string { return root }, "public": func(lang string) string {
 		if lang == "da" {
 			return site + "/da/"
 		}
@@ -56,18 +55,6 @@ func pages(root, site string) *template.Template {
 
 // internalRoot is where every private route is registered and gated.
 const internalRoot = "/portal"
-
-const reviewCollectorTemplate = "56278e9abfbbba0bdcd568bc"
-const reviewCollectorFrame = "https://widget.trustpilot.com/trustboxes/" + reviewCollectorTemplate + "/index.html"
-
-func reviewCollectorURL(lang string) string {
-	locale := "en-US"
-	if lang == "da" {
-		locale = "da-DK"
-	}
-	return reviewCollectorFrame + "?templateId=" + reviewCollectorTemplate +
-		"&businessunitId=6b00bb09a7dbf30ad4d33478#locale=" + locale + "&styleHeight=52px&styleWidth=100%25"
-}
 
 type browser struct {
 	foundation *Foundation
@@ -699,10 +686,6 @@ type pageData struct {
 // render escapes all page data and exposes no broker tokens or raw store errors.
 func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kind, client, token string) {
 	d := b.data(r, kind, client, token)
-	if kind == "home" {
-		csp := w.Header().Get("Content-Security-Policy")
-		w.Header().Set("Content-Security-Policy", csp+"; frame-src "+reviewCollectorFrame)
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = b.templates().ExecuteTemplate(w, "portal.html", d)

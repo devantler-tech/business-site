@@ -440,8 +440,8 @@ func linkAttribute(n *html.Node, key string) string {
 }
 
 // validateRenderedLinks accounts for every URL-bearing attribute. Checked private
-// targets remain explicit data attributes, not Lychee GET requests. External and
-// public targets remain ordinary attributes for Lychee; no status is exempted.
+// targets and the runtime's fixed review handoff remain explicit data
+// attributes. Other public and external targets retain normal Lychee checking.
 func validateRenderedLinks(page linkPage) (string, int, error) {
 	if strings.Contains(page.markup, "{{") {
 		return "", 0, errors.New("unexpanded template field")
@@ -523,6 +523,13 @@ func validateRenderedLinks(page linkPage) (string, int, error) {
 				continue
 			}
 			if ref.IsAbs() || ref.Host != "" {
+				continue
+			}
+			if n.Data == "a" && attr.Key == "href" && attr.Val == "/trustpilot/" {
+				if err := checkTrustpilotHandoff(); err != nil {
+					return "", count, err
+				}
+				n.Attr[i].Key = "data-route-checked-href"
 				continue
 			}
 			target := base.ResolveReference(ref)

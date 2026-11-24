@@ -27,6 +27,7 @@ type Artifact struct {
 var ErrArtifact = errors.New("public artifact is invalid")
 
 const maxArtifactBytes = 128 << 20
+const trustpilotPath = "/trustpilot/"
 
 // publicPath reserves the private namespaces at any depth and rejects source,
 // credentials and hidden files. Only the public discovery directory is exempt.
@@ -204,6 +205,8 @@ func (a *Artifact) HostHandler(portal http.Handler, hosts Hosts) http.Handler {
 			switch {
 			case p == "/healthz":
 				readOnly(w, r)
+			case p == trustpilotPath:
+				public.ServeHTTP(w, r)
 			case private:
 				if !readOnly(w, r) {
 					redirect(w, r, rootPath(p), http.StatusMovedPermanently)
@@ -295,6 +298,13 @@ func (a *Artifact) Handler(portal http.Handler) http.Handler {
 			return
 		}
 		if servePrivate(w, r, portal) || readOnly(w, r) {
+			return
+		}
+		if p == trustpilotPath {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.Header().Set("Location", "https://www.trustpilot.com/review/devantler.tech")
+			w.WriteHeader(http.StatusFound)
 			return
 		}
 		name := strings.TrimPrefix(p, "/")
