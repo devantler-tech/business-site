@@ -87,7 +87,7 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	if err != nil {
 		return nil, err
 	}
-	return pendingInvitation{subject, input.Workspace, "client", invitation.Expires}, nil
+	return pendingInvitation{Subject: subject, Workspace: input.Workspace, Role: "client", Expires: invitation.Expires}, nil
 }
 
 // operatorInvitationPage uses the API's exact authorization and audit boundary.

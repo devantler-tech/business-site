@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/devantler-tech/business-site/server/internal/customeridentity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -59,15 +60,17 @@ func operatorRead[T any](run func(*browser, context.Context) (T, error)) func(*b
 
 type (
 	pendingInvitation struct {
-		Subject   string    `json:"subject"`
-		Workspace string    `json:"workspace"`
-		Role      string    `json:"role"`
-		Expires   time.Time `json:"expires"`
+		Subject   string                   `json:"subject"`
+		Workspace string                   `json:"workspace"`
+		Role      string                   `json:"role"`
+		Expires   time.Time                `json:"expires"`
+		Person    customeridentity.Profile `json:"-"`
 	}
 	workspaceMember struct {
-		Subject string `json:"subject"`
-		Role    string `json:"role"`
-		Revoked bool   `json:"revoked"`
+		Subject string                   `json:"subject"`
+		Role    string                   `json:"role"`
+		Revoked bool                     `json:"revoked"`
+		Person  customeridentity.Profile `json:"-"`
 	}
 	workspaceView struct {
 		ID      string            `json:"id"`
@@ -247,7 +250,7 @@ func (b *browser) operatorAuditPage(w http.ResponseWriter, r *http.Request) {
 
 // pendingInvitations lists invitations that can still be accepted.
 func (b *browser) pendingInvitations(ctx context.Context) ([]pendingInvitation, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE NOT revoked AND expires_at>now() ORDER BY expires_at,client_id LIMIT $1`, operatorListLimit+1)
+	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,client_id,role,expires_at FROM portal_invitations WHERE issuer=$1 AND NOT revoked AND expires_at>now() ORDER BY expires_at,client_id LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list invitations: %w", err)
 	}

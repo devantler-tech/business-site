@@ -29,6 +29,10 @@ type managementPage struct {
 
 func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "customers.view", func(ctx context.Context, client string) ([]byte, error) {
+		authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
+		if authority == nil || authority.kind != "operator" {
+			return nil, ErrDenied
+		}
 		spaces, err := b.workspaces(ctx)
 		if err != nil {
 			return nil, err
@@ -38,6 +42,7 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 			return nil, err
 		}
 		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations}
+		b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)
 		return buffer.Bytes(), err

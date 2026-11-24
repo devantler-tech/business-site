@@ -96,13 +96,16 @@
   <section class="operator-panel" aria-labelledby="operator-workspaces">
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Arbejdsområder og medlemmer{{else}}Workspaces and members{{end}}</h2>
     {{range .Workspaces}}
-    <details class="operator-workspace">
+    <details class="operator-workspace" open="open">
       <summary>{{.ID}}</summary>
       {{$workspace := .ID}}
+      {{if .Members}}<ul class="operator-members" role="list">
       {{range .Members}}
-      <div class="operator-member">
-        <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Deaktiveret{{else}}Deactivated{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv{{else}}Active{{end}}{{end}}</span>
-        <code>{{.Subject}}</code>
+      <li class="operator-member">
+        <div class="operator-member-heading">
+          {{template "operator-person" .Person}}
+          <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Deaktiveret{{else}}Deactivated{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv kunde{{else}}Active customer{{end}}{{end}}</span>
+        </div>
         {{if eq .Role "client"}}
         <details class="operator-member-actions">
           <summary>{{if eq $.Lang "da"}}Administrer adgang{{else}}Manage access{{end}}</summary>
@@ -125,8 +128,9 @@
           </div>
         </details>
         {{end}}
-      </div>
-      {{else}}<p>{{if eq $.Lang "da"}}Ingen medlemmer endnu.{{else}}No members yet.{{end}}</p>{{end}}
+      </li>
+      {{end}}
+      </ul>{{else}}<p>{{if eq $.Lang "da"}}Ingen medlemmer endnu.{{else}}No members yet.{{end}}</p>{{end}}
     </details>
     {{else}}<p>{{if eq .Lang "da"}}Opret et arbejdsområde.{{else}}Create a workspace to get started.{{end}}</p>{{end}}
   </section>
@@ -135,8 +139,8 @@
       <h2 id="operator-pending">{{if eq .Lang "da"}}Afventende invitationer{{else}}Pending invitations{{end}}</h2>
       {{range .Invitations}}
       <div class="operator-pending">
-        <strong>{{.Workspace}}</strong>
-        <code>{{.Subject}}</code>
+        {{template "operator-person" .Person}}
+        <p>{{if eq $.Lang "da"}}Arbejdsområde{{else}}Workspace{{end}} <strong>{{.Workspace}}</strong></p>
         <p>{{if eq $.Lang "da"}}Udløber{{else}}Expires{{end}} <time datetime="{{.Expires.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Expires.UTC.Format "2006-01-02 15:04"}} UTC</time></p>
         <details class="operator-member-actions">
           <summary>{{if eq $.Lang "da"}}Administrer invitation{{else}}Manage invitation{{end}}</summary>
@@ -160,6 +164,13 @@
       </form>
     </section>
   </div>
+</div>
+{{end}}
+
+{{define "operator-person"}}
+<div class="operator-person">
+  <strong>{{.Name}}</strong>
+  {{if .Email}}<span>{{.Email}}</span>{{end}}
 </div>
 {{end}}
 
