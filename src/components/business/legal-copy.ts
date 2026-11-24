@@ -11,7 +11,7 @@ export type LegalBlock = string | { list: readonly string[] } | { links: readonl
 export type LegalSection = { title: string; blocks: readonly LegalBlock[] };
 export type LegalPage = { title: string; description: string; intro: string; updated: string; sections: readonly LegalSection[] };
 
-const updated = { en: 'Last updated 16 November 2026.', da: 'Senest opdateret 16. november 2026.' } as const;
+const updated = { en: 'Last updated 24 November 2026.', da: 'Senest opdateret 24. november 2026.' } as const;
 const companyPath = { en: '/company/', da: '/da/company/' } as const;
 
 /** The trader line of the terms; the phone number appears once company.json has one. */
@@ -63,6 +63,10 @@ const privacy = (portal: boolean) => ({
         'Sign-in runs on my own services, ZITADEL at accounts.devantler.tech and Dex at login.devantler.tech, on the same EU platform as the portal. Emails about sign-in and the portal are sent through Amazon Web Services (Amazon SES) in Frankfurt. When you place an order, the portal sends what billing needs to Numina for an invoice, or to Stripe for card or MobilePay. When you pay by card or MobilePay, Stripe collects your billing address and, for a business, its name and VAT number, to issue your invoice.',
         'You can choose to sign in with GitHub instead. It never creates an account: it links to the account you were invited to, either automatically when your GitHub email address matches the invitation, or after one sign-in with your password and two-step verification. With GitHub sign-in, GitHub’s own login protects your account. ZITADEL receives your GitHub user ID and username, your public GitHub profile and your email addresses. It keeps only the link to your GitHub account (user ID and username), and uses your email address only to find your invited account. GitHub learns that you sign in to Devantler Tech. You can remove the link in your account, or ask me to. If you do not use GitHub sign-in, GitHub receives nothing about you.',
         'The legal basis is our agreement, and the steps you ask for before one (GDPR Article 6(1)(b)). Your account and portal records are kept while you are a customer, and for 3 years after your last portal access ends, the general Danish limitation period for claims. The portal then deletes them. Accounting records are kept for five years, as described above. Backups of the portal and sign-in databases are stored with Cloudflare and kept for 30 days.',
+      ] }] : []),
+      ...(portal ? [{ title: 'Portal support', blocks: [
+        'If you ask me for help with the portal, I record your request. When instructions or demo data are insufficient, I may use a read-only view to check your workspace’s access status, contact setup and request status.',
+        'My legal basis is my legitimate interest in resolving reported portal problems and checking that support access is appropriate (GDPR Article 6(1)(f)). I record who opened the view, when, the case reference and the account involved. The daily cleanup deletes support access logs once they reach 90 days. You can object using the contact details under Your rights below.',
       ] }] : []),
       { title: 'Who else receives the data', blocks: [
         'I do not sell personal data or share it for marketing. These providers receive data:',
@@ -123,6 +127,10 @@ const privacy = (portal: boolean) => ({
         'Login kører på mine egne tjenester, ZITADEL på accounts.devantler.tech og Dex på login.devantler.tech, på samme EU-platform som portalen. E-mails om login og portalen sendes gennem Amazon Web Services (Amazon SES) i Frankfurt. Når du afgiver en ordre, sender portalen det, faktureringen kræver, til Numina ved betaling via faktura eller til Stripe ved betaling med kort eller MobilePay. Betaler du med kort eller MobilePay, indsamler Stripe din faktureringsadresse og, for en virksomhed, dens navn og momsnummer, så Stripe kan udstede din faktura.',
         'Du kan i stedet vælge at logge ind med GitHub. Det opretter aldrig en konto, men kobles til den konto, du er inviteret til: automatisk, når din e-mailadresse hos GitHub svarer til invitationen, eller efter ét login med din adgangskode og totrinsbekræftelse. Ved login med GitHub beskytter GitHubs eget login din konto. ZITADEL modtager dit GitHub-bruger-id og brugernavn, din offentlige GitHub-profil og dine e-mailadresser. Den gemmer kun koblingen til din GitHub-konto (bruger-id og brugernavn) og bruger kun din e-mailadresse til at finde din inviterede konto. GitHub får at vide, at du logger ind hos Devantler Tech. Du kan fjerne koblingen i din konto eller bede mig om det. Bruger du ikke login med GitHub, modtager GitHub intet om dig.',
         'Behandlingsgrundlaget er vores aftale og de tiltag, du beder om, inden en aftale indgås (artikel 6, stk. 1, litra b). Din konto og dine portaloplysninger gemmes, mens du er kunde, og i 3 år efter, at din sidste adgang til portalen er ophørt, som er den almindelige forældelsesfrist for krav. Derefter sletter portalen dem. Regnskabsmateriale gemmes i fem år som beskrevet ovenfor. Sikkerhedskopier af portalens og logintjenesternes databaser opbevares hos Cloudflare i 30 dage.',
+      ] }] : []),
+      ...(portal ? [{ title: 'Support i kundeportalen', blocks: [
+        'Når du beder mig om hjælp til portalen, dokumenterer jeg din henvendelse. Hvis en vejledning eller demodata ikke er nok, kan jeg se status for adgang, kontaktoplysninger og forespørgsler i dit arbejdsområde. Visningen giver kun læseadgang.',
+        'Behandlingsgrundlaget er min berettigede interesse i at løse de portalproblemer, du melder, og kontrollere adgangen (artikel 6, stk. 1, litra f). Jeg registrerer, hvem der åbnede visningen, tidspunktet, sagens reference og den konto, sagen gælder. Adgangsloggen slettes ved den daglige oprydning, når den er 90 dage gammel. Du kan gøre indsigelse som beskrevet under Dine rettigheder nedenfor.',
       ] }] : []),
       { title: 'Hvem modtager ellers oplysningerne', blocks: [
         'Jeg sælger ikke personoplysninger og deler dem ikke til markedsføring. Disse leverandører modtager oplysninger:',
