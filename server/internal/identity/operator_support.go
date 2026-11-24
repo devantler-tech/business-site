@@ -54,16 +54,10 @@ func (b *browser) operatorSupportPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, supportViewAction, func(ctx context.Context, _ string) ([]byte, error) {
 		return b.renderSupport(ctx, r)
 	})
-	if status != http.StatusOK {
-		if status != http.StatusBadRequest && status != http.StatusServiceUnavailable {
-			status = http.StatusForbidden
-		}
-		b.render(w, r, status, "operator-action-error", "", "")
-		return
+	if status != http.StatusOK && status != http.StatusBadRequest && status != http.StatusServiceUnavailable {
+		status = http.StatusForbidden
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write(result)
+	b.writeOperatorActionPage(w, r, status, result)
 }
 
 // renderSupport keeps the human operator's principal and participates in
