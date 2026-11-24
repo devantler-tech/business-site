@@ -203,7 +203,7 @@
   <ul class="operator-events" role="list">
     {{range .Requests}}
     <li>
-      <strong>{{if eq .Product "website"}}{{if eq $.Lang "da"}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product "service"}}{{if eq $.Lang "da"}}Ydelse{{else}}Service{{end}}{{else}}App{{end}}</strong>
+      <strong>{{if eq .Product "website"}}{{if eq $.Lang "da"}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product "app"}}{{if eq $.Lang "da"}}Webapp{{else}}Web app{{end}}{{else if eq .Product "service"}}{{if eq $.Lang "da"}}Service eller integration{{else}}Service or integration{{end}}{{else}}{{if eq $.Lang "da"}}Andre opgaver{{else}}Other requests{{end}}{{end}}</strong>
       {{if and $.SharingOpen .ProposalShared}}<span class="operator-status">{{if eq $.Lang "da"}}Tilbud delt{{else}}Proposal shared{{end}}</span>{{end}}
       <time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Submitted.UTC.Format "2006-01-02 15:04"}} UTC</time>
     </li>

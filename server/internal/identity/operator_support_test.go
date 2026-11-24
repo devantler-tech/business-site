@@ -20,7 +20,7 @@ func TestOperatorSupportViewKeepsOperatorAndCustomerBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief,submitted_at) VALUES
- ('AAAAAAAAAAAAAAAAAAAAAAAAAA','fixture-client','AAAAAAAAAAAAAAAAAAAAAAAAAA','website','Private title','Private brief','2026-10-18T12:00:00Z'),
+ ('AAAAAAAAAAAAAAAAAAAAAAAAAA','fixture-client','AAAAAAAAAAAAAAAAAAAAAAAAAA','other','Private title','Private brief','2026-10-18T12:00:00Z'),
  ('BBBBBBBBBBBBBBBBBBBBBBBBBB','other-client','BBBBBBBBBBBBBBBBBBBBBBBBBB','app','Other title','Other brief','2026-09-01T09:00:00Z')`); err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +48,9 @@ func TestOperatorSupportViewKeepsOperatorAndCustomerBoundaries(t *testing.T) {
 	if status != http.StatusOK || !strings.Contains(body, "Read-only support view") || !strings.Contains(body, "2026-10-18 12:00") {
 		t.Fatalf("support did not show the selected workspace state: %d %s", status, body)
 	}
+	if !strings.Contains(body, "<strong>Other requests</strong>") {
+		t.Errorf("support did not show the English label for an other request")
+	}
 	for _, value := range []string{"Private title", "Private brief", "2026-09-01 09:00", `action="/portal/requests`} {
 		if strings.Contains(body, value) {
 			t.Errorf("support disclosed unrelated data or a customer action: %q", value)
@@ -65,6 +68,10 @@ func TestOperatorSupportViewKeepsOperatorAndCustomerBoundaries(t *testing.T) {
    AND disclosed.action='support.view' AND disclosed.outcome='allowed' AND recorded.at<disclosed.at)`,
 		operatorSubject).Scan(&recordedBeforeDisclosure); err != nil || !recordedBeforeDisclosure {
 		t.Fatalf("documented request was not recorded before disclosure: %v", err)
+	}
+	status, body, _ = b.request("POST", "/portal/operator/support?lang=da", form, b.site.URL)
+	if status != http.StatusOK || !strings.Contains(body, "<strong>Andre opgaver</strong>") {
+		t.Errorf("support did not show the Danish label for an other request: %d", status)
 	}
 	if status, body, _ := b.request("GET", "/portal/", nil, ""); status != http.StatusOK || !strings.Contains(body, "Operator workspace") {
 		t.Fatal("support changed the operator session")
