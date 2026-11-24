@@ -43,13 +43,10 @@ test("the terms describe the portal agreement and follow-up in both languages", 
   }
 });
 
-test("the privacy notice explains consent, its duration and withdrawal", () => {
+test("the privacy notice describes Trustpilot as an external link", () => {
   for (const locale of ["en", "da"] as const) {
     const notice = flat(legalPage("privacy", locale, true));
-    assert.match(notice, /Trustpilot/);
-    assert.match(notice, /IP-adresse|IP address/);
-    assert.match(notice, locale === "da" ? /Tillad Trustpilot/ : /Allow Trustpilot/);
-    assert.match(notice, locale === "da" ? /Cookieindstillinger/ : /Cookie settings/);
-    assert.match(notice, locale === "da" ? /180 dage/ : /180 days/);
+    assert.match(notice, locale === "da" ? /åbner Trustpilots hjemmeside/ : /opens Trustpilot’s website/);
+    assert.doesNotMatch(notice, /Tillad Trustpilot|Allow Trustpilot|180 dage|180 days/);
   }
 });
