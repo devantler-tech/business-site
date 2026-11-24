@@ -115,6 +115,7 @@ export function validateTenantPackage(input) {
       { key: "portal-database-ca", path: "portal-database-ca" },
       { key: "smtp-username", path: "smtp-username" },
       { key: "smtp-password", path: "smtp-password" },
+      { key: "portal-zitadel-token", path: "portal-zitadel-token" },
     ],
   }]);
   // The one migration Job runs this release's own image with only migration
