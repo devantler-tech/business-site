@@ -38,6 +38,11 @@ func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 		if d.Lang == "da" {
 			d.Title, d.Intro = "Revisionslog", "Se de seneste handlinger fra operatører og agenter."
 		}
+	case "operator-support":
+		d.Title = "Read-only support view"
+		if d.Lang == "da" {
+			d.Title = "Supportvisning"
+		}
 	default:
 		d.Title = "Operator workspace"
 		if d.Lang == "da" {

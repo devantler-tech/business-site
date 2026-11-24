@@ -23,8 +23,9 @@ var managementRoutes = []operatorRoute{
 
 type managementPage struct {
 	pageData
-	Workspaces  []workspaceView
-	Invitations []pendingInvitation
+	Workspaces       []workspaceView
+	Invitations      []pendingInvitation
+	SupportAvailable bool
 }
 
 func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +42,7 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations}
+		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations, SupportAvailable: b.foundation.supportReady(ctx)}
 		b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)

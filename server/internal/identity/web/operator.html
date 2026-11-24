@@ -21,6 +21,7 @@
     {{if eq .Kind "operator-customers"}}{{template "operator-directory" .}}
     {{else if eq .Kind "operator-invite"}}{{template "operator-invite-form" .}}
     {{else if eq .Kind "operator-audit"}}{{template "operator-activity" .}}
+    {{else if eq .Kind "operator-support"}}{{template "operator-support" .}}
     {{else}}{{template "operator-overview" .}}{{end}}
   </div>
 </main>
@@ -30,7 +31,7 @@
 <nav class="operator-navigation" aria-label="{{if eq .Lang `da`}}Operatørportal{{else}}Operator workspace{{end}}">
   <ul>
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
-    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if eq .Kind `operator-invite`}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
+    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
     <li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
   </ul>
@@ -127,6 +128,24 @@
             </form>
           </div>
         </details>
+        {{if and $.SupportAvailable (not .Revoked)}}
+        <details class="operator-member-actions">
+          <summary>{{if eq $.Lang "da"}}Åbn support{{else}}Open support view{{end}}</summary>
+          <form class="operator-form" method="post" action="{{root}}/operator/support?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <input type="hidden" name="subject" value="{{.Subject}}">
+            <label>{{if eq $.Lang "da"}}Reference til sag{{else}}Support case reference{{end}}
+              <input name="case" type="text" maxlength="15" pattern="CASE-[0-9]{4,10}" placeholder="CASE-1234" required>
+            </label>
+            <label>
+              <input name="confirmed" type="checkbox" value="yes" required>
+              {{if eq $.Lang "da"}}Jeg har dokumenteret kundens ønske om hjælp.{{else}}I have documented the client’s request for support.{{end}}
+            </label>
+            <button type="submit" class="operator-secondary">{{if eq $.Lang "da"}}Vis kundeportal{{else}}View client portal status{{end}}</button>
+          </form>
+        </details>
+        {{end}}
         {{end}}
       </li>
       {{end}}
@@ -165,6 +184,34 @@
     </section>
   </div>
 </div>
+{{end}}
+
+{{define "operator-support"}}
+<section class="operator-panel" aria-labelledby="support-workspace">
+  <h2 id="support-workspace">{{.Client}}</h2>
+  <p>{{if eq .Lang "da"}}Du ser kundens portalstatus. Adgangen bliver logget under sag{{else}}You’re viewing the client’s portal status. This access is logged under case{{end}} <strong>{{.Case}}</strong>.</p>
+  <dl>
+    <dt>{{if eq .Lang "da"}}Portaladgang{{else}}Portal access{{end}}</dt>
+    <dd>{{if eq .Lang "da"}}Aktiv{{else}}Active{{end}}</dd>
+    <dt>{{if eq .Lang "da"}}Kontaktoplysninger{{else}}Contact details{{end}}</dt>
+    <dd>{{if .ContactSaved}}{{if eq .Lang "da"}}Gemt{{else}}Saved{{end}}{{else}}{{if eq .Lang "da"}}Mangler{{else}}Missing{{end}}{{end}}</dd>
+    <dt>{{template "operator-requests-label" .}}</dt>
+    <dd>{{if .RequestsEnabled}}{{if eq .Lang "da"}}Aktive{{else}}Available{{end}}{{else}}{{if eq .Lang "da"}}Ikke tilgængelige{{else}}Unavailable{{end}}{{end}}</dd>
+  </dl>
+  {{if .RequestsEnabled}}
+  <h3>{{if eq .Lang "da"}}Seneste forespørgsler{{else}}Recent requests{{end}}</h3>
+  <ul class="operator-events" role="list">
+    {{range .Requests}}
+    <li>
+      <strong>{{if eq .Product "website"}}{{if eq $.Lang "da"}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product "service"}}{{if eq $.Lang "da"}}Ydelse{{else}}Service{{end}}{{else}}App{{end}}</strong>
+      {{if and $.SharingOpen .ProposalShared}}<span class="operator-status">{{if eq $.Lang "da"}}Tilbud delt{{else}}Proposal shared{{end}}</span>{{end}}
+      <time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Submitted.UTC.Format "2006-01-02 15:04"}} UTC</time>
+    </li>
+    {{else}}<li>{{if eq $.Lang "da"}}Ingen forespørgsler endnu.{{else}}No requests yet.{{end}}</li>{{end}}
+  </ul>
+  {{end}}
+  <div class="operator-actions"><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}</a></div>
+</section>
 {{end}}
 
 {{define "operator-person"}}
