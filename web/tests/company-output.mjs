@@ -84,9 +84,8 @@ export function assertCompanyOutput(candidate, {identity, scope, template, addre
       if (identity) {
         const [directLink] = profileLinks;
         assert.equal(attr(directLink, "hidden"), undefined, "the link is visible by default");
-        assert.equal(attr(directLink, "href"), "/trustpilot/");
+        assert.equal(attr(directLink, "href"), "https://www.trustpilot.com/review/devantler.tech");
         assert.equal(attr(directLink, "rel"), "noreferrer");
-        assert.equal(attr(directLink, "data-sveltekit-reload"), "");
         assert.equal(text(directLink).replace(/\s*↗$/, ""), locale === "da" ? "Anmeldelser på Trustpilot" : "Reviews on Trustpilot");
       }
       if (route === "") {
