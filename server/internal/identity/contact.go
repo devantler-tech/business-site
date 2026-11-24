@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -118,6 +119,9 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		return ErrDenied
 	}
+	if err = s.checkPreviewWrite(ctx, tx, p, client); err != nil {
+		return err
+	}
 	var revision int64
 	if d.Revision == 0 {
 		err = tx.QueryRow(ctx, `INSERT INTO portal_contacts(client_id,name,email,company,revision) VALUES($1,$2,$3,$4,1) ON CONFLICT(client_id) DO NOTHING RETURNING revision`, client, d.Name, d.Email, d.Company).Scan(&revision)
@@ -128,6 +132,9 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 		return errContactConflict
 	}
 	if err != nil {
+		return ErrDenied
+	}
+	if p.isClientPreview() && !time.Now().Before(p.expires) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {

@@ -51,6 +51,21 @@
   padding-left: 1rem;
 }
 
+.preview-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 1rem;
+  border-block-end: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.preview-mode form {
+  margin: 0;
+}
+
 .field-limit {
   font-weight: 400;
   font-size: 0.85rem;

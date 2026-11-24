@@ -97,6 +97,9 @@ func (s *Foundation) persistRequest(ctx context.Context, p Principal, d projectR
 	if err = tx.QueryRow(ctx, `SELECT client_id FROM portal_memberships WHERE issuer=$1 AND subject=$2 AND role='client' AND NOT revoked AND ($3='' OR incarnation::text=$3) FOR SHARE`, p.issuer, p.subject, p.membershipIncarnation).Scan(&client); err != nil {
 		return projectRequest{}, ErrDenied
 	}
+	if err = s.checkPreviewWrite(ctx, tx, p, client); err != nil {
+		return projectRequest{}, err
+	}
 	// Fair use: a client with hosting has one request in progress at a time.
 	if s.orderReady(ctx) {
 		busy, err := requestBusy(ctx, tx, client, d.Key)

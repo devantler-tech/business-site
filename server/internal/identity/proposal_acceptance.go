@@ -88,6 +88,9 @@ func (s *Foundation) beginClientProposalWrite(ctx context.Context, p Principal, 
 	if client != bound || ctx.Err() != nil || !time.Now().Before(p.expires) {
 		return nil, "", ErrDenied
 	}
+	if err = s.checkPreviewWrite(ctx, tx, p, client); err != nil {
+		return nil, "", err
+	}
 	var owned string
 	if err = tx.QueryRow(ctx, `SELECT id FROM portal_requests WHERE id=$1 AND client_id=$2`, id, client).Scan(&owned); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
