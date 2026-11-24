@@ -17,6 +17,30 @@ test("the portal's privacy text appears only when FEATURE_PORTAL_PRIVACY is on",
   }
 });
 
+test("the portal notice describes account access and contact details in both languages", () => {
+  const cases = [
+    { locale: "en", title: "The customer portal", invitation: /by invitation/,
+      profile: /save a contact profile/, purpose: /secure your access/,
+      transactions: /project requests|accept proposals|orders|payments|invoices|Stripe|Numina/ },
+    { locale: "da", title: "Kundeportalen", invitation: /efter invitation/,
+      profile: /gemmer en kontaktprofil/, purpose: /beskytte din adgang/,
+      transactions: /projektforespørgsler|acceptere tilbud|ordrer|betalinger|faktura|Stripe|Numina/ },
+  ] as const;
+  for (const item of cases) {
+    const notice = legalPage("privacy", item.locale, true);
+    const portal = notice.sections.find(section => section.title === item.title);
+    assert.ok(portal);
+    const text = portal.blocks.filter(block => typeof block === "string").join("\n");
+    assert.match(text, item.invitation);
+    assert.match(text, item.profile);
+    assert.match(text, item.purpose);
+    assert.match(text, /Amazon SES/);
+    assert.doesNotMatch(text, item.transactions);
+    assert.match(flat(notice), /Numina/);
+    assert.match(flat(notice), /Stripe/);
+  }
+});
+
 test("the terms do not depend on the portal flag", () => {
   for (const locale of ["en", "da"] as const) assert.deepEqual(legalPage("terms", locale, true), legalPage("terms", locale, false));
 });
