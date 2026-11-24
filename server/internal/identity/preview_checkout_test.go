@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"encoding/base64"
 	"errors"
 	"html"
 	"net/http"
@@ -80,11 +81,37 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	expired := operator
-	expired.subject, expired.membershipIncarnation = previewSubject, incarnation
-	expired.preview = previewOperator{subject: operator.subject, incarnation: operator.membershipIncarnation}
-	if err := b.svc.recordPreviewPurchase(ctx, expired, proposalRequestID, acceptance[1], time.Now().Add(-time.Second)); !errors.Is(err, ErrDenied) {
+	preview := operator
+	preview.subject, preview.membershipIncarnation = previewSubject, incarnation
+	preview.preview = previewOperator{subject: operator.subject, incarnation: operator.membershipIncarnation}
+	sessionKey := base64.RawURLEncoding.EncodeToString(digest(b.cookie().Value))
+	var data []byte
+	var deadline time.Time
+	if err := b.pool.QueryRow(ctx, `SELECT data,expiry FROM portal_sessions WHERE token=$1`, sessionKey).Scan(&data, &deadline); err != nil {
+		t.Fatal("could not load the disposable preview session", err)
+	}
+	session := durableResponseSnapshot{
+		original: contactAuthority{principal: preview, deadline: deadline},
+		key:      sessionKey,
+		data:     data,
+	}
+	expired := session
+	expired.original.deadline = time.Now().Add(-time.Second)
+	if err := b.svc.recordPreviewPurchase(ctx, expired, proposalRequestID, acceptance[1]); !errors.Is(err, ErrDenied) {
 		t.Fatalf("expired browser session completed checkout with a current broker token: %v", err)
+	}
+	if _, err := b.pool.Exec(ctx, `DELETE FROM portal_sessions WHERE token=$1`, sessionKey); err != nil {
+		t.Fatal("could not retire the disposable preview session", err)
+	}
+	if err := b.svc.recordPreviewPurchase(ctx, session, proposalRequestID, acceptance[1]); !errors.Is(err, ErrDenied) {
+		t.Fatalf("retired preview session was accepted at checkout: %v", err)
+	}
+	var recorded bool
+	if err := b.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_preview_receipts)`).Scan(&recorded); err != nil || recorded {
+		t.Fatalf("denied preview checkout left a receipt: %v", err)
+	}
+	if _, err := b.pool.Exec(ctx, `INSERT INTO portal_sessions(token,data,expiry) VALUES($1,$2,$3)`, sessionKey, data, deadline); err != nil {
+		t.Fatal("could not restore the fixture for the authorized checkout controls", err)
 	}
 	forged := url.Values{"acceptance": purchase["acceptance"], "csrf_token": purchase["csrf_token"], "due_minor": {"1"}}
 	if status, _, _ := b.request(http.MethodPost, path, forged, b.site.URL); status != http.StatusBadRequest {

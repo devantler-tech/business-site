@@ -34,10 +34,11 @@ func currentPreviewPurchase(acceptances []proposalAcceptance) *previewPurchase {
 	return nil
 }
 
-// recordPreviewPurchase uses the existing request and current actor locks. A
-// retry for the same accepted proposal returns the receipt with no new effects.
-// The point of sale never creates an actual order or reserves a public offer.
-func (s *Foundation) recordPreviewPurchase(ctx context.Context, p Principal, id, acceptance string, deadline time.Time) error {
+// recordPreviewPurchase retains the request and actor locks and binds the
+// original browser session at commit. Retrying an accepted proposal adds no
+// receipt and the preview never creates a commercial order.
+func (s *Foundation) recordPreviewPurchase(ctx context.Context, session durableResponseSnapshot, id, acceptance string) error {
+	p, deadline := session.original.principal, session.original.deadline
 	if !s.operatorOnly || !p.isClientPreview() || !time.Now().Before(deadline) {
 		return ErrDenied
 	}
@@ -63,7 +64,23 @@ func (s *Foundation) recordPreviewPurchase(ctx context.Context, p Principal, id,
 		acceptance, id, client, price.OneTimeMinor, price.MonthlyMinor); err != nil {
 		return errTriageStorage
 	}
-	return s.commitClientProposal(ctx, p, tx, deadline)
+	if !s.acceptanceReady(ctx) {
+		return ErrDenied
+	}
+	// Acquire the session lock after the final flag lookup. A session rotation
+	// or logout that completes first invalidates these bytes. Otherwise the
+	// receipt and session change serialize while the transaction holds the row.
+	var storedDeadline time.Time
+	err = tx.QueryRow(ctx, `SELECT expiry FROM portal_sessions
+ WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() FOR SHARE`, session.key, session.data).Scan(&storedDeadline)
+	now := time.Now()
+	if err != nil || ctx.Err() != nil || !now.Before(storedDeadline) || !now.Before(deadline) || !now.Before(p.expires) {
+		return ErrDenied
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return errTriageStorage
+	}
+	return nil
 }
 
 func (s *Foundation) readPreviewPurchase(ctx context.Context, p Principal, id string, accepted []proposalAcceptance) (*previewPurchase, error) {
@@ -100,12 +117,19 @@ func previewPurchaseForm(r *http.Request) (string, bool) {
 }
 
 func (b *browser) submitPreviewPurchase(w http.ResponseWriter, r *http.Request) {
-	p := b.principal(r.Context())
-	if !p.isClientPreview() {
+	original := b.contactAuthority(r.Context(), previewWorkspace)
+	if !original.principal.isClientPreview() {
 		b.clientOrderResult(w, r, ErrDenied)
 		return
 	}
-	if !b.foundation.acceptanceReady(r.Context()) {
+	ctx, cancel := context.WithDeadline(r.Context(), original.deadline)
+	defer cancel()
+	session, ok := b.captureDurableResponse(ctx, original)
+	if !ok {
+		b.clientOrderResult(w, r, ErrDenied)
+		return
+	}
+	if !b.foundation.acceptanceReady(ctx) {
 		http.NotFound(w, r)
 		return
 	}
@@ -114,8 +138,5 @@ func (b *browser) submitPreviewPurchase(w http.ResponseWriter, r *http.Request) 
 		b.render(w, r, http.StatusBadRequest, "error", "", "")
 		return
 	}
-	deadline := b.sessions.Deadline(r.Context())
-	ctx, cancel := context.WithDeadline(r.Context(), deadline)
-	defer cancel()
-	b.clientOrderResult(w, r, b.foundation.recordPreviewPurchase(ctx, p, r.PathValue("id"), acceptance, deadline))
+	b.clientOrderResult(w, r, b.foundation.recordPreviewPurchase(ctx, session, r.PathValue("id"), acceptance))
 }
