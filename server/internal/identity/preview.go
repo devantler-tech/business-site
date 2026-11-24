@@ -2,7 +2,9 @@ package identity
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -39,8 +41,11 @@ func (s *Foundation) previewClient(ctx context.Context, p Principal) (string, st
  WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role='client' AND NOT m.revoked AND m.incarnation::text=$4
  AND a.subject=$5 AND a.role='operator' AND NOT a.revoked AND a.incarnation::text=$6`,
 		p.issuer, p.subject, previewWorkspace, p.membershipIncarnation, p.preview.subject, p.preview.incarnation).Scan(&incarnation)
-	if err != nil || ctx.Err() != nil || !time.Now().Before(p.expires) {
+	if errors.Is(err, pgx.ErrNoRows) || ctx.Err() != nil || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied
+	}
+	if err != nil {
+		return "", "", "", fmt.Errorf("read preview membership: %w", err)
 	}
 	return previewWorkspace, "client", incarnation, nil
 }
@@ -88,6 +93,18 @@ func (s *Foundation) startClientPreview(ctx context.Context, operator Principal)
 	if err = s.lockPreviewOperator(ctx, tx, operator); err != nil {
 		return "", err
 	}
+	var reserved bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS (
+ SELECT 1 FROM portal_workspaces WHERE id=$1
+ UNION ALL SELECT 1 FROM portal_invitations WHERE client_id=$1
+ UNION ALL SELECT 1 FROM portal_memberships WHERE client_id=$1 AND (issuer<>$2 OR subject<>$3)
+ )`, previewWorkspace, operator.issuer, previewSubject).Scan(&reserved)
+	if err != nil {
+		return "", err
+	}
+	if reserved {
+		return "", ErrDenied
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_memberships(issuer,subject,client_id,role)
  VALUES($1,$2,$3,'client') ON CONFLICT(issuer,subject) DO NOTHING`, operator.issuer, previewSubject, previewWorkspace); err != nil {
 		return "", err
@@ -120,7 +137,7 @@ func validPreviewForm(r *http.Request) bool {
 	return true
 }
 
-func (b *browser) switchPreviewSession(ctx context.Context, previewIncarnation string) error {
+func (b *browser) switchPreviewSession(w http.ResponseWriter, ctx context.Context, previewIncarnation string) error {
 	authority := b.contactAuthority(ctx, "")
 	current, ok := b.captureDurableResponse(ctx, authority)
 	if !ok {
@@ -130,32 +147,55 @@ func (b *browser) switchPreviewSession(ctx context.Context, previewIncarnation s
 	if operator.isClientPreview() {
 		operator = operator.previewOwner()
 	}
-	// Two tabs can load the same session. Only one can consume its exact
-	// durable record and receive a replacement in the other mode. The same
-	// statement verifies the current membership that permits this transition.
-	deleted, err := b.foundation.pool.Exec(ctx, `DELETE FROM portal_sessions
- WHERE token=$1 AND data=$2 AND expiry>clock_timestamp() AND EXISTS
- (SELECT 1 FROM portal_memberships WHERE issuer=$3 AND subject=$4 AND role='operator'
- AND NOT revoked AND incarnation::text=$5)`, current.key, current.data,
-		operator.issuer, operator.subject, operator.membershipIncarnation)
+	// Prepare cookie settings on a fresh SCS context. LoadAndSave must leave
+	// the original request's session untouched after the database rotation.
+	replacement, err := b.sessions.Load(context.Background(), "")
 	if err != nil {
 		return err
 	}
-	if deleted.RowsAffected() != 1 {
-		return ErrDenied
-	}
-	if err := b.sessions.RenewToken(ctx); err != nil {
+	_, values, err := b.sessions.Codec.Decode(current.data)
+	if err != nil {
 		return err
 	}
-	// Token renewal may reset the session deadline. Both modes keep the
-	// original sign-in deadline. The fictional client cookie is session-only.
-	b.sessions.SetDeadline(ctx, authority.deadline)
-	b.sessions.RememberMe(ctx, previewIncarnation == "")
 	if previewIncarnation == "" {
-		b.sessions.Remove(ctx, previewSessionKey)
+		delete(values, previewSessionKey)
 	} else {
-		b.sessions.Put(ctx, previewSessionKey, previewIncarnation)
+		values[previewSessionKey] = previewIncarnation
 	}
+	b.sessions.RememberMe(replacement, previewIncarnation == "")
+	for _, key := range b.sessions.Keys(replacement) {
+		values[key] = b.sessions.Get(replacement, key)
+	}
+	data, err := b.sessions.Codec.Encode(authority.deadline, values)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithDeadline(ctx, authority.deadline)
+	defer cancel()
+	tx, err := b.foundation.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := b.foundation.lockPreviewOperator(ctx, tx, operator); err != nil {
+		return err
+	}
+	token := secret()
+	key := base64.RawURLEncoding.EncodeToString(digest(token))
+	// Only one request can replace these exact bytes. Changing the durable
+	// key and payload together preserves the old session on a failed write.
+	updated, err := tx.Exec(ctx, `UPDATE portal_sessions SET token=$3,data=$4
+ WHERE token=$1 AND data=$2 AND expiry>clock_timestamp()`, current.key, current.data, key, data)
+	if err != nil {
+		return err
+	}
+	if updated.RowsAffected() != 1 {
+		return ErrDenied
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	b.sessions.WriteSessionCookie(replacement, w, token, authority.deadline)
 	return nil
 }
 
@@ -166,7 +206,7 @@ func (b *browser) enterClientPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	incarnation, err := b.foundation.startClientPreview(r.Context(), b.principal(r.Context()))
 	if err == nil {
-		err = b.switchPreviewSession(r.Context(), incarnation)
+		err = b.switchPreviewSession(w, r.Context(), incarnation)
 	}
 	b.finishPreviewTransition(w, r, "/portal/", err)
 }
@@ -181,11 +221,7 @@ func (b *browser) leaveClientPreview(w http.ResponseWriter, r *http.Request) {
 		b.finishPreviewTransition(w, r, "", ErrDenied)
 		return
 	}
-	_, _, err := b.foundation.membership(r.Context(), p)
-	if err == nil {
-		err = b.switchPreviewSession(r.Context(), "")
-	}
-	b.finishPreviewTransition(w, r, "/portal/operator", err)
+	b.finishPreviewTransition(w, r, "/portal/operator", b.switchPreviewSession(w, r.Context(), ""))
 }
 
 func (b *browser) finishPreviewTransition(w http.ResponseWriter, r *http.Request, path string, err error) {

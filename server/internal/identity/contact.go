@@ -134,7 +134,7 @@ func (s *Foundation) saveContact(ctx context.Context, p Principal, d contactData
 	if err != nil {
 		return ErrDenied
 	}
-	if p.isClientPreview() && !time.Now().Before(p.expires) {
+	if p.isClientPreview() && (ctx.Err() != nil || !time.Now().Before(p.expires)) {
 		return ErrDenied
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -228,7 +228,13 @@ func (b *browser) updateContact(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	err = b.foundation.saveContact(r.Context(), b.principal(r.Context()), d)
+	ctx := r.Context()
+	if authority.principal.isClientPreview() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, authority.deadline)
+		defer cancel()
+	}
+	err = b.foundation.saveContact(ctx, authority.principal, d)
 	if errors.Is(err, errContactConflict) {
 		b.renderContact(w, r, 409, d, "conflict", false, authority)
 		return

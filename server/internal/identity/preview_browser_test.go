@@ -77,6 +77,62 @@ func TestPrivatePreviewSwitchesToOneFictionalClient(t *testing.T) {
 	}
 }
 
+func TestPreviewCanReturnAfterItsFictionalMembershipIsRevoked(t *testing.T) {
+	b := previewOperatorFixture(t)
+	form := url.Values{"csrf_token": {b.csrf("/portal/operator")}, "lang": {"en"}}
+	if status, _, _ := b.request(http.MethodPost, "/portal/preview", form, b.site.URL); status != http.StatusSeeOther {
+		t.Fatalf("preview entry returned %d", status)
+	}
+	form.Set("csrf_token", b.csrf("/portal/"))
+	revokeFixtureAccess(t.Context(), t, b, previewSubject)
+	if status, _, headers := b.request(http.MethodPost, "/portal/preview/leave", form, b.site.URL); status != http.StatusSeeOther || headers.Get("Location") != "/portal/operator?lang=en" {
+		t.Fatalf("leaving a revoked demo workspace returned %d", status)
+	}
+}
+
+func TestOrdinaryProvisioningReservesTheFictionalWorkspace(t *testing.T) {
+	b := newBrowserFixture(t)
+	invitation := Invitation{b.svc.broker.issuer, customerSubject, previewWorkspace, "client", time.Now().Add(time.Hour)}
+	if err := b.svc.Invite(t.Context(), invitation); !errors.Is(err, ErrDenied) {
+		t.Fatalf("ordinary provisioning accepted the reserved demo workspace: %v", err)
+	}
+	if validCustomerWorkspace(previewWorkspace) {
+		t.Fatal("operator provisioning accepted the reserved demo workspace")
+	}
+}
+
+func TestPreviewRefusesAPreviouslyProvisionedWorkspace(t *testing.T) {
+	b := previewOperatorFixture(t)
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_workspaces(id) VALUES ($1)`, previewWorkspace); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"csrf_token": {b.csrf("/portal/operator")}, "lang": {"en"}}
+	if status, _, _ := b.request(http.MethodPost, "/portal/preview", form, b.site.URL); status != http.StatusForbidden {
+		t.Fatalf("preview accepted an existing operator-created workspace: %d", status)
+	}
+}
+
+func TestPreviewPreservesOperatorSessionIfRotationFails(t *testing.T) {
+	b := previewOperatorFixture(t)
+	migrator := migrationDB(t)
+	if _, err := migrator.Exec(t.Context(), `ALTER TABLE portal_sessions
+ ADD CONSTRAINT fixture_fail_session_write CHECK (false) NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := migrator.Exec(context.Background(), `ALTER TABLE portal_sessions DROP CONSTRAINT fixture_fail_session_write`); err != nil {
+			t.Error(err)
+		}
+	}()
+	form := url.Values{"csrf_token": {b.csrf("/portal/operator")}, "lang": {"en"}}
+	if status, _, _ := b.request(http.MethodPost, "/portal/preview", form, b.site.URL); status != http.StatusServiceUnavailable {
+		t.Fatalf("failed session write returned %d", status)
+	}
+	if status, _, _ := b.request(http.MethodGet, "/portal/operator", nil, ""); status != http.StatusOK {
+		t.Fatalf("failed rotation discarded the starting operator session: %d", status)
+	}
+}
+
 func TestConcurrentPreviewTransitionsConsumeTheSourceSessionOnce(t *testing.T) {
 	b := previewOperatorFixture(t)
 	form := url.Values{"csrf_token": {b.csrf("/portal/operator")}, "lang": {"en"}}
@@ -133,7 +189,7 @@ func TestConcurrentPreviewTransitionsConsumeTheSourceSessionOnce(t *testing.T) {
 		})
 	}
 	waitForFixtureDatabaseLock(ctx, t, b.pool, `SELECT count(*)=2 FROM pg_stat_activity
- WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'DELETE FROM portal_sessions%'`)
+ WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'UPDATE portal_sessions SET token=%'`)
 	if err := lock.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
