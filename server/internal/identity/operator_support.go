@@ -96,6 +96,11 @@ func (b *browser) renderSupport(ctx context.Context, r *http.Request) ([]byte, e
 	if !b.operatorMutationAllowed(ctx, b.foundation.pool) {
 		return nil, ErrDenied
 	}
+	name, err := workspaceDisplayName(ctx, b.foundation.pool, input.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	page.Client = name
 	if err := b.foundation.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM portal_contacts WHERE client_id=$1)`, input.Workspace).Scan(&page.ContactSaved); err != nil {
 		return nil, err
 	}

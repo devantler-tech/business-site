@@ -72,7 +72,9 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 // producer metadata without changing the frozen mail, sender receipt or older ledger.
 func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_preview_receipts;
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_workspace_settings;
+ DELETE FROM portal_schema_version WHERE version=32;
+ DROP TABLE portal_preview_receipts;
  DELETE FROM portal_schema_version WHERE version=31;
  ALTER TABLE portal_mail_outbox
  DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,

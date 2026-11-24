@@ -93,6 +93,8 @@ func TestPortalLinkRejections(t *testing.T) {
 		"unknown language":              `<a href="/portal/?lang=de">Home</a>`,
 		"unknown query":                 `<a href="/portal/?next=elsewhere">Home</a>`,
 		"misplaced cursor":              `<a href="/portal/contact?cursor=invalid">Contact</a>`,
+		"misplaced workspace":           `<a href="/portal/contact?workspace=sample">Contact</a>`,
+		"invalid invitation workspace":  `<a href="/portal/operator/invitations/new?workspace=%0A">Invite</a>`,
 		"missing fragment":              `<a href="#absent">Skip</a>`,
 		"encoded route":                 `<a href="/portal%2f/logout">Out</a>`,
 		"empty target":                  `<a href="">Nothing</a>`,
@@ -264,7 +266,7 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 					if view.kind == "operator-customers" {
 						return templates.ExecuteTemplate(w, name, managementPage{
 							pageData: d, SupportAvailable: true,
-							Workspaces: []workspaceView{{ID: "fictional-workspace", Members: []workspaceMember{
+							Workspaces: []workspaceView{{ID: "fictional-workspace", Name: "Fictional workspace", Manageable: true, Members: []workspaceMember{
 								{Subject: strings.Repeat("FictionalMember", 9), Role: "client"},
 								{Subject: "fictional-disabled", Role: "client", Revoked: true},
 							}}},
@@ -654,6 +656,10 @@ func registeredLinkTarget(mux *http.ServeMux, method string, target *url.URL) er
 		case "review":
 			if values[0] != "funding" || pattern != "GET /portal/operator/requests/{id}/work-review" {
 				return errors.New("invalid target funding review")
+			}
+		case "workspace":
+			if pattern != "GET /portal/operator/invitations/new" || !validCustomerWorkspace(values[0]) {
+				return errors.New("invalid invitation workspace")
 			}
 		default:
 			return errors.New("unexpected target query")
