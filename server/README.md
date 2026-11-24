@@ -394,6 +394,16 @@ Source checks do not establish deployed acceptance: #305 retains runtime deliver
 [Issue #302](https://github.com/devantler-tech/business-site/issues/302) owns live
 identity acceptance and #21 owns later intake/payment activation.
 
+### Isolated client preview identity profile
+
+`PORTAL_IDENTITY_PROFILE=preview` binds the portal to `dev.devantler.tech`, a
+dedicated broker audience and one verified operator subject. It requires a
+projected sign-in credential and verified TLS to a PostgreSQL service in the
+preview namespace with its own database and web role. The profile supports
+identity and project flows. Real card and invoice collection, email, customer
+provisioning and work approvals stay closed. The simulated checkout is tracked
+in [#689](https://github.com/devantler-tech/business-site/issues/689).
+
 ### Production public-content template
 
 Use `bash scripts/package-runtime.sh --release --production-template --svelte` to build

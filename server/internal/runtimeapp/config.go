@@ -23,10 +23,11 @@ import (
 // ErrConfig intentionally omits private dependency details from startup errors.
 var ErrConfig = errors.New("portal configuration is invalid")
 
-// Config holds the all-or-none private dependencies, never an activation setting.
+// Config holds the admitted private dependencies and their runtime boundary.
 type Config struct {
 	database, issuer, client, callback, secretFile string
 	secretProjected                                bool
+	preview                                        bool
 	billing                                        billingConfig
 	cards                                          cardConfig
 	mail                                           mailConfig
@@ -49,10 +50,13 @@ type billingConfig struct {
 	salesAccount                int
 }
 
-// IdentityProvider keeps ordinary startup closed. An explicit production profile
-// is separate from bounded staging; both require complete private dependencies.
+// IdentityProvider keeps ordinary startup closed. An explicit profile requires
+// complete private dependencies admitted for that profile.
 func IdentityProvider(ctx context.Context, c Config) (openfeature.FeatureProvider, error) {
 	profile := os.Getenv("PORTAL_IDENTITY_PROFILE")
+	if c.preview != (profile == "preview") {
+		return nil, activation.ErrInvalid
+	}
 	if profile == "" && os.Getenv("PORTAL_IDENTITY_FLAG") == "" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" {
 		return openfeature.NoopProvider{}, nil
 	}
@@ -64,6 +68,8 @@ func IdentityProvider(ctx context.Context, c Config) (openfeature.FeatureProvide
 		return activation.New(ctx)
 	case "production":
 		return activation.NewProduction(ctx)
+	case "preview":
+		return activation.NewPreview(ctx)
 	default:
 		return nil, activation.ErrInvalid
 	}
@@ -130,6 +136,7 @@ func ReadCompanyDisclosure(filename string) (string, error) {
 // set. It parses no activation flag; the real OpenFeature SDK remains the gate.
 func ReadConfig(getenv func(string) string) (Config, error) {
 	c := Config{database: getenv("PORTAL_DATABASE_URL"), issuer: getenv("PORTAL_OIDC_ISSUER"), client: getenv("PORTAL_OIDC_CLIENT_ID"), callback: getenv("PORTAL_CALLBACK_URL"), secretFile: getenv("PORTAL_CLIENT_SECRET_FILE")}
+	c.preview = getenv("PORTAL_IDENTITY_PROFILE") == "preview"
 	if projected := getenv("PORTAL_CLIENT_SECRET_PROJECTION_FILE"); projected != "" {
 		if c.secretFile != "" {
 			return Config{}, ErrConfig
@@ -171,6 +178,9 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	if count == 0 {
+		if c.preview {
+			return Config{}, ErrConfig
+		}
 		return c, nil
 	}
 	if count != 5 || !filepath.IsAbs(c.secretFile) {
@@ -191,6 +201,9 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 	}
 	db, err := pgxpool.ParseConfig(c.database)
 	if err != nil || db.ConnConfig.TLSConfig == nil || db.ConnConfig.TLSConfig.InsecureSkipVerify || len(db.ConnConfig.Fallbacks) != 0 {
+		return Config{}, ErrConfig
+	}
+	if c.preview && !c.isolatedPreview(db.ConnConfig) {
 		return Config{}, ErrConfig
 	}
 	return c, nil
@@ -345,6 +358,12 @@ func (c Config) FitsPortalHost(host string) bool {
 	}
 	callback, err := url.Parse(c.callback)
 	if err != nil {
+		return false
+	}
+	if c.preview {
+		return host == previewPortalHost && callback.Host == previewPortalHost && callback.Path == "/callback"
+	}
+	if isPreviewHost(host) || isPreviewHost(callback.Hostname()) {
 		return false
 	}
 	if host == "" {
