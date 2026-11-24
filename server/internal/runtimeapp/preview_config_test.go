@@ -15,7 +15,7 @@ const enabledPreviewTestFlag = `{"defaultVariant":"on","variants":[{"name":"on",
 func previewTestSettings() map[string]string {
 	return map[string]string{
 		"PORTAL_IDENTITY_PROFILE":              "preview",
-		"PORTAL_DATABASE_URL":                  "postgres://portal_preview_web:fixture@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full",
+		"PORTAL_DATABASE_URL":                  "postgres://portal_preview_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full",
 		"PORTAL_OIDC_ISSUER":                   "https://login.devantler.tech",
 		"PORTAL_OIDC_CLIENT_ID":                "business-site-preview",
 		"PORTAL_CALLBACK_URL":                  "https://dev.devantler.tech/callback",
@@ -63,11 +63,11 @@ func TestPreviewRuntimeRejectsSharedDependencies(t *testing.T) {
 		name     string
 		override map[string]string
 	}{
-		{"ordinary database", map[string]string{"PORTAL_DATABASE_URL": "postgres://ordinary_runtime:fixture@production-fixture.example.invalid:5432/portal?sslmode=verify-full"}},
+		{"ordinary database", map[string]string{"PORTAL_DATABASE_URL": "postgres://ordinary_runtime@production-fixture.example.invalid:5432/portal?sslmode=verify-full"}},
 		{"database host override", map[string]string{"PORTAL_DATABASE_URL": previewTestSettings()["PORTAL_DATABASE_URL"] + "&host=production.example.invalid"}},
-		{"ordinary database role", map[string]string{"PORTAL_DATABASE_URL": "postgres://ordinary_runtime:fixture@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"}},
-		{"ordinary database name", map[string]string{"PORTAL_DATABASE_URL": "postgres://portal_preview_web:fixture@preview-fixture.business-site-dev.svc.cluster.local:5432/portal?sslmode=verify-full"}},
-		{"hostname outside the preview service form", map[string]string{"PORTAL_DATABASE_URL": "postgres://portal_preview_web:fixture@other.preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"}},
+		{"ordinary database role", map[string]string{"PORTAL_DATABASE_URL": "postgres://ordinary_runtime@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"}},
+		{"ordinary database name", map[string]string{"PORTAL_DATABASE_URL": "postgres://portal_preview_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal?sslmode=verify-full"}},
+		{"hostname outside the preview service form", map[string]string{"PORTAL_DATABASE_URL": "postgres://portal_preview_web@other.preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"}},
 		{"ordinary audience", map[string]string{"PORTAL_OIDC_CLIENT_ID": "portal"}},
 		{"different issuer", map[string]string{"PORTAL_OIDC_ISSUER": "https://different.example.invalid"}},
 		{"ordinary callback", map[string]string{"PORTAL_CALLBACK_URL": "https://portal.devantler.tech/callback"}},
