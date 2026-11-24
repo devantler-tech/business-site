@@ -119,7 +119,7 @@ readonly manifest_members=(
   prod/network-policy.yaml prod/disruption-budget.yaml prod/secret-store.yaml
   prod/external-secret-disclosure.yaml prod/external-secret-numina.yaml prod/external-secret-stripe.yaml
   prod/job-portal-migration.yaml prod/cronjob-portal-retention.yaml
-  dev/kustomization.yaml
+  dev/kustomization.yaml dev/job-preview-migration.yaml
 )
 is_manifest_member() {
   local expected
