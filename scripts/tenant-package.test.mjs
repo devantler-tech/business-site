@@ -28,18 +28,23 @@ test("the artifact root renders the production overlay", () => {
   assert.equal(render(), render(path.join(root, "deploy/prod")));
 });
 
-test("the hosted preview uses only its own disclosure input", () => {
+test("the hosted preview keeps its application and schema migration private", () => {
   const preview = yaml.loadAll(render(path.join(root, "deploy/dev")));
-  assert.deepEqual(preview.map((document) => document.kind), ["WebApp"]);
-  const [app] = preview;
-  assert.equal(app.metadata.namespace, "business-site-dev");
+  assert.deepEqual(preview.map((document) => document.kind).sort(), ["Job", "WebApp"]);
+  assert.ok(preview.every((document) => document.metadata.namespace === "business-site-dev"));
+  const app = preview.find((document) => document.kind === "WebApp");
   assert.equal(app.metadata.name, "business-site-dev");
   assert.equal(app.spec.name, "business-site-dev");
   assert.equal(app.spec.host, "dev.devantler.tech");
   assert.equal(app.spec.replicas, 1);
   assert.deepEqual(app.spec.secretProjections, [{
-    secretName: "business-site-dev-disclosure",
-    items: [{ key: "company-disclosure", path: "disclosure" }],
+    secretName: "business-site-dev-runtime",
+    items: [
+      { key: "company-disclosure", path: "disclosure" },
+      { key: "portal-settings", path: "portal-settings" },
+      { key: "portal-client-secret", path: "portal-client-secret" },
+      { key: "portal-database-ca", path: "portal-database-ca" },
+    ],
   }]);
   const [base] = yaml.loadAll(render(path.join(root, "deploy/base")));
   assert.equal(app.spec.image, base.spec.image);
@@ -47,7 +52,20 @@ test("the hosted preview uses only its own disclosure input", () => {
     "--public", "/app/public",
     "--listen", "0.0.0.0:8080",
     "--company-disclosure-projection", "/run/webapp-inputs/disclosure",
+    "--public-host", "devantler.tech",
+    "--portal-host", "dev.devantler.tech",
+    "--portal-settings-projection", "/run/webapp-inputs/portal-settings",
   ]);
+  const job = preview.find((document) => document.kind === "Job");
+  assert.equal(job.metadata.name, "business-site-dev-migration");
+  const pod = job.spec.template.spec;
+  assert.equal(pod.automountServiceAccountToken, false);
+  assert.equal(pod.containers[0].image, app.spec.image);
+  assert.deepEqual(pod.containers[0].args, [
+    "--migrate", "--migration-database-projection", "/run/portal-migration/database-url",
+    "--runtime-role", "portal_preview_web",
+  ]);
+  assert.equal(pod.volumes.find((volume) => volume.name === "migration").secret.secretName, "business-site-dev-migration");
 });
 
 test("the rendered network policy allows only the two billing APIs on HTTPS", () => {

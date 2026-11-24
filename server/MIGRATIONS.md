@@ -243,7 +243,11 @@ retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
 Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
 This grants no service execution authority and does not prove inbox receipt.
 
-v31 records typed proposal terms and the original membership incarnations at
+v31 adds immutable simulated purchase receipts for the fictional client workspace.
+The named preview database and runtime login receive SELECT/INSERT. The normal
+runtime has no receipt privileges. The migration changes no billing or work records.
+
+v32 records typed proposal terms and the original membership incarnations at
 sharing and acceptance. Existing proposals remain in their original format.
 The service fulfillment and consumer tables grant the runtime SELECT and INSERT.
 Appointment sharing and prepayment remain held pending the booking workflow.

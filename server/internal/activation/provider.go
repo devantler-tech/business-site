@@ -29,13 +29,24 @@ var productionFlags = map[string]string{
 	"portal-card-billing":         "PORTAL_CARD_BILLING_FLAG",
 }
 
+// Preview maps only the capabilities needed to exercise a fictional workspace.
+var previewFlags = map[string]string{
+	"portal-identity":            "PORTAL_IDENTITY_FLAG",
+	"portal-requests":            "PORTAL_REQUESTS_FLAG",
+	"portal-triage":              "PORTAL_TRIAGE_FLAG",
+	"portal-proposals":           "PORTAL_PROPOSALS_FLAG",
+	"portal-proposal-sharing":    "PORTAL_PROPOSAL_SHARING_FLAG",
+	"portal-proposal-acceptance": "PORTAL_PROPOSAL_ACCEPTANCE_FLAG",
+}
+
 type provider struct {
 	openfeature.FeatureProvider
-	lifetime   context.Context
-	cancel     context.CancelFunc
-	until      time.Time
-	lease      string
-	production bool
+	lifetime context.Context
+	cancel   context.CancelFunc
+	until    time.Time
+	lease    string
+	profile  string
+	settings map[string]string
 }
 
 // New uses the maintained JSON decoder behind a ten-minute maximum operator
@@ -69,13 +80,22 @@ func identityEnvironment() openfeature.FeatureProvider {
 // It inherits process cancellation and has no staging timer. Optional release
 // gates require their own settings; identity alone enables none of them.
 func NewProduction(ctx context.Context) (openfeature.FeatureProvider, error) {
-	if ctx == nil || ctx.Err() != nil || os.Getenv("PORTAL_IDENTITY_PROFILE") != "production" || os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") != "" || len(os.Getenv("PORTAL_IDENTITY_FLAG")) == 0 || len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 16384 {
+	return newNamedProfile(ctx, "production", productionFlags)
+}
+
+// NewPreview enables the fictional workspace's identity and project workflow.
+func NewPreview(ctx context.Context) (openfeature.FeatureProvider, error) {
+	return newNamedProfile(ctx, "preview", previewFlags)
+}
+
+func newNamedProfile(ctx context.Context, profile string, settings map[string]string) (openfeature.FeatureProvider, error) {
+	if ctx == nil || ctx.Err() != nil || os.Getenv("PORTAL_IDENTITY_PROFILE") != profile || os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") != "" || len(os.Getenv("PORTAL_IDENTITY_FLAG")) == 0 || len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 16384 {
 		return nil, ErrInvalid
 	}
 	lifetime, cancel := context.WithCancel(ctx)
 	p := &provider{FeatureProvider: environment.NewProvider(environment.WithFlagToEnvMapper(func(key string) string {
-		return productionFlags[key]
-	})), lifetime: lifetime, cancel: cancel, production: true}
+		return settings[key]
+	})), lifetime: lifetime, cancel: cancel, profile: profile, settings: settings}
 	if err := p.Init(openfeature.NewEvaluationContext("", nil)); err != nil {
 		cancel()
 		return nil, ErrInvalid
@@ -83,14 +103,14 @@ func NewProduction(ctx context.Context) (openfeature.FeatureProvider, error) {
 	return p, nil
 }
 
-// Init rechecks the selected process lifetime and, for production, the maintained
+// Init rechecks the selected process lifetime and, for a named profile, the maintained
 // decoder's typed result. A false flag is valid closed configuration.
 func (p *provider) Init(openfeature.EvaluationContext) error {
 	if !p.valid(p.lifetime) {
 		return ErrInvalid
 	}
-	if p.production {
-		for key, setting := range productionFlags {
+	if p.profile != "" {
+		for key, setting := range p.settings {
 			if os.Getenv(setting) == "" {
 				continue
 			}
@@ -107,18 +127,18 @@ func (p *provider) Init(openfeature.EvaluationContext) error {
 func (p *provider) Shutdown() { p.cancel() }
 
 // valid checks request/process lifetime and the unchanged profile boundary. Only
-// staging uses its original bounded lease; production refuses any such lease.
+// staging uses a bounded lease; named profiles use the process lifetime.
 func (p *provider) valid(ctx context.Context) bool {
 	if ctx == nil || ctx.Err() != nil || p.lifetime.Err() != nil || len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 16384 {
 		return false
 	}
-	if p.production {
-		for _, setting := range productionFlags {
+	if p.profile != "" {
+		for _, setting := range p.settings {
 			if len(os.Getenv(setting)) > 16384 {
 				return false
 			}
 		}
-		return os.Getenv("PORTAL_IDENTITY_PROFILE") == "production" && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" && len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 0
+		return os.Getenv("PORTAL_IDENTITY_PROFILE") == p.profile && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == "" && len(os.Getenv("PORTAL_IDENTITY_FLAG")) > 0
 	}
 	return os.Getenv("PORTAL_IDENTITY_PROFILE") == "" && time.Now().Before(p.until) && os.Getenv("PORTAL_IDENTITY_LEASE_UNTIL") == p.lease
 }
@@ -129,8 +149,8 @@ func (p *provider) BooleanEvaluation(ctx context.Context, key string, fallback b
 	// A successful explicit false keeps unrelated capabilities closed even if
 	// a future caller supplies true as its SDK fallback. Evaluation errors are
 	// still denied by the application's false-default/no-error gate.
-	if p.production {
-		setting, supported := productionFlags[key]
+	if p.profile != "" {
+		setting, supported := p.settings[key]
 		if !supported || (key != "portal-identity" && os.Getenv(setting) == "") {
 			return openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{Reason: openfeature.DisabledReason}}
 		}
@@ -138,7 +158,7 @@ func (p *provider) BooleanEvaluation(ctx context.Context, key string, fallback b
 	denied := openfeature.BoolResolutionDetail{Value: false, ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
 		Reason: openfeature.ErrorReason, ResolutionError: openfeature.NewGeneralResolutionError("portal activation is unavailable"),
 	}}
-	if (!p.production && key != "portal-identity") || !p.valid(ctx) {
+	if (p.profile == "" && key != "portal-identity") || !p.valid(ctx) {
 		return denied
 	}
 	result := p.FeatureProvider.BooleanEvaluation(ctx, key, fallback, data)

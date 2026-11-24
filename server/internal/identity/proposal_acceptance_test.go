@@ -399,6 +399,7 @@ func TestAcceptanceStorageDenialAndV9PreserveHistory(t *testing.T) {
 	assertAcceptanceCount(t, b, 0)
 	// Reset only this disposable ledger before the historical migration control.
 	if _, err := migrator.Exec(t.Context(), `TRUNCATE portal_service_consumers,portal_service_fulfillments,
+ portal_preview_receipts,
  portal_addon_removals,portal_addon_ends,portal_request_closures,portal_order_addons,portal_launch_places,
  portal_mail_deliveries,portal_mail_outbox,portal_withdrawal_settlements,portal_order_completions,
  portal_withdrawal_cancellations,portal_order_withdrawals,portal_charge_reversals,portal_card_cancellations,

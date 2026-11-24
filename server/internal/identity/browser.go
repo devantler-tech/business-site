@@ -302,6 +302,11 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
+	if b.foundation != nil && b.foundation.operatorOnly {
+		mux.HandleFunc("POST /portal/preview", b.enterClientPreview)
+		mux.HandleFunc("POST /portal/preview/leave", b.leaveClientPreview)
+		mux.HandleFunc("POST /portal/requests/{id}/preview-orders", b.submitPreviewPurchase)
+	}
 	for _, route := range operatorRoutes {
 		mux.HandleFunc(route.method+" "+operatorAPIRoot+route.path, b.operatorAPI(route))
 	}
@@ -610,13 +615,28 @@ func (b *browser) callback(w http.ResponseWriter, r *http.Request) {
 
 // principal reconstructs identity only from the server-owned durable session.
 func (b *browser) principal(ctx context.Context) Principal {
-	incarnation := b.sessions.GetString(ctx, "membership_incarnation")
+	return b.sessionPrincipal(
+		b.sessions.GetString(ctx, "issuer"), b.sessions.GetString(ctx, "subject"),
+		b.sessions.GetString(ctx, "membership_incarnation"), b.sessions.GetInt64(ctx, "expires"),
+		b.sessions.GetString(ctx, previewSessionKey),
+	)
+}
+
+func (b *browser) sessionPrincipal(issuer, subject, incarnation string, expiry int64, previewIncarnation string) Principal {
 	if incarnation == "" {
 		// Legacy authenticated payloads must sign in again; pre-authentication
 		// sessions remain anonymous and can complete their ordinary sign-in flow.
 		return Principal{}
 	}
-	return Principal{issuer: b.sessions.GetString(ctx, "issuer"), subject: b.sessions.GetString(ctx, "subject"), audience: b.foundation.broker.clientID, expires: time.Unix(b.sessions.GetInt64(ctx, "expires"), 0), membershipIncarnation: incarnation}
+	p := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expiry, 0), membershipIncarnation: incarnation}
+	if previewIncarnation != "" {
+		if !b.foundation.operatorOnly {
+			return Principal{}
+		}
+		p.preview = previewOperator{subject: subject, incarnation: incarnation}
+		p.subject, p.membershipIncarnation = previewSubject, previewIncarnation
+	}
+	return p
 }
 
 // home rechecks current membership before rendering the client's workspace.
@@ -680,6 +700,7 @@ type pageData struct {
 	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                            bool
 	TriageEnabled                                                                                                                              bool
+	ClientPreview, PreviewAvailable                                                                                                            bool
 	Audit                                                                                                                                      []auditEntry
 }
 
@@ -694,6 +715,7 @@ func (b *browser) render(w http.ResponseWriter, r *http.Request, status int, kin
 // data shares the same localized, escaped layout with the private contact form.
 func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	d := pageData{Lang: language(r), Kind: kind, Client: client, CSRF: token, Title: "Your client portal", Intro: "A private space for your work with Devantler Tech.", Action: "Sign in", SignedIn: "You are signed in", Logout: "Sign out", Error: "Sign-in could not be completed. The portal is invitation-only: try again with the account from your invitation, or contact Devantler Tech.", Unavailable: "The portal is unavailable. Please try again later.", Back: "Back to the website", Theme: "Appearance", System: "System", Light: "Light", Dark: "Dark", Operator: "Operator", Boundary: "Ordering and payments are not available yet."}
+	d.ClientPreview = token != "" && b.foundation != nil && b.foundation.operatorOnly && b.principal(r.Context()).isClientPreview()
 	other, path := "da", r.URL.Path
 	if d.Lang == "da" {
 		other = "en"
@@ -729,6 +751,12 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Dark = "Mørk"
 		d.Operator = "Operatør"
 		d.Boundary = "Bestilling og betaling er endnu ikke tilgængelig."
+	}
+	if kind == "home" && d.ClientPreview {
+		d.Client = "Demo workspace"
+		if d.Lang == "da" {
+			d.Client = "Arbejdsområde til test"
+		}
 	}
 	return d
 }

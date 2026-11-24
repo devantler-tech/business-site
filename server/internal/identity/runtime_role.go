@@ -99,6 +99,28 @@ var (
 	billingStateTables = []string{"portal_order_charges", "portal_card_checkouts"}
 )
 
+// CheckPreviewReceiptRole confines append-only receipts to the separately
+// configured preview login and database. It checks assumable roles as well.
+func CheckPreviewReceiptRole(ctx context.Context, pool queryRower, preview bool) error {
+	var allowed bool
+	err := pool.QueryRow(ctx, `SELECT
+ (CASE WHEN $1::boolean THEN current_user='portal_preview_web' AND current_database()='portal_preview'
+    AND has_table_privilege(current_user,'portal_preview_receipts','SELECT')
+    AND has_table_privilege(current_user,'portal_preview_receipts','INSERT')
+  ELSE NOT EXISTS (SELECT 1 FROM pg_roles r
+    WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER'))
+      AND has_any_column_privilege(r.oid,'portal_preview_receipts','SELECT,INSERT'))
+  END)
+ AND NOT EXISTS (SELECT 1 FROM pg_roles r
+    WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND
+      (has_any_column_privilege(r.oid,'portal_preview_receipts','UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION')
+       OR has_table_privilege(r.oid,'portal_preview_receipts','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`, preview).Scan(&allowed)
+	if err != nil || !allowed {
+		return ErrDenied
+	}
+	return nil
+}
+
 // checkBillingRole requires SELECT/INSERT on every billing table and UPDATE on
 // the state tables only. Fixed tables are never changed, and nothing is
 // deleted, directly, by delegation or assumable role.

@@ -24,7 +24,7 @@ type customerInvitationInput struct {
 }
 
 func validCustomerWorkspace(workspace string) bool {
-	return workspace != "" && workspace != operatorWorkspace && len(workspace) <= 100 && strings.TrimSpace(workspace) == workspace && utf8.ValidString(workspace) && !strings.ContainsFunc(workspace, unicode.IsControl)
+	return workspace != "" && workspace != operatorWorkspace && workspace != previewWorkspace && len(workspace) <= 100 && strings.TrimSpace(workspace) == workspace && utf8.ValidString(workspace) && !strings.ContainsFunc(workspace, unicode.IsControl)
 }
 
 // decodeOperatorInput admits one bounded JSON object or the native form's exact

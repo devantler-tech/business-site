@@ -17,6 +17,7 @@ func (b *browser) renderOperator(w http.ResponseWriter, r *http.Request, client 
 // authority. Existing operator handlers keep their final authorization checks.
 func (b *browser) operatorData(r *http.Request, kind, client string) pageData {
 	d := b.data(r, kind, client, nosurf.Token(r))
+	d.PreviewAvailable = kind == "operator" && b.foundation != nil && b.foundation.operatorOnly
 	d.Intro = ""
 	if kind != "operator" {
 		d.TriageEnabled = b.foundation.triageReady(r.Context())

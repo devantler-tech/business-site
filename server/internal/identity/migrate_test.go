@@ -68,9 +68,8 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
-// rewindOriginalConfirmationFixture removes v31 dependencies and the v30
-// producer metadata while preserving the frozen mail, sender receipt and older ledger.
-func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
+// rewindServiceContractsFixture removes v32 while retaining the published v31 state.
+func rewindServiceContractsFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_service_consumers,portal_service_fulfillments;
  DROP TRIGGER portal_service_confirmation ON portal_mail_outbox;
@@ -86,6 +85,17 @@ func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
    DROP COLUMN appointment_terms_en,DROP COLUMN appointment_terms_da,DROP COLUMN appointment_terms_sha256,DROP COLUMN content_sha256;
  DROP FUNCTION portal_service_quote_hash(text,text,text,text,text,bigint,bigint,text,integer,text,text,text),
    portal_service_terms_hash(text,text),portal_service_json_text(text);
+ DELETE FROM portal_schema_version WHERE version=32`); err != nil {
+		t.Fatal("historical fixture could not reconstruct the preview receipt schema", err)
+	}
+}
+
+// rewindOriginalConfirmationFixture removes later migrations and the v30 producer
+// metadata while preserving the frozen mail, sender receipt and older ledger.
+func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rewindServiceContractsFixture(t, pool)
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_preview_receipts;
  ALTER TABLE portal_mail_outbox
  DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,
  DROP CONSTRAINT portal_mail_complete_producer, DROP CONSTRAINT portal_mail_body_digest,

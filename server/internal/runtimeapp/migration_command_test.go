@@ -21,6 +21,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const migrationFixtureVersionCount = 32
+
 // migrationCommandFixture creates only a uniquely named disposable database on
 // the already validated loopback fixture, then exercises verified PostgreSQL TLS.
 func migrationCommandFixture(t *testing.T) (string, *pgxpool.Pool, *url.URL) {
@@ -151,7 +153,7 @@ func TestActualExecutableMigration(t *testing.T) {
 		t.Fatal("actual command did not migrate the empty disposable database")
 	}
 	var count int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != 31 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&count); err != nil || count != migrationFixtureVersionCount {
 		t.Fatal("actual command did not apply every embedded schema version")
 	}
 	if _, err := pool.Exec(t.Context(), "INSERT INTO portal_memberships VALUES('https://fixture.invalid','existing','client-existing','client',true)"); err != nil {
@@ -407,7 +409,7 @@ func TestMigrationBoundsTLSAndAmbientServiceFiles(t *testing.T) {
 					t.Fatal("explicit connection inherited ambient service-file access")
 				}
 				var versions int
-				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 31 {
+				if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != migrationFixtureVersionCount {
 					t.Fatal("explicit migration did not apply every embedded schema version")
 				}
 			} else {
@@ -530,7 +532,7 @@ func TestActualMigrationAcceptsConfinedProjection(t *testing.T) {
 		t.Fatal("actual job refused trusted confined projected inputs")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 31 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != migrationFixtureVersionCount {
 		t.Fatal("actual projected-input migration did not apply every version")
 	}
 }
@@ -564,7 +566,7 @@ func TestActualMigrationAcceptsKubeletProjection(t *testing.T) {
 		t.Fatal("actual job refused the kubelet-shaped projection")
 	}
 	var versions int
-	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != 31 {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM portal_schema_version").Scan(&versions); err != nil || versions != migrationFixtureVersionCount {
 		t.Fatal("projected migration did not apply every version")
 	}
 	if output, err := runMigrationCommand(t, binary, "--retention-purge", "--migration-database-file", connection); err == nil || output != "portal retention purge failed\n" {
@@ -649,7 +651,7 @@ func TestActualMigrationRequiresExistingRelationOwnership(t *testing.T) {
 				t.Error("actual job reported success without owning the managed schema")
 			}
 			var preserved bool
-			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=31 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)").Scan(&preserved); err != nil || !preserved {
+			if err := admin.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM portal_schema_version)=$1 AND EXISTS(SELECT 1 FROM portal_memberships WHERE subject='retained' AND revoked)", migrationFixtureVersionCount).Scan(&preserved); err != nil || !preserved {
 				t.Fatal("ownership refusal changed the ledger or retained record")
 			}
 		})
@@ -734,7 +736,8 @@ func TestActualMigrationGrantsRuntimeRole(t *testing.T) {
  AND NOT has_table_privilege('portal_runtime','portal_service_fulfillments','UPDATE,DELETE')
  AND has_table_privilege('portal_runtime','portal_service_consumers','INSERT')
  AND NOT has_table_privilege('portal_runtime','portal_service_consumers','UPDATE,DELETE')
- AND (SELECT count(*) FROM portal_schema_version)=31`).Scan(&exact); err != nil || !exact {
+ AND NOT has_any_column_privilege('portal_runtime','portal_preview_receipts','SELECT,INSERT')
+ AND (SELECT count(*) FROM portal_schema_version)=$1`, migrationFixtureVersionCount).Scan(&exact); err != nil || !exact {
 		t.Fatal("repeat migration retained privileges beyond the documented set")
 	}
 	if err := identity.CheckRuntimeRole(t.Context(), runtime); err != nil {

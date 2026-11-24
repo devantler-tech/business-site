@@ -86,6 +86,44 @@ func TestLinkOperatorsAcceptsOnlySupportedDexSubjects(t *testing.T) {
 	}
 }
 
+func TestPrivatePreviewOnlyAdmitsItsListedOperator(t *testing.T) {
+	b := newBrowserFixture(t)
+	// Prepare the same records and token claims an ordinary portal accepts.
+	// The preview must refuse them even if such data is present in its database.
+	existing := enroll(t, b.svc, b.f, customerSubject, "fixture-client", "client")
+	pendingSubject := customeridentity.DexSubject("567890123456789012", customeridentity.ZitadelConnectorID)
+	pending := invitedAttempt(t, b.svc, b.f, pendingSubject, "fixture-client", "client")
+	pendingToken := b.f.token(t, pendingSubject, pending.Nonce, nil)
+
+	if err := b.svc.LinkPreviewOperator(operatorSubject); !errors.Is(err, ErrDenied) {
+		t.Fatal("the preview accepted a legacy sign-in subject")
+	}
+	if err := b.svc.LinkPreviewOperator(sharedOperator); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.svc.Authorize(t.Context(), existing, "fixture-client", false); !errors.Is(err, ErrDenied) {
+		t.Error("an existing customer was authorized in the preview")
+	}
+	if _, err := b.svc.Complete(t.Context(), pending.State, pending.BrowserBinding, pendingToken); !errors.Is(err, ErrDenied) {
+		t.Error("a pending customer invitation was redeemed in the preview")
+	}
+	newSubject := customeridentity.DexSubject("678901234567890123", customeridentity.ZitadelConnectorID)
+	if err := b.svc.Invite(t.Context(), Invitation{b.f.issuer, newSubject, "fixture-client", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
+		t.Error("a customer invitation could be issued in the preview")
+	}
+	b.as(sharedOperator)
+	b.finish(b.start())
+	if status, _, _ := b.request("GET", "/portal/operator", nil, ""); status != http.StatusOK {
+		t.Fatalf("the listed operator could not sign in: %d", status)
+	}
+	if err := b.svc.Revoke(t.Context(), b.f.issuer, sharedOperator); err != nil {
+		t.Fatal(err)
+	}
+	if status, _, _ := b.request("GET", "/portal/operator", nil, ""); status != http.StatusForbidden {
+		t.Fatalf("the operator retained preview access after revocation: %d", status)
+	}
+}
+
 func TestSharedSignInOffersConfiguredMethods(t *testing.T) {
 	b := newBrowserFixture(t)
 	for _, path := range []string{"/portal/?lang=da", "/portal/sign-in?lang=da"} {

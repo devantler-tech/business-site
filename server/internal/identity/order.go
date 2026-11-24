@@ -119,7 +119,7 @@ func firstOfNextMonth(t time.Time) time.Time {
 // placeOrder binds the client's current acceptance to one collection path. An
 // identical retry returns the existing order; a different path conflicts.
 func (s *Foundation) placeOrder(ctx context.Context, p Principal, id, acceptance, collection string, earlyStart, launch bool, addonValues []string, mc mailContext) (projectOrder, error) {
-	if !s.collectionReady(ctx, collection) {
+	if p.isClientPreview() || !s.collectionReady(ctx, collection) {
 		return projectOrder{}, ErrDenied
 	}
 	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
