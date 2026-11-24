@@ -346,6 +346,9 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 	if err := identity.CheckSchemaCurrent(startup, pool); err != nil {
 		return fail()
 	}
+	if err := identity.CheckPreviewReceiptRole(startup, pool, c.preview); err != nil {
+		return fail()
+	}
 	broker, err := identity.NewBroker(startup, c.issuer, c.client)
 	if err != nil {
 		return fail()

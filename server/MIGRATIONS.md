@@ -243,6 +243,10 @@ retain NULL metadata; no legacy email or sender receipt is upgraded into proof.
 Runtime grants stay SELECT/INSERT only on the outbox and sender receipt tables.
 This grants no service execution authority and does not prove inbox receipt.
 
+v31 adds immutable simulated purchase receipts for the fictional client workspace.
+The named preview database and runtime login receive SELECT/INSERT. The normal
+runtime has no receipt privileges. The migration changes no billing or work records.
+
 Grant SELECT only on `portal_membership_transitions`. Membership DML invokes
 migration-owned triggers; never grant direct event writes, delegated event
 privileges, membership TRUNCATE/TRIGGER/MAINTAIN, trigger-function execution or

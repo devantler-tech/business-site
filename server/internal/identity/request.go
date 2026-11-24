@@ -208,6 +208,13 @@ func (b *browser) showRequests(w http.ResponseWriter, r *http.Request, id string
 			b.triageError(w, r, err)
 			return
 		}
+		if page.ClientPreview {
+			page.PreviewPurchase, err = b.foundation.readPreviewPurchase(r.Context(), b.principal(r.Context()), id, page.Acceptances)
+			if err != nil {
+				b.triageError(w, r, err)
+				return
+			}
+		}
 		if billing {
 			if page.Order, err = b.foundation.readClientOrder(r.Context(), b.principal(r.Context()), id); err != nil {
 				b.triageError(w, r, err)
@@ -301,6 +308,7 @@ type requestPageData struct {
 	Order             *projectOrder
 	OrderAcceptance   string
 	OrderProposal     *projectProposal
+	PreviewPurchase   *previewPurchase
 	OrderTerms        string
 	OrderTermsHash    string
 	Checkouts         []orderCheckout

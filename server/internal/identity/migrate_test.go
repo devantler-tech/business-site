@@ -68,11 +68,13 @@ func rewindMembershipHistoryFixture(t *testing.T, pool *pgxpool.Pool) {
 
 // Rewinds touch only the disposable migrator's synthetic schema, never deployed
 // runtime grants or a production rollback. Remove new dependent tables before v13.
-// rewindOriginalConfirmationFixture removes only the disposable v30 producer
-// metadata. It never rewrites the frozen mail, sender receipt or older ledger.
+// rewindOriginalConfirmationFixture removes later preview receipts and the v30
+// producer metadata without changing the frozen mail, sender receipt or older ledger.
 func rewindOriginalConfirmationFixture(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(t.Context(), `ALTER TABLE portal_mail_outbox
+	if _, err := pool.Exec(t.Context(), `DROP TABLE portal_preview_receipts;
+ DELETE FROM portal_schema_version WHERE version=31;
+ ALTER TABLE portal_mail_outbox
  DROP CONSTRAINT portal_mail_original_order, DROP CONSTRAINT portal_mail_original_acceptance,
  DROP CONSTRAINT portal_mail_complete_producer, DROP CONSTRAINT portal_mail_body_digest,
  DROP COLUMN producer_format, DROP COLUMN acceptance_id, DROP COLUMN proposal_version,

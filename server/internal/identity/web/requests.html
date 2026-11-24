@@ -25,7 +25,7 @@
 {{with .SharedProposal}}<h3>Version {{.Version}}</h3>
 <dl class="request-receipt"><dt>{{if eq $.Lang `da`}}Omfang{{else}}Scope{{end}}</dt><dd class="request-brief">{{.Scope}}</dd><dt>{{if eq $.Lang `da`}}Leverancer{{else}}Deliverables{{end}}</dt><dd class="request-brief">{{.Deliverables}}</dd><dt>{{if eq $.Lang `da`}}Engangspris{{else}}One-time price{{end}}</dt><dd>{{.OneTimeDKK}} DKK</dd><dd class="request-brief">{{.OneTimeTerms}}</dd>{{if not $.OrderAcceptance}}{{with $.Launch}}<dt>{{if eq $.Lang `da`}}Lanceringsrabat{{else}}Launch discount{{end}}</dt><dd>−{{.DiscountDKK}} DKK ({{.Percent}}{{if eq $.Lang `da`}} %{{else}}%{{end}})</dd><dt>{{if eq $.Lang `da`}}Engangspris med rabat{{else}}One-time price with discount{{end}}</dt><dd>{{.PriceDKK}} DKK</dd><dd class="request-brief">{{.LaunchText $.Lang}}</dd>{{end}}{{end}}<dt>{{if eq $.Lang `da`}}Månedspris{{else}}Monthly price{{end}}</dt><dd>{{.MonthlyDKK}} DKK</dd><dd class="request-brief">{{.MonthlyTerms}}</dd></dl>{{end}}{{if and .AddonChoices (not .OrderAcceptance)}}<h3>{{if eq .Lang `da`}}Tilvalg ved bestilling{{else}}Add-ons when you order{{end}}</h3>
 <ul>{{range .AddonChoices}}<li>{{.Title $.Lang}}: {{.Price}} DKK{{if .Monthly}}{{if eq $.Lang `da`}} om måneden{{else}} a month{{end}}{{end}}{{if gt .Max 1}}{{if eq $.Lang `da`}} pr. stk.{{else}} each{{end}}{{end}}</li>{{end}}</ul>{{end}}
-{{if .Review}}<form method="post" action="{{root}}/requests/{{.Request.ID}}/proposal-acceptance"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="context_key" value="{{.Review.Key}}"><p id="consent-boundary">{{if eq .Lang `da`}}Gennemgå omfang, priser og vilkår ovenfor. Bekræft kun, hvis det er det tilbud, du ønsker at acceptere. Ved ændringer skal du gennemgå tilbuddet igen.{{else}}Review the scope, prices and terms above. Confirm only if this is the proposal you want to accept. If it changes, you must review it again.{{end}}</p><label for="confirm-proposal"><input id="confirm-proposal" type="checkbox" name="confirm" value="yes" required aria-describedby="consent-boundary">{{if eq .Lang `da`}}Jeg accepterer denne version af tilbuddet{{else}}I accept this version of the proposal{{end}}</label><button type="submit">{{if eq .Lang `da`}}Bekræft dette tilbud{{else}}Confirm this proposal{{end}}</button></form>
+{{if .PreviewPurchase}}{{template "preview-purchase" .}}{{end}}{{if .Review}}<form method="post" action="{{root}}/requests/{{.Request.ID}}/proposal-acceptance"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><input type="hidden" name="context_key" value="{{.Review.Key}}"><p id="consent-boundary">{{if eq .Lang `da`}}Gennemgå omfang, priser og vilkår ovenfor. Bekræft kun, hvis det er det tilbud, du ønsker at acceptere. Ved ændringer skal du gennemgå tilbuddet igen.{{else}}Review the scope, prices and terms above. Confirm only if this is the proposal you want to accept. If it changes, you must review it again.{{end}}</p><label for="confirm-proposal"><input id="confirm-proposal" type="checkbox" name="confirm" value="yes" required aria-describedby="consent-boundary">{{if eq .Lang `da`}}Jeg accepterer denne version af tilbuddet{{else}}I accept this version of the proposal{{end}}</label><button type="submit">{{if eq .Lang `da`}}Bekræft dette tilbud{{else}}Confirm this proposal{{end}}</button></form>
 {{else if .CanAccept}}<form method="post" action="{{root}}/requests/{{.Request.ID}}/proposal-review"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><input type="hidden" name="lang" value="{{.Lang}}"><button type="submit">{{if eq .Lang `da`}}Gennemgå før accept{{else}}Review before accepting{{end}}</button></form>{{end}}
 </section>{{end}}
 {{range .Acceptances}}<section aria-label="{{if eq $.Lang `da`}}Registreret accept{{else}}Recorded acceptance{{end}}"><h2>{{if eq $.Lang `da`}}Accept registreret{{else}}Acceptance recorded{{end}} — Version {{.Proposal.Version}}</h2>
@@ -49,3 +49,24 @@
 {{if .Requests}}<ul class="request-list">{{range .Requests}}<li><a href="{{root}}/requests/{{.ID}}?lang={{$.Lang}}">{{.Title}}</a><time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Submitted.UTC.Format `2006-01-02`}}</time></li>{{end}}</ul>{{else}}<p>{{if eq .Lang `da`}}Du har ikke sendt en forespørgsel endnu.{{else}}You have not sent a request yet.{{end}}</p>{{end}}
 {{end}}
 </section>{{if ne .View `list`}}<a class="back" href="{{root}}/requests?lang={{.Lang}}">{{if eq .Lang `da`}}Dine forespørgsler{{else}}Your requests{{end}}</a>{{end}}<br><a class="back" href="{{root}}/?lang={{.Lang}}">{{if eq .Lang `da`}}Tilbage til dit arbejdsområde{{else}}Back to your workspace{{end}}</a></main>{{template "portal-footer" .}}
+{{define "preview-purchase"}}
+{{with .PreviewPurchase}}
+<section class="portal-order" aria-labelledby="preview-purchase">
+  <h3 id="preview-purchase">{{if .Simulated}}{{if eq $.Lang `da`}}Køb til test er registreret{{else}}Simulated purchase{{end}}{{else if eq $.Lang `da`}}Pris i denne test{{else}}Simulated checkout{{end}}</h3>
+  <dl class="request-receipt">
+    <dt>{{if eq $.Lang `da`}}Normal engangspris{{else}}Regular one-time price{{end}}</dt><dd>{{.OneTimeDKK}} DKK</dd>
+    {{if .MonthlyMinor}}<dt>{{if eq $.Lang `da`}}Normal månedspris{{else}}Regular monthly price{{end}}</dt><dd>{{.MonthlyDKK}} DKK</dd>{{end}}
+    <dt>{{if eq $.Lang `da`}}Rabat til test{{else}}Test discount{{end}}</dt><dd>{{.DiscountPercent}}%</dd>
+    <dt>{{if eq $.Lang `da`}}Til betaling{{else}}Amount due in the preview{{end}}</dt><dd><strong>DKK {{.DueDKK}}</strong></dd>
+  </dl>
+  {{if .Simulated}}<p>{{if eq $.Lang `da`}}Ingen betaling eller levering er sat i gang.{{else}}No payment or delivery started.{{end}}</p>
+  {{else if .Acceptance}}
+  <form method="post" action="{{root}}/requests/{{$.Request.ID}}/preview-orders">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <input type="hidden" name="lang" value="{{$.Lang}}">
+    <input type="hidden" name="acceptance" value="{{.Acceptance}}">
+    <button type="submit">{{if eq $.Lang `da`}}Bestil som test{{else}}Simulate purchase{{end}}</button>
+  </form>
+  {{end}}
+</section>
+{{end}}{{end -}}
