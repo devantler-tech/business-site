@@ -71,9 +71,7 @@ func TestPrivatePreviewSwitchesToOneFictionalClient(t *testing.T) {
 	if status, _, _ := b.request(http.MethodPost, enter, form, b.site.URL); status != http.StatusSeeOther {
 		t.Fatalf("could not re-enter the demo workspace: status %d", status)
 	}
-	if err := b.svc.Revoke(t.Context(), b.f.issuer, sharedOperator); err != nil {
-		t.Fatal(err)
-	}
+	revokeFixtureAccess(t.Context(), t, b, sharedOperator)
 	if status, _, _ := b.request(http.MethodGet, home, nil, ""); status == http.StatusOK {
 		t.Fatal("a revoked operator could still use the preview")
 	}
