@@ -137,7 +137,7 @@ func validPreviewForm(r *http.Request) bool {
 	return true
 }
 
-func (b *browser) switchPreviewSession(w http.ResponseWriter, ctx context.Context, previewIncarnation string) error {
+func (b *browser) switchPreviewSession(ctx context.Context, w http.ResponseWriter, previewIncarnation string) error {
 	authority := b.contactAuthority(ctx, "")
 	current, ok := b.captureDurableResponse(ctx, authority)
 	if !ok {
@@ -206,7 +206,7 @@ func (b *browser) enterClientPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	incarnation, err := b.foundation.startClientPreview(r.Context(), b.principal(r.Context()))
 	if err == nil {
-		err = b.switchPreviewSession(w, r.Context(), incarnation)
+		err = b.switchPreviewSession(r.Context(), w, incarnation)
 	}
 	b.finishPreviewTransition(w, r, "/portal/", err)
 }
@@ -221,7 +221,7 @@ func (b *browser) leaveClientPreview(w http.ResponseWriter, r *http.Request) {
 		b.finishPreviewTransition(w, r, "", ErrDenied)
 		return
 	}
-	b.finishPreviewTransition(w, r, "/portal/operator", b.switchPreviewSession(w, r.Context(), ""))
+	b.finishPreviewTransition(w, r, "/portal/operator", b.switchPreviewSession(r.Context(), w, ""))
 }
 
 func (b *browser) finishPreviewTransition(w http.ResponseWriter, r *http.Request, path string, err error) {
