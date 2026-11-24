@@ -78,8 +78,11 @@ func (b *browser) captureDurableResponse(ctx context.Context, original contactAu
 	subject, subjectOK := values["subject"].(string)
 	expires, expiresOK := values["expires"].(int64)
 	incarnation, incarnationOK := values["membership_incarnation"].(string)
-	principal := Principal{issuer: issuer, subject: subject, audience: b.foundation.broker.clientID, expires: time.Unix(expires, 0), membershipIncarnation: incarnation}
-	if err != nil || !issuerOK || !subjectOK || !expiresOK || !incarnationOK || incarnation == "" || principal != original.principal || !deadline.Equal(original.deadline) {
+	storedPreview, previewPresent := values[previewSessionKey]
+	previewIncarnation, previewOK := storedPreview.(string)
+	principal := b.sessionPrincipal(issuer, subject, incarnation, expires, previewIncarnation)
+	if err != nil || !issuerOK || !subjectOK || !expiresOK || !incarnationOK || incarnation == "" ||
+		(previewPresent && !previewOK) || principal != original.principal || !deadline.Equal(original.deadline) {
 		return durableResponseSnapshot{}, false
 	}
 	return durableResponseSnapshot{original: original, key: key, data: data}, true
@@ -102,8 +105,20 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
 	defer cancel()
 	// The SDK wait precedes fresh durable reads. This SQL is scoped to the
 	// original client, not whichever client a replacement membership might own.
+	p := original.principal
+	sql := `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>clock_timestamp() AND s.data=$5
+ WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role=$6 AND NOT m.revoked AND m.incarnation::text=$7`
+	args := []any{p.issuer, p.subject, client, snapshot.key, snapshot.data, role, p.membershipIncarnation}
+	if p.isClientPreview() {
+		if !b.foundation.operatorOnly || !b.foundation.operators[p.preview.subject] || client != previewWorkspace || role != "client" {
+			return false
+		}
+		sql += ` AND EXISTS(SELECT 1 FROM portal_memberships a WHERE a.issuer=m.issuer AND a.subject=$8
+ AND a.role='operator' AND NOT a.revoked AND a.incarnation::text=$9)`
+		args = append(args, p.preview.subject, p.preview.incarnation)
+	}
 	var allowed bool
-	err := query.QueryRow(fresh, `SELECT EXISTS(SELECT 1 FROM portal_memberships m JOIN portal_sessions s ON s.token=$4 AND s.expiry>clock_timestamp() AND s.data=$5 WHERE m.issuer=$1 AND m.subject=$2 AND m.client_id=$3 AND m.role=$6 AND NOT m.revoked AND m.incarnation::text=$7)`, original.principal.issuer, original.principal.subject, client, snapshot.key, snapshot.data, role, original.principal.membershipIncarnation).Scan(&allowed)
+	err := query.QueryRow(fresh, sql+")", args...).Scan(&allowed)
 	return err == nil && allowed && ctx.Err() == nil && fresh.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState && time.Now().Before(original.deadline) && time.Now().Before(original.principal.expires)
 }
 

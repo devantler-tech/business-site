@@ -43,6 +43,7 @@ type Principal struct {
 	// Browser sessions retain the exact server-owned membership that admitted
 	// sign-in. Unbound broker/domain proofs have not become browser sessions.
 	membershipIncarnation string
+	preview               previewOperator
 }
 
 // NewBroker discovers the configured HTTPS issuer through maintained OIDC code.
@@ -301,6 +302,9 @@ func (s *Foundation) Invite(ctx context.Context, i Invitation) error {
 // invite retains the control-plane rules and permits the operator API to bind
 // its final commit to the original caller after any provider or SDK wait.
 func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.Tx) bool) error {
+	if i.ClientID == previewWorkspace || i.Subject == previewSubject {
+		return ErrDenied
+	}
 	if !s.ready(ctx) || i.Issuer != s.broker.issuer || strings.TrimSpace(i.Subject) == "" || !s.canInvite(i.Subject, i.Role) || strings.TrimSpace(i.ClientID) == "" || (i.Role != "client" && i.Role != "operator") || !time.Now().Before(i.Expires) || i.Expires.After(time.Now().Add(7*24*time.Hour)) {
 		return ErrDenied
 	}
@@ -496,6 +500,9 @@ func (s *Foundation) membership(ctx context.Context, p Principal) (string, strin
 func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, string, string, error) {
 	if !s.ready(ctx) || p.subject == "" || p.issuer != s.broker.issuer || p.audience != s.broker.clientID || !time.Now().Before(p.expires) {
 		return "", "", "", ErrDenied
+	}
+	if p.isClientPreview() {
+		return s.previewClient(ctx, p)
 	}
 	// Legacy platform identities can only be operators.
 	connector := customeridentity.DexConnector(p.subject)
