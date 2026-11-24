@@ -267,7 +267,12 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 			return nil, closed, ErrConfig
 		}
 	}
-	if c.operators != "" {
+	if c.preview {
+		if err := foundation.LinkPreviewOperator(c.operators); err != nil {
+			pool.Close()
+			return nil, closed, ErrConfig
+		}
+	} else if c.operators != "" {
 		if err := foundation.LinkOperators(strings.Split(c.operators, ",")); err != nil {
 			pool.Close()
 			return nil, closed, ErrConfig

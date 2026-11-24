@@ -123,9 +123,10 @@ type Foundation struct {
 	// endSession and endSessionClient name the upstream identity provider's
 	// RP-initiated logout, which the broker cannot do itself. Both are public.
 	endSession, endSessionClient string
-	// operators are the customer Dex subjects, all issued through the platform
-	// connector, that hold the operator role. Nothing else can sign in that way.
+	// operators lists the customer Dex subjects eligible for the operator role.
 	operators map[string]bool
+	// operatorOnly refuses external customer identities in the private preview.
+	operatorOnly bool
 	// customers is the optional organization-scoped provider for operator actions.
 	customers CustomerDirectory
 	// agents is immutable policy and a distinct verifier, installed at startup.
@@ -170,6 +171,19 @@ func (s *Foundation) LinkOperators(subjects []string) error {
 	return nil
 }
 
+// LinkPreviewOperator admits one shared sign-in subject and disables customer
+// invitations. Like LinkOperators, it must run before serving any requests.
+func (s *Foundation) LinkPreviewOperator(subject string) error {
+	if customeridentity.DexConnector(subject) != customeridentity.ZitadelConnectorID {
+		return ErrDenied
+	}
+	if err := s.LinkOperators([]string{subject}); err != nil {
+		return err
+	}
+	s.operatorOnly = true
+	return nil
+}
+
 // OperatorsLinked reports whether any operator subject is configured.
 func (s *Foundation) OperatorsLinked() bool {
 	return s != nil && len(s.operators) > 0
@@ -196,7 +210,7 @@ func platformIdentity(subject string) bool {
 // out of customer invitations. The customer Dex cannot invite an operator.
 func (s *Foundation) canInvite(subject, role string) bool {
 	connector := customeridentity.DexConnector(subject)
-	return !s.operators[subject] && connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
+	return !s.operatorOnly && !s.operators[subject] && connector != customeridentity.PlatformConnectorID && (connector == "" || role != "operator")
 }
 
 // enrollOperator gives a listed operator its operator membership on first sign-in.
@@ -372,9 +386,9 @@ func (s *Foundation) completeProof(ctx context.Context, nonce, raw string) (Prin
 	if err != nil {
 		return Principal{}, ErrDenied
 	}
-	// Listed operators enroll directly. Legacy platform identities are admitted
-	// only through this branch, which never falls back to an invitation.
-	if s.operators[p.subject] || platformIdentity(p.subject) {
+	// Listed operators enroll directly. Private preview and legacy platform
+	// sign-ins use this branch exclusively, with no invitation fallback.
+	if s.operatorOnly || s.operators[p.subject] || platformIdentity(p.subject) {
 		if err = s.enrollOperator(ctx, p); err != nil {
 			return Principal{}, err
 		}
@@ -486,7 +500,7 @@ func (s *Foundation) membershipState(ctx context.Context, p Principal) (string, 
 	// Legacy platform identities can only be operators.
 	connector := customeridentity.DexConnector(p.subject)
 	listed := s.operators[p.subject]
-	if connector == customeridentity.PlatformConnectorID && !listed {
+	if (s.operatorOnly || connector == customeridentity.PlatformConnectorID) && !listed {
 		return "", "", "", ErrDenied
 	}
 	var own, role, incarnation string
