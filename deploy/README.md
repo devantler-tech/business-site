@@ -56,9 +56,9 @@ needs an image built from current source, as CI supplies.
 
 The WebApp projects the one Secret the platform composes in this namespace,
 `business-site-runtime`, read-only at `/run/webapp-inputs` with mode 0440 and the
-application's primary group. It admits exactly six items: `company-disclosure` as
+application's primary group. It admits exactly seven items: `company-disclosure` as
 `disclosure`, and `portal-settings`, `portal-client-secret`, `portal-database-ca`,
-`smtp-username` and `smtp-password` at their own names. While sign-in is off,
+`smtp-username`, `smtp-password` and `portal-zitadel-token` at their own names. While sign-in is off,
 `portal-settings` holds only a `#` comment line, so the portal reads none of the other
 portal items. Serving needs both the disclosure and the settings file: without that
 Secret or any projected item the Pods do not start, so the Secret must exist before

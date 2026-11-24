@@ -73,8 +73,10 @@ type (
 		Person  customeridentity.Profile `json:"-"`
 	}
 	workspaceView struct {
-		ID      string            `json:"id"`
-		Members []workspaceMember `json:"members"`
+		ID         string            `json:"id"`
+		Name       string            `json:"name"`
+		Members    []workspaceMember `json:"members"`
+		Manageable bool              `json:"-"`
 	}
 	auditEntry struct {
 		At      time.Time `json:"at"`
@@ -157,6 +159,8 @@ func (b *browser) authorizedOperatorCall(ctx context.Context, bound *operatorAut
 				status, outcome = http.StatusServiceUnavailable, "failed"
 			case errors.Is(err, errOperatorInput):
 				status, outcome = http.StatusBadRequest, "refused"
+			case errors.Is(err, errWorkspaceStillBills):
+				status, outcome = http.StatusConflict, "refused"
 			case err != nil:
 				status, outcome = http.StatusServiceUnavailable, "failed"
 			default:
@@ -195,9 +199,12 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 		// A native form uses the same action and audit record as JSON callers.
 		// The fixed return path cannot be supplied by the caller.
 		if r.Method == "POST" && strings.Contains(r.Header.Get("Accept"), "text/html") {
-			if status == http.StatusOK {
+			switch status {
+			case http.StatusOK:
 				http.Redirect(w, r, b.visible("/portal/operator/customers")+"?lang="+language(r), http.StatusSeeOther)
-			} else {
+			case http.StatusConflict:
+				b.render(w, r, status, "operator-workspace-billing-error", "", "")
+			default:
 				b.render(w, r, status, "operator-action-error", "", "")
 			}
 			return
@@ -211,6 +218,8 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 			problem = "operators only"
 		case http.StatusBadRequest:
 			problem = "invalid or conflicting action"
+		case http.StatusConflict:
+			problem = "end active billing before deleting this workspace"
 		default:
 			problem = "unavailable"
 		}
@@ -270,26 +279,32 @@ func (b *browser) workspaces(ctx context.Context) ([]workspaceView, error) {
  SELECT id FROM portal_workspaces
  UNION SELECT client_id FROM portal_memberships WHERE issuer=$1
  UNION SELECT client_id FROM portal_invitations WHERE issuer=$1)
- SELECT i.id,COALESCE(m.subject,''),COALESCE(m.role,''),COALESCE(m.revoked,false)
+ SELECT i.id,COALESCE(w.display_name,i.id),COALESCE(m.subject,''),COALESCE(m.role,''),COALESCE(m.revoked,false)
  FROM inventory i LEFT JOIN portal_memberships m ON m.client_id=i.id AND m.issuer=$1
+ LEFT JOIN portal_workspace_settings w ON w.workspace_id=i.id
+ WHERE w.closed_at IS NULL
  ORDER BY i.id,m.role,m.subject LIMIT $2`, b.foundation.broker.issuer, operatorListLimit+1)
 	if err != nil {
 		return nil, fmt.Errorf("list workspaces: %w", err)
 	}
 	views := []workspaceView{}
-	var id string
+	var id, name string
 	var m workspaceMember
 	count := 0
-	_, err = pgx.ForEachRow(rows, []any{&id, &m.Subject, &m.Role, &m.Revoked}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&id, &name, &m.Subject, &m.Role, &m.Revoked}, func() error {
 		count++
 		if count > operatorListLimit {
 			return errors.New("membership inventory exceeds response limit")
 		}
 		if len(views) == 0 || views[len(views)-1].ID != id {
-			views = append(views, workspaceView{ID: id, Members: []workspaceMember{}})
+			views = append(views, workspaceView{ID: id, Name: name, Members: []workspaceMember{}, Manageable: validCustomerWorkspace(id)})
 		}
 		if m.Subject != "" {
-			views[len(views)-1].Members = append(views[len(views)-1].Members, m)
+			view := &views[len(views)-1]
+			view.Members = append(view.Members, m)
+			if m.Role == "operator" {
+				view.Manageable = false
+			}
 		}
 		return nil
 	})

@@ -1,0 +1,173 @@
+package identity
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestOperatorRenamesWorkspaceAndRemovesItsMember(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	b.invite(customerSubject, "fixture-workspace", "client")
+	b.signOut()
+	b.as(customerSubject)
+	b.finish(b.start())
+	b.signOut()
+	b.as(operatorSubject)
+	b.finish(b.startAt(operatorLink))
+	token := b.csrf("/portal/")
+
+	rename := url.Values{"workspace": {"fixture-workspace"}, "name": {"North Lab"}, "csrf_token": {token}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/rename", rename, b.site.URL); status != http.StatusOK {
+		t.Fatalf("rename workspace: status %d", status)
+	}
+	if status, body, _ := b.request("GET", "/portal/operator/customers", nil, ""); status != http.StatusOK || !strings.Contains(body, "North Lab") {
+		t.Fatalf("customer directory did not show the new workspace name: status %d", status)
+	}
+
+	remove := url.Values{"workspace": {"another-workspace"}, "subject": {customerSubject}, "csrf_token": {token}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", remove, b.site.URL); status != http.StatusBadRequest {
+		t.Fatalf("removing a member from the wrong workspace returned %d", status)
+	}
+	remove.Set("workspace", "fixture-workspace")
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/members/remove", remove, b.site.URL); status != http.StatusOK {
+		t.Fatalf("remove member: status %d", status)
+	}
+	var removed, recorded bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT
+ NOT EXISTS (SELECT 1 FROM portal_memberships WHERE issuer=$1 AND subject=$2),
+ EXISTS (SELECT 1 FROM portal_membership_transitions WHERE issuer=$1 AND subject=$2 AND client_id='fixture-workspace' AND kind='delete')`,
+		b.f.issuer, customerSubject).Scan(&removed, &recorded); err != nil || !removed || !recorded {
+		t.Fatalf("removal did not preserve its history while ending membership: %v", err)
+	}
+	b.signOut()
+	b.as(customerSubject)
+	b.refused(b.start())
+}
+
+func TestOperatorDeletesWorkspaceAndClosesItsInvitations(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	b.invite("active-client", "fixture-workspace", "client")
+	b.signOut()
+	b.as("active-client")
+	b.finish(b.start())
+	b.signOut()
+	b.as(operatorSubject)
+	b.finish(b.startAt(operatorLink))
+	b.invite("waiting-client", "fixture-workspace", "client")
+	b.invite("unrelated-client", "other-workspace", "client")
+	if _, err := b.pool.Exec(t.Context(), `INSERT INTO portal_requests(id,client_id,submission_key,product,title,brief) VALUES
+ ('AAAAAAAAAAAAAAAAAAAAAAAAAA','fixture-workspace','AAAAAAAAAAAAAAAAAAAAAAAAAA','website','Fixture work','Fixture brief')`); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"workspace": {"fixture-workspace"}, "confirm": {"wrong workspace"}, "csrf_token": {b.csrf("/portal/")}}
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", form, b.site.URL); status != http.StatusBadRequest {
+		t.Fatalf("deletion without the exact name returned %d", status)
+	}
+	form.Set("confirm", "fixture-workspace")
+	if status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", form, b.site.URL); status != http.StatusOK {
+		t.Fatalf("delete workspace: status %d", status)
+	}
+	if status, body, _ := b.request("GET", "/portal/operator/customers", nil, ""); status != http.StatusOK ||
+		strings.Contains(body, "fixture-workspace") || !strings.Contains(body, "other-workspace") {
+		t.Fatalf("workspace deletion affected the wrong directory entries: status %d", status)
+	}
+	if err := b.svc.Invite(t.Context(), Invitation{b.f.issuer, "new-client", "fixture-workspace", "client", time.Now().Add(time.Hour)}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("new invitation can restore a deleted workspace: %v", err)
+	}
+	var retained bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM portal_requests WHERE client_id='fixture-workspace')`).Scan(&retained); err != nil || !retained {
+		t.Fatalf("deletion erased retained business records: %v", err)
+	}
+	b.signOut()
+	b.as("active-client")
+	b.refused(b.start())
+	b.as("waiting-client")
+	b.refused(b.start())
+	b.as("unrelated-client")
+	b.finish(b.start())
+}
+
+func TestOperatorWorkspaceDeletionSerializesWithInvitation(t *testing.T) {
+	b := newOperatorBrowserFixture(t)
+	b.invite("existing-customer", "fixture-workspace", "client")
+	form := url.Values{"workspace": {"fixture-workspace"}, "confirm": {"fixture-workspace"}, "csrf_token": {b.csrf("/portal/")}}
+	pause := installCompletedRead(t, b, "INSERT INTO portal_invitations")
+	resume := onceRelease(pause.release)
+	inviteDone := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	defer resume()
+	go func() {
+		inviteDone <- b.svc.Invite(ctx, Invitation{b.f.issuer, "concurrent-customer", "fixture-workspace", "client", time.Now().Add(time.Hour)})
+	}()
+	select {
+	case <-pause.blocked:
+	case <-ctx.Done():
+		t.Fatal("invitation did not reach the database")
+	}
+	deleted := make(chan int, 1)
+	go func() {
+		status, _, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", form, b.site.URL)
+		deleted <- status
+	}()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		var waiting bool
+		if err := b.pool.QueryRow(ctx, `SELECT EXISTS (
+ SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=$1::oid AND NOT granted)`, workspaceLock).Scan(&waiting); err != nil {
+			t.Fatal("workspace deletion did not wait for the invitation", err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case status := <-deleted:
+			t.Fatalf("workspace deletion bypassed the invitation lock: %d", status)
+		case <-tick.C:
+		case <-ctx.Done():
+			t.Fatal("workspace deletion did not reach the invitation lock")
+		}
+	}
+	resume()
+	select {
+	case err := <-inviteDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("invitation did not finish")
+	}
+	select {
+	case status := <-deleted:
+		if status != http.StatusOK {
+			t.Fatalf("delete workspace: status %d", status)
+		}
+	case <-ctx.Done():
+		t.Fatal("workspace deletion did not finish")
+	}
+	b.signOut()
+	b.as("concurrent-customer")
+	b.refused(b.start())
+}
+
+func TestOperatorWorkspaceDeletionPreservesActiveBillingAccess(t *testing.T) {
+	b, _ := subscribedCardOrder(t)
+	b.signOut()
+	configureOperatorBrowser(t, b)
+	form := url.Values{"workspace": {"private-client-key"}, "confirm": {"private-client-key"}, "csrf_token": {b.csrf("/portal/")}}
+	status, body, _ := b.request("POST", operatorAPIRoot+"/workspaces/delete", form, b.site.URL)
+	if status != http.StatusConflict || !strings.Contains(body, "active billing") {
+		t.Fatalf("delete workspace with a subscription: status %d", status)
+	}
+	var staysOpen bool
+	if err := b.pool.QueryRow(t.Context(), `SELECT EXISTS(
+ SELECT 1 FROM portal_memberships WHERE client_id='private-client-key' AND NOT revoked)`).Scan(&staysOpen); err != nil || !staysOpen {
+		t.Fatalf("refused workspace deletion ended client access: %v", err)
+	}
+}

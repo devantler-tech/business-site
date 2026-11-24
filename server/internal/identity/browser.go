@@ -684,6 +684,7 @@ func (b *browser) logout(w http.ResponseWriter, r *http.Request) {
 type pageData struct {
 	BrokerURL                                                                                                                                  string
 	LanguageURL                                                                                                                                string
+	InviteWorkspace                                                                                                                            string
 	Lang, Kind, Client, CSRF, Title, Intro, Action, SignedIn, Logout, Error, Unavailable, Back, Theme, System, Light, Dark, Operator, Boundary string
 	RequestsEnabled                                                                                                                            bool
 	TriageEnabled                                                                                                                              bool
@@ -717,7 +718,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
-	if kind == "operator-action-error" || kind == "operator-support" {
+	if kind == "operator-action-error" || kind == "operator-workspace-billing-error" || kind == "operator-support" {
 		path = "/portal/operator/customers"
 	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other

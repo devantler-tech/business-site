@@ -313,7 +313,12 @@ The rows hold IDs, never request bodies or customer details, and the retention p
 them after the retention period. The operator page links to the newest 100 entries at
 `/operator/audit`. The API lists pending invitations, workspaces and members, reads the log
 and serves its OpenAPI file. `/operator/customers` provides native English/Danish forms
-for creating a workspace, revoking a pending invitation and changing a customer's access.
+for creating and renaming a workspace, revoking a pending invitation and changing a customer's access.
+An operator can remove one member's portal membership or close a full workspace.
+Closing a workspace removes all customer memberships and revokes pending invitations
+in one transaction. A workspace with active recurring billing stays available for
+account management. Renaming preserves the workspace ID and its records. The
+retention purge handles historical records. These actions require a human operator.
 The same authenticated API actions serve browser forms and JSON clients. Workspaces can
 be empty; member lists also include deactivated members. Operator memberships are managed
 only through server configuration and cannot be changed by these customer actions.

@@ -76,6 +76,13 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 	if b.foundation.customers == nil || !b.operatorMutationAllowed(ctx, b.foundation.pool) {
 		return nil, ErrDenied
 	}
+	open, err := workspaceOpen(ctx, b.foundation.pool, input.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
+		return nil, errOperatorInput
+	}
 	userID, err := b.foundation.customers.EnsureUser(ctx, input.Name, input.Email, func() bool { return b.operatorMutationAllowed(ctx, b.foundation.pool) })
 	if err != nil {
 		return nil, err
@@ -95,6 +102,9 @@ func (b *browser) createCustomerInvitation(ctx context.Context, r *http.Request)
 func (b *browser) operatorInvitationPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "invitations.view", func(_ context.Context, client string) ([]byte, error) {
 		d := b.operatorData(r, "operator-invite", client)
+		if workspace := r.URL.Query().Get("workspace"); validCustomerWorkspace(workspace) {
+			d.InviteWorkspace = workspace
+		}
 		var buffer bytes.Buffer
 		err := b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
