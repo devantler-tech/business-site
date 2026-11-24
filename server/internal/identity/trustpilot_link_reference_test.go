@@ -9,7 +9,7 @@ import (
 )
 
 // The rest of the client home still has to match its existing frozen body.
-const trustpilotLinkExpectation = `<a class="trustpilot-link" href="https://www.trustpilot.com/review/devantler.tech" rel="noreferrer"><span>@LABEL@ <strong>Trustpilot</strong></span><span class="trustpilot-link-arrow" aria-hidden="true">↗</span></a>`
+const trustpilotLinkExpectation = `<a class="trustpilot-link" href="/trustpilot/" rel="noreferrer"><span>@LABEL@ <strong>Trustpilot</strong></span><span class="trustpilot-link-arrow" aria-hidden="true">↗</span></a>`
 
 func checkClientHomeTrustpilotLink(markup, lang string) (string, error) {
 	doc, err := html.Parse(strings.NewReader(markup))
@@ -60,7 +60,7 @@ func TestContactMaintenanceTrustpilotLinkReferenceBoundary(t *testing.T) {
 	}
 	for _, change := range [][2]string{
 		{`class="trustpilot-link"`, `class="missing-trustpilot-link"`},
-		{`/review/devantler.tech`, `/evaluate/devantler.tech`},
+		{`/trustpilot/`, `/different-review-provider/`},
 		{`rel="noreferrer"`, `rel="noopener"`},
 		{`<span>Reviews on`, `<span>5 stars on`},
 	} {

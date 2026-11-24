@@ -185,7 +185,7 @@ func TestBrowserSignInPage(t *testing.T) {
 
 func TestTrustpilotLinkIsConfinedToClientHome(t *testing.T) {
 	b := &browser{foundation: &Foundation{}}
-	const profile = "https://www.trustpilot.com/review/devantler.tech"
+	const profile = "/trustpilot/"
 	for _, kind := range []string{"home", "operator", "no-access"} {
 		for _, lang := range []string{"en", "da"} {
 			r := httptest.NewRequest("GET", "/portal/?lang="+lang, nil)
@@ -197,14 +197,14 @@ func TestTrustpilotLinkIsConfinedToClientHome(t *testing.T) {
 				t.Errorf("%s %s CSP = %q", kind, lang, got)
 			}
 			if kind != "home" {
-				if strings.Contains(body, "trustpilot.com") {
+				if strings.Contains(body, profile) {
 					t.Fatalf("%s %s exposes a customer footer link", kind, lang)
 				}
 				continue
 			}
-			if strings.Count(body, "trustpilot.com") != 1 || !strings.Contains(body, `href="`+profile+`" rel="noreferrer"`) ||
+			if strings.Count(body, profile) != 1 || !strings.Contains(body, `href="`+profile+`" rel="noreferrer"`) ||
 				strings.Contains(body, "<iframe") || strings.Contains(body, "data-review-consent") {
-				t.Errorf("%s client home must render one direct profile link", lang)
+				t.Errorf("%s client home must render one profile link", lang)
 			}
 		}
 	}
