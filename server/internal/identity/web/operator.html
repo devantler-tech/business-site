@@ -79,7 +79,7 @@
       <div><label for="invite-email">{{if eq .Lang "da"}}E-mail{{else}}Email{{end}}</label>
         <input id="invite-email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
       <div><label for="invite-workspace">{{if eq .Lang "da"}}Arbejdsområde{{else}}Workspace{{end}}</label>
-        <input id="invite-workspace" name="workspace" maxlength="100" aria-describedby="invite-workspace-help" required>
+        <input id="invite-workspace" name="workspace" maxlength="100" aria-describedby="invite-workspace-help" value="{{.InviteWorkspace}}" required>
         <p id="invite-workspace-help">{{if eq .Lang "da"}}Brug samme arbejdsområde til kunder, der skal samarbejde.{{else}}Use the same workspace for customers who should collaborate.{{end}}</p></div>
       <div class="operator-actions"><button type="submit">Send invitation</button>
         <a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a></div>
@@ -98,8 +98,34 @@
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Arbejdsområder og medlemmer{{else}}Workspaces and members{{end}}</h2>
     {{range .Workspaces}}
     <details class="operator-workspace" open="open">
-      <summary>{{.ID}}</summary>
+      <summary>{{if .Name}}{{.Name}}{{else}}{{.ID}}{{end}}</summary>
       {{$workspace := .ID}}
+      {{if .Manageable}}
+      <details class="operator-member-actions">
+        <summary>{{if eq $.Lang "da"}}Indstillinger for arbejdsområdet{{else}}Workspace settings{{end}}</summary>
+        <p><a href="{{root}}/operator/invitations/new?lang={{$.Lang}}&amp;workspace={{.ID}}">{{if eq $.Lang "da"}}Inviter et medlem{{else}}Invite a member{{end}}</a></p>
+        <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/workspaces/rename?lang={{$.Lang}}">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="workspace" value="{{$workspace}}">
+          <label>{{if eq $.Lang "da"}}Arbejdsområdets navn{{else}}Workspace name{{end}}
+            <input name="name" maxlength="100" value="{{.Name}}" required>
+          </label>
+          <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Gem navn{{else}}Save name{{end}}</button>
+        </form>
+        <details class="operator-member-actions operator-destructive">
+          <summary>{{if eq $.Lang "da"}}Slet arbejdsområde{{else}}Delete workspace{{end}}</summary>
+          <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/workspaces/delete?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <p>{{if eq $.Lang "da"}}Det fjerner alle medlemmers adgang og annullerer åbne invitationer. Eksisterende oplysninger følger opbevaringspolitikken.{{else}}This removes access for every member and cancels pending invitations. Existing records follow the retention policy.{{end}}</p>
+            <label>{{if eq $.Lang "da"}}Skriv arbejdsområdets navn for at bekræfte{{else}}Enter the workspace name to confirm{{end}}
+              <input name="confirm" maxlength="100" spellcheck="false" autocomplete="off" required>
+            </label>
+            <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Slet arbejdsområde{{else}}Delete workspace{{end}}</button>
+          </form>
+        </details>
+      </details>
+      {{end}}
       {{if .Members}}<ul class="operator-members" role="list">
       {{range .Members}}
       <li class="operator-member">
@@ -127,6 +153,16 @@
               <button type="submit" class="operator-secondary">{{if .Revoked}}{{if eq $.Lang "da"}}Genaktiver medlem{{else}}Reactivate member{{end}}{{else}}{{if eq $.Lang "da"}}Deaktiver medlem{{else}}Deactivate member{{end}}{{end}}</button>
             </form>
           </div>
+        </details>
+        <details class="operator-member-actions operator-destructive">
+          <summary>{{if eq $.Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</summary>
+          <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/members/remove?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <input type="hidden" name="subject" value="{{.Subject}}">
+            <p>{{if eq $.Lang "da"}}Medlemmet mister adgangen med det samme. En ny invitation giver adgang igen.{{else}}This ends the member’s access immediately. A new invitation is required to return.{{end}}</p>
+            <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</button>
+          </form>
         </details>
         {{if and $.SupportAvailable (not .Revoked)}}
         <details class="operator-member-actions">

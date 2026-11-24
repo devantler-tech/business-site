@@ -536,6 +536,18 @@ footer .trustpilot-link {
   cursor: pointer;
 }
 
+.operator-management-form {
+  margin-block: 0.5rem 1rem;
+}
+
+.operator-management-form p {
+  margin: 0;
+}
+
+.operator-destructive {
+  border-block-start: 1px solid var(--operator-rule);
+}
+
 .operator-workspace > p,
 .operator-member,
 .operator-pending,

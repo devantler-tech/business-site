@@ -322,6 +322,16 @@ func (s *Foundation) invite(ctx context.Context, i Invitation, allowed func(pgx.
 	if err = lockIdentity(ctx, tx, i.Issuer, i.Subject); err != nil {
 		return err
 	}
+	if err = lockWorkspace(ctx, tx, i.ClientID); err != nil {
+		return err
+	}
+	open, err := workspaceOpen(ctx, tx, i.ClientID)
+	if err != nil {
+		return err
+	}
+	if !open {
+		return ErrDenied
+	}
 	result, err := tx.Exec(ctx, `INSERT INTO portal_invitations(token_digest,issuer,subject,client_id,role,expires_at)
  SELECT $1,$2,$3,$4,$5,$6
  WHERE NOT EXISTS (SELECT 1 FROM portal_invitations WHERE issuer=$2 AND subject=$3 AND NOT revoked AND expires_at>now())
@@ -435,7 +445,26 @@ func (s *Foundation) redeem(ctx context.Context, p Principal) error {
 	if err = lockIdentity(ctx, tx, p.issuer, p.subject); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() RETURNING client_id,role`, p.issuer, p.subject)
+	var workspace string
+	var invitations int
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(min(client_id),''),count(*) FROM portal_invitations
+ WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now()`, p.issuer, p.subject).Scan(&workspace, &invitations); err != nil {
+		return fmt.Errorf("read pending invitation: %w", err)
+	}
+	if invitations != 1 {
+		return ErrDenied
+	}
+	if err = lockWorkspace(ctx, tx, workspace); err != nil {
+		return err
+	}
+	open, err := workspaceOpen(ctx, tx, workspace)
+	if err != nil {
+		return err
+	}
+	if !open {
+		return ErrDenied
+	}
+	rows, err := tx.Query(ctx, `DELETE FROM portal_invitations WHERE issuer=$1 AND subject=$2 AND NOT revoked AND expires_at>now() AND client_id=$3 RETURNING client_id,role`, p.issuer, p.subject, workspace)
 	if err != nil {
 		return fmt.Errorf("consume invitation: %w", err)
 	}
