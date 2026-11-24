@@ -199,11 +199,12 @@ func (b *browser) operatorAPI(route operatorRoute) http.HandlerFunc {
 		// A native form uses the same action and audit record as JSON callers.
 		// The fixed return path cannot be supplied by the caller.
 		if r.Method == "POST" && strings.Contains(r.Header.Get("Accept"), "text/html") {
-			if status == http.StatusOK {
+			switch status {
+			case http.StatusOK:
 				http.Redirect(w, r, b.visible("/portal/operator/customers")+"?lang="+language(r), http.StatusSeeOther)
-			} else if status == http.StatusConflict {
+			case http.StatusConflict:
 				b.render(w, r, status, "operator-workspace-billing-error", "", "")
-			} else {
+			default:
 				b.render(w, r, status, "operator-action-error", "", "")
 			}
 			return
