@@ -88,7 +88,28 @@ func CheckRuntimeRole(ctx context.Context, pool queryRower) error {
 	if err := checkWorkApprovalRole(ctx, pool); err != nil {
 		return err
 	}
+	if err := checkWorkspaceRole(ctx, pool); err != nil {
+		return err
+	}
 	return checkBillingRole(ctx, pool)
+}
+
+func checkWorkspaceRole(ctx context.Context, pool queryRower) error {
+	var allowed bool
+	err := pool.QueryRow(ctx, `SELECT
+ has_table_privilege(current_user,'portal_workspace_settings','SELECT')
+ AND has_table_privilege(current_user,'portal_workspace_settings','INSERT')
+ AND has_column_privilege(current_user,'portal_workspace_settings','display_name','UPDATE')
+ AND has_column_privilege(current_user,'portal_workspace_settings','closed_at','UPDATE')
+ AND NOT EXISTS (
+  SELECT 1 FROM pg_roles r WHERE (r.rolname=current_user OR pg_has_role(current_user,r.oid,'MEMBER')) AND (
+   has_column_privilege(r.oid,'portal_workspace_settings','workspace_id','UPDATE')
+   OR has_any_column_privilege(r.oid,'portal_workspace_settings','REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
+   OR has_table_privilege(r.oid,'portal_workspace_settings','DELETE,TRUNCATE,TRIGGER,MAINTAIN')))`).Scan(&allowed)
+	if err != nil || !allowed {
+		return ErrDenied
+	}
+	return nil
 }
 
 // Billing, fulfillment and operator audit tables the web runtime only reads

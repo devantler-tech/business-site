@@ -21,6 +21,7 @@
     {{if eq .Kind "operator-customers"}}{{template "operator-directory" .}}
     {{else if eq .Kind "operator-invite"}}{{template "operator-invite-form" .}}
     {{else if eq .Kind "operator-audit"}}{{template "operator-activity" .}}
+    {{else if eq .Kind "operator-support"}}{{template "operator-support" .}}
     {{else}}{{template "operator-overview" .}}{{end}}
   </div>
 </main>
@@ -30,7 +31,7 @@
 <nav class="operator-navigation" aria-label="{{if eq .Lang `da`}}Operatørportal{{else}}Operator workspace{{end}}">
   <ul>
     <li><a href="{{root}}/operator?lang={{.Lang}}" aria-current="{{if eq .Kind `operator`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Oversigt{{else}}Overview{{end}}</a></li>
-    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if eq .Kind `operator-invite`}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
+    <li><a href="{{root}}/operator/customers?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-customers`}}page{{else if or (eq .Kind `operator-invite`) (eq .Kind `operator-support`)}}location{{else}}false{{end}}">{{if eq .Lang "da"}}Kunder{{else}}Customers{{end}}</a></li>
     {{if .TriageEnabled}}<li><a href="{{root}}/operator/requests?lang={{.Lang}}" aria-current="{{if or (eq .Kind `triage`) (eq .Kind `work-review`)}}location{{else}}false{{end}}">{{template "operator-requests-label" .}}</a></li>{{end}}
     <li><a href="{{root}}/operator/audit?lang={{.Lang}}" aria-current="{{if eq .Kind `operator-audit`}}page{{else}}false{{end}}">{{if eq .Lang "da"}}Revisionslog{{else}}Audit log{{end}}</a></li>
   </ul>
@@ -78,7 +79,7 @@
       <div><label for="invite-email">{{if eq .Lang "da"}}E-mail{{else}}Email{{end}}</label>
         <input id="invite-email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
       <div><label for="invite-workspace">{{if eq .Lang "da"}}Arbejdsområde{{else}}Workspace{{end}}</label>
-        <input id="invite-workspace" name="workspace" maxlength="100" aria-describedby="invite-workspace-help" required>
+        <input id="invite-workspace" name="workspace" maxlength="100" aria-describedby="invite-workspace-help" value="{{.InviteWorkspace}}" required>
         <p id="invite-workspace-help">{{if eq .Lang "da"}}Brug samme arbejdsområde til kunder, der skal samarbejde.{{else}}Use the same workspace for customers who should collaborate.{{end}}</p></div>
       <div class="operator-actions"><button type="submit">Send invitation</button>
         <a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang "da"}}Annuller{{else}}Cancel{{end}}</a></div>
@@ -96,13 +97,42 @@
   <section class="operator-panel" aria-labelledby="operator-workspaces">
     <h2 id="operator-workspaces">{{if eq .Lang "da"}}Arbejdsområder og medlemmer{{else}}Workspaces and members{{end}}</h2>
     {{range .Workspaces}}
-    <details class="operator-workspace">
-      <summary>{{.ID}}</summary>
+    <details class="operator-workspace" open="open">
+      <summary>{{if .Name}}{{.Name}}{{else}}{{.ID}}{{end}}</summary>
       {{$workspace := .ID}}
+      {{if .Manageable}}
+      <details class="operator-member-actions">
+        <summary>{{if eq $.Lang "da"}}Indstillinger for arbejdsområdet{{else}}Workspace settings{{end}}</summary>
+        <p><a href="{{root}}/operator/invitations/new?lang={{$.Lang}}&amp;workspace={{.ID}}">{{if eq $.Lang "da"}}Inviter et medlem{{else}}Invite a member{{end}}</a></p>
+        <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/workspaces/rename?lang={{$.Lang}}">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <input type="hidden" name="workspace" value="{{$workspace}}">
+          <label>{{if eq $.Lang "da"}}Arbejdsområdets navn{{else}}Workspace name{{end}}
+            <input name="name" maxlength="100" value="{{.Name}}" required>
+          </label>
+          <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Gem navn{{else}}Save name{{end}}</button>
+        </form>
+        <details class="operator-member-actions operator-destructive">
+          <summary>{{if eq $.Lang "da"}}Slet arbejdsområde{{else}}Delete workspace{{end}}</summary>
+          <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/workspaces/delete?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <p>{{if eq $.Lang "da"}}Det fjerner alle medlemmers adgang og annullerer åbne invitationer. Eksisterende oplysninger følger opbevaringspolitikken.{{else}}This removes access for every member and cancels pending invitations. Existing records follow the retention policy.{{end}}</p>
+            <label>{{if eq $.Lang "da"}}Skriv arbejdsområdets navn for at bekræfte{{else}}Enter the workspace name to confirm{{end}}
+              <input name="confirm" maxlength="100" spellcheck="false" autocomplete="off" required>
+            </label>
+            <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Slet arbejdsområde{{else}}Delete workspace{{end}}</button>
+          </form>
+        </details>
+      </details>
+      {{end}}
+      {{if .Members}}<ul class="operator-members" role="list">
       {{range .Members}}
-      <div class="operator-member">
-        <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Deaktiveret{{else}}Deactivated{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv{{else}}Active{{end}}{{end}}</span>
-        <code>{{.Subject}}</code>
+      <li class="operator-member">
+        <div class="operator-member-heading">
+          {{template "operator-person" .Person}}
+          <span class="operator-status">{{if eq .Role "operator"}}{{$.Operator}}{{else if .Revoked}}{{if eq $.Lang "da"}}Deaktiveret{{else}}Deactivated{{end}}{{else}}{{if eq $.Lang "da"}}Aktiv kunde{{else}}Active customer{{end}}{{end}}</span>
+        </div>
         {{if eq .Role "client"}}
         <details class="operator-member-actions">
           <summary>{{if eq $.Lang "da"}}Administrer adgang{{else}}Manage access{{end}}</summary>
@@ -124,9 +154,38 @@
             </form>
           </div>
         </details>
+        <details class="operator-member-actions operator-destructive">
+          <summary>{{if eq $.Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</summary>
+          <form class="operator-form operator-management-form" method="post" action="{{root}}/operator/api/members/remove?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <input type="hidden" name="subject" value="{{.Subject}}">
+            <p>{{if eq $.Lang "da"}}Medlemmet mister adgangen med det samme. En ny invitation giver adgang igen.{{else}}This ends the member’s access immediately. A new invitation is required to return.{{end}}</p>
+            <button class="operator-secondary" type="submit">{{if eq $.Lang "da"}}Fjern medlem{{else}}Remove member{{end}}</button>
+          </form>
+        </details>
+        {{if and $.SupportAvailable (not .Revoked)}}
+        <details class="operator-member-actions">
+          <summary>{{if eq $.Lang "da"}}Åbn support{{else}}Open support view{{end}}</summary>
+          <form class="operator-form" method="post" action="{{root}}/operator/support?lang={{$.Lang}}">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <input type="hidden" name="workspace" value="{{$workspace}}">
+            <input type="hidden" name="subject" value="{{.Subject}}">
+            <label>{{if eq $.Lang "da"}}Reference til sag{{else}}Support case reference{{end}}
+              <input name="case" type="text" maxlength="15" pattern="CASE-[0-9]{4,10}" placeholder="CASE-1234" required>
+            </label>
+            <label>
+              <input name="confirmed" type="checkbox" value="yes" required>
+              {{if eq $.Lang "da"}}Jeg har dokumenteret kundens ønske om hjælp.{{else}}I have documented the client’s request for support.{{end}}
+            </label>
+            <button type="submit" class="operator-secondary">{{if eq $.Lang "da"}}Vis kundeportal{{else}}View client portal status{{end}}</button>
+          </form>
+        </details>
         {{end}}
-      </div>
-      {{else}}<p>{{if eq $.Lang "da"}}Ingen medlemmer endnu.{{else}}No members yet.{{end}}</p>{{end}}
+        {{end}}
+      </li>
+      {{end}}
+      </ul>{{else}}<p>{{if eq $.Lang "da"}}Ingen medlemmer endnu.{{else}}No members yet.{{end}}</p>{{end}}
     </details>
     {{else}}<p>{{if eq .Lang "da"}}Opret et arbejdsområde.{{else}}Create a workspace to get started.{{end}}</p>{{end}}
   </section>
@@ -135,8 +194,8 @@
       <h2 id="operator-pending">{{if eq .Lang "da"}}Afventende invitationer{{else}}Pending invitations{{end}}</h2>
       {{range .Invitations}}
       <div class="operator-pending">
-        <strong>{{.Workspace}}</strong>
-        <code>{{.Subject}}</code>
+        {{template "operator-person" .Person}}
+        <p>{{if eq $.Lang "da"}}Arbejdsområde{{else}}Workspace{{end}} <strong>{{.Workspace}}</strong></p>
         <p>{{if eq $.Lang "da"}}Udløber{{else}}Expires{{end}} <time datetime="{{.Expires.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Expires.UTC.Format "2006-01-02 15:04"}} UTC</time></p>
         <details class="operator-member-actions">
           <summary>{{if eq $.Lang "da"}}Administrer invitation{{else}}Manage invitation{{end}}</summary>
@@ -160,6 +219,41 @@
       </form>
     </section>
   </div>
+</div>
+{{end}}
+
+{{define "operator-support"}}
+<section class="operator-panel" aria-labelledby="support-workspace">
+  <h2 id="support-workspace">{{.Client}}</h2>
+  <p>{{if eq .Lang "da"}}Du ser kundens portalstatus. Adgangen bliver logget under sag{{else}}You’re viewing the client’s portal status. This access is logged under case{{end}} <strong>{{.Case}}</strong>.</p>
+  <dl>
+    <dt>{{if eq .Lang "da"}}Portaladgang{{else}}Portal access{{end}}</dt>
+    <dd>{{if eq .Lang "da"}}Aktiv{{else}}Active{{end}}</dd>
+    <dt>{{if eq .Lang "da"}}Kontaktoplysninger{{else}}Contact details{{end}}</dt>
+    <dd>{{if .ContactSaved}}{{if eq .Lang "da"}}Gemt{{else}}Saved{{end}}{{else}}{{if eq .Lang "da"}}Mangler{{else}}Missing{{end}}{{end}}</dd>
+    <dt>{{template "operator-requests-label" .}}</dt>
+    <dd>{{if .RequestsEnabled}}{{if eq .Lang "da"}}Aktive{{else}}Available{{end}}{{else}}{{if eq .Lang "da"}}Ikke tilgængelige{{else}}Unavailable{{end}}{{end}}</dd>
+  </dl>
+  {{if .RequestsEnabled}}
+  <h3>{{if eq .Lang "da"}}Seneste forespørgsler{{else}}Recent requests{{end}}</h3>
+  <ul class="operator-events" role="list">
+    {{range .Requests}}
+    <li>
+      <strong>{{if eq .Product "website"}}{{if eq $.Lang "da"}}Hjemmeside{{else}}Website{{end}}{{else if eq .Product "app"}}{{if eq $.Lang "da"}}Webapp{{else}}Web app{{end}}{{else if eq .Product "service"}}{{if eq $.Lang "da"}}Service eller integration{{else}}Service or integration{{end}}{{else}}{{if eq $.Lang "da"}}Andre opgaver{{else}}Other requests{{end}}{{end}}</strong>
+      {{if and $.SharingOpen .ProposalShared}}<span class="operator-status">{{if eq $.Lang "da"}}Tilbud delt{{else}}Proposal shared{{end}}</span>{{end}}
+      <time datetime="{{.Submitted.UTC.Format `2006-01-02T15:04:05Z`}}">{{.Submitted.UTC.Format "2006-01-02 15:04"}} UTC</time>
+    </li>
+    {{else}}<li>{{if eq $.Lang "da"}}Ingen forespørgsler endnu.{{else}}No requests yet.{{end}}</li>{{end}}
+  </ul>
+  {{end}}
+  <div class="operator-actions"><a href="{{root}}/operator/customers?lang={{.Lang}}">{{if eq .Lang "da"}}Tilbage til kunder{{else}}Back to customers{{end}}</a></div>
+</section>
+{{end}}
+
+{{define "operator-person"}}
+<div class="operator-person">
+  <strong>{{.Name}}</strong>
+  {{if .Email}}<span>{{.Email}}</span>{{end}}
 </div>
 {{end}}
 

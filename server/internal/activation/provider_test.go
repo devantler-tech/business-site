@@ -53,7 +53,8 @@ func TestMaintainedDecoderAndIndependentWorkGates(t *testing.T) {
 		}
 	}
 	t.Setenv("PORTAL_IDENTITY_FLAG", on)
-	for _, key := range []string{"portal-requests", "portal-triage", "portal-proposals", "portal-contact-verification"} {
+	t.Setenv("PORTAL_SUPPORT_FLAG", on)
+	for _, key := range []string{"portal-requests", "portal-triage", "portal-proposals", "portal-contact-verification", "portal-support"} {
 		t.Setenv(key, on)
 		value, err := client.BooleanValue(context.Background(), key, false, openfeature.NewEvaluationContext("", nil))
 		if value || err == nil {
@@ -155,7 +156,7 @@ func TestProductionUsesTheSDKAndOnlyIdentity(t *testing.T) {
 		}
 	}
 	t.Setenv("PORTAL_IDENTITY_FLAG", on)
-	for _, key := range []string{"portal-requests", "portal-triage", "portal-proposals", "portal-contact-verification", "portal-billing", "portal-payments", "portal-work"} {
+	for _, key := range []string{"portal-requests", "portal-triage", "portal-proposals", "portal-contact-verification", "portal-billing", "portal-payments", "portal-work", "portal-support"} {
 		t.Setenv(key, on)
 		value, err := client.BooleanValue(context.Background(), key, true, openfeature.NewEvaluationContext("", nil))
 		if value || err != nil {

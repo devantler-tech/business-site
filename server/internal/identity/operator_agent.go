@@ -131,6 +131,7 @@ type operatorAuthority struct {
 	kind, action, client, target string
 	current                      func(context.Context, privateResponseQuery) bool
 	mutating                     bool
+	support                      *supportMember
 }
 
 // operatorMutationAllowed re-evaluates the SDK before checking the exact original

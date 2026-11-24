@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T) {
@@ -84,6 +86,24 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 	preview := operator
 	preview.subject, preview.membershipIncarnation = previewSubject, incarnation
 	preview.preview = previewOperator{subject: operator.subject, incarnation: operator.membershipIncarnation}
+	t.Run("proposal transaction holds preview owner membership", func(t *testing.T) {
+		tx, _, _, err := b.svc.beginClientServiceRequest(ctx, preview, proposalRequestID, b.svc.acceptanceReady)
+		if err != nil {
+			t.Fatal("open preview proposal transaction", err)
+		}
+		defer rollbackProposalWrite(ctx, tx)
+		other := beginFixtureTransaction(ctx, t, b.pool)
+		if _, err := other.Exec(ctx, `SET LOCAL lock_timeout='50ms'`); err != nil {
+			t.Fatal("bound the competing membership lock", err)
+		}
+		var subject string
+		err = other.QueryRow(ctx, `SELECT subject FROM portal_memberships
+ WHERE issuer=$1 AND subject=$2 FOR UPDATE`, operator.issuer, operator.subject).Scan(&subject)
+		var databaseError *pgconn.PgError
+		if !errors.As(err, &databaseError) || databaseError.Code != "55P03" {
+			t.Fatal("preview proposal transaction did not hold the owner's membership lock", err)
+		}
+	})
 	sessionKey := base64.RawURLEncoding.EncodeToString(digest(b.cookie().Value))
 	var data []byte
 	var deadline time.Time
@@ -168,7 +188,7 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 		}
 		var upgraded, retained bool
 		if err := migrator.QueryRow(ctx, `SELECT
- EXISTS (SELECT 1 FROM portal_schema_version WHERE version=32),
+ EXISTS (SELECT 1 FROM portal_schema_version WHERE version=33),
  EXISTS (SELECT 1 FROM portal_preview_receipts WHERE acceptance_id=$1 AND request_id=$2
   AND client_id='preview-demo' AND one_time_minor=299500 AND monthly_minor=9900)`,
 			acceptance[1], proposalRequestID).Scan(&upgraded, &retained); err != nil || !upgraded || !retained {

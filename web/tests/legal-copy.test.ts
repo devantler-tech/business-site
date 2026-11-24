@@ -21,6 +21,19 @@ test("the terms do not depend on the portal flag", () => {
   for (const locale of ["en", "da"] as const) assert.deepEqual(legalPage("terms", locale, true), legalPage("terms", locale, false));
 });
 
+test("the portal support notice states the purpose, basis, retention and right to object in both languages", () => {
+  const cases = [
+    { locale: "en", title: "Portal support", text: [/record your request/, /read-only/, /legitimate interest/, /90 days/, /can object/] },
+    { locale: "da", title: "Support i kundeportalen", text: [/dokumenterer jeg din henvendelse/, /læseadgang/, /berettigede interesse/, /90 dage/, /gøre indsigelse/] },
+  ] as const;
+  for (const { locale, title, text } of cases) {
+    assert.ok(!legalPage("privacy", locale, false).sections.some(section => section.title === title));
+    const support = legalPage("privacy", locale, true).sections.find(section => section.title === title);
+    assert.ok(support);
+    for (const phrase of text) assert.match(support.blocks.join("\n"), phrase);
+  }
+});
+
 test("the terms describe the portal agreement and follow-up in both languages", () => {
   const cases = [
     { locale: "en", title: "Proposal and agreement", initial: /by email or phone.*invite you to the client portal/s,

@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -16,6 +17,24 @@ func serviceProposalForm(t *testing.T, b *browserFixture, kind proposalServiceKi
 		}
 	}
 	return form
+}
+
+func TestServiceQuoteSaveAcceptsMaximumLengthUnicode(t *testing.T) {
+	b := proposalFixture(t)
+	form := serviceProposalForm(t, b, proposalServiceAppointment)
+	form.Set("scope", strings.Repeat("𠀀", 1200))
+	form.Set("deliverables", strings.Repeat("𠀀", 1200))
+	form.Set("one_time_terms", strings.Repeat("𠀀", 600))
+	form.Set("monthly_terms", strings.Repeat("𠀀", 600))
+	form.Set("appointment_terms_en", strings.Repeat("𠀀", 2000))
+	form.Set("appointment_terms_da", strings.Repeat("𠀀", 2000))
+	if _, ok := parseServiceQuoteForm(form); !ok {
+		t.Fatal("maximum-length Unicode quote failed field validation")
+	}
+	path := "/portal/operator/requests/" + proposalRequestID + "/proposals"
+	if status, _, _ := b.request(http.MethodPost, path, form, b.site.URL); status != http.StatusSeeOther {
+		t.Fatalf("maximum-length Unicode quote save returned %d, want %d", status, http.StatusSeeOther)
+	}
 }
 
 // acceptedServiceQuoteFixture creates a fresh typed quote through native human

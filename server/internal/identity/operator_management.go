@@ -16,19 +16,27 @@ import (
 var managementRoutes = []operatorRoute{
 	{"POST", "/invitations/revoke", "invitations.revoke", (*browser).revokeCustomerInvitation},
 	{"POST", "/workspaces", "workspaces.create", (*browser).createCustomerWorkspace},
+	{"POST", "/workspaces/rename", "workspaces.rename", (*browser).renameCustomerWorkspace},
+	{"POST", "/workspaces/delete", "workspaces.delete", (*browser).deleteCustomerWorkspace},
 	{"GET", "/workspaces/members", "workspaces.members.list", (*browser).customerWorkspaceMembers},
 	{"POST", "/members/deactivate", "members.deactivate", (*browser).deactivateCustomerMember},
 	{"POST", "/members/reactivate", "members.reactivate", (*browser).reactivateCustomerMember},
+	{"POST", "/members/remove", "members.remove", (*browser).removeCustomerMember},
 }
 
 type managementPage struct {
 	pageData
-	Workspaces  []workspaceView
-	Invitations []pendingInvitation
+	Workspaces       []workspaceView
+	Invitations      []pendingInvitation
+	SupportAvailable bool
 }
 
 func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) {
 	status, result := b.operatorCall(r, "customers.view", func(ctx context.Context, client string) ([]byte, error) {
+		authority, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority)
+		if authority == nil || authority.kind != "operator" {
+			return nil, ErrDenied
+		}
 		spaces, err := b.workspaces(ctx)
 		if err != nil {
 			return nil, err
@@ -37,7 +45,8 @@ func (b *browser) operatorCustomersPage(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			return nil, err
 		}
-		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations}
+		data := managementPage{pageData: b.operatorData(r, "operator-customers", client), Workspaces: spaces, Invitations: invitations, SupportAvailable: b.foundation.supportReady(ctx)}
+		b.identifyDirectoryPeople(ctx, &data, authority.principal.subject)
 		var buffer bytes.Buffer
 		err = b.templates().ExecuteTemplate(&buffer, "operator.html", data)
 		return buffer.Bytes(), err
@@ -137,7 +146,21 @@ func (b *browser) createCustomerWorkspace(ctx context.Context, r *http.Request) 
 	if !b.operatorMutationAllowed(ctx, tx) {
 		return nil, ErrDenied
 	}
+	if err = lockWorkspace(ctx, tx, input.Workspace); err != nil {
+		return nil, err
+	}
+	open, err := workspaceOpen(ctx, tx, input.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
+		return nil, errOperatorInput
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES($1) ON CONFLICT DO NOTHING`, input.Workspace); err != nil {
+		return nil, err
+	}
+	name, err := workspaceDisplayName(ctx, tx, input.Workspace)
+	if err != nil {
 		return nil, err
 	}
 	if !b.operatorMutationAllowed(ctx, tx) {
@@ -147,7 +170,7 @@ func (b *browser) createCustomerWorkspace(ctx context.Context, r *http.Request) 
 		return nil, err
 	}
 	members, err := b.membersOfWorkspace(ctx, input.Workspace)
-	return workspaceView{ID: input.Workspace, Members: members}, err
+	return workspaceView{ID: input.Workspace, Name: name, Members: members}, err
 }
 
 func (b *browser) customerWorkspaceMembers(ctx context.Context, r *http.Request) (any, error) {
@@ -160,7 +183,9 @@ func (b *browser) customerWorkspaceMembers(ctx context.Context, r *http.Request)
 }
 
 func (b *browser) membersOfWorkspace(ctx context.Context, workspace string) ([]workspaceMember, error) {
-	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,role,revoked FROM portal_memberships WHERE issuer=$1 AND client_id=$2 ORDER BY role,subject LIMIT $3`, b.foundation.broker.issuer, workspace, operatorListLimit+1)
+	rows, err := b.foundation.pool.Query(ctx, `SELECT subject,role,revoked FROM portal_memberships WHERE issuer=$1 AND client_id=$2
+ AND NOT EXISTS (SELECT 1 FROM portal_workspace_settings WHERE workspace_id=$2 AND closed_at IS NOT NULL)
+ ORDER BY role,subject LIMIT $3`, b.foundation.broker.issuer, workspace, operatorListLimit+1)
 	if err != nil {
 		return nil, err
 	}

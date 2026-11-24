@@ -359,6 +359,7 @@ production setting below uses the same maintained-provider JSON as the identity 
 | OpenFeature capability        | Production setting                 |
 |-------------------------------|------------------------------------|
 | `portal-contact-verification` | `PORTAL_CONTACT_VERIFICATION_FLAG` |
+| `portal-support`              | `PORTAL_SUPPORT_FLAG`              |
 | `portal-requests`             | `PORTAL_REQUESTS_FLAG`             |
 | `portal-triage`               | `PORTAL_TRIAGE_FLAG`               |
 | `portal-proposals`            | `PORTAL_PROPOSALS_FLAG`            |

@@ -72,7 +72,7 @@
       },
       "get": {
         "operationId": "workspaces.list",
-        "summary": "Every workspace and its members, revoked ones included",
+        "summary": "Open workspaces and their members, deactivated ones included",
         "responses": {
           "200": {
             "description": "All workspaces by ID; more than 1000 memberships across them returns 503",
@@ -98,6 +98,37 @@
           "400": { "description": "The submitted fields are invalid" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces/rename": {
+      "post": {
+        "operationId": "workspaces.rename",
+        "summary": "Change a customer workspace’s display name",
+        "security": [{ "portalSession": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/RenameWorkspace" },
+        "responses": {
+          "200": { "description": "The new name is recorded against the original workspace ID" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/workspaces/delete": {
+      "post": {
+        "operationId": "workspaces.delete",
+        "summary": "Remove a workspace from active use and revoke its access",
+        "security": [{ "portalSession": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/DeleteWorkspace" },
+        "responses": {
+          "200": { "description": "The workspace is closed and any remaining memberships and invites are ended" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "409": { "description": "The workspace still has active billing" },
           "503": { "$ref": "#/components/responses/Unavailable" }
         }
       }
@@ -152,6 +183,21 @@
         "responses": {
           "200": { "description": "Portal and identity-provider access are enabled" },
           "400": { "description": "The submitted fields are invalid" },
+          "401": { "$ref": "#/components/responses/SignIn" },
+          "403": { "$ref": "#/components/responses/OperatorsOnly" },
+          "503": { "$ref": "#/components/responses/Unavailable" }
+        }
+      }
+    },
+    "/operator/api/members/remove": {
+      "post": {
+        "operationId": "members.remove",
+        "summary": "Remove a customer’s workspace membership",
+        "security": [{ "portalSession": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/ChangeMember" },
+        "responses": {
+          "200": { "description": "The member’s access is removed and the transition is retained" },
+          "400": { "$ref": "#/components/responses/InvalidInput" },
           "401": { "$ref": "#/components/responses/SignIn" },
           "403": { "$ref": "#/components/responses/OperatorsOnly" },
           "503": { "$ref": "#/components/responses/Unavailable" }
@@ -232,6 +278,42 @@
               "required": ["workspace"],
               "properties": {
                 "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      },
+      "RenameWorkspace": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/RenameWorkspace" } },
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace", "name"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "csrf_token": { "type": "string", "maxLength": 256 }
+              }
+            }
+          }
+        }
+      },
+      "DeleteWorkspace": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/DeleteWorkspace" } },
+          "application/x-www-form-urlencoded": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["workspace", "confirm"],
+              "properties": {
+                "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+                "confirm": { "type": "string", "minLength": 1, "maxLength": 100 },
                 "csrf_token": { "type": "string", "maxLength": 256 }
               }
             }
@@ -347,6 +429,24 @@
         "required": ["workspace"],
         "properties": { "workspace": { "type": "string", "minLength": 1, "maxLength": 100 } }
       },
+      "RenameWorkspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace", "name"],
+        "properties": {
+          "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
+      "DeleteWorkspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspace", "confirm"],
+        "properties": {
+          "workspace": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "confirm": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
       "RevokeInvitation": {
         "type": "object",
         "additionalProperties": false,
@@ -410,9 +510,10 @@
       },
       "Workspace": {
         "type": "object",
-        "required": ["id", "members"],
+        "required": ["id", "name", "members"],
         "properties": {
           "id": { "type": "string" },
+          "name": { "type": "string" },
           "members": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/components/schemas/Member" } }
         }
       },

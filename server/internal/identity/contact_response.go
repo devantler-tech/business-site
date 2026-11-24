@@ -117,6 +117,15 @@ func (b *browser) durableSnapshotAllowed(ctx context.Context, snapshot durableRe
  AND a.role='operator' AND NOT a.revoked AND a.incarnation::text=$9)`
 		args = append(args, p.preview.subject, p.preview.incarnation)
 	}
+	if call, _ := ctx.Value(operatorAuthorityKey{}).(*operatorAuthority); call != nil && call.support != nil {
+		if role != "operator" || call.kind != "operator" || call.action != supportViewAction || p.isClientPreview() {
+			return false
+		}
+		target := call.support
+		sql += ` AND EXISTS(SELECT 1 FROM portal_memberships target WHERE target.issuer=m.issuer
+ AND target.client_id=$8 AND target.subject=$9 AND target.incarnation::text=$10 AND target.role='client' AND NOT target.revoked)`
+		args = append(args, target.workspace, target.subject, target.incarnation)
+	}
 	var allowed bool
 	err := query.QueryRow(fresh, sql+")", args...).Scan(&allowed)
 	return err == nil && allowed && ctx.Err() == nil && fresh.Err() == nil && b.foundation.flags.State() == openfeature.ReadyState && time.Now().Before(original.deadline) && time.Now().Before(original.principal.expires)

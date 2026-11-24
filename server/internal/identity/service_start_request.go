@@ -25,9 +25,9 @@ func resolveClientServiceViewer(ctx context.Context, tx pgx.Tx, p Principal) (wo
 	return heldProposalViewer(ctx, tx, p, "client")
 }
 
-// beginClientServiceRequest fences the actual client request without acquiring
-// an early membership lock. Software and appointment consumers subsequently
-// acquire their complete, sorted real membership set under this transaction.
+// beginClientServiceRequest fences the client request and holds the preview
+// owner's authority through commit. Real service consumers acquire their
+// complete, sorted membership set later in the same transaction.
 func (s *Foundation) beginClientServiceRequest(ctx context.Context, p Principal, id string, ready func(context.Context) bool) (pgx.Tx, string, workMember, error) {
 	if !ready(ctx) || p.membershipIncarnation == "" {
 		return nil, "", workMember{}, ErrDenied
@@ -43,6 +43,9 @@ func (s *Foundation) beginClientServiceRequest(ctx context.Context, p Principal,
 		}
 		if viewer.Client != bound {
 			return "", workMember{}, ErrDenied
+		}
+		if err := s.checkPreviewWrite(ctx, tx, p, bound); err != nil {
+			return "", workMember{}, err
 		}
 		var request string
 		if err := tx.QueryRow(ctx, `SELECT id FROM portal_requests WHERE id=$1 AND client_id=$2`, id, bound).Scan(&request); err != nil {
