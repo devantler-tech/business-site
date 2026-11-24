@@ -117,7 +117,7 @@ func TestPreviewProviderKeepsRealBillingAndWorkGatesClosed(t *testing.T) {
 			t.Fatalf("preview capability %s was refused", key)
 		}
 	}
-	for _, key := range []string{"portal-invoice-billing", "portal-card-billing", "portal-contact-verification", "portal-work-approvals"} {
+	for _, key := range []string{"portal-invoice-billing", "portal-card-billing", "portal-contact-verification", "portal-work-approvals", "portal-support"} {
 		result := provider.BooleanEvaluation(context.Background(), key, true, openfeature.FlattenedContext{})
 		if result.Value {
 			t.Fatalf("preview capability %s should be explicitly closed", key)

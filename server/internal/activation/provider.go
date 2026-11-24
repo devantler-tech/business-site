@@ -22,6 +22,7 @@ var productionFlags = map[string]string{
 	"portal-contact-verification": "PORTAL_CONTACT_VERIFICATION_FLAG",
 	"portal-requests":             "PORTAL_REQUESTS_FLAG",
 	"portal-triage":               "PORTAL_TRIAGE_FLAG",
+	"portal-support":              "PORTAL_SUPPORT_FLAG",
 	"portal-proposals":            "PORTAL_PROPOSALS_FLAG",
 	"portal-proposal-sharing":     "PORTAL_PROPOSAL_SHARING_FLAG",
 	"portal-proposal-acceptance":  "PORTAL_PROPOSAL_ACCEPTANCE_FLAG",

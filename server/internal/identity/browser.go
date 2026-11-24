@@ -287,6 +287,7 @@ func (b *browser) routes() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /portal/operator", b.operator)
 	mux.HandleFunc("GET /portal/operator/audit", b.operatorAuditPage)
 	mux.HandleFunc("GET /portal/operator/customers", b.operatorCustomersPage)
+	mux.HandleFunc("POST /portal/operator/support", b.operatorSupportPage)
 	mux.HandleFunc("GET /portal/operator/invitations/new", b.operatorInvitationPage)
 	if b.foundation != nil && b.foundation.operatorOnly {
 		mux.HandleFunc("POST /portal/preview", b.enterClientPreview)
@@ -716,7 +717,7 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 	if kind == "proposal-invalid" || kind == "proposal-conflict" || kind == "sharing-invalid" || kind == "sharing-conflict" {
 		path = "/portal/operator/requests"
 	}
-	if kind == "operator-action-error" {
+	if kind == "operator-action-error" || kind == "operator-support" {
 		path = "/portal/operator/customers"
 	}
 	d.LanguageURL = b.visible(path) + "?lang=" + other

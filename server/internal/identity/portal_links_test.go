@@ -50,7 +50,7 @@ func TestPortalLinkPreprocessor(t *testing.T) {
 		}
 		return
 	}
-	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 12} {
+	for name, want := range map[string]int{"portal.html": 24, "contact.html": 12, "requests.html": 38, "triage.html": 24, "work-review.html": 18, "operator.html": 14} {
 		t.Run(name, func(t *testing.T) {
 			pages, err := renderedLinkPages(name)
 			if err != nil || len(pages) != want {
@@ -256,18 +256,26 @@ func renderedLinkPagesFor(name string, templates *template.Template, b *browser)
 				{"/operator/invitations/new", "operator-invite", true, false},
 				{"/operator/audit", "operator-audit", true, false},
 				{"/operator/audit", "operator-audit", true, true},
+				{"/operator/support", "operator-support", true, false},
 			} {
 				err := add("/portal"+view.path, func(w *httptest.ResponseRecorder, r *http.Request) error {
 					d := b.operatorData(r, view.kind, "fictional-operator")
 					d.CSRF, d.TriageEnabled = "fictional-csrf", view.triage
 					if view.kind == "operator-customers" {
 						return templates.ExecuteTemplate(w, name, managementPage{
-							pageData: d,
+							pageData: d, SupportAvailable: true,
 							Workspaces: []workspaceView{{ID: "fictional-workspace", Members: []workspaceMember{
 								{Subject: strings.Repeat("FictionalMember", 9), Role: "client"},
 								{Subject: "fictional-disabled", Role: "client", Revoked: true},
 							}}},
 							Invitations: []pendingInvitation{{Subject: "fictional-invitation", Workspace: "fictional-workspace", Expires: request.Submitted}},
+						})
+					}
+					if view.kind == "operator-support" {
+						d.RequestsEnabled = true
+						return templates.ExecuteTemplate(w, name, supportPage{
+							pageData: d, Case: "CASE-1234", ContactSaved: true, SharingOpen: true,
+							Requests: []supportRequest{{Product: "website", Submitted: request.Submitted, ProposalShared: true}},
 						})
 					}
 					if view.events {

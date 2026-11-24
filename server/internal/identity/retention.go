@@ -132,8 +132,9 @@ func clientHasRecords(column string) string {
 // migration role: the web runtime can delete none of this history.
 func PurgeExpiredClients(ctx context.Context, pool *pgxpool.Pool, now time.Time) (int, error) {
 	cutoff := now.AddDate(-RetentionYears, 0, 0)
-	// The operator audit log keeps every call for the same period, then forgets it.
-	if _, err := pool.Exec(ctx, `DELETE FROM portal_operator_audit WHERE at<$1`, cutoff); err != nil {
+	// Support access is checked more frequently and has a shorter audit window.
+	if _, err := pool.Exec(ctx, `DELETE FROM portal_operator_audit WHERE at<$1 OR (at<$2 AND action LIKE 'support.%')`,
+		cutoff, now.AddDate(0, 0, -90)); err != nil {
 		return 0, errTriageStorage
 	}
 	rows, err := pool.Query(ctx, retentionDue, cutoff, "")

@@ -7,6 +7,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func TestRetentionPurgesSupportAuditAfterNinetyDays(t *testing.T) {
+	_ = fixtureDB(t)
+	migrator := migrationDB(t)
+	ctx := t.Context()
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, err := migrator.Exec(ctx, `INSERT INTO portal_operator_audit(at,actor_issuer,actor_subject,actor_kind,action,outcome)
+ VALUES($1,'https://retention.example.invalid','operator','operator','support.view','allowed'),
+       ($1,'https://retention.example.invalid','operator','operator','support.request-recorded','allowed'),
+       ($1,'https://retention.example.invalid','operator','operator','customers.view','allowed'),
+       ($2,'https://retention.example.invalid','operator','operator','support.view','allowed')`,
+		now.AddDate(0, 0, -91), now.AddDate(0, 0, -90)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PurgeExpiredClients(ctx, migrator, now); err != nil {
+		t.Fatal(err)
+	}
+	var support, other int
+	if err := migrator.QueryRow(ctx, `SELECT count(*) FILTER (WHERE action LIKE 'support.%'),
+ count(*) FILTER (WHERE action='customers.view') FROM portal_operator_audit`).Scan(&support, &other); err != nil || support != 1 || other != 1 {
+		t.Fatalf("support audit retention applied to the wrong records: %d support, %d other, %v", support, other, err)
+	}
+}
+
 // TestRetentionPurgesFormerClientsAfterThreeYears deletes every portal record
 // of a client whose memberships all ended more than three years ago, and
 // nothing of a client who is still a member, an operator workspace or a

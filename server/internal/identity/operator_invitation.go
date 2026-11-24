@@ -99,14 +99,8 @@ func (b *browser) operatorInvitationPage(w http.ResponseWriter, r *http.Request)
 		err := b.templates().ExecuteTemplate(&buffer, "operator.html", d)
 		return buffer.Bytes(), err
 	})
-	if status != http.StatusOK {
-		if status != http.StatusServiceUnavailable {
-			status = http.StatusForbidden
-		}
-		b.render(w, r, status, "operator-action-error", "", "")
-		return
+	if status != http.StatusOK && status != http.StatusServiceUnavailable {
+		status = http.StatusForbidden
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write(result)
+	b.writeOperatorActionPage(w, r, status, result)
 }
