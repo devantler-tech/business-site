@@ -37,8 +37,8 @@ func currentPreviewPurchase(acceptances []proposalAcceptance) *previewPurchase {
 // recordPreviewPurchase uses the existing request and current actor locks. A
 // retry for the same accepted proposal returns the receipt with no new effects.
 // The point of sale never creates an actual order or reserves a public offer.
-func (s *Foundation) recordPreviewPurchase(ctx context.Context, p Principal, id, acceptance string) error {
-	if !s.operatorOnly || !p.isClientPreview() {
+func (s *Foundation) recordPreviewPurchase(ctx context.Context, p Principal, id, acceptance string, deadline time.Time) error {
+	if !s.operatorOnly || !p.isClientPreview() || !time.Now().Before(deadline) {
 		return ErrDenied
 	}
 	tx, client, err := s.beginClientProposalWrite(ctx, p, id)
@@ -63,7 +63,7 @@ func (s *Foundation) recordPreviewPurchase(ctx context.Context, p Principal, id,
 		acceptance, id, client, price.OneTimeMinor, price.MonthlyMinor); err != nil {
 		return errTriageStorage
 	}
-	return s.commitClientProposal(ctx, p, tx, time.Time{})
+	return s.commitClientProposal(ctx, p, tx, deadline)
 }
 
 func (s *Foundation) readPreviewPurchase(ctx context.Context, p Principal, id string, accepted []proposalAcceptance) (*previewPurchase, error) {
@@ -114,5 +114,8 @@ func (b *browser) submitPreviewPurchase(w http.ResponseWriter, r *http.Request) 
 		b.render(w, r, http.StatusBadRequest, "error", "", "")
 		return
 	}
-	b.clientOrderResult(w, r, b.foundation.recordPreviewPurchase(r.Context(), p, r.PathValue("id"), acceptance))
+	deadline := b.sessions.Deadline(r.Context())
+	ctx, cancel := context.WithDeadline(r.Context(), deadline)
+	defer cancel()
+	b.clientOrderResult(w, r, b.foundation.recordPreviewPurchase(ctx, p, r.PathValue("id"), acceptance, deadline))
 }

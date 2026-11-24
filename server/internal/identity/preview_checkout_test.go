@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T) {
@@ -75,6 +76,16 @@ func TestPreviewCheckoutSimulatesThePurchaseWithoutCommercialWrites(t *testing.T
 	}
 	purchase := url.Values{"acceptance": {acceptance[1]}, "csrf_token": {b.csrf(request)}, "lang": {"en"}}
 	path := request + "/preview-orders"
+	incarnation, err := b.svc.startClientPreview(ctx, operator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired := operator
+	expired.subject, expired.membershipIncarnation = previewSubject, incarnation
+	expired.preview = previewOperator{subject: operator.subject, incarnation: operator.membershipIncarnation}
+	if err := b.svc.recordPreviewPurchase(ctx, expired, proposalRequestID, acceptance[1], time.Now().Add(-time.Second)); !errors.Is(err, ErrDenied) {
+		t.Fatalf("expired browser session completed checkout with a current broker token: %v", err)
+	}
 	forged := url.Values{"acceptance": purchase["acceptance"], "csrf_token": purchase["csrf_token"], "due_minor": {"1"}}
 	if status, _, _ := b.request(http.MethodPost, path, forged, b.site.URL); status != http.StatusBadRequest {
 		t.Errorf("browser-supplied price was not refused: status %d", status)
