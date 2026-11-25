@@ -79,6 +79,7 @@ jobs:
     needs: admit
     permissions:
       contents: read
+      id-token: write # lets the shared release workflow prove its identity to the GitHub token broker (ADR 0020)
     uses: devantler-tech/.github/.github/workflows/create-release.yaml@946fff9cb37042f4c26c3342665727e28bd66c01
     with:
       disable-issue-side-effects: true
