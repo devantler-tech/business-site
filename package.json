@@ -27,7 +27,7 @@
     "pdfkit": "^0.20.2",
     "satteri": "0.11.7",
     "sharp": "^0.35.5",
-    "expressive-code": "0.44.3",
+    "expressive-code": "0.44.4",
     "hast-util-to-html": "9.0.7"
   },
   "devDependencies": {
