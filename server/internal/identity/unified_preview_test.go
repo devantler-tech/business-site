@@ -171,26 +171,26 @@ func unifiedPreviewFixture(t *testing.T, primary *pgxpool.Pool) *pgxpool.Pool {
 		t.Fatal(err)
 	}
 	t.Cleanup(admin.Close)
-	if _, err := admin.Exec(t.Context(), "CREATE ROLE portal_preview_web LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := admin.Exec(ctx, "DROP ROLE portal_preview_web"); err != nil {
-			t.Error(err)
+	for _, resource := range []struct{ create, drop string }{
+		{
+			create: "CREATE ROLE portal_preview_web LOGIN PASSWORD 'fixture-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS",
+			drop:   "DROP ROLE portal_preview_web",
+		}, {
+			create: "CREATE DATABASE portal_preview OWNER portal_migrator",
+			drop:   "DROP DATABASE portal_preview",
+		},
+	} {
+		if _, err := admin.Exec(t.Context(), resource.create); err != nil {
+			t.Fatalf("create the fictional storage fixture: %v", err)
 		}
-	})
-	if _, err := admin.Exec(t.Context(), "CREATE DATABASE portal_preview OWNER portal_migrator"); err != nil {
-		t.Fatal(err)
+		t.Cleanup(func() {
+			cleanup, finish := context.WithTimeout(context.Background(), 5*time.Second)
+			defer finish()
+			if _, err := admin.Exec(cleanup, resource.drop); err != nil {
+				t.Errorf("remove a fictional storage fixture: %v", err)
+			}
+		})
 	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := admin.Exec(ctx, "DROP DATABASE portal_preview"); err != nil {
-			t.Error(err)
-		}
-	})
 	migrationConfig := primary.Config()
 	migrationConfig.ConnConfig.Database = "portal_preview"
 	migrationConfig.ConnConfig.User = "portal_migrator"

@@ -66,7 +66,7 @@ func TestUnifiedPreviewRequiresIsolatedStorageOnTheProductionPortal(t *testing.T
 		{"preview database cannot select the main CA", previewKey, isolatedURL + "&sslrootcert=/run/webapp-inputs/portal-database-ca"},
 		{"missing preview trust root", caKey, ""},
 		{"missing preview database", previewKey, ""},
-		{"invalid preview trust root", caKey, "Tm90IGEgY2VydGlmaWNhdGU="},
+		{"invalid preview trust root", caKey, base64.StdEncoding.EncodeToString([]byte("not a certificate"))},
 		{"preview database without hostname validation", previewKey, "postgres://portal_preview_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=require"},
 		{"preview database carries another login", previewKey, "postgres://portal_web@preview-fixture.business-site-dev.svc.cluster.local:5432/portal_preview?sslmode=verify-full"},
 		{"wrong callback host", "PORTAL_CALLBACK_URL", "https://other.example.invalid/callback"},

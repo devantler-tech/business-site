@@ -767,8 +767,8 @@ func (b *browser) data(r *http.Request, kind, client, token string) pageData {
 		d.Error = "This action is unavailable in client preview."
 		d.Unavailable = "Client preview is temporarily unavailable."
 		if d.Lang == "da" {
-			d.Error = "Denne handling er ikke tilgængelig i kundeportalen til test."
-			d.Unavailable = "Kundeportalen til test er midlertidigt utilgængelig."
+			d.Error = "Denne handling er ikke tilgængelig i portalen til test."
+			d.Unavailable = "Portalen til test er ikke tilgængelig. Prøv igen senere."
 		}
 	}
 	if kind == "home" && d.ClientPreview {
