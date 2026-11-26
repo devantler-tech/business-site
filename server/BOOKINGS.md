@@ -67,8 +67,11 @@ The policy's enabled field alone grants neither of those authorities.
 The selected direction builds the small portal-specific policy and state machine in the existing
 Go/PostgreSQL application, reusing calendar protocol libraries through the narrow interface.
 A client-bound reservation ID and its append-only revisions are stored by migration v34,
-after the shared service contract. The booking service will decide whether the latest
-revision is valid and available before it grants a hold or confirms an appointment.
+after the shared service contract. The private hold writer serializes changes to the
+single booking calendar. It re-reads the latest revision after obtaining the lock and
+uses database time to exclude expired holds. Dual attempts for the same time can retain
+one provisional hold. The booking service must also apply provider availability,
+buffers, weekly capacity and current authority before confirming an appointment.
 A second booking application would introduce another identity, business-state and presentation
 boundary. No new service, subscription or paid enrollment is selected. The maintained MIT
 [go-webdav CalDAV package](https://pkg.go.dev/github.com/emersion/go-webdav/caldav) is the adapter
