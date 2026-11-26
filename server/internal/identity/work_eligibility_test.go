@@ -337,6 +337,21 @@ func TestWorkEligibilityCertifiedOriginalConfirmation(t *testing.T) {
 	assertEligibilityState(t, b, op, eligibilityEligible)
 }
 
+func TestWorkEligibilityTypedSoftwareNeedsOriginalConfirmation(t *testing.T) {
+	b := acceptedServiceQuoteFixture(t, proposalServiceSoftware)
+	placeEarlyStartOrder(t, b)
+	fake, cfg := newFakeNumina(t)
+	paidInvoiceOrder(t, b, fake, cfg)
+	setEligibilityFlags(t, b, eligibilityFlags())
+	op := authenticateExistingMember(t, b, "proposal-operator")
+	savedApproval(t, b, op)
+	m := mailFixture(t, b)
+	assertEligibilityState(t, b, op, eligibilityConfirmationPending)
+	exerciseEligibilitySender(t, b, op, m, eligibilityEligible)
+	changeFixtureFunding(t, "refunded")
+	assertEligibilityState(t, b, op, eligibilityApprovalPaused)
+}
+
 func setEligibilityFlags(t *testing.T, b *browserFixture, flags map[string]memprovider.InMemoryFlag) {
 	t.Helper()
 	if err := b.flags.SetProviderAndWait(t.Context(), memprovider.NewInMemoryProvider(flags)); err != nil {
