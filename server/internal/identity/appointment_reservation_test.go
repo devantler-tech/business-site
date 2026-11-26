@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -87,10 +88,12 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, second := beginFixtureTransaction(ctx, t, pool), beginFixtureTransaction(ctx, t, pool)
-	start := time.Now().UTC().Truncate(time.Minute).Add(48 * time.Hour)
+	start, policy := appointmentHoldFixture(t)
+	policy.policy.WeeklyCapacity = 30 * time.Minute
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
+	later := booking.Interval{Start: start.Add(2 * time.Hour), End: start.Add(150 * time.Minute)}
 	root := secret()
-	if _, err := appendAppointmentHold(ctx, first, root, "fictional-first-hold", 0, slot, 10*time.Minute); err != nil {
+	if _, err := policy.append(ctx, first, root, "fictional-first-hold", 0, slot); err != nil {
 		t.Fatal("first hold failed", err)
 	}
 	var competingPID int
@@ -100,7 +103,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 	result := make(chan error, 1)
 	go func() {
 		defer close(result)
-		_, err := appendAppointmentHold(ctx, second, secret(), "fictional-second-hold", 0, slot, 10*time.Minute)
+		_, err := policy.append(ctx, second, secret(), "fictional-second-hold", 0, later)
 		result <- err
 	}()
 	defer func() {
@@ -113,7 +116,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := <-result; !errors.Is(err, errProposalConflict) {
-		t.Fatalf("the second client should see the first hold after waiting: %v", err)
+		t.Fatalf("the second client should see the first hold consuming the rest of the week after waiting: %v", err)
 	}
 	if err := second.Commit(ctx); err != nil {
 		t.Fatal(err)
@@ -130,7 +133,7 @@ func TestAppointmentHoldsSerializeCompetingClients(t *testing.T) {
 		t.Fatal("prepare an expired fixture hold", err)
 	}
 	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		_, err := appendAppointmentHold(ctx, tx, secret(), "fictional-second-hold", 0, slot, 10*time.Minute)
+		_, err := policy.append(ctx, tx, secret(), "fictional-second-hold", 0, later)
 		return err
 	})
 	if err != nil {
@@ -145,14 +148,15 @@ func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := secret()
-	start := time.Now().UTC().Truncate(time.Minute).Add(48 * time.Hour)
+	start, policy := appointmentHoldFixture(t)
+	policy.policy.WeeklyCapacity = 60 * time.Minute
 	original := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	adjacent := booking.Interval{Start: original.End, End: original.End.Add(30 * time.Minute)}
 	reserve := func(id, client string, expected int, slot booking.Interval) (appointmentHold, error) {
 		var saved appointmentHold
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 			var err error
-			saved, err = appendAppointmentHold(ctx, tx, id, client, expected, slot, 10*time.Minute)
+			saved, err = policy.append(ctx, tx, id, client, expected, slot)
 			return err
 		})
 		return saved, err
@@ -161,10 +165,13 @@ func TestAppointmentHoldRetriesPreserveTheSelectedRevision(t *testing.T) {
 	if err != nil || first.Revision != 1 {
 		t.Fatal("first hold did not open the reservation", err)
 	}
+	provider := policy.provider
+	policy.provider = nil
 	replayed, err := reserve(root, "fictional-booking-client", 0, original)
 	if err != nil || replayed.Revision != 1 || !replayed.HeldUntil.Equal(first.HeldUntil) {
 		t.Fatal("an identical retry changed the original hold", err)
 	}
+	policy.provider = provider
 	if _, err := reserve(root, "fictional-other-client", 1, adjacent); !errors.Is(err, errProposalConflict) {
 		t.Fatalf("another client could revise the hold: %v", err)
 	}
@@ -186,10 +193,10 @@ func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client')`); err != nil {
 		t.Fatal(err)
 	}
-	start := time.Now().UTC().Truncate(time.Minute).Add(48 * time.Hour)
+	start, policy := appointmentHoldFixture(t)
 	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
 	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		_, err := appendAppointmentHold(ctx, tx, secret(), "fictional-booking-client", 0, slot, 10*time.Minute)
+		_, err := policy.append(ctx, tx, secret(), "fictional-booking-client", 0, slot)
 		return err
 	})
 	if !errors.Is(err, errTriageStorage) {
@@ -198,5 +205,83 @@ func TestAppointmentHoldRefusesAStaleTransactionSnapshot(t *testing.T) {
 	var count int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM portal_appointment_reservations`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("the refused transaction left a reservation: count=%d err=%v", count, err)
+	}
+}
+
+func TestAppointmentHoldRequiresCurrentCalendarAndBuffers(t *testing.T) {
+	pool := fixtureDB(t)
+	ctx := t.Context()
+	if _, err := pool.Exec(ctx, `INSERT INTO portal_workspaces(id) VALUES('fictional-booking-client')`); err != nil {
+		t.Fatal(err)
+	}
+	start, policy := appointmentHoldFixture(t)
+	buffer := 15 * time.Minute
+	policy.policy.BufferBefore = &buffer
+	policy.policy.BufferAfter = &buffer
+	slot := booking.Interval{Start: start, End: start.Add(30 * time.Minute)}
+	id := secret()
+	reserve := func(id string, expected int, slot booking.Interval) error {
+		return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			_, err := policy.append(ctx, tx, id, "fictional-booking-client", expected, slot)
+			return err
+		})
+	}
+	if err := reserve(id, 0, slot); err != nil {
+		t.Fatal("eligible slot was refused", err)
+	}
+	adjacent := booking.Interval{Start: slot.End.Add(buffer), End: slot.End.Add(3 * buffer)}
+	if err := reserve(secret(), 0, adjacent); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("the existing reservation's buffer was ignored: %v", err)
+	}
+	candidate := booking.Interval{Start: start.Add(2 * time.Hour), End: start.Add(150 * time.Minute)}
+	policy.provider = appointmentBusyFunc(func(_ context.Context, coverage booking.Interval) (booking.BusySnapshot, error) {
+		if !coverage.Start.Equal(candidate.Start.Add(-buffer)) || !coverage.End.Equal(candidate.End.Add(buffer)) {
+			t.Fatal("the requested calendar interval did not include both buffers")
+		}
+		busy := booking.Interval{Start: coverage.Start, End: candidate.Start}
+		return booking.BusySnapshot{ObservedAt: time.Now(), Coverage: coverage, Complete: true, Busy: []booking.Interval{busy}}, nil
+	})
+	if err := reserve(id, 1, candidate); !errors.Is(err, errProposalConflict) {
+		t.Fatalf("the outside-calendar buffer was ignored: %v", err)
+	}
+	policy.provider = appointmentBusyFunc(func(_ context.Context, coverage booking.Interval) (booking.BusySnapshot, error) {
+		return booking.BusySnapshot{ObservedAt: time.Now().Add(-time.Minute), Coverage: coverage, Complete: true}, nil
+	})
+	if err := reserve(id, 1, candidate); !errors.Is(err, booking.ErrUnavailable) {
+		t.Fatalf("stale calendar data admitted a hold: %v", err)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM portal_appointment_revisions`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("a refused hold replaced the original revision: count=%d err=%v", count, err)
+	}
+}
+
+type appointmentBusyFunc func(context.Context, booking.Interval) (booking.BusySnapshot, error)
+
+func (f appointmentBusyFunc) Busy(ctx context.Context, coverage booking.Interval) (booking.BusySnapshot, error) {
+	return f(ctx, coverage)
+}
+
+func appointmentHoldFixture(t *testing.T) (time.Time, appointmentHoldPolicy) {
+	t.Helper()
+	loc, err := time.LoadLocation("Europe/Copenhagen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Choose the Monday after the coming week so test slots never straddle
+	// the capacity boundary or fall inside the lead time.
+	today := time.Now().In(loc)
+	monday := time.Date(today.Year(), today.Month(), today.Day()+14-(int(today.Weekday())+6)%7, 9, 0, 0, 0, loc)
+	zero, lead := time.Duration(0), 24*time.Hour
+	return monday, appointmentHoldPolicy{
+		policy: booking.Policy{
+			Enabled: true, SlotStep: 15 * time.Minute, WeeklyCapacity: 150 * time.Minute,
+			LeadTime: &lead, BufferBefore: &zero, BufferAfter: &zero, CancellationNotice: &lead,
+			CancellationTermsVersion: "fixture-v1",
+			Openings:                 []booking.Opening{{Date: monday.Format("2006-01-02"), Start: 9 * time.Hour, End: 15 * time.Hour}},
+		},
+		provider: appointmentBusyFunc(func(_ context.Context, coverage booking.Interval) (booking.BusySnapshot, error) {
+			return booking.BusySnapshot{ObservedAt: time.Now(), Coverage: coverage, Complete: true}, nil
+		}),
 	}
 }

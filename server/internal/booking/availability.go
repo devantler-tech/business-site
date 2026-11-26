@@ -76,7 +76,20 @@ type Input struct {
 // provider check; a recent snapshot never grants calendar-write authority.
 const MaxSnapshotAge = 30 * time.Second
 
-const maxIntervals = 4096
+// MaxIntervals bounds each input to the availability calculation. A reader
+// must detect additional rows so a truncated result cannot attest coverage.
+const MaxIntervals = 4096
+
+// RequiredCoverage returns the buffered calendar range and complete local
+// weeks needed to evaluate a search.
+func RequiredCoverage(p Policy, search Interval) (calendar, commitments Interval, err error) {
+	loc, err := time.LoadLocation("Europe/Copenhagen")
+	if err != nil || !validPolicy(p) || !validSearch(search) {
+		return Interval{}, Interval{}, ErrUnavailable
+	}
+	calendar, commitments = requiredCoverage(p, search, loc)
+	return calendar, commitments, nil
+}
 
 // Available returns candidate appointment intervals, never a reservation. The
 // caller supplies the duration authorized for this meeting; it is not inferred
@@ -162,20 +175,20 @@ func validInterval(i Interval) bool {
 	return !i.Start.IsZero() && !i.End.IsZero() && i.Start.Before(i.End)
 }
 
+func validSearch(search Interval) bool {
+	return validInterval(search) && search.End.Sub(search.Start) <= 31*24*time.Hour
+}
+
 func validInput(p Policy, in Input, loc *time.Location) bool {
 	c := in.Calendar
-	if in.Now.IsZero() || !validInterval(in.Search) || in.Search.End.Sub(in.Search.Start) > 31*24*time.Hour || in.Duration <= 0 || !wholeMinutes(in.Duration, 24*time.Hour) || !c.Complete || c.ObservedAt.IsZero() || c.ObservedAt.After(in.Now) || in.Now.Sub(c.ObservedAt) > MaxSnapshotAge || !validInterval(c.Coverage) {
+	if in.Now.IsZero() || !validSearch(in.Search) || in.Duration <= 0 || !wholeMinutes(in.Duration, 24*time.Hour) || !c.Complete || c.ObservedAt.IsZero() || c.ObservedAt.After(in.Now) || in.Now.Sub(c.ObservedAt) > MaxSnapshotAge || !validInterval(c.Coverage) {
 		return false
 	}
-	if c.Coverage.Start.After(in.Search.Start.Add(-*p.BufferBefore)) || c.Coverage.End.Before(in.Search.End.Add(*p.BufferAfter)) || len(c.Busy) > maxIntervals || len(in.Commitments) > maxIntervals {
+	calendar, commitments := requiredCoverage(p, in.Search, loc)
+	if c.Coverage.Start.After(calendar.Start) || c.Coverage.End.Before(calendar.End) || len(c.Busy) > MaxIntervals || len(in.Commitments) > MaxIntervals {
 		return false
 	}
-	// The buffer sum includes space occupied by an appointment just outside
-	// the queried week as well as this candidate's own buffered interval.
-	margin := *p.BufferBefore + *p.BufferAfter
-	from := weekStart(midnight(in.Search.Start.In(loc))).Add(-margin)
-	until := weekStart(midnight(in.Search.End.Add(-time.Nanosecond).In(loc))).AddDate(0, 0, 7).Add(margin)
-	if !in.CommitmentsComplete || !validInterval(in.CommitmentsCoverage) || in.CommitmentsCoverage.Start.After(from) || in.CommitmentsCoverage.End.Before(until) {
+	if !in.CommitmentsComplete || !validInterval(in.CommitmentsCoverage) || in.CommitmentsCoverage.Start.After(commitments.Start) || in.CommitmentsCoverage.End.Before(commitments.End) {
 		return false
 	}
 	for _, intervals := range [][]Interval{c.Busy, in.Commitments} {
@@ -186,6 +199,16 @@ func validInput(p Policy, in Input, loc *time.Location) bool {
 		}
 	}
 	return true
+}
+
+func requiredCoverage(p Policy, search Interval, loc *time.Location) (calendar, commitments Interval) {
+	calendar = Interval{search.Start.Add(-*p.BufferBefore), search.End.Add(*p.BufferAfter)}
+	// Include commitments just outside the week whose buffer overlaps a
+	// candidate's own buffer.
+	margin := *p.BufferBefore + *p.BufferAfter
+	from := weekStart(midnight(search.Start.In(loc))).Add(-margin)
+	until := weekStart(midnight(search.End.Add(-time.Nanosecond).In(loc))).AddDate(0, 0, 7).Add(margin)
+	return calendar, Interval{from, until}
 }
 
 func midnight(t time.Time) time.Time {

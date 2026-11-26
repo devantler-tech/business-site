@@ -13,6 +13,8 @@ import (
 // There is one business calendar. Its reservation writers share this lock.
 const appointmentCalendarLock = int64(0x61707074686f6c64)
 
+const appointmentHoldLifetime = 10 * time.Minute
+
 type appointmentHold struct {
 	Revision   int
 	Slot       booking.Interval
@@ -20,14 +22,19 @@ type appointmentHold struct {
 	recordedAt time.Time
 }
 
-// appendAppointmentHold compares and appends a provisional hold in the caller's
-// transaction. The caller supplies the server-bound client and checks booking
-// policy, calendar availability and authority before committing the hold.
-func appendAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, client string, expected int, slot booking.Interval, lifetime time.Duration) (appointmentHold, error) {
+// appointmentHoldPolicy uses the server's booking policy and calendar. The
+// caller supplies the authorized client, reservation and meeting duration.
+type appointmentHoldPolicy struct {
+	policy   booking.Policy
+	provider booking.BusyProvider
+}
+
+// append compares and appends a provisional hold while serializing the
+// availability read and write through the caller's transaction.
+func (holds appointmentHoldPolicy) append(ctx context.Context, tx pgx.Tx, reservation, client string, expected int, slot booking.Interval) (appointmentHold, error) {
 	duration := slot.End.Sub(slot.Start)
 	if !opaqueRequestID.MatchString(reservation) || client == "" || expected < 0 || expected >= math.MaxInt32 ||
-		duration <= 0 || duration > 24*time.Hour || duration%time.Minute != 0 || slot.Start.Nanosecond()%int(time.Microsecond) != 0 ||
-		lifetime <= 0 || lifetime > 10*time.Minute || lifetime%time.Microsecond != 0 {
+		duration <= 0 || duration > 24*time.Hour || duration%time.Minute != 0 || slot.Start.Nanosecond()%int(time.Microsecond) != 0 {
 		return appointmentHold{}, errProposalConflict
 	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1::bigint)`, appointmentCalendarLock); err != nil {
@@ -45,26 +52,47 @@ func appendAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, client s
 		return appointmentHold{}, err
 	}
 	if prior.Revision == expected+1 && prior.HeldUntil.After(now) && prior.Slot.Start.Equal(slot.Start) && prior.Slot.End.Equal(slot.End) &&
-		prior.HeldUntil.Sub(prior.recordedAt) == lifetime {
+		prior.HeldUntil.Sub(prior.recordedAt) == appointmentHoldLifetime {
 		return prior, nil
 	}
 	if prior.Revision != expected || (prior.Revision > 0 && !prior.HeldUntil.After(now)) {
 		return appointmentHold{}, errProposalConflict
 	}
-	until := now.Add(lifetime)
-	if until.After(slot.Start) {
+	if now.Add(appointmentHoldLifetime).After(slot.Start) {
 		return appointmentHold{}, errProposalConflict
 	}
-	var occupied bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(
- SELECT 1 FROM portal_appointment_revisions r
- WHERE r.reservation_id<>$1 AND r.held_until>$2 AND r.starts_at<$4 AND r.ends_at>$3
-   AND NOT EXISTS(SELECT 1 FROM portal_appointment_revisions later
-     WHERE later.reservation_id=r.reservation_id AND later.revision>r.revision))`, reservation, now, slot.Start, slot.End).Scan(&occupied)
+	calendarRange, commitmentRange, err := booking.RequiredCoverage(holds.policy, slot)
+	if err != nil || holds.provider == nil {
+		return appointmentHold{}, booking.ErrUnavailable
+	}
+	// Bound the provider read while other reservation writers wait on the
+	// same calendar lock.
+	calendarCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	calendar, err := holds.provider.Busy(calendarCtx, calendarRange)
+	cancel()
 	if err != nil {
+		return appointmentHold{}, booking.ErrUnavailable
+	}
+	// Measure the hold lifetime and snapshot freshness after the provider read.
+	if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return appointmentHold{}, errTriageStorage
 	}
-	if occupied {
+	until := now.Add(appointmentHoldLifetime)
+	if until.After(slot.Start) || (prior.Revision > 0 && !prior.HeldUntil.After(now)) {
+		return appointmentHold{}, errProposalConflict
+	}
+	commitments, err := readActiveAppointmentHolds(ctx, tx, reservation, now, commitmentRange)
+	if err != nil {
+		return appointmentHold{}, err
+	}
+	available, err := booking.Available(holds.policy, booking.Input{
+		Now: now, Search: slot, Duration: duration, Calendar: calendar, Commitments: commitments,
+		CommitmentsCoverage: commitmentRange, CommitmentsComplete: true,
+	})
+	if err != nil {
+		return appointmentHold{}, err
+	}
+	if len(available) != 1 || !available[0].Start.Equal(slot.Start) || !available[0].End.Equal(slot.End) {
 		return appointmentHold{}, errProposalConflict
 	}
 	if expected == 0 {
@@ -82,6 +110,26 @@ func appendAppointmentHold(ctx context.Context, tx pgx.Tx, reservation, client s
 		return appointmentHold{}, creditWriteError(err)
 	}
 	return appointmentHold{Revision: revision, Slot: slot, HeldUntil: until, recordedAt: now}, nil
+}
+
+func readActiveAppointmentHolds(ctx context.Context, tx pgx.Tx, reservation string, now time.Time, coverage booking.Interval) ([]booking.Interval, error) {
+	rows, err := tx.Query(ctx, `SELECT r.starts_at,r.ends_at FROM portal_appointment_revisions r
+ WHERE r.reservation_id<>$1 AND r.held_until>$2 AND r.starts_at<$4 AND r.ends_at>$3
+   AND NOT EXISTS(SELECT 1 FROM portal_appointment_revisions later
+     WHERE later.reservation_id=r.reservation_id AND later.revision>r.revision)
+ LIMIT $5`, reservation, now, coverage.Start, coverage.End, booking.MaxIntervals+1)
+	if err != nil {
+		return nil, errTriageStorage
+	}
+	holds, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (booking.Interval, error) {
+		var interval booking.Interval
+		err := row.Scan(&interval.Start, &interval.End)
+		return interval, err
+	})
+	if err != nil {
+		return nil, errTriageStorage
+	}
+	return holds, nil
 }
 
 // readLatestAppointmentHold scopes the stored interval to its real client. Any
