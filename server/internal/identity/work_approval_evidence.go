@@ -20,7 +20,8 @@ type workMember struct {
 
 // workEvidence is a closed typed encoding of the exact accepted agreement, the
 // order's one collection path and its funding charge (ADR 0030, decision 6).
-// Format 2 replaces the retired invoice-record and bank-credit evidence.
+// Format 2 binds historical proposals to funding. Format 3 adds the software
+// classification and new immutable quote hash.
 type workEvidence struct {
 	Format          int
 	Request, Client string
@@ -85,32 +86,54 @@ func lockWorkMembers(ctx context.Context, tx pgx.Tx, wanted []workMember) ([]wor
 	return actual, matches, nil
 }
 
-// readWorkFunding reads the request's order for the acceptance and its first
-// charge under the caller's request lock. Anything but a settled charge for
-// exactly the agreed amount, never refunded or disputed, is not funding.
+// readWorkFunding applies software work's current-time withdrawal policy to
+// the funding facts. Callers must hold the request lock in this transaction.
 func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance string) (workOrder, workFunding, error) {
-	var o workOrder
-	var placed time.Time
-	var early *time.Time
-	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &placed, &early)
-	if errors.Is(err, pgx.ErrNoRows) {
+	order, err := readFundingOrder(ctx, tx, id, client, acceptance)
+	if err != nil {
+		return workOrder{}, workFunding{}, err
+	}
+	if !earlyStartReady(order.placed, order.earlyStart) {
 		return workOrder{}, workFunding{}, errProposalConflict
+	}
+	funding, err := readSettledOrderFunding(ctx, tx, order)
+	if err != nil {
+		return workOrder{}, workFunding{}, err
+	}
+	order.MonthlyFrom = order.MonthlyFrom.UTC()
+	return order.workOrder, funding, nil
+}
+
+type fundingOrder struct {
+	workOrder
+	placed     time.Time
+	earlyStart *time.Time
+}
+
+// readFundingOrder binds the order to the exact acceptance under the caller's
+// request lock. Its timestamps are facts for the caller's service policy.
+func readFundingOrder(ctx context.Context, tx pgx.Tx, id, client, acceptance string) (fundingOrder, error) {
+	var o fundingOrder
+	err := tx.QueryRow(ctx, `SELECT id,collection,one_time_minor,monthly_minor,monthly_from,placed_at,early_start_at FROM portal_orders WHERE request_id=$1 AND client_id=$2 AND acceptance_id=$3`, id, client, acceptance).Scan(&o.ID, &o.Collection, &o.OneTimeMinor, &o.MonthlyMinor, &o.MonthlyFrom, &o.placed, &o.earlyStart)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fundingOrder{}, errProposalConflict
 	}
 	if err != nil {
-		return workOrder{}, workFunding{}, errTriageStorage
+		return fundingOrder{}, errTriageStorage
 	}
-	if !earlyStartReady(placed, early) {
-		// Without the client's request to start early, no work starts within
-		// the withdrawal period.
-		return workOrder{}, workFunding{}, errProposalConflict
-	}
+	return o, nil
+}
+
+// readSettledOrderFunding reads the first charge of the order just bound by
+// readFundingOrder in this transaction. It grants no permission to start work.
+func readSettledOrderFunding(ctx context.Context, tx pgx.Tx, o fundingOrder) (workFunding, error) {
 	f := workFunding{Period: "acceptance"}
 	want := o.OneTimeMinor
 	if want == 0 {
 		// The first month charges less once the client ended an add-on before it.
 		addons, err := readOrderAddons(ctx, tx, o.ID)
 		if err != nil {
-			return workOrder{}, workFunding{}, err
+			return workFunding{}, err
 		}
 		f.Period = monthPeriod(o.MonthlyFrom)
 		want = periodMonthly(o.MonthlyMinor, addons, f.Period)
@@ -119,28 +142,28 @@ func readWorkFunding(ctx context.Context, tx pgx.Tx, id, client, acceptance stri
 	// or a reversal (applyReversal locks the charge for update) committed while
 	// this waited is then seen, and none can commit until this decision does.
 	var locked bool
-	err = tx.QueryRow(ctx, `SELECT true FROM portal_order_charges WHERE order_id=$1 AND period=$2 FOR SHARE`, o.ID, f.Period).Scan(&locked)
+	err := tx.QueryRow(ctx, `SELECT true FROM portal_order_charges WHERE order_id=$1 AND period=$2 FOR SHARE`, o.ID, f.Period).Scan(&locked)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return workOrder{}, workFunding{}, errProposalConflict
+		return workFunding{}, errProposalConflict
 	}
 	if err != nil {
-		return workOrder{}, workFunding{}, errTriageStorage
+		return workFunding{}, errTriageStorage
 	}
 	var settled *time.Time
 	err = tx.QueryRow(ctx, `SELECT c.gross_minor,c.net_minor,c.vat_minor,coalesce(c.provider_ref,''),c.settled_at FROM portal_order_charges c
  WHERE c.order_id=$1 AND c.period=$2 AND c.state='settled' AND NOT EXISTS (SELECT 1 FROM portal_charge_reversals r WHERE r.order_id=c.order_id AND r.period=c.period)
  AND NOT EXISTS (SELECT 1 FROM portal_order_withdrawals w WHERE w.order_id=c.order_id)`, o.ID, f.Period).Scan(&f.GrossMinor, &f.NetMinor, &f.VATMinor, &f.Reference, &settled)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return workOrder{}, workFunding{}, errProposalConflict
+		return workFunding{}, errProposalConflict
 	}
 	if err != nil {
-		return workOrder{}, workFunding{}, errTriageStorage
+		return workFunding{}, errTriageStorage
 	}
 	if settled == nil || f.GrossMinor != want || f.NetMinor+f.VATMinor != f.GrossMinor || f.Reference == "" {
-		return workOrder{}, workFunding{}, errProposalConflict
+		return workFunding{}, errProposalConflict
 	}
-	o.MonthlyFrom, f.Settled = o.MonthlyFrom.UTC(), settled.UTC()
-	return o, f, nil
+	f.Settled = settled.UTC()
+	return f, nil
 }
 
 // collectWorkEvidence reads only under the caller's request lock. The current
@@ -151,7 +174,7 @@ func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, acto
 		return workEvidence{}, nil, "", err
 	}
 	acceptor := workMember{Client: client, Role: "client"}
-	if err := tx.QueryRow(ctx, `SELECT client_issuer,client_subject FROM portal_proposal_acceptances WHERE id=$1 AND request_id=$2 AND client_id=$3`, acceptance, id, client).Scan(&acceptor.Issuer, &acceptor.Subject); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT client_issuer,client_subject,COALESCE(client_incarnation::text,'') FROM portal_proposal_acceptances WHERE id=$1 AND request_id=$2 AND client_id=$3`, acceptance, id, client).Scan(&acceptor.Issuer, &acceptor.Subject, &acceptor.Incarnation); err != nil {
 		return workEvidence{}, nil, "", errTriageStorage
 	}
 	members, matches, err := lockWorkMembers(ctx, tx, []workMember{acceptor, actor, viewer})
@@ -164,12 +187,19 @@ func collectWorkEvidence(ctx context.Context, tx pgx.Tx, id, client string, acto
 	if !matches[0] || !matches[1] {
 		return workEvidence{}, nil, "", errProposalConflict
 	}
+	format := 2
+	if review.Proposal.ContentFormat == 2 {
+		if review.Proposal.Service.Kind != proposalServiceSoftware || acceptor.Incarnation == "" {
+			return workEvidence{}, nil, "", errProposalConflict
+		}
+		format = 3
+	}
 	order, funding, err := readWorkFunding(ctx, tx, id, client, acceptance)
 	if err != nil {
 		return workEvidence{}, nil, "", err
 	}
 	review.Proposal.Prepared = review.Proposal.Prepared.UTC()
-	evidence := workEvidence{Format: 2, Request: id, Client: client, Acceptance: acceptance, Event: review.Event, Hash: review.Hash, Proposal: review.Proposal, Order: order, Funding: funding, Acceptor: members[0], Actor: members[1]}
+	evidence := workEvidence{Format: format, Request: id, Client: client, Acceptance: acceptance, Event: review.Event, Hash: review.Hash, Proposal: review.Proposal, Order: order, Funding: funding, Acceptor: members[0], Actor: members[1]}
 	data, err := json.Marshal(evidence)
 	if errors.Is(err, errProposalConflict) {
 		return workEvidence{}, nil, "", errProposalConflict

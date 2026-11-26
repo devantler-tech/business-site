@@ -36,8 +36,14 @@ inside the request transaction:
   independently authorized; a different authorized operator may review a
   decision without changing its original actor.
 
-The closed typed encoding (format 2) normalizes timestamps to UTC before
-hashing. It contains private evidence and must not be logged or published.
+The evidence normalizes timestamps to UTC before hashing. Historical
+unclassified proposals retain format 2. A typed software approval uses format 3
+to bind the software classification and the exact accepted quote hash. It
+checks that the acceptor still has the original membership incarnation. The
+same transaction records the permanent software fulfillment and its order
+binding. Retries and reapprovals keep this binding. Execution still needs its
+own current approval and delivery checks. The private evidence must stay out
+of logs and public output.
 Changes to the agreement, the order, the funding charge (its state, amounts,
 payment reference or a reversal) or the bound memberships invalidate the existing approval even when totals or current
 membership values later return to their earlier values.

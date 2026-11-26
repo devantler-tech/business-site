@@ -207,6 +207,11 @@ func (s *Foundation) persistWorkApprovalChecked(ctx context.Context, p Principal
 	if err != nil {
 		return workApprovalReceipt{}, creditWriteError(err)
 	}
+	if evidence.Proposal.ContentFormat == 2 {
+		if err := bindSoftwareFulfillment(ctx, tx, evidence); err != nil {
+			return workApprovalReceipt{}, err
+		}
+	}
 	if pointer.ID != "" {
 		if err := appendWorkRevocation(ctx, tx, id, client, p, workRevocationInput{Key: secret(), Approval: pointer.ID, Expected: pointer.Generation}, "superseded"); err != nil {
 			return workApprovalReceipt{}, err
@@ -328,7 +333,7 @@ func inspectWorkCurrent(ctx context.Context, tx pgx.Tx, id, client string, point
 	}
 	actor := workMember{Issuer: d.OperatorIssuer, Subject: d.OperatorSubject, Client: d.OperatorClient, Role: "operator", Incarnation: d.OperatorIncarnation}
 	// A legacy approval bound to a retired invoice record has no current
-	// funding evidence: its format-1 hash never matches format 2.
+	// funding evidence: its format-1 hash never matches the current encoder.
 	_, _, hash, evidenceErr := collectWorkEvidence(ctx, tx, id, client, actor, viewer)
 	if evidenceErr != nil && !errors.Is(evidenceErr, errProposalConflict) {
 		return workApprovalReceipt{}, false, evidenceErr

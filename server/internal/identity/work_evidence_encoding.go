@@ -42,6 +42,11 @@ type workEvidenceV2 struct {
 	Acceptor, Actor memberEvidenceV2
 }
 
+type workEvidenceV3 struct {
+	workEvidenceV2
+	ServiceKind proposalServiceKind
+}
+
 func proposalEvidenceLegacy(d projectProposal) proposalEvidenceV1 {
 	return proposalEvidenceV1{
 		Version: d.Version, Expected: d.Expected, Key: d.Key,
@@ -51,19 +56,23 @@ func proposalEvidenceLegacy(d projectProposal) proposalEvidenceV1 {
 	}
 }
 
-// MarshalJSON keeps the historical encoder independent of projectProposal's
-// expanded fields. Classified quotes must use a separately versioned receipt;
-// silently labeling their reduced contents as format 2 is refused.
+// MarshalJSON uses format 2 for the original unclassified proposals. Format 3
+// adds the explicit software kind and binds the hash of the typed quote.
 func (e workEvidence) MarshalJSON() ([]byte, error) {
-	if e.Format != 2 || e.Proposal.ContentFormat < 0 || e.Proposal.ContentFormat > 1 || e.Proposal.Service != (proposalServiceTerms{}) {
-		return nil, errProposalConflict
-	}
-	return json.Marshal(workEvidenceV2{
+	wire := workEvidenceV2{
 		Format: e.Format, Request: e.Request, Client: e.Client,
 		Acceptance: e.Acceptance, Event: e.Event, Hash: e.Hash,
 		Proposal: proposalEvidenceLegacy(e.Proposal),
 		Order:    orderEvidenceV2{e.Order.ID, e.Order.Collection, e.Order.OneTimeMinor, e.Order.MonthlyMinor, e.Order.MonthlyFrom},
 		Funding:  fundingEvidenceV2{e.Funding.Period, e.Funding.Reference, e.Funding.GrossMinor, e.Funding.NetMinor, e.Funding.VATMinor, e.Funding.Settled},
 		Acceptor: memberEvidenceV2(e.Acceptor), Actor: memberEvidenceV2(e.Actor),
-	})
+	}
+	switch {
+	case e.Format == 2 && e.Proposal.ContentFormat >= 0 && e.Proposal.ContentFormat <= 1 && e.Proposal.Service == (proposalServiceTerms{}):
+		return json.Marshal(wire)
+	case e.Format == 3 && e.Proposal.ContentFormat == 2 && e.Proposal.ContentSHA256 == e.Hash && e.Proposal.Service.Kind == proposalServiceSoftware && e.Proposal.Service.valid():
+		return json.Marshal(workEvidenceV3{workEvidenceV2: wire, ServiceKind: e.Proposal.Service.Kind})
+	default:
+		return nil, errProposalConflict
+	}
 }
