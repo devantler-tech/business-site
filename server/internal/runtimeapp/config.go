@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +19,8 @@ import (
 	"github.com/devantler-tech/business-site/server/internal/webapp"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-feature/go-sdk/openfeature"
+	"github.com/open-feature/go-sdk/openfeature/isolated"
+	"github.com/open-feature/go-sdk/openfeature/memprovider"
 )
 
 // ErrConfig intentionally omits private dependency details from startup errors.
@@ -28,6 +31,7 @@ type Config struct {
 	database, issuer, client, callback, secretFile string
 	secretProjected                                bool
 	preview                                        bool
+	previewDatabase, previewDatabaseCA             string
 	billing                                        billingConfig
 	cards                                          cardConfig
 	mail                                           mailConfig
@@ -136,7 +140,13 @@ func ReadCompanyDisclosure(filename string) (string, error) {
 // set. It parses no activation flag; the real OpenFeature SDK remains the gate.
 func ReadConfig(getenv func(string) string) (Config, error) {
 	c := Config{database: getenv("PORTAL_DATABASE_URL"), issuer: getenv("PORTAL_OIDC_ISSUER"), client: getenv("PORTAL_OIDC_CLIENT_ID"), callback: getenv("PORTAL_CALLBACK_URL"), secretFile: getenv("PORTAL_CLIENT_SECRET_FILE")}
-	c.preview = getenv("PORTAL_IDENTITY_PROFILE") == "preview"
+	profile := getenv("PORTAL_IDENTITY_PROFILE")
+	c.preview = profile == "preview"
+	c.previewDatabase = getenv("PORTAL_CLIENT_PREVIEW_DATABASE_URL")
+	c.previewDatabaseCA = getenv("PORTAL_CLIENT_PREVIEW_DATABASE_CA")
+	if (c.previewDatabase == "") != (c.previewDatabaseCA == "") {
+		return Config{}, ErrConfig
+	}
 	if projected := getenv("PORTAL_CLIENT_SECRET_PROJECTION_FILE"); projected != "" {
 		if c.secretFile != "" {
 			return Config{}, ErrConfig
@@ -178,7 +188,7 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	if count == 0 {
-		if c.preview {
+		if c.preview || c.previewDatabase != "" {
 			return Config{}, ErrConfig
 		}
 		return c, nil
@@ -204,6 +214,9 @@ func ReadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, ErrConfig
 	}
 	if c.preview && !c.isolatedPreview(db.ConnConfig) {
+		return Config{}, ErrConfig
+	}
+	if c.previewDatabase != "" && (profile != "production" || !c.isolatedUnifiedPreview(db.ConnConfig)) {
 		return Config{}, ErrConfig
 	}
 	return c, nil
@@ -292,6 +305,17 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		pool.Close()
 		return nil, closed, ErrConfig
 	}
+	stopPreview := func() {}
+	if c.previewDatabase != "" {
+		foundation.EnableClientPreviewSessions()
+		stopPreview = linkUnifiedPreview(ctx, startup, foundation, c)
+	}
+	serving := false
+	defer func() {
+		if !serving {
+			stopPreview()
+		}
+	}()
 	handler, err := foundation.Browser(c.callback, secret)
 	if err != nil {
 		pool.Close()
@@ -308,7 +332,44 @@ func Portal(ctx context.Context, c Config, flags *openfeature.Client) (http.Hand
 		pool.Close()
 		return nil, closed, ErrConfig
 	}
-	return handler, func() { stopMail(); stopBilling(); pool.Close() }, nil
+	serving = true
+	return handler, func() { stopMail(); stopBilling(); stopPreview(); pool.Close() }, nil
+}
+
+func linkUnifiedPreview(ctx, startup context.Context, foundation *identity.Foundation, c Config) func() {
+	closed := func() {}
+	cfg, err := c.unifiedPreviewStoreConfig()
+	if err != nil {
+		slog.Warn("client preview storage configuration is unavailable")
+		return closed
+	}
+	pool, err := connectPortalStore(startup, cfg, true)
+	if err != nil {
+		slog.Warn("client preview storage is unavailable")
+		return closed
+	}
+	preview := isolated.NewAPI()
+	settings := make(map[string]memprovider.InMemoryFlag)
+	for _, key := range []string{
+		"portal-identity", "portal-requests", "portal-triage", "portal-proposals", "portal-proposal-sharing", "portal-proposal-acceptance",
+	} {
+		settings[key] = memprovider.InMemoryFlag{Key: key, State: memprovider.Enabled, DefaultVariant: "enabled", Variants: map[string]any{"enabled": true}}
+	}
+	shutdown := func() {
+		_ = preview.Shutdown(context.WithoutCancel(ctx))
+		pool.Close()
+	}
+	if err := preview.SetProviderAndWait(startup, memprovider.NewInMemoryProvider(settings)); err != nil {
+		shutdown()
+		slog.Warn("client preview capabilities are unavailable")
+		return closed
+	}
+	if err := foundation.LinkClientPreview(pool, preview.NewClient()); err != nil {
+		shutdown()
+		slog.Warn("client preview could not be linked")
+		return closed
+	}
+	return shutdown
 }
 
 // connectPortal opens the bounded runtime pool, then checks its restricted login
@@ -319,6 +380,19 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 	if err != nil {
 		return nil, nil, ErrConfig
 	}
+	pool, err := connectPortalStore(startup, cfg, c.preview)
+	if err != nil {
+		return nil, nil, ErrConfig
+	}
+	broker, err := identity.NewBroker(startup, c.issuer, c.client)
+	if err != nil {
+		pool.Close()
+		return nil, nil, ErrConfig
+	}
+	return pool, broker, nil
+}
+
+func connectPortalStore(startup context.Context, cfg *pgxpool.Config, preview bool) (*pgxpool.Pool, error) {
 	cfg.MaxConns = 4
 	cfg.MinConns = 0
 	cfg.MaxConnLifetime = time.Hour
@@ -330,9 +404,9 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "1000"
 	pool, err := pgxpool.NewWithConfig(startup, cfg)
 	if err != nil {
-		return nil, nil, ErrConfig
+		return nil, ErrConfig
 	}
-	fail := func() (*pgxpool.Pool, *identity.Broker, error) { pool.Close(); return nil, nil, ErrConfig }
+	fail := func() (*pgxpool.Pool, error) { pool.Close(); return nil, ErrConfig }
 	// Assess the actual configured login, not a restricted role adopted by a
 	// broader credential. Both identities must agree before checking its grants.
 	var loginMatches bool
@@ -346,14 +420,10 @@ func connectPortal(startup context.Context, c Config) (*pgxpool.Pool, *identity.
 	if err := identity.CheckSchemaCurrent(startup, pool); err != nil {
 		return fail()
 	}
-	if err := identity.CheckPreviewReceiptRole(startup, pool, c.preview); err != nil {
+	if err := identity.CheckPreviewReceiptRole(startup, pool, preview); err != nil {
 		return fail()
 	}
-	broker, err := identity.NewBroker(startup, c.issuer, c.client)
-	if err != nil {
-		return fail()
-	}
-	return pool, broker, nil
+	return pool, nil
 }
 
 // FitsPortalHost reports whether the configured portal matches the runtime's host

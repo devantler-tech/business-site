@@ -18,6 +18,7 @@ var ErrPortalSettings = errors.New("portal settings projection is unavailable")
 var projectedPortalSettings = []string{
 	"PORTAL_DATABASE_URL", "PORTAL_OIDC_ISSUER", "PORTAL_OIDC_CLIENT_ID", "PORTAL_CALLBACK_URL",
 	"PORTAL_CLIENT_SECRET_PROJECTION_FILE", "PORTAL_IDENTITY_PROFILE", "PORTAL_IDENTITY_FLAG",
+	"PORTAL_CLIENT_PREVIEW_DATABASE_URL", "PORTAL_CLIENT_PREVIEW_DATABASE_CA",
 	// Independently default-off production capabilities; never staging or work approval.
 	"PORTAL_CONTACT_VERIFICATION_FLAG", "PORTAL_REQUESTS_FLAG", "PORTAL_TRIAGE_FLAG", "PORTAL_PROPOSALS_FLAG",
 	"PORTAL_SUPPORT_FLAG",
